@@ -98,27 +98,37 @@ fn minimal_roots(store: &dyn LayerStore, paths: &[PathId]) -> Vec<PathId> {
 
 /// What `new` composes differently from `old` when only the layers of the
 /// stage's own layer stack changed, as changes: the prims that came or
-/// went, or whose kept children's order or prototype changed, are
-/// resynced, as minimal roots. A prim whose spec stack only gained or
+/// went, or whose prototype changed, and the children a new order moved
+/// among their kept siblings, are resynced, as minimal roots. A prim whose spec stack only gained or
 /// lost specs with no opinions of the prim's own (an `over` holding
 /// properties, say) changes info-only, and the properties those specs
 /// hold are resynced; one whose spec stack changed otherwise is resynced.
 /// A prim whose spec stack is the same composes the same specs, so the
 /// same opinions (the offsets of the layers kept are kept), arcs and
 /// children. The pseudo-root's own specs compose nothing: it changes
-/// info-only.
+/// info-only when `sublayers`, a layer's `subLayers` changed, as OpenUSD
+/// reports it, and not for a layer muted or unmuted.
 ///
 /// OpenUSD: `PcpChanges::DidChange` handles a sublayer added or removed
 /// (`_DidAddOrRemoveSublayer`) as the addition or removal of its specs,
 /// which `UsdStage` reports as for authored specs (an inert prim spec's
 /// prim info-only, its property specs resynced), and the pseudo-root's
 /// `subLayers` change info-only.
-fn layer_stack_changes(store: &dyn LayerStore, old: &Stage, new: &Stage) -> Changes {
+fn layer_stack_changes(
+    store: &dyn LayerStore,
+    old: &Stage,
+    new: &Stage,
+    sublayers: bool,
+) -> Changes {
     let root = store.paths().intern(crate::Path::root());
-    let kept = |prim: PathId| {
+    // The children of a prim that its kept children's new order moved.
+    let moved = |prim: PathId| {
         let before = old.all_children_of(prim).unwrap_or_default();
         let after = new.all_children_of(prim).unwrap_or_default();
-        controls::kept_order(before, after) == controls::kept_order(after, before)
+        moved_children(
+            &controls::kept_order(before, after),
+            &controls::kept_order(after, before),
+        )
     };
     // The specs one stack has and the other not, when the specs both have
     // keep their order; None otherwise.
@@ -166,12 +176,12 @@ fn layer_stack_changes(store: &dyn LayerStore, old: &Stage, new: &Stage) -> Chan
     {
         if !(old.has_prim(prim)
             && new.has_prim(prim)
-            && kept(prim)
             && old.instance_prototype(prim) == new.instance_prototype(prim))
         {
             resynced.push(prim);
             continue;
         }
+        resynced.extend(moved(prim));
         if prim == root {
             continue;
         }
@@ -195,7 +205,7 @@ fn layer_stack_changes(store: &dyn LayerStore, old: &Stage, new: &Stage) -> Chan
         }
     }
     changes.resynced = minimal_roots(store, &resynced);
-    if !changes.resynced.contains(&root) {
+    if sublayers && !changes.resynced.contains(&root) {
         changes.changed_info_only.push(root);
     }
     let within: HashSet<PathId> = changes.resynced.iter().copied().collect();
@@ -207,6 +217,47 @@ fn layer_stack_changes(store: &dyn LayerStore, old: &Stage, new: &Stage) -> Chan
         .retain(|path| !is_beneath_set(store, path.prim_path(), &within));
     changes.sort(store.paths(), store.tokens());
     changes
+}
+
+/// The paths of `after`, the paths of `before` in a new order, that moved:
+/// all but a longest run of them in their old order (a longest increasing
+/// subsequence of their old positions, in O(n log n)).
+fn moved_children(before: &[PathId], after: &[PathId]) -> Vec<PathId> {
+    if before == after {
+        return Vec::new();
+    }
+    let position: HashMap<PathId, usize> = before
+        .iter()
+        .enumerate()
+        .map(|(at, path)| (*path, at))
+        .collect();
+    let positions: Vec<usize> = after.iter().map(|path| position[path]).collect();
+    // `tails[k]`: the index in `after` ending the best run of length k + 1.
+    let mut tails: Vec<usize> = Vec::new();
+    let mut previous = alloc::vec![usize::MAX; after.len()];
+    for at in 0..after.len() {
+        let length = tails.partition_point(|&tail| positions[tail] < positions[at]);
+        if length > 0 {
+            previous[at] = tails[length - 1];
+        }
+        if length == tails.len() {
+            tails.push(at);
+        } else {
+            tails[length] = at;
+        }
+    }
+    let mut kept = alloc::vec![false; after.len()];
+    let mut at = tails.last().copied().unwrap_or(usize::MAX);
+    while at != usize::MAX {
+        kept[at] = true;
+        at = previous[at];
+    }
+    after
+        .iter()
+        .zip(kept)
+        .filter(|(_, kept)| !kept)
+        .map(|(path, _)| *path)
+        .collect()
 }
 
 fn include_resyncs(store: &dyn LayerStore, changes: &mut Changes, paths: &[PathId]) {
@@ -423,11 +474,18 @@ pub struct LiveStage {
     /// the sites they compose from; empty outside [`Self::apply`], and when
     /// unnotified or pending edits may have changed more.
     inert_prims: HashSet<PathId>,
-    /// Whether the full rebuild [`Self::apply`] makes follows a change of
-    /// the stage's own layer stack alone, with nothing else pending: its
+    /// Whether the full rebuild pending follows a change of the stage's
+    /// own layer stack alone (a sublayer [`Self::apply`] inserts or
+    /// removes, a layer muted or unmuted), with nothing else pending: its
     /// report compares the stages before and after
-    /// ([`layer_stack_changes`]).
-    layer_stack_diff: bool,
+    /// ([`layer_stack_changes`]). `Some(true)` when a layer's `subLayers`
+    /// changed, which changes the pseudo-root info-only too.
+    layer_stack_diff: Option<bool>,
+    /// Whether the recomposition just made reported its changes from a
+    /// comparison of the stages before and after, which
+    /// [`Self::recompose_changes`] then reports as they are, not widened
+    /// to resyncs.
+    exact_report: bool,
     layer_discovery: discovery::LayerDiscovery,
     /// The child specs of layers that do not list them, kept across
     /// compositions so an edit re-indexes only the specs it adds.
@@ -481,7 +539,8 @@ impl LiveStage {
             structural_sources: Vec::new(),
             support_sources: Vec::new(),
             inert_prims: HashSet::new(),
-            layer_stack_diff: false,
+            layer_stack_diff: None,
+            exact_report: false,
             layer_discovery: discovery::LayerDiscovery::default(),
             child_index_mark: child_index.work(),
             child_index,
@@ -970,7 +1029,7 @@ impl LiveStage {
             }
         }
         self.layer_stack_diff =
-            outcome.layer_stack_only && sources_current && !pending_recomposition;
+            (outcome.layer_stack_only && sources_current && !pending_recomposition).then_some(true);
         let mut recomposed = match refreshed {
             Some(paths) => {
                 changes.changed_info_only = paths.clone();
@@ -979,7 +1038,7 @@ impl LiveStage {
             None => self.recompose_report(store, Some(&mut changes)),
         };
         self.inert_prims.clear();
-        self.layer_stack_diff = false;
+        self.layer_stack_diff = None;
         include_resyncs(store, &mut changes, &declaration_resyncs);
         // Stage metadata the transaction changed in the stage's own layer
         // stack, which the stage reads when asked.
@@ -1655,8 +1714,10 @@ impl LiveStage {
     pub fn recompose(&mut self, store: &mut dyn LayerStore) -> Vec<PathId> {
         let mut changes = Changes::default();
         let mut paths = self.recompose_report(store, Some(&mut changes));
-        let info_only = core::mem::take(&mut changes.changed_info_only);
-        include_resyncs(store, &mut changes, &info_only);
+        if !self.exact_report {
+            let info_only = core::mem::take(&mut changes.changed_info_only);
+            include_resyncs(store, &mut changes, &info_only);
+        }
         self.notices.publish(&mut changes, &self.stage, store);
         store.paths().sort_paths(&mut paths, store.tokens());
         paths
@@ -1670,8 +1731,12 @@ impl LiveStage {
     pub fn recompose_changes(&mut self, store: &mut dyn LayerStore) -> Changes {
         let mut changes = Changes::default();
         self.recompose_report(store, Some(&mut changes));
-        let info_only = core::mem::take(&mut changes.changed_info_only);
-        include_resyncs(store, &mut changes, &info_only);
+        // A layer of the stage's own layer stack muted or unmuted alone is
+        // reported from a comparison of the stages, as it is.
+        if !self.exact_report {
+            let info_only = core::mem::take(&mut changes.changed_info_only);
+            include_resyncs(store, &mut changes, &info_only);
+        }
         self.notices.publish(&mut changes, &self.stage, store);
         changes
     }
@@ -1764,6 +1829,7 @@ impl LiveStage {
         store: &mut dyn LayerStore,
         mut changes: Option<&mut Changes>,
     ) -> Vec<PathId> {
+        self.exact_report = false;
         let was_spent = self.stage.reached_node_limit();
         let mut recomposed = self.recompose_pending(store, changes.as_deref_mut());
         if !recomposed.is_empty()
@@ -2268,8 +2334,9 @@ impl LiveStage {
                 .collect();
             let root = store.paths().intern(crate::Path::root());
             changes.resynced = alloc::vec![root];
-            if diff {
-                let found = layer_stack_changes(store, &old_stage, &self.stage);
+            self.exact_report = diff.is_some();
+            if let Some(sublayers) = diff {
+                let found = layer_stack_changes(store, &old_stage, &self.stage, sublayers);
                 changes.resynced = found.resynced;
                 changes.changed_info_only = found.changed_info_only;
                 changes.resynced_properties = found.resynced_properties;
@@ -6351,6 +6418,27 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The children a new order moves are all but a longest run kept in
+    /// their old order: one child moved to the front is the one moved.
+    #[test]
+    fn moved_children_are_those_out_of_the_longest_kept_run() {
+        let mut store = InMemoryStore::default();
+        let all: Vec<PathId> = ["/A", "/B", "/C", "/D", "/E"]
+            .iter()
+            .map(|path| p(&mut store, path))
+            .collect();
+        let ids = |list: &[usize]| list.iter().map(|&at| all[at - 1]).collect::<Vec<_>>();
+        assert!(moved_children(&ids(&[1, 2, 3]), &ids(&[1, 2, 3])).is_empty());
+        assert_eq!(
+            moved_children(&ids(&[1, 2, 3, 4]), &ids(&[4, 1, 2, 3])),
+            ids(&[4])
+        );
+        assert_eq!(
+            moved_children(&ids(&[1, 2, 3, 4, 5]), &ids(&[1, 3, 2, 5, 4])).len(),
+            2
+        );
     }
 
     /// Setting a prim's `kind` resyncs it, as a change of its model

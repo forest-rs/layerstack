@@ -28,7 +28,8 @@
 //! of the root layer composing nothing changes `/` info-only. A sublayer
 //! inserted or removed resyncs the prims whose specs it adds or takes
 //! away, changes those its `over`s hold properties of info-only, with the
-//! properties resynced, and changes `/` info-only.
+//! properties resynced, and changes `/` info-only; a layer muted or
+//! unmuted does the same, `/` aside.
 //!
 //! Differences, deliberate:
 //!
@@ -49,13 +50,8 @@
 //!   order); layerstack composes the new order and resyncs `/Thing`, so
 //!   that a client reads the root prims again.
 //! - OpenUSD reports `/Echo` info-only with every change of the root
-//!   layer's own fields, which compose nothing into it; layerstack does
-//!   not.
-//! - A layer of the root layer stack muted or unmuted recomposes the stage
-//!   whole here, and resyncs `/`. OpenUSD resyncs the prims and properties
-//!   whose specs came or went, and changes the rest of the prims whose spec
-//!   stacks changed, and `/`, info-only, as both do for a sublayer
-//!   inserted or removed.
+//!   layer's own fields, and with the weaker layer muted or unmuted, though
+//!   neither changes its spec stack; layerstack does not.
 
 use std::collections::BTreeMap;
 
@@ -450,8 +446,9 @@ fn edit(name: &str, loaded: &mut LoadedStage, live: &LiveStage, added: &Extra) -
 
 /// The oracle's report of `name` with the differences of the module docs.
 fn corrected(name: &str, mut report: Report) -> Report {
-    // The root layer's own fields compose nothing into `/Echo`.
-    if report.info.contains_key("/") {
+    // The root layer stack's own fields and layers compose nothing into
+    // `/Echo` here.
+    if report.info.contains_key("/") || name.ends_with("mute_sublayer") {
         report.info.remove("/Echo");
     }
     match name {
@@ -461,12 +458,6 @@ fn corrected(name: &str, mut report: Report) -> Report {
         "override_reorders_children" => {
             report.info.remove("/Thing");
             report.resynced = vec!["/Thing".into()];
-        }
-        "mute_sublayer" | "unmute_sublayer" => {
-            report = Report {
-                resynced: vec!["/".into()],
-                ..Report::default()
-            };
         }
         _ => {}
     }

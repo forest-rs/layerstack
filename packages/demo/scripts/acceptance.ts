@@ -119,6 +119,12 @@ const checks: ((session: Session) => void)[] = [
       "/World/Beacons",
       "/World/Ground",
       "/World/Path",
+      "/World/Top",
+      "/World/Camera",
+      "/World/Sun",
+      "/World/Sky",
+      "/World/Spot",
+      "/World/Panel",
       "/World/Stones",
     ]);
     assert.equal(current.stage.prim("/Shape")?.abstract, true);
@@ -437,6 +443,17 @@ const checks: ((session: Session) => void)[] = [
     assert.deepEqual(changes?.resyncedProperties, [`${sample.rock}.visibility`]);
     assert.equal(after.localComputed - before.localComputed, 1, "only the beacon's local transform is recomputed");
   },
+  // 15. The lamp's intensity, a `UsdLux` input, written over the sublayer's.
+  ({ current, prim, attribute }) => {
+    assert.equal(prim, sample.lamp);
+    assert.equal(attribute, sample.lampIntensity);
+    const intensity = read(current.stage, sample.lampIntensity);
+    assert.equal(intensity.value, String(sample.brighter));
+    assert.deepEqual(intensity.opinions, [
+      "scene.usda /World/Lamp.inputs:intensity local contributed",
+      "library.usda /World/Lamp.inputs:intensity local ignored (shadowed)",
+    ]);
+  },
 ];
 
 /**
@@ -486,20 +503,27 @@ const meshes = [
   // The path's L is concave: ear-clipped, not fanned.
   "/World/Path: 4 triangles, 6 vertices, 1 concave (1 clipped), ranges 4",
 ];
+/**
+ * The sample's lights, by kind: the lamp (a sphere light in the
+ * sublayer), the sun, the sky, the spot and the panel.
+ */
+const lights = ["/World/Lamp sphere", "/World/Panel rect", "/World/Sky dome", "/World/Spot disk", "/World/Sun distant"];
 const opened: ViewportSummary = {
-  drawn: [...beacons, "/World/Ground", "/World/Path", `${sample.robot}/Body`, `${sample.robot}/Head`, sample.rock, `${sample.stones} ×5`],
+  drawn: [...beacons, "/World/Ground", "/World/Path", `${sample.robot}/Body`, `${sample.robot}/Head`, sample.rock, `${sample.stones} ×5`, sample.top],
   hidden: [],
   // Two meshes of four triangles, four spheres of 528 (24 segments by 12
-  // rings: the rock, the head, two bulbs), three cubes of 12 (the body,
-  // two posts) and five stones.
-  triangles: 2 * 4 + 4 * SPHERE + 3 * 12 + 5 * 12,
+  // rings: the rock, the head, two bulbs), four cubes of 12 (the body,
+  // two posts, the top) and five stones.
+  triangles: 2 * 4 + 4 * SPHERE + 4 * 12 + 5 * 12,
   instances: 5,
-  // The ground's corners in x and z; the lamp's sphere light at the origin
-  // to the rock's top (radius 2 at y = 2) in y.
-  bounds: [-8, -0.5, -8, 8, 4, 6],
+  // The ground's corners in x and z; the ground to the spot light's disk
+  // (y = 5) in y.
+  bounds: [-8, 0, -8, 8, 5, 6],
   meshes,
+  lights,
+  camera: sample.camera,
 };
-/** The rock's radius is 3: it reaches y = -1 and 5. */
+/** The rock's radius is 3: it reaches y = -1. */
 const overridden: ViewportSummary = { ...opened, bounds: [-8, -1, -8, 8, 5, 6] };
 const withPebble = (pebble: "sphere" | "cube", robot: string = sample.robot): ViewportSummary => ({
   ...overridden,
@@ -526,16 +550,20 @@ const viewports: ViewportSummary[] = [
     triangles: opened.triangles + 12 - SPHERE - 12,
   },
   // The rock and stone 3 hidden, the north beacon moved to x = -5, z = -1;
-  // the bulbs' tops (y = 2.25) are the highest now.
+  // the pebble (a cube of 0.8 at the origin) is the lowest now.
   {
-    drawn: [...beacons, "/World/Ground", "/World/Path", sample.pebble, `${sample.stones} ×4`],
+    drawn: [...beacons, "/World/Ground", "/World/Path", sample.pebble, `${sample.stones} ×4`, sample.top],
     hidden: [sample.rock],
-    triangles: 2 * 4 + 2 * SPHERE + 3 * 12 + 4 * 12,
+    triangles: 2 * 4 + 2 * SPHERE + 4 * 12 + 4 * 12,
     instances: 4,
-    bounds: [-8, -0.5, -8, 8, 2.25, 6],
+    bounds: [-8, -0.4, -8, 8, 5, 6],
     meshes,
+    lights,
+    camera: sample.camera,
   },
 ];
+// The lamp brightened: the same draws.
+viewports.push(viewports.at(-1)!);
 
 /**
  * What the viewport's draw list did after each step, from the editor's
@@ -556,45 +584,55 @@ const update = (counts: Partial<UpdateSummary>): UpdateSummary => ({
   itemsUntouched: 0,
   itemsTimeInvariant: 0,
   localTransforms: 0,
+  lightsRead: 0,
+  lights: 0,
+  camerasRead: 0,
   ...counts,
 });
 const updates: UpdateSummary[] = [
-  // Read whole: eight draws (the beacons' post and bulb one each for both
-  // instances, the stones one for five), two meshes planned and five
-  // shapes tessellated (the body and the posts share a cube).
-  update({ added: 8, triangulations: 2, tessellations: 5, itemsRead: 8, localTransforms: 15 }),
+  // Read whole: nine draws (the beacons' post and bulb one each for both
+  // instances, the stones one for five), two meshes planned and six
+  // shapes tessellated (the body and the posts share a cube); five lights
+  // and the camera read.
+  update({ added: 9, triangulations: 2, tessellations: 6, itemsRead: 9, localTransforms: 22, lightsRead: 5, lights: 5, camerasRead: 1 }),
   // Selecting changes nothing.
   update({}),
   // The rock's radius: one draw read, its sphere tessellated at radius 3.
-  update({ tessellations: 1, itemsRead: 1, itemsUntouched: 7 }),
+  update({ tessellations: 1, itemsRead: 1, itemsUntouched: 8 }),
   // The variant and its asset: the robot's draws read in each record
   // (untouched counts the last one's), recolored, nothing rebuilt.
-  update({ itemsRead: 4, itemsUntouched: 6, localTransforms: 3 }),
-  // Undo, undo, redo: the shapes of both radii are still held.
   update({ itemsRead: 4, itemsUntouched: 7, localTransforms: 3 }),
+  // Undo, undo, redo: the shapes of both radii are still held.
+  update({ itemsRead: 4, itemsUntouched: 8, localTransforms: 3 }),
   // A new prim: its draw added, and nothing else read. The prim alone is
   // resynced, as OpenUSD reports it, not `/World` with it.
-  update({ added: 1, tessellations: 1, itemsRead: 1, itemsUntouched: 8, localTransforms: 1 }),
+  update({ added: 1, tessellations: 1, itemsRead: 1, itemsUntouched: 9, localTransforms: 1 }),
   // Retyped: the pebble alone, a cube now.
-  update({ tessellations: 1, itemsRead: 1, itemsUntouched: 8, localTransforms: 1 }),
+  update({ tessellations: 1, itemsRead: 1, itemsUntouched: 9, localTransforms: 1 }),
   // The asset's height: the robot's two draws read, nothing rebuilt.
-  update({ itemsRead: 2, itemsUntouched: 7 }),
+  update({ itemsRead: 2, itemsUntouched: 8 }),
   // Renamed: the robot's draws gone, the rover's added, drawing the same
-  // buffers; the old and new paths alone are resynced.
-  update({ added: 2, removed: 2, itemsRead: 2, itemsUntouched: 7, localTransforms: 3 }),
-  // Time 30, then the default time again: nothing in the sample is
-  // animated, so no draw is read.
-  update({ itemsUntouched: 9, itemsTimeInvariant: 9 }),
-  update({ itemsUntouched: 9, itemsTimeInvariant: 9 }),
+  // buffers; the old and new paths alone are resynced, and the lamp, whose
+  // `aim` the rename repairs: read again, unchanged.
+  update({ added: 2, removed: 2, itemsRead: 2, itemsUntouched: 8, localTransforms: 4, lightsRead: 1 }),
+  // Time 30, then the default time again: the top alone is animated (its
+  // `xformOp:rotateY` samples), so it alone is read and moved; no other
+  // draw, light or camera is.
+  update({ moved: 1, itemsRead: 1, itemsUntouched: 9, itemsTimeInvariant: 9, localTransforms: 1 }),
+  update({ moved: 1, itemsRead: 1, itemsUntouched: 9, itemsTimeInvariant: 9, localTransforms: 1 }),
   // Reopened: a new stage, read whole.
-  update({ added: 9, triangulations: 2, tessellations: 6, itemsRead: 9, localTransforms: 16 }),
+  update({ added: 10, triangulations: 2, tessellations: 7, itemsRead: 10, localTransforms: 23, lightsRead: 5, lights: 5, camerasRead: 1 }),
   // Muted: the rover's draws gone, nothing read.
-  update({ removed: 2, itemsUntouched: 7 }),
+  update({ removed: 2, itemsUntouched: 8 }),
   // One edit moves the north beacon (its post and bulb groups' matrices),
   // hides the rock (no matrices, shown or hidden) and stone 3 (the
   // stones' matrices): matrices and visibility only, nothing triangulated,
   // tessellated or refilled.
-  update({ moved: 4, shown: 1, itemsRead: 4, itemsUntouched: 3 }),
+  update({ moved: 4, shown: 1, itemsRead: 4, itemsUntouched: 4 }),
+  // The lamp's intensity: that light alone read and changed; no draw or
+  // camera read. Its new opinion is a new property spec in the edit layer,
+  // which resyncs that property alone.
+  update({ itemsUntouched: 8, localTransforms: 1, lightsRead: 1, lights: 1 }),
 ];
 
 /** The transform cache's counters after the last viewport was built. */
@@ -625,6 +663,17 @@ try {
       `ok ${index + 1} ${step.title}: in ${after.bytesIn - before.bytesIn} B, out ${after.bytesOut - before.bytesOut} B, views ${after.views - before.views}`,
     );
   }
+  // What the viewport draws the lamp from: radiance in nits, `color *
+  // intensity * 2^exposure` (exposure -3, not normalized), and the camera.
+  const lamp = model.list!.light(sample.lamp)!;
+  assert.equal(lamp.emission.intensity, sample.brighter);
+  assert.deepEqual(lamp.emission.radiance, [sample.brighter / 8, (Math.fround(0.9) * sample.brighter) / 8, (Math.fround(0.7) * sample.brighter) / 8]);
+  assert.deepEqual(lamp.position, [0, 3, 2]);
+  const camera = model.list!.camera(sample.camera)!.camera!;
+  assert.equal(camera.focalLength, 24);
+  assert.equal(camera.linearExposureScale, 1);
+  assert.deepEqual([...camera.cameraToWorld.subarray(12, 15)], [10, 7, 14]);
+  console.log("ok the lamp's light and the camera the viewport draws with");
   await unmuteWithTheToggle(session);
   console.log("ok the layers panel's toggle unmutes the robot asset in one change");
   const { bytesIn, bytesOut, memoryBytes } = host.layerstack.transfer();

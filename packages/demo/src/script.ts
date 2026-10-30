@@ -50,6 +50,13 @@ export const sample = {
   hiddenStone: 3n,
   /** Where the script moves the north beacon. */
   beaconMoved: [-5, 0, -1],
+  /** The lamp's intensity, a `UsdLux` input, and what the script brightens it to. */
+  lampIntensity: "/World/Lamp.inputs:intensity",
+  brighter: 1500,
+  /** A cube spun by time samples on its `xformOp:rotateY`: the sample's one animated draw. */
+  top: "/World/Top",
+  /** The camera the viewport looks through, until "Free camera" is checked. */
+  camera: "/World/Camera",
 } as const;
 
 /** What the script needs of its host: the instance, the fetch, and a way to hand saved layers to the user. */
@@ -245,6 +252,14 @@ export const steps: readonly Step[] = [
         { type: "setValue", path: `${sample.stones}.invisibleIds`, value: { type: "int64[]", value: [sample.hiddenStone] } },
       ]);
       session.select(sample.instance);
+    },
+  },
+  {
+    title: "Brighten the lamp",
+    look: "The viewport: the lamp, a UsdLux sphere light drawn as a three.js point light, brightens. The stats line: the edit reads that light alone, and no draw, camera or other light; its three.js light alone is replaced. The edit layer holds the new intensity over the sublayer's.",
+    async run(session) {
+      session.current.setValue(sample.lampIntensity, { type: "float", value: sample.brighter });
+      session.select(sample.lamp, sample.lampIntensity);
     },
   },
 ];

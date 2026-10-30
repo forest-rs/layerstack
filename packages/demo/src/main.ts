@@ -173,7 +173,7 @@ let viewport: Viewport | null | undefined;
 import("./viewport3d.ts").then(
   ({ Viewport }) => {
     try {
-      viewport = new Viewport(panel("viewport-canvas") as HTMLCanvasElement);
+      viewport = new Viewport(panel("viewport-canvas") as HTMLCanvasElement, panel("free-camera") as HTMLInputElement);
     } catch (error) {
       console.error(error);
       viewport = null;
@@ -219,10 +219,11 @@ function renderViewport(editor: Editor): void {
         `${work.refilled} refilled, ${work.rebuilt} rebuilt, ${work.triangulations} triangulated, ${work.tessellations} tessellated; ` +
         `${work.itemsRead} draws read, ${work.itemsUntouched} untouched` +
         (last.timeChanged ? ` (${work.itemsTimeInvariant} not animated)` : "") +
-        `, ${work.localTransforms} local transforms`;
+        `, ${work.localTransforms} local transforms; ${work.lightsRead} lights read, ${work.lights} changed; ${work.camerasRead} cameras read`;
   fill(
     body,
-    `${scene.items.length} draws: ${summary.drawn.length} drawn (${summary.instances} instances), ${summary.triangles} triangles, framed on ${bounds}`,
+    `${scene.items.length} draws: ${summary.drawn.length} drawn (${summary.instances} instances), ${summary.triangles} triangles, framed on ${bounds}; ` +
+      `${summary.lights.length} lights, ${summary.camera === null ? "no stage camera" : `stage camera ${summary.camera}`}`,
     summary.hidden.length > 0 ? `; hidden: ${summary.hidden.join(", ")}` : "",
     viewport === null ? " (WebGL is unavailable: the summary is all there is)" : "",
     h("div", { class: "viewport-diff" }, changed),

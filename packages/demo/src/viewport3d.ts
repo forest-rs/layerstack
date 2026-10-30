@@ -7,35 +7,102 @@
 // group per subset range); three.js only rasterizes them. No USD loader is
 // involved. Each update applies the draw list's diffs in place: an
 // `InstancedMesh` per instanced item whose matrices are rewritten, a
-// buffer geometry per stagehand buffer whose attributes are refilled, and
-// nothing rebuilt that the diffs do not name.
+// buffer geometry per stagehand buffer whose attributes are refilled, a
+// three.js light per `UsdLux` light the diff adds or changes, and nothing
+// rebuilt that the diffs do not name.
+//
+// The camera is the stage's (`UsdGeomCamera`, its view and projection
+// matrices as `GfFrustum` computes them), fitted to the canvas by
+// `CameraUtilConformWindow`'s `fit` policy (everything the camera frames
+// stays in view), until "Free camera" hands the view to orbit controls.
+//
+// Lights: `UsdLux` emission is luminance in nits (cd/m²); stagehand's
+// `LightItem.emission.radiance` is `color * blackbody * intensity *
+// 2^exposure / sizeFactor` per channel. Since r155, three.js lights are in
+// physical units (`physicallyCorrectLights` is gone: always on): a
+// `PointLight` or `SpotLight` in candela (cd, falling off as 1/d²), a
+// `DirectionalLight` in lux (lx), a `RectAreaLight` in nits, a
+// `HemisphereLight` as the irradiance (lx) it adds, and a Lambertian
+// surface reflects irradiance × albedo / π. Each light's color is its
+// radiance divided by its largest channel, its intensity that channel
+// times:
+//
+// - `SphereLight` → `PointLight`: the sphere's projected area, a quarter
+//   of its world surface area (luminous intensity = luminance × projected
+//   area). `treatAsPoint` changes nothing: a point light either way.
+// - `DiskLight` → `SpotLight` along -Z: the disk's world area (its
+//   intensity on its axis); `ShapingAPI`'s cone angle is the spot's angle
+//   and its softness the penumbra (`focus` and IES profiles are not
+//   drawn). Without `ShapingAPI`, a 90° spot (a hemisphere).
+// - `CylinderLight` → `PointLight`: its side's projected area across its
+//   axis (`2 r length`, its world side area / π).
+// - `RectLight` → `RectAreaLight` facing -Z, its width and height scaled
+//   by the transform: the radiance itself (its `texture:file` is not
+//   loaded).
+// - `DistantLight` → `DirectionalLight` along -Z: the illuminance of a disk
+//   of the light's angular size, radiance × π sin²(angle / 2) (the
+//   `sizeFactor` `UsdLux` normalizes by, so a normalized light's intensity
+//   is its illuminance in lux), or the radiance itself at angle 0.
+// - `DomeLight` → `HemisphereLight` of one color: a uniform dome of
+//   luminance L gives an upward surface π L of irradiance (its texture is
+//   not loaded).
+// - `PortalLight`: not drawn; it only guides a dome's light.
+//
+// A pixel then holds luminance in nits, which the `UsdLux` documentation
+// makes 1 for a 1-nit light seen directly at exposure 0: the renderer's
+// `toneMappingExposure` is the stage camera's
+// `UsdGeomCamera::ComputeLinearExposureScale` (1 with the free camera), and
+// AgX tone mapping fits the highlights into the display's range. A stage
+// without lights is lit by a fixed sky and sun, as before.
 import {
+  AgXToneMapping,
   BufferAttribute,
   BufferGeometry,
+  Camera,
   Color,
   DirectionalLight,
   DoubleSide,
   GridHelper,
+  Group,
   HemisphereLight,
   InstancedMesh,
   Matrix4,
   Mesh,
   MeshStandardMaterial,
+  Object3D,
   PerspectiveCamera,
+  PointLight,
+  Quaternion,
+  RectAreaLight,
   Scene,
+  SpotLight,
   Vector3,
   WebGLRenderer,
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
+import { conformCamera, lightSizeFactor } from "@forest-rs/layerstack_stagehand";
+import type { CameraItem, LightItem } from "@forest-rs/layerstack_stagehand";
 import type { ViewItem, ViewportScene, ViewportUpdate } from "./viewport.ts";
 
 /** A three.js view of a {@link ViewportScene}, updated in place from each {@link ViewportUpdate}. */
 export class Viewport {
   readonly #renderer: WebGLRenderer;
   readonly #scene = new Scene();
+  /** The free camera, which the orbit controls move. */
   readonly #camera = new PerspectiveCamera(45, 1, 0.05, 500);
+  /** The stage's camera: its matrices are set from layerstack's, never computed by three.js. */
+  readonly #stageCamera = new Camera();
   readonly #controls: OrbitControls;
   readonly #canvas: HTMLCanvasElement;
+  /** "Free camera": checked, the orbit controls' camera draws; unchecked, the stage's when it has one. */
+  readonly #free: HTMLInputElement | null;
+  /** The stage camera last listed, and its exposure scale. */
+  #usdCamera: CameraItem | null = null;
+  /** The three.js objects of each `UsdLux` light, by path: the light and, for a directional or spot light, its target. */
+  readonly #lights = new Map<string, Object3D[]>();
+  /** The sky and sun lighting a stage without lights. */
+  readonly #fallback = new Group();
   /** One geometry per stagehand buffer, by key: a sphere of one radius is uploaded once. */
   readonly #geometries = new Map<number, BufferGeometry>();
   /** One object per draw item, by id: a `Mesh` for a gprim, an `InstancedMesh` for a group. */
@@ -47,15 +114,25 @@ export class Viewport {
   /** The bounds the camera was last framed on, to frame again only when they change. */
   #framed = "";
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, free: HTMLInputElement | null = null) {
     this.#canvas = canvas;
+    this.#free = free;
     this.#renderer = new WebGLRenderer({ canvas, antialias: true });
     this.#renderer.setPixelRatio(window.devicePixelRatio);
+    this.#renderer.toneMapping = AgXToneMapping;
+    RectAreaLightUniformsLib.init();
     this.#scene.background = new Color(0x20201e);
-    this.#scene.add(new HemisphereLight(0xffffff, 0x404038, 1.4));
+    this.#fallback.add(new HemisphereLight(0xffffff, 0x404038, 1.4));
     const sun = new DirectionalLight(0xffffff, 1.8);
     sun.position.set(5, 10, 7);
-    this.#scene.add(sun);
+    this.#fallback.add(sun);
+    this.#scene.add(this.#fallback);
+    this.#stageCamera.matrixAutoUpdate = false;
+    this.#stageCamera.matrixWorldAutoUpdate = false;
+    free?.addEventListener("change", () => {
+      this.#controls.enabled = this.#looking() === null;
+      this.#draw();
+    });
     const grid = new GridHelper(40, 40, 0x55554f, 0x3a3a35);
     grid.position.y = -0.001;
     this.#scene.add(grid);
@@ -129,6 +206,19 @@ export class Viewport {
       object.material = materials(view, selected);
     }
     this.#selected = selected;
+    // Lights: those the update names made again, the rest left as they are.
+    const lights = new Map(scene.lights.map((light) => [light.path, light]));
+    if (reset) for (const path of [...this.#lights.keys()]) this.#dropLight(path);
+    for (const path of update.lightsRemoved) this.#dropLight(path);
+    const relit = reset ? [...lights.keys()] : [...update.lightsAdded, ...update.lightsChanged];
+    for (const path of relit) {
+      this.#dropLight(path);
+      const light = lights.get(path);
+      if (light !== undefined) this.#addLight(light);
+    }
+    this.#fallback.visible = this.#lights.size === 0;
+    if (reset || update.cameras.size > 0) this.#usdCamera = scene.camera;
+    this.#controls.enabled = this.#looking() === null;
     const framed = JSON.stringify(scene.bounds);
     if (scene.bounds !== null && framed !== this.#framed) {
       this.#framed = framed;
@@ -178,6 +268,25 @@ export class Viewport {
     object.computeBoundingSphere();
   }
 
+  #addLight(light: LightItem): void {
+    const objects = threeLights(light);
+    for (const object of objects) this.#scene.add(object);
+    this.#lights.set(light.path, objects);
+  }
+
+  #dropLight(path: string): void {
+    for (const object of this.#lights.get(path) ?? []) {
+      this.#scene.remove(object);
+      if ("dispose" in object && typeof object.dispose === "function") object.dispose();
+    }
+    this.#lights.delete(path);
+  }
+
+  /** The stage camera the view looks through, or `null` for the free camera. */
+  #looking(): CameraItem | null {
+    return this.#free?.checked === true || this.#usdCamera?.camera == null ? null : this.#usdCamera;
+  }
+
   #drop(id: number): void {
     const object = this.#objects.get(id);
     if (object === undefined) return;
@@ -212,7 +321,23 @@ export class Viewport {
   }
 
   #draw(): void {
-    this.#renderer.render(this.#scene, this.#camera);
+    const looking = this.#looking()?.camera ?? null;
+    if (looking === null) {
+      this.#renderer.toneMappingExposure = 1;
+      this.#renderer.render(this.#scene, this.#camera);
+      return;
+    }
+    // Row-by-row row-vector matrices are three.js's column-major
+    // column-vector ones: `fromArray` reads them as they are.
+    const { clientWidth: width, clientHeight: height } = this.#canvas;
+    const fitted = conformCamera(looking, "fit", height > 0 ? width / height : 1);
+    const camera = this.#stageCamera;
+    camera.projectionMatrix.fromArray(fitted.projectionMatrix);
+    camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+    camera.matrixWorldInverse.fromArray(fitted.view);
+    camera.matrixWorld.copy(camera.matrixWorldInverse).invert();
+    this.#renderer.toneMappingExposure = looking.linearExposureScale;
+    this.#renderer.render(this.#scene, camera);
   }
 }
 
@@ -252,4 +377,59 @@ function makeGeometry(view: ViewItem): BufferGeometry {
   if (mesh.ranges.length > 1) mesh.ranges.forEach((range, index) => geometry.addGroup(range.first, range.count, index));
   geometry.computeBoundingSphere();
   return geometry;
+}
+
+/**
+ * The three.js lights of a `UsdLux` light, in the units the header of this
+ * file states: the light, and a directional or spot light's target.
+ */
+function threeLights(light: LightItem): Object3D[] {
+  if (light.hidden || light.kind === "portal") return [];
+  const radiance = light.emission.radiance;
+  const peak = Math.max(...radiance);
+  if (!(peak > 0)) return [];
+  const color = new Color().setRGB(radiance[0] / peak, radiance[1] / peak, radiance[2] / peak);
+  const position = new Vector3(...light.position);
+  const direction = new Vector3(...light.direction);
+  // The light's area in world space: `sizeFactor` as `normalize` would make it.
+  const area = lightSizeFactor(light.geometry, light.matrix);
+  const aimed = (object: DirectionalLight | SpotLight): Object3D[] => {
+    object.target.position.copy(position).add(direction);
+    return [object, object.target];
+  };
+  switch (light.geometry.kind) {
+    case "sphere":
+    case "cylinder": {
+      const projected = light.geometry.kind === "sphere" ? area / 4 : area / Math.PI;
+      const point = new PointLight(color, peak * projected, 0, 2);
+      point.position.copy(position);
+      return [point];
+    }
+    case "disk": {
+      const shaping = light.shaping;
+      const angle = Math.min(Math.PI / 2, ((shaping?.coneAngle ?? 90) * Math.PI) / 180);
+      const spot = new SpotLight(color, peak * area, 0, angle, Math.min(1, Math.max(0, shaping?.coneSoftness ?? 0)), 2);
+      spot.position.copy(position);
+      return aimed(spot);
+    }
+    case "rect": {
+      const translation = new Vector3();
+      const rotation = new Quaternion();
+      const scale = new Vector3();
+      new Matrix4().fromArray(light.matrix).decompose(translation, rotation, scale);
+      const rect = new RectAreaLight(color, peak, light.geometry.width * Math.abs(scale.x), light.geometry.height * Math.abs(scale.y));
+      rect.position.copy(translation);
+      rect.quaternion.copy(rotation);
+      return [rect];
+    }
+    case "distant": {
+      const sun = new DirectionalLight(color, peak * area);
+      sun.position.copy(position).sub(direction);
+      return aimed(sun);
+    }
+    case "dome":
+      return [new HemisphereLight(color, color, Math.PI * peak)];
+    case "portal":
+      return [];
+  }
 }

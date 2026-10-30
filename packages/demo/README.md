@@ -96,9 +96,10 @@ The script runs fourteen steps, one button each:
     beacon's `xformOp:translate`, the rock's `visibility` and the stones'
     `invisibleIds`. The viewport moves the beacon, leaves out the rock and
     stone 3, and frames the smaller bounds. The transform cache recomputes
-    two local transforms, the beacon's and the rock's (whose first
-    `visibility` opinion is a new spec, which resyncs it), and the world
-    transforms below them, and reuses the rest.
+    one local transform, the beacon's, and the world transforms below it,
+    and reuses the rest: the rock's first `visibility` opinion is a new
+    property spec, which resyncs only `/World/Rock.visibility`, as
+    OpenUSD's `ObjectsChanged` does, and no transform reads it.
 
 `scripts/acceptance.ts` runs the same steps headless in Node, reading the
 sample from disk, and checks the values and explanations after each one,

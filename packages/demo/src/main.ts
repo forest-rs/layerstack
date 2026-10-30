@@ -798,7 +798,7 @@ function renderChanges(editor: Editor): void {
       h("span", { class: "cause" }, `${index + 1}. ${entry.cause}: `),
       list("created", entry.changes.created),
       list("removed", entry.changes.removed),
-      list("resynced", entry.changes.resynced),
+      list("resynced", [...entry.changes.resynced, ...entry.changes.resyncedProperties]),
       list("info", entry.changes.changedInfoOnly),
       list("muted", entry.changes.mutedIdentifiers),
       list("unmuted", entry.changes.unmutedIdentifiers),

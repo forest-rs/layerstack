@@ -985,7 +985,7 @@ impl Stage {
     /// Either every edit applies or none does. The receipt holds the
     /// inverse, and its record is `[target, changes, loaded, failures,
     /// unavailable]`: the target layer's id, the composed changes of the
-    /// transaction (`[created, removed, resynced, changedInfoOnly, properties]`), the
+    /// transaction (`[created, removed, resynced, changedInfoOnly, properties, resyncedProperties]`), the
     /// ids of the layers loaded for it, each asset that failed to load as
     /// `[asset, anchor, code, message]`, and the assets it asks for that
     /// the host has not supplied, as `unavailable` rows.
@@ -1281,7 +1281,7 @@ impl Stage {
     /// `[batches, mutedLayers, unmutedLayers]`.
     ///
     /// `batches` holds one batch per recomposition, oldest first, each a
-    /// `[created, removed, resynced, changedInfoOnly, properties]` record
+    /// `[created, removed, resynced, changedInfoOnly, properties, resyncedProperties]` record
     /// (`changes_record`): an empty list when nothing changed, and `null`
     /// when the history the cursor needs was evicted (more than the
     /// history budget changed in one call), which the wrapper reports as a
@@ -1445,7 +1445,7 @@ impl Stage {
     /// `[target, changes, loaded, failures, unavailable, layers,
     /// unrepaired]`: the target's record ([`crate::target`]), the
     /// composed changes of the transaction (`[created, removed, resynced,
-    /// changedInfoOnly, properties]`), the ids of the layers loaded for
+    /// changedInfoOnly, properties, resyncedProperties]`), the ids of the layers loaded for
     /// it, each asset that failed to load as `[asset, anchor, code,
     /// message]`, the assets it asks for that the host has not supplied
     /// yet, as [`Self::unavailable`] rows, the ids of the layers it wrote
@@ -2456,12 +2456,13 @@ impl Stage {
     }
 }
 
-/// `[created, removed, resynced, changedInfoOnly, properties]`: the prim
-/// paths of `changes` as text, and its property-field inventories
-/// ([`Changes::property_changes`]) as `[prim, fields]`, each field
-/// `[property, field, metadata]` (`field` `default`, `animation`,
-/// `timeSamples`, `targets`, `metadata` with the metadata field's name, or
-/// `other`).
+/// `[created, removed, resynced, changedInfoOnly, properties,
+/// resyncedProperties]`: the prim paths of `changes` as text, its
+/// property-field inventories ([`Changes::property_changes`]) as
+/// `[prim, fields]`, each field `[property, field, metadata]` (`field`
+/// `default`, `animation`, `timeSamples`, `targets`, `metadata` with the
+/// metadata field's name, or `other`), and the property paths of its
+/// property resyncs ([`Changes::resynced_properties`]) as text.
 fn changes_record(changes: &Changes, store: &InMemoryStore) -> Wire {
     let tokens = store.tokens();
     let path = |id: PathId| Wire::Text(store.paths().display(id, tokens));
@@ -2498,6 +2499,13 @@ fn changes_record(changes: &Changes, store: &InMemoryStore) -> Wire {
         paths(&changes.resynced),
         paths(&changes.changed_info_only),
         Wire::List(properties),
+        Wire::List(
+            changes
+                .resynced_properties
+                .iter()
+                .map(|property| Wire::Text(property.display(store.paths(), tokens)))
+                .collect(),
+        ),
     ])
 }
 

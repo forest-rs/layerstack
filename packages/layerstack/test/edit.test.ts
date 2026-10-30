@@ -486,6 +486,24 @@ describe("change listeners", () => {
     assert.equal(heard.length, before + 1, "a removed listener hears nothing");
   });
 
+  it("hear a new property spec as a resync of the property, not its prim", async () => {
+    using stage = await openScene();
+    const heard: Changes[] = [];
+    stage.onChange((changes) => heard.push(changes));
+    const receipt = stage.apply(
+      [{ type: "createAttribute", path: "/World.weight", typeName: "double", value: { type: "double", value: 1 } }],
+      stage.root,
+    );
+    assert.deepEqual(receipt.changes.resynced, []);
+    assert.deepEqual(receipt.changes.changedInfoOnly, []);
+    assert.deepEqual(receipt.changes.resyncedProperties, ["/World.weight"]);
+    assert.deepEqual(heard.at(-1)?.resyncedProperties, ["/World.weight"]);
+    receipt.undo().release();
+    assert.deepEqual(heard.at(-1)?.resyncedProperties, ["/World.weight"], "removing the spec resyncs it too");
+    stage.apply([{ type: "setValue", path: "/World.size", value: { type: "double", value: 3 } }], stage.root).release();
+    assert.deepEqual(heard.at(-1)?.resyncedProperties, [], "a value of an existing spec is info-only");
+  });
+
   it("keep going when one throws, and report it", async () => {
     using stage = await openScene();
     const reported: unknown[] = [];

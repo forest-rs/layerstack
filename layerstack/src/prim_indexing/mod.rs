@@ -2052,7 +2052,7 @@ pub(crate) fn order_children(
         let Some(node) = graph.node(id) else {
             continue;
         };
-        let layers: Vec<LayerId> = node.stack_layers().collect();
+        let layers: Vec<LayerId> = node.layers().collect();
         site::compose_child_names_in(
             store,
             &layers,

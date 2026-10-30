@@ -3533,14 +3533,11 @@ impl Stage {
         };
         let mut sites = Vec::new();
         for (id, node) in index.graph.nodes() {
-            let targeted = node.site() == target && node.stack_layers().any(|l| l == target_layer);
+            let targeted = node.site() == target && node.layers().any(|l| l == target_layer);
             if !targeted && !index.sources.iter().any(|source| source.key.node == id) {
                 continue;
             }
-            sites.extend(
-                node.stack_layers()
-                    .map(|layer| (layer, node.site().clone())),
-            );
+            sites.extend(node.layers().map(|layer| (layer, node.site().clone())));
         }
         sites
     }

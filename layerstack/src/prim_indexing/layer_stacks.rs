@@ -48,7 +48,7 @@ pub(crate) struct ComputedStack<'s> {
     pub(crate) resolved: Box<[&'s Layer]>,
     pub(crate) offsets: Vec<LayerOffset>,
     /// `layers` with their offsets, shared by the stage's nodes of this
-    /// layer stack ([`crate::prim_index_graph::PrimNode::stack_layers`]).
+    /// layer stack ([`crate::prim_index_graph::PrimNode::layers`]).
     pub(crate) layer_offsets: Arc<[(LayerId, LayerOffset)]>,
     /// The child listing of each of `layers`, as this composition reads it
     /// ([`super::site::compose_child_names`]).

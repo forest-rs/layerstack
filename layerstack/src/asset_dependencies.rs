@@ -187,10 +187,17 @@ pub fn collect_dependencies(
     mut resolve: impl FnMut(&AssetDependency) -> Vec<DependencyTarget>,
 ) -> DependencyReport {
     let mut report = DependencyReport::default();
-    let mut pending = BTreeSet::new();
-    pending.insert(root);
+    // The layers to visit, sorted with the smallest id last, so `pop`
+    // visits them in id order: a vector rather than a set, whose removals
+    // would compile the tree's rebalancing for this one walk.
+    let mut pending = alloc::vec![root];
+    let push = |pending: &mut Vec<LayerId>, id: LayerId| {
+        if let Err(at) = pending.binary_search_by(|p| id.cmp(p)) {
+            pending.insert(at, id);
+        }
+    };
     let mut visited = BTreeSet::new();
-    while let Some(id) = pending.pop_first() {
+    while let Some(id) = pending.pop() {
         if !visited.insert(id) {
             continue;
         }
@@ -203,7 +210,7 @@ pub fn collect_dependencies(
         // host results: import-time IDs can be stale after an asset path edit.
         for sub in &layer.sublayers {
             if sub.asset.is_none() && sub.layer != id {
-                pending.insert(sub.layer);
+                push(&mut pending, sub.layer);
             }
         }
         for prim in layer
@@ -216,7 +223,7 @@ pub fn collect_dependencies(
                     .flat_map(|b| b.spec.references.items().chain(b.spec.payloads.items())),
             ) {
                 if arc.asset.is_none() && arc.layer != id {
-                    pending.insert(arc.layer);
+                    push(&mut pending, arc.layer);
                 }
             }
         }
@@ -229,7 +236,7 @@ pub fn collect_dependencies(
             }
             for target in &targets {
                 if let DependencyTarget::Layer(layer) = target {
-                    pending.insert(*layer);
+                    push(&mut pending, *layer);
                 }
             }
             report

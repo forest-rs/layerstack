@@ -1161,26 +1161,28 @@ impl LiveStage {
             parents: parents.iter().copied().collect(),
             retained: false,
         };
-        let mut seed: BTreeSet<PathId> = sort::collect_set(affected.iter().copied());
+        // Deleted specs are removal candidates, not population candidates.
+        // Seeding them would leave an empty child-list entry on a parent
+        // whose clean population has no child-list entry at all. Filtered
+        // as they are met, so the set is only ever inserted into.
+        let pseudo_root = store.paths().intern(crate::Path::root());
+        let root_layer = store.layer(self.root);
+        let seeds = |path: &PathId| root_layer.is_some_and(|l| l.prims.contains_key(path));
+        let mut seed: BTreeSet<PathId> = BTreeSet::new();
+        seed.insert(pseudo_root);
         for &path in &affected {
+            if seeds(&path) {
+                seed.insert(path);
+            }
             let mut current = store.paths().resolve(path).parent();
             while let Some(parent) = current {
                 let parent_id = store.paths().intern(parent.clone());
-                seed.insert(parent_id);
+                if seeds(&parent_id) {
+                    seed.insert(parent_id);
+                }
                 current = parent.parent();
             }
         }
-        // Deleted specs are removal candidates, not population candidates.
-        // Seeding them would leave an empty child-list entry on a parent
-        // whose clean population has no child-list entry at all.
-        let pseudo_root = store.paths().intern(crate::Path::root());
-        seed.retain(|path| {
-            *path == pseudo_root
-                || store
-                    .layer(self.root)
-                    .is_some_and(|l| l.prims.contains_key(path))
-        });
-        seed.insert(pseudo_root);
         let options = StageOptions {
             with_dependencies: true,
             ..self.options.clone()

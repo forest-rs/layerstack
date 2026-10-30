@@ -31,8 +31,9 @@ mod helpers;
 pub use helpers::JointTransformComponents;
 mod influences;
 pub use influences::{
-    InfluenceShapeError, normalize_joint_weights, normalize_joint_weights_with_epsilon,
-    resize_joint_indices, resize_joint_weights, sort_joint_influences,
+    InfluenceShapeError, expand_constant_influences, interleave_joint_influences,
+    normalize_joint_weights, normalize_joint_weights_with_epsilon, resize_joint_indices,
+    resize_joint_weights, sort_joint_influences,
 };
 mod normals;
 pub use normals::{
@@ -53,7 +54,8 @@ mod inputs;
 #[cfg(feature = "simd")]
 mod simd;
 pub use inputs::{
-    DeformationInputs, DeformationRevisions, NormalSkinningInputs, SkinningBindingInputs,
+    DeformationInputs, DeformationRevisions, JointInfluenceArrays, NormalSkinningInputs,
+    SkinningBindingInputs,
 };
 mod skinning;
 pub use skinning::{
@@ -142,6 +144,14 @@ pub enum SkelError {
         /// Joint index in skeleton order.
         joint: usize,
     },
+    /// A binding's joint influences are not shaped as their element size
+    /// and interpolation need.
+    Influences {
+        /// The bound geometry.
+        prim: PathId,
+        /// How the influence arrays are misshapen.
+        error: InfluenceShapeError,
+    },
 }
 impl SkelError {
     /// The error in words, its prims, properties and targets written as paths
@@ -224,6 +234,11 @@ impl Describe for SkelError {
             Self::SingularBind { joint } => {
                 write!(f, "the bind transform of joint {joint} cannot be inverted")
             }
+            Self::Influences { prim, error } => write!(
+                f,
+                "the joint influences of {} are misshapen: {error}",
+                names.path(*prim)
+            ),
         }
     }
 }
@@ -237,6 +252,7 @@ impl core::error::Error for SkelError {
         match self {
             Self::Decode { error, .. } => Some(error),
             Self::Primvar { source, .. } => Some(source),
+            Self::Influences { error, .. } => Some(error),
             _ => None,
         }
     }

@@ -3,8 +3,8 @@
 
 //! Backend-independent resolved bindings and retained deformation input views.
 use super::{
-    InfluenceInterpolation, JointInfluences, SkelError, SkinningMethod, SkinningQuery, invalid,
-    read,
+    InfluenceInterpolation, InfluenceShapeError, JointInfluences, SkelError, SkinningMethod,
+    SkinningQuery, invalid, read,
 };
 use crate::{PrimView, Time, gf, primvar::Primvar};
 use alloc::vec::Vec;
@@ -53,6 +53,30 @@ impl SkinningBindingInputs {
         self.influences().validate(point_count, joint_count)
     }
 }
+/// A binding's flattened joint influences, as
+/// [`SkinningQuery::compute_joint_influences`] reads them: index and weight
+/// arrays of equal length, in blocks of the binding's element size.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct JointInfluenceArrays {
+    /// Joint index per influence, in the binding's joint order.
+    pub indices: Vec<i32>,
+    /// Weight per influence, unnormalized.
+    pub weights: Vec<f32>,
+}
+
+impl JointInfluenceArrays {
+    /// The influences as `[index, weight]` pairs
+    /// ([`super::interleave_joint_influences`]).
+    ///
+    /// OpenUSD: `UsdSkelInterleaveInfluences`.
+    #[doc(alias = "UsdSkelInterleaveInfluences")]
+    #[must_use]
+    pub fn interleaved(&self) -> Vec<[f32; 2]> {
+        super::interleave_joint_influences(&self.indices, &self.weights)
+            .expect("equal lengths by construction")
+    }
+}
+
 impl SkinningQuery<'_> {
     /// Resolves method, geometry bind and flattened influence arrays at `time`.
     /// This does not evaluate the Skeleton, read points/normals or apply shapes.
@@ -125,6 +149,94 @@ impl SkinningQuery<'_> {
             interpolation: self.definition.interpolation,
         })
     }
+    /// Whether the binding's influences are constant: one block of
+    /// [`Self::element_size`] influences moves the whole prim rigidly.
+    ///
+    /// OpenUSD: `UsdSkelSkinningQuery::IsRigidlyDeformed`.
+    #[doc(alias = "UsdSkelSkinningQuery::IsRigidlyDeformed")]
+    #[doc(alias = "IsRigidlyDeformed")]
+    #[must_use]
+    pub fn is_rigidly_deformed(&self) -> bool {
+        self.definition.interpolation == InfluenceInterpolation::Constant
+    }
+
+    /// The binding's flattened joint indices and weights at `time`, checked
+    /// for their basic shape but not their contents: as many weights as
+    /// indices, a whole number of [`Self::element_size`] blocks, and one
+    /// block for constant influences. Joint indices are not checked against
+    /// the skeleton ([`JointInfluences::validate`] does that).
+    ///
+    /// OpenUSD: `UsdSkelSkinningQuery::ComputeJointInfluences`.
+    ///
+    /// # Errors
+    /// [`SkelError::Influences`] for misshapen arrays, or why a primvar
+    /// cannot be read or flattened.
+    #[doc(alias = "UsdSkelSkinningQuery::ComputeJointInfluences")]
+    #[doc(alias = "ComputeJointInfluences")]
+    pub fn compute_joint_influences(&self, time: Time) -> Result<JointInfluenceArrays, SkelError> {
+        let inputs = self.binding_inputs(time)?;
+        let prim = self.definition.geometry;
+        let shape = |error| SkelError::Influences { prim, error };
+        let (indices, weights) = (inputs.indices, inputs.weights);
+        if indices.len() != weights.len() {
+            return Err(shape(InfluenceShapeError::Mismatch {
+                indices: indices.len(),
+                weights: weights.len(),
+            }));
+        }
+        let element_size = self.definition.element_size;
+        if !indices.len().is_multiple_of(element_size) {
+            return Err(shape(InfluenceShapeError::Length {
+                len: indices.len(),
+                influences_per_component: element_size,
+            }));
+        }
+        if self.is_rigidly_deformed() && indices.len() != element_size {
+            return Err(shape(InfluenceShapeError::Count {
+                len: indices.len(),
+                expected: element_size,
+            }));
+        }
+        Ok(JointInfluenceArrays { indices, weights })
+    }
+
+    /// [`Self::compute_joint_influences`] with a block per point: constant
+    /// influences are repeated for each of `point_count` points
+    /// ([`super::expand_constant_influences`]; none for no points), and
+    /// varying ones must already have `point_count` blocks.
+    ///
+    /// OpenUSD: `UsdSkelSkinningQuery::ComputeVaryingJointInfluences`.
+    ///
+    /// # Errors
+    /// As [`Self::compute_joint_influences`], and
+    /// [`InfluenceShapeError::Count`] for varying influences that are not
+    /// sized for `point_count` points.
+    #[doc(alias = "UsdSkelSkinningQuery::ComputeVaryingJointInfluences")]
+    #[doc(alias = "ComputeVaryingJointInfluences")]
+    pub fn compute_varying_joint_influences(
+        &self,
+        point_count: usize,
+        time: Time,
+    ) -> Result<JointInfluenceArrays, SkelError> {
+        let mut influences = self.compute_joint_influences(time)?;
+        if self.is_rigidly_deformed() {
+            super::expand_constant_influences(&mut influences.indices, point_count);
+            super::expand_constant_influences(&mut influences.weights, point_count);
+            return Ok(influences);
+        }
+        let expected = point_count.saturating_mul(self.definition.element_size);
+        if influences.indices.len() != expected {
+            return Err(SkelError::Influences {
+                prim: self.definition.geometry,
+                error: InfluenceShapeError::Count {
+                    len: influences.indices.len(),
+                    expected,
+                },
+            });
+        }
+        Ok(influences)
+    }
+
     /// Binding-order joint index to Skeleton-order joint index. `None` means
     /// identical orders; an unmapped entry uses an identity transform, as USD's
     /// joint mapper does. Influence indices address this mapping when present.

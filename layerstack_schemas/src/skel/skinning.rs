@@ -614,6 +614,8 @@ impl<'a> SkinningQuery<'a> {
         self.binding_property(self.definition.geometry, "skel:blendShapeTargets", true)
     }
     /// Number of influences in each constant or vertex block.
+    #[doc(alias = "UsdSkelSkinningQuery::GetNumInfluencesPerComponent")]
+    #[doc(alias = "GetNumInfluencesPerComponent")]
     #[must_use]
     pub fn element_size(&self) -> usize {
         self.definition.element_size

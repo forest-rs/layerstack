@@ -6,8 +6,9 @@
 //!
 //! Influences are stored in blocks of `influences_per_component` entries,
 //! one block per point (vertex interpolation) or one for the whole prim
-//! (constant). OpenUSD: `UsdSkelNormalizeWeights`, `UsdSkelSortInfluences`
-//! and `UsdSkelResizeInfluences` (`pxr/usd/usdSkel/utils.cpp`).
+//! (constant). OpenUSD: `UsdSkelNormalizeWeights`, `UsdSkelSortInfluences`,
+//! `UsdSkelResizeInfluences`, `UsdSkelExpandConstantInfluencesToVarying`
+//! and `UsdSkelInterleaveInfluences` (`pxr/usd/usdSkel/utils.cpp`).
 use alloc::vec::Vec;
 use layerstack::sort;
 
@@ -32,6 +33,15 @@ pub enum InfluenceShapeError {
         /// The number of joint weights.
         weights: usize,
     },
+    /// The arrays do not hold the number of influences their interpolation
+    /// needs: one block for constant influences, one per point for varying
+    /// ones.
+    Count {
+        /// The arrays' length.
+        len: usize,
+        /// The length the interpolation needs.
+        expected: usize,
+    },
 }
 
 impl core::fmt::Display for InfluenceShapeError {
@@ -49,6 +59,9 @@ impl core::fmt::Display for InfluenceShapeError {
             ),
             Self::Mismatch { indices, weights } => {
                 write!(f, "{indices} joint indices but {weights} joint weights")
+            }
+            Self::Count { len, expected } => {
+                write!(f, "{len} influences where {expected} are needed")
             }
         }
     }
@@ -228,6 +241,59 @@ fn resize<T: Copy>(
         }
     }
     Ok(())
+}
+
+/// Repeats a constant (rigid) block of influences, joint indices or
+/// weights, once per point: `values` becomes `point_count` copies of
+/// itself, and empty for no points.
+///
+/// A convenience for consumers that only understand varying influences;
+/// [`super::SkinningQuery::compute_varying_joint_influences`] reads a
+/// binding's influences this way.
+///
+/// OpenUSD: `UsdSkelExpandConstantInfluencesToVarying`, which never fails.
+#[doc(alias = "UsdSkelExpandConstantInfluencesToVarying")]
+pub fn expand_constant_influences<T: Copy>(values: &mut Vec<T>, point_count: usize) {
+    if point_count == 0 {
+        values.clear();
+        return;
+    }
+    let block = values.len();
+    values.reserve(block * (point_count - 1));
+    for _ in 1..point_count {
+        values.extend_from_within(..block);
+    }
+}
+
+/// Pairs each joint index with its weight, as `[index, weight]` with the
+/// index converted to `f32`: the interleaved form GPU skinning and
+/// OpenUSD's interleaved skinning overloads consume.
+///
+/// OpenUSD: `UsdSkelInterleaveInfluences`.
+///
+/// # Errors
+/// [`InfluenceShapeError::Mismatch`] for arrays of different lengths.
+#[doc(alias = "UsdSkelInterleaveInfluences")]
+pub fn interleave_joint_influences(
+    indices: &[i32],
+    weights: &[f32],
+) -> Result<Vec<[f32; 2]>, InfluenceShapeError> {
+    if indices.len() != weights.len() {
+        return Err(InfluenceShapeError::Mismatch {
+            indices: indices.len(),
+            weights: weights.len(),
+        });
+    }
+    // `static_cast<float>(index)`: rounds to nearest, as `as` does.
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "OpenUSD converts the index to float the same way"
+    )]
+    Ok(indices
+        .iter()
+        .zip(weights)
+        .map(|(&index, &weight)| [index as f32, weight])
+        .collect())
 }
 
 #[cfg(test)]

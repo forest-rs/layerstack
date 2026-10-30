@@ -1852,6 +1852,19 @@ impl<'s> SchemaEdit<'s> {
         self.transaction.clear_targets(at);
     }
 
+    /// Sets the `specializes` list op of the prim at `path` in the edit
+    /// target; an empty list op clears the field.
+    /// OpenUSD: `UsdSpecializes::SetSpecializes`, `ClearSpecializes`.
+    #[cfg(feature = "usd-shade")]
+    pub(crate) fn set_specializes(&mut self, path: PathId, specializes: ListOp<PathId>) {
+        let at = self.target.prim(path);
+        if specializes == ListOp::default() {
+            self.transaction.clear_specializes(at);
+        } else {
+            self.transaction.set_specializes(at, specializes);
+        }
+    }
+
     /// Authors `targets` as the explicit targets of the relationship `name`.
     pub(crate) fn set_targets(&mut self, path: PathId, name: &str, targets: &[TargetPath]) {
         let token = self.store.tokens().intern(name);

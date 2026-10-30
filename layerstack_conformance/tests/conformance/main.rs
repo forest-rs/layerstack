@@ -32,6 +32,7 @@ mod authored_sublayers;
 mod authoring;
 mod authoring_inspection;
 mod authoring_targets;
+mod base_material;
 mod binding;
 mod binding_authoring;
 mod bounds;

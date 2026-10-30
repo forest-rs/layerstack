@@ -1,0 +1,207 @@
+{
+  "calls": [
+    {
+      "call": "set path A",
+      "path": "/Looks/A",
+      "specializes": {
+        "explicit": true,
+        "explicit_items": [
+          "/Looks/A"
+        ],
+        "prepended": []
+      }
+    },
+    {
+      "call": "set material B",
+      "path": "/Looks/B",
+      "specializes": {
+        "explicit": true,
+        "explicit_items": [
+          "/Looks/B"
+        ],
+        "prepended": []
+      }
+    },
+    {
+      "call": "set path to a missing prim",
+      "path": null,
+      "specializes": {
+        "explicit": true,
+        "explicit_items": [
+          "/Looks/Nowhere"
+        ],
+        "prepended": []
+      }
+    },
+    {
+      "call": "set invalid material",
+      "path": null,
+      "specializes": null
+    },
+    {
+      "call": "set path A again",
+      "path": "/Looks/A",
+      "specializes": {
+        "explicit": true,
+        "explicit_items": [
+          "/Looks/A"
+        ],
+        "prepended": []
+      }
+    },
+    {
+      "call": "set empty path",
+      "path": null,
+      "specializes": null
+    },
+    {
+      "call": "set material B again",
+      "path": "/Looks/B",
+      "specializes": {
+        "explicit": true,
+        "explicit_items": [
+          "/Looks/B"
+        ],
+        "prepended": []
+      }
+    },
+    {
+      "call": "clear",
+      "path": null,
+      "specializes": null
+    }
+  ],
+  "openusd_version": "26.11",
+  "reads": {
+    "/Instanced": {
+      "has": false,
+      "material": null,
+      "path": null
+    },
+    "/Instanced/Base": {
+      "has": false,
+      "material": null,
+      "path": null
+    },
+    "/Instanced/Rock": {
+      "has": true,
+      "material": "/__Prototype_1/Base",
+      "path": "/__Prototype_1/Base"
+    },
+    "/Lib": {
+      "has": false,
+      "material": null,
+      "path": null
+    },
+    "/Lib/Base": {
+      "has": false,
+      "material": null,
+      "path": null
+    },
+    "/Lib/Rock": {
+      "has": true,
+      "material": "/Lib/Base",
+      "path": "/Lib/Base"
+    },
+    "/Looks": {
+      "has": false,
+      "material": null,
+      "path": null
+    },
+    "/Looks/Base": {
+      "has": false,
+      "material": null,
+      "path": null
+    },
+    "/Looks/Chain": {
+      "has": true,
+      "material": "/Looks/Derived",
+      "path": "/Looks/Derived"
+    },
+    "/Looks/Derived": {
+      "has": true,
+      "material": "/Looks/Base",
+      "path": "/Looks/Base"
+    },
+    "/Looks/External": {
+      "has": false,
+      "material": null,
+      "path": null
+    },
+    "/Looks/External/Coat": {
+      "has": true,
+      "material": "/Looks/External/Inner",
+      "path": "/Looks/External/Inner"
+    },
+    "/Looks/External/Inner": {
+      "has": false,
+      "material": null,
+      "path": null
+    },
+    "/Looks/Inherited": {
+      "has": true,
+      "material": "/Looks/Base",
+      "path": "/Looks/Base"
+    },
+    "/Looks/Internal": {
+      "has": true,
+      "material": "/Looks/Base",
+      "path": "/Looks/Base"
+    },
+    "/Looks/Missing": {
+      "has": false,
+      "material": null,
+      "path": null
+    },
+    "/Looks/NotMaterial": {
+      "has": false,
+      "material": null,
+      "path": null
+    },
+    "/Looks/Plain": {
+      "has": false,
+      "material": null,
+      "path": null
+    },
+    "/Looks/ScopeThenBase": {
+      "has": true,
+      "material": "/Looks/Base",
+      "path": "/Looks/Base"
+    },
+    "/Looks/SelfReference": {
+      "has": true,
+      "material": "/Looks/Base",
+      "path": "/Looks/Base"
+    },
+    "/Looks/Shader": {
+      "has": true,
+      "material": "/Looks/Base",
+      "path": "/Looks/Base"
+    },
+    "/Looks/ToScope": {
+      "has": false,
+      "material": null,
+      "path": null
+    },
+    "/Looks/Varied": {
+      "has": true,
+      "material": "/Looks/Base",
+      "path": "/Looks/Base"
+    },
+    "/Placed": {
+      "has": false,
+      "material": null,
+      "path": null
+    },
+    "/Placed/Base": {
+      "has": false,
+      "material": null,
+      "path": null
+    },
+    "/Placed/Rock": {
+      "has": true,
+      "material": "/Placed/Base",
+      "path": "/Placed/Base"
+    }
+  }
+}

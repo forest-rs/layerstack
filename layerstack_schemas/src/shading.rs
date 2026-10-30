@@ -19,6 +19,7 @@ pub mod nodes {
     pub use crate::generated::shader_nodes::*;
 }
 
+mod base_material;
 mod behavior;
 pub use behavior::{ConnectableBehavior, ConnectionError, ConnectionIssue};
 mod node_def;

@@ -100,7 +100,7 @@ pub(super) struct DemandSet {
     owner: PathId,
     name: Arc<str>,
     manifest: Option<ClipAssetRequest>,
-    declarations: BTreeMap<TokenId, Arc<PropertySpec>>,
+    declarations: Properties,
     requests: Vec<ClipAssetRequest>,
     active: Vec<(f64, usize)>,
     identifiers: Vec<Arc<str>>,

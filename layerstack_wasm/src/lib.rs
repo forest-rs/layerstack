@@ -123,7 +123,7 @@ pub use edit::EditBatch;
 pub use error::Error;
 pub use receipt::EditReceipt;
 pub use skel::{skin_normals, skin_points, skin_transform};
-pub use stage::{BROWSER_LIMITS, Stage};
+pub use stage::{BROWSER_LIMITS, SessionLayer, Stage};
 pub use storage::HostStorage;
 
 use alloc::vec;
@@ -131,10 +131,10 @@ use alloc::vec;
 use wasm_bindgen::prelude::*;
 
 /// The version of the records the module exchanges with the TypeScript
-/// wrapper: currently 7. It changes whenever an export's arguments or a
+/// wrapper: currently 9. It changes whenever an export's arguments or a
 /// record's layout change incompatibly; the wrapper
 /// refuses a module whose ABI differs from its own (`module.abi`).
-pub const ABI: u32 = 8;
+pub const ABI: u32 = 9;
 
 /// The crate version, the source revision the module was built from
 /// (`LAYERSTACK_REVISION` at build time, `unknown` when unset) and [`ABI`],

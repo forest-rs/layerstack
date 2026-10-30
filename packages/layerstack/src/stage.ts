@@ -88,7 +88,7 @@ export const PACKAGE_VERSION = "0.1.0";
  * The ABI this package speaks: the version of the records it exchanges
  * with the native module (`layerstack_wasm::ABI`).
  */
-export const ABI = 8;
+export const ABI = 9;
 
 /** The native stage the generated glue exports (`layerstack_wasm::Stage`). Borrowed only by same-module extensions. */
 export interface NativeStage extends Disposable {
@@ -229,6 +229,8 @@ export interface NativeModule {
       nodesPerPrimIndex: number | undefined,
       composedDepth: number | undefined,
       provenance: boolean,
+      sessionIdentifier: string | undefined,
+      sessionBytes: Uint8Array | undefined,
     ): NativeStage;
   };
   /** The batch of edits `Stage.apply` takes. */
@@ -312,15 +314,26 @@ export class Layerstack {
    *
    * To edit a root that cannot be saved (a USDZ package), pass
    * `editLayer: "session"`: edits then go to an anonymous session layer in
-   * front of it ({@link Stage.editLayer}).
+   * front of it ({@link Stage.editLayer}). `sessionLayer` opens a session
+   * layer from bytes instead.
    */
   open(root: { readonly identifier: string; readonly bytes: Uint8Array }, options: OpenOptions = {}): Stage {
     if (typeof root?.identifier !== "string" || !(root.bytes instanceof Uint8Array)) {
       throw new LayerstackError("argument.invalid", "open", "expected { identifier: string, bytes: Uint8Array }");
     }
-    const editLayer = options.editLayer ?? "root";
+    const sessionLayer = options.sessionLayer;
+    if (
+      sessionLayer !== undefined &&
+      (typeof sessionLayer?.identifier !== "string" || !(sessionLayer.bytes instanceof Uint8Array))
+    ) {
+      throw new LayerstackError("argument.invalid", "open", "sessionLayer: expected { identifier: string, bytes: Uint8Array }");
+    }
+    const editLayer = options.editLayer ?? (sessionLayer ? "session" : "root");
     if (editLayer !== "root" && editLayer !== "session") {
       throw new LayerstackError("argument.invalid", "open", 'editLayer must be "root" or "session"');
+    }
+    if (sessionLayer && editLayer !== "session") {
+      throw new LayerstackError("argument.invalid", "open", 'a sessionLayer takes the edits: editLayer must be "session"');
     }
     if (options.provenance !== undefined && typeof options.provenance !== "boolean") {
       throw new LayerstackError("argument.invalid", "open", "provenance must be a boolean");
@@ -333,9 +346,20 @@ export class Layerstack {
     const perIndex = limit(limits?.nodesPerPrimIndex, "nodesPerPrimIndex");
     const depth = limit(limits?.composedDepth, "composedDepth");
     const native = this.call("open", () =>
-      this.#module.Stage.open(root.identifier, root.bytes, recover, session, nodes, perIndex, depth, provenance),
+      this.#module.Stage.open(
+        root.identifier,
+        root.bytes,
+        recover,
+        session,
+        nodes,
+        perIndex,
+        depth,
+        provenance,
+        sessionLayer?.identifier,
+        sessionLayer?.bytes,
+      ),
     );
-    this.#bytesIn += root.bytes.byteLength;
+    this.#bytesIn += root.bytes.byteLength + (sessionLayer?.bytes.byteLength ?? 0);
     return new Stage(this, native, provenance);
   }
 
@@ -1616,8 +1640,11 @@ export class Stage implements Disposable {
    * The saved bytes also become what the stage reads those identifiers
    * from, and the layers are clean afterwards.
    *
-   * The session layer is anonymous, so it is never saved: it is listed in
-   * `anonymous`; export it with {@link Stage.exportLayer}. A package member
+   * A save of the stage leaves the session layer and its sublayers alone,
+   * as OpenUSD's does; `save(layer)` saves one. An anonymous session layer
+   * has nowhere to go, so it is listed in `anonymous`; export it with
+   * {@link Stage.exportLayer}. A session layer opened from bytes
+   * (`sessionLayer`) is written to its identifier. A package member
    * fails with `io.read_only` and stays dirty. A layer edited through an
    * arc is saved like any other while the stage uses it; a dirty layer the
    * stage mutes or no longer composes is left dirty and listed in

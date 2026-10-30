@@ -55,6 +55,31 @@ pub const BROWSER_LIMITS: CompositionLimits = CompositionLimits {
 /// the ids derived from identifiers, as host-made layers' ids are.
 const SESSION_LAYER: LayerId = LayerId(1);
 
+/// The session layer a stage opens with ([`Stage::open_with_provenance`]):
+/// the strongest layer of its root layer stack, which takes its edits
+/// ([`Stage::edit_layer`]).
+///
+/// Spec: AOUSD Core §10.3.1.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum SessionLayer {
+    /// No session layer.
+    #[default]
+    None,
+    /// An empty anonymous session layer, never saved.
+    Anonymous,
+    /// A session layer read from `bytes`, the source of `identifier`, as
+    /// OpenUSD's `UsdStage::Open(rootLayer, sessionLayer)` opens one from a
+    /// file ([`layerstack_io::OpenOptions::session_layer`]): its sublayers
+    /// are wanted as any dependency, the asset paths it authors anchor to
+    /// it, and saving it writes it back.
+    Supplied {
+        /// The identifier the host supplies it under.
+        identifier: String,
+        /// Its source.
+        bytes: Vec<u8>,
+    },
+}
+
 /// An edit target resolved against the stage as it is composed now: the
 /// core target, and the layer stack its layer is in.
 #[derive(Clone, Debug)]
@@ -122,23 +147,30 @@ impl Stage {
         session_layer: bool,
         limits: CompositionLimits,
     ) -> Result<Self, Error> {
-        Self::open_with_provenance(identifier, bytes, recover, session_layer, limits, false)
+        let session = if session_layer {
+            SessionLayer::Anonymous
+        } else {
+            SessionLayer::None
+        };
+        Self::open_with_provenance(identifier, bytes, recover, session, limits, false)
     }
 
-    /// Opens a stage as in [`Self::open`], optionally including the winning
-    /// source layer, spec path and field in native resolved values.
+    /// Opens a stage as in [`Self::open`], with the session layer
+    /// `session_layer`, optionally including the winning source layer,
+    /// spec path and field in native resolved values.
     ///
     /// Same-module extensions use this evidence to check source correspondence.
     /// Query explanations remain available when `provenance` is false.
     ///
     /// # Errors
     ///
-    /// The root's read or import failure, as in [`Self::open`].
+    /// The root's or the session layer's read or import failure, as in
+    /// [`Self::open`]; `io.rejected` for a session layer that is the root.
     pub fn open_with_provenance(
         identifier: &str,
         bytes: Vec<u8>,
         recover: bool,
-        session_layer: bool,
+        session_layer: SessionLayer,
         limits: CompositionLimits,
         provenance: bool,
     ) -> Result<Self, Error> {
@@ -146,12 +178,20 @@ impl Stage {
         storage.supply(identifier, bytes);
         let mut store = InMemoryStore::default();
         let schemas = layerstack_schemas::openusd(store.tokens());
-        if session_layer {
-            store.insert_layer(Layer::new(SESSION_LAYER));
-        }
+        let (anonymous, supplied) = match session_layer {
+            SessionLayer::None => (None, None),
+            SessionLayer::Anonymous => {
+                store.insert_layer(Layer::new(SESSION_LAYER));
+                (Some(SESSION_LAYER), None)
+            }
+            SessionLayer::Supplied { identifier, bytes } => {
+                storage.supply(&identifier, bytes);
+                (None, Some(identifier))
+            }
+        };
         let options = StageOptions {
             schemas: Some(Arc::new(schemas)),
-            session_layer: session_layer.then_some(SESSION_LAYER),
+            session_layer: anonymous,
             limits,
             with_provenance: provenance,
             ..StageOptions::default()
@@ -171,7 +211,7 @@ impl Stage {
                     ..LoadOptions::default()
                 },
                 store: Some(store),
-                ..OpenOptions::default()
+                session_layer: supplied,
             },
         )?;
         let cursor = document.parts_mut().1.change_cursor();
@@ -1510,7 +1550,7 @@ impl Stage {
 
     /// Saves the dirty layers the stage uses to the host's storage
     /// ([`StageDocument::save`], OpenUSD's `UsdStage::Save`: not the
-    /// session layer, which is anonymous), or only layer `layer` when given
+    /// session layer nor its sublayers), or only layer `layer` when given
     /// ([`StageDocument::save_layers`]). Each layer is written in its own
     /// format to the identifier it was read from; the bytes become that
     /// identifier's source and are handed to the host to persist.
@@ -1555,6 +1595,17 @@ impl Stage {
     /// composed stay dirty.
     fn skipped_by(&self, report: &SaveReport) -> Vec<Wire> {
         let stage = self.document.stage().stage();
+        // The session layer stack, which a save of the stage leaves alone
+        // (`UsdStage::Save`), as `save_session_layers` saves it.
+        let mut session = BTreeSet::new();
+        let mut queue: Vec<LayerId> = stage.session_layer().into_iter().collect();
+        while let Some(id) = queue.pop() {
+            if session.insert(id)
+                && let Some(layer) = self.document.store().layer(id)
+            {
+                queue.extend(layer.sublayers().iter().map(|sublayer| sublayer.layer));
+            }
+        }
         let reported = |id: LayerId| {
             report.saved.contains(&id)
                 || report.anonymous.contains(&id)
@@ -1567,7 +1618,7 @@ impl Stage {
             .filter(|&id| {
                 self.document.is_dirty(id)
                     && self.document.identifier(id).is_some()
-                    && stage.session_layer() != Some(id)
+                    && !session.contains(&id)
                     && !reported(id)
             })
             .map(|id| {
@@ -1792,7 +1843,9 @@ impl Stage {
     /// each `undefined` for its
     /// [`BROWSER_LIMITS`] value, infinite for no limit, a number for that
     /// limit (truncated to an integer). `provenance` includes winning sources
-    /// in native resolved values ([`Self::open_with_provenance`]).
+    /// in native resolved values ([`Self::open_with_provenance`]). A
+    /// `session_identifier` with `session_bytes` opens that session layer
+    /// ([`SessionLayer::Supplied`]) in place of an anonymous one.
     #[wasm_bindgen(js_name = open)]
     pub fn js_open(
         identifier: &str,
@@ -1803,6 +1856,8 @@ impl Stage {
         nodes_per_prim_index: Option<f64>,
         composed_depth: Option<f64>,
         provenance: bool,
+        session_identifier: Option<String>,
+        session_bytes: Option<Vec<u8>>,
     ) -> Result<Self, JsValue> {
         let limit = |given: Option<f64>, default: Option<usize>| match given {
             None => default,
@@ -1819,13 +1874,13 @@ impl Stage {
             nodes_per_prim_index: limit(nodes_per_prim_index, BROWSER_LIMITS.nodes_per_prim_index),
             composed_depth: limit(composed_depth, BROWSER_LIMITS.composed_depth),
         };
+        let session = match (session_identifier, session_bytes) {
+            (Some(identifier), Some(bytes)) => SessionLayer::Supplied { identifier, bytes },
+            _ if session_layer => SessionLayer::Anonymous,
+            _ => SessionLayer::None,
+        };
         Ok(Self::open_with_provenance(
-            identifier,
-            bytes,
-            recover,
-            session_layer,
-            limits,
-            provenance,
+            identifier, bytes, recover, session, limits, provenance,
         )?)
     }
 
@@ -2795,7 +2850,7 @@ def "Ball" {
                 "scene.usda",
                 ROOT.as_bytes().to_vec(),
                 false,
-                false,
+                SessionLayer::None,
                 BROWSER_LIMITS,
                 provenance,
             )
@@ -3501,7 +3556,7 @@ def Mesh "Rock" {
             "root.usda",
             MESH_ROOT.as_bytes().to_vec(),
             false,
-            false,
+            SessionLayer::None,
             BROWSER_LIMITS,
             provenance,
         )

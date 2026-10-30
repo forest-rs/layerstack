@@ -222,8 +222,21 @@ export interface OpenOptions {
    * - `"session"`: an empty anonymous session layer, placed in front of
    *   the root (the strongest layer of the stage), takes the edits. This
    *   is how to edit a USDZ package: the package stays as it was read.
+   *   With `sessionLayer`, that layer takes them (the default then).
    */
   readonly editLayer?: "root" | "session";
+  /**
+   * A session layer read from these bytes, the source of `identifier`, in
+   * place of an anonymous one, as OpenUSD's `UsdStage::Open(rootLayer,
+   * sessionLayer)` opens one from a file: the strongest layer of the
+   * stage, which takes the edits ({@link Stage.editLayer}). The sublayers
+   * it names are wanted as any dependency ({@link Stage.unavailable}) and
+   * form the session layer stack; the asset paths it authors anchor to
+   * its identifier, so {@link Stage.exportFlattened} anchors them; and
+   * `save(layer)` writes it back, while `save()` leaves it alone.
+   * `editLayer: "root"` with it is `argument.invalid`.
+   */
+  readonly sessionLayer?: { readonly identifier: string; readonly bytes: Uint8Array };
   /**
    * How much work composition may do (`layerstack::CompositionLimits`), for
    * the open and every edit after: each limit `undefined` for the module's

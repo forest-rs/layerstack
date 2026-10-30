@@ -114,6 +114,7 @@ mod material_subsets;
 mod membership_cache;
 mod membership_index;
 mod mesh_export;
+mod mesh_topology;
 mod metadata;
 mod metadata_by_key;
 mod missing_assets;

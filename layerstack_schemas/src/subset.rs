@@ -7,9 +7,12 @@
 use crate::diagnostic::{Describe, Names, with_store};
 use crate::{
     PrimView, Time,
-    usd_geom::{GeomSubset as Subset, GeomSubsetElementType as SubsetElementType, Imageable, Mesh},
+    usd_geom::{
+        GeomSubset as Subset, GeomSubsetElementType as SubsetElementType, GprimOrientation,
+        Imageable, Mesh, MeshSubdivisionScheme,
+    },
 };
-use alloc::{collections::BTreeSet, format, string::String, vec::Vec};
+use alloc::{collections::BTreeSet, format, string::String, sync::Arc, vec::Vec};
 use layerstack::sort;
 use layerstack::{ArrayReadError, LayerStore, PathId, PropertyPath, TokenInterner, Value};
 
@@ -1141,5 +1144,113 @@ impl Mesh<'_> {
             .map_err(|error| decode_error("faceVertexIndices", error))?
             .ok_or(MeshTopologyError::MissingAttribute)?;
         validate_mesh_topology(&indices, &counts, points.len())
+    }
+}
+
+/// A mesh's topology at one time: what a renderer needs to triangulate it,
+/// with the result of validating it.
+///
+/// The arrays are the stage's shared buffers (no copy). An absent
+/// attribute reads as an empty array, as OpenUSD's `Get` leaves it, so a
+/// mesh without faces is valid and draws nothing; an attribute that fails
+/// to decode also reads as empty, and `validation` is then
+/// [`MeshTopologyError::Decode`]. (The `MeshTopology` validation rule,
+/// [`Mesh::validate_topology`], is stricter: it also requires `points`,
+/// `faceVertexCounts` and `faceVertexIndices` to be authored.)
+/// `orientation` and `subdivision_scheme` are their schema fallbacks
+/// (`rightHanded`, `catmullClark`) when unauthored.
+///
+/// OpenUSD: the `UsdGeomMesh` attribute reads and
+/// `UsdGeomMesh::ValidateTopology`, except that a negative face count is
+/// refused ([`validate_mesh_topology`]); `subdivisionScheme` says how a
+/// renderer refines the faces, which this read does not do.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct MeshTopology {
+    /// `faceVertexCounts`: the number of vertices of each face.
+    pub face_vertex_counts: Arc<Vec<i32>>,
+    /// `faceVertexIndices`: each face's vertices, as indices into `points`.
+    pub face_vertex_indices: Arc<Vec<i32>>,
+    /// `holeIndices`: the faces a renderer leaves out, by face index.
+    pub hole_indices: Arc<Vec<i32>>,
+    /// `orientation`: the winding of the faces' front sides.
+    pub orientation: GprimOrientation,
+    /// `subdivisionScheme`: how a renderer refines the faces.
+    pub subdivision_scheme: MeshSubdivisionScheme,
+    /// The number of `points` at the time, which `faceVertexIndices` must
+    /// stay under.
+    pub point_count: usize,
+    /// The topology validated against `point_count`
+    /// ([`validate_mesh_topology`]).
+    pub validation: Result<(), MeshTopologyError>,
+}
+
+impl Mesh<'_> {
+    /// Its topology at `time` ([`MeshTopology`]): the face counts, face
+    /// indices and hole indices at `time`, its orientation and subdivision
+    /// scheme, and the topology's validation. It never fails: an absent
+    /// array reads as empty, as does an undecodable one, which
+    /// `validation` reports.
+    #[doc(alias = "UsdGeomMesh::ValidateTopology")]
+    #[must_use]
+    pub fn topology(&self, time: Time) -> MeshTopology {
+        // The first attribute that fails to decode.
+        let mut problem = None;
+        let points = self.kept(
+            &mut problem,
+            "points",
+            self.try_read_value("points", time, crate::value::read_float3_array_shared),
+        );
+        let face_vertex_counts = self.kept(
+            &mut problem,
+            "faceVertexCounts",
+            self.try_face_vertex_counts(time),
+        );
+        let face_vertex_indices = self.kept(
+            &mut problem,
+            "faceVertexIndices",
+            self.try_face_vertex_indices(time),
+        );
+        let hole_indices = self.kept(&mut problem, "holeIndices", self.try_hole_indices(time));
+        let points = points.len();
+        let validation = match problem {
+            Some(problem) => Err(problem),
+            None => validate_mesh_topology(&face_vertex_indices, &face_vertex_counts, points),
+        };
+        MeshTopology {
+            face_vertex_counts,
+            face_vertex_indices,
+            hole_indices,
+            orientation: self.orientation().unwrap_or(GprimOrientation::RightHanded),
+            subdivision_scheme: self
+                .subdivision_scheme()
+                .unwrap_or(MeshSubdivisionScheme::CatmullClark),
+            point_count: points,
+            validation,
+        }
+    }
+
+    /// The array `read` gave, or an empty one when it is absent or fails
+    /// to decode, noting the failure in `problem` unless it already holds
+    /// one.
+    fn kept<T: Default>(
+        &self,
+        problem: &mut Option<MeshTopologyError>,
+        name: &str,
+        read: Result<Option<T>, ArrayReadError>,
+    ) -> T {
+        match read {
+            Ok(Some(values)) => values,
+            Ok(None) => T::default(),
+            Err(error) => {
+                problem.get_or_insert_with(|| MeshTopologyError::Decode {
+                    property: self
+                        .property_path(name)
+                        .expect("failed attribute is interned"),
+                    error,
+                });
+                T::default()
+            }
+        }
     }
 }

@@ -3,7 +3,7 @@
 
 //! Scene import without materializing numeric property arrays as syntax trees.
 
-use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
+use alloc::{sync::Arc, vec::Vec};
 use layerstack::{AssetResolver, LayerId, PathInterner, SchemaRegistry, TokenInterner};
 
 use crate::{
@@ -153,7 +153,11 @@ fn read_with_registry(
 /// lowers; the rare conversion errors are kept apart.
 #[derive(Default)]
 pub(crate) struct PreparedValues {
-    values: BTreeMap<PreparedKey, layerstack::Value>,
+    /// The values by key, sorted by key: the parser meets them in key
+    /// order, so each is pushed at the end, and emission takes each out of
+    /// its slot by binary search. A sorted vector rather than a map, whose
+    /// insertions and removals compile the tree's code for this one map.
+    values: Vec<(PreparedKey, Option<layerstack::Value>)>,
     /// Why elements of the arrays at these keys did not convert, sorted by
     /// key. Rare, so a sorted vector rather than a second map, whose
     /// removals would compile the tree's rebalancing again.
@@ -196,7 +200,19 @@ impl PreparedValues {
                 Err(index) => self.errors.insert(index, (key, prepared.errors)),
             }
         }
-        self.values.insert(key, prepared.value);
+        let value = Some(prepared.value);
+        match self.values.last() {
+            Some((last, _)) if *last >= key => match self.position(key) {
+                Ok(index) => self.values[index].1 = value,
+                Err(index) => self.values.insert(index, (key, value)),
+            },
+            _ => self.values.push((key, value)),
+        }
+    }
+
+    /// Where the value at `key` is, or where it would go.
+    fn position(&self, key: PreparedKey) -> Result<usize, usize> {
+        self.values.binary_search_by_key(&key, |(at, _)| *at)
     }
 
     /// Takes the value read at `key` and why its elements did not convert.
@@ -204,7 +220,8 @@ impl PreparedValues {
         &mut self,
         key: PreparedKey,
     ) -> Option<(layerstack::Value, Vec<alloc::string::String>)> {
-        let value = self.values.remove(&key)?;
+        let index = self.position(key).ok()?;
+        let value = self.values[index].1.take()?;
         let errors = match self.errors.binary_search_by_key(&key, |(at, _)| *at) {
             Ok(index) => self.errors.remove(index).1,
             Err(_) => Vec::new(),

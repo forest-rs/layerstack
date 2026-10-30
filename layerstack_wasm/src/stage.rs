@@ -2132,6 +2132,108 @@ impl Stage {
         Ok(self.export_package()?.into())
     }
 
+    /// [`Self::bound_materials`].
+    #[wasm_bindgen(js_name = boundMaterials)]
+    pub fn js_bound_materials(
+        &self,
+        paths: Vec<String>,
+        purpose: &str,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self.bound_materials(&paths, purpose)?.into())
+    }
+
+    /// [`Self::material_subsets`].
+    #[wasm_bindgen(js_name = materialSubsets)]
+    pub fn js_material_subsets(
+        &self,
+        path: &str,
+        purpose: &str,
+        time: Option<f64>,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self.material_subsets(path, purpose, time)?.into())
+    }
+
+    /// [`Self::material`].
+    #[wasm_bindgen(js_name = material)]
+    pub fn js_material(&self, path: &str) -> Result<JsValue, JsValue> {
+        Ok(self.material(path)?.into())
+    }
+
+    /// [`Self::material_terminal`].
+    #[wasm_bindgen(js_name = materialTerminal)]
+    pub fn js_material_terminal(
+        &self,
+        path: &str,
+        terminal: &str,
+        contexts: Vec<String>,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self.material_terminal(path, terminal, &contexts)?.into())
+    }
+
+    /// [`Self::shader`].
+    #[wasm_bindgen(js_name = shader)]
+    pub fn js_shader(&self, path: &str) -> Result<JsValue, JsValue> {
+        Ok(self.shader(path)?.into())
+    }
+
+    /// [`Self::ports`].
+    #[wasm_bindgen(js_name = ports)]
+    pub fn js_ports(&self, path: &str, kind: &str) -> Result<JsValue, JsValue> {
+        Ok(self.ports(path, kind)?.into())
+    }
+
+    /// [`Self::port`].
+    #[wasm_bindgen(js_name = port)]
+    pub fn js_port(&self, path: &str) -> Result<JsValue, JsValue> {
+        Ok(self.port(path)?.into())
+    }
+
+    /// [`Self::value_sources`].
+    #[wasm_bindgen(js_name = valueSources)]
+    pub fn js_value_sources(&self, path: &str) -> Result<JsValue, JsValue> {
+        Ok(self.value_sources(path)?.into())
+    }
+
+    /// [`Self::geom_subsets`].
+    #[wasm_bindgen(js_name = geomSubsets)]
+    pub fn js_geom_subsets(
+        &self,
+        path: &str,
+        element: Option<String>,
+        family: Option<String>,
+        time: Option<f64>,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self
+            .geom_subsets(path, element.as_deref(), family.as_deref(), time)?
+            .into())
+    }
+
+    /// [`Self::subset_family_type`].
+    #[wasm_bindgen(js_name = subsetFamilyType)]
+    pub fn js_subset_family_type(&self, path: &str, family: &str) -> Result<String, JsValue> {
+        Ok(self.subset_family_type(path, family)?)
+    }
+
+    /// [`Self::validate_subset_family`].
+    #[wasm_bindgen(js_name = validateSubsetFamily)]
+    pub fn js_validate_subset_family(
+        &self,
+        path: &str,
+        element: &str,
+        family: &str,
+        time: Option<f64>,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self
+            .validate_subset_family(path, element, family, time)?
+            .into())
+    }
+
+    /// [`Self::coord_sys_bindings`].
+    #[wasm_bindgen(js_name = coordSysBindings)]
+    pub fn js_coord_sys_bindings(&self, path: &str, inherited: bool) -> Result<JsValue, JsValue> {
+        Ok(self.coord_sys_bindings(path, inherited)?.into())
+    }
+
     /// The record `supplied_bytes` builds, as documented in `stage.rs`.
     #[wasm_bindgen(js_name = suppliedBytes)]
     pub fn js_supplied_bytes(&self) -> u64 {
@@ -2287,7 +2389,7 @@ fn load_result(report: &LoadReport) -> Wire {
 
 /// The time a query reads: the default time, or a time code interpolated
 /// linearly (OpenUSD's default).
-fn time_of(time: Option<f64>) -> Time {
+pub(crate) fn time_of(time: Option<f64>) -> Time {
     time.map_or(Time::Default, Time::at)
 }
 
@@ -2389,7 +2491,7 @@ fn namespace_error(error: &NamespaceError, store: &dyn LayerStore, path: &str) -
 
 /// `path` is an absolute prim path: `/`, or `/` and names separated by
 /// `/`, none empty and none holding a `.`.
-fn check_prim_path(path: &str) -> Result<(), Error> {
+pub(crate) fn check_prim_path(path: &str) -> Result<(), Error> {
     let valid = path == "/"
         || path.strip_prefix('/').is_some_and(|rest| {
             rest.split('/')
@@ -2408,7 +2510,7 @@ fn check_prim_path(path: &str) -> Result<(), Error> {
 
 /// `path` is a property path: an absolute prim path (not `/`), a `.` and
 /// a non-empty name.
-fn check_property_path(path: &str) -> Result<(), Error> {
+pub(crate) fn check_property_path(path: &str) -> Result<(), Error> {
     let valid = path.rsplit_once('.').is_some_and(|(prim, name)| {
         prim != "/" && !name.is_empty() && !name.contains('/') && check_prim_path(prim).is_ok()
     });

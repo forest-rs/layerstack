@@ -843,3 +843,148 @@ export interface Transfer {
   /** The module's memory now, in bytes (0 when the module does not expose it). */
   readonly memoryBytes: number;
 }
+
+/** How a material binding holds against its prim's descendants' bindings: the `bindMaterialAs` token. */
+export type BindingStrength = "weakerThanDescendants" | "strongerThanDescendants";
+
+/**
+ * The binding that decides a prim's material, as OpenUSD's
+ * `UsdShadeMaterialBindingAPI::ComputeBoundMaterial` resolves it: the
+ * prim's own binding or an ancestor's, direct or through a collection,
+ * for the purpose asked for and then for all purposes.
+ */
+export interface MaterialBinding {
+  /** The bound `Material`'s path; `null` when the winning binding targets no material (a missing prim, or one of another type). */
+  readonly material: string | null;
+  /** The path the winning binding targets, whatever is there. */
+  readonly target: string;
+  /** The binding relationship that decides it (`/World.material:binding`). */
+  readonly relationship: string;
+  /** A direct binding, or one through a collection. */
+  readonly kind: "direct" | "collection";
+  /** The collection a collection binding binds (`/World.collection:metal`); `null` for a direct one. */
+  readonly collection: string | null;
+  /** Its strength. */
+  readonly strength: BindingStrength;
+  /** The purpose it was found for: the one asked for, or `""` (all purposes) when that found nothing. */
+  readonly purpose: string;
+  /** Whether the prim authoring it lacks `MaterialBindingAPI`: a legacy binding, which OpenUSD still counts and warns about. */
+  readonly withoutBindingApi: boolean;
+}
+
+/** The element type of a geometry subset (`elementType`). */
+export type SubsetElementType = "face" | "point" | "edge" | "segment" | "tetrahedron";
+
+/** The ownership contract of a geometry subset family (`subsetFamily:<family>:familyType`). */
+export type SubsetFamilyType = "unrestricted" | "nonOverlapping" | "partition";
+
+/** What a {@link SubsetProblem} found wrong with a subset family. */
+export type SubsetProblemKind =
+  | "invalidGeometry"
+  | "elementTypeMismatch"
+  | "invalidTopology"
+  | "noIndices"
+  | "oddPairCount"
+  | "duplicateIndex"
+  | "duplicatePair"
+  | "invalidIndex"
+  | "invalidPair"
+  | "incompletePartition"
+  | "other";
+
+/** One violation of a subset family's contract, as OpenUSD's `UsdGeomSubset::ValidateFamily` reports it. */
+export interface SubsetProblem {
+  /** The family member, or the geometry for a family-wide problem. */
+  readonly prim: string;
+  /** The stage time it occurs at; `null` for the default time. */
+  readonly time: number | null;
+  /** What is wrong. */
+  readonly kind: SubsetProblemKind;
+  /** The index or `[a, b]` pair it names, else `null`. */
+  readonly at: number | readonly [number, number] | null;
+  /** The problem in words. */
+  readonly message: string;
+}
+
+/** A `GeomSubset` child of a geometry prim. */
+export interface GeomSubset {
+  /** Its path. */
+  readonly path: string;
+  /** Its `elementType`; `null` when it resolves none. */
+  readonly elementType: SubsetElementType | null;
+  /** Its `familyName`; `null` when it resolves none. */
+  readonly familyName: string | null;
+  /** Its `indices` at the time read, an `int[]` array; `null` when none resolves. Release it when done. */
+  readonly indices: ArrayData | null;
+}
+
+/** One `materialBind` face subset of a mesh and the material it is bound to. */
+export interface MaterialSubset {
+  /** The subset's path. */
+  readonly path: string;
+  /** Its face indices, an `int[]` array, unchecked against the mesh: see {@link MaterialSubsets.problems}. Release it when done. */
+  readonly indices: ArrayData;
+  /** Its bound material, inherited ones included; `null` when nothing binds it. */
+  readonly binding: MaterialBinding | null;
+}
+
+/**
+ * A mesh's material face subsets at one time, as a renderer draws them:
+ * OpenUSD's `UsdShadeMaterialBindingAPI::GetMaterialBindSubsets`, each
+ * subset's `ComputeBoundMaterial`, and `UsdGeomSubset::ValidateFamily`.
+ */
+export interface MaterialSubsets {
+  /** The `materialBind` family's type, `unrestricted` when unauthored. */
+  readonly familyType: string;
+  /** The binding of the faces in no subset: the mesh's own; `null` when nothing binds it. */
+  readonly fallback: MaterialBinding | null;
+  /** The family's active face subsets whose indices resolve, in namespace order. */
+  readonly subsets: readonly MaterialSubset[];
+  /** The family's validation problems, which never hide a subset: a renderer decides what to do with an invalid family. */
+  readonly problems: readonly SubsetProblem[];
+}
+
+/** A bound coordinate system, as OpenUSD's `UsdShadeCoordSysAPI::Binding` describes it. */
+export interface CoordSysBinding {
+  /** The `CoordSysAPI` instance name (`paint`). */
+  readonly name: string;
+  /** The `coordSys:<name>:binding` relationship that binds it. */
+  readonly relationship: string;
+  /** The prim (or property) whose space it names. */
+  readonly target: string;
+}
+
+/** A material output terminal. */
+export type MaterialTerminal = "surface" | "displacement" | "volume";
+
+/**
+ * The source of a material's terminal output, as OpenUSD's
+ * `UsdShadeMaterial::ComputeSurfaceSource` finds it: node graphs pass
+ * connections through, and an output on a shader ends them.
+ */
+export interface TerminalSource {
+  /** The first source's prim when it is a `Shader`, else `null`. */
+  readonly shader: string | null;
+  /** The render context that supplied the sources (`""` universal); `null` when none did. */
+  readonly context: string | null;
+  /** Every source in connection order: the shader output, and the outputs the connection passed through, the material's first. */
+  readonly sources: readonly { readonly output: string; readonly chain: readonly string[] }[];
+}
+
+/** An attribute that produces a shading input's value, and the connections that lead to it. */
+export interface ValueProducer {
+  /** The input or output attribute. */
+  readonly attribute: string;
+  /** `shaderOutput` for an output a renderer evaluates; `authoredValue` for an attribute whose value it reads ({@link Stage.attribute}). */
+  readonly kind: "shaderOutput" | "authoredValue";
+  /** The attributes the connections passed through, the input asked about first. */
+  readonly chain: readonly string[];
+}
+
+/** Where a shading input gets its value: OpenUSD's `UsdShadeUtils::GetValueProducingAttributes`. */
+export interface ValueSources {
+  /** The producers, depth first in connection order. */
+  readonly sources: readonly ValueProducer[];
+  /** Recoverable problems on a branch: a target that names no shading attribute, a cycle, a connection into a shader's input. */
+  readonly issues: readonly { readonly kind: "invalidTarget" | "cycle" | "nonContainerInput" | "other"; readonly at: string | null }[];
+}

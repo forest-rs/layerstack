@@ -76,6 +76,9 @@
  *   undoable), `edit.rejected.*` (such as `edit.rejected.type_mismatch`
  *   or `edit.rejected.spec_exists`), the codes of
  *   `layerstack::EditError::code`.
+ * - `subset.geometry`: a subset read asked of a prim that is not geometry
+ *   of the subsets' element type ({@link Prim.materialSubsets} of a prim
+ *   that is not a mesh).
  *
  * Composition errors are not thrown; {@link Stage.status} lists them as
  * {@link Issue}s with `composition.*` codes
@@ -121,6 +124,7 @@ export type ErrorCode =
   | "package.failed"
   | `edit.${string}`
   | `namespace.${string}`
+  | `subset.${string}`
   | `io.${string}`;
 
 /**

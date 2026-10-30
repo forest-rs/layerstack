@@ -7,6 +7,18 @@ import { lowerEdits } from "./edits.js";
 import type { NativeEditBatch } from "./edits.js";
 import { LayerstackError } from "./errors.js";
 import type { ErrorCode, HostErrorCode } from "./errors.js";
+import {
+  Material,
+  Shader,
+  ShaderPort,
+  decodeBinding,
+  decodeCoordSys,
+  decodeMaterialSubsets,
+  decodeProblems,
+  decodeSubsets,
+  readPort,
+  readPorts,
+} from "./schemas.js";
 import type {
   ArcKind,
   ArrayData,
@@ -16,12 +28,16 @@ import type {
   AssetUse,
   ChangeListener,
   Changes,
+  CoordSysBinding,
   Edit,
   Explanation,
   FlattenResult,
+  GeomSubset,
   Issue,
   LayerFormat,
   LoadResult,
+  MaterialBinding,
+  MaterialSubsets,
   OpenOptions,
   Opinion,
   PropertyChange,
@@ -32,6 +48,8 @@ import type {
   Scalar,
   SkippedLayer,
   StageStatus,
+  SubsetElementType,
+  SubsetProblem,
   Transfer,
   UnavailableAsset,
   UnrepairedField,
@@ -50,7 +68,7 @@ export const PACKAGE_VERSION = "0.1.0";
  * The ABI this package speaks: the version of the records it exchanges
  * with the native module (`layerstack_wasm::ABI`).
  */
-export const ABI = 6;
+export const ABI = 7;
 
 /** The native stage the generated glue exports (`layerstack_wasm::Stage`). Borrowed only by same-module extensions. */
 export interface NativeStage extends Disposable {
@@ -99,6 +117,18 @@ export interface NativeStage extends Disposable {
   exportLayer(layer: bigint, format: string): Uint8Array;
   exportFlattened(format: string): unknown;
   exportPackage(): unknown;
+  boundMaterials(paths: string[], purpose: string): unknown;
+  materialSubsets(path: string, purpose: string, time?: number | null): unknown;
+  material(path: string): unknown;
+  materialTerminal(path: string, terminal: string, contexts: string[]): unknown;
+  shader(path: string): unknown;
+  ports(path: string, kind: string): unknown;
+  port(path: string): unknown;
+  valueSources(path: string): unknown;
+  geomSubsets(path: string, element?: string | null, family?: string | null, time?: number | null): unknown;
+  subsetFamilyType(path: string, family: string): string;
+  validateSubsetFamily(path: string, element: string, family: string, time?: number | null): unknown;
+  coordSysBindings(path: string, inherited: boolean): unknown;
 }
 
 /**
@@ -918,6 +948,39 @@ export class Stage implements Disposable {
     return row === null ? null : new Relationship(this, path, row);
   }
 
+  /** The `Material` at `path` (or of a type derived from it), or `null` when no material is there. Throws `path.invalid`. */
+  material(path: string): Material | null {
+    const row = this.#call("material", (native) => native.material(path)) as Row | null;
+    return row === null ? null : new Material(this, path, row);
+  }
+
+  /** The `Shader` at `path` (or of a type derived from it), or `null` when no shader is there. Throws `path.invalid`. */
+  shader(path: string): Shader | null {
+    const row = this.#call("shader", (native) => native.shader(path)) as Row | null;
+    return row === null ? null : new Shader(this, path, row);
+  }
+
+  /** The shading input or output at the property path `path` (`/Looks/Stone/Surface.inputs:roughness`), or `null`. */
+  port(path: string): ShaderPort | null {
+    return readPort(this, path);
+  }
+
+  /**
+   * The bound material of each prim of `paths`, in order: what
+   * {@link Prim.boundMaterial} reads, for many prims at once, sharing the
+   * ancestors' bindings and the bound collections' membership as OpenUSD's
+   * `UsdShadeMaterialBindingAPI::ComputeBoundMaterials` does. `purpose` is
+   * a material purpose (`preview`, `full`); without one, all purposes.
+   *
+   * Throws `prim.not_found` naming the first path no prim is at.
+   */
+  boundMaterials(paths: readonly string[], options: { readonly purpose?: string } = {}): (MaterialBinding | null)[] {
+    const records = this.#call("boundMaterials", (native) =>
+      native.boundMaterials([...paths], options.purpose ?? ""),
+    ) as unknown[];
+    return records.map(decodeBinding);
+  }
+
   /**
    * Applies `edits` through `target`, the {@link Stage.editLayer} by
    * default, atomically: every edit applies, or none does and this throws. Assets the edits ask for that the stage
@@ -1559,6 +1622,101 @@ export class Prim {
   /** Its composed metadata field `key` (`kind`, `documentation`, `apiSchemas`), or `null` when nothing authors it. */
   metadata(key: string): Value | null {
     return readMetadata(this.stage, this.path, key);
+  }
+
+  /**
+   * The material it is bound to for `purpose` (`preview`, `full`; all
+   * purposes without one), with the binding that decides it: its own or
+   * an ancestor's, direct or through a collection, as OpenUSD's
+   * `UsdShadeMaterialBindingAPI::ComputeBoundMaterial` resolves it;
+   * `null` when nothing binds it. A binding to a path where no material is
+   * has a `null` {@link MaterialBinding.material}. For many prims, use
+   * {@link Stage.boundMaterials}.
+   *
+   * Throws `prim.not_found` when the prim is gone.
+   */
+  boundMaterial(options: { readonly purpose?: string } = {}): MaterialBinding | null {
+    return this.stage.boundMaterials([this.path], options)[0] ?? null;
+  }
+
+  /**
+   * Its `materialBind` face subsets at `time` and the material each is
+   * bound to, with the faces in no subset bound as the mesh is, and the
+   * family's validation: what a renderer draws a mesh with
+   * ({@link MaterialSubsets}). Release the subsets' `indices` when done.
+   *
+   * Throws `subset.geometry` when the prim is not a mesh or tetrahedral
+   * mesh, `value.decode` for indices or topology that fail to decode.
+   */
+  materialSubsets(options: { readonly purpose?: string; readonly time?: number } = {}): MaterialSubsets {
+    const record = this.stage.native("materialSubsets", (native) =>
+      native.materialSubsets(this.path, options.purpose ?? "", options.time),
+    );
+    return decodeMaterialSubsets(this.stage.layerstack, record);
+  }
+
+  /**
+   * Its geometry subsets: its active, defined `GeomSubset` children in
+   * namespace order, of `elementType` and in `familyName` when given,
+   * with their indices at `time` (OpenUSD's `UsdGeomSubset::GetGeomSubsets`).
+   *
+   * Throws `argument.invalid` for an unknown element type.
+   */
+  geomSubsets(
+    options: { readonly elementType?: SubsetElementType; readonly familyName?: string; readonly time?: number } = {},
+  ): GeomSubset[] {
+    const rows = this.stage.native("geomSubsets", (native) =>
+      native.geomSubsets(this.path, options.elementType ?? null, options.familyName ?? null, options.time),
+    );
+    return decodeSubsets(this.stage.layerstack, rows);
+  }
+
+  /** The type of its subset family `familyName`, `unrestricted` when unauthored (`UsdGeomSubset::GetFamilyType`). */
+  subsetFamilyType(familyName: string): string {
+    return this.stage.native("subsetFamilyType", (native) => native.subsetFamilyType(this.path, familyName));
+  }
+
+  /**
+   * Validates its subset family `familyName` of `elementType` subsets
+   * against its topology, at `time` or, without one, at the default time
+   * and every sample of the members' indices: the problems, none for a
+   * valid family (`UsdGeomSubset::ValidateFamily`).
+   *
+   * Throws `subset.geometry` when the prim is not geometry,
+   * `argument.invalid` for an unknown element type.
+   */
+  validateSubsetFamily(
+    familyName: string,
+    elementType: SubsetElementType,
+    options: { readonly time?: number } = {},
+  ): SubsetProblem[] {
+    const rows = this.stage.native("validateSubsetFamily", (native) =>
+      native.validateSubsetFamily(this.path, elementType, familyName, options.time),
+    );
+    return decodeProblems(rows);
+  }
+
+  /**
+   * Its coordinate-system bindings: with `inherited` (the default), every
+   * system bound on it or an ancestor, the nearest binding of each, as
+   * OpenUSD's `UsdShadeCoordSysAPI::FindBindingsWithInheritance` finds
+   * them; else only those its applied `CoordSysAPI` instances author.
+   */
+  coordSysBindings(options: { readonly inherited?: boolean } = {}): CoordSysBinding[] {
+    const rows = this.stage.native("coordSysBindings", (native) =>
+      native.coordSysBindings(this.path, options.inherited ?? true),
+    );
+    return decodeCoordSys(rows);
+  }
+
+  /** Its shading inputs (`inputs:*`), schema-defined and authored, in property order: a shader's parameters, a material's or node graph's interface. */
+  inputs(): ShaderPort[] {
+    return readPorts(this.stage, this.path, "input");
+  }
+
+  /** Its shading outputs (`outputs:*`), in property order. */
+  outputs(): ShaderPort[] {
+    return readPorts(this.stage, this.path, "output");
   }
 
   /**

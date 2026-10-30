@@ -26,7 +26,7 @@ use layerstack_io::{
 use wasm_bindgen::prelude::*;
 
 use crate::{
-    edit::{self, EditBatch, Scope},
+    edit::{self, EditBatch},
     error::Error,
     receipt::EditReceipt,
     storage::HostStorage,
@@ -1025,13 +1025,8 @@ impl Stage {
         self.check_writable(layer)?;
         let batch = core::mem::take(batch);
         let lowered = {
-            let scope = Scope {
-                store: self.document.store(),
-                view: self.document.view(),
-                target: &target.target,
-                stack: &target.stack,
-            };
-            edit::lower(&batch, &scope)?
+            let (store, live) = self.document.parts_mut();
+            edit::lower(&batch, live.stage(), store, &target.target, &target.stack)?
         };
         self.commit(record, layer, &lowered.transaction, |op| {
             let index = lowered.edit_of(op)?;
@@ -2132,7 +2127,7 @@ impl Stage {
         Ok(self.export_package()?.into())
     }
 
-    /// [`Self::bound_materials`].
+    /// The record `bound_materials` builds, as documented in `schemas.rs`.
     #[wasm_bindgen(js_name = boundMaterials)]
     pub fn js_bound_materials(
         &self,
@@ -2142,7 +2137,7 @@ impl Stage {
         Ok(self.bound_materials(&paths, purpose)?.into())
     }
 
-    /// [`Self::material_subsets`].
+    /// The record `material_subsets` builds, as documented in `schemas.rs`.
     #[wasm_bindgen(js_name = materialSubsets)]
     pub fn js_material_subsets(
         &self,
@@ -2153,13 +2148,13 @@ impl Stage {
         Ok(self.material_subsets(path, purpose, time)?.into())
     }
 
-    /// [`Self::material`].
+    /// The record `material` builds, as documented in `schemas.rs`.
     #[wasm_bindgen(js_name = material)]
     pub fn js_material(&self, path: &str) -> Result<JsValue, JsValue> {
         Ok(self.material(path)?.into())
     }
 
-    /// [`Self::material_terminal`].
+    /// The record `material_terminal` builds, as documented in `schemas.rs`.
     #[wasm_bindgen(js_name = materialTerminal)]
     pub fn js_material_terminal(
         &self,
@@ -2170,31 +2165,31 @@ impl Stage {
         Ok(self.material_terminal(path, terminal, &contexts)?.into())
     }
 
-    /// [`Self::shader`].
+    /// The record `shader` builds, as documented in `schemas.rs`.
     #[wasm_bindgen(js_name = shader)]
     pub fn js_shader(&self, path: &str) -> Result<JsValue, JsValue> {
         Ok(self.shader(path)?.into())
     }
 
-    /// [`Self::ports`].
+    /// The record `ports` builds, as documented in `schemas.rs`.
     #[wasm_bindgen(js_name = ports)]
     pub fn js_ports(&self, path: &str, kind: &str) -> Result<JsValue, JsValue> {
         Ok(self.ports(path, kind)?.into())
     }
 
-    /// [`Self::port`].
+    /// The record `port` builds, as documented in `schemas.rs`.
     #[wasm_bindgen(js_name = port)]
     pub fn js_port(&self, path: &str) -> Result<JsValue, JsValue> {
         Ok(self.port(path)?.into())
     }
 
-    /// [`Self::value_sources`].
+    /// The record `value_sources` builds, as documented in `schemas.rs`.
     #[wasm_bindgen(js_name = valueSources)]
     pub fn js_value_sources(&self, path: &str) -> Result<JsValue, JsValue> {
         Ok(self.value_sources(path)?.into())
     }
 
-    /// [`Self::geom_subsets`].
+    /// The record `geom_subsets` builds, as documented in `schemas.rs`.
     #[wasm_bindgen(js_name = geomSubsets)]
     pub fn js_geom_subsets(
         &self,
@@ -2208,13 +2203,13 @@ impl Stage {
             .into())
     }
 
-    /// [`Self::subset_family_type`].
+    /// The record `subset_family_type` builds, as documented in `schemas.rs`.
     #[wasm_bindgen(js_name = subsetFamilyType)]
     pub fn js_subset_family_type(&self, path: &str, family: &str) -> Result<String, JsValue> {
         Ok(self.subset_family_type(path, family)?)
     }
 
-    /// [`Self::validate_subset_family`].
+    /// The record `validate_subset_family` builds, as documented in `schemas.rs`.
     #[wasm_bindgen(js_name = validateSubsetFamily)]
     pub fn js_validate_subset_family(
         &self,
@@ -2228,7 +2223,7 @@ impl Stage {
             .into())
     }
 
-    /// [`Self::coord_sys_bindings`].
+    /// The record `coord_sys_bindings` builds, as documented in `schemas.rs`.
     #[wasm_bindgen(js_name = coordSysBindings)]
     pub fn js_coord_sys_bindings(&self, path: &str, inherited: bool) -> Result<JsValue, JsValue> {
         Ok(self.coord_sys_bindings(path, inherited)?.into())

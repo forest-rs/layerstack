@@ -524,7 +524,11 @@ export type ListPosition = "frontOfPrepend" | "backOfPrepend" | "frontOfAppend" 
  *
  * - `def`: nothing when the prim is defined and `typeName` is absent or
  *   its type already; otherwise authors `def` (and `typeName`) on its
- *   spec, and `def` on each ancestor that is not defined.
+ *   spec, and `def` on each ancestor that is not defined. Refused with
+ *   `schema.cannot_edit` beneath an instance or in a prototype, as
+ *   OpenUSD refuses it. Later schema-shaped edits of the same `apply`
+ *   (such as {@link SetShaderInputEdit} on a shader defined here) see
+ *   the prim and its type.
  * - `over`: nothing when the prim exists; otherwise an `over` spec.
  * - `class`: nothing when the prim is a class; otherwise authors `class`.
  */
@@ -722,7 +726,220 @@ export type Edit =
   | SetInstanceableEdit
   | SetKindEdit
   | SetMetadataEdit
-  | ClearMetadataEdit;
+  | ClearMetadataEdit
+  | BindMaterialEdit
+  | UnbindMaterialEdit
+  | SetShaderInputEdit
+  | ConnectToSourceEdit
+  | DisconnectSourceEdit
+  | SetBaseMaterialEdit
+  | CreateGeomSubsetEdit
+  | CreateMaterialSubsetEdit
+  | SetSubsetFamilyTypeEdit
+  | BindCoordSysEdit
+  | BlockCoordSysEdit
+  | ClearCoordSysEdit
+  | SetSdrMetadataEdit;
+
+/**
+ * `UsdShadeMaterialBindingAPI::Apply(prim).Bind(material, strength,
+ * purpose)`: applies `MaterialBindingAPI` to the prim and binds
+ * `material`, directly (`material:binding[:<purpose>]`) or, with
+ * `collection`, to the prims of that collection
+ * (`material:binding:collection[:<purpose>]:<bindingName>`). A `strength`
+ * authors `bindMaterialAs`; without one an authored
+ * `strongerThanDescendants` is weakened, as OpenUSD's fallback strength
+ * does.
+ *
+ * `material` is any prim on the stage or defined earlier in the same
+ * edits, whatever its type, as OpenUSD's `Bind` binds any prim it is
+ * given; one that is not a `Material` resolves no material
+ * ({@link MaterialBinding.material} is `null`).
+ *
+ * Refused with `material.not_found` when no prim is at `material`, as
+ * OpenUSD refuses it; `prim.not_found` when the prim to bind is not
+ * there; `material.binding_name` for a binding name with a namespace or a
+ * purpose that is not an identifier.
+ */
+export interface BindMaterialEdit {
+  readonly type: "bindMaterial";
+  /** The prim to bind. */
+  readonly path: string;
+  /** The material's path. */
+  readonly material: string;
+  /** The material purpose (`preview`, `full`); all purposes without one. */
+  readonly purpose?: string;
+  readonly strength?: BindingStrength;
+  /** A collection's path (`/World.collection:metal`), for a collection binding. */
+  readonly collection?: string;
+  /** A collection binding's name; the collection's own name without one. */
+  readonly bindingName?: string;
+}
+
+/**
+ * `UsdShadeMaterialBindingAPI::UnbindDirectBinding`, or
+ * `UnbindCollectionBinding` with `bindingName`: an explicit empty target
+ * list, which blocks weaker and inherited bindings of the purpose.
+ */
+export interface UnbindMaterialEdit {
+  readonly type: "unbindMaterial";
+  readonly path: string;
+  readonly purpose?: string;
+  readonly bindingName?: string;
+}
+
+/**
+ * `UsdShadeConnectableAPI::CreateInput(name, type).Set(value, time)`: the
+ * input at `path` (`/Looks/Stone/Surface.inputs:roughness`) is created
+ * with the value's type when it does not exist, and its default (or the
+ * time sample at `time`) set. Works on any prim with inputs: a shader, a
+ * node graph or a material's interface.
+ *
+ * Refused with `shading.type_mismatch` when the input exists with another
+ * type, `prim.not_found` when its prim is not there, `path.invalid` for a
+ * path that is not an `inputs:` property.
+ */
+export interface SetShaderInputEdit {
+  readonly type: "setShaderInput";
+  readonly path: string;
+  readonly value: ValueInput;
+  readonly time?: number;
+}
+
+/**
+ * `UsdShadeConnectableAPI::ConnectToSource`: connects the input or output
+ * at `path` to the input or output at `source`
+ * (`/Looks/Stone/Texture.outputs:rgb`). A source that does not exist is
+ * created with the port's type, as OpenUSD creates it. `position`:
+ * `replace` (the default) makes it the only connection; `prepend` and
+ * `append` add it to the list.
+ *
+ * A port that does not exist is created with `typeName`
+ * (`/Looks/Stone.outputs:surface`, `token`); without one it is refused
+ * with `shading.no_port`.
+ */
+export interface ConnectToSourceEdit {
+  readonly type: "connectToSource";
+  readonly path: string;
+  readonly source: string;
+  readonly typeName?: string;
+  readonly position?: "replace" | "prepend" | "append";
+}
+
+/**
+ * `UsdShadeConnectableAPI::DisconnectSource`: removes `source` from the
+ * port's connections, or without one disconnects every source (an
+ * explicit empty list, which hides weaker connections). Refused with
+ * `shading.no_port` when the port does not exist.
+ */
+export interface DisconnectSourceEdit {
+  readonly type: "disconnectSource";
+  readonly path: string;
+  readonly source?: string;
+}
+
+/**
+ * `UsdShadeMaterial::SetBaseMaterial`: the material derives from `base`
+ * through a specialize arc; `null` clears it (`ClearBaseMaterial`).
+ * Refused with `material.not_material` when the prim at `path` is not a
+ * `Material`, `prim.not_found` when no prim is there.
+ */
+export interface SetBaseMaterialEdit {
+  readonly type: "setBaseMaterial";
+  readonly path: string;
+  readonly base: string | null;
+}
+
+/**
+ * `UsdGeomSubset::CreateGeomSubset`: the `GeomSubset` child `name` of the
+ * geometry at `path`, created or (one already there) re-authored, with
+ * its element type, indices and family; a `familyType` is authored on the
+ * geometry (`subsetFamily:<familyName>:familyType`).
+ *
+ * The indices are checked against the geometry's topology, where OpenUSD
+ * authors any: `subset.indices` for one out of range, `subset.geometry`
+ * for geometry that has no elements of the type, `subset.invalid_name`,
+ * `subset.name_taken` for a prim of another type at the name.
+ */
+export interface CreateGeomSubsetEdit {
+  readonly type: "createGeomSubset";
+  readonly path: string;
+  readonly name: string;
+  readonly elementType: SubsetElementType;
+  readonly indices: Int32Array | readonly number[];
+  /** The family (`materialBind`); none without one. */
+  readonly familyName?: string;
+  readonly familyType?: SubsetFamilyType;
+}
+
+/**
+ * `UsdShadeMaterialBindingAPI::CreateMaterialBindSubset`: a
+ * {@link CreateGeomSubsetEdit} in the `materialBind` family, whose type
+ * becomes `nonOverlapping` when it is unauthored or `unrestricted`. Bind
+ * a material to the new subset with a {@link BindMaterialEdit} later in
+ * the same edits.
+ */
+export interface CreateMaterialSubsetEdit {
+  readonly type: "createMaterialSubset";
+  readonly path: string;
+  readonly name: string;
+  readonly indices: Int32Array | readonly number[];
+  /** `face` by default. */
+  readonly elementType?: SubsetElementType;
+}
+
+/** `UsdGeomSubset::SetFamilyType`: the type of the geometry's subset family `familyName`. */
+export interface SetSubsetFamilyTypeEdit {
+  readonly type: "setSubsetFamilyType";
+  readonly path: string;
+  readonly familyName: string;
+  readonly familyType: SubsetFamilyType;
+}
+
+/**
+ * `UsdShadeCoordSysAPI::Apply(prim, name).Bind(target)`: applies the
+ * `CoordSysAPI` instance `name` and binds it to `target`, the prim whose
+ * space it names (`coordSys:<name>:binding`).
+ */
+export interface BindCoordSysEdit {
+  readonly type: "bindCoordSys";
+  readonly path: string;
+  readonly name: string;
+  readonly target: string;
+}
+
+/** `UsdShadeCoordSysAPI::BlockBinding`: an explicit empty target list, so the prim binds nothing for `name`. */
+export interface BlockCoordSysEdit {
+  readonly type: "blockCoordSys";
+  readonly path: string;
+  readonly name: string;
+}
+
+/**
+ * `UsdShadeCoordSysAPI::ClearBinding(removeSpec)`: clears the binding's
+ * targets in the target layer, or with `removeSpec` removes its spec.
+ * Refused with `coord_sys.no_binding` when no such relationship exists.
+ */
+export interface ClearCoordSysEdit {
+  readonly type: "clearCoordSys";
+  readonly path: string;
+  readonly name: string;
+  readonly removeSpec?: boolean;
+}
+
+/**
+ * `SetSdrMetadataByKey` on the shader at a prim path, or on the input or
+ * output at a property path; `value: null` clears the key
+ * (`ClearSdrMetadataByKey`), and every key when `key` is `""`. Refused
+ * with `shading.not_shader` for a prim that is not a `Shader`,
+ * `shading.no_port` for a port that does not exist.
+ */
+export interface SetSdrMetadataEdit {
+  readonly type: "setSdrMetadata";
+  readonly path: string;
+  readonly key: string;
+  readonly value: string | null;
+}
 
 /** A layer file format: USDA text or USDC binary. */
 export type LayerFormat = "usda" | "usdc";

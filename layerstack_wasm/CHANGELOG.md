@@ -17,6 +17,11 @@ Initial release.
   material face subsets with their family's validation, material terminal
   sources, shader inputs and outputs with their connections, value sources
   and `sdrMetadata`, geometry subsets and coordinate-system bindings.
+- Schema-shaped edits: bind and unbind materials, set shader inputs,
+  connect and disconnect them, set a base material, create geometry and
+  material subsets and set a family's type, bind, block and clear
+  coordinate systems, and set `sdrMetadata`, in the same atomic batch as
+  the generic edits.
 - Atomic edits with undo and change records, saves of dirty layers, and
   exports of a layer, the flattened stage or a USDZ package.
 - An `rlib` for crates that link the bindings into a module of their own.

@@ -279,6 +279,7 @@ button:disabled {
 }
 
 .badge.waiting,
+.badge.issue,
 .warning {
   color: var(--warn);
   border-color: var(--warn);
@@ -361,6 +362,11 @@ th {
 .attributes tr.selected,
 .layers tr.dirty {
   background: var(--accent-soft);
+}
+
+.layers tr.muted .name {
+  color: var(--muted);
+  text-decoration: line-through;
 }
 
 .opinions tr.contributed .role {

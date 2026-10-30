@@ -85,6 +85,12 @@ export class Editor implements Disposable {
   readonly loopLog: LoopEntry[] = [];
   /** The layers last saved: what a reopen reads before fetching. */
   saved: readonly LayerFile[] = [];
+  /**
+   * The identifiers of the layers the stage mutes, kept from the changes
+   * it reports (`Changes.mutedIdentifiers` and `unmutedIdentifiers`), not
+   * read back from the stage.
+   */
+  readonly muted = new Set<string>();
   readonly #fetch: Fetcher;
   readonly #local: ReadonlyMap<string, Uint8Array>;
   readonly #progress: (() => void) | undefined;
@@ -105,7 +111,11 @@ export class Editor implements Disposable {
     this.#local = options.local ?? new Map();
     this.#progress = options.progress;
     this.stage = layerstack.open({ identifier: root, bytes });
-    this.stage.onChange((changes) => this.changeLog.push({ cause: this.#cause, changes }));
+    this.stage.onChange((changes) => {
+      this.changeLog.push({ cause: this.#cause, changes });
+      for (const identifier of changes.mutedIdentifiers) this.muted.add(identifier);
+      for (const identifier of changes.unmutedIdentifiers) this.muted.delete(identifier);
+    });
   }
 
   /**
@@ -261,6 +271,28 @@ export class Editor implements Disposable {
       throw error;
     }
     await this.supplyUnavailable(this.#cause);
+  }
+
+  /**
+   * Mutes or unmutes `layer`: the stage recomposes without or with its
+   * opinions, heard as one change. Muting is the stage's state, not an
+   * edit, so it is not on the undo stack. What an unmuted layer asks for
+   * that the stage has not read is supplied. Returns whether the muting
+   * changed.
+   */
+  async setMuted(layer: Layer, muted: boolean): Promise<boolean> {
+    const name = layer.identifier ?? "(anonymous)";
+    this.#cause = `${muted ? "mute" : "unmute"} ${name}`;
+    const changed = muted ? this.stage.muteLayer(layer) : this.stage.unmuteLayer(layer);
+    if (!muted) await this.supplyUnavailable(this.#cause);
+    return changed;
+  }
+
+  /** The layer the stage holds with `identifier`; throws when it holds none. */
+  layerNamed(identifier: string): Layer {
+    const layer = this.stage.layers().find((candidate) => candidate.identifier === identifier);
+    if (layer === undefined) throw new Error(`the stage holds no layer ${identifier}`);
+    return layer;
   }
 
   /** The layers with unsaved changes. */

@@ -344,7 +344,64 @@ const checks: ((session: Session) => void)[] = [
       "a fresh open explains the instance proxy as the edited live stage did",
     );
   },
+  // 13. The robot asset muted: its opinions leave the explanation, and the rover reports the muted reference.
+  ({ current, prim, attribute }) => {
+    assert.equal(prim, sample.rover);
+    assert.equal(attribute, sample.roverColor);
+    const asset = current.layerNamed(sample.robotAsset);
+    assert.equal(current.stage.isMuted(asset), true);
+    assert.deepEqual([...current.muted], [sample.robotAsset], "the layers panel's muted state, from the changes heard");
+    assert.deepEqual(current.stage.mutedIdentifiers(), [sample.robotAsset]);
+    assert.ok(current.stage.layers().includes(asset), "the stage still holds it");
+    const change = current.changeLog.at(-1);
+    assert.equal(change?.cause, `mute ${sample.robotAsset}`);
+    assert.deepEqual(change?.changes.mutedIdentifiers, [sample.robotAsset]);
+    assert.deepEqual(change?.changes.mutedLayers, [asset]);
+    assert.deepEqual(change?.changes.resynced, [sample.rover]);
+    assert.deepEqual(change?.changes.removed, [`${sample.rover}/Body`, `${sample.rover}/Head`]);
+    const color = read(current.stage, sample.roverColor);
+    assert.equal(color.value, "(0.8, 0.2, 0.1)");
+    assert.deepEqual(color.opinions, [`scene.usda ${sample.rover}{finish=painted}.color variants contributed`], "the asset's opinion is gone");
+    assert.equal(current.stage.attribute(`${sample.rover}.height`), null, "the height lived only in the asset");
+    assert.deepEqual(
+      current.stage.status().compositionErrors.map((issue) => `${issue.code} ${issue.prim}`),
+      [`composition.muted_asset ${sample.rover}`],
+    );
+    assert.deepEqual(current.undoStack, [], "muting is not an edit");
+  },
 ];
+
+/**
+ * The layers panel's toggle, after the script: unmuting the robot asset
+ * brings its opinions back in one change, and fetches nothing.
+ */
+async function unmuteWithTheToggle(session: Session): Promise<void> {
+  const current = session.current;
+  const changes = current.changeLog.length;
+  const loop = current.loopLog.length;
+  const asset = current.layerNamed(sample.robotAsset);
+  assert.equal(await current.setMuted(asset, false), true);
+  assert.equal(current.changeLog.length, changes + 1, "one change");
+  const change = current.changeLog.at(-1);
+  assert.equal(change?.cause, `unmute ${sample.robotAsset}`);
+  assert.deepEqual(change?.changes.unmutedIdentifiers, [sample.robotAsset]);
+  assert.deepEqual(change?.changes.unmutedLayers, [asset]);
+  assert.deepEqual(change?.changes.resynced, [sample.rover]);
+  assert.deepEqual([...current.muted], []);
+  assert.deepEqual(current.stage.mutedIdentifiers(), []);
+  assert.equal(current.loopLog.length, loop, "nothing is fetched: the stage kept the layer");
+  assert.deepEqual(read(current.stage, sample.roverColor).opinions, [
+    `scene.usda ${sample.rover}{finish=painted}.color variants contributed`,
+    "assets/robot.usda /Robot.color references ignored (shadowed)",
+  ]);
+  assert.equal(read(current.stage, `${sample.rover}.height`).value, String(sample.assetHeight), "the saved height is back");
+  assert.deepEqual(current.stage.children(sample.rover), [`${sample.rover}/Body`, `${sample.rover}/Head`]);
+  assert.deepEqual(current.stage.status().compositionErrors, []);
+  assert.equal(await current.setMuted(asset, false), false, "unmuting again changes nothing");
+  assert.equal(current.changeLog.length, changes + 1);
+  // The page offers no toggle for the root, which cannot be muted.
+  assert.equal(code(() => current.stage.muteLayer(current.stage.root)), "mute.root_layer");
+}
 
 assert.equal(checks.length, steps.length);
 try {
@@ -358,6 +415,8 @@ try {
       `ok ${index + 1} ${step.title}: in ${after.bytesIn - before.bytesIn} B, out ${after.bytesOut - before.bytesOut} B, views ${after.views - before.views}`,
     );
   }
+  await unmuteWithTheToggle(session);
+  console.log("ok the layers panel's toggle unmutes the robot asset in one change");
   const { bytesIn, bytesOut, memoryBytes } = host.layerstack.transfer();
   console.log(`transfer: in ${bytesIn} B, out ${bytesOut} B, memory ${memoryBytes} B`);
 } finally {

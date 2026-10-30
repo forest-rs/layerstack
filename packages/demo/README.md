@@ -9,16 +9,21 @@ referenced from its own file, with a variant set whose `chrome` variant
 references an asset fetched only when it is selected; and two instances of
 a beacon, which share one prototype.
 
-Panels: the prim tree (instances and instance proxies badged), the
+Panels: the prim tree (instances, instance proxies and composition errors
+badged), the
 attribute inspector (the variant dropdowns, the time to read at, the
 relationships and their targets, an edit field, and rename and delete), the
 explanation (every opinion with its layer, arc and role, the value's source,
 and an "Edit here" button that points the edit field at where the opinion
-lives, through the arc that reaches it), the layers (dirty, edit layer, save and reopen), the undo stack,
-the asset loop (want, fetch, supply, load), the change log, and the transfer
-counters in the header.
+lives, through the arc that reaches it, and the prim's composition errors),
+the layers (dirty, edit layer, a mute toggle, save and reopen), the undo
+stack, the asset loop (want, fetch, supply, load), the change log (with the
+layers each change muted or unmuted), and the transfer counters in the
+header. The layers panel shows which layers are muted from the changes the
+stage reports (`Changes.mutedIdentifiers` and `unmutedIdentifiers`), not by
+asking the stage again.
 
-The script runs twelve steps, one button each:
+The script runs thirteen steps, one button each:
 
 1. Open the sample: the stage wants its sublayer, the robot's reference and
    the beacon's (once, for both instances), and `resolve` fetches them.
@@ -57,10 +62,17 @@ The script runs twelve steps, one button each:
     asset's height included), and
     the reopened stage explains the instance proxy as the edited live
     stage did.
+13. Mute the robot asset (`Stage.muteLayer`): the rover's color keeps only
+    the painted variant's opinion, its height and its `Body` and `Head`
+    are gone, and the rover reports its reference to the muted asset
+    (`composition.muted_asset`), in the explanation and as a tree badge.
+    The stage still holds the layer. Its Unmute in the layers panel
+    brings every opinion back in one change and fetches nothing. Muting
+    is not an edit: the undo stack is empty.
 
 `scripts/acceptance.ts` runs the same steps headless in Node, reading the
-sample from disk, and checks the values and explanations after each one; CI
-runs it.
+sample from disk, and checks the values and explanations after each one,
+then unmutes the robot asset as the layers panel's toggle does; CI runs it.
 
 ```sh
 # Build the package first (see ../layerstack/README.md):

@@ -1515,6 +1515,16 @@ export interface InstanceOptions {
   readonly applyMask?: boolean;
 }
 
+/**
+ * A native instancing prototype ({@link Stage.prototypes}): the instance
+ * roots that share it, whose descendants are instance proxies of one
+ * composed subtree.
+ */
+export interface Prototype {
+  /** The instance roots, in traversal order; the first is where its prims are read. */
+  readonly instances: readonly string[];
+}
+
 /** A point instancer's instances at one time ({@link Stage.pointInstances}). */
 export interface PointInstances {
   /** The number of instances. */

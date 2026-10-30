@@ -38,6 +38,7 @@ import type {
   InstanceOptions,
   LocalTransform,
   PointInstances,
+  Prototype,
   PurposeInfo,
   TransformCacheStats,
   Visibility,
@@ -195,6 +196,7 @@ export interface NativeStage extends Disposable {
     applyMask: boolean,
   ): unknown;
   instanceMask(path: string, time?: number | null): Uint8Array;
+  prototypes(): unknown;
 }
 
 /**
@@ -1389,6 +1391,20 @@ export class Stage implements Disposable {
       ),
     ) as Row;
     return decodeInstances(row);
+  }
+
+  /**
+   * The native instancing prototypes: for each, the instance roots that
+   * share it (`instanceable` prims whose composition is the same), in
+   * traversal order; prototypes in the order of their first instance. A
+   * prototype's position names it in this snapshot only: an edit may
+   * renumber them. Which instances share a prototype is OpenUSD's
+   * (`UsdPrim::GetPrototype`, `UsdPrim::GetInstances`); OpenUSD orders its
+   * `/__Prototype_N` prims otherwise.
+   */
+  prototypes(): Prototype[] {
+    const rows = this.#call("prototypes", (native) => native.prototypes()) as string[][];
+    return rows.map((instances) => ({ instances: Object.freeze([...instances]) }));
   }
 
   /**

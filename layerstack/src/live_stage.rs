@@ -6137,6 +6137,48 @@ mod tests {
         }
     }
 
+    /// Setting a prim's `kind` resyncs it, as a change of its model
+    /// hierarchy, which its descendants read too; `documentation` changes
+    /// it info-only.
+    ///
+    /// OpenUSD: `UsdStage::_HandleLayersDidChange` (`pxr/usd/usd/stage.cpp`)
+    /// recomposes a prim whose `kind` changed: the model hierarchy
+    /// (`UsdPrim::IsModel`) of it and its descendants follows `kind`.
+    #[test]
+    fn setting_kind_resyncs_the_prim() {
+        use crate::edit::{EditTarget, Transaction};
+
+        let mut store = InMemoryStore::default();
+        let world = p(&mut store, "/World");
+        let rock = p(&mut store, "/World/Rock");
+        let kind = store.tokens.intern("kind");
+        let component = store.tokens.intern("component");
+        let documentation = store.tokens.intern("documentation");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(world, PrimSpec::def());
+        layer.insert_prim(rock, PrimSpec::def());
+        store.insert_layer(layer);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let at = EditTarget::for_layer(LayerId(1)).prim(world);
+        let mut edit = Transaction::new();
+        edit.set_metadata(at.clone(), kind, FieldValue::Value(Value::Token(component)));
+        let applied = live.apply(&mut store, &edit).expect("applies");
+        assert_eq!(applied.changes.resynced, [world]);
+        assert!(applied.changes.changed_info_only.is_empty());
+        let undone = live.apply(&mut store, &applied.inverse).expect("undo");
+        assert_eq!(undone.changes.resynced, [world]);
+
+        let mut edit = Transaction::new();
+        edit.set_metadata(
+            at,
+            documentation,
+            FieldValue::Value(Value::string("granite")),
+        );
+        let applied = live.apply(&mut store, &edit).expect("applies");
+        assert!(applied.changes.resynced.is_empty());
+        assert_eq!(applied.changes.changed_info_only, [world]);
+    }
+
     /// An edit that applies a multiple-apply instance recomposes the prim,
     /// which interns the names the instance forms, so the stage lists and
     /// resolves its properties without mutating the store.

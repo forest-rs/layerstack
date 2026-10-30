@@ -31,10 +31,10 @@
 use std::path::{Path, PathBuf};
 
 use layerstack::{
-    CompositionError, EditTarget, LayerId, LayerMuteError, LayerOffset, ListPosition, Reference,
-    ReferenceTarget, Specifier, StageOptions, Transaction,
+    CompositionError, EditTarget, LayerId, LayerMuteError, LayerOffset, ListPosition, LiveStage,
+    NamespaceEdit, Reference, ReferenceTarget, Specifier, StageOptions, TargetPath, Transaction,
 };
-use layerstack_conformance::workspace_root;
+use layerstack_conformance::{usda_real::load_entry_usda, workspace_root};
 use layerstack_io::{Filesystem, StageDocument};
 use serde_json::{Value as Json, json};
 
@@ -305,6 +305,78 @@ fn muting_by_identifier_replays_openusd_call_by_call() {
             calls.holds("lamp.usda"),
             opened,
             "{call}: a layer muted before anything read it is not read"
+        );
+    }
+}
+
+#[test]
+fn namespace_edits_leave_muted_layers_as_openusd_does() {
+    let oracle = oracle();
+    let directory = fixtures("namespace");
+    for case in oracle["namespace"].as_array().unwrap() {
+        let name = case["name"].as_str().unwrap();
+        let mut loaded = load_entry_usda(&directory.join("scene.usda"));
+        assert!(loaded.invalid.is_empty(), "{:?}", loaded.invalid);
+        let named = |loaded: &layerstack_conformance::usda_real::LoadedStage, file: &str| {
+            *loaded
+                .layer_names
+                .iter()
+                .find(|(_, path)| {
+                    let path = path.replace('\\', "/");
+                    path == file || path.ends_with(&format!("/{file}"))
+                })
+                .unwrap()
+                .0
+        };
+        let muted = strings(&case["muted"])
+            .iter()
+            .map(|file| named(&loaded, file))
+            .collect();
+        let options = StageOptions {
+            muted_layers: muted,
+            ..StageOptions::default()
+        };
+        let mut live = LiveStage::compose(&mut loaded.store, loaded.root_layer, options);
+        let ids: Vec<(String, LayerId)> = case["layers"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(|file| (file.clone(), named(&loaded, file)))
+            .collect();
+        let store = &mut loaded.store;
+        let target = EditTarget::for_layer(loaded.root_layer);
+        let source = TargetPath::Prim(store.path(case["path"].as_str().unwrap()));
+        let prepared = match case["destination"].as_str() {
+            Some(to) => {
+                let destination = TargetPath::Prim(store.path(to));
+                NamespaceEdit::prepare(live.stage(), store, &target, source, destination)
+            }
+            None => NamespaceEdit::prepare_delete(live.stage(), store, &target, source),
+        };
+        if !case["can_apply"].as_bool().unwrap() {
+            assert!(prepared.is_err(), "{name}: OpenUSD refuses it");
+            continue;
+        }
+        let edit = prepared.unwrap_or_else(|e| panic!("{name}: {e}"));
+        live.apply(store, edit.transaction())
+            .unwrap_or_else(|e| panic!("{name}: {e:?}"));
+        for (file, id) in &ids {
+            let text = &case["layers"][file];
+            let layer = store.layer(*id).unwrap();
+            let written =
+                layerstack_usda::save_usda(layer, store.tokens(), store.paths()).expect("saves");
+            assert_eq!(written, text.as_str().unwrap(), "{name}: {file}");
+        }
+        let errors = live
+            .stage()
+            .composition_errors()
+            .iter()
+            .filter(|error| matches!(error, CompositionError::MutedAsset(_)))
+            .count();
+        assert_eq!(
+            errors,
+            case["muted_assets"].as_array().unwrap().len(),
+            "{name}: muted assets"
         );
     }
 }

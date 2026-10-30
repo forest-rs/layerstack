@@ -248,6 +248,19 @@ impl NamespaceEdit {
         source: TargetPath,
         destination: TargetPath,
     ) -> Result<Self, NamespaceError> {
+        unmuted(stage, store, |store| {
+            Self::prepare_unmuted(stage, store, target, source, destination)
+        })
+    }
+
+    /// [`Self::prepare`] against `store` as `stage` reads it ([`unmuted`]).
+    fn prepare_unmuted(
+        stage: &Stage,
+        store: &mut dyn LayerStore,
+        target: &EditTarget,
+        source: TargetPath,
+        destination: TargetPath,
+    ) -> Result<Self, NamespaceError> {
         validate_paths(store, source, destination)?;
         validate_stage(stage, store, source, destination)?;
         let mapped_source = map(target, store, source)?;
@@ -258,7 +271,7 @@ impl NamespaceEdit {
         {
             // Through a variant of the root stack too, which
             // `prepare_with_dependents` refuses as OpenUSD does.
-            return Self::prepare_with_dependents(stage, &[], store, target, source, destination);
+            return coordinated::prepare(stage, &[], store, target, source, destination);
         }
         let from = mapped_source;
         let to = mapped_destination;
@@ -593,7 +606,9 @@ impl NamespaceEdit {
         target: &EditTarget,
         object: TargetPath,
     ) -> Result<Self, NamespaceError> {
-        delete::prepare(stage, store, target, object)
+        unmuted(stage, store, |store| {
+            delete::prepare(stage, store, target, object)
+        })
     }
 
     /// Prepares one atomic root-stack namespace edit and repairs supplied stages.
@@ -608,7 +623,9 @@ impl NamespaceEdit {
     /// and receive a repaired source target instead.
     ///
     /// Dependents are caller-owned: undisclosed stages cannot be discovered.
-    /// Masks, muted layers, unloaded payloads and ambiguous mappings are
+    /// The layers the stage mutes are neither read nor edited, as
+    /// `UsdNamespaceEditor` leaves them; dependents must mute the same
+    /// layers. Masks, unloaded payloads and ambiguous mappings are
     /// rejected explicitly, as is a `target` that maps paths into a variant
     /// ([`NamespaceError::Unmappable`]), which `UsdNamespaceEditor` refuses.
     /// Dependent mappings require non-implied arcs to sites outside variant
@@ -638,8 +655,53 @@ impl NamespaceEdit {
         source: TargetPath,
         destination: TargetPath,
     ) -> Result<Self, NamespaceError> {
-        coordinated::prepare(stage, dependents, store, target, source, destination)
+        if dependents
+            .iter()
+            .any(|dependent| dependent.muted_layers() != stage.muted_layers())
+        {
+            return Err(NamespaceError::UnsupportedComposition(
+                "dependent stages must mute the layers the edited stage mutes",
+            ));
+        }
+        unmuted(stage, store, |store| {
+            coordinated::prepare(stage, dependents, store, target, source, destination)
+        })
     }
+}
+
+/// Runs a preparation against `store` as `stage` reads it: without the
+/// layers the stage mutes, which it neither reads nor edits, so their
+/// specs stay where they are and the paths they author are not repaired.
+/// `UsdNamespaceEditor` edits the layers of the stage's layer stacks and
+/// the layers its prim indexes use, and a muted layer is in neither
+/// (`PcpLayerStack::_BuildLayerStack` skips a muted sublayer, and
+/// `_EvalRefOrPayloadArcs` does not follow an arc to a muted asset).
+fn unmuted<R>(
+    stage: &Stage,
+    store: &mut dyn LayerStore,
+    prepare: impl FnOnce(&mut dyn LayerStore) -> Result<R, NamespaceError>,
+) -> Result<R, NamespaceError> {
+    if stage.muted_layers().is_empty() {
+        return prepare(store);
+    }
+    let root = stage.root_layer().ok_or(NamespaceError::NoSuchObject)?;
+    let mut view = crate::stage::ControlledStore {
+        inner: store,
+        root,
+        muted: stage.muted_layers(),
+    };
+    prepare(&mut view)
+}
+
+/// Whether `stage` composes with an error a namespace edit cannot
+/// coordinate: any but an arc to a muted asset, which hides that asset on
+/// purpose, as `UsdNamespaceEditor` edits a stage reporting
+/// `PcpErrorMutedAssetPath`.
+pub(super) fn blocking_errors(stage: &Stage) -> bool {
+    stage
+        .composition_errors()
+        .iter()
+        .any(|error| !matches!(error, crate::CompositionError::MutedAsset(_)))
 }
 
 fn map(

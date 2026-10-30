@@ -37,6 +37,7 @@ pub use traversal::{PrimPredicate, PrimRange, PrimStatus, PrimVisit, PrimVisits}
 pub(crate) mod metadata;
 pub use metadata::StageMetadataError;
 mod loading;
+pub(crate) use loading::ControlledStore;
 pub use loading::{LayerMuteError, LoadPolicy, PayloadLoadRules, PayloadRule};
 pub(crate) mod preparation;
 mod prototypes;
@@ -709,7 +710,7 @@ impl Stage {
         let captured = options.clone();
         let foreign_schemas = Self::drop_foreign_schemas(&mut options, store);
         let schemas = options.schemas.clone();
-        let mut controlled = loading::ControlledStore {
+        let mut controlled = ControlledStore {
             inner: store,
             root,
             muted: &captured.muted_layers,
@@ -1131,7 +1132,7 @@ impl Stage {
     }
 
     fn prepare_clips(&mut self, store: &mut dyn LayerStore) {
-        let mut controlled = loading::ControlledStore {
+        let mut controlled = ControlledStore {
             inner: store,
             root: self.root_layer.unwrap_or(LayerId(0)),
             muted: &self.options.muted_layers,

@@ -115,14 +115,24 @@ function triangles(stage: Stage, stagehand: Stagehand, path: string, typeName: s
   if (typeName === "Mesh") {
     const input = readMesh(stage, path, at);
     if (input === null) return null;
-    using mesh = stagehand.buildMesh(input);
-    if (mesh.indices.length === 0) return null;
-    return fromMesh(mesh, (input.subsets ?? []).map((subset) => subset.path ?? ""), `mesh ${path}`);
+    // `try`/`finally`, not `using`: Safari cannot parse `using` declarations,
+    // and the dev server passes the source through without lowering them.
+    const mesh = stagehand.buildMesh(input);
+    try {
+      if (mesh.indices.length === 0) return null;
+      return fromMesh(mesh, (input.subsets ?? []).map((subset) => subset.path ?? ""), `mesh ${path}`);
+    } finally {
+      mesh.dispose();
+    }
   }
   const shape = readShape(stage, path, at);
   if (shape === null) return null;
-  using mesh = stagehand.tessellate(shape, TESSELLATION);
-  return fromMesh(mesh, [], JSON.stringify(shape));
+  const mesh = stagehand.tessellate(shape, TESSELLATION);
+  try {
+    return fromMesh(mesh, [], JSON.stringify(shape));
+  } finally {
+    mesh.dispose();
+  }
 }
 
 /** The `diffuseColor` of the surface shader of the material at `material`, if it has one. */

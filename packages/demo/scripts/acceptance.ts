@@ -18,8 +18,8 @@ import { Session, sample, steps } from "../src/script.ts";
 import type { Host } from "../src/script.ts";
 import { materialSummary } from "../src/materials.ts";
 import { formatValue, releaseValue } from "../src/values.ts";
-import { buildViewport, primColor, viewportSummary } from "../src/viewport.ts";
-import type { ViewportSummary } from "../src/viewport.ts";
+import { ViewportModel, primColor, updateSummary, viewportSummary } from "../src/viewport.ts";
+import type { UpdateSummary, ViewportSummary } from "../src/viewport.ts";
 
 const scene = fileURLToPath(new URL("../public/scene/", import.meta.url));
 const downloads = await mkdtemp(join(tmpdir(), "layerstack-demo-"));
@@ -28,6 +28,8 @@ let downloaded: readonly LayerFile[] = [];
 
 /** Builds the viewport's triangles, as the page does. */
 const stagehand = await loadStagehand();
+/** The viewport's draw list, kept from the editor's change log as the page keeps it. */
+const model = new ViewportModel(stagehand);
 
 const host: Host = {
   layerstack: await loadLayerstack(),
@@ -421,7 +423,9 @@ const checks: ((session: Session) => void)[] = [
     const before = transformsBefore;
     assert.ok(before !== null);
     // Every prim the viewport draws, the instance proxies below the beacon included.
-    stage.worldTransforms(buildViewport(stage, stagehand).items.filter((item) => item.prototype === null).map((item) => item.path));
+    stage.worldTransforms(
+      model.list!.items().flatMap((item) => (item.source.kind === "pointInstancer" ? [] : [item.prim, ...item.instances])),
+    );
     const after = stage.transformCache();
     assert.ok(after.changeBatches > before.changeBatches, "the cache heard the edit");
     // The beacon's local transform alone: the rock's first `visibility`
@@ -533,18 +537,80 @@ const viewports: ViewportSummary[] = [
   },
 ];
 
+/**
+ * What the viewport's draw list did after each step, from the editor's
+ * change records: draws added, removed, moved and shown or hidden, buffers
+ * refilled and rebuilt, meshes triangulated and shapes tessellated, draws
+ * read and left untouched, and local transforms the stage recomputed.
+ */
+const update = (counts: Partial<UpdateSummary>): UpdateSummary => ({
+  added: 0,
+  removed: 0,
+  moved: 0,
+  shown: 0,
+  refilled: 0,
+  rebuilt: 0,
+  triangulations: 0,
+  tessellations: 0,
+  itemsRead: 0,
+  itemsUntouched: 0,
+  localTransforms: 0,
+  ...counts,
+});
+const updates: UpdateSummary[] = [
+  // Read whole: eight draws (the beacons' post and bulb one each for both
+  // instances, the stones one for five), two meshes planned and five
+  // shapes tessellated (the body and the posts share a cube).
+  update({ added: 8, triangulations: 2, tessellations: 5, itemsRead: 8, localTransforms: 15 }),
+  // Selecting changes nothing.
+  update({}),
+  // The rock's radius: one draw read, its sphere tessellated at radius 3.
+  update({ tessellations: 1, itemsRead: 1, itemsUntouched: 7 }),
+  // The variant and its asset: the robot's draws read in each record
+  // (untouched counts the last one's), recolored, nothing rebuilt.
+  update({ itemsRead: 4, itemsUntouched: 6, localTransforms: 3 }),
+  // Undo, undo, redo: the shapes of both radii are still held.
+  update({ itemsRead: 4, itemsUntouched: 7, localTransforms: 3 }),
+  // A new prim: its draw added. `/World`'s child list changed with no
+  // property inventory, so every draw under it is read again, and every
+  // buffer found unchanged.
+  update({ added: 1, tessellations: 1, itemsRead: 9, localTransforms: 2 }),
+  // Retyped: the pebble alone, a cube now.
+  update({ tessellations: 1, itemsRead: 1, itemsUntouched: 8, localTransforms: 1 }),
+  // The asset's height: the robot's two draws read, nothing rebuilt.
+  update({ itemsRead: 2, itemsUntouched: 7 }),
+  // Renamed: the robot's draws gone, the rover's added, drawing the same buffers.
+  update({ added: 2, removed: 2, itemsRead: 9, localTransforms: 4 }),
+  // Time 30, then the default time again: every draw read at the time, nothing animated.
+  update({ itemsRead: 9 }),
+  update({ itemsRead: 9 }),
+  // Reopened: a new stage, read whole.
+  update({ added: 9, triangulations: 2, tessellations: 6, itemsRead: 9, localTransforms: 16 }),
+  // Muted: the rover's draws gone, nothing read.
+  update({ removed: 2, itemsUntouched: 7 }),
+  // One edit moves the north beacon (its post and bulb groups' matrices),
+  // hides the rock (no matrices, shown or hidden) and stone 3 (the
+  // stones' matrices): matrices and visibility only, nothing triangulated,
+  // tessellated or refilled.
+  update({ moved: 4, shown: 1, itemsRead: 4, itemsUntouched: 3 }),
+];
+
 /** The transform cache's counters after the last viewport was built. */
 let transformsBefore: TransformCacheStats | null = null;
 
 function checkViewport(index: number, session: Session): void {
-  const summary = viewportSummary(buildViewport(session.current.stage, stagehand, session.time ?? undefined));
+  const time = session.time ?? undefined;
+  const counts = updateSummary(model.sync(session.current, time));
+  const summary = viewportSummary(model.scene(time));
   transformsBefore = session.current.stage.transformCache();
-  if (process.env.PRINT_VIEWPORTS !== undefined) console.log(JSON.stringify(summary));
+  if (process.env.PRINT_VIEWPORTS !== undefined) console.log(JSON.stringify(summary), JSON.stringify(counts));
   assert.deepEqual(summary, viewports[index], `the viewport after step ${index + 1}`);
+  assert.deepEqual(counts, updates[index], `the viewport's update after step ${index + 1}`);
 }
 
 assert.equal(checks.length, steps.length);
 assert.equal(viewports.length, steps.length);
+assert.equal(updates.length, steps.length);
 try {
   for (const [index, step] of steps.entries()) {
     const before = host.layerstack.transfer();
@@ -562,6 +628,7 @@ try {
   const { bytesIn, bytesOut, memoryBytes } = host.layerstack.transfer();
   console.log(`transfer: in ${bytesIn} B, out ${bytesOut} B, memory ${memoryBytes} B`);
 } finally {
+  model.dispose();
   session.editor?.free();
   await rm(downloads, { recursive: true, force: true });
 }

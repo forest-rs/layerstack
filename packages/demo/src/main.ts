@@ -11,7 +11,8 @@ import type { Editor, LayerFile } from "./editor.ts";
 import { Session, steps } from "./script.ts";
 import type { Host } from "./script.ts";
 import { materialSummary } from "./materials.ts";
-import { buildViewport, viewportSummary } from "./viewport.ts";
+import { ViewportModel, updateSummary, viewportSummary } from "./viewport.ts";
+import type { ViewportUpdate } from "./viewport.ts";
 import type { Viewport } from "./viewport3d.ts";
 import { formatNumber, formatValue, parseValue, releaseValue } from "./values.ts";
 import "./style.css";
@@ -62,6 +63,10 @@ function layerName(layer: Layer): string {
 const sceneBase = new URL("scene/", document.baseURI);
 /** Builds the viewport's triangles: its own module, fed typed arrays read through layerstack. */
 const stagehand = await loadStagehand();
+/** The viewport's draw list, kept up to date from the editor's change log. */
+const model = new ViewportModel(stagehand);
+/** The last update that changed something, for the stats line: panels render again without edits. */
+let shown: ViewportUpdate | null = null;
 /** The download links of the last save, revoked at the next. */
 let links: { identifier: string; url: string; size: number }[] = [];
 
@@ -148,7 +153,7 @@ function render(): void {
   for (const issue of stage.status().compositionErrors) {
     if (issue.prim !== null) issues.set(issue.prim, [...(issues.get(issue.prim) ?? []), issue]);
   }
-  renderViewport(stage);
+  renderViewport(editor);
   renderTree(stage, waiting, issues);
   renderInspector(editor);
   renderExplanation(stage, waiting, issues);
@@ -182,25 +187,43 @@ import("./viewport3d.ts").then(
   },
 );
 
-/** Draws the stage from its reads at the inspector's time: world transforms, visibility, purpose, triangles, colors, instances and bounds. */
-function renderViewport(stage: Stage): void {
+/**
+ * Draws the stage at the inspector's time: the draw list hears the change
+ * records since the last render (or reads a new stage whole), and the
+ * three.js view applies its diffs. The stats line says what the last
+ * update did.
+ */
+function renderViewport(editor: Editor): void {
   const body = panel("viewport-body");
-  let scene: ReturnType<typeof buildViewport>;
+  let update: ViewportUpdate;
+  let scene: ReturnType<ViewportModel["scene"]>;
   try {
-    scene = buildViewport(stage, stagehand, session.time ?? undefined);
+    update = model.sync(editor, session.time ?? undefined);
+    scene = model.scene(session.time ?? undefined);
   } catch (error) {
     // A read the viewport cannot make (an invalid instancer, say) must not take the panels down.
     fill(body, `The viewport could not read the stage: ${error instanceof Error ? error.message : String(error)}`);
     return;
   }
   const summary = viewportSummary(scene);
-  viewport?.update(scene, session.prim);
+  viewport?.update(scene, update, session.prim);
+  if (update.reset || update.records > 0 || update.timeChanged || shown === null) shown = update;
+  const last = shown;
+  const work = updateSummary(last);
   const bounds = summary.bounds === null ? "empty" : `[${summary.bounds.slice(0, 3).map(formatNumber).join(", ")}] to [${summary.bounds.slice(3).map(formatNumber).join(", ")}]`;
+  const changed =
+    last.reset
+      ? `read whole: ${work.added} draws, ${work.triangulations} triangulated, ${work.tessellations} tessellated`
+      : `last update (${last.records} change${last.records === 1 ? "" : "s"}${last.timeChanged ? ", new time" : ""}): ` +
+        `+${work.added} −${work.removed} draws, ${work.moved} moved, ${work.shown} shown or hidden, ` +
+        `${work.refilled} refilled, ${work.rebuilt} rebuilt, ${work.triangulations} triangulated, ${work.tessellations} tessellated; ` +
+        `${work.itemsRead} draws read, ${work.itemsUntouched} untouched, ${work.localTransforms} local transforms`;
   fill(
     body,
-    `${summary.drawn.length} drawn (${summary.instances} instances), ${summary.triangles} triangles, framed on ${bounds}`,
+    `${scene.items.length} draws: ${summary.drawn.length} drawn (${summary.instances} instances), ${summary.triangles} triangles, framed on ${bounds}`,
     summary.hidden.length > 0 ? `; hidden: ${summary.hidden.join(", ")}` : "",
     viewport === null ? " (WebGL is unavailable: the summary is all there is)" : "",
+    h("div", { class: "viewport-diff" }, changed),
   );
 }
 

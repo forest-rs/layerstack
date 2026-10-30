@@ -21,7 +21,8 @@ from `/Unused`, a prim no arc reaches, and arcs back into the stage from
 composed specs: `/Asset/Front` references the lamp and overs its bulb
 and `intensity`, `/Asset/Base` (inherited by `/Asset/Side`) payloads the
 bulb, and the selected variant's `/Asset{mode=plain}Under` references the
-lamp. `/World/Switch` is named only from composed specs.
+lamp and overs its bulb. `/World/Switch` is named only from composed
+specs.
 
 Each case opens the scene afresh, queues one `UsdNamespaceEditor` move or
 delete through the root layer and applies it. It records each layer's
@@ -201,6 +202,9 @@ def "Asset" (
                 prepend references = @scene.usda@</World/Lamp>
             )
             {
+                over "Bulb"
+                {
+                }
             }
 
         }

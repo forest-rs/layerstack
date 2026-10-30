@@ -47,6 +47,9 @@ def "Asset" (
                 prepend references = @scene.usda@</World/Lamp>
             )
             {
+                over "Bulb"
+                {
+                }
             }
 
         }

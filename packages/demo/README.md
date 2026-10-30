@@ -13,26 +13,33 @@ a beacon, which share one prototype; a ground mesh; and a point instancer
 of five stones.
 
 The viewport (`src/viewport.ts`, drawn by three.js in `src/viewport3d.ts`)
-takes everything from layerstack, with no USD loader: the drawable prims
-(meshes, implicit shapes and point instancers) from the composed tree, one
-batched `stage.visibilities` and `stage.purposeInfos` read to leave out
-what is invisible or of a purpose not drawn (default and proxy are, as in
-usdview), one batched `stage.worldTransforms` read for every placement,
-triangles built by `@forest-rs/layerstack_stagehand` (`../layerstack_stagehand`)
-from typed arrays read through layerstack (a mesh's topology, points,
-primvars and `materialBind` subsets, or a shape's size attributes): indexed
-buffers with normals, per-vertex `displayColor` where it varies, concave
-faces ear-clipped (the path), and a three.js group per subset range (the
-ground), the `displayColor` primvar (inherited from an ancestor or a class
-too) or else the bound material's surface `diffuseColor`,
-`stage.pointInstances` for the stones, each matrix times the
-instancer's world transform, and `stage.worldBounds(["/"])` to frame the
-camera. It is read again after every action, so the edits, undos, the
-variant switch, the rename and the muted asset show in it; selecting a prim
+takes everything from layerstack, with no USD loader, through a
+`DrawList` of `@forest-rs/layerstack_stagehand` (`../layerstack_stagehand`):
+instanced draws of the composed tree (a gprim drawn once, each gprim of the
+beacon prototype drawn at both instances, the stones' prototype at each
+visible instance), left out when invisible or of a purpose not drawn
+(default and proxy are, as in usdview), placed by the stage's world
+transforms, over buffers stagehand built from typed arrays read through
+layerstack (a mesh's topology, points, primvars and `materialBind`
+subsets, or a shape's size attributes): indexed buffers with normals,
+per-vertex `displayColor` where it varies, concave faces ear-clipped (the
+path), and a three.js group per subset range (the ground), colored by the
+`displayColor` primvar (inherited from an ancestor or a class too) or else
+the bound material's surface `diffuseColor`; `stage.worldBounds(["/"])`
+frames the camera.
+
+After every action the draw list hears the editor's change records and
+answers with a diff, which the view applies in place: an `InstancedMesh`
+per group whose matrices are rewritten, geometries refilled or rebuilt
+only when their buffers were, objects added, removed, shown or hidden as
+listed. A new stage (opened, reopened) is read whole. Selecting a prim
 highlights it. Drag to orbit, scroll to zoom. Under it, the same read
-summarized: the prims drawn, the instances, the triangles, the framed
-bounds and each mesh's stagehand report in brief, which
-`scripts/acceptance.ts` checks after every step without rendering a pixel.
+summarized (the prims drawn, the instances, the triangles, the framed
+bounds) and what the last update did: draws added, removed, moved, shown
+or hidden, buffers refilled or rebuilt, meshes triangulated and shapes
+tessellated, draws read and left untouched, local transforms recomputed.
+`scripts/acceptance.ts` checks both after every step without rendering a
+pixel.
 
 Panels: the prim tree (instances, instance proxies and composition errors
 badged), the
@@ -99,7 +106,8 @@ The script runs fourteen steps, one button each:
 14. Move a beacon, hide the rock and a stone, in one edit: the north
     beacon's `xformOp:translate`, the rock's `visibility` and the stones'
     `invisibleIds`. The viewport moves the beacon, leaves out the rock and
-    stone 3, and frames the smaller bounds. The transform cache recomputes
+    stone 3, and frames the smaller bounds: its update moves four draws and
+    hides one, and triangulates, tessellates and refills nothing. The transform cache recomputes
     one local transform, the beacon's, and the world transforms below it,
     and reuses the rest: the rock's first `visibility` opinion is a new
     property spec, which resyncs only `/World/Rock.visibility`, as

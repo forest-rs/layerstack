@@ -644,6 +644,32 @@ impl Stage {
         ]))
     }
 
+    /// The native instancing prototypes (`layerstack::Stage::prototypes`):
+    /// one list per prototype, in first-instance traversal order, of the
+    /// paths of the instance roots sharing it, in traversal order. A
+    /// prototype's position is its identity in this snapshot only.
+    ///
+    /// OpenUSD: `UsdStage::GetPrototypes` and `UsdPrim::GetInstances`.
+    pub(crate) fn prototypes(&self) -> Wire {
+        let store = self.document.store();
+        Wire::List(
+            self.document
+                .stage()
+                .stage()
+                .prototypes()
+                .map(|prototype| {
+                    Wire::List(
+                        prototype
+                            .instances()
+                            .iter()
+                            .map(|&root| Wire::text(store.paths().display(root, store.tokens())))
+                            .collect(),
+                    )
+                })
+                .collect(),
+        )
+    }
+
     /// The paths of every composed child of the prim at `path`, in
     /// namespace order, inactive and abstract ones included (OpenUSD
     /// `UsdPrim::GetAllChildren`).
@@ -2514,6 +2540,12 @@ impl Stage {
             .into())
     }
 
+    /// The record `prototypes` builds, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = prototypes)]
+    pub fn js_prototypes(&self) -> JsValue {
+        self.prototypes().into()
+    }
+
     /// The mask `instance_mask` computes, as documented in `geom.rs`.
     #[wasm_bindgen(js_name = instanceMask)]
     pub fn js_instance_mask(&self, path: &str, time: Option<f64>) -> Result<Vec<u8>, JsValue> {
@@ -4011,6 +4043,36 @@ def Mesh "Rock" {
             !stage
                 .mute_and_unmute_layers(&[], &[MuteRequest::Identifier("never.usda")])
                 .unwrap()
+        );
+    }
+
+    #[test]
+    fn prototypes_list_their_instance_roots_in_traversal_order() {
+        let stage = crate::schemas::tests::open(
+            r#"#usda 1.0
+class "Beacon" {
+    def Sphere "Bulb" {
+    }
+}
+def "North" (
+    instanceable = true
+    prepend references = </Beacon>
+) {
+}
+def "South" (
+    instanceable = true
+    prepend references = </Beacon>
+) {
+}
+def "Lone" (
+    prepend references = </Beacon>
+) {
+}
+"#,
+        );
+        assert_eq!(
+            crate::schemas::tests::show(&stage.prototypes()),
+            "[[/North, /South]]"
         );
     }
 }

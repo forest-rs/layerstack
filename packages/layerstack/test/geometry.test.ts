@@ -511,3 +511,43 @@ describe("mesh topology", () => {
     assert.equal(other.prim("/Lamp")!.meshTopology(), null);
   });
 });
+
+describe("native instancing", () => {
+  it("lists each prototype's instance roots", () => {
+    using stage = layerstack.open({
+      identifier: "scene.usda",
+      bytes: new TextEncoder().encode(`#usda 1.0
+class "Beacon" {
+    def Sphere "Bulb" {
+    }
+}
+class "Lamp" {
+    def Cube "Base" {
+    }
+}
+def "South" (
+    instanceable = true
+    prepend references = </Beacon>
+) {
+}
+def "North" (
+    instanceable = true
+    prepend references = </Beacon>
+) {
+}
+def "Desk" (
+    instanceable = true
+    prepend references = </Lamp>
+) {
+}
+def "Loose" (
+    prepend references = </Beacon>
+) {
+}
+`),
+    });
+    // In traversal order; the loose reference is no instance.
+    assert.deepEqual(stage.prototypes(), [{ instances: ["/South", "/North"] }, { instances: ["/Desk"] }]);
+    assert.equal(stage.prim("/North/Bulb")?.instanceProxy, true);
+  });
+});

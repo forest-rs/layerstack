@@ -123,6 +123,28 @@ describe("draw lists", () => {
     }
   });
 
+  it("read nothing for the stage's metadata", () => {
+    const { stage, list, edit } = fixture();
+    try {
+      for (const [key, value] of [
+        ["documentation", { type: "string", value: "rocks and beacons" }],
+        ["metersPerUnit", { type: "double", value: 0.01 }],
+        ["upAxis", { type: "token", value: "Z" }],
+        ["startTimeCode", { type: "double", value: 1 }],
+      ] as const) {
+        const diff = edit([{ type: "setLayerMetadata", key, value }]);
+        assert.deepEqual([diff.added, diff.removed, diff.matrices, diff.refilled, diff.rebuilt], [[], [], [], [], []], key);
+        assert.equal(diff.work.itemsRead, 0, key);
+        assert.equal(diff.work.itemsUntouched, 6, key);
+        assert.equal(diff.work.primsTraversed, 0, key);
+        assert.equal(diff.work.lightsRead + diff.work.camerasRead + diff.work.materialsRead, 0, key);
+      }
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+  });
+
   it("touch only the item a property edit reaches", () => {
     const { stage, list, edit } = fixture();
     try {

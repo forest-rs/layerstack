@@ -375,6 +375,24 @@ fn reads(inputs: &[&str], name: &str) -> bool {
         || name.starts_with("collection:shadowLink:")
 }
 
+/// Whether an info-only change of `prim` reaches nothing a draw list reads:
+/// the pseudo-root's. It holds no properties, so its own fields are the
+/// stage's metadata: a layer field of the stage's own layer stack that
+/// composes nothing (`documentation`, `customLayerData`, `startTimeCode`,
+/// `endTimeCode`, `metersPerUnit`, `upAxis` and the like), or the
+/// `subLayers` of a sublayer inserted or removed, whose prims are listed on
+/// their own (`layerstack::Changes::changed_info_only`). No buffer, matrix,
+/// camera, light or material reads them: the time codes bound what a
+/// caller animates, not a value read at a time; `metersPerUnit` and
+/// `upAxis` scale and orient a whole scene for a renderer (a
+/// `DomeLight_1`'s `poleAxis = "scene"` follows `upAxis`), which reads them
+/// off the stage again when the pseudo-root changes. OpenUSD reports these
+/// edits as an info change of the pseudo-root
+/// (`UsdStage::_HandleLayersDidChange`).
+fn stage_metadata(scene: &Scene<'_>, prim: PathId) -> bool {
+    parent(scene, prim).is_none()
+}
+
 /// What a property's change may change of the items under its prim.
 fn property_dirt(name: &str) -> Dirty {
     let mut dirty = Dirty::default();
@@ -461,6 +479,9 @@ fn shading_touched(scene: &Scene<'_>, changes: &Changes, roots: &[PathId], prim:
     let tokens = scene.store().tokens();
     roots.iter().any(|&root| under(scene, prim, root))
         || changes.changed_info_only.iter().any(|&changed| {
+            if stage_metadata(scene, changed) {
+                return false;
+            }
             match changes
                 .property_changes
                 .iter()
@@ -645,7 +666,10 @@ struct Entry {
 ///   plan when not). A point instancer's properties recompute its items'
 ///   instances. Other properties draw nothing and are ignored;
 /// - an info-only prim without an inventory: every input of the items
-///   under it is read again, and compared.
+///   under it is read again, and compared; but the pseudo-root's change
+///   is the stage's metadata (`documentation`, `metersPerUnit`, `upAxis`,
+///   the start and end time codes, or a sublayer's `subLayers`), which
+///   nothing in the list reads: it reads nothing.
 ///
 /// Cameras ([`CameraItem`]) and lights ([`LightItem`]) are listed beside
 /// the items, by path, and diffed by [`DrawDiff::cameras_changed`] and
@@ -965,6 +989,9 @@ impl DrawList {
         // Prims and properties: what their names reach, under the prim.
         let mut reached: Vec<(PathId, Dirty)> = Vec::new();
         for &prim in &changes.changed_info_only {
+            if stage_metadata(scene, prim) {
+                continue;
+            }
             let what = changes
                 .property_changes
                 .iter()
@@ -1194,6 +1221,9 @@ impl DrawList {
         // inventory of them, which reaches everything under the prim.
         let mut reached: Vec<(PathId, Option<Vec<&str>>)> = Vec::new();
         for &prim in &changes.changed_info_only {
+            if stage_metadata(scene, prim) {
+                continue;
+            }
             let names = changes
                 .property_changes
                 .iter()
@@ -2466,6 +2496,43 @@ def Xform "Lab" {
             list.buffers(lamp.buffer).unwrap().shape,
             Some(crate::shapes::Shape::Sphere { radius: 0.25 })
         );
+    }
+
+    /// Stage metadata (the root layer's `documentation`, `metersPerUnit`,
+    /// `upAxis`, `startTimeCode`) changes the pseudo-root info-only, and
+    /// nothing the list holds reads it: nothing is read.
+    #[test]
+    fn stage_metadata_reads_nothing() {
+        let (mut fixture, _) = Fixture::new();
+        let root = fixture.path("/");
+        let tokens = fixture.store.tokens();
+        let fields = [
+            ("documentation", Value::string("rocks and beacons")),
+            ("metersPerUnit", Value::Double(0.01)),
+            ("upAxis", Value::Token(tokens.intern("Z"))),
+            ("startTimeCode", Value::Double(1.0)),
+        ];
+        for (key, value) in fields {
+            let mut edit = Transaction::new();
+            edit.set_layer_metadata(
+                LayerId(1),
+                fixture.store.tokens().intern(key),
+                layerstack::FieldValue::Value(value),
+            );
+            let applied = fixture.live.apply(&mut fixture.store, &edit).unwrap();
+            assert_eq!(applied.changes.changed_info_only, [root], "{key}");
+            let scene = Scene::new(fixture.live.stage(), &fixture.store);
+            let diff = fixture.list.apply_changes(&scene, &applied.changes);
+            assert!(diff.is_empty(), "{key}: {diff:?}");
+            assert_eq!(diff.work.items_read, 0, "{key}");
+            assert_eq!(diff.work.items_untouched, 6, "{key}");
+            assert_eq!(diff.work.prims_traversed, 0, "{key}");
+            assert_eq!(
+                diff.work.lights_read + diff.work.cameras_read + diff.work.materials_read,
+                0,
+                "{key}"
+            );
+        }
     }
 
     #[test]

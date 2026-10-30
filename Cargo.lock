@@ -202,6 +202,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e9c71c2167ca323c882b99918929403426e2373ea17242ff5653e0d5e1058be"
 
 [[package]]
+name = "exedra_triangulate"
+version = "0.1.0"
+source = "git+https://github.com/forest-rs/exedra?rev=c089c8710f3783be596c416a2e4d3195188df360#c089c8710f3783be596c416a2e4d3195188df360"
+
+[[package]]
 name = "fearless_simd"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -405,6 +410,18 @@ dependencies = [
  "fearless_simd",
  "hashbrown",
  "layerstack",
+ "libm",
+]
+
+[[package]]
+name = "layerstack_stagehand"
+version = "0.1.0"
+dependencies = [
+ "exedra_triangulate",
+ "hashbrown",
+ "layerstack",
+ "layerstack_schemas",
+ "layerstack_usda",
  "libm",
 ]
 

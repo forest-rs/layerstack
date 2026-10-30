@@ -1,0 +1,43 @@
+[package]
+name = "layerstack_stagehand"
+description = "Render-ready buffers from a composed Layerstack stage: triangulated meshes, face-varying primvars, normals, subset draw ranges and tessellated implicit shapes."
+version.workspace = true
+edition.workspace = true
+# `exedra_triangulate` needs Rust 1.92, above the workspace's 1.89, so
+# this crate (not a core crate) sets its own MSRV and stays out of CI's
+# MSRV job (`RUST_MIN_VER_PKGS`).
+rust-version = "1.92"
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords = ["usd", "mesh", "triangulation", "rendering", "no-std"]
+categories = ["graphics", "rendering"]
+# Not published while `exedra_triangulate` is a Git dependency, which
+# crates.io refuses.
+publish = false
+
+[features]
+default = ["stage"]
+# Reading meshes and implicit shapes off a `layerstack_schemas::Scene`
+# (`StageMesh`, `read_shape`). Without it the crate depends on neither
+# `layerstack` nor its schemas, as its WebAssembly module is built.
+stage = ["dep:layerstack", "dep:layerstack_schemas"]
+
+[dependencies]
+# Ear clipping of concave faces: deterministic, `no_std`, no
+# dependencies of its own. Pinned to a commit until it is published.
+exedra_triangulate = { default-features = false, git = "https://github.com/forest-rs/exedra", rev = "c089c8710f3783be596c416a2e4d3195188df360" }
+# The vertex split's corner keys.
+hashbrown = { workspace = true }
+layerstack = { optional = true, workspace = true }
+layerstack_schemas = { features = ["usd-geom"], optional = true, workspace = true }
+# Square roots and the trigonometry of the implicit shapes, in `no_std`;
+# `layerstack` already depends on it.
+libm = { workspace = true }
+
+[dev-dependencies]
+# Tests read their scenes from USDA text.
+layerstack_usda = { workspace = true }
+
+[lints]
+workspace = true

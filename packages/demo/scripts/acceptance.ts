@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { LayerstackError, loadLayerstack } from "@forest-rs/layerstack";
+import { loadStagehand } from "@forest-rs/layerstack_stagehand";
 import type { EditTarget, Explanation, Stage, TransformCacheStats, Value } from "@forest-rs/layerstack";
 import type { LayerFile } from "../src/editor.ts";
 import { Session, sample, steps } from "../src/script.ts";
@@ -24,6 +25,9 @@ const scene = fileURLToPath(new URL("../public/scene/", import.meta.url));
 const downloads = await mkdtemp(join(tmpdir(), "layerstack-demo-"));
 /** What the last download wrote and read back. */
 let downloaded: readonly LayerFile[] = [];
+
+/** Builds the viewport's triangles, as the page does. */
+const stagehand = await loadStagehand();
 
 const host: Host = {
   layerstack: await loadLayerstack(),
@@ -112,6 +116,7 @@ const checks: ((session: Session) => void)[] = [
       "/World/Robot",
       "/World/Beacons",
       "/World/Ground",
+      "/World/Path",
       "/World/Stones",
     ]);
     assert.equal(current.stage.prim("/Shape")?.abstract, true);
@@ -416,7 +421,7 @@ const checks: ((session: Session) => void)[] = [
     const before = transformsBefore;
     assert.ok(before !== null);
     // Every prim the viewport draws, the instance proxies below the beacon included.
-    stage.worldTransforms(buildViewport(stage).items.filter((item) => item.prototype === null).map((item) => item.path));
+    stage.worldTransforms(buildViewport(stage, stagehand).items.filter((item) => item.prototype === null).map((item) => item.path));
     const after = stage.transformCache();
     assert.ok(after.changeBatches > before.changeBatches, "the cache heard the edit");
     // The beacon's local transform alone: the rock's first `visibility`
@@ -467,24 +472,35 @@ async function unmuteWithTheToggle(session: Session): Promise<void> {
  * the prims drawn, the triangles, the instances and the framed world
  * bounds. Pixels are never compared.
  */
+/** A sphere's triangles: 2 per cell of 24 segments by 12 rings, one per cell at the poles. */
+const SPHERE = 2 * 24 * 11;
 const beacons = ["/World/Beacons/North/Bulb", "/World/Beacons/North/Post", "/World/Beacons/South/Bulb", "/World/Beacons/South/Post"];
+const meshes = [
+  // The ground's two faces differ in displayColor (uniform): its shared
+  // edge splits, and its subset draws first.
+  "/World/Ground: 4 triangles, 8 vertices, 0 concave (0 clipped), ranges 2+2",
+  // The path's L is concave: ear-clipped, not fanned.
+  "/World/Path: 4 triangles, 6 vertices, 1 concave (1 clipped), ranges 4",
+];
 const opened: ViewportSummary = {
-  drawn: [...beacons, "/World/Ground", `${sample.robot}/Body`, `${sample.robot}/Head`, sample.rock, `${sample.stones} ×5`],
+  drawn: [...beacons, "/World/Ground", "/World/Path", `${sample.robot}/Body`, `${sample.robot}/Head`, sample.rock, `${sample.stones} ×5`],
   hidden: [],
-  // Two quads, four spheres of 576 triangles (the rock, the head, two
-  // bulbs), three cubes of 12 (the body, two posts) and five stones.
-  triangles: 4 + 4 * 576 + 3 * 12 + 5 * 12,
+  // Two meshes of four triangles, four spheres of 528 (24 segments by 12
+  // rings: the rock, the head, two bulbs), three cubes of 12 (the body,
+  // two posts) and five stones.
+  triangles: 2 * 4 + 4 * SPHERE + 3 * 12 + 5 * 12,
   instances: 5,
   // The ground's corners in x and z; the lamp's sphere light at the origin
   // to the rock's top (radius 2 at y = 2) in y.
   bounds: [-8, -0.5, -8, 8, 4, 6],
+  meshes,
 };
 /** The rock's radius is 3: it reaches y = -1 and 5. */
 const overridden: ViewportSummary = { ...opened, bounds: [-8, -1, -8, 8, 5, 6] };
 const withPebble = (pebble: "sphere" | "cube", robot: string = sample.robot): ViewportSummary => ({
   ...overridden,
   drawn: [...overridden.drawn.filter((path) => !path.startsWith(sample.robot)), sample.pebble, `${robot}/Body`, `${robot}/Head`].sort(),
-  triangles: opened.triangles + (pebble === "sphere" ? 576 : 12),
+  triangles: opened.triangles + (pebble === "sphere" ? SPHERE : 12),
 });
 const viewports: ViewportSummary[] = [
   opened,
@@ -503,16 +519,17 @@ const viewports: ViewportSummary[] = [
   {
     ...withPebble("cube", sample.rover),
     drawn: withPebble("cube", sample.rover).drawn.filter((path) => !path.startsWith(sample.rover)),
-    triangles: opened.triangles + 12 - 576 - 12,
+    triangles: opened.triangles + 12 - SPHERE - 12,
   },
   // The rock and stone 3 hidden, the north beacon moved to x = -5, z = -1;
   // the bulbs' tops (y = 2.25) are the highest now.
   {
-    drawn: [...beacons, "/World/Ground", sample.pebble, `${sample.stones} ×4`],
+    drawn: [...beacons, "/World/Ground", "/World/Path", sample.pebble, `${sample.stones} ×4`],
     hidden: [sample.rock],
-    triangles: 4 + 2 * 576 + 3 * 12 + 4 * 12,
+    triangles: 2 * 4 + 2 * SPHERE + 3 * 12 + 4 * 12,
     instances: 4,
     bounds: [-8, -0.5, -8, 8, 2.25, 6],
+    meshes,
   },
 ];
 
@@ -520,7 +537,7 @@ const viewports: ViewportSummary[] = [
 let transformsBefore: TransformCacheStats | null = null;
 
 function checkViewport(index: number, session: Session): void {
-  const summary = viewportSummary(buildViewport(session.current.stage, session.time ?? undefined));
+  const summary = viewportSummary(buildViewport(session.current.stage, stagehand, session.time ?? undefined));
   transformsBefore = session.current.stage.transformCache();
   if (process.env.PRINT_VIEWPORTS !== undefined) console.log(JSON.stringify(summary));
   assert.deepEqual(summary, viewports[index], `the viewport after step ${index + 1}`);

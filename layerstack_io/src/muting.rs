@@ -108,7 +108,7 @@ impl<B: Storage> StageDocument<B> {
         // Diagnostics name the layer by its identifier before any read, as
         // OpenUSD's `PcpErrorMutedAssetPath` names the muted asset.
         self.store.set_layer_identifier(id, Arc::clone(&anchored));
-        self.catalog.sources.insert(
+        self.catalog.insert_source(
             id,
             Source {
                 identifier: anchored,

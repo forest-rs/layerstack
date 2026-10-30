@@ -858,20 +858,18 @@ enum State {
 #[derive(Clone, Debug, Default)]
 struct Catalog {
     cache_work: PackageCacheStats,
-    sources: BTreeMap<LayerId, Source>,
+    /// What the document knows of each layer, in one record per layer
+    /// rather than one map per fact.
+    layers: BTreeMap<LayerId, LayerRecord>,
     /// The layer each identifier names. Looked up for every arc a load
     /// resolves and never listed in order, so hashed: identifiers of one
     /// scene share long directory prefixes that ordered keys compare again
     /// on every lookup.
     ids: HashMap<Arc<str>, LayerId>,
-    states: BTreeMap<LayerId, State>,
-    saved: BTreeMap<LayerId, u64>,
     /// Every id handed out or held by the store, which no new layer takes.
     reserved: BTreeSet<LayerId>,
     /// Where [`Catalog::allocate`] looks for a free id next.
     next: u64,
-    package_bytes: BTreeMap<LayerId, Arc<PackageSnapshot>>,
-    package_roots: BTreeMap<LayerId, String>,
     #[cfg(feature = "std")]
     retained_values: BTreeMap<LayerId, layerstack_usdc::RetainedValues>,
     /// The latest failed read of each dependency, by anchor layer and
@@ -905,11 +903,87 @@ pub struct PackageCacheStats {
     /// holders and retained loose USDC pools are outside this count.
     pub resident_backing_bytes: u64,
 }
+/// What a [`Catalog`] knows of one layer.
+#[derive(Clone, Debug, Default)]
+struct LayerRecord {
+    /// Where the layer is read from.
+    source: Option<Source>,
+    /// Whether the layer is being read or has been.
+    state: Option<State>,
+    /// The layer's generation when it was last read or saved.
+    saved: Option<u64>,
+    /// For a package read as a layer: the package's bytes.
+    package: Option<Arc<PackageSnapshot>>,
+    /// For a package read as a layer: its root member's path.
+    package_root: Option<String>,
+}
 impl Catalog {
+    /// The record of `layer`, if the catalog knows it.
+    fn record(&self, layer: LayerId) -> Option<&LayerRecord> {
+        self.layers.get(&layer)
+    }
+    /// The record of `layer`, made empty when the catalog does not know it.
+    fn record_mut(&mut self, layer: LayerId) -> &mut LayerRecord {
+        self.layers.entry(layer).or_default()
+    }
+    /// Where `layer` is read from.
+    fn source(&self, layer: LayerId) -> Option<&Source> {
+        self.record(layer)?.source.as_ref()
+    }
+    /// Where `layer` is read from, mutably.
+    fn source_mut(&mut self, layer: LayerId) -> Option<&mut Source> {
+        self.layers.get_mut(&layer)?.source.as_mut()
+    }
+    /// Records where `layer` is read from.
+    fn insert_source(&mut self, layer: LayerId, source: Source) {
+        self.record_mut(layer).source = Some(source);
+    }
+    /// Every layer with a source, in id order.
+    fn sources(&self) -> impl Iterator<Item = (LayerId, &Source)> {
+        self.layers
+            .iter()
+            .filter_map(|(&id, record)| Some((id, record.source.as_ref()?)))
+    }
+    /// Whether `layer` is being read or has been.
+    fn state(&self, layer: LayerId) -> Option<State> {
+        self.record(layer)?.state
+    }
+    /// Records whether `layer` is being read or has been.
+    fn set_state(&mut self, layer: LayerId, state: State) {
+        self.record_mut(layer).state = Some(state);
+    }
+    /// Forgets that `layer` was read, so a load reads it again.
+    fn clear_state(&mut self, layer: LayerId) {
+        if let Some(record) = self.layers.get_mut(&layer) {
+            record.state = None;
+        }
+    }
+    /// Forgets that any layer was read.
+    fn clear_states(&mut self) {
+        for record in self.layers.values_mut() {
+            record.state = None;
+        }
+    }
+    /// The generation of `layer` when it was last read or saved.
+    fn saved(&self, layer: LayerId) -> Option<u64> {
+        self.record(layer)?.saved
+    }
+    /// Records the generation of `layer` as read or saved.
+    fn set_saved(&mut self, layer: LayerId, generation: u64) {
+        self.record_mut(layer).saved = Some(generation);
+    }
+    /// The bytes of the package read as `layer`.
+    fn package_bytes(&self, layer: LayerId) -> Option<&Arc<PackageSnapshot>> {
+        self.record(layer)?.package.as_ref()
+    }
+    /// The root member's path of the package read as `layer`.
+    fn package_root(&self, layer: LayerId) -> Option<&str> {
+        self.record(layer)?.package_root.as_deref()
+    }
     fn cache_stats(&self) -> PackageCacheStats {
         let mut stats = self.cache_work;
         let mut seen: Vec<&Arc<PackageSnapshot>> = Vec::new();
-        for archive in self.package_bytes.values() {
+        for archive in self.layers.values().filter_map(|r| r.package.as_ref()) {
             if !seen.iter().any(|old| Arc::ptr_eq(old, archive)) {
                 stats.resident_backing_bytes += archive.stats().backing_bytes as u64;
                 seen.push(archive);
@@ -918,13 +992,11 @@ impl Catalog {
         stats
     }
     fn package_stats(&self, layer: LayerId) -> Option<PackageStats> {
-        let package = self.sources.get(&layer)?.package.unwrap_or(layer);
-        self.package_bytes
-            .get(&package)
-            .map(|archive| archive.stats())
+        let package = self.source(layer)?.package.unwrap_or(layer);
+        self.package_bytes(package).map(|archive| archive.stats())
     }
     fn package_identifier(&self, package: LayerId) -> &str {
-        let identifier = &self.sources[&package].identifier;
+        let identifier = &self.source(package).expect("package source").identifier;
         identifier
             .split_once('[')
             .map_or(identifier, |(outer, _)| outer)
@@ -1065,7 +1137,7 @@ impl<B: Storage> StageDocument<B> {
         let root = catalog.allocate_for(&identifier)?;
         let identifier: Arc<str> = Arc::from(identifier);
         catalog.ids.insert(Arc::clone(&identifier), root);
-        catalog.sources.insert(
+        catalog.insert_source(
             root,
             Source {
                 identifier,
@@ -1073,9 +1145,12 @@ impl<B: Storage> StageDocument<B> {
                 package: None,
             },
         );
-        catalog.states.insert(root, State::Loaded);
-        store.set_layer_identifier(root, Arc::clone(&catalog.sources[&root].identifier));
-        store.set_layer_read_only(root, catalog.sources[&root].read_only());
+        catalog.set_state(root, State::Loaded);
+        store.set_layer_identifier(
+            root,
+            Arc::clone(&catalog.source(root).expect("source").identifier),
+        );
+        store.set_layer_read_only(root, catalog.source(root).expect("source").read_only());
         store.insert_layer(Layer::new(root));
         let mut report = LoadReport::default();
         if let Some(session) = &session_layer {
@@ -1408,7 +1483,7 @@ impl<B: Storage> StageDocument<B> {
     /// Spec: AOUSD Core §16 (the first layer of a package is its root).
     #[must_use]
     pub fn package_root_member(&self, layer: LayerId) -> Option<&str> {
-        self.catalog.package_roots.get(&layer).map(String::as_str)
+        self.catalog.package_root(layer)
     }
     /// Authored layers and the document's shared interners.
     pub fn store(&self) -> &InMemoryStore {
@@ -1560,14 +1635,14 @@ impl<B: Storage> StageDocument<B> {
     }
     /// Identifier of a loaded layer. Package members use `package[member]`.
     pub fn identifier(&self, layer: LayerId) -> Option<&str> {
-        self.catalog.sources.get(&layer).map(|s| &*s.identifier)
+        self.catalog.source(layer).map(|s| &*s.identifier)
     }
     /// Whether a layer has changed since import or its last successful save.
     /// Anonymous layers have no saved generation and remain dirty.
     pub fn is_dirty(&self, layer: LayerId) -> bool {
         self.store
             .layer(layer)
-            .is_some_and(|l| self.catalog.saved.get(&layer) != Some(&l.generation()))
+            .is_some_and(|l| self.catalog.saved(layer) != Some(l.generation()))
     }
     /// Creates an anonymous layer without colliding with imported identities.
     pub fn create_anonymous_layer(&mut self) -> Result<LayerId, IoError> {
@@ -1622,7 +1697,7 @@ impl<B: Storage> StageDocument<B> {
             if !self.is_dirty(id) {
                 continue;
             }
-            let Some(source) = self.catalog.sources.get(&id).cloned() else {
+            let Some(source) = self.catalog.source(id).cloned() else {
                 report.anonymous.push(id);
                 continue;
             };
@@ -1644,8 +1719,7 @@ impl<B: Storage> StageDocument<B> {
             match result {
                 Ok(()) => {
                     self.catalog
-                        .saved
-                        .insert(id, self.store.layer(id).unwrap().generation());
+                        .set_saved(id, self.store.layer(id).unwrap().generation());
                     report.saved.push(id);
                 }
                 Err(error) => report.failures.push(LayerFailure { layer: id, error }),
@@ -1899,7 +1973,7 @@ impl<'a, B: Storage> Reader<'a, B> {
     /// of a reference or payload (`_EvalRefOrPayloadArcs`), so a layer
     /// muted before anything read it is never read while it stays muted.
     fn unread_muted(&self, id: LayerId) -> bool {
-        self.muted.contains(&id) && !self.catalog.states.contains_key(&id)
+        self.muted.contains(&id) && !self.catalog.state(id).is_some()
     }
     fn resolve_expressions(
         &mut self,
@@ -2004,7 +2078,7 @@ impl<'a, B: Storage> Reader<'a, B> {
         let clean_anchors = sort::collect_set(self.bindings.keys().copied().filter(|id| {
             store
                 .layer(*id)
-                .is_some_and(|l| self.catalog.saved.get(id) == Some(&l.generation()))
+                .is_some_and(|l| self.catalog.saved(*id) == Some(l.generation()))
         }));
         // The first layer read for each id is committed; the report lists
         // them in id order.
@@ -2027,7 +2101,7 @@ impl<'a, B: Storage> Reader<'a, B> {
                 // A reader records a change for each spec it inserts; no
                 // stage has seen the layer before them.
                 layer.forget_change_history();
-                if let Some(source) = self.catalog.sources.get(&id) {
+                if let Some(source) = self.catalog.source(id) {
                     store.set_layer_identifier(id, Arc::clone(&source.identifier));
                     store.set_layer_read_only(id, source.read_only());
                 }
@@ -2043,13 +2117,11 @@ impl<'a, B: Storage> Reader<'a, B> {
         sort::sort_unstable(&mut layers);
         for id in clean_anchors {
             self.catalog
-                .saved
-                .insert(id, store.layer(id).unwrap().generation());
+                .set_saved(id, store.layer(id).unwrap().generation());
         }
         for &id in &layers {
             self.catalog
-                .saved
-                .insert(id, store.layer(id).unwrap().generation());
+                .set_saved(id, store.layer(id).unwrap().generation());
         }
         for failure in &self.failures {
             if let Some(anchor) = failure.anchor {
@@ -2077,11 +2149,7 @@ impl<'a, B: Storage> Reader<'a, B> {
         paths: &PathInterner,
     ) -> Result<Layer, IoError> {
         let format = source_format(&self.formats, identifier, &data);
-        self.catalog
-            .sources
-            .get_mut(&id)
-            .expect("reserved source")
-            .format = format;
+        self.catalog.source_mut(id).expect("reserved source").format = format;
         let first_diagnostic = self.diagnostics.len();
         let first_failure = self.failures.len();
         let layer = match format {
@@ -2121,10 +2189,9 @@ impl<'a, B: Storage> Reader<'a, B> {
                 }
                 let members: Vec<String> = self
                     .catalog
-                    .sources
-                    .iter()
+                    .sources()
                     .filter(|(member_id, s)| {
-                        !self.reachable_only && **member_id != id && s.package == Some(id)
+                        !self.reachable_only && *member_id != id && s.package == Some(id)
                     })
                     .filter_map(|(_, s)| package_member_path(&s.identifier))
                     .collect();
@@ -2150,17 +2217,16 @@ impl<'a, B: Storage> Reader<'a, B> {
                 .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
                 #[cfg(feature = "std")]
                 self.catalog.retained_values.extend(result.retained_values);
-                self.catalog.package_bytes.insert(id, archive);
-                self.catalog
-                    .package_roots
-                    .insert(id, result.member_paths[&id].to_string());
+                let record = self.catalog.record_mut(id);
+                record.package = Some(archive);
+                record.package_root = Some(result.member_paths[&id].to_string());
                 for (&member_id, member) in &result.member_paths {
                     let outer = identifier
                         .split_once('[')
                         .map_or(identifier, |(outer, _)| outer);
                     let member_identifier: Arc<str> =
                         Arc::from(alloc::format!("{outer}[{member}]"));
-                    self.catalog.sources.insert(
+                    self.catalog.insert_source(
                         member_id,
                         Source {
                             identifier: Arc::clone(&member_identifier),
@@ -2171,15 +2237,15 @@ impl<'a, B: Storage> Reader<'a, B> {
                     if member_id != id || !self.catalog.ids.contains_key(&*member_identifier) {
                         self.catalog.ids.insert(member_identifier, member_id);
                     }
-                    self.catalog.states.insert(member_id, State::Loaded);
+                    self.catalog.set_state(member_id, State::Loaded);
                 }
                 // The package root is resolved by its outer identifier too.
                 self.catalog
-                    .sources
-                    .get_mut(&id)
+                    .source_mut(id)
                     .expect("package root")
                     .identifier = identifier.into();
-                let root_member = self.catalog.package_roots[&id].clone();
+                let root_member =
+                    String::from(self.catalog.package_root(id).expect("package root"));
                 let outer = identifier
                     .split_once('[')
                     .map_or(identifier, |(outer, _)| outer);
@@ -2412,8 +2478,8 @@ impl<B: Storage> Reader<'_, B> {
         paths: &PathInterner,
     ) -> Result<ResolvedAsset, IoError> {
         if let Some(anchor) = anchor
-            && let Some(package) = self.catalog.sources.get(&anchor).and_then(|s| s.package)
-            && self.catalog.states.get(&package) == Some(&State::Loaded)
+            && let Some(package) = self.catalog.source(anchor).and_then(|s| s.package)
+            && self.catalog.state(package) == Some(State::Loaded)
         {
             return self.load_package_asset(asset, anchor, package, tokens, paths);
         }
@@ -2430,7 +2496,11 @@ impl<B: Storage> Reader<'_, B> {
         if asset.starts_with('/') || asset.contains(':') {
             return self.load_external(asset, Some(package), tokens, paths);
         }
-        let archive = self.catalog.package_bytes[&package].clone();
+        let archive = self
+            .catalog
+            .package_bytes(package)
+            .expect("package bytes")
+            .clone();
         let Some(member) = self
             .catalog
             .package_member(&archive, asset, anchor, package)?
@@ -2454,7 +2524,11 @@ impl<B: Storage> Reader<'_, B> {
         paths: &PathInterner,
     ) -> Result<ResolvedAsset, IoError> {
         self.catalog.cache_work.index_hits += 1;
-        let archive = self.catalog.package_bytes[&package].clone();
+        let archive = self
+            .catalog
+            .package_bytes(package)
+            .expect("package bytes")
+            .clone();
         let selected = archive
             .layer(member)
             .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
@@ -2472,14 +2546,14 @@ impl<B: Storage> Reader<'_, B> {
             "{}[{member}]",
             self.catalog.package_identifier(package)
         ));
-        if self.catalog.states.contains_key(&id) || self.unread_muted(id) {
+        if self.catalog.state(id).is_some() || self.unread_muted(id) {
             return Ok(ResolvedAsset {
                 layer_id: id,
                 resolved_path: identifier,
                 layer: None,
             });
         }
-        self.catalog.sources.insert(
+        self.catalog.insert_source(
             id,
             Source {
                 identifier: Arc::clone(&identifier),
@@ -2487,10 +2561,10 @@ impl<B: Storage> Reader<'_, B> {
                 package: Some(package),
             },
         );
-        self.catalog.states.insert(id, State::Loading);
+        self.catalog.set_state(id, State::Loading);
         match self.read_layer(data, &identifier, id, tokens, paths) {
             Ok(layer) => {
-                self.catalog.states.insert(id, State::Loaded);
+                self.catalog.set_state(id, State::Loaded);
                 Ok(ResolvedAsset {
                     layer_id: id,
                     resolved_path: identifier,
@@ -2498,7 +2572,7 @@ impl<B: Storage> Reader<'_, B> {
                 })
             }
             Err(error) => {
-                self.catalog.states.remove(&id);
+                self.catalog.clear_state(id);
                 Err(error)
             }
         }
@@ -2510,16 +2584,14 @@ impl<B: Storage> Reader<'_, B> {
         tokens: &TokenInterner,
         paths: &PathInterner,
     ) -> Result<ResolvedAsset, IoError> {
-        let anchor_identifier = anchor
-            .and_then(|id| self.catalog.sources.get(&id))
-            .map(|s| {
-                let identifier = FormatArgs::strip(&s.identifier);
-                String::from(
-                    identifier
-                        .split_once('[')
-                        .map_or(identifier, |(outer, _)| outer),
-                )
-            });
+        let anchor_identifier = anchor.and_then(|id| self.catalog.source(id)).map(|s| {
+            let identifier = FormatArgs::strip(&s.identifier);
+            String::from(
+                identifier
+                    .split_once('[')
+                    .map_or(identifier, |(outer, _)| outer),
+            )
+        });
         let (asset, args) = format::split_args(asset)?;
         let path = PackagePath::parse(asset, 32)
             .map_err(|reason| IoError::new(IoErrorKind::Rejected, reason))?;
@@ -2527,8 +2599,8 @@ impl<B: Storage> Reader<'_, B> {
         let identifier: Arc<str> = Arc::from(source_identifier(&self.formats, &path, &outer, args));
         if let Some((first, rest)) = path.members().split_first()
             && let Some(&package) = self.catalog.ids.get(outer.as_str())
-            && self.catalog.states.get(&package) == Some(&State::Loaded)
-            && self.catalog.package_bytes.contains_key(&package)
+            && self.catalog.state(package) == Some(State::Loaded)
+            && self.catalog.package_bytes(package).is_some()
         {
             return self.load_package_member(
                 &PackagePath::join(first, rest),
@@ -2542,7 +2614,7 @@ impl<B: Storage> Reader<'_, B> {
         } else {
             let id = self.catalog.allocate_for(&identifier)?;
             self.catalog.ids.insert(Arc::clone(&identifier), id);
-            self.catalog.sources.insert(
+            self.catalog.insert_source(
                 id,
                 Source {
                     identifier: Arc::clone(&identifier),
@@ -2552,7 +2624,7 @@ impl<B: Storage> Reader<'_, B> {
             );
             id
         };
-        if self.catalog.states.contains_key(&id) || self.unread_muted(id) {
+        if self.catalog.state(id).is_some() || self.unread_muted(id) {
             return Ok(ResolvedAsset {
                 layer_id: id,
                 resolved_path: identifier,
@@ -2570,10 +2642,10 @@ impl<B: Storage> Reader<'_, B> {
         } else {
             EncodedBytes::from(Vec::new())
         };
-        self.catalog.states.insert(id, State::Loading);
+        self.catalog.set_state(id, State::Loading);
         match self.read_layer(bytes, &identifier, id, tokens, paths) {
             Ok(layer) => {
-                self.catalog.states.insert(id, State::Loaded);
+                self.catalog.set_state(id, State::Loaded);
                 Ok(ResolvedAsset {
                     layer_id: id,
                     resolved_path: identifier,
@@ -2581,7 +2653,7 @@ impl<B: Storage> Reader<'_, B> {
                 })
             }
             Err(error) => {
-                self.catalog.states.remove(&id);
+                self.catalog.clear_state(id);
                 Err(error)
             }
         }
@@ -2633,7 +2705,7 @@ impl<B: Storage> AssetResolver for Reader<'_, B> {
         result.map_err(asset_error)
     }
     fn resolved_path(&self, id: LayerId) -> Option<&str> {
-        self.catalog.sources.get(&id).map(|s| &*s.identifier)
+        self.catalog.source(id).map(|s| &*s.identifier)
     }
     fn defers_variant_arcs(&self) -> bool {
         self.variant_arcs == VariantArcLoading::Selected

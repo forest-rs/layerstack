@@ -22,7 +22,7 @@
 use alloc::{string::String, sync::Arc, vec::Vec};
 
 use layerstack::{
-    LayerId, LayerMuteError,
+    LayerId, LayerMuteError, LayerStore,
     asset::{FormatArgs, PackagePath},
 };
 
@@ -82,7 +82,10 @@ impl<B: Storage> StageDocument<B> {
     /// Pass it to [`Self::mute_and_unmute_layers`] to mute a layer before
     /// anything reads it, as `UsdStage::MuteLayer` mutes an identifier.
     /// Reserving reads nothing, and the store holds no layer for the id
-    /// until a read of it.
+    /// until a read of it, as OpenUSD opens no layer for a muted
+    /// identifier (`SdfLayer::Find` gives none); it names the id by
+    /// `identifier` ([`layerstack::LayerStore::layer_identifier`]), so
+    /// diagnostics write `@lamp.usda@` rather than the id.
     ///
     /// # Errors
     ///
@@ -91,12 +94,19 @@ impl<B: Storage> StageDocument<B> {
     pub fn layer_named(&mut self, identifier: &str) -> Result<LayerId, IoError> {
         let anchored = self.anchored_identifier(identifier)?;
         if let Some(&id) = self.catalog.ids.get(anchored.as_str()) {
+            // An asset the stage asked for has an id but no layer yet.
+            if self.store.layer_identifier(id).is_none() {
+                self.store.set_layer_identifier(id, anchored);
+            }
             return Ok(id);
         }
         self.catalog.reserved.extend(self.store.layer_ids());
         let anchored: Arc<str> = Arc::from(anchored);
         let id = self.catalog.allocate_for(&anchored)?;
         self.catalog.ids.insert(Arc::clone(&anchored), id);
+        // Diagnostics name the layer by its identifier before any read, as
+        // OpenUSD's `PcpErrorMutedAssetPath` names the muted asset.
+        self.store.set_layer_identifier(id, Arc::clone(&anchored));
         self.catalog.sources.insert(
             id,
             Source {

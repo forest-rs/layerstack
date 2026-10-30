@@ -172,8 +172,14 @@ describe("layer muting", () => {
     assert.equal(stage.isMuted("./parts/ball.usda"), true);
     assert.equal(stage.isMuted("never.usda"), false);
     assert.deepEqual(
-      stage.status().compositionErrors.map((error) => [error.code, error.prim]),
-      [["composition.muted_asset", "/Ball"]],
+      stage.status().compositionErrors.map((error) => [error.code, error.prim, error.message]),
+      [
+        [
+          "composition.muted_asset",
+          "/Ball",
+          "/Ball: the reference authored at /Ball in @scene.usda@ targets @parts/ball.usda@, which the stage mutes; it contributes nothing",
+        ],
+      ],
     );
     assert.equal(heard.length, 1);
     assert.deepEqual(heard[0]?.mutedLayers, []);
@@ -210,6 +216,30 @@ describe("layer muting", () => {
     assert.ok(stage.attribute("/Ball.points"));
     assert.ok(stage.attribute("/Lamp.glow"));
     assert.deepEqual(stage.status().compositionErrors, []);
+  });
+
+  it("names no layer by the id of one muted before it was read, as OpenUSD opens none", async () => {
+    using stage = layerstack.open({ identifier: "scene.usda", bytes: bytes("scene.usda") });
+    stage.muteLayer("sub.usda");
+    await stage.resolve(mockSource(scene));
+    const [[id, identifier, held]] = stage.withNative("domain.muted", (native) => native.mutedLayers()) as [
+      [bigint, string, boolean],
+    ];
+    assert.deepEqual([identifier, held], ["sub.usda", false]);
+    const unknown = failure(() => stage.layer(id));
+    assert.equal(unknown.code, "layer.unknown");
+    assert.equal(unknown.operation, "layer");
+    assert.ok(!stage.layers().some((layer) => layer.identifier === "sub.usda"), "not in the layer stack");
+    assert.deepEqual(stage.mutedLayers(), []);
+    assert.deepEqual(stage.mutedIdentifiers(), ["sub.usda"]);
+    assert.equal(size(stage), 2);
+
+    assert.equal(stage.unmuteLayer("sub.usda"), true);
+    assert.deepEqual(stage.unavailable().map((asset) => asset.identifier), ["sub.usda"]);
+    await stage.resolve(mockSource(scene));
+    const sub = stage.layer(id);
+    assert.equal(sub, layerNamed(stage, "sub.usda"), "read under the id it was muted by");
+    assert.equal(size(stage), 5);
   });
 
   it("mutes and unmutes in one request, dropping an unmute spelled as a mute", async () => {

@@ -38,7 +38,8 @@
  * - `path.invalid`: a path argument is not an absolute prim path (or a
  *   property path, where one is asked for).
  * - `prim.not_found`: no composed prim is at the path.
- * - `layer.unknown`: the stage has no layer with the id.
+ * - `layer.unknown`: the stage holds no layer with the id: it has not read
+ *   that asset yet, or it mutes it and never read it.
  * - `value.decode`: a retained array failed to decode when read.
  * - `value.unknown_type`, `value.kind`, `value.shape`, `value.range`,
  *   `value.unsupported`: a `ValueInput` does not make a value of its

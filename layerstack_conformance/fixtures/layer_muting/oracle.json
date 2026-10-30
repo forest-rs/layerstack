@@ -6,6 +6,11 @@
     "lamp.usda"
    ],
    "heard": null,
+   "layer_stack": [
+    "scene.usda",
+    "a.usda",
+    "b.usda"
+   ],
    "muted": [],
    "muted_assets": [],
    "open": [
@@ -37,6 +42,11 @@
     ],
     []
    ],
+   "layer_stack": [
+    "scene.usda",
+    "a.usda",
+    "b.usda"
+   ],
    "muted": [
     "lamp.usda"
    ],
@@ -65,6 +75,11 @@
     "./lamp.usda"
    ],
    "heard": null,
+   "layer_stack": [
+    "scene.usda",
+    "a.usda",
+    "b.usda"
+   ],
    "muted": [
     "lamp.usda"
    ],
@@ -93,6 +108,11 @@
     "parts/../lamp.usda"
    ],
    "heard": null,
+   "layer_stack": [
+    "scene.usda",
+    "a.usda",
+    "b.usda"
+   ],
    "muted": [
     "lamp.usda"
    ],
@@ -123,6 +143,11 @@
     "/Lamp"
    ],
    "heard": null,
+   "layer_stack": [
+    "scene.usda",
+    "a.usda",
+    "b.usda"
+   ],
    "muted": [
     "lamp.usda"
    ],
@@ -162,6 +187,11 @@
      "lamp.usda"
     ]
    ],
+   "layer_stack": [
+    "scene.usda",
+    "a.usda",
+    "b.usda"
+   ],
    "muted": [],
    "muted_assets": [],
    "open": [
@@ -195,6 +225,11 @@
      "parts/ball.usda"
     ],
     []
+   ],
+   "layer_stack": [
+    "scene.usda",
+    "a.usda",
+    "b.usda"
    ],
    "muted": [
     "parts/ball.usda"
@@ -233,6 +268,11 @@
     "/Robot"
    ],
    "heard": null,
+   "layer_stack": [
+    "scene.usda",
+    "a.usda",
+    "b.usda"
+   ],
    "muted": [
     "parts/ball.usda"
    ],
@@ -274,6 +314,11 @@
     "parts/./ball.usda"
    ],
    "heard": null,
+   "layer_stack": [
+    "scene.usda",
+    "a.usda",
+    "b.usda"
+   ],
    "muted": [
     "parts/ball.usda"
    ],
@@ -324,6 +369,10 @@
      "a.usda"
     ],
     []
+   ],
+   "layer_stack": [
+    "scene.usda",
+    "b.usda"
    ],
    "muted": [
     "a.usda",
@@ -376,6 +425,10 @@
     [
      "b.usda"
     ]
+   ],
+   "layer_stack": [
+    "scene.usda",
+    "b.usda"
    ],
    "muted": [
     "a.usda",
@@ -425,6 +478,9 @@
      "b.usda"
     ],
     []
+   ],
+   "layer_stack": [
+    "scene.usda"
    ],
    "muted": [
     "a.usda",
@@ -475,6 +531,10 @@
      "b.usda"
     ]
    ],
+   "layer_stack": [
+    "scene.usda",
+    "b.usda"
+   ],
    "muted": [
     "a.usda",
     "parts/ball.usda"
@@ -525,6 +585,11 @@
      "parts/ball.usda"
     ]
    ],
+   "layer_stack": [
+    "scene.usda",
+    "a.usda",
+    "b.usda"
+   ],
    "muted": [],
    "muted_assets": [],
    "open": [
@@ -557,6 +622,11 @@
     "scene.usda"
    ],
    "heard": null,
+   "layer_stack": [
+    "scene.usda",
+    "a.usda",
+    "b.usda"
+   ],
    "muted": [],
    "muted_assets": [],
    "open": [
@@ -598,6 +668,10 @@
     ],
     []
    ],
+   "layer_stack": [
+    "scene.usda",
+    "a.usda"
+   ],
    "muted": [
     "b.usda"
    ],
@@ -630,6 +704,10 @@
     "scene.usda"
    ],
    "heard": null,
+   "layer_stack": [
+    "scene.usda",
+    "a.usda"
+   ],
    "muted": [
     "b.usda"
    ],
@@ -662,6 +740,10 @@
     ""
    ],
    "heard": null,
+   "layer_stack": [
+    "scene.usda",
+    "a.usda"
+   ],
    "muted": [
     "b.usda"
    ],
@@ -694,6 +776,10 @@
     "never.usda"
    ],
    "heard": null,
+   "layer_stack": [
+    "scene.usda",
+    "a.usda"
+   ],
    "muted": [
     "b.usda"
    ],
@@ -726,6 +812,10 @@
     "never.usda"
    ],
    "heard": null,
+   "layer_stack": [
+    "scene.usda",
+    "a.usda"
+   ],
    "muted": [
     "b.usda"
    ],
@@ -751,6 +841,129 @@
    },
    "raised": false,
    "result": false
+  },
+  {
+   "call": [
+    "mute",
+    "c.usda"
+   ],
+   "heard": [
+    [
+     "c.usda"
+    ],
+    []
+   ],
+   "layer_stack": [
+    "scene.usda",
+    "a.usda"
+   ],
+   "muted": [
+    "b.usda",
+    "c.usda"
+   ],
+   "muted_assets": [],
+   "open": [
+    "a.usda",
+    "lamp.usda",
+    "parts/ball.usda",
+    "parts/robot.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "a",
+     "points"
+    ],
+    "/Lamp": [
+     "glow"
+    ],
+    "/Robot": [
+     "points"
+    ]
+   },
+   "raised": false,
+   "result": null
+  },
+  {
+   "call": [
+    "sublayer",
+    "./c.usda"
+   ],
+   "heard": null,
+   "layer_stack": [
+    "scene.usda",
+    "a.usda"
+   ],
+   "muted": [
+    "b.usda",
+    "c.usda"
+   ],
+   "muted_assets": [],
+   "open": [
+    "a.usda",
+    "lamp.usda",
+    "parts/ball.usda",
+    "parts/robot.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "a",
+     "points"
+    ],
+    "/Lamp": [
+     "glow"
+    ],
+    "/Robot": [
+     "points"
+    ]
+   },
+   "raised": false,
+   "result": null
+  },
+  {
+   "call": [
+    "unmute",
+    "c.usda"
+   ],
+   "heard": [
+    [],
+    [
+     "c.usda"
+    ]
+   ],
+   "layer_stack": [
+    "scene.usda",
+    "a.usda",
+    "c.usda"
+   ],
+   "muted": [
+    "b.usda"
+   ],
+   "muted_assets": [],
+   "open": [
+    "a.usda",
+    "c.usda",
+    "lamp.usda",
+    "parts/ball.usda",
+    "parts/robot.usda",
+    "scene.usda"
+   ],
+   "properties": {
+    "/Ball": [
+     "a",
+     "c",
+     "points"
+    ],
+    "/Lamp": [
+     "glow"
+    ],
+    "/Robot": [
+     "points"
+    ]
+   },
+   "raised": false,
+   "result": null
   }
  ],
  "namespace": [

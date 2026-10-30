@@ -117,7 +117,9 @@ await stage.resolve(source);
 - **Layer ids are `bigint`** and may exceed 2^53; you rarely need them.
   `stage.layer(id)` is the `Layer` of an id native code returns (the same
   object every time, for any layer the stage holds; `layer.unknown`
-  otherwise). A `Layer` belongs to its stage: passing it to another stage
+  otherwise, as for a layer muted before the stage read it, which OpenUSD
+  never opens either: `mutedIdentifiers()` lists it, and once unmuted and
+  read its id names the layer). A `Layer` belongs to its stage: passing it to another stage
   fails with `layer.affinity`.
 - **Muting is stage state.** `stage.muteLayer(layer)` recomposes the stage
   without a layer's opinions and sublayers wherever it reaches it (a
@@ -409,7 +411,7 @@ exist, `subset.indices` for a face past the mesh, `coord_sys.no_binding`,
 | `listener.failed` | Reported, not thrown: a change listener threw; `cause` is its error. |
 | `path.invalid` | A path is not an absolute prim path, or not a property path where one is asked for. |
 | `prim.not_found` | No composed prim is at the path. |
-| `layer.unknown` | The stage has no layer with the id. |
+| `layer.unknown` | The stage holds no layer with the id: it has not read that asset yet, or it mutes it and never read it. |
 | `value.decode` | A retained array failed to decode when read. |
 | `value.unknown_type` | A value's `type` is not a registered value type name. |
 | `value.kind` | A value's scalars are of the wrong kind (strings for a `float`). |

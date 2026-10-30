@@ -12,17 +12,20 @@ the layers below and `oracle.json`, which
 
 `calls` is one stage on `calls/scene.usda` taking a fixed sequence of
 `UsdStage::MuteLayer`, `UnmuteLayer`, `MuteAndUnmuteLayers` and
-`IsLayerMuted` calls, and two edits that add references to layers muted
-before anything opened them. After each call it records what the call
-returned or raised, `GetMutedLayers`, the `UsdNotice::LayerMutingChanged`
-the call sent (`null` for none), the composed property names of the
-prims, the `PcpErrorMutedAssetPath` errors, and which of the fixture's
-layers are open. Identifiers are relative to the fixture directory.
+`IsLayerMuted` calls, two edits that add references to layers muted
+before anything opened them, and one that adds a sublayer muted before
+anything opened it. After each call it records what the call returned or
+raised, `GetMutedLayers`, the `UsdNotice::LayerMutingChanged` the call
+sent (`null` for none), the composed property names of the prims, the
+`PcpErrorMutedAssetPath` errors, the stage's layer stack
+(`GetLayerStack`, without the session layer), and which of the fixture's
+layers are open (`SdfLayer::Find`). Identifiers are relative to the fixture directory.
 What it shows, with the 26.11 code that does it: a muted identifier is
 anchored to the root layer (`Pcp_MutedLayers::_GetCanonicalLayerId`,
 `pxr/usd/pcp/layerStackRegistry.cpp`), may name a layer not opened yet,
 and a later arc to it, anchored to the layer authoring it, composes
-muted without opening it; an unmute request repeating a mute request's
+muted without opening it: a muted layer is never opened, so it is in
+no layer stack, and unmuting it opens it; an unmute request repeating a mute request's
 spelling is dropped, and the root cannot be muted
 (`PcpCache::RequestLayerMuting`, `pxr/usd/pcp/cache.cpp`).
 
@@ -77,6 +80,13 @@ over "Ball"
 over "Ball"
 {
     double b = 1
+}
+''',
+    "calls/c.usda": '''#usda 1.0
+
+over "Ball"
+{
+    double c = 1
 }
 ''',
     "calls/lamp.usda": '''#usda 1.0
@@ -188,7 +198,8 @@ def "Asset"
 LAYERS = {**CALL_LAYERS, **NAMESPACE_LAYERS}
 
 # Each call: [method, *arguments]. `reference` adds a reference to the
-# prim, defining it first; `mute_and_unmute` takes two lists.
+# prim, defining it first; `sublayer` appends a sublayer to the root
+# layer; `mute_and_unmute` takes two lists.
 CALLS = [
     ["is_muted", "lamp.usda"],
     ["mute", "lamp.usda"],
@@ -210,6 +221,9 @@ CALLS = [
     ["mute", ""],
     ["unmute", "never.usda"],
     ["is_muted", "never.usda"],
+    ["mute", "c.usda"],
+    ["sublayer", "./c.usda"],
+    ["unmute", "c.usda"],
 ]
 
 PRIMS = ["/Ball", "/Lamp", "/Robot"]
@@ -267,6 +281,8 @@ def calls_record(out):
             elif method == "reference":
                 prim = stage.DefinePrim(call[1])
                 assert prim.GetReferences().AddReference(call[2], Sdf.Path(call[3]))
+            elif method == "sublayer":
+                stage.GetRootLayer().subLayerPaths.append(call[1])
             raised = False
         except Tf.ErrorException:
             raised = True
@@ -283,6 +299,8 @@ def calls_record(out):
                 for path in PRIMS
             },
             "muted_assets": errors,
+            "layer_stack": [relative(directory, layer.identifier)
+                            for layer in stage.GetLayerStack(includeSessionLayers=False)],
             "open": sorted(name[len("calls/"):] for name in CALL_LAYERS
                            if Sdf.Layer.Find(os.path.join(out, name)) is not None),
         })

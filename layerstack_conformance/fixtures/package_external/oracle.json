@@ -1,0 +1,91 @@
+{
+ "anchored": {
+  "out/pkg.usdz": {
+   "besidePackage": {
+    "anchored": "<dir>/out/set/near.png",
+    "authored": "set/near.png",
+    "resolved": "<dir>/out/set/near.png"
+   },
+   "layerRelative": {
+    "anchored": "<dir>/out/pkg.usdz[set/albedo.png]",
+    "authored": "./set/albedo.png",
+    "resolved": ""
+   },
+   "nowhere": {
+    "anchored": "set/nowhere.png",
+    "authored": "set/nowhere.png",
+    "resolved": ""
+   },
+   "parentRelative": {
+    "anchored": "<dir>/out/pkg.usdz[../set/albedo.png]",
+    "authored": "../set/albedo.png",
+    "resolved": ""
+   },
+   "searchPath": {
+    "anchored": "set/albedo.png",
+    "authored": "set/albedo.png",
+    "resolved": "<dir>/set/albedo.png"
+   }
+  },
+  "pkg.usdz": {
+   "besidePackage": {
+    "anchored": "set/near.png",
+    "authored": "set/near.png",
+    "resolved": ""
+   },
+   "layerRelative": {
+    "anchored": "<dir>/pkg.usdz[set/albedo.png]",
+    "authored": "./set/albedo.png",
+    "resolved": ""
+   },
+   "nowhere": {
+    "anchored": "set/nowhere.png",
+    "authored": "set/nowhere.png",
+    "resolved": ""
+   },
+   "parentRelative": {
+    "anchored": "<dir>/pkg.usdz[../set/albedo.png]",
+    "authored": "../set/albedo.png",
+    "resolved": ""
+   },
+   "searchPath": {
+    "anchored": "<dir>/set/albedo.png",
+    "authored": "set/albedo.png",
+    "resolved": "<dir>/set/albedo.png"
+   }
+  }
+ },
+ "openusd": "26.11",
+ "packaged": {
+  "create_new_usdz_package": {
+   "members": [
+    "rock.usda",
+    "albedo.png",
+    "1/outside.png"
+   ],
+   "result": false,
+   "values": {
+    "albedo": "./albedo.png",
+    "missingAbsolute": "0/gone.png",
+    "missingRelative": "./gone.png",
+    "missingSearch": "gone.png",
+    "outside": "1/outside.png"
+   }
+  },
+  "localize_asset_keeping_outside": {
+   "files": [
+    "1/outside.png",
+    "albedo.png",
+    "rock.usda"
+   ],
+   "result": false,
+   "values": {
+    "albedo": "./albedo.png",
+    "missingAbsolute": "0/gone.png",
+    "missingRelative": "./gone.png",
+    "missingSearch": "gone.png",
+    "outside": "1/outside.png"
+   }
+  }
+ }
+}

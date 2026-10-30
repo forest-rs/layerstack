@@ -130,6 +130,7 @@ mod nested_arc_depth;
 mod numeric_ingestion_bounds;
 mod observers;
 mod openusd_schemas;
+mod package_external;
 mod particles;
 mod path_expression;
 mod peer_regressions;

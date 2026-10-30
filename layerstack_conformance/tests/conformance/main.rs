@@ -58,6 +58,7 @@ mod composition_misc;
 mod composition_pcp;
 mod composition_strict;
 mod connectable_plug;
+mod connection_source_info;
 mod coord_sys;
 mod coord_sys_authoring;
 mod copy_spec;

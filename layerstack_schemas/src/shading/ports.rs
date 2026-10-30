@@ -297,6 +297,204 @@ impl From<PortEdit> for ConnectionSource {
     }
 }
 
+/// A connection source named by a path and checked against a scene, as
+/// OpenUSD's `UsdShadeConnectionSourceInfo(stage, sourcePath)` builds it:
+/// the source prim, the attribute's base name and namespace, and its type
+/// name when the attribute exists.
+///
+/// [`Self::new`] reads `path` as text, as `SdfPath` parses it, and never
+/// interns anything:
+///
+/// - Text that is not a property path (a prim path, a target path such as
+///   `/Mat/Shader.outputs:out[/X]`, text that does not parse) gives an
+///   empty info: no name, no kind, no prim.
+/// - Otherwise the property name is split from its `inputs:` or
+///   `outputs:` namespace into [`Self::name`] and [`Self::kind`]
+///   (`UsdShadeUtils::GetBaseNameAndType`); a name in neither namespace is
+///   kept whole, with no kind.
+/// - The source prim is the prim at the path's prim path, trailing variant
+///   selections stripped (`SdfPath::GetPrimPath`):
+///   `/Mat/Shader{v=a}.outputs:out` names `/Mat/Shader`. It is any prim on
+///   the stage, typed or not, an `over`, an inactive prim or an instance
+///   proxy: none for a missing prim, a prim beneath an inactive one, a
+///   relative path or a variant selection within the path.
+/// - [`Self::type_name`] is the attribute's when one is at the property
+///   path, authored or defined by the prim's schemas; none for a missing
+///   attribute or a relationship.
+///
+/// The info is valid ([`Self::is_valid`]) when it has a kind, a name and
+/// a source prim, as OpenUSD's `IsValid` is; [`Self::source`] is then the
+/// [`ConnectionSource`] to connect to.
+///
+/// One difference from OpenUSD: a relational attribute path
+/// (`/Mat/Shader.outputs:out[/X].inputs:y`) gives an empty info. OpenUSD
+/// reads it as `inputs:y` of `/Mat/Shader`, a different attribute from
+/// the one the path names.
+///
+/// OpenUSD: `UsdShadeConnectionSourceInfo::UsdShadeConnectionSourceInfo(
+/// UsdStagePtr const&, SdfPath const&)` (`pxr/usd/usdShade/connectableAPI.cpp`).
+///
+/// Spec: AOUSD Core §7.6.4.2.3 (connections), §8.5 (path grammar).
+#[doc(alias = "UsdShadeConnectionSourceInfo")]
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ConnectionSourceInfo {
+    prim: Option<PathId>,
+    name: String,
+    kind: Option<PortKind>,
+    type_name: Option<PropertyType>,
+}
+impl ConnectionSourceInfo {
+    /// The source `path` names, checked against `scene` (see the type's
+    /// documentation for each case).
+    #[must_use]
+    pub fn new(scene: &Scene<'_>, path: &str) -> Self {
+        let Some((prim_text, property)) = split_source_path(path) else {
+            return Self::default();
+        };
+        let (name, kind) = match PortKind::of(property) {
+            Some(kind) => (&property[kind.prefix().len()..], Some(kind)),
+            None => (property, None),
+        };
+        let store = scene.store();
+        let prim =
+            <&str as layerstack::PrimPathArg>::prim_path(&prim_text, store.paths(), store.tokens())
+                .filter(|&prim| scene.prim(prim).is_some());
+        let type_name = prim
+            .zip(store.tokens().lookup(property))
+            .and_then(|(prim, name)| {
+                let property = scene.property(PropertyPath::new(prim, name))?;
+                let declared = property.declaration();
+                let kind = declared
+                    .as_ref()
+                    .map_or_else(|| property.kind(), |declared| declared.kind);
+                if kind != layerstack::PropertyKind::Attribute {
+                    return None;
+                }
+                declared
+                    .and_then(|d| d.type_name)
+                    .or_else(|| property.definition().and_then(|d| d.type_name.clone()))
+            });
+        Self {
+            prim,
+            name: name.into(),
+            kind,
+            type_name,
+        }
+    }
+    /// Whether the info names a source to connect to: it has a kind, a
+    /// nonempty name and a source prim.
+    ///
+    /// OpenUSD: `UsdShadeConnectionSourceInfo::IsValid`.
+    #[must_use]
+    pub fn is_valid(&self) -> bool {
+        self.kind.is_some() && !self.name.is_empty() && self.prim.is_some()
+    }
+    /// The source prim, when it is on the stage.
+    #[must_use]
+    pub fn prim(&self) -> Option<PathId> {
+        self.prim
+    }
+    /// The attribute's name without its `inputs:` or `outputs:` namespace
+    /// (`rgb` for `outputs:rgb`); the whole property name when it is in
+    /// neither; empty when the path is not a property path.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    /// Whether the attribute is an input or an output; `None` for a name
+    /// in neither namespace.
+    #[must_use]
+    pub fn kind(&self) -> Option<PortKind> {
+        self.kind
+    }
+    /// The attribute's declared type, when an attribute is at the path.
+    #[must_use]
+    pub fn type_name(&self) -> Option<&PropertyType> {
+        self.type_name.as_ref()
+    }
+    /// The source to connect to, when the info is valid.
+    #[must_use]
+    pub fn source(&self) -> Option<ConnectionSource> {
+        let prim = self.prim.filter(|_| !self.name.is_empty())?;
+        Some(match self.kind? {
+            PortKind::Output => ConnectionSource::output(prim, &self.name),
+            PortKind::Input => ConnectionSource::input(prim, &self.name),
+        })
+    }
+}
+
+/// The prim path text and property name of the property path `text`, its
+/// trailing variant selections stripped (`SdfPath::GetPrimPath`); `None`
+/// for text that is not a property path. Selections within the prim path
+/// are kept, so its prim is on no stage; a relative prim path is kept as
+/// well.
+fn split_source_path(text: &str) -> Option<(&str, &str)> {
+    if text.contains(['[', ']']) {
+        return None;
+    }
+    let (mut prim, property) = text.rsplit_once('.')?;
+    if !property.split(':').all(layerstack::ident::is_identifier) {
+        return None;
+    }
+    while let Some(rest) = prim.strip_suffix('}') {
+        let (before, selection) = rest.rsplit_once('{')?;
+        if !is_variant_selection(selection) {
+            return None;
+        }
+        prim = before;
+    }
+    let mut names = match prim.strip_prefix('/') {
+        // The pseudo-root has no properties.
+        Some("") => return None,
+        Some(names) => names,
+        // A relative path: `..` segments first, or `.` (or nothing) alone.
+        None => {
+            let mut rest = prim;
+            while let Some(tail) = rest.strip_prefix("../") {
+                rest = tail;
+            }
+            if matches!(rest, "" | "." | "..") {
+                return Some((prim, property));
+            }
+            rest
+        }
+    };
+    // Prim names, each but the last followed by `/` or variant selections.
+    loop {
+        let end = names.find(['/', '{']).unwrap_or(names.len());
+        if !layerstack::ident::is_identifier(&names[..end]) {
+            return None;
+        }
+        names = &names[end..];
+        while let Some(after) = names.strip_prefix('{') {
+            let (selection, tail) = after.split_once('}')?;
+            if !is_variant_selection(selection) {
+                return None;
+            }
+            names = tail;
+        }
+        if names.is_empty() {
+            return Some((prim, property));
+        }
+        names = names.strip_prefix('/').unwrap_or(names);
+    }
+}
+
+/// Whether `text` is a variant selection's `set=variant` (the variant
+/// possibly empty), as `SdfPath` parses one.
+fn is_variant_selection(text: &str) -> bool {
+    let Some((set, variant)) = text.split_once('=') else {
+        return false;
+    };
+    let variant_char = |c: char| c.is_alphanumeric() || matches!(c, '_' | '|' | '-');
+    layerstack::ident::is_identifier(set)
+        && variant
+            .strip_prefix('.')
+            .unwrap_or(variant)
+            .chars()
+            .all(variant_char)
+}
+
 /// A named input or output authored through a [`SchemaEdit`].
 ///
 /// Connections are source opinions: every target is mapped through the edit

@@ -1,0 +1,311 @@
+{
+ "openusd_version": "26.11",
+ "sources": [
+  {
+   "name": "out",
+   "parsed": "/Mat/Source.outputs:out",
+   "path": "/Mat/Source.outputs:out",
+   "source": "/Mat/Source",
+   "type": "Output",
+   "type_name": "",
+   "valid": true
+  },
+  {
+   "name": "defined",
+   "parsed": "/Mat/Source.outputs:defined",
+   "path": "/Mat/Source.outputs:defined",
+   "source": "/Mat/Source",
+   "type": "Output",
+   "type_name": "float",
+   "valid": true
+  },
+  {
+   "name": "in",
+   "parsed": "/Mat/Source.inputs:in",
+   "path": "/Mat/Source.inputs:in",
+   "source": "/Mat/Source",
+   "type": "Input",
+   "type_name": "float",
+   "valid": true
+  },
+  {
+   "name": "a:b",
+   "parsed": "/Mat/Source.inputs:a:b",
+   "path": "/Mat/Source.inputs:a:b",
+   "source": "/Mat/Source",
+   "type": "Input",
+   "type_name": "float",
+   "valid": true
+  },
+  {
+   "name": "rel",
+   "parsed": "/Mat/Source.outputs:rel",
+   "path": "/Mat/Source.outputs:rel",
+   "source": "/Mat/Source",
+   "type": "Output",
+   "type_name": "",
+   "valid": true
+  },
+  {
+   "name": "out",
+   "parsed": "/Mat/Source.out",
+   "path": "/Mat/Source.out",
+   "source": "/Mat/Source",
+   "type": "Invalid",
+   "type_name": "",
+   "valid": false
+  },
+  {
+   "name": "inputs",
+   "parsed": "/Mat/Source.inputs",
+   "path": "/Mat/Source.inputs",
+   "source": "/Mat/Source",
+   "type": "Invalid",
+   "type_name": "",
+   "valid": false
+  },
+  {
+   "name": "inputsx:in",
+   "parsed": "/Mat/Source.inputsx:in",
+   "path": "/Mat/Source.inputsx:in",
+   "source": "/Mat/Source",
+   "type": "Invalid",
+   "type_name": "",
+   "valid": false
+  },
+  {
+   "name": "",
+   "parsed": "/Mat/Source",
+   "path": "/Mat/Source",
+   "source": "",
+   "type": "Invalid",
+   "type_name": "",
+   "valid": false
+  },
+  {
+   "name": "out",
+   "parsed": "/Mat/Missing.outputs:out",
+   "path": "/Mat/Missing.outputs:out",
+   "source": "",
+   "type": "Output",
+   "type_name": "",
+   "valid": false
+  },
+  {
+   "name": "out",
+   "parsed": "/Mat/Over.outputs:out",
+   "path": "/Mat/Over.outputs:out",
+   "source": "/Mat/Over",
+   "type": "Output",
+   "type_name": "",
+   "valid": true
+  },
+  {
+   "name": "out",
+   "parsed": "/Mat/Inactive.outputs:out",
+   "path": "/Mat/Inactive.outputs:out",
+   "source": "/Mat/Inactive",
+   "type": "Output",
+   "type_name": "",
+   "valid": true
+  },
+  {
+   "name": "out",
+   "parsed": "/Mat/Inactive/Kid.outputs:out",
+   "path": "/Mat/Inactive/Kid.outputs:out",
+   "source": "",
+   "type": "Output",
+   "type_name": "",
+   "valid": false
+  },
+  {
+   "name": "surface",
+   "parsed": "/Mat.outputs:surface",
+   "path": "/Mat.outputs:surface",
+   "source": "/Mat",
+   "type": "Output",
+   "type_name": "token",
+   "valid": true
+  },
+  {
+   "name": "missing",
+   "parsed": "/Mat.outputs:missing",
+   "path": "/Mat.outputs:missing",
+   "source": "/Mat",
+   "type": "Output",
+   "type_name": "",
+   "valid": true
+  },
+  {
+   "name": "",
+   "parsed": "",
+   "path": "/Mat/Source.outputs:",
+   "source": "",
+   "type": "Invalid",
+   "type_name": "",
+   "valid": false
+  },
+  {
+   "name": "",
+   "parsed": "/Mat/Source.outputs:out[/X]",
+   "path": "/Mat/Source.outputs:out[/X]",
+   "source": "",
+   "type": "Invalid",
+   "type_name": "",
+   "valid": false
+  },
+  {
+   "name": "y",
+   "parsed": "/Mat/Source.outputs:out[/X].inputs:y",
+   "path": "/Mat/Source.outputs:out[/X].inputs:y",
+   "source": "/Mat/Source",
+   "type": "Input",
+   "type_name": "",
+   "valid": true
+  },
+  {
+   "name": "out",
+   "parsed": "/Mat/Source{v=a}.outputs:out",
+   "path": "/Mat/Source{v=a}.outputs:out",
+   "source": "/Mat/Source",
+   "type": "Output",
+   "type_name": "",
+   "valid": true
+  },
+  {
+   "name": "glow",
+   "parsed": "/Mat/Lamp{shade=warm}.outputs:glow",
+   "path": "/Mat/Lamp{shade=warm}.outputs:glow",
+   "source": "/Mat/Lamp",
+   "type": "Output",
+   "type_name": "color3f",
+   "valid": true
+  },
+  {
+   "name": "glow",
+   "parsed": "/Mat/Lamp.outputs:glow",
+   "path": "/Mat/Lamp.outputs:glow",
+   "source": "/Mat/Lamp",
+   "type": "Output",
+   "type_name": "color3f",
+   "valid": true
+  },
+  {
+   "name": "defined",
+   "parsed": "/Mat{v=}Source.outputs:defined",
+   "path": "/Mat{v=}Source.outputs:defined",
+   "source": "",
+   "type": "Output",
+   "type_name": "",
+   "valid": false
+  },
+  {
+   "name": "out",
+   "parsed": "/Robot.outputs:out",
+   "path": "/Robot.outputs:out",
+   "source": "/Robot",
+   "type": "Output",
+   "type_name": "",
+   "valid": true
+  },
+  {
+   "name": "out",
+   "parsed": "/Robot/Eye.outputs:out",
+   "path": "/Robot/Eye.outputs:out",
+   "source": "/Robot/Eye",
+   "type": "Output",
+   "type_name": "float",
+   "valid": true
+  },
+  {
+   "name": "out",
+   "parsed": "/RobotPrototype/Eye.outputs:out",
+   "path": "/RobotPrototype/Eye.outputs:out",
+   "source": "/RobotPrototype/Eye",
+   "type": "Output",
+   "type_name": "float",
+   "valid": true
+  },
+  {
+   "name": "out",
+   "parsed": "Source.outputs:out",
+   "path": "Source.outputs:out",
+   "source": "",
+   "type": "Output",
+   "type_name": "",
+   "valid": false
+  },
+  {
+   "name": "out",
+   "parsed": "../Source.outputs:out",
+   "path": "../Source.outputs:out",
+   "source": "",
+   "type": "Output",
+   "type_name": "",
+   "valid": false
+  },
+  {
+   "name": "out",
+   "parsed": ".outputs:out",
+   "path": ".outputs:out",
+   "source": "",
+   "type": "Output",
+   "type_name": "",
+   "valid": false
+  },
+  {
+   "name": "glow",
+   "parsed": "/Mat/Lamp{shade=warm}{other=}.outputs:glow",
+   "path": "/Mat/Lamp{shade=warm}{other=}.outputs:glow",
+   "source": "/Mat/Lamp",
+   "type": "Output",
+   "type_name": "color3f",
+   "valid": true
+  },
+  {
+   "name": "",
+   "parsed": "",
+   "path": "/Mat/Lamp/{shade=warm}.outputs:glow",
+   "source": "",
+   "type": "Invalid",
+   "type_name": "",
+   "valid": false
+  },
+  {
+   "name": "",
+   "parsed": "",
+   "path": "/Mat/Source.outputs:out.connect",
+   "source": "",
+   "type": "Invalid",
+   "type_name": "",
+   "valid": false
+  },
+  {
+   "name": "",
+   "parsed": "/",
+   "path": "/",
+   "source": "",
+   "type": "Invalid",
+   "type_name": "",
+   "valid": false
+  },
+  {
+   "name": "",
+   "parsed": "",
+   "path": "",
+   "source": "",
+   "type": "Invalid",
+   "type_name": "",
+   "valid": false
+  },
+  {
+   "name": "",
+   "parsed": "",
+   "path": "not a path",
+   "source": "",
+   "type": "Invalid",
+   "type_name": "",
+   "valid": false
+  }
+ ]
+}

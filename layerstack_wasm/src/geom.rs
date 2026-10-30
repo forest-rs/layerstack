@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! The geometry a renderer reads from TypeScript: transforms, visibility
-//! and purpose, primvars and bounds.
+//! and purpose, primvars, bounds and point instances.
 //!
 //! A stage keeps one [`GeomState`] with its own change cursor: before each
 //! transform or bounds read it hears the stage's changes since the last
@@ -12,8 +12,8 @@
 //! frame's reads then reuse every transform and bound an edit did not
 //! touch, and recompute time-varying ones at the new time.
 //!
-//! Batched results leave as JS-owned typed arrays (`Float64Array`),
-//! copied once out of the module; matrices
+//! Batched results leave as JS-owned typed arrays (`Float64Array`,
+//! `Int32Array`, `BigInt64Array`), copied once out of the module; matrices
 //! are 16 numbers each, row by row, in OpenUSD's row-vector convention
 //! (`GfMatrix4d`: a point `p` transforms as `p * M`, the translation in
 //! the last row).
@@ -21,7 +21,8 @@
 //! Spec: AOUSD Core §6.3 (row-vector matrices), §12.3 (value resolution
 //! at a time). OpenUSD: `UsdGeomXformCache`, `UsdGeomXformable`,
 //! `UsdGeomImageable`, `UsdGeomPrimvarsAPI`, `UsdGeomPrimvar`,
-//! `UsdGeomBBoxCache`, `UsdGeomModelAPI::ComputeExtentsHint`.
+//! `UsdGeomBBoxCache`, `UsdGeomModelAPI::ComputeExtentsHint`,
+//! `UsdGeomPointInstancer`.
 
 use alloc::{
     format,
@@ -30,18 +31,21 @@ use alloc::{
     vec::Vec,
 };
 
-use layerstack::{ChangeCursor, InMemoryStore, LiveStage, PathId, StageView, Time, TypedArray};
+use layerstack::{
+    ChangeCursor, InMemoryStore, LiveStage, PathId, StageView, TargetPath, Time, TypedArray,
+};
 use layerstack_schemas::{
     PrimView, Scene, Visibility, XformCache, XformCacheStats, XformProblemKind,
     bounds::{BoundingBox, BoundsCache, BoundsError, BoundsOptions, BoundsStats, Range3d},
+    point_instancer::{InstanceTransformOptions, PointInstancerError},
     primvar::{Primvar, PrimvarError},
-    usd_geom::{Imageable, ImageablePurpose, Xformable},
+    usd_geom::{Imageable, ImageablePurpose, PointInstancer, Xformable},
 };
 
 use crate::{
     array::ArrayHandle,
     error::Error,
-    schemas::path_text,
+    schemas::{path_text, property_text},
     stage::{Stage, time_of},
     value,
     wire::Wire,
@@ -228,6 +232,21 @@ fn bounds_code(error: &BoundsError) -> &'static str {
         BoundsError::SingularTransform(_) => "bounds.singular",
         // A failure this build does not name.
         _ => "bounds.invalid",
+    }
+}
+
+/// The code of a point-instancer failure.
+fn instancer_code(error: &PointInstancerError) -> &'static str {
+    match error {
+        PointInstancerError::MissingAttribute(_) => "instancer.missing_attribute",
+        PointInstancerError::Decode { .. } => "value.decode",
+        PointInstancerError::LengthMismatch(_) => "instancer.length",
+        PointInstancerError::InvalidPrototypes => "instancer.prototypes",
+        PointInstancerError::InvalidPrototypeIndex { .. } => "instancer.prototype_index",
+        PointInstancerError::InvalidTime => "instancer.time",
+        PointInstancerError::UnsupportedMotionSource(_) => "instancer.motion",
+        // A failure this build does not name.
+        _ => "instancer.invalid",
     }
 }
 
@@ -775,6 +794,121 @@ impl Stage {
             .map(|&value| f64::from(value))
             .collect())
     }
+
+    /// The point instancer at `path`'s instances at `time` against
+    /// `base_time` (the time that fixes topology and masks and anchors
+    /// motion; `time` when absent): `[prototypes, matrices,
+    /// prototypeIndices, ids, indices]`, the `prototypes` targets (prim
+    /// paths; a property target as its path), each instance's transform
+    /// in the instancer's space (16 numbers, row by row), its prototype
+    /// index, its id (the array position without `ids`) and its position in
+    /// the authored arrays. With `include_prototype_transform` each
+    /// prototype's local transform applies first; with `apply_mask`,
+    /// inactive and invisible ids are left out.
+    ///
+    /// OpenUSD: `UsdGeomPointInstancer::ComputeInstanceTransformsAtTime`.
+    ///
+    /// # Errors
+    ///
+    /// `path.invalid`, `prim.not_found`; `instancer.not_instancer` for a
+    /// prim that is not a `PointInstancer`; an `instancer.*` code for
+    /// invalid instance data (`instancer.length` for an array of the wrong
+    /// length, `instancer.prototype_index`, `instancer.prototypes`,
+    /// `instancer.time`).
+    pub(crate) fn instance_transforms(
+        &self,
+        path: &str,
+        time: Option<f64>,
+        base_time: Option<f64>,
+        include_prototype_transform: bool,
+        apply_mask: bool,
+    ) -> Result<Wire, Error> {
+        let prim = self.existing_prim(path)?.path();
+        let document = self.document();
+        let store = document.store();
+        let scene = Scene::new(document.stage().stage(), store);
+        let instancer = instancer(&scene, prim, path)?;
+        let time = time_of(time);
+        let base_time = base_time.map_or(time, Time::at);
+        let instances = instancer
+            .prepare_instance_transforms(
+                time,
+                base_time,
+                InstanceTransformOptions {
+                    include_prototype_transform,
+                    apply_mask,
+                },
+            )
+            .map_err(|error| {
+                Error::new(instancer_code(&error), error.display(store).to_string()).at_path(path)
+            })?;
+        let count = instances.len();
+        let mut matrices = Vec::with_capacity(16 * count);
+        let mut prototype_indices = Vec::with_capacity(count);
+        let mut ids = Vec::with_capacity(count);
+        let mut indices = Vec::with_capacity(count);
+        for instance in instances.iter() {
+            push_matrix(&mut matrices, &instance.matrix);
+            prototype_indices.push(i32::try_from(instance.prototype_index).unwrap_or(i32::MAX));
+            ids.push(instance.id);
+            indices.push(i32::try_from(instance.index).unwrap_or(i32::MAX));
+        }
+        Ok(Wire::List(vec![
+            prototypes(store, &instancer),
+            Wire::Floats(matrices),
+            Wire::Ints(prototype_indices),
+            Wire::Int64s(ids),
+            Wire::Ints(indices),
+        ]))
+    }
+
+    /// The point instancer at `path`'s mask at `time`, one byte per
+    /// instance in authored order, 1 for an instance drawn and 0 for an
+    /// inactive or invisible one; empty when every instance is drawn.
+    ///
+    /// OpenUSD: `UsdGeomPointInstancer::ComputeMaskAtTime`.
+    ///
+    /// # Errors
+    ///
+    /// `path.invalid`, `prim.not_found`, `instancer.not_instancer`;
+    /// `value.decode` for ids that fail to decode.
+    pub(crate) fn instance_mask(&self, path: &str, time: Option<f64>) -> Result<Vec<u8>, Error> {
+        let prim = self.existing_prim(path)?.path();
+        let document = self.document();
+        let store = document.store();
+        let scene = Scene::new(document.stage().stage(), store);
+        let mask = instancer(&scene, prim, path)?
+            .try_compute_mask(time_of(time))
+            .map_err(|error| {
+                Error::new(instancer_code(&error), error.display(store).to_string()).at_path(path)
+            })?;
+        Ok(mask.into_iter().map(u8::from).collect())
+    }
+}
+
+/// The point instancer at `prim`.
+fn instancer<'a>(scene: &Scene<'a>, prim: PathId, path: &str) -> Result<PointInstancer<'a>, Error> {
+    PointInstancer::get(scene, prim).ok_or_else(|| {
+        Error::new(
+            "instancer.not_instancer",
+            "the prim is not a `PointInstancer`",
+        )
+        .at_path(path)
+    })
+}
+
+/// The `prototypes` targets of `instancer`, as text.
+fn prototypes(store: &InMemoryStore, instancer: &PointInstancer<'_>) -> Wire {
+    Wire::List(
+        instancer
+            .prototypes()
+            .into_iter()
+            .map(|target| match target {
+                TargetPath::Prim(path) => path_text(store, path),
+                TargetPath::Property(path) => property_text(store, path),
+            })
+            .collect(),
+    )
 }
 
 #[cfg(test)]
@@ -788,7 +922,7 @@ mod tests {
     };
 
     /// A robot whose arm is translated and moves over time, a hidden lamp,
-    /// a guide, and primvars to inherit.
+    /// a guide, primvars to inherit, and a point instancer of rocks.
     const SCENE: &str = r#"#usda 1.0
 def Xform "Robot" (
     kind = "component"
@@ -827,6 +961,15 @@ def Xform "Lamp" {
     }
 }
 def "Loose" {
+}
+def PointInstancer "Rocks" {
+    rel prototypes = </Rocks/Rock>
+    int[] protoIndices = [0, 0, 0]
+    point3f[] positions = [(0, 0, 0), (2, 0, 0), (4, 0, 0)]
+    int64[] invisibleIds = [1]
+    def Cube "Rock" {
+        double size = 1
+    }
 }
 "#;
 
@@ -1022,6 +1165,25 @@ def "Loose" {
                 .unwrap_err()
                 .code,
             "argument.invalid"
+        );
+    }
+
+    #[test]
+    fn instances_are_transformed_and_masked() {
+        let stage = open(SCENE);
+        let instances = stage
+            .instance_transforms("/Rocks", None, None, true, true)
+            .unwrap();
+        let text = show(&instances);
+        assert!(text.starts_with("[[/Rocks/Rock], [1, 0, 0, 0"), "{text}");
+        assert!(text.ends_with("[0, 0], [0, 2], [0, 2]]"), "{text}");
+        assert_eq!(stage.instance_mask("/Rocks", None).unwrap(), vec![1, 0, 1]);
+        assert_eq!(
+            stage
+                .instance_transforms("/Robot", None, None, true, true)
+                .unwrap_err()
+                .code,
+            "instancer.not_instancer"
         );
     }
 }

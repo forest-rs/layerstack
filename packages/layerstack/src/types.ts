@@ -1398,3 +1398,31 @@ export interface BoundingBoxes {
   /** Each box's axis-aligned range after its matrix, 6 numbers as in `ranges` (`GfBBox3d::ComputeAlignedRange`): what to frame a camera on. */
   readonly alignedRanges: Float64Array;
 }
+
+/** The options of {@link Stage.pointInstances} (`UsdGeomPointInstancer::ComputeInstanceTransformsAtTime`). */
+export interface InstanceOptions {
+  /** The time code the transforms are at; the default time without one. */
+  readonly time?: number;
+  /** The time that fixes topology and the mask and anchors velocities; `time` without one. */
+  readonly baseTime?: number;
+  /** Whether each prototype's own local transform applies first (`IncludeProtoXform`); true by default. */
+  readonly includePrototypeTransform?: boolean;
+  /** Whether inactive and invisible ids are left out (`ApplyMask`); true by default. */
+  readonly applyMask?: boolean;
+}
+
+/** A point instancer's instances at one time ({@link Stage.pointInstances}). */
+export interface PointInstances {
+  /** The number of instances. */
+  readonly count: number;
+  /** The `prototypes` targets, which prototype indices address. */
+  readonly prototypes: readonly string[];
+  /** Each instance's transform in the instancer's space: 16 numbers, row by row. */
+  readonly matrices: Float64Array;
+  /** Each instance's prototype index. */
+  readonly prototypeIndices: Int32Array;
+  /** Each instance's id: its `ids` entry, or its position without `ids`. */
+  readonly ids: BigInt64Array;
+  /** Each instance's position in the authored arrays (before masking). */
+  readonly indices: Int32Array;
+}

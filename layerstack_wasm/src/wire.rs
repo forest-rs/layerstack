@@ -36,6 +36,10 @@ pub(crate) enum Wire {
     Bytes(Vec<u8>),
     /// Numbers, copied into a JS-owned `Float64Array`.
     Floats(Vec<f64>),
+    /// Integers, copied into a JS-owned `Int32Array`.
+    Ints(Vec<i32>),
+    /// 64-bit integers, copied into a JS-owned `BigInt64Array`.
+    Int64s(Vec<i64>),
     /// A pinned numeric array, which becomes the native `ArrayHandle`
     /// object: its bytes stay in Wasm memory.
     Array(ArrayHandle),
@@ -85,6 +89,8 @@ impl From<Wire> for JsValue {
             }
             Wire::Bytes(bytes) => Self::from(bytes),
             Wire::Floats(values) => Self::from(values),
+            Wire::Ints(values) => Self::from(values),
+            Wire::Int64s(values) => Self::from(values),
             Wire::Array(handle) => Self::from(handle),
         }
     }

@@ -788,6 +788,8 @@ def Scope "Looks" {
             }
             Wire::Bytes(bytes) => format!("<{} bytes>", bytes.len()),
             Wire::Floats(values) => show_numbers(values),
+            Wire::Ints(values) => show_numbers(values),
+            Wire::Int64s(values) => show_numbers(values),
             Wire::Array(handle) => format!("{:?}", handle.array()),
         }
     }

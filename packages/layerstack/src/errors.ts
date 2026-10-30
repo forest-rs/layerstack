@@ -117,6 +117,11 @@
  *   boundable without a valid extent nor geometry to compute one from),
  *   `bounds.extent_provider`, `bounds.instancer` (invalid instance data),
  *   `bounds.instancer_cycle`, `bounds.singular`.
+ * - `instancer.*`: a point instancer read that cannot be made:
+ *   `instancer.not_instancer` (the prim is not a `PointInstancer`),
+ *   `instancer.length` (an array of another length than the instances),
+ *   `instancer.prototype_index`, `instancer.prototypes` (no prototypes),
+ *   `instancer.missing_attribute`, `instancer.time`, `instancer.motion`.
  *
  * Composition errors are not thrown; {@link Stage.status} lists them as
  * {@link Issue}s with `composition.*` codes
@@ -171,6 +176,7 @@ export type ErrorCode =
   | `skel.${string}`
   | `primvar.${string}`
   | `bounds.${string}`
+  | `instancer.${string}`
   | `io.${string}`;
 
 /**

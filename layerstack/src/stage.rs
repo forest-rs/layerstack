@@ -120,6 +120,32 @@ pub(crate) struct PrimTypeInfo {
     definition: Arc<PrimDefinition>,
 }
 
+/// A typed read through one of the stage's type-erased selections:
+/// `select` is handed `accept(value, keep)`, which converts `value` with
+/// `read` and says whether it converted, keeping the conversion when
+/// `keep` is set, and returns the kept answer's provenance. Each value type
+/// compiles only this wrapper and its closure; the selection is shared.
+fn read_typed<T, E>(
+    read: impl Fn(&Value) -> Option<T>,
+    select: impl FnOnce(&dyn Fn(&Value, bool) -> bool) -> Result<Option<Option<Provenance>>, E>,
+) -> Result<Option<Resolved<T>>, E> {
+    let kept = core::cell::Cell::new(None);
+    let accept = |value: &Value, keep: bool| match read(value) {
+        Some(value) => {
+            if keep {
+                kept.set(Some(value));
+            }
+            true
+        }
+        None => false,
+    };
+    let provenance = select(&accept)?;
+    Ok(provenance.map(|provenance| Resolved {
+        value: kept.take().expect("an accepted value is kept"),
+        provenance,
+    }))
+}
+
 /// A dictionary schema fallback composed as a one-opinion dictionary
 /// chain; `None` for any other fallback, which reads as it is.
 fn composed_fallback(fallback: &Value) -> Option<Value> {
@@ -4051,11 +4077,24 @@ impl Stage {
         time: Time,
         read: impl Fn(&Value) -> Option<T>,
     ) -> Result<Option<Resolved<T>>, crate::ArrayReadError> {
+        read_typed(read, |accept| {
+            self.try_read_property_by(property, time, accept)
+        })
+    }
+
+    /// [`Stage::try_read_property`] through the type-erased conversion of
+    /// [`Stage::try_read_default_by`].
+    fn try_read_property_by(
+        &self,
+        property: PropertyPath,
+        time: Time,
+        accept: &dyn Fn(&Value, bool) -> bool,
+    ) -> Result<Option<Option<Provenance>>, crate::ArrayReadError> {
         objects::check_decode(self, property, time)?;
         // Schema fallbacks are not authored property-path opinions. Preserve
         // their decode errors too, including conversions used by sparse folding.
         let error = core::cell::RefCell::new(None);
-        let checked_read = |value: &Value| {
+        let checked = |value: &Value, keep: bool| {
             let failure = match value {
                 Value::TypedArray(array) => array.try_materialize().err(),
                 Value::Deferred(_) => value.try_materialize().err(),
@@ -4063,19 +4102,27 @@ impl Stage {
             };
             if let Some(failure) = failure {
                 *error.borrow_mut() = Some(failure.clone());
-                return None;
+                return false;
             }
-            read(value)
+            accept(value, keep)
         };
+        let (prim, field) = (property.prim_path(), property.property());
         let result = match time {
-            Time::Default => self.try_read_default(
-                property.prim_path(),
-                property.property(),
-                checked_read,
+            Time::Default => {
+                self.try_read_default_by(prim, field, &checked, self.with_provenance, None)?
+            }
+            Time::At {
+                code,
+                interpolation,
+            } => self.read_at_by(
+                prim,
+                field,
+                code,
+                interpolation,
+                &checked,
                 self.with_provenance,
                 None,
-            )?,
-            Time::At { .. } => self.read_property(property, time, checked_read),
+            ),
         };
         match error.into_inner() {
             Some(error) => Err(error),
@@ -4161,36 +4208,57 @@ impl Stage {
         below: Option<LayerId>,
     ) -> Option<Resolved<T>> {
         let (prim, field) = (property.prim_path(), property.property());
-        match time {
-            Time::Default => self.read_default(prim, field, read, with_source, below),
-            Time::At {
-                code,
-                interpolation,
-            } => {
-                let fallback = self.schema_fallback(prim, field);
-                let (resolved, clip_selected) = self.resolve_property_at_time(
-                    prim,
-                    field,
+        let read = read_typed(read, |accept| {
+            Ok::<_, crate::ArrayReadError>(match time {
+                Time::Default => self
+                    .try_read_default_by(prim, field, accept, with_source, below)
+                    .ok()
+                    .flatten(),
+                Time::At {
                     code,
                     interpolation,
-                    fallback,
-                    Some(&|value| read(value).is_some()),
-                    with_source,
-                    below,
-                );
-                match resolved {
-                    Some(resolved) => Some(Resolved {
-                        value: read(&resolved.value)?,
-                        provenance: resolved.provenance,
-                    }),
-                    None if clip_selected => None,
-                    None => self.read_fallback(fallback, &read),
-                }
-            }
+                } => self.read_at_by(prim, field, code, interpolation, accept, with_source, below),
+            })
+        });
+        read.ok().flatten()
+    }
+
+    /// A numeric-time read through the type-erased conversion of
+    /// [`Stage::try_read_default_by`]: the source is selected by whether
+    /// its value converts, then converted and kept.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the erased form of `read_property_by`'s numeric-time branch"
+    )]
+    fn read_at_by(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        code: f64,
+        interpolation: InterpolationType,
+        accept: &dyn Fn(&Value, bool) -> bool,
+        with_source: bool,
+        below: Option<LayerId>,
+    ) -> Option<Option<Provenance>> {
+        let fallback = self.schema_fallback(prim, field);
+        let (resolved, clip_selected) = self.resolve_property_at_time(
+            prim,
+            field,
+            code,
+            interpolation,
+            fallback,
+            Some(&|value| accept(value, false)),
+            with_source,
+            below,
+        );
+        match resolved {
+            Some(resolved) => accept(&resolved.value, true).then_some(resolved.provenance),
+            None if clip_selected => None,
+            None => self.accept_fallback(fallback, accept).then_some(None),
         }
     }
 
-    /// Reads a default-time attribute into the type accepted by `read`.
+    /// Selects a default-time attribute value that `accept` converts.
     ///
     /// Dense opinions whose values `read` cannot accept are skipped in
     /// strength order; the schema fallback is tried last. This is the typed
@@ -4213,52 +4281,15 @@ impl Stage {
     /// Spec: AOUSD Core §12.3 (value resolution), §12.3.2.1 (layer offsets),
     /// §13.3.2.4 (schema fallbacks). The typed default-time retry is an
     /// OpenUSD API behavior beyond the untyped value-resolution contract.
-    fn read_default<T>(
-        &self,
-        prim: PathId,
-        field: TokenId,
-        read: impl Fn(&Value) -> Option<T>,
-        with_source: bool,
-        below: Option<LayerId>,
-    ) -> Option<Resolved<T>> {
-        self.try_read_default(prim, field, read, with_source, below)
-            .ok()
-            .flatten()
-    }
-
-    // Keep decode failure in the actual typed selection path: a stronger
-    // incompatible opinion can hide the failing array from untyped resolution.
-    fn try_read_default<T>(
-        &self,
-        prim: PathId,
-        field: TokenId,
-        read: impl Fn(&Value) -> Option<T>,
-        with_source: bool,
-        below: Option<LayerId>,
-    ) -> Result<Option<Resolved<T>>, crate::ArrayReadError> {
-        let kept = core::cell::Cell::new(None);
-        let accept = |value: &Value, keep: bool| match read(value) {
-            Some(value) => {
-                if keep {
-                    kept.set(Some(value));
-                }
-                true
-            }
-            None => false,
-        };
-        let provenance = self.try_read_default_by(prim, field, &accept, with_source, below)?;
-        Ok(provenance.map(|provenance| Resolved {
-            value: kept.take().expect("an accepted value is kept"),
-            provenance,
-        }))
-    }
-
-    /// [`Stage::try_read_default`] with its conversion type-erased, so that
-    /// one copy of the selection serves every value type (each copy was
-    /// about 2.7 KB of WebAssembly). `accept(value, keep)` converts `value`
-    /// and says whether it converted; with `keep` the caller keeps the
-    /// result as the answer. Returns the answer's provenance, `None` when
-    /// nothing was accepted.
+    ///
+    /// The conversion is type-erased, so that one copy of the selection
+    /// serves every value type (each copy was about 2.7 KB of WebAssembly):
+    /// `accept(value, keep)` converts `value` and says whether it converted,
+    /// and with `keep` the caller keeps the result as the answer
+    /// ([`read_typed`]). Returns the answer's provenance, `None` when
+    /// nothing was accepted. A selected value that does not decode answers
+    /// with its error: a stronger incompatible opinion can hide the failing
+    /// array from untyped resolution.
     fn try_read_default_by(
         &self,
         prim: PathId,
@@ -4343,21 +4374,8 @@ impl Stage {
         Ok(self.accept_fallback(fallback, accept).then_some(None))
     }
 
-    fn read_fallback<T>(
-        &self,
-        fallback: Option<&Value>,
-        read: &impl Fn(&Value) -> Option<T>,
-    ) -> Option<Resolved<T>> {
-        let fallback = fallback?;
-        let dictionary = composed_fallback(fallback);
-        Some(Resolved {
-            value: read(dictionary.as_ref().unwrap_or(fallback))?,
-            provenance: None,
-        })
-    }
-
-    /// [`Stage::read_fallback`] through the type-erased conversion of
-    /// [`Stage::try_read_default_by`]: whether `accept` kept the fallback.
+    /// Hands the schema fallback to `accept` to keep, a dictionary composed
+    /// as a one-opinion chain; whether `accept` kept it.
     fn accept_fallback(
         &self,
         fallback: Option<&Value>,

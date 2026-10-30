@@ -680,6 +680,37 @@ fn implicit_shapes_have_the_documented_counts_and_face_out() {
             (2 * (r / 2) + 2) * (s + 1),
             2 * s * (2 * (r / 2)),
         ),
+        (
+            Shape::Cylinder1 {
+                radius_top: 0.5,
+                radius_bottom: 1.0,
+                height: 2.0,
+                axis: Axis::Z,
+            },
+            4 * (s + 1) + 2,
+            4 * s,
+        ),
+        // A zero radius: no cap there and no degenerate side triangles.
+        (
+            Shape::Cylinder1 {
+                radius_top: 0.0,
+                radius_bottom: 1.0,
+                height: 2.0,
+                axis: Axis::Y,
+            },
+            4 * (s + 1) + 2 - (s + 2),
+            2 * s,
+        ),
+        (
+            Shape::Capsule1 {
+                radius_top: 0.25,
+                radius_bottom: 0.5,
+                height: 1.0,
+                axis: Axis::X,
+            },
+            (2 * (r / 2) + 2) * (s + 1),
+            2 * s * (2 * (r / 2)),
+        ),
     ];
     for (shape, vertices, triangles) in cases {
         let buffers = tessellate(&shape, &t);
@@ -839,3 +870,118 @@ fn face_oriented_normals_turn_the_reflex_corner_to_the_face_and_change_nothing_e
     );
 }
 
+#[test]
+fn the_one_revisions_meet_their_ends_and_reduce_to_the_originals() {
+    use crate::Axis;
+    let t = Tessellation::default();
+    let along = |buffers: &MeshBuffers| {
+        let z = buffers.positions.iter().map(|p| p[2]);
+        (
+            z.clone().fold(f32::MAX, f32::min),
+            z.fold(f32::MIN, f32::max),
+        )
+    };
+    // Equal radii: the original shapes, vertex for vertex (to rounding).
+    let close = |a: &MeshBuffers, b: &MeshBuffers| {
+        assert_eq!(a.indices, b.indices);
+        for (p, q) in a.positions.iter().zip(&b.positions) {
+            assert!((0..3).all(|k| (p[k] - q[k]).abs() < 1e-6), "{p:?} {q:?}");
+        }
+    };
+    close(
+        &tessellate(
+            &Shape::Capsule1 {
+                radius_top: 0.5,
+                radius_bottom: 0.5,
+                height: 1.0,
+                axis: Axis::Z,
+            },
+            &t,
+        ),
+        &tessellate(
+            &Shape::Capsule {
+                radius: 0.5,
+                height: 1.0,
+                axis: Axis::Z,
+            },
+            &t,
+        ),
+    );
+    close(
+        &tessellate(
+            &Shape::Cylinder1 {
+                radius_top: 1.0,
+                radius_bottom: 1.0,
+                height: 2.0,
+                axis: Axis::Z,
+            },
+            &t,
+        ),
+        &tessellate(
+            &Shape::Cylinder {
+                radius: 1.0,
+                height: 2.0,
+                axis: Axis::Z,
+            },
+            &t,
+        ),
+    );
+    // A frustum: radius 1 at the bottom, 0.5 at the top.
+    let frustum = tessellate(
+        &Shape::Cylinder1 {
+            radius_top: 0.5,
+            radius_bottom: 1.0,
+            height: 2.0,
+            axis: Axis::Z,
+        },
+        &t,
+    );
+    assert_eq!(along(&frustum), (-1.0, 1.0));
+    for p in &frustum.positions {
+        let r = libm::sqrtf(p[0] * p[0] + p[1] * p[1]);
+        let limit = 0.75 - 0.25 * p[2];
+        assert!(r <= limit + 1e-5, "{p:?} outside the frustum");
+    }
+    // A capsule of radii 0.25 (top) and 0.5 (bottom), height 1: the poles
+    // reach OpenUSD's extent along the axis (`capsule_1.cpp`,
+    // `_ComputeExtentMax`): `h/2 - s*top + top*sec` and
+    // `-h/2 - s*bottom - bottom*sec`, `s = 0.25`, `sec = sqrt(1 + s²)`.
+    let capsule = tessellate(
+        &Shape::Capsule1 {
+            radius_top: 0.25,
+            radius_bottom: 0.5,
+            height: 1.0,
+            axis: Axis::Z,
+        },
+        &t,
+    );
+    let sec = libm::sqrt(1.0625_f64);
+    let (min, max) = along(&capsule);
+    assert!(
+        (f64::from(max) - (0.5 - 0.0625 + 0.25 * sec)).abs() < 1e-6,
+        "{max}"
+    );
+    assert!(
+        (f64::from(min) - (-0.5 - 0.125 - 0.5 * sec)).abs() < 1e-6,
+        "{min}"
+    );
+    // The rims sit at the side's ends, where the caps' normals lean as the
+    // side's: the side is the band between them, smooth across.
+    let rim = |z: f32| {
+        capsule
+            .positions
+            .iter()
+            .zip(&capsule.normals)
+            .filter(|(p, _)| (p[2] - z).abs() < 1e-6)
+            .map(|(p, n)| (libm::sqrtf(p[0] * p[0] + p[1] * p[1]), n[2]))
+            .collect::<Vec<_>>()
+    };
+    let lean = 0.25 / libm::sqrtf(1.0625);
+    for (z, radius) in [(0.5, 0.25), (-0.5, 0.5)] {
+        let ring = rim(z);
+        assert_eq!(ring.len(), 33, "the rim at {z}");
+        for (r, nz) in ring {
+            assert!((r - radius).abs() < 1e-6 && (nz - lean).abs() < 1e-6);
+        }
+    }
+}

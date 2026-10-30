@@ -219,16 +219,18 @@ export class Stagehand {
    * to pole by default). The mesh has one range and no report.
    */
   tessellate(shape: Shape, tessellation: Tessellation = {}): StagehandMesh {
-    const [a, b, axis] =
+    const [a, b, c, axis] =
       shape.kind === "Cube"
-        ? [shape.size, 0, "Z"]
+        ? [shape.size, 0, 0, "Z"]
         : shape.kind === "Sphere"
-          ? [shape.radius, 0, "Z"]
+          ? [shape.radius, 0, 0, "Z"]
           : shape.kind === "Plane"
-            ? [shape.width, shape.length, shape.axis]
-            : [shape.radius, shape.height, shape.axis];
+            ? [shape.width, shape.length, 0, shape.axis]
+            : shape.kind === "Cylinder_1" || shape.kind === "Capsule_1"
+              ? [shape.radiusTop, shape.height, shape.radiusBottom, shape.axis]
+              : [shape.radius, shape.height, 0, shape.axis];
     const native = call("argument.invalid", "tessellate", () =>
-      tessellateShape(shape.kind, a, b, axis, tessellation.segments ?? 32, tessellation.rings ?? 16),
+      tessellateShape(shape.kind, a, b, c, axis, tessellation.segments ?? 32, tessellation.rings ?? 16),
     );
     const mesh = new StagehandMesh(native);
     mesh.dispose();

@@ -57,6 +57,15 @@ def Xform "World" {
         double radius = 0.25
         uniform token axis = "Y"
     }
+
+    def Cylinder_1 "Post" {
+        double radiusTop = 0.5
+    }
+
+    def Capsule_1 "Bulb" {
+        double radiusTop = 0.25
+        uniform token axis = "X"
+    }
 }
 `;
 
@@ -211,6 +220,22 @@ describe("implicit shapes", () => {
     // Along Y: half the height plus the radius.
     const ys = [...mesh.positions].filter((_, i) => i % 3 === 1);
     assert.ok(Math.abs(Math.max(...ys) - 0.75) < 1e-6);
+    // The `_1` revisions: a radius per end.
+    const post = readShape(stage, "/World/Post")!;
+    assert.deepEqual(post, { kind: "Cylinder_1", radiusTop: 0.5, radiusBottom: 1, height: 2, axis: "Z" });
+    const frustum = stagehand.tessellate(post, { segments: 8 });
+    assert.equal(frustum.positions.length / 3, 4 * 9 + 2);
+    assert.equal(frustum.indices.length / 3, 4 * 8);
+    const bulb = readShape(stage, "/World/Bulb")!;
+    assert.deepEqual(bulb, { kind: "Capsule_1", radiusTop: 0.25, radiusBottom: 0.5, height: 1, axis: "X" });
+    const capsule = stagehand.tessellate(bulb, { segments: 8, rings: 4 });
+    assert.equal(capsule.indices.length / 3, 2 * 8 * 4);
+    // Along X, the poles reach OpenUSD's extent (`capsule_1.cpp`): the
+    // spheres sit inward by slope * radius, slope (0.5 - 0.25) / 1.
+    const xs = [...capsule.positions].filter((_, i) => i % 3 === 0);
+    const secant = Math.hypot(1, 0.25);
+    assert.ok(Math.abs(Math.max(...xs) - (0.5 - 0.0625 + 0.25 * secant)) < 1e-6);
+    assert.ok(Math.abs(Math.min(...xs) - (-0.5 - 0.125 - 0.5 * secant)) < 1e-6);
     const cube = stagehand.tessellate({ kind: "Cube", size: 2 });
     assert.equal(cube.indices.length, 36);
     assert.throws(() => cube.refill(cube.positions), { code: "argument.invalid" });

@@ -205,12 +205,7 @@ macro_rules! array_types {
                         let mut items = Vec::<$ty>::with_capacity(values.size_hint().0);
                         for value in &mut *values {
                             if let Some(item) = ($read)(&value) { items.push(item); }
-                            else {
-                                let mut mixed: Vec<Value> = items.into_iter().map($wrap).collect();
-                                mixed.push(value);
-                                mixed.extend(values);
-                                return Value::Array(mixed);
-                            }
+                            else { return mixed(Self::$variant(Arc::new(items)), value, values); }
                         }
                         Value::TypedArray(Self::$variant(Arc::new(items)))
                     },)*
@@ -218,12 +213,7 @@ macro_rules! array_types {
                         let mut items = Vec::<TokenId>::with_capacity(values.size_hint().0);
                         for value in &mut *values {
                             if let Value::Token(token) = value { items.push(token); }
-                            else {
-                                let mut mixed: Vec<Value> = items.into_iter().map(Value::Token).collect();
-                                mixed.push(value);
-                                mixed.extend(values);
-                                return Value::Array(mixed);
-                            }
+                            else { return mixed(Self::Token(items.into()), value, values); }
                         }
                         Value::TypedArray(Self::Token(items.into()))
                     },
@@ -231,12 +221,7 @@ macro_rules! array_types {
                         let mut items = StringArray::with_capacity(values.size_hint().0, 0);
                         for value in &mut *values {
                             if let Value::String(text) = &value { items.push(text); }
-                            else {
-                                let mut mixed: Vec<Value> = items.iter().map(Value::string).collect();
-                                mixed.push(value);
-                                mixed.extend(values);
-                                return Value::Array(mixed);
-                            }
+                            else { return mixed(Self::String(Arc::new(items)), value, values); }
                         }
                         Value::TypedArray(Self::String(Arc::new(items)))
                     },
@@ -541,6 +526,18 @@ impl<S: AsRef<str>> Extend<S> for StringArray {
             self.push(element.as_ref());
         }
     }
+}
+
+/// The heterogeneous array of `packed`'s elements, `value` and the rest of
+/// `values`: what [`TypedArray::pack_iter`] returns from the first element
+/// that does not fit. One function for every kind, as the elements already
+/// packed read back through [`TypedArray::values`].
+fn mixed(packed: TypedArray, value: Value, values: &mut dyn Iterator<Item = Value>) -> Value {
+    let mut mixed: Vec<Value> = Vec::with_capacity(packed.len() + 1 + values.size_hint().0);
+    mixed.extend(packed.values());
+    mixed.push(value);
+    mixed.extend(values);
+    Value::Array(mixed)
 }
 
 /// Whether every value `edit` holds (its literals and sized fills) and
@@ -977,6 +974,33 @@ mod tests {
             actual,
             Some(Value::TypedArray(TypedArray::Int(_)))
         ));
+    }
+
+    /// Packing falls back to a heterogeneous array at the first element of
+    /// another kind, keeping every element before it, it and the rest, in
+    /// order, for numeric, token and string buffers alike.
+    #[test]
+    fn packing_falls_back_to_every_element_in_order() {
+        let cases = [
+            vec![
+                Value::Vec2f([1.0, 2.0]),
+                Value::Vec2f([3.0, 4.0]),
+                Value::Int(5),
+                Value::Vec2f([6.0, 7.0]),
+            ],
+            vec![
+                Value::Token(TokenId::EMPTY),
+                Value::string("a"),
+                Value::Token(TokenId::EMPTY),
+            ],
+            vec![Value::string("a"), Value::string("b"), Value::Bool(true)],
+        ];
+        for elements in cases {
+            let Value::Array(packed) = Value::array_from_iter(elements.clone(), None) else {
+                panic!("a heterogeneous array");
+            };
+            assert_eq!(packed, elements);
+        }
     }
 
     #[test]

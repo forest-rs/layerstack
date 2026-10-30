@@ -116,6 +116,7 @@ describe("namespace edits", () => {
       "the sublayer's over moved too",
     );
     assert.deepEqual(stage.relationship("/World.lookAt")?.targets(), ["/World/Stone"]);
+    assert.deepEqual(receipt.unrepaired, [], "every path naming the rock was repaired");
     assert.equal(stage.isDirty(stage.root), true);
     assert.equal(stage.isDirty(layer(stage, "sub.usda")), true);
     assert.ok(heard.length > 0, "the listeners heard the move");
@@ -172,6 +173,58 @@ describe("namespace edits", () => {
     assert.equal(failure(() => stage.move("/World/Rock", 3 as unknown as string)).code, "argument.invalid");
     assert.equal(stage.isDirty(stage.root), false, "nothing changed");
     assert.equal(stage.prim("/World/Rock")?.typeName, "Sphere");
+  });
+
+  it("the receipt lists the paths an unselected variant keeps naming the old location", () => {
+    using stage = layerstack.open({
+      identifier: "room.usda",
+      bytes: text.encode(`#usda 1.0
+def "World" {
+    def "Lamp" {}
+    def "Room" (
+        variants = {
+            string light = "on"
+        }
+        prepend variantSets = "light"
+    ) {
+        variantSet "light" = {
+            "off" {
+                rel lamp = </World/Lamp>
+                def "Fixture" (
+                    prepend references = </World/Lamp>
+                ) {}
+            }
+            "on" {
+                rel lamp = </World/Lamp>
+            }
+        }
+    }
+}
+`),
+    });
+    const moved = stage.move("/World/Lamp", "/World/Lamp2");
+    assert.deepEqual(stage.relationship("/World/Room.lamp")?.targets(), ["/World/Lamp2"], "the selected variant is repaired");
+    assert.deepEqual(
+      moved.unrepaired.map(({ layer, spec, field, metadata, path }) => [layer, spec, field, metadata, path]),
+      [
+        [stage.root, "/World/Room{light=off}.lamp", "targets", null, "/World/Lamp"],
+        [stage.root, "/World/Room{light=off}Fixture", "references", null, "/World/Lamp"],
+      ],
+    );
+    assert.ok(Object.isFrozen(moved.unrepaired[0]));
+    // What the receipt warned of: selecting `off` composes the old path.
+    const selected = stage.setVariantSelection("/World/Room", "light", "off");
+    assert.deepEqual(selected.unrepaired, [], "only moves and deletes report paths");
+    assert.deepEqual(stage.relationship("/World/Room.lamp")?.targets(), ["/World/Lamp"]);
+    selected.undo();
+    moved.undo();
+
+    const deleted = stage.delete("/World/Lamp");
+    assert.deepEqual(stage.relationship("/World/Room.lamp")?.targets(), []);
+    assert.deepEqual(
+      deleted.unrepaired.map(({ spec, field }) => `${field} ${spec}`),
+      ["targets /World/Room{light=off}.lamp", "references /World/Room{light=off}Fixture"],
+    );
   });
 
   it("move targets the edit layer's stack and refuses another stage's layer", async () => {

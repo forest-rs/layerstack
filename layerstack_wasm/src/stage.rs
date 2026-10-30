@@ -15,9 +15,9 @@ use alloc::{
 use layerstack::{
     ArcKind, ChangeCursor, Changes, CompositionLimits, Contribution, EditError, EditTarget,
     FlattenError, FlattenRequirements, IgnoreCause, InMemoryStore, Layer, LayerId, LayerMuteError,
-    LayerStore, NamespaceEdit, NamespaceError, OpinionRole, PathId, PropertyField, ResolvedValue,
-    Specifier, StageOptions, TargetPath, Time, Transaction, ValueSource, Variability,
-    asset_dependencies::DependencyTarget,
+    LayerStore, NamespaceEdit, NamespaceError, OpinionRole, PathField, PathId, PropertyField,
+    ResolvedValue, Specifier, StageOptions, TargetPath, Time, Transaction, UnrepairedPath,
+    ValueSource, Variability, asset_dependencies::DependencyTarget,
 };
 use layerstack_io::{
     ApplyError, FORMAT_ARGS_DELIMITER, ImportPolicy, IoError, LoadOptions, LoadReport, OpenOptions,
@@ -1094,7 +1094,8 @@ impl Stage {
     }
 
     /// Applies a prepared namespace edit, after checking that every layer
-    /// it edits can be saved.
+    /// it edits can be saved; its receipt lists the paths the edit leaves
+    /// naming the old location ([`NamespaceEdit::unrepaired_paths`]).
     fn commit_namespace(
         &mut self,
         record: Wire,
@@ -1115,8 +1116,21 @@ impl Stage {
                 });
             }
         }
-        self.commit(record, target, edit.transaction(), |_| None)
-            .map_err(|error| error.at_path(path))
+        let mut receipt = self
+            .commit(record, target, edit.transaction(), |_| None)
+            .map_err(|error| error.at_path(path))?;
+        if let Wire::List(fields) = &mut receipt.record
+            && let Some(last) = fields.last_mut()
+        {
+            let store = self.document.store();
+            *last = Wire::List(
+                edit.unrepaired_paths()
+                    .iter()
+                    .map(|left| unrepaired_row(left, store))
+                    .collect(),
+            );
+        }
+        Ok(receipt)
     }
 
     /// The composed changes since the last call:
@@ -1284,13 +1298,16 @@ impl Stage {
     }
 
     /// The receipt of an applied transaction. Its record is
-    /// `[target, changes, loaded, failures, unavailable, layers]`: the
-    /// target's record ([`crate::target`]), the composed changes of the
-    /// transaction (`[created, removed, resynced, changedInfoOnly, properties]`), the ids of the
-    /// layers loaded for it, each asset that failed to load as
-    /// `[asset, anchor, code, message]`, the assets it asks for that
-    /// the host has not supplied yet, as [`Self::unavailable`] rows, and
-    /// the ids of the layers it wrote (a move can write several).
+    /// `[target, changes, loaded, failures, unavailable, layers,
+    /// unrepaired]`: the target's record ([`crate::target`]), the
+    /// composed changes of the transaction (`[created, removed, resynced,
+    /// changedInfoOnly, properties]`), the ids of the layers loaded for
+    /// it, each asset that failed to load as `[asset, anchor, code,
+    /// message]`, the assets it asks for that the host has not supplied
+    /// yet, as [`Self::unavailable`] rows, the ids of the layers it wrote
+    /// (a move can write several), and, for a move or delete, the paths
+    /// it leaves naming the old location as [`unrepaired_row`]s (empty
+    /// here; [`Self::commit_namespace`] fills it).
     fn receipt(
         &self,
         record: Wire,
@@ -1335,6 +1352,7 @@ impl Stage {
             Wire::List(failures),
             Wire::List(unavailable),
             Wire::List(written.into_iter().map(|id| Wire::UInt64(id.0)).collect()),
+            Wire::List(Vec::new()),
         ]);
         EditReceipt {
             stage: Arc::clone(&self.identity),
@@ -2042,6 +2060,35 @@ fn mute_error(error: LayerMuteError) -> Error {
 
 /// `[identifier, assetPath, anchor, usedBy, prims]` for an unavailable
 /// asset, as [`Stage::unavailable`] lists it.
+/// A path a namespace edit leaves naming the old location
+/// ([`UnrepairedPath`]): `[layer, spec, field, path, key]`, the id of the
+/// layer authoring it, the spec holding it where the edit leaves it
+/// (`/World/Room{light=off}.lamp`), the field (`references`, `payloads`,
+/// `inherits`, `specializes`, `targets`, `connections`, `default`,
+/// `timeSamples` or `metadata`), the path it names, and the metadata
+/// field's name for `metadata` (`null` otherwise).
+fn unrepaired_row(left: &UnrepairedPath, store: &InMemoryStore) -> Wire {
+    let (field, key) = match left.field {
+        PathField::References => ("references", None),
+        PathField::Payloads => ("payloads", None),
+        PathField::Inherits => ("inherits", None),
+        PathField::Specializes => ("specializes", None),
+        PathField::Targets => ("targets", None),
+        PathField::Connections => ("connections", None),
+        PathField::Default => ("default", None),
+        PathField::TimeSamples => ("timeSamples", None),
+        PathField::Metadata(key) => ("metadata", Some(store.tokens().resolve(key).to_string())),
+        _ => ("metadata", None),
+    };
+    Wire::List(vec![
+        Wire::UInt64(left.layer.0),
+        Wire::text(left.spec.display(store.paths(), store.tokens())),
+        Wire::text(field),
+        Wire::text(left.path.display(store.paths(), store.tokens())),
+        Wire::text_or_null(key),
+    ])
+}
+
 fn unavailable_row(asset: UnavailableAsset, store: &InMemoryStore) -> Wire {
     let prims = asset
         .prims

@@ -704,8 +704,24 @@ export interface SaveResult {
   readonly failures: readonly LayerFailure[];
   /** Dirty anonymous layers (the session layer), which have no identifier to save to: use {@link Stage.exportLayer}. */
   readonly anonymous: readonly Layer[];
+  /**
+   * Dirty layers a save of the whole stage left unwritten and dirty, as
+   * OpenUSD's `UsdStage::Save` saves only the layers the stage uses: a
+   * muted one, or one no longer composed, such as an asset edited through
+   * its reference before the reference was removed. `save(layer)` writes
+   * one. Empty for `save(layer)`.
+   */
+  readonly skipped: readonly SkippedLayer[];
   /** The bytes written, summed. */
   readonly bytes: number;
+}
+
+/** A dirty layer {@link Stage.save} left unwritten ({@link SaveResult.skipped}). */
+export interface SkippedLayer {
+  /** The layer, still dirty. */
+  readonly layer: Layer;
+  /** Why: the stage mutes it, or no longer composes it. */
+  readonly reason: "muted" | "unused";
 }
 
 /** Composed content a flatten could not write ({@link FlattenResult.lost}). */

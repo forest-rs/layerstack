@@ -230,7 +230,9 @@ await stage.resolve(source);
   for you to persist; the layers are clean afterwards, and the saved bytes
   are what the stage reads those identifiers from from then on. The session
   layer is anonymous, so it is never saved (`anonymous` lists it); a package
-  member fails with `io.read_only`. Exports copy and change nothing:
+  member fails with `io.read_only`. A dirty layer the stage mutes or no
+  longer composes (an asset edited through a reference since removed) is
+  left dirty and listed in `skipped`; `save(layer)` writes it. Exports copy and change nothing:
   `exportLayer(layer, "usda" | "usdc")` returns one layer's bytes (the
   session layer too), `exportFlattened(format)` the composed stage as one
   layer with no arcs (`lossless`, and `lost` for anything a layer cannot

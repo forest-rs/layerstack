@@ -30,6 +30,7 @@ import type {
   ResolveResult,
   SaveResult,
   Scalar,
+  SkippedLayer,
   StageStatus,
   Transfer,
   UnavailableAsset,
@@ -1014,16 +1015,20 @@ export class Stage implements Disposable {
    *
    * The session layer is anonymous, so it is never saved: it is listed in
    * `anonymous`; export it with {@link Stage.exportLayer}. A package member
-   * fails with `io.read_only` and stays dirty.
+   * fails with `io.read_only` and stays dirty. A layer edited through an
+   * arc is saved like any other while the stage uses it; a dirty layer the
+   * stage mutes or no longer composes is left dirty and listed in
+   * `skipped`.
    *
    * Throws `layer.affinity` or `layer.unknown` for a `layer` not of this stage.
    */
   save(layer?: Layer): SaveResult {
     if (layer !== undefined) this.#own("save", layer);
-    const [written, failures, anonymous] = this.#call("save", (native) => native.save(layer?.id ?? null)) as [
+    const [written, failures, anonymous, skipped] = this.#call("save", (native) => native.save(layer?.id ?? null)) as [
       Row[],
       Row[],
       bigint[],
+      Row[],
     ];
     let bytes = 0;
     const saved = written.map(([id, identifier, data]) => {
@@ -1039,6 +1044,7 @@ export class Stage implements Disposable {
         message: message as string,
       })),
       anonymous: anonymous.map((id) => this.#layer(id)),
+      skipped: skipped.map(([id, reason]) => ({ layer: this.#layer(id as bigint), reason: reason as SkippedLayer["reason"] })),
       bytes,
     };
   }

@@ -554,6 +554,7 @@ const update = (counts: Partial<UpdateSummary>): UpdateSummary => ({
   tessellations: 0,
   itemsRead: 0,
   itemsUntouched: 0,
+  itemsTimeInvariant: 0,
   localTransforms: 0,
   ...counts,
 });
@@ -581,9 +582,10 @@ const updates: UpdateSummary[] = [
   // Renamed: the robot's draws gone, the rover's added, drawing the same
   // buffers; the old and new paths alone are resynced.
   update({ added: 2, removed: 2, itemsRead: 2, itemsUntouched: 7, localTransforms: 3 }),
-  // Time 30, then the default time again: every draw read at the time, nothing animated.
-  update({ itemsRead: 9 }),
-  update({ itemsRead: 9 }),
+  // Time 30, then the default time again: nothing in the sample is
+  // animated, so no draw is read.
+  update({ itemsUntouched: 9, itemsTimeInvariant: 9 }),
+  update({ itemsUntouched: 9, itemsTimeInvariant: 9 }),
   // Reopened: a new stage, read whole.
   update({ added: 9, triangulations: 2, tessellations: 6, itemsRead: 9, localTransforms: 16 }),
   // Muted: the rover's draws gone, nothing read.

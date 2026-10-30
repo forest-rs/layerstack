@@ -37,7 +37,9 @@ highlights it. Drag to orbit, scroll to zoom. Under it, the same read
 summarized (the prims drawn, the instances, the triangles, the framed
 bounds) and what the last update did: draws added, removed, moved, shown
 or hidden, buffers refilled or rebuilt, meshes triangulated and shapes
-tessellated, draws read and left untouched, local transforms recomputed.
+tessellated, draws read and left untouched (after a time change, the
+draws nothing animated reaches, which it does not read), local transforms
+recomputed.
 `scripts/acceptance.ts` checks both after every step without rendering a
 pixel.
 

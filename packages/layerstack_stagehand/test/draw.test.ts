@@ -150,10 +150,58 @@ describe("draw lists", () => {
       assert.deepEqual(diff.matrices, []);
       assert.equal(diff.work.refills, 1);
       assert.equal(diff.work.triangulations, 0);
-      assert.equal(diff.work.buffersReused, 5);
+      // Nothing the other items read is animated: none was read.
+      assert.equal(diff.work.itemsRead, 1);
+      assert.equal(diff.work.itemsUntouched, 5);
+      assert.equal(diff.work.itemsTimeInvariant, 5);
+      assert.equal(diff.work.buffersReused, 0);
       const buffers = list.buffers(rock.buffer)!;
       assert.equal(buffers.revision, 1);
       assert.ok([...buffers.mesh.positions].every((p, i) => i % 3 !== 2 || p === 1));
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+  });
+
+  it("read at a new time the items an edit animated, and no longer once it is undone", () => {
+    const { stage, list, edit } = fixture();
+    try {
+      const [rock, pebble, stone] = ["Rock", "Pebble", "Stone"].map((name) => itemOf(list, `/World/Rocks/${name}`));
+      const readAt = (time: number) => {
+        const diff = list.setTime(time);
+        assert.equal(diff.work.itemsRead + diff.work.itemsTimeInvariant, 6, "every item read or skipped");
+        return diff;
+      };
+      // A single sample holds at every numeric time: the pebble is larger already.
+      const sampled = edit([
+        { type: "setValue", path: "/World/Rocks/Pebble.radius", value: { type: "double", value: 2 }, time: 3 },
+      ]);
+      assert.equal(sampled.work.itemsRead, 1);
+      assert.deepEqual(sampled.rebound, [pebble]);
+      assert.equal(readAt(3).work.itemsRead, 2, "the rock and the pebble");
+      const cleared = edit([{ type: "clearValue", path: "/World/Rocks/Pebble.radius", time: 3 }]);
+      assert.deepEqual(cleared.rebound, [pebble], "back to the radius at default");
+      assert.equal(readAt(4).work.itemsRead, 1, "the rock alone");
+
+      const moving = edit([
+        { type: "setValue", path: "/World/Rocks.xformOpOrder", value: { type: "token[]", value: ["xformOp:translate"] } },
+        { type: "createAttribute", path: "/World/Rocks.xformOp:translate", typeName: "double3", custom: false },
+        { type: "setValue", path: "/World/Rocks.xformOp:translate", value: { type: "double3", value: [0, 5, 0] }, time: 5 },
+        { type: "setValue", path: "/World/Rocks.xformOp:translate", value: { type: "double3", value: [0, 7, 0] }, time: 7 },
+      ]);
+      assert.equal(moving.work.itemsRead, 3, "the items beneath the rocks");
+      const moved = readAt(7);
+      assert.equal(moved.work.itemsRead, 3);
+      assert.deepEqual(moved.matrices, [rock!, pebble!, stone!].sort((a, b) => a - b));
+
+      edit([
+        { type: "setValue", path: "/World/Beacons/North.visibility", value: { type: "token", value: "invisible" }, time: 6 },
+      ]);
+      const blinking = readAt(8);
+      // The rocks (moving) and the beacon's post and bulb (blinking).
+      assert.equal(blinking.work.itemsRead, 5);
+      assert.equal(blinking.work.itemsTimeInvariant, 1, "the stones");
     } finally {
       list.dispose();
       stage.free();

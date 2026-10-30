@@ -112,6 +112,10 @@ pub(crate) enum EditInput {
     },
     /// `UsdObject::ClearMetadata` on a prim or property.
     ClearMetadata { path: String, key: String },
+    /// `Transaction::set_layer_metadata` of the target's layer.
+    SetLayerMetadata { key: String, value: u32 },
+    /// `Transaction::clear_layer_metadata` of the target's layer.
+    ClearLayerMetadata { key: String },
     /// A schema-shaped edit, lowered through `layerstack_schemas`' edit
     /// handles ([`crate::schema_edit`]).
     Schema(SchemaInput),
@@ -137,6 +141,8 @@ impl EditInput {
             | Self::SetKind { path, .. }
             | Self::SetMetadata { path, .. }
             | Self::ClearMetadata { path, .. } => path,
+            // Layer metadata is the pseudo-root spec's.
+            Self::SetLayerMetadata { .. } | Self::ClearLayerMetadata { .. } => "/",
             Self::Schema(input) => input.path(),
         }
     }
@@ -386,6 +392,18 @@ impl EditBatch {
     #[wasm_bindgen(js_name = clearMetadata)]
     pub fn clear_metadata(&mut self, path: String, key: String) {
         self.edits.push(EditInput::ClearMetadata { path, key });
+    }
+
+    /// Pushes a `setLayerMetadata` edit.
+    #[wasm_bindgen(js_name = setLayerMetadata)]
+    pub fn set_layer_metadata(&mut self, key: String, value: u32) {
+        self.edits.push(EditInput::SetLayerMetadata { key, value });
+    }
+
+    /// Pushes a `clearLayerMetadata` edit.
+    #[wasm_bindgen(js_name = clearLayerMetadata)]
+    pub fn clear_layer_metadata(&mut self, key: String) {
+        self.edits.push(EditInput::ClearLayerMetadata { key });
     }
 
     /// Pushes a `bindMaterial` edit: a direct binding, or a collection
@@ -921,6 +939,15 @@ fn lower_one(
             };
             let key = store.tokens().intern(key);
             txn.clear_metadata(at, key);
+        }
+        EditInput::SetLayerMetadata { key, value: slot } => {
+            let value = value(*slot)?;
+            let key = store.tokens().intern(key);
+            txn.set_layer_metadata(at.layer(), key, FieldValue::Value(value));
+        }
+        EditInput::ClearLayerMetadata { key } => {
+            let key = store.tokens().intern(key);
+            txn.clear_layer_metadata(at.layer(), key);
         }
         // Prepared and collected by `lower` itself.
         EditInput::Schema(_) => {}

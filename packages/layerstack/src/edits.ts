@@ -45,6 +45,8 @@ export interface NativeEditBatch extends Disposable {
   setKind(path: string, kind: string): void;
   setMetadata(path: string, key: string, value: number): void;
   clearMetadata(path: string, key: string): void;
+  setLayerMetadata(key: string, value: number): void;
+  clearLayerMetadata(key: string): void;
   bindMaterial(
     path: string,
     material: string,
@@ -99,7 +101,7 @@ export function lowerEdits(batch: NativeEditBatch, edits: readonly Edit[], opera
       lowerEdit(batch, edit, host);
     } catch (error) {
       if (!(error instanceof EditFailure)) throw error;
-      const path = typeof edit?.path === "string" ? edit.path : undefined;
+      const path = typeof edit === "object" && edit !== null && "path" in edit && typeof edit.path === "string" ? edit.path : undefined;
       throw new LayerstackError(error.code, operation, `edit ${index}: ${error.message}`, { edit: index, path });
     }
   });
@@ -107,6 +109,14 @@ export function lowerEdits(batch: NativeEditBatch, edits: readonly Edit[], opera
 
 function lowerEdit(batch: NativeEditBatch, edit: Edit, host: ArrayHost): void {
   if (typeof edit !== "object" || edit === null) fail("an edit is an object with a `type`");
+  if (edit.type === "setLayerMetadata") {
+    batch.setLayerMetadata(text(edit.key, "key"), encodeValue(batch, edit.value, host));
+    return;
+  }
+  if (edit.type === "clearLayerMetadata") {
+    batch.clearLayerMetadata(text(edit.key, "key"));
+    return;
+  }
   const path = text(edit.path, "path");
   switch (edit.type) {
     case "definePrim":

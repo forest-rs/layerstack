@@ -6,9 +6,14 @@ Usage: skel_influences_oracle.py [--check]
 
 Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.11`.
 
-Runs `UsdSkel.NormalizeWeights`, `UsdSkel.SortInfluences` and
-`UsdSkel.ResizeInfluences` on each case below and records whether the call
-was accepted and the arrays it left. With `--check`, compares a fresh run
+Runs `UsdSkel.NormalizeWeights`, `UsdSkel.SortInfluences`,
+`UsdSkel.ResizeInfluences`, `UsdSkel.ExpandConstantInfluencesToVarying` and
+`UsdSkel.InterleaveInfluences` on each case below and records whether the
+call was accepted and the arrays it left. Then, for each mesh of
+`fixtures/skel_influences/scene.usda`, records the skinning query's
+`IsRigidlyDeformed`, `GetNumInfluencesPerComponent`,
+`ComputeJointInfluences` and `ComputeVaryingJointInfluences` for several
+point counts (`null` where C++ fails). With `--check`, compares a fresh run
 with `fixtures/skel_influences/oracle.json`: acceptance and integers
 exactly, weights within 1e-6.
 
@@ -53,7 +58,19 @@ CASES = [
     {"op": "resize_weights", "weights": [1, 1, 1], "from": 3, "to": 0},
     {"op": "resize_weights", "weights": [], "from": 3, "to": 0},
     {"op": "resize_weights", "weights": [1, 1, 1], "from": 0, "to": 2},
+    {"op": "expand_indices", "indices": [2, 1], "size": 3},
+    {"op": "expand_indices", "indices": [2, 1], "size": 1},
+    {"op": "expand_indices", "indices": [2, 1], "size": 0},
+    {"op": "expand_indices", "indices": [], "size": 4},
+    {"op": "expand_weights", "weights": [0.25, 0.75], "size": 2},
+    {"op": "expand_weights", "weights": [0.25, 0.75], "size": 0},
+    {"op": "interleave", "indices": [0, 3, 16777217], "weights": [0.5, 0.25, 0.25]},
+    {"op": "interleave", "indices": [], "weights": []},
+    {"op": "interleave", "indices": [1, 2], "weights": [1]},
 ]
+SCENE = OUTPUT.parent / "scene.usda"
+MESHES = ["Vertex", "Rigid", "Indexed", "RigidTooMany", "Mismatched", "Ragged"]
+POINT_COUNTS = [0, 2, 3]
 
 
 def run(case):
@@ -73,6 +90,19 @@ def run(case):
         ok = UsdSkel.SortInfluences(indices, weights, n)
         result["result_indices"] = list(indices)
         result["result_weights"] = [float(w) for w in weights]
+    elif op in ("expand_indices", "expand_weights"):
+        array = (Vt.IntArray(case["indices"]) if op == "expand_indices"
+                 else Vt.FloatArray(case["weights"]))
+        ok = UsdSkel.ExpandConstantInfluencesToVarying(array, case["size"])
+        if op == "expand_indices":
+            result["result_indices"] = list(array)
+        else:
+            result["result_weights"] = [float(w) for w in array]
+    elif op == "interleave":
+        out = Vt.Vec2fArray(len(case["indices"]))
+        ok = UsdSkel.InterleaveInfluences(
+            Vt.IntArray(case["indices"]), Vt.FloatArray(case["weights"]), out)
+        result["result_interleaved"] = [[float(v[0]), float(v[1])] for v in out]
     elif op == "resize_indices":
         indices = Vt.IntArray(case["indices"])
         ok = UsdSkel.ResizeInfluences(indices, case["from"], case["to"])
@@ -83,6 +113,30 @@ def run(case):
         result["result_weights"] = [float(w) for w in weights]
     result["ok"] = bool(ok)
     return result
+
+
+def arrays(found):
+    if found is None:
+        return None
+    indices, weights = found
+    return {"indices": list(indices), "weights": [float(w) for w in weights]}
+
+
+def queries():
+    stage = Usd.Stage.Open(str(SCENE))
+    cache = UsdSkel.Cache()
+    cache.Populate(UsdSkel.Root(stage.GetPrimAtPath("/Root")), Usd.TraverseInstanceProxies())
+    found = {}
+    for name in MESHES:
+        query = cache.GetSkinningQuery(stage.GetPrimAtPath("/Root/" + name))
+        found[name] = {
+            "rigid": query.IsRigidlyDeformed(),
+            "per_component": query.GetNumInfluencesPerComponent(),
+            "influences": arrays(query.ComputeJointInfluences()),
+            "varying": {str(n): arrays(query.ComputeVaryingJointInfluences(n))
+                        for n in POINT_COUNTS},
+        }
+    return found
 
 
 def agree(a, b):
@@ -102,6 +156,7 @@ def main():
     result = {
         "openusd_version": ".".join(map(str, Usd.GetVersion()[1:])),
         "cases": [run(case) for case in CASES],
+        "queries": queries(),
     }
     if args.check:
         assert agree(json.loads(OUTPUT.read_text()), result), "oracle.json is out of date"

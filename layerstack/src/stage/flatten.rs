@@ -213,6 +213,12 @@ impl Stage {
             .layer(root)
             .ok_or(FlattenError::MissingRootLayer(root))?;
         let mut out = Layer::new(id);
+        // The session's `defaultPrim` wins, as OpenUSD's flatten copies the
+        // composed stage metadata, although the stage's own default prim
+        // (`UsdStage::GetDefaultPrim`, `StageView::default_prim`) reads the
+        // root layer's alone: OpenUSD is inconsistent here, so flattening a
+        // stage whose session names another default prim changes it, and
+        // this keeps that for parity.
         out.default_prim = root_layer.default_prim;
         out.metadata = root_layer.metadata.clone();
         let session = self.session_layer().filter(|id| !self.is_layer_muted(*id));

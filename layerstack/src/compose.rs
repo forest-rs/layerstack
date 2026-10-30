@@ -153,7 +153,7 @@ fn compose_indexed(
         .into_iter()
         .filter(|request| prims.contains_key(&request.prim))
         .collect();
-    let used_layers = composed.used_layers.into_iter().collect();
+    let used_layers = crate::sort::collect_set(composed.used_layers);
     let stage = Stage::from_parts(prims, composed.children, options.with_provenance, None)
         .with_loadable(composed.loadable)
         .with_layer_inventory(

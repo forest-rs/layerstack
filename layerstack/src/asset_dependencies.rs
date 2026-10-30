@@ -187,7 +187,8 @@ pub fn collect_dependencies(
     mut resolve: impl FnMut(&AssetDependency) -> Vec<DependencyTarget>,
 ) -> DependencyReport {
     let mut report = DependencyReport::default();
-    let mut pending = BTreeSet::from([root]);
+    let mut pending = BTreeSet::new();
+    pending.insert(root);
     let mut visited = BTreeSet::new();
     while let Some(id) = pending.pop_first() {
         if !visited.insert(id) {

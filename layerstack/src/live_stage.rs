@@ -1161,7 +1161,7 @@ impl LiveStage {
             parents: parents.iter().copied().collect(),
             retained: false,
         };
-        let mut seed: BTreeSet<PathId> = affected.iter().copied().collect();
+        let mut seed: BTreeSet<PathId> = sort::collect_set(affected.iter().copied());
         for &path in &affected {
             let mut current = store.paths().resolve(path).parent();
             while let Some(parent) = current {

@@ -243,8 +243,10 @@ pub fn localize_asset(
     let root_member = root_member.into();
     valid_member(&root_member)?;
     valid_layer_member(&root_member)?;
-    let mut names = BTreeMap::from([(root, root_member.clone())]);
-    let mut occupied = BTreeMap::from([(root_member.clone(), Some(root))]);
+    let mut names = BTreeMap::new();
+    names.insert(root, root_member.clone());
+    let mut occupied = BTreeMap::new();
+    occupied.insert(root_member.clone(), Some(root));
     let mut assets = BTreeMap::<Arc<str>, Arc<[u8]>>::new();
     let mut queue = VecDeque::from([root]);
     let mut visited = BTreeSet::new();

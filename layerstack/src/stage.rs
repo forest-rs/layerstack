@@ -1364,11 +1364,12 @@ impl Stage {
     /// The layers the dynamic payloads of the composed prims target,
     /// which the store binds by identifiers no authored arc spells.
     pub(crate) fn dynamic_layers(&self) -> alloc::collections::BTreeSet<LayerId> {
-        self.prims
-            .values()
-            .filter_map(|index| index.dynamic.as_deref())
-            .flat_map(|dynamic| dynamic.targets.iter().copied())
-            .collect()
+        sort::collect_set(
+            self.prims
+                .values()
+                .filter_map(|index| index.dynamic.as_deref())
+                .flat_map(|dynamic| dynamic.targets.iter().copied()),
+        )
     }
 
     /// The selected clip source and its mapped bracketing samples.
@@ -2169,12 +2170,12 @@ impl Stage {
                 }
             }
         }
-        self.used_layers = self
-            .local_layers
-            .iter()
-            .copied()
-            .chain(self.used_layer_counts.keys().copied())
-            .collect();
+        self.used_layers = sort::collect_set(
+            self.local_layers
+                .iter()
+                .copied()
+                .chain(self.used_layer_counts.keys().copied()),
+        );
         self.clips.merge_from(partial.clips, recomposed);
         for path in recomposed {
             if partial.inactive.contains(path) {

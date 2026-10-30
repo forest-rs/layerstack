@@ -1059,7 +1059,7 @@ impl<B: Storage> StageDocument<B> {
             ));
         }
         let mut catalog = Catalog {
-            reserved: store.layer_ids().into_iter().collect(),
+            reserved: sort::collect_set(store.layer_ids()),
             ..Default::default()
         };
         let root = catalog.allocate_for(&identifier)?;
@@ -1171,7 +1171,7 @@ impl<B: Storage> StageDocument<B> {
         join_dynamic_formats(&mut options, &loading)?;
         let import_policy = loading.import_policy;
         let mut catalog = Catalog {
-            reserved: store.layer_ids().into_iter().collect(),
+            reserved: sort::collect_set(store.layer_ids()),
             ..Default::default()
         };
         let mut reader = Reader::new(
@@ -1611,7 +1611,7 @@ impl<B: Storage> StageDocument<B> {
     /// authored generations or emit a scene edit. Existing snapshots remain valid.
     pub fn save_layers(&mut self, layers: &[LayerId]) -> SaveReport {
         let mut report = SaveReport::default();
-        for id in layers.iter().copied().collect::<BTreeSet<_>>() {
+        for id in sort::collect_set(layers.iter().copied()) {
             if !self.store.contains_layer(id) {
                 report.failures.push(LayerFailure {
                     layer: id,
@@ -2001,16 +2001,11 @@ impl<'a, B: Storage> Reader<'a, B> {
             .insert(asset.into(), layer);
     }
     fn commit(mut self, store: &mut InMemoryStore) -> LoadReport {
-        let clean_anchors: BTreeSet<_> = self
-            .bindings
-            .keys()
-            .copied()
-            .filter(|id| {
-                store
-                    .layer(*id)
-                    .is_some_and(|l| self.catalog.saved.get(id) == Some(&l.generation()))
-            })
-            .collect();
+        let clean_anchors = sort::collect_set(self.bindings.keys().copied().filter(|id| {
+            store
+                .layer(*id)
+                .is_some_and(|l| self.catalog.saved.get(id) == Some(&l.generation()))
+        }));
         // The first layer read for each id is committed; the report lists
         // them in id order.
         let mut added = HashSet::with_capacity(self.pending.len());

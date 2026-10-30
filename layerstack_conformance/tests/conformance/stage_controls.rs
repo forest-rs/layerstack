@@ -114,8 +114,10 @@ fn controls_match_openusd_and_preserve_other_stage_snapshots() {
     );
     assert_eq!(
         live.mute_and_unmute_layers(&[overlay], &[overlay]),
-        Err(LayerMuteError::ConflictingRequest)
+        Ok(false),
+        "a layer named in both stays muted, as OpenUSD drops the repeated unmute"
     );
+    assert!(live.options().muted_layers.contains(&overlay));
     assert!(live.unmute_layer(overlay));
     assert!(!live.unmute_layer(overlay));
     live.synchronize(&mut store);

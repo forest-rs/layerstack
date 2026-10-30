@@ -132,20 +132,28 @@ export interface LightLink {
   readonly excludes: readonly string[];
 }
 
-/** Which instance of a point instancer places a light: the instancer and the instance's position in its arrays. */
-export interface LightInstance {
-  readonly instancer: string;
-  readonly index: number;
-}
+/**
+ * Which instance of a point instancer places a light: the instancer and
+ * the instance's `ids` entry (`id`) when the instancer authors `ids`, its
+ * position in the arrays (`index`, masked instances counted) otherwise, as
+ * `layerstack_stagehand`'s `InstanceId` tells them apart. Keyed by id,
+ * reordering or compacting the arrays moves a light instead of removing
+ * one and adding another (`UsdGeomPointInstancer`, "Varying Instance
+ * Identity over Time"). Ids repeated among the unmasked instances key the
+ * whole instancer by position.
+ */
+export type LightInstance = { readonly instancer: string; readonly id: bigint } | { readonly instancer: string; readonly index: number };
 
 /**
  * A light's key in a {@link DrawList}: its path (an instance proxy's
  * inside a native instance, once per instance), and for one a point
- * instancer places `${path}@${instancer}[${index}]`, once per unmasked
- * instance.
+ * instancer places, once per unmasked instance,
+ * `${path}@${instancer}#${id}` by the instance's authored id or
+ * `${path}@${instancer}[${index}]` by its position.
  */
 export function lightKey(path: string, instance: LightInstance | null): string {
-  return instance === null ? path : `${path}@${instance.instancer}[${instance.index}]`;
+  if (instance === null) return path;
+  return "id" in instance ? `${path}@${instance.instancer}#${instance.id}` : `${path}@${instance.instancer}[${instance.index}]`;
 }
 
 /** One light, read at the list's time. */

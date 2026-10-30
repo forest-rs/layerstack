@@ -5,7 +5,7 @@
 // instanced draws and kept up to date from change records. It mirrors
 // `layerstack_stagehand::DrawList`, reading the stage through
 // `@forest-rs/layerstack` and building buffers in this package's module.
-import type { Changes, Prim, Stage } from "@forest-rs/layerstack";
+import type { Changes, PointInstances, Prim, Stage } from "@forest-rs/layerstack";
 import type { Stagehand, StagehandMesh } from "./index.js";
 import { CAMERA_INPUTS, LIGHT_INPUTS, lightKey, lightKind, readLight } from "./light.js";
 import type { CameraItem, LightInstance, LightItem, LightKind } from "./light.js";
@@ -394,7 +394,29 @@ interface Found {
 /** A point instancer's prototypes and its unmasked instances, by position: prototype index and matrix. */
 interface Placed {
   readonly prototypes: readonly string[];
-  readonly instances: Map<number, [number, Float64Array]>;
+  /** By the instance's key ({@link instanceKeys}). */
+  readonly instances: Map<string, [number, Float64Array]>;
+}
+
+/**
+ * Each of a point instancer's unmasked instances ({@link Stage.pointInstances}
+ * at `time`) as a {@link LightInstance}: by its `ids` entry when the
+ * instancer authors `ids` and they are distinct, by its position
+ * otherwise, as `layerstack_stagehand` keys them.
+ */
+function placedInstances(stage: Stage, instancer: string, placed: PointInstances, time: number | undefined): LightInstance[] {
+  // Whether `ids` has a value at `time`; its elements are `placed.ids`.
+  const ids = stage.attribute(`${instancer}.ids`)?.get(time) ?? null;
+  if (ids?.kind === "array") ids.array.release();
+  const authored = ids !== null && new Set(placed.ids).size === placed.ids.length;
+  return Array.from(placed.indices, (index, i) =>
+    Object.freeze(authored ? { instancer, id: placed.ids[i]! } : { instancer, index }),
+  );
+}
+
+/** An instance's part of its {@link lightKey}. */
+function instanceKey(instance: LightInstance): string {
+  return "id" in instance ? `#${instance.id}` : `[${instance.index}]`;
 }
 
 /**
@@ -458,7 +480,8 @@ class Changed {
 
 /** Whether two records hold the same values, typed arrays included. */
 function sameRecord(a: unknown, b: unknown): boolean {
-  const plain = (_: string, value: unknown) => (ArrayBuffer.isView(value) ? Array.from(value as Float64Array) : value);
+  const plain = (_: string, value: unknown) =>
+    ArrayBuffer.isView(value) ? Array.from(value as Float64Array) : typeof value === "bigint" ? `${value}n` : value;
   return JSON.stringify(a, plain) === JSON.stringify(b, plain);
 }
 
@@ -1180,15 +1203,17 @@ export class DrawList implements Disposable {
       placed = null;
       try {
         const read = this.#stage.pointInstances(instance.instancer, this.#time === undefined ? {} : { time: this.#time });
-        const instances = new Map<number, [number, Float64Array]>();
-        read.indices.forEach((index, i) => instances.set(index, [read.prototypeIndices[i]!, read.matrices.subarray(16 * i, 16 * i + 16)]));
+        const instances = new Map<string, [number, Float64Array]>();
+        placedInstances(this.#stage, instance.instancer, read, this.#time).forEach((placed, i) =>
+          instances.set(instanceKey(placed), [read.prototypeIndices[i]!, read.matrices.subarray(16 * i, 16 * i + 16)]),
+        );
         placed = { prototypes: read.prototypes, instances };
       } catch (error) {
         if (!String((error as { code?: string }).code).startsWith("instancer.") && (error as { code?: string }).code !== "prim.not_found") throw error;
       }
       placements.set(instance.instancer, placed);
     }
-    const found = placed?.instances.get(instance.index);
+    const found = placed?.instances.get(instanceKey(instance));
     const prototype = found === undefined ? undefined : placed!.prototypes[found[0]];
     if (found === undefined || prototype === undefined || !under(path, prototype)) return null;
     const world = this.#world([instance.instancer]);
@@ -1267,10 +1292,11 @@ export class DrawList implements Disposable {
       if (String((error as { code?: string }).code).startsWith("instancer.")) return;
       throw error;
     }
+    const instances = placedInstances(stage, instancer, placed, this.#time);
     placed.prototypeIndices.forEach((prototype, i) => {
       for (const [index, path, kind] of lights) {
         if (index !== prototype) continue;
-        const instance = Object.freeze({ instancer, index: placed.indices[i]! });
+        const instance = instances[i]!;
         found.lights.set(lightKey(path, instance), { path, instance, kind });
       }
     });

@@ -66,6 +66,7 @@
     {
      "applied": [],
      "applied_schemas": [
+      "ShieldAPI",
       "CalibrationAPI"
      ],
      "properties": {
@@ -128,6 +129,13 @@
       "instrument:temperature": {
        "allowed_tokens": [],
        "fallback": 21.5,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "shield:thickness": {
+       "allowed_tokens": [],
+       "fallback": 0.01,
        "kind": "attribute",
        "type_name": "double",
        "variability": "varying"
@@ -481,11 +489,143 @@
    "version": 0
   },
   {
+   "allowed_instance_names": [
+    [
+     "red",
+     true
+    ],
+    [
+     "green",
+     false
+    ],
+    [
+     "blue",
+     true
+    ],
+    [
+     "fixture",
+     false
+    ],
+    [
+     "outer:inner",
+     false
+    ],
+    [
+     "gain",
+     false
+    ],
+    [
+     "1st",
+     false
+    ]
+   ],
+   "auto_apply_to": [],
+   "can_only_apply_to": [
+    [
+     "",
+     []
+    ],
+    [
+     "red",
+     [
+      "Spectrometer"
+     ]
+    ],
+    [
+     "fixture",
+     []
+    ]
+   ],
+   "definitions": [
+    {
+     "applied": [
+      "PortAPI:red"
+     ],
+     "applied_schemas": [
+      "PortAPI:red"
+     ],
+     "properties": {
+      "port:red:open": {
+       "allowed_tokens": [],
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      }
+     },
+     "type": ""
+    },
+    {
+     "applied": [
+      "PortAPI:fixture"
+     ],
+     "applied_schemas": [
+      "PortAPI:fixture"
+     ],
+     "properties": {
+      "port:fixture:open": {
+       "allowed_tokens": [],
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "PortAPI",
+   "is_a": [],
+   "kind": "MultipleApplyAPI",
+   "name": "PortAPI",
+   "plugin": "lab",
+   "version": 0
+  },
+  {
    "definitions": [],
    "family": "SampleQueryAPI",
    "is_a": [],
    "kind": "NonAppliedAPI",
    "name": "SampleQueryAPI",
+   "plugin": "lab",
+   "version": 0
+  },
+  {
+   "auto_apply_to": [
+    "Centrifuge"
+   ],
+   "can_only_apply_to": [
+    [
+     "",
+     [
+      "Centrifuge"
+     ]
+    ]
+   ],
+   "definitions": [
+    {
+     "applied": [
+      "ShieldAPI"
+     ],
+     "applied_schemas": [
+      "ShieldAPI"
+     ],
+     "properties": {
+      "shield:thickness": {
+       "allowed_tokens": [],
+       "fallback": 0.01,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "ShieldAPI",
+   "is_a": [],
+   "kind": "SingleApplyAPI",
+   "name": "ShieldAPI",
    "plugin": "lab",
    "version": 0
   },

@@ -152,3 +152,45 @@ class "SampleQueryAPI" (
 )
 {
 }
+
+class "ShieldAPI" (
+    inherits = </APISchemaBase>
+    doc = """A radiation shield around a centrifuge. Its apply lists live
+    only in `extraPlugInfo`, which usdGenSchema copies into plugInfo.json
+    and OpenUSD's registry reads from there."""
+    customData = {
+        token apiSchemaType = "singleApply"
+        dictionary extraPlugInfo = {
+            token[] apiSchemaAutoApplyTo = ["Centrifuge"]
+            token[] apiSchemaCanOnlyApplyTo = ["Centrifuge"]
+        }
+    }
+)
+{
+    double shield:thickness = 0.01 (
+        doc = "Shield thickness, in meters."
+    )
+}
+
+class "PortAPI" (
+    inherits = </APISchemaBase>
+    doc = """A sample port. Multiple-apply, its allowed instance names and
+    per-instance restriction given only in `extraPlugInfo`."""
+    customData = {
+        token apiSchemaType = "multipleApply"
+        token propertyNamespacePrefix = "port"
+        dictionary extraPlugInfo = {
+            token[] apiSchemaAllowedInstanceNames = ["red", "blue"]
+            dictionary apiSchemaInstances = {
+                dictionary red = {
+                    token[] apiSchemaCanOnlyApplyTo = ["Spectrometer"]
+                }
+            }
+        }
+    }
+)
+{
+    bool open = 0 (
+        doc = "Whether the port is open."
+    )
+}

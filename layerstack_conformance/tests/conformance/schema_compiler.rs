@@ -132,9 +132,24 @@ fn fixtures_compile_to_their_committed_files() {
             ("CalibrationAPI", "singleApplyAPI", Some("APISchemaBase")),
             ("ChannelAPI", "multipleApplyAPI", Some("APISchemaBase")),
             ("SampleQueryAPI", "nonAppliedAPI", Some("APISchemaBase")),
+            ("ShieldAPI", "singleApplyAPI", Some("APISchemaBase")),
+            ("PortAPI", "multipleApplyAPI", Some("APISchemaBase")),
         ],
         "the classes, in file order"
     );
+    // `ShieldAPI` and `PortAPI` give their apply lists only in
+    // `extraPlugInfo`: the classes declare none, and the registry reads
+    // them from `plugInfo.json` (`oracle.json`).
+    for class in &compiled.classes()[7..] {
+        assert!(
+            class.auto_apply_to.is_empty()
+                && class.can_only_apply_to.is_empty()
+                && class.allowed_instance_names.is_empty()
+                && class.instance_can_only_apply_to.is_empty(),
+            "{}",
+            class.name
+        );
+    }
     let channel = &compiled.classes()[5];
     assert_eq!(
         channel.property_namespace_prefix.as_deref(),

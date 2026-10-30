@@ -203,3 +203,29 @@ class "SampleQueryAPI" (
 {
 }
 
+class "ShieldAPI" (
+    customData = {
+        string userDocBrief = "A radiation shield around a centrifuge."
+    }
+)
+{
+    double shield:thickness = 0.01 (
+        customData = {
+            string userDocBrief = "Shield thickness, in meters."
+        }
+    )
+}
+
+class "PortAPI" (
+    customData = {
+        string userDocBrief = "A sample port."
+    }
+)
+{
+    bool port:__INSTANCE_NAME__:open = 0 (
+        customData = {
+            string userDocBrief = "Whether the port is open."
+        }
+    )
+}
+

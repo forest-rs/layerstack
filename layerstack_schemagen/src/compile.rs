@@ -459,6 +459,11 @@ pub struct SchemaClass {
     pub built_ins: Vec<String>,
     /// `apiSchemaAutoApplyTo`: the schemas a single-apply schema applies
     /// itself to.
+    ///
+    /// This and the other apply lists are the class's `customData`'s. A
+    /// list given only in its `extraPlugInfo` is not here: it reaches
+    /// `plugInfo.json`, from which OpenUSD's registry and
+    /// [`CompiledSchema::rust_module`] read it.
     pub auto_apply_to: Vec<String>,
     /// `apiSchemaCanOnlyApplyTo`: the typed schemas, and the applied ones
     /// (`Name:instance` for one instance of a multiple-apply schema), a

@@ -11,8 +11,9 @@ hold a `schema.usda` and the `generatedSchema.usda` and `plugInfo.json`
 `fixtures/schema_compiler/installed/<plugin>/resources` what
 `layerstack_schemagen compile --install` writes, from OpenUSD's template.
 This registers the installed plugins with usd-core, reading their
-`plugInfo.json` as strict JSON, and records, for each schema they declare, its kind, family
-and version, the typed schemas it `IsA`, its prim definitions (a typed
+`plugInfo.json` as strict JSON, and records, for each schema they declare
+(`lab`'s `ShieldAPI` and `PortAPI` give their apply lists only in
+`extraPlugInfo`), its kind, family and version, the typed schemas it `IsA`, its prim definitions (a typed
 schema's own; a typeless prim applying an applied schema, for a
 multiple-apply schema once per recorded instance name), each with its
 applied schemas and every property's kind, type, variability, fallback and

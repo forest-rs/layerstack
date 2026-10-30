@@ -285,19 +285,10 @@ impl AssetResolver for Locations {
     }
 
     fn anchor_asset_path(&self, asset_path: &str, anchor: LayerId) -> Option<String> {
-        use layerstack::asset::{anchor_asset_path, normalize_asset_path};
         let location = self.resolved_path(anchor)?;
-        let anchored = anchor_asset_path(asset_path, location)?;
-        let search = anchored == normalize_asset_path(asset_path)
-            && !asset_path.starts_with('/')
-            && !asset_path.contains(':');
-        if search
-            && let Some(beside) = anchor_asset_path(&format!("./{asset_path}"), location)
-            && Path::new(&beside).exists()
-        {
-            return Some(beside);
-        }
-        Some(anchored)
+        layerstack::asset::create_identifier(asset_path, location, |identifier| {
+            Path::new(identifier).exists()
+        })
     }
 }
 

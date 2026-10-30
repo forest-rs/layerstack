@@ -561,7 +561,8 @@ pub trait AssetResolver {
     /// absolute path are normalized and kept, and a URI is kept as
     /// authored. OpenUSD's default resolver anchors a search path too when
     /// the anchored asset exists (`ArDefaultResolver::_CreateIdentifier`); a
-    /// resolver that can look overrides this to do the same.
+    /// resolver that can look overrides this to do the same with
+    /// [`create_identifier`].
     ///
     /// Spec: AOUSD Core §9.4 (relative asset paths).
     fn anchor_asset_path(&self, asset_path: &str, anchor: LayerId) -> Option<String> {
@@ -673,6 +674,41 @@ pub fn normalize_asset_path(path: &str) -> String {
     }
 }
 
+/// The identifier `asset_path`, authored in the layer at `layer_location`
+/// (its resolved path), names, as OpenUSD's default resolver creates it
+/// (`ArDefaultResolver::_CreateIdentifier` in
+/// `pxr/usd/ar/defaultResolver.cpp`): [`anchor_asset_path`]'s, except that
+/// a search path (`textures/bark.png`) is anchored to the layer's
+/// directory when `exists` reports the asset there
+/// (`/assets/textures/bark.png`), and otherwise kept, normalized, for a
+/// search to find. `exists` is asked only about a search path, with the
+/// anchored identifier, and never when the location is unknown (empty).
+///
+/// `None` as [`anchor_asset_path`] returns it: for an expression
+/// (`` `...` ``), and for a path relative to its layer (`./bark.png`)
+/// when the location is unknown.
+///
+/// Spec: AOUSD Core §9.4 (relative asset paths), §9.5 (search paths).
+#[doc(alias = "CreateIdentifier")]
+#[must_use]
+pub fn create_identifier(
+    asset_path: &str,
+    layer_location: &str,
+    exists: impl FnOnce(&str) -> bool,
+) -> Option<String> {
+    let path = asset_path.replace('\\', "/");
+    let search = !path.starts_with('`') && is_relative(&path) && !is_file_relative(&path);
+    if search && !layer_location.is_empty() {
+        // `_AnchorRelativePath` joins any relative path to the layer's
+        // directory; only `./` and `../` are anchored without looking.
+        let beside = anchor_asset_path(&alloc::format!("./{path}"), layer_location)?;
+        if exists(&beside) {
+            return Some(beside);
+        }
+    }
+    anchor_asset_path(asset_path, layer_location)
+}
+
 /// Splits a Windows drive root off `path`: `C:/a` is `("C:", "/a")`.
 fn drive_root(path: &str) -> Option<(&str, &str)> {
     let bytes = path.as_bytes();
@@ -713,10 +749,15 @@ pub fn anchor_asset_path(asset_path: &str, layer_location: &str) -> Option<Strin
         return None;
     }
     let location = layer_location.replace('\\', "/");
-    let directory = location.rfind('/').map_or("", |end| &location[..end]);
-    Some(normalize_asset_path(&alloc::format!(
-        "{directory}/{asset_path}"
-    )))
+    // A location relative to wherever its host resolves from anchors to a
+    // path relative to the same place: `set/bark.png` from `set/oak.usda`,
+    // and `./bark.png` kept from `oak.usda`, never the absolute `/bark.png`.
+    let joined = match location.rfind('/') {
+        Some(end) => alloc::format!("{}/{asset_path}", &location[..end]),
+        None if !is_relative(&location) => alloc::format!("/{asset_path}"),
+        None => asset_path,
+    };
+    Some(normalize_asset_path(&joined))
 }
 
 #[cfg(test)]
@@ -783,6 +824,19 @@ mod tests {
             Some("C:/assets/mixed/bark.png")
         );
         assert_eq!(anchor_asset_path("`${X}.png`", layer), None);
+        // A location relative to its host's root stays relative.
+        for (path, location, anchored) in [
+            ("./bark.png", "oak.usda", "./bark.png"),
+            ("../bark.png", "oak.usda", "../bark.png"),
+            ("./bark.png", "trees/oak.usda", "trees/bark.png"),
+            ("../../bark.png", "trees/oak.usda", "../bark.png"),
+        ] {
+            assert_eq!(
+                anchor_asset_path(path, location).as_deref(),
+                Some(anchored),
+                "{path} in {location}"
+            );
+        }
         assert_eq!(
             anchor_asset_path("./a.png", "/p/a.usdz[b.usda]").as_deref(),
             Some("/p/a.usdz[a.png]")
@@ -794,6 +848,44 @@ mod tests {
         assert_eq!(
             anchor_asset_path("../../a.png", "/p/a.usdz[inner.usdz[dir/b.usda]]"),
             None
+        );
+    }
+
+    #[test]
+    fn identifiers_anchor_search_paths_found_beside_their_layer() {
+        let layer = "/assets/oak.usda";
+        let found = |identifier: &str| identifier == "/assets/textures/bark.png";
+        for (path, identifier) in [
+            ("textures/bark.png", "/assets/textures/bark.png"),
+            ("textures/./bark.png", "/assets/textures/bark.png"),
+            ("textures/moss.png", "textures/moss.png"),
+            ("./textures/moss.png", "/assets/textures/moss.png"),
+            ("/abs/bark.png", "/abs/bark.png"),
+            (
+                "https://example.com/bark.png",
+                "https://example.com/bark.png",
+            ),
+            ("", ""),
+        ] {
+            assert_eq!(
+                create_identifier(path, layer, found).as_deref(),
+                Some(identifier),
+                "{path}"
+            );
+        }
+        assert_eq!(create_identifier("`\"a.png\"`", layer, found), None);
+        // An unknown location keeps a search path and asks nothing.
+        let unasked = |_: &str| -> bool { panic!("asked") };
+        assert_eq!(
+            create_identifier("textures/bark.png", "", unasked).as_deref(),
+            Some("textures/bark.png")
+        );
+        assert_eq!(create_identifier("./bark.png", "", unasked), None);
+        // A package member's search path is looked for inside the package.
+        let packaged = |identifier: &str| identifier == "/p/a.usdz[textures/bark.png]";
+        assert_eq!(
+            create_identifier("textures/bark.png", "/p/a.usdz[b.usda]", packaged).as_deref(),
+            Some("/p/a.usdz[textures/bark.png]")
         );
     }
 

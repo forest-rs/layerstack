@@ -19,7 +19,7 @@ use super::error::UsdcWriteError;
 /// The derived ordering is `Sdf_PathNode`'s for these nodes: a prim node
 /// before a variant selection node, prim nodes by name, and variant
 /// selection nodes by set name, then variant name.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum Element {
     /// A prim name (`/A`).
     Prim(String),
@@ -40,7 +40,7 @@ pub(crate) enum Element {
 /// an expression node), so the derived ordering is
 /// `Sdf_PathNode::Compare`'s: by node type, then a name by byte order or a
 /// bracketed path in `SdfPath` order.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum PropertyElement {
     /// The property of a prim or variant (`.b`).
     Property(String),
@@ -70,7 +70,7 @@ pub(crate) enum PropertyElement {
 /// parts, likewise, with no property first. So a prim is followed by its
 /// properties, then by its child prims, then by its variant sets and
 /// variants.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct CratePath {
     /// Prim part elements from the root; empty for the pseudo-root.
     pub(crate) elements: Vec<Element>,

@@ -98,9 +98,6 @@ describe("layer muting", () => {
     assert.equal(error.identifier, "sub.usda");
     assert.equal(stage.save().written.length, 0, "the stage does not use the muted layer");
     assert.equal(stage.isDirty(sub), true);
-    const move = failure(() => stage.move("/Ball", "/Bowl"));
-    assert.equal(move.code, "namespace.unsupported", "a move cannot repair what a muted layer names");
-    assert.ok(stage.prim("/Ball"));
     stage.unmuteLayer(sub);
     assert.equal(size(stage), 8, "unmuted, its edit composes again");
     assert.deepEqual(
@@ -154,6 +151,93 @@ describe("layer muting", () => {
     stage.withNative("domain.mute", (native) => native.setLayerMuted(sub.id, true));
     assert.equal(heard.length, 1);
     assert.deepEqual(heard[0]?.mutedLayers, [sub]);
+    assert.deepEqual(heard[0]?.mutedIdentifiers, ["sub.usda"]);
     assert.deepEqual(stage.mutedLayers(), [sub]);
+  });
+
+  it("mutes a layer by identifier before the stage reads it, as OpenUSD does", async () => {
+    using stage = layerstack.open({ identifier: "scene.usda", bytes: bytes("scene.usda") });
+    const heard: Changes[] = [];
+    stage.onChange((changes) => heard.push(changes));
+    assert.deepEqual(
+      stage.unavailable().map((asset) => asset.identifier),
+      ["parts/ball.usda", "sub.usda"],
+    );
+
+    assert.equal(stage.muteLayer("./parts/../parts/ball.usda"), true, "anchored to the root layer");
+    assert.deepEqual(stage.unavailable().map((asset) => asset.identifier), ["sub.usda"], "no longer asked for");
+    assert.deepEqual(stage.mutedLayers(), [], "the stage holds no layer for it");
+    assert.deepEqual(stage.mutedIdentifiers(), ["parts/ball.usda"]);
+    assert.equal(stage.isMuted("parts/ball.usda"), true);
+    assert.equal(stage.isMuted("./parts/ball.usda"), true);
+    assert.equal(stage.isMuted("never.usda"), false);
+    assert.deepEqual(
+      stage.status().compositionErrors.map((error) => [error.code, error.prim]),
+      [["composition.muted_asset", "/Ball"]],
+    );
+    assert.equal(heard.length, 1);
+    assert.deepEqual(heard[0]?.mutedLayers, []);
+    assert.deepEqual(heard[0]?.mutedIdentifiers, ["parts/ball.usda"]);
+
+    const source = mockSource({ ...scene, "lamp.usda": '#usda 1.0\ndef "Lamp" {\n    double glow = 1\n}\n' });
+    await stage.resolve(source);
+    assert.deepEqual(source.asked, ["sub.usda"], "a muted layer is not read");
+    assert.equal(stage.attribute("/Ball.points"), null);
+
+    // A later arc to a layer muted before anything named it composes muted.
+    assert.equal(stage.muteLayer("lamp.usda"), true);
+    const receipt = stage.apply([
+      { type: "definePrim", path: "/Lamp" },
+      { type: "addReference", path: "/Lamp", asset: "./lamp.usda", primPath: "/Lamp" },
+    ]);
+    assert.deepEqual(receipt.unavailable, [], "nothing to fetch");
+    assert.equal(stage.attribute("/Lamp.glow"), null);
+    assert.deepEqual(stage.mutedIdentifiers(), ["lamp.usda", "parts/ball.usda"]);
+
+    heard.length = 0;
+    assert.equal(stage.muteAndUnmuteLayers([], ["parts/ball.usda", "./lamp.usda"]), true);
+    assert.equal(heard.length, 1, "one request, one change");
+    assert.deepEqual(heard[0]?.unmutedIdentifiers, ["lamp.usda", "parts/ball.usda"]);
+    assert.deepEqual(heard[0]?.unmutedLayers, [], "neither was read");
+    assert.deepEqual(
+      stage.unavailable().map((asset) => asset.identifier),
+      ["lamp.usda", "parts/ball.usda"],
+      "unmuted, they are asked for",
+    );
+    source.asked.length = 0;
+    await stage.resolve(source);
+    assert.deepEqual(source.asked.sort(), ["lamp.usda", "parts/ball.usda", "parts/trim.usda"]);
+    assert.ok(stage.attribute("/Ball.points"));
+    assert.ok(stage.attribute("/Lamp.glow"));
+    assert.deepEqual(stage.status().compositionErrors, []);
+  });
+
+  it("mutes and unmutes in one request, dropping an unmute spelled as a mute", async () => {
+    using stage = await resolved();
+    const sub = layerNamed(stage, "sub.usda");
+    const ball = layerNamed(stage, "parts/ball.usda");
+    const heard: Changes[] = [];
+    stage.onChange((changes) => heard.push(changes));
+
+    assert.equal(stage.muteAndUnmuteLayers([sub, "parts/ball.usda"], []), true);
+    assert.equal(heard.length, 1, "one recomposition, one change");
+    assert.deepEqual(new Set(heard[0]?.mutedLayers), new Set([sub, ball]));
+    assert.deepEqual(heard[0]?.mutedIdentifiers, ["parts/ball.usda", "sub.usda"]);
+    assert.deepEqual(stage.mutedIdentifiers(), ["parts/ball.usda", "sub.usda"]);
+
+    assert.equal(stage.muteAndUnmuteLayers(["sub.usda"], [sub]), false, "a layer is spelled by its identifier");
+    assert.equal(stage.isMuted(sub), true);
+    assert.equal(stage.muteAndUnmuteLayers(["./sub.usda"], [sub]), true, "two spellings: muted, then unmuted");
+    assert.equal(stage.isMuted(sub), false);
+    assert.equal(heard.length, 2);
+    assert.deepEqual(heard[1]?.unmutedLayers, [sub]);
+
+    const root = failure(() => stage.muteAndUnmuteLayers(["./scene.usda", sub], [ball]));
+    assert.equal(root.code, "mute.root_layer");
+    assert.equal(root.operation, "muteAndUnmuteLayers");
+    assert.deepEqual(stage.mutedLayers(), [ball], "refused whole");
+    assert.equal(failure(() => stage.muteLayer("scene.usda")).code, "mute.root_layer");
+    assert.equal(stage.muteLayer(""), false, "the empty identifier names nothing");
+    assert.equal(failure(() => stage.muteLayer(7 as unknown as string)).code, "argument.invalid");
   });
 });

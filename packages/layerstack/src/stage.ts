@@ -50,7 +50,7 @@ export const PACKAGE_VERSION = "0.1.0";
  * The ABI this package speaks: the version of the records it exchanges
  * with the native module (`layerstack_wasm::ABI`).
  */
-export const ABI = 5;
+export const ABI = 6;
 
 /** The native stage the generated glue exports (`layerstack_wasm::Stage`). Borrowed only by same-module extensions. */
 export interface NativeStage extends Disposable {
@@ -63,6 +63,13 @@ export interface NativeStage extends Disposable {
   layers(): unknown;
   layerDirty(id: bigint): boolean;
   setLayerMuted(id: bigint, muted: boolean): boolean;
+  muteAndUnmuteLayers(
+    muteIds: BigUint64Array,
+    muteIdentifiers: string[],
+    unmuteIds: BigUint64Array,
+    unmuteIdentifiers: string[],
+  ): boolean;
+  isLayerMuted(identifier: string): boolean;
   mutedLayers(): unknown;
   status(): unknown;
   prim(path: string): unknown;
@@ -760,47 +767,106 @@ export class Stage implements Disposable {
    * ({@link Changes.mutedLayers}). Returns whether its muting changed:
    * `false` for a layer muted already.
    *
+   * `layer` is a {@link Layer} of the stage, or an identifier, anchored to
+   * the root layer as OpenUSD anchors a muted identifier: `./lamp.usda`,
+   * `lamp.usda` and `parts/../lamp.usda` beside a root `set/scene.usda`
+   * all name `set/lamp.usda`, the layer an arc authored on the root to
+   * that path reads. An identifier may name a layer the stage has not
+   * read: it is not read while muted, and an arc or sublayer to it, now or
+   * added later, composes muted (`composition.muted_asset` for an arc)
+   * instead of asking for it ({@link Stage.unavailable}). The empty
+   * identifier names nothing.
+   *
    * Muting is the stage's state, not an edit: it makes no receipt, and
    * undo neither undoes it nor is blocked by it. The layer keeps its
    * content and its unsaved edits, and composes again when unmuted.
    * While it is muted, edits that target it fail with `layer.muted` and
    * {@link Stage.save} without a layer skips it (`save(layer)` writes it).
-   * While any layer is muted, {@link Stage.move} and {@link Stage.delete}
-   * fail with `namespace.unsupported`: they could not repair the paths a
-   * muted layer names. Muting a layer the stage holds but does not use is
-   * not an error, as in OpenUSD; it changes no prim.
+   * {@link Stage.move} and {@link Stage.delete} neither read nor edit a
+   * muted layer, as OpenUSD's `UsdNamespaceEditor` does: its specs stay at
+   * the old path, and the paths it authors are not repaired. Muting a
+   * layer the stage does not use is not an error, as in OpenUSD; it
+   * changes no prim.
    *
-   * Throws `layer.affinity` for another stage's layer and
-   * `mute.root_layer` for {@link Stage.root}, which cannot be muted.
+   * Throws `layer.affinity` for another stage's layer, `mute.root_layer`
+   * for the root ({@link Stage.root}, by any spelling), which cannot be
+   * muted, `argument.invalid` for neither a layer nor a string, and the
+   * `io.*` error of an identifier that cannot be anchored.
    */
-  muteLayer(layer: Layer): boolean {
-    return this.#setMuted("muteLayer", layer, true);
+  muteLayer(layer: Layer | string): boolean {
+    return this.#mute("muteLayer", [layer], []);
   }
 
   /**
-   * Unmutes `layer`, as OpenUSD's `UsdStage::UnmuteLayer` does: the stage
-   * recomposes with it again, and listeners hear it
+   * Unmutes `layer`, a {@link Layer} or an identifier as
+   * {@link Stage.muteLayer} takes it, as OpenUSD's `UsdStage::UnmuteLayer`
+   * does: the stage recomposes with it again, and listeners hear it
    * ({@link Changes.unmutedLayers}). Returns whether its muting changed:
-   * `false` for a layer not muted. Assets its content asks for that the
-   * stage has not read are unavailable afterwards:
-   * `await stage.resolve(source)`.
+   * `false` for a layer not muted, the root included. A layer muted before
+   * the stage read it, and assets its content asks for that the stage has
+   * not read, are unavailable afterwards: `await stage.resolve(source)`.
    *
+   * Throws as {@link Stage.muteLayer} does.
+   */
+  unmuteLayer(layer: Layer | string): boolean {
+    return this.#mute("unmuteLayer", [], [layer]);
+  }
+
+  /**
+   * Mutes the layers of `mute`, then unmutes those of `unmute`, as one
+   * request: one recomposition, heard as one change, as OpenUSD's
+   * `UsdStage::MuteAndUnmuteLayers`. Each is a {@link Layer} or an
+   * identifier, as {@link Stage.muteLayer} takes it. Returns whether the
+   * muted layers changed.
+   *
+   * As in OpenUSD, an unmute spelled as a mute is dropped, so the layer
+   * stays muted; a {@link Layer} is spelled by its identifier. A layer
+   * named under two spellings (`b.usda` to mute, `./b.usda` to unmute) is
+   * muted, then unmuted, and listeners hear no change of it. A request
+   * naming the root among the layers to mute fails as a whole
+   * (`mute.root_layer`) and changes nothing, where OpenUSD reports an
+   * error and mutes the others.
+   *
+   * Throws as {@link Stage.muteLayer} does.
+   */
+  muteAndUnmuteLayers(mute: Iterable<Layer | string>, unmute: Iterable<Layer | string>): boolean {
+    return this.#mute("muteAndUnmuteLayers", [...mute], [...unmute]);
+  }
+
+  /**
+   * The layers the stage mutes that it holds, by id ({@link Stage.layers}).
+   * Never the root. A layer muted by identifier before the stage read it
+   * has no {@link Layer}: {@link Stage.mutedIdentifiers} lists it.
+   */
+  mutedLayers(): Layer[] {
+    return this.#mutedRows("mutedLayers")
+      .filter(([, , held]) => held)
+      .map(([id]) => this.#layer(id));
+  }
+
+  /**
+   * The identifiers of the layers the stage mutes, sorted, as OpenUSD's
+   * `UsdStage::GetMutedLayers` lists them: the layers it holds and those
+   * muted by identifier before it read them. An anonymous layer, which
+   * has no identifier, is listed only by {@link Stage.mutedLayers}.
+   */
+  mutedIdentifiers(): string[] {
+    return this.#mutedRows("mutedIdentifiers")
+      .flatMap(([, identifier]) => (identifier === null ? [] : [identifier]))
+      .sort();
+  }
+
+  /**
+   * Whether the stage mutes `layer`, a {@link Layer} or an identifier as
+   * {@link Stage.muteLayer} takes it (OpenUSD's `UsdStage::IsLayerMuted`).
    * Throws `layer.affinity` for another stage's layer.
    */
-  unmuteLayer(layer: Layer): boolean {
-    return this.#setMuted("unmuteLayer", layer, false);
-  }
-
-  /** The layers the stage mutes, by id, as OpenUSD's `UsdStage::GetMutedLayers` lists them. Never the root. */
-  mutedLayers(): Layer[] {
-    const ids = this.#call("mutedLayers", (native) => native.mutedLayers()) as bigint[];
-    return ids.map((id) => this.#layer(id));
-  }
-
-  /** Whether the stage mutes `layer` (OpenUSD's `UsdStage::IsLayerMuted`). Throws `layer.affinity` for another stage's layer. */
-  isMuted(layer: Layer): boolean {
+  isMuted(layer: Layer | string): boolean {
+    if (typeof layer === "string") {
+      return this.#call("isMuted", (native) => native.isLayerMuted(layer));
+    }
     this.#own("isMuted", layer);
-    return this.mutedLayers().includes(layer);
+    return this.#mutedRows("isMuted").some(([id]) => id === layer.id);
   }
 
   /** The stage's state now: prims, composition errors, unavailable and unresolved assets. */
@@ -1225,11 +1291,44 @@ export class Stage implements Disposable {
     return target;
   }
 
-  #setMuted(operation: string, layer: Layer, muted: boolean): boolean {
-    this.#own(operation, layer);
-    const changed = this.#call(operation, (native) => native.setLayerMuted(layer.id, muted));
-    this.#notify();
-    return changed;
+  #mute(operation: string, mute: readonly unknown[], unmute: readonly unknown[]): boolean {
+    const split = (layers: readonly unknown[]): [BigUint64Array, string[]] => {
+      const ids: bigint[] = [];
+      const identifiers: string[] = [];
+      for (const layer of layers) {
+        if (typeof layer === "string") {
+          identifiers.push(layer);
+        } else if (layer instanceof Layer) {
+          this.#own(operation, layer);
+          ids.push(layer.id);
+        } else {
+          throw new LayerstackError("argument.invalid", operation, "expected a Layer or an identifier string");
+        }
+      }
+      return [BigUint64Array.from(ids), identifiers];
+    };
+    const [muteIds, muteIdentifiers] = split(mute);
+    const [unmuteIds, unmuteIdentifiers] = split(unmute);
+    try {
+      return this.#call(operation, (native) =>
+        native.muteAndUnmuteLayers(muteIds, muteIdentifiers, unmuteIds, unmuteIdentifiers),
+      );
+    } finally {
+      this.#notify();
+    }
+  }
+
+  /** The muted layers as the module lists them: `[id, identifier, held]`. */
+  #mutedRows(operation: string): MutingRow[] {
+    return this.#call(operation, (native) => native.mutedLayers()) as MutingRow[];
+  }
+
+  /** The changes a muting row names: its layer, if the stage holds it, and its identifier. */
+  #muting(rows: readonly MutingRow[]): [Layer[], string[]] {
+    return [
+      rows.filter(([, , held]) => held).map(([id]) => this.#layer(id)),
+      rows.flatMap(([, identifier]) => (identifier === null ? [] : [identifier])).sort(),
+    ];
   }
 
   /** The target edits go through, as the native module takes it: `target`, else the edit layer. */
@@ -1300,15 +1399,13 @@ export class Stage implements Disposable {
       for (;;) {
         const [record, muted, unmuted] = this.#call("onChange", (native) =>
           native.takeChanges(this.#listeners.length > 0),
-        ) as [Row[] | null, bigint[], bigint[]];
+        ) as [Row[] | null, MutingRow[], MutingRow[]];
         const batches = record === null ? [decodeChanges([[], [], ["/"], [], []])] : record.map(decodeChanges);
         if (muted.length > 0 || unmuted.length > 0) {
           const last = batches.pop() ?? decodeChanges([[], [], [], [], []]);
-          batches.push({
-            ...last,
-            mutedLayers: muted.map((id) => this.#layer(id)),
-            unmutedLayers: unmuted.map((id) => this.#layer(id)),
-          });
+          const [mutedLayers, mutedIdentifiers] = this.#muting(muted);
+          const [unmutedLayers, unmutedIdentifiers] = this.#muting(unmuted);
+          batches.push({ ...last, mutedLayers, unmutedLayers, mutedIdentifiers, unmutedIdentifiers });
         }
         if (batches.length === 0 || this.#listeners.length === 0) return;
         for (const changes of batches) {
@@ -1742,8 +1839,13 @@ function decodeChanges(row: unknown): Changes {
     })),
     mutedLayers: [],
     unmutedLayers: [],
+    mutedIdentifiers: [],
+    unmutedIdentifiers: [],
   };
 }
+
+/** A muted or unmuted layer as the module lists it: `[id, identifier, held]`. */
+type MutingRow = [bigint, string | null, boolean];
 
 /** Reports an error that must not interrupt the caller, as the host reports uncaught errors. */
 /** A limit of `OpenOptions.limits` as the module takes it: `undefined` for its default, `Infinity` for none. */

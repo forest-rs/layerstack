@@ -10,7 +10,9 @@ Initial release.
   explanations, and composed numeric arrays viewed in place in the module's
   memory.
 - Layer muting, which is stage state and not an undoable edit, heard in the
-  change records with the layers muted and unmuted.
+  change records with the layers muted and unmuted: by layer or by
+  identifier, before the stage reads a layer, and several layers in one
+  request.
 - Atomic edits with undo and change records, saves of dirty layers, and
   exports of a layer, the flattened stage or a USDZ package.
 - An `rlib` for crates that link the bindings into a module of their own.

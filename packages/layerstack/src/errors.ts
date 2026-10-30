@@ -56,8 +56,11 @@
  *   Take a new target from the prim's opinions or arcs.
  * - `layer.muted`: the edits target a muted layer ({@link Stage.muteLayer});
  *   unmute it to edit it.
- * - `mute.root_layer`: {@link Stage.muteLayer} was given the root layer,
- *   which cannot be muted.
+ * - `mute.root_layer`: {@link Stage.muteLayer} or
+ *   {@link Stage.muteAndUnmuteLayers} was given the root layer, by any
+ *   spelling, which cannot be muted; nothing changed.
+ * - `mute.refused`: the module refused a mute request for a reason this
+ *   package does not know yet.
  * - `namespace.*`: a {@link Stage.move} or {@link Stage.delete} that
  *   cannot be made; nothing changed: `namespace.invalid_paths` (not two
  *   distinct non-root prims or two properties), `namespace.not_found`,
@@ -113,6 +116,7 @@ export type ErrorCode =
   | "layer.outside_stack"
   | "layer.muted"
   | "mute.root_layer"
+  | "mute.refused"
   | "flatten.failed"
   | "package.failed"
   | `edit.${string}`

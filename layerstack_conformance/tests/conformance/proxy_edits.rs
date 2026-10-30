@@ -189,7 +189,7 @@ fn author(route: &str, edit: &mut SchemaEdit<'_>, site: &Site) -> Result<(), Box
         // `Subset.CreateGeomSubset(prim, "part", "face", [0], "family")`
         "subset" => {
             let face = GeomSubsetElementType::Face;
-            GeomSubsetEdit::create(edit, path, "part", face, &[0], "family")?;
+            GeomSubsetEdit::create(edit, path, "part", face, &[0], "family", None)?;
         }
         // `MaterialBindingAPI.Apply(prim).Bind(material)`
         "binding" => {

@@ -24,9 +24,11 @@ fn unique_subsets_validate_membership_and_publish_a_valid_partition() {
     let expected_paths = [store.path("/M/faces_1"), store.path("/M/faces_2")];
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     let first =
-        GeomSubsetEdit::create_unique(&mut edit, mesh, "faces", Element::Face, &[0], "f").unwrap();
+        GeomSubsetEdit::create_unique(&mut edit, mesh, "faces", Element::Face, &[0], "f", None)
+            .unwrap();
     let second =
-        GeomSubsetEdit::create_unique(&mut edit, mesh, "faces", Element::Face, &[1], "f").unwrap();
+        GeomSubsetEdit::create_unique(&mut edit, mesh, "faces", Element::Face, &[1], "f", None)
+            .unwrap();
     assert_eq!([first.path(), second.path()], expected_paths);
     ImageableEdit::new(&edit, mesh)
         .expect("outside any instance")
@@ -35,13 +37,21 @@ fn unique_subsets_validate_membership_and_publish_a_valid_partition() {
         .unwrap();
     let count = edit.transaction().len();
     assert_eq!(
-        GeomSubsetEdit::create_unique(&mut edit, mesh, "bad", Element::Face, &[2], "f"),
+        GeomSubsetEdit::create_unique(&mut edit, mesh, "bad", Element::Face, &[2], "f", None),
         Err(SubsetAuthoringError::Indices(
             SubsetProblemKind::InvalidIndex(2)
         ))
     );
     assert_eq!(
-        GeomSubsetEdit::create_unique(&mut edit, mesh, "nested/name", Element::Face, &[0], "f"),
+        GeomSubsetEdit::create_unique(
+            &mut edit,
+            mesh,
+            "nested/name",
+            Element::Face,
+            &[0],
+            "f",
+            None
+        ),
         Err(SubsetAuthoringError::InvalidName)
     );
     assert_eq!(
@@ -83,7 +93,7 @@ fn rolled_back_subset_groups_release_names_and_family_overlays() {
     let expected = store.path("/M/new");
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
     let cancelled: Result<(), &str> = edit.group(|child| {
-        GeomSubsetEdit::create_unique(child, mesh, "new", Element::Face, &[0], "f").unwrap();
+        GeomSubsetEdit::create_unique(child, mesh, "new", Element::Face, &[0], "f", None).unwrap();
         ImageableEdit::new(child, mesh)
             .expect("outside any instance")
             .unwrap()
@@ -97,7 +107,8 @@ fn rolled_back_subset_groups_release_names_and_family_overlays() {
         "no partial declarations survive cancellation"
     );
     let subset =
-        GeomSubsetEdit::create_unique(&mut edit, mesh, "new", Element::Face, &[1, 1], "f").unwrap();
+        GeomSubsetEdit::create_unique(&mut edit, mesh, "new", Element::Face, &[1, 1], "f", None)
+            .unwrap();
     assert_eq!(
         subset.path(),
         expected,
@@ -136,7 +147,7 @@ fn incompatible_family_declarations_reject_without_touching_prior_edits() {
             .clone();
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
         let subset =
-            GeomSubsetEdit::create_unique(&mut edit, mesh, "kept", Element::Face, &[0], "f")
+            GeomSubsetEdit::create_unique(&mut edit, mesh, "kept", Element::Face, &[0], "f", None)
                 .unwrap();
         let count = edit.transaction().len();
         assert_eq!(

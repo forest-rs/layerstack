@@ -5,7 +5,7 @@
 // from the stage after each action; the sample is small, and reading the
 // stage is what the demo shows.
 import { LayerstackError, loadLayerstack } from "@forest-rs/layerstack";
-import type { Attribute, Layer, Prim, Stage } from "@forest-rs/layerstack";
+import type { Attribute, EditTarget, Layer, Prim, Stage } from "@forest-rs/layerstack";
 import type { Editor, LayerFile } from "./editor.ts";
 import { Session, steps } from "./script.ts";
 import type { Host } from "./script.ts";
@@ -404,22 +404,26 @@ function editForm(editor: Editor, path: string): HTMLElement | null {
   input.value = current === null ? "" : formatValue(current);
   input.disabled = busy || !editable;
   const typeName = attribute.typeName;
+  const through = session.target;
+  const where =
+    through === null
+      ? editor.stage.editLayer === null
+        ? "(no edit layer)"
+        : layerName(editor.stage.editLayer)
+      : `${layerName(through.layer)}, at ${mappedPath(through, path)} through the ${through.arc}`;
   const form = h(
     "form",
     { class: "edit" },
     h("label", {}, `${attribute.name} (${typeName})`, input),
-    h(
-      "button",
-      { disabled: busy || !editable },
-      `Set ${time === null ? "" : `at time ${time} `}in ${editor.stage.editLayer === null ? "(no edit layer)" : layerName(editor.stage.editLayer)}`,
-    ),
+    h("button", { disabled: busy || !editable }, `Set ${time === null ? "" : `at time ${time} `}in ${where}`),
+    through !== null && editLayerButton(),
   );
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const now = attribute.get(time ?? undefined);
     const value = parseValue(typeName, input.value, now);
     releaseValue(now);
-    void act(() => editor.setValue(path, value, time));
+    void act(() => (through === null ? editor.setValue(path, value, time) : editor.setValueThrough(through, path, value, time)));
   });
   releaseValue(current);
   return form;
@@ -453,6 +457,7 @@ function renderExplanation(stage: Stage, waiting: ReadonlyMap<string, readonly s
           ? ""
           : `offset ${formatNumber(opinion.layerOffset.offset)}, scale ${formatNumber(opinion.layerOffset.scale)}`,
       ),
+      h("td", {}, editHere(opinion.editTarget)),
     ),
   );
   fill(target, 
@@ -484,11 +489,66 @@ function renderExplanation(stage: Stage, waiting: ReadonlyMap<string, readonly s
         h(
           "thead",
           {},
-          h("tr", {}, h("th", {}, "#"), h("th", {}, "layer"), h("th", {}, "spec"), h("th", {}, "arc"), h("th", {}, "role"), h("th", {}, "")),
+          h(
+            "tr",
+            {},
+            h("th", {}, "#"),
+            h("th", {}, "layer"),
+            h("th", {}, "spec"),
+            h("th", {}, "arc"),
+            h("th", {}, "role"),
+            h("th", {}, ""),
+            h("th", {}, "edit"),
+          ),
         ),
         h("tbody", {}, ...rows),
       ),
-    h("p", { class: "hint" }, "Opinions are listed strongest first."),
+    h(
+      "p",
+      { class: "hint" },
+      "Opinions are listed strongest first. Edit here writes where an opinion lives, through the arc that reaches it: in a referenced asset, every prim that references it changes, and an edit of a shadowed opinion changes nothing shown.",
+    ),
+  );
+}
+
+/** The button that sends the edit field back to the edit layer: a plain button, not the form's submit. */
+function editLayerButton(): HTMLButtonElement {
+  const button = h("button", {
+    disabled: busy,
+    onclick: () => {
+      session.target = null;
+      render();
+    },
+  }, "Edit the edit layer instead");
+  button.type = "button";
+  return button;
+}
+
+/** Where `target` writes `path`, in words: a stale target says so rather than throwing. */
+function mappedPath(target: EditTarget, path: string): string {
+  try {
+    return target.mapPath(path) ?? "(a path it does not map)";
+  } catch (error) {
+    if (error instanceof LayerstackError && error.code === "target.stale") return "(stale: no arc maps it now)";
+    throw error;
+  }
+}
+
+/** The button that points the edit field at an opinion's edit target, or why it cannot. */
+function editHere(target: EditTarget | null): Child {
+  if (target === null) return "";
+  if (target.layer.readOnly) return h("span", { class: "detail" }, "read-only");
+  const current = session.target === target;
+  return h(
+    "button",
+    {
+      disabled: busy || current,
+      onclick: () => {
+        session.target = target;
+        render();
+      },
+    },
+    current ? "editing" : "Edit here",
   );
 }
 

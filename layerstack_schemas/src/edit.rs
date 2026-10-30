@@ -92,6 +92,70 @@ impl fmt::Display for CannotEdit {
 
 impl core::error::Error for CannotEdit {}
 
+/// Why [`SchemaEdit::create_class_prim`] creates no class, as OpenUSD's
+/// `UsdStage::CreateClassPrim` refuses it. Nothing is authored.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ClassPrimError {
+    /// The edit target is a layer outside the stage's local layer stack
+    /// that maps every path to itself: classes are created in the local
+    /// layer stack, or through an arc's target.
+    NotLocal,
+    /// The edit may not author the prim, beneath an instance or in a
+    /// prototype ([`SchemaEdit::can_edit`]).
+    CannotEdit(CannotEdit),
+    /// A defined prim that is not a class is at the path, on the stage or
+    /// as this edit leaves it (the pseudo-root among them): a class is not
+    /// made from it.
+    DefinedNotClass,
+}
+
+impl ClassPrimError {
+    /// The refusal in words, an instance written as its path with `store`,
+    /// the store the stage was composed from ([`CannotEdit::display`]).
+    /// `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+
+impl Describe for ClassPrimError {
+    fn describe(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
+        match self {
+            Self::NotLocal => f.write_str(
+                "classes are created in the stage's local layer stack; target one of its \
+                 layers, or an arc's layer through the arc",
+            ),
+            Self::CannotEdit(error) => error.describe(f, names),
+            Self::DefinedNotClass => {
+                f.write_str("a defined prim that is not a class is already at the path")
+            }
+        }
+    }
+}
+
+impl fmt::Display for ClassPrimError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.describe(f, Names(None))
+    }
+}
+
+impl core::error::Error for ClassPrimError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::CannotEdit(error) => Some(error),
+            Self::NotLocal | Self::DefinedNotClass => None,
+        }
+    }
+}
+
+impl From<CannotEdit> for ClassPrimError {
+    fn from(value: CannotEdit) -> Self {
+        Self::CannotEdit(value)
+    }
+}
+
 /// Why [`SchemaEdit::apply_api`], or an `<Api>::apply`, applies no schema.
 /// Nothing is authored.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -197,8 +261,14 @@ pub struct SchemaEdit<'s> {
     transaction: Transaction,
     /// Prims this edit defines, with their type.
     defined: Vec<(PathId, String)>,
-    /// Prims this edit gives the `def` specifier, typed or not.
+    /// Prims this edit gives a defining specifier (`def` or `class`),
+    /// typed or not.
     specified: Vec<PathId>,
+    /// The prims of `specified` this edit leaves `class`es.
+    classes: Vec<PathId>,
+    /// Prims this edit creates an `over` spec for, absent from the stage
+    /// before.
+    overridden: Vec<PathId>,
     /// Applied schema names this edit adds, by prim.
     applied: Vec<(PathId, TokenId)>,
     /// Properties this edit creates, with an attribute's type name.
@@ -263,6 +333,8 @@ impl<'s> SchemaEdit<'s> {
             transaction: Transaction::new(),
             defined: Vec::new(),
             specified: Vec::new(),
+            classes: Vec::new(),
+            overridden: Vec::new(),
             applied: Vec::new(),
             created: Vec::new(),
             defaults: Vec::new(),
@@ -472,8 +544,153 @@ impl<'s> SchemaEdit<'s> {
         Ok(crate::PrimEdit::from_path_unchecked(path))
     }
 
+    /// Makes sure a prim is at `path`, as OpenUSD's
+    /// `UsdStage::OverridePrim` does, and returns the handle authoring it.
+    ///
+    /// A prim already at `path`, on the stage or earlier in this edit
+    /// (defined, overridden, an `over`, a class, a prim of any specifier),
+    /// is left as it is: nothing is authored, so a `def` stays a `def`.
+    /// Otherwise the edit target gets an `over` spec at `path`, its
+    /// missing ancestor specs as `over`s too, and no type; a spec the
+    /// target already holds (beneath an inactive prim, where the stage
+    /// has no prim) is kept as it is. The pseudo-root (`/`) is never
+    /// authored. To give the prim a type, define it
+    /// ([`Self::define_prim`]) or author its type name in a transaction
+    /// ([`Self::append`]).
+    ///
+    /// A prim authored beneath an inactive or unloaded ancestor stays off
+    /// the stage until the ancestor is active and loaded, as in OpenUSD.
+    ///
+    /// # Errors
+    ///
+    /// What [`Self::can_edit`] refuses, as for [`Self::define_prim`]. A
+    /// refusal authors nothing.
+    ///
+    /// OpenUSD: `UsdStage::OverridePrim`, `_IsValidPathForCreatingPrim`,
+    /// `SdfCreatePrimInLayer` (`pxr/usd/usd/stage.cpp`).
+    ///
+    /// Spec: AOUSD Core §7.6 (specifier field), §11.3.3 (instancing),
+    /// §12.2.1 (specifier resolution).
+    #[doc(alias = "OverridePrim")]
+    #[doc(alias = "UsdStage::OverridePrim")]
+    pub fn override_prim(&mut self, path: PathId) -> Result<crate::PrimEdit, CannotEdit> {
+        self.can_edit(path)?;
+        if self.store.paths().parent(path).is_some()
+            && !self.exists(path)
+            && !self.target_holds_prim_spec(path)
+        {
+            self.transaction
+                .create_prim(self.target.prim(path), Specifier::Over, None);
+            self.overridden.push(path);
+        }
+        Ok(crate::PrimEdit::from_path_unchecked(path))
+    }
+
+    /// Makes the prim at `path` a class, as OpenUSD's
+    /// `UsdStage::CreateClassPrim` does, and returns the handle authoring
+    /// it.
+    ///
+    /// Nothing is authored when the prim is abstract: a class, or beneath
+    /// one, on the stage or as this edit leaves it (so an `over` inside a
+    /// class stays an `over`). Otherwise the prim is defined as
+    /// [`Self::define_prim`] defines it without a type (each undefined
+    /// ancestor gets `def`), and its spec in the edit target gets the
+    /// `class` specifier, keeping any type it has: an `over` becomes a
+    /// `class`, and a new `/Group/Base` authors a `def "Group"` holding a
+    /// `class "Base"`.
+    ///
+    /// One difference from OpenUSD: beneath an inactive or unloaded
+    /// ancestor, the prim's spec gets `class` too, and stays off the stage
+    /// until the ancestor is active and loaded. OpenUSD authors `def` there
+    /// and fails before it sets `class`, leaving a defined prim where a
+    /// class was asked for.
+    ///
+    /// # Errors
+    ///
+    /// [`ClassPrimError::NotLocal`] for a target outside the stage's local
+    /// layer stack that maps every path to itself; then
+    /// [`ClassPrimError::CannotEdit`] for what [`Self::can_edit`] refuses;
+    /// then [`ClassPrimError::DefinedNotClass`] when a defined prim that
+    /// is not a class is at `path`. A refusal authors nothing.
+    ///
+    /// OpenUSD: `UsdStage::CreateClassPrim`, `_DefinePrim`,
+    /// `UsdPrim::IsAbstract` (`pxr/usd/usd/stage.cpp`).
+    ///
+    /// Spec: AOUSD Core §7.6 (specifier field), §11.5 (defined prims),
+    /// §12.2.1 (specifier resolution).
+    #[doc(alias = "CreateClassPrim")]
+    #[doc(alias = "UsdStage::CreateClassPrim")]
+    pub fn create_class_prim(&mut self, path: PathId) -> Result<crate::PrimEdit, ClassPrimError> {
+        if self.target.has_root_identity() && !self.stage.has_local_layer(self.target.layer()) {
+            return Err(ClassPrimError::NotLocal);
+        }
+        self.can_edit(path)?;
+        let specifier = self.specifier(path);
+        if specifier.is_some_and(|specifier| specifier != Specifier::Class)
+            && self.is_defined_specifier(path)
+        {
+            return Err(ClassPrimError::DefinedNotClass);
+        }
+        let abstract_ = specifier.is_some()
+            && core::iter::successors(Some(path), |at| self.store.paths().parent(*at))
+                .any(|at| self.specifier(at) == Some(Specifier::Class));
+        if !abstract_ {
+            self.define_prim(path, "")?;
+            self.transaction
+                .set_specifier(self.target.prim(path), Specifier::Class);
+            if !self.specified.contains(&path) {
+                self.specified.push(path);
+            }
+            self.classes.push(path);
+        }
+        Ok(crate::PrimEdit::from_path_unchecked(path))
+    }
+
+    /// The specifier the prim at `path` resolves, as this edit leaves it;
+    /// `None` where no prim is. The pseudo-root's is `def`.
+    ///
+    /// Spec: AOUSD Core §12.2.1 (specifier resolution).
+    fn specifier(&self, path: PathId) -> Option<Specifier> {
+        if self.classes.contains(&path) {
+            Some(Specifier::Class)
+        } else if self.specified.contains(&path) || self.store.paths().parent(path).is_none() {
+            Some(Specifier::Def)
+        } else if let Some(prim) = self.stage_prim(path) {
+            Some(prim.specifier())
+        } else {
+            self.overridden.contains(&path).then_some(Specifier::Over)
+        }
+    }
+
+    /// Whether the prim at `path` is defined, as `UsdPrim::IsDefined`
+    /// reads it: [`Self::is_defined`], and the pseudo-root.
+    fn is_defined_specifier(&self, path: PathId) -> bool {
+        self.store.paths().parent(path).is_none() || self.is_defined(path)
+    }
+
+    /// Whether the edit target's layer holds a prim spec at the path
+    /// `path` maps to there.
+    fn target_holds_prim_spec(&self, path: PathId) -> bool {
+        let Some(mapped) = self.target.map_to_spec_path(path, self.store.paths()) else {
+            return false;
+        };
+        let Some(layer) = self.store.layer(self.target.layer()) else {
+            return false;
+        };
+        if !mapped.variant_chain().is_empty() {
+            return layer.variant_spec_at(&mapped, self.store.paths()).is_some();
+        }
+        layer.prim_specs(mapped.prim_path()).any(|spec| {
+            layerstack::SpecPath::from_variant_selection_sites(
+                mapped.prim_path(),
+                spec.outer_variant_sites(),
+                self.store.paths(),
+            ) == mapped
+        })
+    }
+
     /// Whether the prim at `path` resolves a defining specifier (`def` or
-    /// `class`) on the edit's stage, or this edit gives it `def`. Its
+    /// `class`) on the edit's stage, or this edit gives it one. Its
     /// ancestors' specifiers are not considered: defining a prim defines
     /// them first.
     ///
@@ -497,6 +714,7 @@ impl<'s> SchemaEdit<'s> {
             self.transaction.set_type_name(at, type_name);
         }
         self.specified.push(path);
+        self.classes.retain(|&class| class != path);
     }
 
     /// Collects a fallible child group. Success appends its transaction; an error
@@ -514,6 +732,8 @@ impl<'s> SchemaEdit<'s> {
             transaction: Transaction::new(),
             defined: self.defined.clone(),
             specified: self.specified.clone(),
+            classes: self.classes.clone(),
+            overridden: self.overridden.clone(),
             applied: self.applied.clone(),
             created: self.created.clone(),
             defaults: self.defaults.clone(),
@@ -531,6 +751,8 @@ impl<'s> SchemaEdit<'s> {
         self.transaction.append(child.transaction);
         self.defined = child.defined;
         self.specified = child.specified;
+        self.classes = child.classes;
+        self.overridden = child.overridden;
         self.applied = child.applied;
         self.created = child.created;
         self.defaults = child.defaults;
@@ -659,13 +881,16 @@ impl<'s> SchemaEdit<'s> {
         self.target.property(PropertyPath::new(path, name))
     }
 
-    /// Whether a prim is at `path`: on the stage, or defined earlier in
-    /// this edit. Edit handles and `apply` author only such prims, so no
-    /// edit manufactures an `over` for a prim that does not exist.
+    /// Whether a prim is at `path`: on the stage, or defined or
+    /// overridden earlier in this edit. Edit handles and `apply` author
+    /// only such prims, so no edit manufactures an `over` for a prim that
+    /// does not exist.
     ///
     /// OpenUSD: authoring through an invalid `UsdPrim` fails.
     pub(crate) fn exists(&self, path: PathId) -> bool {
-        self.stage_prim(path).is_some() || self.specified.contains(&path)
+        self.stage_prim(path).is_some()
+            || self.specified.contains(&path)
+            || self.overridden.contains(&path)
     }
 
     /// The parent of the prim at `path`; `None` for the pseudo-root.
@@ -676,7 +901,8 @@ impl<'s> SchemaEdit<'s> {
 
     /// The children of the prim at `path` as this edit leaves them: the
     /// stage's, inactive ones included, in composed order, then those this
-    /// edit defines, in the order it defines them.
+    /// edit defines, in the order it defines them, then those it only
+    /// overrides.
     ///
     /// OpenUSD: `UsdPrim::GetAllChildren`.
     #[cfg(feature = "usd-geom")]
@@ -685,7 +911,7 @@ impl<'s> SchemaEdit<'s> {
             .stage_prim(path)
             .map(|prim| prim.all_children().map(layerstack::Prim::path).collect())
             .unwrap_or_default();
-        for &defined in &self.specified {
+        for &defined in self.specified.iter().chain(&self.overridden) {
             if self.store.paths().parent(defined) == Some(path) && !children.contains(&defined) {
                 children.push(defined);
             }

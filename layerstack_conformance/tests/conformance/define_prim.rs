@@ -1,9 +1,10 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! `SchemaEdit::define_prim` (and so every generated `<Schema>::define`)
-//! authors what OpenUSD 26.08's `UsdStage::DefinePrim` authors, call by
-//! call, and refuses what it refuses.
+//! `SchemaEdit::define_prim` (and so every generated `<Schema>::define`),
+//! `override_prim` and `create_class_prim` author what OpenUSD 26.11's
+//! `UsdStage::DefinePrim`, `OverridePrim` and `CreateClassPrim` author,
+//! call by call, and refuse what they refuse.
 //!
 //! `scripts/define_prim_oracle.py` writes `fixtures/define_prim` and
 //! records, for each case on fresh copies of its layers, whether each
@@ -15,7 +16,9 @@
 //! composed. A call is refused (`Err`) exactly when OpenUSD raised without
 //! authoring: beneath an instance or in a prototype. Beneath an inactive
 //! prim OpenUSD authors the prim and then raises, as it is not on the
-//! stage; layerstack authors the same and accepts. Undoing the steps one by
+//! stage; layerstack authors the same and accepts, but for
+//! `CreateClassPrim`, where OpenUSD leaves the `def` it authors first and
+//! layerstack authors the class. Undoing the steps one by
 //! one, last first, restores each step's text before it.
 //!
 //! Spec: AOUSD Core §7.6 (specifier), §11.3.3 (instancing), §11.5 (defined
@@ -34,6 +37,10 @@ use layerstack_schemas::SchemaEdit;
 use serde_json::Value as Json;
 
 const ORACLE: &str = include_str!("../../fixtures/define_prim/oracle.json");
+
+/// The case where layerstack departs from OpenUSD: `CreateClassPrim`
+/// beneath an inactive prim, which OpenUSD leaves a `def`.
+const CLASS_BELOW_INACTIVE: &str = "class_below_inactive";
 
 fn oracle() -> Json {
     let oracle: Json = serde_json::from_str(ORACLE).expect("oracle.json");
@@ -100,7 +107,7 @@ fn the_layers_are_the_fixtures() {
 fn define_prim_agrees_with_openusd_call_by_call() {
     let oracle = oracle();
     let cases = oracle["cases"].as_array().unwrap();
-    assert!(cases.len() >= 20, "every case is recorded");
+    assert!(cases.len() >= 50, "every case is recorded");
     for case in cases {
         let name = case["name"].as_str().unwrap();
         let mut loaded = load();
@@ -121,9 +128,12 @@ fn define_prim_agrees_with_openusd_call_by_call() {
             let refused: Vec<bool> = calls
                 .iter()
                 .zip(&paths)
-                .map(|(call, &path)| {
-                    edit.define_prim(path, call["type"].as_str().unwrap())
-                        .is_err()
+                .map(|(call, &path)| match call["op"].as_str().unwrap() {
+                    "over" => edit.override_prim(path).is_err(),
+                    "class" => edit.create_class_prim(path).is_err(),
+                    _ => edit
+                        .define_prim(path, call["type"].as_str().unwrap())
+                        .is_err(),
                 })
                 .collect();
             let transaction = edit.finish();
@@ -132,25 +142,41 @@ fn define_prim_agrees_with_openusd_call_by_call() {
                 .unwrap_or_else(|e| panic!("{name} step {index}: {e}"));
             undo.push((applied.inverse, previous.clone()));
 
-            for ((call, &path), refused) in calls.iter().zip(&paths).zip(refused) {
+            for (at, ((call, &path), refused)) in calls.iter().zip(&paths).zip(refused).enumerate()
+            {
                 let raised = call["raised"].as_bool().unwrap();
                 // OpenUSD raises after authoring a prim it cannot then find
                 // on the stage; it refuses only when it authors nothing.
                 let openusd_refused = raised && (calls.len() > 1 || want == previous);
                 assert_eq!(refused, openusd_refused, "{name} step {index}: {call}");
-                if !refused {
-                    let defined = live
-                        .stage()
-                        .prim(path, &loaded.store)
-                        .is_some_and(Prim::is_defined);
+                // The last call of the step at its path returns the prim
+                // as the step leaves it.
+                let last_at_path = !calls[at + 1..]
+                    .iter()
+                    .any(|later| later["path"] == call["path"]);
+                if !refused && last_at_path {
+                    let prim = live.stage().prim(path, &loaded.store);
                     assert_eq!(
-                        json(defined),
+                        json(prim.is_some_and(Prim::is_defined)),
                         call["defined"],
+                        "{name} step {index}: {call}"
+                    );
+                    assert_eq!(
+                        json(prim.is_some()),
+                        call["valid"],
                         "{name} step {index}: {call}"
                     );
                 }
             }
             let now = text(&loaded, layer);
+            // OpenUSD authors `def` beneath the inactive prim and fails
+            // before it sets `class`; layerstack authors the class asked
+            // for.
+            let want = if name == CLASS_BELOW_INACTIVE {
+                want.replace("def \"Base\"", "class \"Base\"")
+            } else {
+                want.to_owned()
+            };
             assert_eq!(now, want, "{name} step {index}: layer text");
             assert_eq!(
                 json(traversal(live.stage(), &loaded.store, root)),

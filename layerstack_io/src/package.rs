@@ -447,7 +447,7 @@ impl<B: Storage> StageDocument<B> {
         if report.is_complete() {
             let mut layers = report.layers.clone();
             sort::sort_by_key(&mut layers, |id| {
-                catalog.sources.get(id).map_or_else(
+                catalog.source(*id).map_or_else(
                     || alloc::format!("anonymous/{}", id.0),
                     |s| String::from(&*s.identifier),
                 )
@@ -571,18 +571,18 @@ impl<B: Storage> StageDocument<B> {
         layer: LayerId,
         asset: &str,
     ) -> Result<String, IoError> {
-        let source = catalog.sources.get(&layer);
+        let source = catalog.source(layer);
         if let Some(package) = source.and_then(|s| s.package)
             && !asset.starts_with('/')
             && !asset.contains(':')
         {
             let authoring = if package == layer {
-                catalog.package_roots[&package].clone()
+                String::from(catalog.package_root(package).expect("package root"))
             } else {
                 package_member_path(&source.expect("package source").identifier)
                     .expect("package member")
             };
-            let archive = &catalog.package_bytes[&package];
+            let archive = catalog.package_bytes(package).expect("package bytes");
             let member = catalog
                 .package_member(archive, asset, layer, package)?
                 .or_else(|| {

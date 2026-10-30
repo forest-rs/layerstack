@@ -571,7 +571,7 @@ impl<B: Storage> Replay<'_, '_, B> {
                 catalog.allocate_for(identifier)?
             };
             catalog.ids.insert(Arc::clone(identifier), id);
-            catalog.sources.insert(
+            catalog.insert_source(
                 id,
                 Source {
                     identifier: Arc::clone(identifier),
@@ -584,7 +584,7 @@ impl<B: Storage> Replay<'_, '_, B> {
         if id != read_id {
             self.renamed.insert(read_id, id);
         }
-        if catalog.states.contains_key(&id) {
+        if catalog.state(id).is_some() {
             return Ok((id, None));
         }
         let read = self.reads.get_mut(&read_id).expect("read source");
@@ -596,8 +596,8 @@ impl<B: Storage> Replay<'_, '_, B> {
             Outcome::Read { format, .. } => *format,
             Outcome::Package => unreachable!("packages are read on one thread"),
         };
-        catalog.sources.get_mut(&id).expect("source").format = format;
-        catalog.states.insert(id, State::Loading);
+        catalog.source_mut(id).expect("source").format = format;
+        catalog.set_state(id, State::Loading);
         let first_failure = self.reader.failures.len();
         let first_diagnostic = self.reader.diagnostics.len();
         // A source that failed to parse is read again each time an arc asks
@@ -636,7 +636,7 @@ impl<B: Storage> Replay<'_, '_, B> {
             }
         };
         if let Some(error) = error {
-            self.reader.catalog.states.remove(&id);
+            self.reader.catalog.clear_state(id);
             self.failed.insert(read_id);
             return Err(error);
         }
@@ -644,7 +644,7 @@ impl<B: Storage> Replay<'_, '_, B> {
             &mut loose.layer,
             Err(IoError::new(IoErrorKind::Rejected, "layer recorded")),
         );
-        self.reader.catalog.states.insert(id, State::Loaded);
+        self.reader.catalog.set_state(id, State::Loaded);
         Ok((id, layer.ok()))
     }
 

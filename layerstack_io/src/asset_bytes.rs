@@ -148,9 +148,10 @@ impl Catalog {
         package: LayerId,
     ) -> Result<Option<String>, IoError> {
         let authoring = if anchor == package {
-            self.package_roots[&package].clone()
+            String::from(self.package_root(package).expect("package root"))
         } else {
-            package_member_path(&self.sources[&anchor].identifier).expect("package source")
+            package_member_path(&self.source(anchor).expect("package source").identifier)
+                .expect("package source")
         };
         let root = archive.containing_root(&authoring).ok_or_else(|| {
             IoError::new(
@@ -190,7 +191,7 @@ pub(super) fn read<B: Storage>(
 ) -> Result<AssetBytes, IoError> {
     let source = anchor
         .map(|id| {
-            catalog.sources.get(&id).ok_or_else(|| {
+            catalog.source(id).ok_or_else(|| {
                 IoError::new(
                     IoErrorKind::MissingLayer,
                     "asset anchor has no source identifier",
@@ -208,7 +209,7 @@ pub(super) fn read<B: Storage>(
         && !asset.contains(':')
     {
         catalog.cache_work.index_hits += 1;
-        let archive = &catalog.package_bytes[&package];
+        let archive = catalog.package_bytes(package).expect("package bytes");
         if let Some(member) =
             catalog.package_member(archive, asset, anchor.expect("package anchor"), package)?
         {
@@ -237,7 +238,7 @@ pub(super) fn read<B: Storage>(
         let resident = catalog
             .ids
             .get(identifier.as_str())
-            .and_then(|id| catalog.package_bytes.get(id))
+            .and_then(|id| catalog.package_bytes(*id))
             .cloned();
         let archive = match resident {
             Some(archive) => {

@@ -1002,7 +1002,7 @@ fn rejecting_a_prepared_reload_preserves_sources_bindings_and_freshness() {
     let root = doc.stage.stage().root_layer().unwrap();
     let generation = doc.store.layer(root).unwrap().generation();
     let ids = doc.catalog.ids.clone();
-    let saved = doc.catalog.saved.clone();
+    let saved = saved_generations(&doc);
     let bindings = doc.store.asset_bindings();
     let identity = doc.store.identity();
     let mut cursor = doc.stage.change_cursor();
@@ -1047,7 +1047,7 @@ fn rejecting_a_prepared_reload_preserves_sources_bindings_and_freshness() {
     }
     assert_eq!(doc.store.layer(root).unwrap().generation(), generation);
     assert_eq!(doc.catalog.ids, ids);
-    assert_eq!(doc.catalog.saved, saved);
+    assert_eq!(saved_generations(&doc), saved);
     assert_eq!(doc.store.asset_bindings(), bindings);
     assert_eq!(doc.store.identity(), identity);
     assert_eq!(value(&doc), Value::Int(1));
@@ -3113,4 +3113,13 @@ fn diagnostics_name_layers_by_identifier() {
         "{shown}"
     );
     assert!(!shown.contains("layer "), "{shown}");
+}
+
+/// Each layer's generation when the document last read or saved it.
+fn saved_generations<B: Storage>(doc: &StageDocument<B>) -> Vec<(LayerId, u64)> {
+    doc.catalog
+        .layers
+        .iter()
+        .filter_map(|(&id, record)| Some((id, record.saved?)))
+        .collect()
 }

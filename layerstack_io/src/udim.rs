@@ -478,7 +478,7 @@ impl<'a, B: Storage> Discovery<'a, B> {
         let catalog = self.catalog;
         let source = anchor
             .map(|id| {
-                catalog.sources.get(&id).ok_or_else(|| {
+                catalog.source(id).ok_or_else(|| {
                     IoError::new(
                         IoErrorKind::MissingLayer,
                         "asset anchor has no source identifier",
@@ -495,7 +495,7 @@ impl<'a, B: Storage> Discovery<'a, B> {
             && !asset.contains(':')
         {
             self.work.member_lookups += 1;
-            let archive = &catalog.package_bytes[&package];
+            let archive = catalog.package_bytes(package).expect("package bytes");
             let anchor = anchor.expect("package anchor");
             if let Some(member) = catalog.package_member(archive, asset, anchor, package)? {
                 return Ok(Some(Found::Member {
@@ -543,7 +543,7 @@ impl<'a, B: Storage> Discovery<'a, B> {
             .catalog
             .ids
             .get(identifier)
-            .and_then(|id| self.catalog.package_bytes.get(id))
+            .and_then(|id| self.catalog.package_bytes(*id))
             .or_else(|| self.session.archives.get(identifier))
         {
             return Ok(archive.clone());

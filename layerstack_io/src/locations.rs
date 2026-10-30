@@ -83,25 +83,24 @@ impl<B: Storage> AssetResolver for LayerLocations<'_, B> {
 
     fn resolved_path(&self, id: LayerId) -> Option<&str> {
         self.catalog
-            .sources
-            .get(&id)
+            .source(id)
             .map(|source| FormatArgs::strip(&source.identifier))
     }
 
     fn anchor_asset_path(&self, asset_path: &str, anchor: LayerId) -> Option<String> {
         let location = self.resolved_path(anchor).unwrap_or("");
         let exists = |identifier: &str| self.exists(identifier);
-        let Some(package) = self.catalog.sources.get(&anchor).and_then(|s| s.package) else {
+        let Some(package) = self.catalog.source(anchor).and_then(|s| s.package) else {
             return create_identifier(asset_path, location, exists);
         };
-        let Some(archive) = self.catalog.package_bytes.get(&package) else {
+        let Some(archive) = self.catalog.package_bytes(package) else {
             return create_identifier(asset_path, location, exists);
         };
         let outer = self.catalog.package_identifier(package);
         // `SdfComputeAssetPathRelativeToLayer` anchors a path inside the
         // package to the packaged layer, the package read as a layer
         // standing for its root layer.
-        let packaged = match self.catalog.package_roots.get(&anchor) {
+        let packaged = match self.catalog.package_root(anchor) {
             Some(root) => alloc::format!("{outer}[{root}]"),
             None => String::from(location),
         };

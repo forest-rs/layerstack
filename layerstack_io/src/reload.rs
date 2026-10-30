@@ -50,7 +50,7 @@ impl<B> PreparedReload<'_, B> {
     }
     /// Candidate source identifier; package members use `package[member]`.
     pub fn identifier(&self, layer: LayerId) -> Option<&str> {
-        self.catalog.sources.get(&layer).map(|s| &*s.identifier)
+        self.catalog.source(layer).map(|s| &*s.identifier)
     }
     /// Candidate retained-array statistics without materializing numeric data.
     #[cfg(feature = "std")]
@@ -98,7 +98,7 @@ impl<B: Storage> StageDocument<B> {
             .used_layers(true)
             .difference(&sessions)
             .copied()
-            .filter(|id| self.catalog.sources.contains_key(id))
+            .filter(|id| self.catalog.source(*id).is_some())
             .collect();
         self.prepare_reload_layers(&ids, policy)
     }
@@ -141,8 +141,7 @@ impl<B: Storage> StageDocument<B> {
             .iter()
             .map(|id| {
                 self.catalog
-                    .sources
-                    .get(id)
+                    .source(*id)
                     .map(|s| s.package.unwrap_or(*id))
                     .ok_or_else(|| {
                         IoError::new(
@@ -154,9 +153,8 @@ impl<B: Storage> StageDocument<B> {
             .collect::<Result<_, _>>()?;
         let selected: BTreeSet<_> = self
             .catalog
-            .sources
-            .iter()
-            .filter_map(|(&id, s)| {
+            .sources()
+            .filter_map(|(id, s)| {
                 (roots.contains(&id) || s.package.is_some_and(|p| roots.contains(&p))).then_some(id)
             })
             .collect();
@@ -178,17 +176,17 @@ impl<B: Storage> StageDocument<B> {
         let mut catalog = self.catalog.clone();
         catalog.reserved.extend(self.store.layer_ids());
         if root_closure {
-            catalog.states.clear();
+            catalog.clear_states();
             #[cfg(feature = "std")]
             catalog.retained_values.clear();
         }
         for id in &selected {
-            catalog.states.remove(id);
+            catalog.clear_state(*id);
             #[cfg(feature = "std")]
             catalog.retained_values.remove(id);
         }
         for root in &roots {
-            let outer = catalog.sources[root].identifier.clone();
+            let outer = catalog.source(*root).expect("source").identifier.clone();
             catalog
                 .ids
                 .retain(|identifier, id| *id != *root || *identifier == outer);
@@ -215,7 +213,12 @@ impl<B: Storage> StageDocument<B> {
         reader.reachable_only = root_closure;
         reader.muted.clone_from(&self.stage.options().muted_layers);
         for id in roots {
-            let identifier = reader.catalog.sources[&id].identifier.clone();
+            let identifier = reader
+                .catalog
+                .source(id)
+                .expect("source")
+                .identifier
+                .clone();
             let result = reader.load(&identifier, None, store.tokens(), store.paths())?;
             if let Some(layer) = result.layer {
                 reader.pending.push(layer);

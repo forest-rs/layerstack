@@ -580,7 +580,8 @@ pub(crate) struct Outcome {
     /// ([`lists_children_only`]), sorted: their prim indexes and namespace
     /// stay as they were, and only their child lists are composed again.
     pub(crate) child_lists: Vec<PathId>,
-    /// Source prims whose schema identity changed (`apiSchemas`).
+    /// Source prims whose schema identity (`apiSchemas`), model kind
+    /// (`kind`) or value clips (`clips`, `clipSets`) changed.
     pub(crate) resync_sites: Vec<(LayerId, PathId)>,
     /// `(layer, source prim path, property name)` of every property spec
     /// added or removed, sorted: each changes that property's spec stack,
@@ -1021,8 +1022,8 @@ pub(crate) fn apply(
         // path of a property spec added or removed (`didAddProperty`,
         // `didAddPropertyWithOnlyRequiredFields`, `didRemoveProperty` in
         // `SdfChangeList`), which `PcpChanges::DidChange` records as a
-        // change of that property's spec stack. An `apiSchemas` change
-        // resyncs the prim.
+        // change of that property's spec stack. A change of a prim field
+        // that `resyncs_prim` resyncs the prim.
         if let Raw::Property {
             layer, loc, name, ..
         } = &guarded.written
@@ -1036,7 +1037,7 @@ pub(crate) fn apply(
                 property: None,
                 key,
                 ..
-            } if store.tokens().resolve(*key) == "apiSchemas" => Some((*layer, loc.prim_path())),
+            } if resyncs_prim(store.tokens().resolve(*key)) => Some((*layer, loc.prim_path())),
             _ => None,
         };
         if let Some(site) = declaration {
@@ -1099,6 +1100,16 @@ pub(crate) fn apply(
         touched,
         structural: !structural_layers.is_empty(),
     })
+}
+
+/// Whether a prim metadata field `key` resyncs its prim: `apiSchemas`
+/// changes its schema identity, `kind` the model hierarchy of it and its
+/// descendants, and `clips` or `clipSets` where its descendants' values
+/// come from. These are the generic fields `UsdStage::_HandleLayersDidChange`
+/// (`pxr/usd/usd/stage.cpp`) recomposes for, with `active`, `specifier`
+/// and `typeName`, which change spec slots of their own here.
+fn resyncs_prim(key: &str) -> bool {
+    matches!(key, "apiSchemas" | "kind" | "clips" | "clipSets")
 }
 
 /// The prim path of `guarded` when it is a [`Raw::PrimSlots`] step that

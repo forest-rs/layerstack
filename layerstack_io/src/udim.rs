@@ -398,12 +398,17 @@ impl<'a, B: Storage> Discovery<'a, B> {
                         // tile only if the storage says so.
                         let stem = resolved.stem.to_ascii_lowercase();
                         let start = listing.folded.partition_point(|e| *e < stem);
-                        let loose: BTreeSet<UdimTile> = listing.folded[start..]
+                        // Sorted and deduplicated through `layerstack::sort`
+                        // rather than collected into a set, whose `collect`
+                        // compiles a sort of its own for `UdimTile`.
+                        let mut loose: Vec<UdimTile> = listing.folded[start..]
                             .iter()
                             .take_while(|entry| entry.starts_with(stem.as_str()))
                             .filter_map(|entry| resolved.tile_of_ignoring_case(entry))
                             .filter(|tile| *tile > first_tile && !tiles.contains(tile))
                             .collect();
+                        sort::sort_unstable(&mut loose);
+                        loose.dedup();
                         for tile in loose {
                             let identifier = resolved.tile(tile);
                             self.work.existence_checks += 1;

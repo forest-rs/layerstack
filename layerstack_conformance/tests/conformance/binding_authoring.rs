@@ -10,6 +10,12 @@
 //! relationship spec after it: explicit targets, `bindMaterialAs` and
 //! `custom`. The test replays the calls through `MaterialBindingApiEdit`,
 //! applying each before the next, and compares the root layer's specs.
+//!
+//! A `Bind` of a material where no prim is is refused on both sides, but
+//! C++ creates the binding relationship before `SetTargets` refuses the
+//! material's empty path, leaving an empty relationship spec behind its
+//! error. A refusal here collects nothing, so those specs
+//! ([`LEFT_BY_REFUSED_BIND`]) are left out of the comparison.
 
 use crate::support::schema_scene as support;
 
@@ -17,10 +23,19 @@ use std::collections::BTreeMap;
 
 use layerstack::{EditTarget, InMemoryStore, LayerId, PathId, PropertyKind, Value};
 use layerstack_schemas::usd_shade::MaterialBindingApiEdit;
-use layerstack_schemas::{BindingStrength, MaterialPurpose, MetadataError, SchemaEdit};
+use layerstack_schemas::{
+    BindingStrength, MaterialBindingError, MaterialPurpose, MetadataError, SchemaEdit,
+};
 use serde::Deserialize;
 
 const ORACLE: &str = include_str!("../../fixtures/binding_authoring/oracle.json");
+
+/// The empty relationship specs C++ leaves behind a refused `Bind` of a
+/// missing material, which a refusal here does not author.
+const LEFT_BY_REFUSED_BIND: [&str; 2] = [
+    "/Set/Mesh.material:binding:draft",
+    "/Set.material:binding:collection:gone",
+];
 
 const SCENE: &str = r#"#usda 1.0
 def Xform "Set" (prepend apiSchemas = ["CollectionAPI:metal", "MaterialBindingAPI"])
@@ -108,6 +123,8 @@ fn binding_authoring_matches_openusd_call_by_call() {
     let mesh = store.path("/Set/Mesh");
     let a = store.path("/Looks/A");
     let b = store.path("/Looks/B");
+    let gone = store.path("/Looks/Gone");
+    let draft = MaterialPurpose::Other("draft".into());
     let collection = store.property_path("/Set.collection:metal");
     let stronger = Some(BindingStrength::StrongerThanDescendants);
     let weaker = Some(BindingStrength::WeakerThanDescendants);
@@ -115,11 +132,12 @@ fn binding_authoring_matches_openusd_call_by_call() {
     enum Author {
         Bind(PathId, Option<BindingStrength>, MaterialPurpose),
         BindCollection(Option<&'static str>, MaterialPurpose),
+        BindCollectionTo(PathId, &'static str),
         Unbind(MaterialPurpose),
         UnbindCollection(&'static str),
         UnbindAll(PathId),
     }
-    use Author::{Bind, BindCollection, Unbind, UnbindAll, UnbindCollection};
+    use Author::{Bind, BindCollection, BindCollectionTo, Unbind, UnbindAll, UnbindCollection};
     use MaterialPurpose::{All, Full, Preview};
     let calls = [
         ("bind A", Bind(a, None, All)),
@@ -145,6 +163,16 @@ fn binding_authoring_matches_openusd_call_by_call() {
         ("unbind collection metalBits", UnbindCollection("metalBits")),
         ("unbind all /Set", UnbindAll(set)),
         ("unbind all /Set/Mesh", UnbindAll(mesh)),
+        ("bind missing /Looks/Gone draft", Bind(gone, None, draft)),
+        ("bind non-material /Set", Bind(set, None, All)),
+        (
+            "bind collection missing gone",
+            BindCollectionTo(gone, "gone"),
+        ),
+        (
+            "bind collection non-material odd",
+            BindCollectionTo(mesh, "odd"),
+        ),
     ];
     assert_eq!(calls.len(), oracle.calls.len());
     for ((label, author), expected) in calls.into_iter().zip(&oracle.calls) {
@@ -165,6 +193,9 @@ fn binding_authoring_matches_openusd_call_by_call() {
             BindCollection(name, purpose) => {
                 on_set.bind_collection(&mut edit, collection, b, name, None, &purpose)
             }
+            BindCollectionTo(material, name) => {
+                on_set.bind_collection(&mut edit, collection, material, Some(name), None, &All)
+            }
             Unbind(purpose) => on_mesh.unbind(&mut edit, &purpose),
             UnbindCollection(name) => on_set.unbind_collection(&mut edit, name, &All),
             UnbindAll(path) => {
@@ -184,12 +215,33 @@ fn binding_authoring_matches_openusd_call_by_call() {
         }
         let transaction = edit.finish();
         live.apply(&mut store, &transaction).unwrap();
+        if label.contains("missing") {
+            assert!(
+                matches!(result, Err(MaterialBindingError::MissingMaterial(path)) if path == gone),
+                "{label}: {result:?}"
+            );
+        }
         let actual = Call {
             call: label.into(),
             accepted: result.is_ok(),
             specs: specs(&store),
         };
-        assert_eq!(&actual, expected, "{label}");
+        let mut expected_specs = BTreeMap::new();
+        for (path, spec) in &expected.specs {
+            if !LEFT_BY_REFUSED_BIND.contains(&path.as_str()) {
+                expected_specs.insert(path.clone(), spec);
+            }
+        }
+        assert_eq!(actual.call, expected.call);
+        assert_eq!(actual.accepted, expected.accepted, "{label}");
+        assert_eq!(
+            actual.specs.iter().collect::<BTreeMap<_, _>>(),
+            expected_specs
+                .iter()
+                .map(|(path, spec)| (path, *spec))
+                .collect::<BTreeMap<_, _>>(),
+            "{label}"
+        );
     }
 }
 

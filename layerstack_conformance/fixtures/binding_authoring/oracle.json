@@ -433,6 +433,201 @@
           "targets": []
         }
       }
+    },
+    {
+      "accepted": false,
+      "call": "bind missing /Looks/Gone draft",
+      "specs": {
+        "/Set.material:binding:collection:metalBits": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": []
+        },
+        "/Set.material:binding:collection:preview:metal": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": []
+        },
+        "/Set/Mesh.material:binding": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": []
+        },
+        "/Set/Mesh.material:binding:draft": {
+          "custom": false,
+          "explicit": false,
+          "strength": null,
+          "targets": []
+        },
+        "/Set/Mesh.material:binding:full": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": []
+        },
+        "/Set/Mesh.material:binding:preview": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": []
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "call": "bind non-material /Set",
+      "specs": {
+        "/Set.material:binding:collection:metalBits": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": []
+        },
+        "/Set.material:binding:collection:preview:metal": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": []
+        },
+        "/Set/Mesh.material:binding": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": [
+            "/Set"
+          ]
+        },
+        "/Set/Mesh.material:binding:draft": {
+          "custom": false,
+          "explicit": false,
+          "strength": null,
+          "targets": []
+        },
+        "/Set/Mesh.material:binding:full": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": []
+        },
+        "/Set/Mesh.material:binding:preview": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": []
+        }
+      }
+    },
+    {
+      "accepted": false,
+      "call": "bind collection missing gone",
+      "specs": {
+        "/Set.material:binding:collection:gone": {
+          "custom": false,
+          "explicit": false,
+          "strength": null,
+          "targets": []
+        },
+        "/Set.material:binding:collection:metalBits": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": []
+        },
+        "/Set.material:binding:collection:preview:metal": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": []
+        },
+        "/Set/Mesh.material:binding": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": [
+            "/Set"
+          ]
+        },
+        "/Set/Mesh.material:binding:draft": {
+          "custom": false,
+          "explicit": false,
+          "strength": null,
+          "targets": []
+        },
+        "/Set/Mesh.material:binding:full": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": []
+        },
+        "/Set/Mesh.material:binding:preview": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": []
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "call": "bind collection non-material odd",
+      "specs": {
+        "/Set.material:binding:collection:gone": {
+          "custom": false,
+          "explicit": false,
+          "strength": null,
+          "targets": []
+        },
+        "/Set.material:binding:collection:metalBits": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": []
+        },
+        "/Set.material:binding:collection:odd": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": [
+            "/Set.collection:metal",
+            "/Set/Mesh"
+          ]
+        },
+        "/Set.material:binding:collection:preview:metal": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": []
+        },
+        "/Set/Mesh.material:binding": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": [
+            "/Set"
+          ]
+        },
+        "/Set/Mesh.material:binding:draft": {
+          "custom": false,
+          "explicit": false,
+          "strength": null,
+          "targets": []
+        },
+        "/Set/Mesh.material:binding:full": {
+          "custom": false,
+          "explicit": true,
+          "strength": null,
+          "targets": []
+        },
+        "/Set/Mesh.material:binding:preview": {
+          "custom": false,
+          "explicit": true,
+          "strength": "weakerThanDescendants",
+          "targets": []
+        }
+      }
     }
   ],
   "openusd_version": "26.11"

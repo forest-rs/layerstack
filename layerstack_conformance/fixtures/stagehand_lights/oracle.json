@@ -1,0 +1,2577 @@
+{
+ "rows": [
+  {
+   "attributes": {
+    "treatAsPoint": true
+   },
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     0.5,
+     0.25
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 8.0,
+    "normalize": true,
+    "radius": 0.25,
+    "shadow:color": [
+     0.10000000149011612,
+     0.0,
+     0.0
+    ],
+    "shadow:distance": 5.0,
+    "shadow:enable": false,
+    "shadow:falloff": 1.0,
+    "shadow:falloffGamma": 2.0,
+    "shaping:cone:angle": 40.0,
+    "shaping:cone:softness": 0.20000000298023224,
+    "shaping:focus": 2.0,
+    "shaping:focusTint": [
+     0.5,
+     0.5,
+     1.0
+    ],
+    "shaping:ies:angleScale": 0.5,
+    "shaping:ies:file": "lamp.ies",
+    "shaping:ies:normalize": true,
+    "specular": 1.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Rig/Bulb",
+   "shadow": true,
+   "shaping": true,
+   "time": null,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.7320508075688774,
+     0.0,
+     -0.9999999999999999,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.9999999999999999,
+     0.0,
+     1.7320508075688774,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {
+    "treatAsPoint": true
+   },
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     0.5,
+     0.25
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 8.0,
+    "normalize": true,
+    "radius": 0.25,
+    "shadow:color": [
+     0.10000000149011612,
+     0.0,
+     0.0
+    ],
+    "shadow:distance": 5.0,
+    "shadow:enable": false,
+    "shadow:falloff": 1.0,
+    "shadow:falloffGamma": 2.0,
+    "shaping:cone:angle": 40.0,
+    "shaping:cone:softness": 0.20000000298023224,
+    "shaping:focus": 2.0,
+    "shaping:focusTint": [
+     0.5,
+     0.5,
+     1.0
+    ],
+    "shaping:ies:angleScale": 0.5,
+    "shaping:ies:file": "lamp.ies",
+    "shaping:ies:normalize": true,
+    "specular": 1.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Rig/Bulb",
+   "shadow": true,
+   "shaping": true,
+   "time": 0,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.7320508075688774,
+     0.0,
+     -0.9999999999999999,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.9999999999999999,
+     0.0,
+     1.7320508075688774,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {
+    "treatAsPoint": true
+   },
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     0.5,
+     0.25
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 1.0,
+    "intensity": 8.0,
+    "normalize": true,
+    "radius": 0.25,
+    "shadow:color": [
+     0.10000000149011612,
+     0.0,
+     0.0
+    ],
+    "shadow:distance": 5.0,
+    "shadow:enable": false,
+    "shadow:falloff": 1.0,
+    "shadow:falloffGamma": 2.0,
+    "shaping:cone:angle": 40.0,
+    "shaping:cone:softness": 0.20000000298023224,
+    "shaping:focus": 2.0,
+    "shaping:focusTint": [
+     0.5,
+     0.5,
+     1.0
+    ],
+    "shaping:ies:angleScale": 0.5,
+    "shaping:ies:file": "lamp.ies",
+    "shaping:ies:normalize": true,
+    "specular": 1.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Rig/Bulb",
+   "shadow": true,
+   "shaping": true,
+   "time": 5,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.7320508075688774,
+     0.0,
+     -0.9999999999999999,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.9999999999999999,
+     0.0,
+     1.7320508075688774,
+     0.0
+    ],
+    [
+     1.0,
+     1.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {
+    "treatAsPoint": true
+   },
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     0.5,
+     0.25
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 2.0,
+    "intensity": 8.0,
+    "normalize": true,
+    "radius": 0.25,
+    "shadow:color": [
+     0.10000000149011612,
+     0.0,
+     0.0
+    ],
+    "shadow:distance": 5.0,
+    "shadow:enable": false,
+    "shadow:falloff": 1.0,
+    "shadow:falloffGamma": 2.0,
+    "shaping:cone:angle": 40.0,
+    "shaping:cone:softness": 0.20000000298023224,
+    "shaping:focus": 2.0,
+    "shaping:focusTint": [
+     0.5,
+     0.5,
+     1.0
+    ],
+    "shaping:ies:angleScale": 0.5,
+    "shaping:ies:file": "lamp.ies",
+    "shaping:ies:normalize": true,
+    "specular": 1.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Rig/Bulb",
+   "shadow": true,
+   "shaping": true,
+   "time": 10,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.7320508075688774,
+     0.0,
+     -0.9999999999999999,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.9999999999999999,
+     0.0,
+     1.7320508075688774,
+     0.0
+    ],
+    [
+     2.0,
+     1.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {},
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": true,
+    "exposure": 0.0,
+    "height": 0.5,
+    "intensity": 1.0,
+    "normalize": false,
+    "specular": 1.0,
+    "texture:file": "panel.png",
+    "width": 2.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Panel",
+   "shadow": false,
+   "shaping": false,
+   "time": null,
+   "type": "RectLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     3.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {},
+   "blackbody": [
+    1.9353238344192505,
+    0.8035657405853271,
+    0.19168955087661743
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 2700.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": true,
+    "exposure": 0.0,
+    "height": 0.5,
+    "intensity": 1.0,
+    "normalize": false,
+    "specular": 1.0,
+    "texture:file": "panel.png",
+    "width": 2.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Panel",
+   "shadow": false,
+   "shaping": false,
+   "time": 0,
+   "type": "RectLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     3.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {},
+   "blackbody": [
+    1.1043095588684082,
+    0.9764251708984375,
+    0.9263780117034912
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 5850.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": true,
+    "exposure": 0.0,
+    "height": 0.5,
+    "intensity": 1.0,
+    "normalize": false,
+    "specular": 1.0,
+    "texture:file": "panel.png",
+    "width": 2.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Panel",
+   "shadow": false,
+   "shaping": false,
+   "time": 5,
+   "type": "RectLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     3.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {},
+   "blackbody": [
+    0.9043021202087402,
+    0.9938889741897583,
+    1.3423259258270264
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 9000.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": true,
+    "exposure": 0.0,
+    "height": 0.5,
+    "intensity": 1.0,
+    "normalize": false,
+    "specular": 1.0,
+    "texture:file": "panel.png",
+    "width": 2.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Panel",
+   "shadow": false,
+   "shaping": false,
+   "time": 10,
+   "type": "RectLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     3.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {},
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "angle": 1.5,
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 50000.0,
+    "normalize": false,
+    "specular": 1.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Sun",
+   "shadow": false,
+   "shaping": false,
+   "time": null,
+   "type": "DistantLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     0.9396926207859084,
+     0.0,
+     -0.34202014332566877,
+     0.0
+    ],
+    [
+     -0.29619813272602386,
+     0.5000000000000001,
+     -0.8137976813493737,
+     0.0
+    ],
+    [
+     0.1710100716628344,
+     0.8660254037844386,
+     0.4698463103929543,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {},
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "angle": 1.5,
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 50000.0,
+    "normalize": false,
+    "specular": 1.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Sun",
+   "shadow": false,
+   "shaping": false,
+   "time": 0,
+   "type": "DistantLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     0.9396926207859084,
+     0.0,
+     -0.34202014332566877,
+     0.0
+    ],
+    [
+     -0.29619813272602386,
+     0.5000000000000001,
+     -0.8137976813493737,
+     0.0
+    ],
+    [
+     0.1710100716628344,
+     0.8660254037844386,
+     0.4698463103929543,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {},
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "angle": 1.5,
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 50000.0,
+    "normalize": false,
+    "specular": 1.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Sun",
+   "shadow": false,
+   "shaping": false,
+   "time": 5,
+   "type": "DistantLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     0.9396926207859084,
+     0.0,
+     -0.34202014332566877,
+     0.0
+    ],
+    [
+     -0.29619813272602386,
+     0.5000000000000001,
+     -0.8137976813493737,
+     0.0
+    ],
+    [
+     0.1710100716628344,
+     0.8660254037844386,
+     0.4698463103929543,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {},
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "angle": 1.5,
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 50000.0,
+    "normalize": false,
+    "specular": 1.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Sun",
+   "shadow": false,
+   "shaping": false,
+   "time": 10,
+   "type": "DistantLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     0.9396926207859084,
+     0.0,
+     -0.34202014332566877,
+     0.0
+    ],
+    [
+     -0.29619813272602386,
+     0.5000000000000001,
+     -0.8137976813493737,
+     0.0
+    ],
+    [
+     0.1710100716628344,
+     0.8660254037844386,
+     0.4698463103929543,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {},
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 1.0,
+    "normalize": false,
+    "radius": 0.75,
+    "specular": 1.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [
+      "/World/Rig/Bulb"
+     ],
+     "includeRoot": false,
+     "includes": [
+      "/World/Rig"
+     ]
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": [
+      "/World/Panel"
+     ]
+    }
+   },
+   "path": "/World/Spot",
+   "shadow": false,
+   "shaping": false,
+   "time": null,
+   "type": "DiskLight",
+   "visibility": "invisible",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {},
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 1.0,
+    "normalize": false,
+    "radius": 0.75,
+    "specular": 1.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [
+      "/World/Rig/Bulb"
+     ],
+     "includeRoot": false,
+     "includes": [
+      "/World/Rig"
+     ]
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": [
+      "/World/Panel"
+     ]
+    }
+   },
+   "path": "/World/Spot",
+   "shadow": false,
+   "shaping": false,
+   "time": 0,
+   "type": "DiskLight",
+   "visibility": "invisible",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {},
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 1.0,
+    "normalize": false,
+    "radius": 0.75,
+    "specular": 1.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [
+      "/World/Rig/Bulb"
+     ],
+     "includeRoot": false,
+     "includes": [
+      "/World/Rig"
+     ]
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": [
+      "/World/Panel"
+     ]
+    }
+   },
+   "path": "/World/Spot",
+   "shadow": false,
+   "shaping": false,
+   "time": 5,
+   "type": "DiskLight",
+   "visibility": "invisible",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {},
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 1.0,
+    "normalize": false,
+    "radius": 0.75,
+    "specular": 1.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [
+      "/World/Rig/Bulb"
+     ],
+     "includeRoot": false,
+     "includes": [
+      "/World/Rig"
+     ]
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": [
+      "/World/Panel"
+     ]
+    }
+   },
+   "path": "/World/Spot",
+   "shadow": false,
+   "shaping": false,
+   "time": 10,
+   "type": "DiskLight",
+   "visibility": "invisible",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {
+    "treatAsLine": true
+   },
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 0.5,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 1.0,
+    "length": 3.0,
+    "normalize": false,
+    "radius": 0.10000000149011612,
+    "specular": 2.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Tube",
+   "shadow": false,
+   "shaping": false,
+   "time": null,
+   "type": "CylinderLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {
+    "treatAsLine": true
+   },
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 0.5,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 1.0,
+    "length": 3.0,
+    "normalize": false,
+    "radius": 0.10000000149011612,
+    "specular": 2.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Tube",
+   "shadow": false,
+   "shaping": false,
+   "time": 0,
+   "type": "CylinderLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {
+    "treatAsLine": true
+   },
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 0.5,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 1.0,
+    "length": 3.0,
+    "normalize": false,
+    "radius": 0.10000000149011612,
+    "specular": 2.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Tube",
+   "shadow": false,
+   "shaping": false,
+   "time": 5,
+   "type": "CylinderLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {
+    "treatAsLine": true
+   },
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 0.5,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 1.0,
+    "length": 3.0,
+    "normalize": false,
+    "radius": 0.10000000149011612,
+    "specular": 2.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Tube",
+   "shadow": false,
+   "shaping": false,
+   "time": 10,
+   "type": "CylinderLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {},
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 1.0,
+    "normalize": false,
+    "specular": 1.0,
+    "texture:file": "sky.exr",
+    "texture:format": "latlong"
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Sky",
+   "shadow": false,
+   "shaping": false,
+   "time": null,
+   "type": "DomeLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {},
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 1.0,
+    "normalize": false,
+    "specular": 1.0,
+    "texture:file": "sky.exr",
+    "texture:format": "latlong"
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Sky",
+   "shadow": false,
+   "shaping": false,
+   "time": 0,
+   "type": "DomeLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {},
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 1.0,
+    "normalize": false,
+    "specular": 1.0,
+    "texture:file": "sky.exr",
+    "texture:format": "latlong"
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Sky",
+   "shadow": false,
+   "shaping": false,
+   "time": 5,
+   "type": "DomeLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {},
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 1.0,
+    "normalize": false,
+    "specular": 1.0,
+    "texture:file": "sky.exr",
+    "texture:format": "latlong"
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Sky",
+   "shadow": false,
+   "shaping": false,
+   "time": 10,
+   "type": "DomeLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {
+    "poleAxis": "Z"
+   },
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 1.0,
+    "normalize": false,
+    "specular": 1.0,
+    "texture:file": null,
+    "texture:format": "mirroredBall"
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Sky1",
+   "shadow": false,
+   "shaping": false,
+   "time": null,
+   "type": "DomeLight_1",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {
+    "poleAxis": "Z"
+   },
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 1.0,
+    "normalize": false,
+    "specular": 1.0,
+    "texture:file": null,
+    "texture:format": "mirroredBall"
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Sky1",
+   "shadow": false,
+   "shaping": false,
+   "time": 0,
+   "type": "DomeLight_1",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {
+    "poleAxis": "Z"
+   },
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 1.0,
+    "normalize": false,
+    "specular": 1.0,
+    "texture:file": null,
+    "texture:format": "mirroredBall"
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Sky1",
+   "shadow": false,
+   "shaping": false,
+   "time": 5,
+   "type": "DomeLight_1",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {
+    "poleAxis": "Z"
+   },
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 1.0,
+    "normalize": false,
+    "specular": 1.0,
+    "texture:file": null,
+    "texture:format": "mirroredBall"
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Sky1",
+   "shadow": false,
+   "shaping": false,
+   "time": 10,
+   "type": "DomeLight_1",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {},
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "height": 1.0,
+    "intensity": 1.0,
+    "normalize": false,
+    "specular": 1.0,
+    "width": 1.5
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Window",
+   "shadow": false,
+   "shaping": false,
+   "time": null,
+   "type": "PortalLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {},
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "height": 1.0,
+    "intensity": 1.0,
+    "normalize": false,
+    "specular": 1.0,
+    "width": 1.5
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Window",
+   "shadow": false,
+   "shaping": false,
+   "time": 0,
+   "type": "PortalLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {},
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "height": 1.0,
+    "intensity": 1.0,
+    "normalize": false,
+    "specular": 1.0,
+    "width": 1.5
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Window",
+   "shadow": false,
+   "shaping": false,
+   "time": 5,
+   "type": "PortalLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {},
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "height": 1.0,
+    "intensity": 1.0,
+    "normalize": false,
+    "specular": 1.0,
+    "width": 1.5
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Window",
+   "shadow": false,
+   "shaping": false,
+   "time": 10,
+   "type": "PortalLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {
+    "treatAsPoint": false
+   },
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 1.0,
+    "normalize": false,
+    "radius": 0.5,
+    "specular": 1.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Fallbacks",
+   "shadow": false,
+   "shaping": false,
+   "time": null,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {
+    "treatAsPoint": false
+   },
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 1.0,
+    "normalize": false,
+    "radius": 0.5,
+    "specular": 1.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Fallbacks",
+   "shadow": false,
+   "shaping": false,
+   "time": 0,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {
+    "treatAsPoint": false
+   },
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 1.0,
+    "normalize": false,
+    "radius": 0.5,
+    "specular": 1.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Fallbacks",
+   "shadow": false,
+   "shaping": false,
+   "time": 5,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "attributes": {
+    "treatAsPoint": false
+   },
+   "blackbody": [
+    1.0433334112167358,
+    0.9836244583129883,
+    1.0346132516860962
+   ],
+   "inputs": {
+    "color": [
+     1.0,
+     1.0,
+     1.0
+    ],
+    "colorTemperature": 6500.0,
+    "diffuse": 1.0,
+    "enableColorTemperature": false,
+    "exposure": 0.0,
+    "intensity": 1.0,
+    "normalize": false,
+    "radius": 0.5,
+    "specular": 1.0
+   },
+   "links": {
+    "lightLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    },
+    "shadowLink": {
+     "excludes": [],
+     "includeRoot": true,
+     "includes": []
+    }
+   },
+   "path": "/World/Fallbacks",
+   "shadow": false,
+   "shaping": false,
+   "time": 10,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  }
+ ],
+ "version": "26.11"
+}

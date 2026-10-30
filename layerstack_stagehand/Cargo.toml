@@ -40,6 +40,9 @@ libm = { workspace = true }
 [dev-dependencies]
 # Tests read their scenes from USDA text.
 layerstack_usda = { workspace = true }
+# The lights test reads the OpenUSD oracle `layerstack_conformance` records
+# (`fixtures/stagehand_lights/oracle.json`); already in the lockfile.
+serde_json = { features = ["float_roundtrip"], version = "1.0" }
 
 [lints]
 workspace = true

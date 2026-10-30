@@ -1840,7 +1840,7 @@ impl LiveStage {
             .filter(|arc| affected_set.contains(&arc.target))
             .copied()
             .collect();
-        new_arcs.sort_unstable_by_key(|arc| arc.target);
+        sort::sort_unstable_by_key(&mut new_arcs, |arc| arc.target);
         let arcs_of = |prim: PathId| {
             let start = new_arcs.partition_point(|arc| arc.target < prim);
             let end = new_arcs.partition_point(|arc| arc.target <= prim);

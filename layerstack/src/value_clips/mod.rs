@@ -1331,7 +1331,10 @@ fn over(
     strong: &[(Arc<str>, FieldValue)],
     weak: &[(Arc<str>, FieldValue)],
 ) -> Vec<(Arc<str>, FieldValue)> {
-    let mut result: BTreeMap<_, _> = weak.iter().cloned().collect();
+    // Inserted one by one: `collect` would sort the pairs first, a copy of
+    // the standard sort for this pair type alone in the WebAssembly module.
+    let mut result = BTreeMap::new();
+    result.extend(weak.iter().cloned());
     for (name, value) in strong {
         let value = match (value, result.get(name)) {
             (

@@ -7,7 +7,8 @@ browser.
 - **Meshes** (`UsdGeomMesh`): faces triangulated as Hydra fans them, with
   concave faces ear-clipped instead (or everything fanned, for parity);
   vertices split for face-varying and indexed normals, `st` and
-  `displayColor`; authored or smooth computed normals; one draw range per
+  `displayColor`; authored or smooth computed normals (Hydra's, or turned
+  to the face at a concave face's reflex corners on request); one draw range per
   `materialBind` face subset; a retained plan that refills positions and
   normals for new points without triangulating again.
 - **Implicit shapes**: `Cube`, `Sphere`, `Cylinder`, `Cone`, `Capsule` and

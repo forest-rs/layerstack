@@ -25,6 +25,35 @@ const NONE: u32 = u32::MAX;
 pub struct MeshOptions {
     /// How faces become triangles; [`Triangulation::Concave`] by default.
     pub triangulation: Triangulation,
+    /// How smooth normals are computed when none are authored;
+    /// [`SmoothNormals::Hydra`] by default.
+    pub normals: SmoothNormals,
+}
+
+/// How a plan computes smooth normals for a mesh without usable authored
+/// ones. Both sum one contribution per face corner into the corner's
+/// point and normalize the sums; they differ only at a concave face's
+/// reflex corners.
+///
+/// At each corner the contribution is the cross product of the edges to
+/// its two neighbors, `(next - here) × (previous - here)`, which points
+/// along the face's normal at a convex corner and against it at a reflex
+/// one (the corner turns the other way).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SmoothNormals {
+    /// The corner cross products as they are, exactly as Hydra sums them
+    /// (`pxr/imaging/hd/smoothNormals.cpp`): the same normals as Hydra
+    /// draws. At the reflex corner of a lone concave face the normal then
+    /// points away from the face's front, and the corner shades dark. The
+    /// default, for parity.
+    #[default]
+    Hydra,
+    /// Each corner's cross product turned to agree with its face's normal
+    /// (by Newell's method, which a concave face does not mislead): a
+    /// reflex corner contributes along the face's front instead of
+    /// against it. The same normals as [`Self::Hydra`] wherever every face
+    /// is convex; at a reflex corner, a normal on the face's front side.
+    FaceOriented,
 }
 
 /// One contiguous run of triangles in [`MeshBuffers::indices`]: a face
@@ -127,6 +156,7 @@ pub struct MeshPlan {
     face_indices: Vec<i32>,
     holes: Vec<i32>,
     orientation: Orientation,
+    smooth: SmoothNormals,
     points: u32,
     faces: u32,
     /// Per vertex: its point, a corner it stands for, and that corner's face.
@@ -155,6 +185,7 @@ impl MeshPlan {
         // Counted here with saturation; past validation every count fits.
         let mut report = MeshReport {
             triangulation: options.triangulation,
+            smooth_normals: options.normals,
             orientation: topology.orientation,
             subdivision_scheme: topology.subdivision_scheme,
             faces,
@@ -168,6 +199,7 @@ impl MeshPlan {
             face_indices: topology.face_vertex_indices.to_vec(),
             holes: topology.hole_indices.to_vec(),
             orientation: topology.orientation,
+            smooth: options.normals,
             points,
             faces,
             vertex_point: Vec::new(),
@@ -438,8 +470,13 @@ impl MeshPlan {
         buffers.normals = match authored {
             Some(normals) => normals.into_iter().map(normalized).collect(),
             None => {
-                let smooth =
-                    smooth_normals(&self.counts, &self.face_indices, self.orientation, points);
+                let smooth = smooth_normals(
+                    &self.counts,
+                    &self.face_indices,
+                    self.orientation,
+                    self.smooth,
+                    points,
+                );
                 self.vertex_point
                     .iter()
                     .map(|&point| smooth[point as usize])
@@ -684,10 +721,15 @@ fn normalized(v: [f32; 3]) -> [f32; 3] {
 /// neighbors. `pxr/imaging/hd/smoothNormals.cpp`,
 /// `_SmoothNormalsWorker::Compute`, over the adjacency of
 /// `pxr/imaging/hd/vertexAdjacency.cpp`, `BuildAdjacencyTable`.
+///
+/// Under [`SmoothNormals::FaceOriented`], a corner whose cross product
+/// points against its face's Newell normal (oriented the same way, so
+/// flipped for a left-handed face) contributes its negation.
 fn smooth_normals(
     counts: &[i32],
     indices: &[i32],
     orientation: Orientation,
+    mode: SmoothNormals,
     points: &[[f32; 3]],
 ) -> Vec<[f32; 3]> {
     let flip = orientation == Orientation::LeftHanded;
@@ -696,6 +738,13 @@ fn smooth_normals(
     for &count in counts {
         let count = count as usize;
         let face = &indices[first..first + count];
+        let front = match mode {
+            SmoothNormals::Hydra => None,
+            SmoothNormals::FaceOriented => {
+                let n = newell(face, points);
+                Some(if flip { n.map(|c| -c) } else { n })
+            }
+        };
         for j in 0..count {
             let mut previous = face[(j + count - 1) % count] as usize;
             let here = face[j] as usize;
@@ -706,10 +755,20 @@ fn smooth_normals(
             let p = points[here];
             let a = sub3(points[next], p);
             let b = sub3(points[previous], p);
+            let mut c = [
+                a[1] * b[2] - a[2] * b[1],
+                a[2] * b[0] - a[0] * b[2],
+                a[0] * b[1] - a[1] * b[0],
+            ];
+            if let Some(front) = front
+                && c[0] * front[0] + c[1] * front[1] + c[2] * front[2] < 0.0
+            {
+                c = c.map(|v| -v);
+            }
             let n = &mut normals[here];
-            n[0] += a[1] * b[2] - a[2] * b[1];
-            n[1] += a[2] * b[0] - a[0] * b[2];
-            n[2] += a[0] * b[1] - a[1] * b[0];
+            n[0] += c[0];
+            n[1] += c[1];
+            n[2] += c[2];
         }
         first += count;
     }
@@ -717,6 +776,21 @@ fn smooth_normals(
         *normal = normalized(*normal);
     }
     normals
+}
+
+/// The face's normal by Newell's method: twice its vector area, along the
+/// normal its corners wind counter-clockwise about, for any simple
+/// polygon, concave or not.
+fn newell(face: &[i32], points: &[[f32; 3]]) -> [f32; 3] {
+    let mut n = [0.0_f32; 3];
+    for (j, &here) in face.iter().enumerate() {
+        let p = points[here as usize];
+        let q = points[face[(j + 1) % face.len()] as usize];
+        n[0] += (p[1] - q[1]) * (p[2] + q[2]);
+        n[1] += (p[2] - q[2]) * (p[0] + q[0]);
+        n[2] += (p[0] - q[0]) * (p[1] + q[1]);
+    }
+    n
 }
 
 fn sub3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {

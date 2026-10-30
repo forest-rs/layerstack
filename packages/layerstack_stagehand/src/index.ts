@@ -31,13 +31,13 @@ import init, {
   stagehandAbi,
   tessellateShape,
 } from "../wasm/layerstack_stagehand.js";
-import type { DrawRange, MeshInput, MeshReport, PrimvarInput, Shape, Tessellation, Triangulation } from "./types.js";
+import type { DrawRange, MeshInput, MeshOptions, MeshReport, PrimvarInput, Shape, Tessellation } from "./types.js";
 
 export type * from "./types.js";
 export { readMesh, readPoints, readShape } from "./read.js";
 
 /** The exports' version this wrapper speaks (`layerstack_stagehand_wasm::ABI`). */
-const ABI = 1;
+const ABI = 2;
 
 /** A failure, with a stable `code`; its message reads `${operation}: ${message}`. */
 export class StagehandError extends Error {
@@ -155,14 +155,15 @@ export class Stagehand {
    * Plans `input` and fills its buffers: Hydra's fan for convex faces,
    * ear clipping for concave ones (or the fan for all, with
    * `triangulation: "hydraFan"`), vertices split where normals, `st` or
-   * colors differ, authored or smooth normals, one range per subset. An
-   * invalid topology draws nothing; {@link MeshReport.topologyProblem}
-   * says why.
+   * colors differ, authored or smooth normals (Hydra's, or with
+   * `normals: "faceOriented"` turned to the face at reflex corners), one
+   * range per subset. An invalid topology draws nothing;
+   * {@link MeshReport.topologyProblem} says why.
    *
    * Throws `argument.invalid` for points or primvar values that are not
    * whole elements, or an unknown interpolation.
    */
-  buildMesh(input: MeshInput, options: { readonly triangulation?: Triangulation } = {}): StagehandMesh {
+  buildMesh(input: MeshInput, options: MeshOptions = {}): StagehandMesh {
     const builder = call(
       "argument.invalid",
       "buildMesh",
@@ -209,7 +210,7 @@ export class Stagehand {
       builder.free();
       throw error;
     }
-    return new StagehandMesh(builder.build(options.triangulation === "hydraFan"));
+    return new StagehandMesh(builder.build(options.triangulation === "hydraFan", options.normals === "faceOriented"));
   }
 
   /**

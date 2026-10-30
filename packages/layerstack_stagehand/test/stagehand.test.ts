@@ -153,6 +153,30 @@ describe("meshes", () => {
     assert.match(error!.message, /^refill: the plan has 4 points, the input 1$/);
   });
 
+  it("computes Hydra's smooth normals by default, and face-oriented ones on request", () => {
+    // A lone L: its reflex corner (point 3) turns the other way.
+    const input = {
+      faceVertexCounts: new Int32Array([6]),
+      faceVertexIndices: new Int32Array([0, 1, 2, 3, 4, 5]),
+      points: new Float32Array([0, 0, 0, 2, 0, 0, 2, 1, 0, 1, 1, 0, 1, 2, 0, 0, 2, 0]),
+    };
+    const zOfPoint3 = (mesh: StagehandMesh) => {
+      for (let v = 0; v < mesh.positions.length / 3; v++) {
+        if (mesh.positions[3 * v] === 1 && mesh.positions[3 * v + 1] === 1) return mesh.normals[3 * v + 2];
+      }
+      return undefined;
+    };
+    using hydra = stagehand.buildMesh(input);
+    assert.equal(hydra.report!.smoothNormals, "hydra");
+    assert.equal(zOfPoint3(hydra), -1, "Hydra's: facing away at the reflex corner");
+    using oriented = stagehand.buildMesh(input, { normals: "faceOriented" });
+    assert.equal(oriented.report!.smoothNormals, "faceOriented");
+    assert.ok([...oriented.normals].every((n, i) => n === (i % 3 === 2 ? 1 : 0)), "every normal faces +Z");
+    // A refill keeps the mode.
+    oriented.refill(input.points);
+    assert.equal(zOfPoint3(oriented), 1);
+  });
+
   it("reports an invalid topology and draws nothing", () => {
     using stage = open();
     const input = readMesh(stage, "/World/Broken")!;

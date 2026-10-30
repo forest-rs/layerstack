@@ -28,7 +28,9 @@
 //!   and merged where they agree.
 //! - **Normals.** Authored normals (`vertex`, `varying`, `faceVarying`,
 //!   `uniform` or `constant`) are used; without them, smooth normals are
-//!   computed per point as Hydra computes them.
+//!   computed per point as Hydra computes them, or, with
+//!   [`SmoothNormals::FaceOriented`], with each reflex corner of a concave
+//!   face turned to the face's front.
 //! - **Subsets.** Each face subset's triangles form one [`DrawRange`],
 //!   then the faces in no subset.
 //! - **Animation.** [`MeshPlan::refill`] rewrites positions and normals for
@@ -97,7 +99,7 @@ mod tests;
 pub use input::{
     FaceSubsets, Interpolation, MeshInput, MeshTopology, Orientation, Primvar, SubdivisionScheme,
 };
-pub use plan::{DrawRange, MeshBuffers, MeshOptions, MeshPlan, PlanMismatch};
+pub use plan::{DrawRange, MeshBuffers, MeshOptions, MeshPlan, PlanMismatch, SmoothNormals};
 pub use report::{
     ChannelState, DropReason, FaceNote, FaceNoteKind, MeshReport, NormalsSource, SubsetReport,
     TopologyProblem,

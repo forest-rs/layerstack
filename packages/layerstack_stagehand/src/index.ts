@@ -80,7 +80,7 @@ export type {
 } from "./light.js";
 
 /** The exports' version this wrapper speaks (`layerstack_stagehand_wasm::ABI`). */
-const ABI = 2;
+const ABI = 3;
 
 /** A failure, with a stable `code`; its message reads `${operation}: ${message}`. */
 export class StagehandError extends Error {
@@ -136,6 +136,12 @@ function gather(operation: string, input: MeshInput): MeshBuilder {
       (p) => builder.displayColor(p.values, p.indices ?? undefined, p.interpolation, p.elementSize ?? 1),
       input.displayColor,
     );
+    for (const set of input.uvSets ?? []) {
+      const p = set.primvar;
+      call("argument.invalid", operation, () =>
+        builder.uvSet(set.name, p.values, p.indices ?? undefined, p.interpolation, p.elementSize ?? 1),
+      );
+    }
     const subsets = input.subsets ?? [];
     if (subsets.length > 0) {
       const ends = new Uint32Array(subsets.length);
@@ -174,6 +180,8 @@ export class StagehandMesh implements Disposable {
   st: Float32Array | null;
   /** Linear RGB colors, three per vertex; `null` when `displayColor` is not drawn. */
   colors: Float32Array | null;
+  /** The texture coordinate sets drawn besides `st` ({@link MeshInput.uvSets}), two numbers per vertex each, in order. */
+  uvSets: readonly { readonly name: string; readonly values: Float32Array }[];
   /** Three vertex indices per triangle, counter-clockwise seen from the front. */
   readonly indices: Uint32Array;
   /** The authored face of each triangle. */
@@ -191,6 +199,7 @@ export class StagehandMesh implements Disposable {
     this.normals = native.normals();
     this.st = native.st() ?? null;
     this.colors = native.colors() ?? null;
+    this.uvSets = uvSetsOf(native);
     this.indices = native.indices();
     this.triangleFaces = native.triangleFaces();
     const ranges: DrawRange[] = [];
@@ -243,6 +252,7 @@ export class StagehandMesh implements Disposable {
     this.normals = native.normals();
     this.st = native.st() ?? null;
     this.colors = native.colors() ?? null;
+    this.uvSets = uvSetsOf(native);
   }
 
   /** Frees the plan in the module. Idempotent; the buffers stay. */
@@ -260,6 +270,11 @@ export class StagehandMesh implements Disposable {
     if (this.#native === null) throw new StagehandError("mesh.disposed", operation, "the mesh was disposed");
     return this.#native;
   }
+}
+
+/** The texture coordinate sets a native mesh draws besides `st`. */
+function uvSetsOf(native: NativeMesh): { readonly name: string; readonly values: Float32Array }[] {
+  return native.uvSetNames().map((name, index) => Object.freeze({ name, values: native.uvSetValues(index) }));
 }
 
 /** The loaded module: builds mesh buffers and tessellates implicit shapes. */

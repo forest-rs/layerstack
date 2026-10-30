@@ -17,6 +17,13 @@ export interface PrimvarInput {
   readonly elementSize?: number;
 }
 
+/** A texture coordinate set besides `st`, by its primvar's name. */
+export interface UvSetInput {
+  /** The primvar's name, without `primvars:`. */
+  readonly name: string;
+  readonly primvar: PrimvarInput;
+}
+
 /** A face subset (`GeomSubset` of `elementType = "face"`): its faces, drawn as one {@link DrawRange}. */
 export interface SubsetInput {
   /** The subset's path, carried through for the caller; the module does not read it. */
@@ -47,6 +54,12 @@ export interface MeshInput {
   readonly st?: PrimvarInput | null;
   /** `primvars:displayColor`. */
   readonly displayColor?: PrimvarInput | null;
+  /**
+   * Texture coordinate sets besides `st`: `float2` primvars a material
+   * reads by name (`st1`, `uv`), each drawn as a channel of its own
+   * ({@link StagehandMesh.uvSets}), splitting vertices where it differs.
+   */
+  readonly uvSets?: readonly UvSetInput[];
   /** The face subsets drawn as ranges, typically the `materialBind` family, in order. */
   readonly subsets?: readonly SubsetInput[];
 }
@@ -139,6 +152,8 @@ export interface MeshReport {
     readonly st: ChannelState;
     readonly displayColor: ChannelState;
   };
+  /** Each texture coordinate set's fate besides `st`, in the input's order. */
+  readonly uvSets: readonly { readonly name: string; readonly channel: ChannelState }[];
   /** Each subset's part, in the input's order. */
   readonly subsets: readonly {
     readonly faces: number;

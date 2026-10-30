@@ -356,3 +356,76 @@ def Xform "Lab" {
     }
   });
 });
+
+describe("texture coordinate sets", () => {
+  // A quad authoring `st` and `st1`, whose material reads `st1`, as
+  // `layerstack_stagehand`'s `a_material_reading_another_uv_set_gets_its_channel`.
+  const SCENE = `#usda 1.0
+def Mesh "Plate" (
+    prepend apiSchemas = ["MaterialBindingAPI"]
+) {
+    int[] faceVertexCounts = [3, 3]
+    int[] faceVertexIndices = [0, 1, 2, 0, 2, 3]
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+    texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1)] (
+        interpolation = "vertex"
+    )
+    texCoord2f[] primvars:st1 = [(0, 0), (2, 0), (2, 2), (0, 2), (5, 5), (5, 5)] (
+        interpolation = "faceVarying"
+    )
+    rel material:binding = </Looks/Tiled>
+}
+def Scope "Looks" {
+    def Material "Tiled" {
+        token outputs:surface.connect = </Looks/Tiled/Surface.outputs:surface>
+        token inputs:coordinates = "st1"
+        def Shader "Surface" {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor.connect = </Looks/Tiled/Texture.outputs:rgb>
+            token outputs:surface
+        }
+        def Shader "Texture" {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @tile.png@
+            float2 inputs:st.connect = </Looks/Tiled/Reader.outputs:result>
+            float3 outputs:rgb
+        }
+        def Shader "Reader" {
+            uniform token info:id = "UsdPrimvarReader_float2"
+            string inputs:varname.connect = </Looks/Tiled.inputs:coordinates>
+            float2 outputs:result
+        }
+    }
+}
+`;
+
+  it("give a mesh the sets its materials read, planned once", () => {
+    const stage = layerstack.open({ identifier: "scene.usda", bytes: new TextEncoder().encode(SCENE) });
+    const heard: Changes[] = [];
+    stage.onChange((changes) => heard.push(changes));
+    const list = stagehand.drawList(stage);
+    try {
+      const first = list.refresh();
+      assert.equal(first.work.triangulations, 1);
+      assert.equal(first.work.materialsRead, 1);
+      const item = list.items()[0]!;
+      const mesh = list.buffers(item.buffer)!.mesh;
+      assert.deepEqual(
+        mesh.uvSets.map((set) => set.name),
+        ["st1"],
+      );
+      assert.equal(mesh.positions.length / 3, 6, "split where st1 differs");
+      assert.deepEqual(mesh.report?.uvSets, [{ name: "st1", channel: { state: "used", interpolation: "faceVarying", indexed: false } }]);
+      stage.apply([{ type: "setValue", path: "/Looks/Tiled.inputs:coordinates", value: { type: "token", value: "st" } }], stage.root);
+      const diff = list.applyChanges(heard.at(-1)!);
+      assert.deepEqual(diff.materialsChanged, ["/Looks/Tiled"]);
+      assert.deepEqual(diff.rebuilt, [item.buffer]);
+      assert.equal(diff.work.triangulations, 1);
+      assert.deepEqual(list.buffers(item.buffer)!.mesh.uvSets, []);
+      assert.equal(list.buffers(item.buffer)!.mesh.positions.length / 3, 4);
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+  });
+});

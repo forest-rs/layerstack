@@ -100,7 +100,18 @@ pub(crate) fn json(report: &MeshReport) -> String {
     channel(&mut out, &report.st);
     out.push_str(r#","displayColor":"#);
     channel(&mut out, &report.display_color);
-    out.push_str(r#"},"subsets":["#);
+    out.push_str(r#"},"uvSets":["#);
+    for (i, set) in report.uv_sets.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        out.push_str(r#"{"name":"#);
+        quoted(&mut out, &set.name);
+        out.push_str(r#","channel":"#);
+        channel(&mut out, &set.state);
+        out.push('}');
+    }
+    out.push_str(r#"],"subsets":["#);
     for (i, subset) in report.subsets.iter().enumerate() {
         if i > 0 {
             out.push(',');

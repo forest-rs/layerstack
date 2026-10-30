@@ -25,7 +25,10 @@
 //! prim composing from it (`/Echo` inherits `/World/Lamp`); one holding an
 //! attribute spec resyncs the attribute too, and one holding metadata
 //! composing nothing is info-only. `kind` resyncs its prim, and a field
-//! of the root layer composing nothing changes `/` info-only.
+//! of the root layer composing nothing changes `/` info-only. A sublayer
+//! inserted or removed resyncs the prims whose specs it adds or takes
+//! away, changes those its `over`s hold properties of info-only, with the
+//! properties resynced, and changes `/` info-only.
 //!
 //! Differences, deliberate:
 //!
@@ -48,11 +51,11 @@
 //! - OpenUSD reports `/Echo` info-only with every change of the root
 //!   layer's own fields, which compose nothing into it; layerstack does
 //!   not.
-//! - A sublayer inserted or removed, or a layer of the root layer stack
-//!   muted or unmuted, recomposes the stage whole here, and resyncs `/`.
-//!   OpenUSD resyncs the prims and properties whose specs came or went,
-//!   and changes the rest of the prims whose spec stacks changed, and `/`,
-//!   info-only.
+//! - A layer of the root layer stack muted or unmuted recomposes the stage
+//!   whole here, and resyncs `/`. OpenUSD resyncs the prims and properties
+//!   whose specs came or went, and changes the rest of the prims whose spec
+//!   stacks changed, and `/`, info-only, as both do for a sublayer
+//!   inserted or removed.
 
 use std::collections::BTreeMap;
 
@@ -189,13 +192,14 @@ struct Extra {
     session: LayerId,
     empty: LayerId,
     comet: LayerId,
+    heavy: LayerId,
 }
 
 impl Extra {
     fn add(loaded: &mut LoadedStage) -> Self {
         let next = loaded.store.layer_ids().into_iter().max().unwrap().0 + 1;
-        let [session, empty, comet] = [0, 1, 2].map(|at| LayerId(next + at));
-        for id in [session, empty, comet] {
+        let [session, empty, comet, heavy] = [0, 1, 2, 3].map(|at| LayerId(next + at));
+        for id in [session, empty, comet, heavy] {
             loaded.store.insert_layer(Layer::new(id));
         }
         let mut txn = Transaction::new();
@@ -205,11 +209,25 @@ impl Extra {
             Specifier::Def,
             None,
         );
-        txn.apply(&mut loaded.store).expect("comet.usda");
+        let rock = loaded.store.path("/World/Rock");
+        txn.create_prim(
+            EditTarget::for_layer(heavy).prim(rock),
+            Specifier::Over,
+            None,
+        );
+        let mass = loaded.store.property_path("/World/Rock.mass");
+        let double = PropertySpec::typed_attribute(PropertyType::parse("double").unwrap());
+        txn.create_property(
+            EditTarget::for_layer(heavy).property(mass),
+            double.with_default(Value::Double(2.0)),
+        );
+        txn.apply(&mut loaded.store)
+            .expect("comet.usda, heavy.usda");
         Self {
             session,
             empty,
             comet,
+            heavy,
         }
     }
 }
@@ -414,15 +432,15 @@ fn edit(name: &str, loaded: &mut LoadedStage, live: &LiveStage, added: &Extra) -
                 FieldValue::Value(Value::string("a scene")),
             );
         }
-        "insert_empty_sublayer" | "insert_prim_sublayer" => {
-            let sublayer = if name == "insert_empty_sublayer" {
-                added.empty
-            } else {
-                added.comet
+        "insert_empty_sublayer" | "insert_prim_sublayer" | "insert_opinion_sublayer" => {
+            let sublayer = match name {
+                "insert_empty_sublayer" => added.empty,
+                "insert_prim_sublayer" => added.comet,
+                _ => added.heavy,
             };
             txn.insert_sublayer(scene, 1, SublayerEntry::new(sublayer));
         }
-        "remove_empty_sublayer" | "remove_prim_sublayer" => {
+        "remove_empty_sublayer" | "remove_prim_sublayer" | "remove_opinion_sublayer" => {
             txn.remove_sublayer(scene, 1);
         }
         other => panic!("no edit for {other}"),
@@ -444,12 +462,7 @@ fn corrected(name: &str, mut report: Report) -> Report {
             report.info.remove("/Thing");
             report.resynced = vec!["/Thing".into()];
         }
-        "insert_empty_sublayer"
-        | "remove_empty_sublayer"
-        | "insert_prim_sublayer"
-        | "remove_prim_sublayer"
-        | "mute_sublayer"
-        | "unmute_sublayer" => {
+        "mute_sublayer" | "unmute_sublayer" => {
             report = Report {
                 resynced: vec!["/".into()],
                 ..Report::default()

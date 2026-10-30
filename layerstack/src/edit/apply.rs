@@ -594,6 +594,13 @@ pub(crate) struct Outcome {
     /// ([`inert_prims`]), in every layer it changed: a prim composed
     /// before and after such an edit changed its spec stack alone.
     pub(crate) inert_sites: Vec<(LayerId, PathId)>,
+    /// Whether the transaction only inserted, removed or reordered
+    /// sublayers of layers of the stage's own layer stack, keeping the
+    /// offsets of the sublayers it kept, and changed layer fields that
+    /// compose nothing: every prim then composes the specs it composed,
+    /// and those of the layers that came, without those of the layers that
+    /// went.
+    pub(crate) layer_stack_only: bool,
     /// `(layer, source prim path, change)` of every property field the
     /// transaction changed, property spec additions and removals aside.
     pub(crate) property_fields: Vec<(LayerId, PathId, super::PropertyChange)>,
@@ -1164,6 +1171,20 @@ pub(crate) fn apply(
         children: _,
         prim_fields: _,
     } = journal;
+    let layer_stack_only = !structural_layers.is_empty()
+        && steps.iter().all(|g| match (&g.written, &g.step) {
+            (
+                Raw::Sublayers { layer, sublayers },
+                Raw::Sublayers {
+                    sublayers: before, ..
+                },
+            ) => {
+                stage.is_some_and(|stage| stage.layer_stack().contains(layer))
+                    && keeps_offsets(sublayers, before)
+            }
+            (Raw::LayerMetadata { key, .. }, _) => composes_nothing(store.tokens().resolve(*key)),
+            _ => false,
+        });
     let mut local_structure = Some(Vec::new());
     let mut child_lists = Vec::new();
     let mut resync_sites = Vec::new();
@@ -1271,6 +1292,7 @@ pub(crate) fn apply(
         argument_inputs,
         inert_sites,
         other_sites,
+        layer_stack_only,
         property_fields,
         layer_info,
         inverse: Transaction {
@@ -1280,6 +1302,19 @@ pub(crate) fn apply(
         layers,
         touched,
         structural: !structural_layers.is_empty(),
+    })
+}
+
+/// Whether each sublayer of `after` that `before` lists too keeps its
+/// offset there: an offset changed retimes the values of every spec of the
+/// sublayer, which keeps its place in every spec stack.
+fn keeps_offsets(after: &[crate::SublayerEntry], before: &[crate::SublayerEntry]) -> bool {
+    after.iter().all(|entry| {
+        entry.layer == LayerId::UNRESOLVED
+            || before
+                .iter()
+                .filter(|kept| kept.layer == entry.layer)
+                .all(|kept| kept.offset == entry.offset)
     })
 }
 

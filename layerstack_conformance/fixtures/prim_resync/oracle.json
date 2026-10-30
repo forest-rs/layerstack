@@ -2247,6 +2247,126 @@
       }
     },
     {
+      "name": "insert_opinion_sublayer",
+      "call": "a sublayer with an `over` of `/World/Rock` holding an attribute appended",
+      "notices": [
+        {
+          "resynced": [
+            "/World/Rock.mass"
+          ],
+          "info": [
+            "/",
+            "/Echo",
+            "/World",
+            "/World/Rock"
+          ],
+          "fields": {
+            "/World/Rock.mass": [],
+            "/": [
+              "subLayerOffsets",
+              "subLayers"
+            ],
+            "/Echo": [
+              "subLayerOffsets",
+              "subLayers"
+            ],
+            "/World": [],
+            "/World/Rock": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp",
+          "Robot"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
+      "name": "remove_opinion_sublayer",
+      "call": "that sublayer removed",
+      "notices": [
+        {
+          "resynced": [
+            "/World/Rock.mass"
+          ],
+          "info": [
+            "/",
+            "/Echo",
+            "/World",
+            "/World/Rock"
+          ],
+          "fields": {
+            "/World/Rock.mass": [],
+            "/": [
+              "subLayerOffsets",
+              "subLayers"
+            ],
+            "/Echo": [
+              "subLayerOffsets",
+              "subLayers"
+            ],
+            "/World": [],
+            "/World/Rock": []
+          }
+        }
+      ],
+      "children": {
+        "/": [
+          "World",
+          "Moon",
+          "Sky",
+          "Robot",
+          "Drone",
+          "Thing",
+          "Switch",
+          "Rover",
+          "Echo",
+          "_Base",
+          "Spirit"
+        ],
+        "/World": [
+          "Rock",
+          "Shrub",
+          "Lamp",
+          "Robot"
+        ],
+        "/Robot": [],
+        "/Thing": [
+          "Ball"
+        ],
+        "/Switch": [],
+        "/Rover": [],
+        "prototype": [
+          "Ball"
+        ]
+      }
+    },
+    {
       "name": "mute_sublayer",
       "call": "`UsdStage::MuteLayer` of the weaker layer",
       "notices": [

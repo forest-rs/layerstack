@@ -346,6 +346,16 @@ impl Dirty {
     }
 }
 
+/// Whether a camera or light reading `inputs` reads its own property
+/// `name`: one of them, `treatAsPoint`, `treatAsLine`, `poleAxis`, or a
+/// property of its link collections.
+fn reads(inputs: &[&str], name: &str) -> bool {
+    inputs.contains(&name)
+        || matches!(name, "treatAsPoint" | "treatAsLine" | "poleAxis")
+        || name.starts_with("collection:lightLink:")
+        || name.starts_with("collection:shadowLink:")
+}
+
 /// What a property's change may change of the items under its prim.
 fn property_dirt(name: &str) -> Dirty {
     let mut dirty = Dirty::default();
@@ -574,9 +584,9 @@ struct Entry {
 ///
 /// Cameras ([`CameraItem`]) and lights ([`LightItem`]) are listed beside
 /// the items, by path, and diffed by [`DrawDiff::cameras_changed`] and
-/// [`DrawDiff::lights_changed`]: a change of the camera's or light's own
-/// prim, or of a transform or visibility above it, or a resync over it,
-/// reads it again.
+/// [`DrawDiff::lights_changed`]: a change of an input it reads, of its
+/// transform or visibility or one above it, or a resync over it, reads it
+/// again; other properties of its prim (a lamp's `aim`) do not.
 ///
 /// Not read: collection-based material bindings changed through the
 /// collection alone, and primvars a prototype's instances inherit from
@@ -1046,8 +1056,9 @@ impl DrawList {
     /// Brings the cameras and lights up to `scene` after `changes`, given
     /// what discovery found: new ones are added and read, those a resync
     /// covers but did not find removed, and those a change reaches read
-    /// again: any change of the prim itself, its transform or visibility
-    /// changing above it, or a resync over it.
+    /// again: a change of an input it reads, of its transform or
+    /// visibility or those above it, an unlisted change of it or above it,
+    /// or a resync over it.
     fn apply_to_views(
         &mut self,
         scene: &Scene<'_>,
@@ -1065,30 +1076,45 @@ impl DrawList {
             })
             .collect();
         let resynced = |path: PathId| roots.iter().any(|&root| under(scene, path, root));
-        // What reaches a camera or light below a changed prim: its
-        // transform or visibility. The prim itself: anything.
-        let mut reached: Vec<(PathId, bool)> = Vec::new();
+        // The properties changed on each prim; `None` when the record has no
+        // inventory of them, which reaches everything under the prim.
+        let mut reached: Vec<(PathId, Option<Vec<&str>>)> = Vec::new();
         for &prim in &changes.changed_info_only {
-            let placement = changes
+            let names = changes
                 .property_changes
                 .iter()
                 .find(|changed| changed.prim == prim)
-                .is_none_or(|changed| {
-                    changed.fields.iter().any(|field| {
-                        let dirt = property_dirt(tokens.resolve(field.name));
-                        dirt.transform || dirt.visibility
-                    })
+                .map(|changed| {
+                    changed
+                        .fields
+                        .iter()
+                        .map(|field| tokens.resolve(field.name))
+                        .collect()
                 });
-            reached.push((prim, placement));
+            reached.push((prim, names));
         }
         for property in &changes.resynced_properties {
-            let dirt = property_dirt(tokens.resolve(property.property()));
-            reached.push((property.prim_path(), dirt.transform || dirt.visibility));
+            reached.push((
+                property.prim_path(),
+                Some(alloc::vec![tokens.resolve(property.property())]),
+            ));
         }
-        let reaches = |path: PathId| {
+        // A camera or light reads its own inputs, and the transform and
+        // visibility of its prim and the prims above it.
+        let reaches = |path: PathId, inputs: &[&str]| {
             resynced(path)
-                || reached.iter().any(|&(prim, placement)| {
-                    prim == path || (placement && under(scene, path, prim))
+                || reached.iter().any(|(prim, names)| {
+                    let placement = |name: &&str| {
+                        let dirt = property_dirt(name);
+                        dirt.transform || dirt.visibility
+                    };
+                    match names {
+                        None => under(scene, path, *prim),
+                        Some(names) if *prim == path => names
+                            .iter()
+                            .any(|name| placement(name) || reads(inputs, name)),
+                        Some(names) => under(scene, path, *prim) && names.iter().any(placement),
+                    }
                 })
         };
 
@@ -1104,7 +1130,12 @@ impl DrawList {
             gather.cameras.removed.insert(path);
         }
         let mut read: BTreeSet<PathId> = cameras;
-        read.extend(self.cameras.keys().copied().filter(|&path| reaches(path)));
+        read.extend(
+            self.cameras
+                .keys()
+                .copied()
+                .filter(|&path| reaches(path, CAMERA_INPUTS)),
+        );
         for path in read {
             self.read_camera(scene, path, gather);
         }
@@ -1122,7 +1153,7 @@ impl DrawList {
         }
         let mut read = lights;
         for (path, held) in &self.lights {
-            if reaches(*path) {
+            if reaches(*path, LIGHT_INPUTS) {
                 read.entry(*path).or_insert(held.item.kind);
             }
         }

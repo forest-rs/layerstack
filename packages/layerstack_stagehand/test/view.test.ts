@@ -166,6 +166,10 @@ describe("a draw list's cameras and lights", () => {
       diff = edit([{ type: "setValue", path: "/World/Rig.xformOp:scale", value: { type: "double3", value: [3, 3, 3] } }]);
       assert.deepEqual(diff.lightsChanged, ["/World/Rig/Bulb"]);
       assert.equal(diff.work.lightsRead, 1);
+      // A property the light does not read: nothing read.
+      diff = edit([{ type: "createAttribute", path: "/World/Rig/Bulb.flicker", typeName: "double", custom: true }]);
+      assert.equal(diff.work.lightsRead, 0);
+      assert.deepEqual(diff.lightsChanged, []);
       diff = edit([{ type: "definePrim", path: "/World/Lamp", typeName: "SphereLight" }]);
       assert.deepEqual(diff.lightsAdded, ["/World/Lamp"]);
       assert.equal(diff.work.lightsRead, 1);

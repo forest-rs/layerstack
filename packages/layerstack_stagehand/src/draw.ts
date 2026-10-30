@@ -223,6 +223,18 @@ const INSTANCER_INPUTS = [
 
 const GEOMETRY = new Set([...GEOMETRY_INPUTS, ...SUBSET_INPUTS]);
 
+/** Whether a camera or light reading `inputs` reads its own property `name`, as `layerstack_stagehand` decides it. */
+function reads(inputs: readonly string[], name: string): boolean {
+  return (
+    inputs.includes(name) ||
+    name === "treatAsPoint" ||
+    name === "treatAsLine" ||
+    name === "poleAxis" ||
+    name.startsWith("collection:lightLink:") ||
+    name.startsWith("collection:shadowLink:")
+  );
+}
+
 /** What a property's change may change of the items under its prim, as `layerstack_stagehand` classifies it. */
 function propertyDirt(name: string): Dirty {
   const dirty = none();
@@ -798,8 +810,9 @@ export class DrawList implements Disposable {
    * Brings the cameras and lights up to the stage after `changes`, given
    * what discovery found, as `layerstack_stagehand` does: new ones are
    * added, those a resync covers but did not find removed, and those a
-   * change reaches read again (any change of the prim itself, a transform
-   * or visibility change above it, a resync over it).
+   * change reaches read again (an input it reads, its transform or
+   * visibility or one above it, an unlisted change of it or above it, a
+   * resync over it).
    */
   #applyToViews(
     changes: Pick<Changes, "resynced" | "changedInfoOnly" | "properties" | "resyncedProperties">,
@@ -808,24 +821,32 @@ export class DrawList implements Disposable {
   ): void {
     const roots = found.scopes.flatMap((scope) => (scope.kind === "resync" ? [scope.root] : []));
     const resynced = (path: string) => roots.some((root) => under(path, root));
-    const reached: [string, boolean][] = [];
+    // The properties changed on each prim; `null` when the record has no
+    // inventory of them, which reaches everything under the prim.
+    const reached: [string, string[] | null][] = [];
     for (const prim of changes.changedInfoOnly) {
       const inventory = changes.properties.find((changed) => changed.prim === prim);
-      const placement =
-        inventory === undefined ||
-        inventory.fields.some((field) => {
-          const dirt = propertyDirt(field.property);
-          return dirt.transform || dirt.visibility;
-        });
-      reached.push([prim, placement]);
+      reached.push([prim, inventory === undefined ? null : inventory.fields.map((field) => field.property)]);
     }
     for (const property of changes.resyncedProperties) {
       const dot = property.lastIndexOf(".");
-      const dirt = propertyDirt(property.slice(dot + 1));
-      reached.push([property.slice(0, dot), dirt.transform || dirt.visibility]);
+      reached.push([property.slice(0, dot), [property.slice(dot + 1)]]);
     }
-    const reaches = (path: string) =>
-      resynced(path) || reached.some(([prim, placement]) => prim === path || (placement && under(path, prim)));
+    const placement = (name: string) => {
+      const dirt = propertyDirt(name);
+      return dirt.transform || dirt.visibility;
+    };
+    // A camera or light reads its own inputs, and the transform and
+    // visibility of its prim and the prims above it.
+    const reaches = (path: string, inputs: readonly string[]) =>
+      resynced(path) ||
+      reached.some(([prim, names]) =>
+        names === null
+          ? under(path, prim)
+          : prim === path
+            ? names.some((name) => placement(name) || reads(inputs, name))
+            : under(path, prim) && names.some(placement),
+      );
 
     const cameras = new Set(found.cameras);
     for (const path of [...this.#cameras.keys()]) {
@@ -834,7 +855,7 @@ export class DrawList implements Disposable {
         gather.cameras.removed.add(path);
       }
     }
-    for (const path of this.#cameras.keys()) if (reaches(path)) cameras.add(path);
+    for (const path of this.#cameras.keys()) if (reaches(path, CAMERA_INPUTS)) cameras.add(path);
     for (const path of [...cameras].sort()) this.#readCamera(path, gather);
 
     const lights = new Map(found.lights);
@@ -844,7 +865,7 @@ export class DrawList implements Disposable {
         gather.lights.removed.add(path);
       }
     }
-    for (const [path, held] of this.#lights) if (reaches(path) && !lights.has(path)) lights.set(path, held.item.kind);
+    for (const [path, held] of this.#lights) if (reaches(path, LIGHT_INPUTS) && !lights.has(path)) lights.set(path, held.item.kind);
     for (const [path, kind] of [...lights].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) this.#readLight(path, kind, gather);
   }
 

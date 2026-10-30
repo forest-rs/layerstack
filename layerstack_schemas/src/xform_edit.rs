@@ -5,6 +5,7 @@
 //! its `xformOpOrder`, as OpenUSD's `UsdGeomXformable::AddXformOp` and
 //! `UsdGeomXformOp::Set` author them.
 
+use crate::diagnostic::{Describe, Names, with_store};
 use alloc::{
     format,
     string::{String, ToString},
@@ -14,7 +15,7 @@ use alloc::{
 use core::fmt;
 
 use layerstack::{
-    AuthoringInspectionError, AuthoringSource, PathId, PropertyType, Time, Value, half,
+    AuthoringInspectionError, AuthoringSource, LayerStore, PathId, PropertyType, Time, Value, half,
 };
 
 use crate::edit::SchemaEdit;
@@ -214,22 +215,57 @@ pub enum MatrixXformError {
     NonfiniteMatrix,
 }
 
-impl fmt::Display for MatrixXformError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl MatrixXformError {
+    /// The error in words, the stronger source's spec and layer written
+    /// with `store`, the store the stage was composed from; a failed
+    /// inspection through [`AuthoringInspectionError::display`]. `Display`
+    /// writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+
+impl MatrixXformError {
+    /// Why, without the operation: shared with the errors that wrap this one.
+    pub(crate) fn reason(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
         match self {
-            Self::Inspection(error) => error.fmt(f),
-            Self::InactiveTarget => f.write_str("matrix edit target does not contribute"),
+            Self::Inspection(error) => match names.0 {
+                Some(store) => write!(f, "{}", error.display(store)),
+                None => write!(f, "{error}"),
+            },
+            Self::InactiveTarget => f.write_str(
+                "the edit target does not contribute to the prim; target one of its sources",
+            ),
             Self::StrongerSource { attribute, source } => write!(
                 f,
-                "{attribute} has a stronger source in {:?} at {:?}",
-                source.key.layer_id, source.key.spec_path
+                "`{attribute}` has a stronger opinion at {} in {}, which would mask or alter \
+                 the replacement",
+                names.spec(&source.key.spec_path),
+                names.layer(source.key.layer_id)
             ),
             Self::IncompatibleType {
                 attribute,
                 type_name,
-            } => write!(f, "{attribute} has incompatible type {type_name}"),
-            Self::NonfiniteMatrix => f.write_str("matrix transform requires finite elements"),
+            } => write!(
+                f,
+                "`{attribute}` is declared as `{type_name}`, which cannot hold the replacement"
+            ),
+            Self::NonfiniteMatrix => f.write_str("the matrix has an element that is not finite"),
         }
+    }
+}
+
+impl Describe for MatrixXformError {
+    fn describe(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
+        f.write_str("cannot replace the transform matrix: ")?;
+        self.reason(f, names)
+    }
+}
+
+impl fmt::Display for MatrixXformError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.describe(f, Names(None))
     }
 }
 

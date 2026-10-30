@@ -81,7 +81,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .set_shadow_distance(&mut edit, -1.);
     DomeLight::define(&mut edit, dome)?.set_texture_file(&mut edit, "./sky.exr");
     let transaction = edit.finish();
-    live.apply(&mut store, &transaction)?;
+    live.apply(&mut store, &transaction)
+        .map_err(|error| error.display(&store).to_string())?;
     let mut cache = LightCache::new(Time::Default, &["engine"]);
     let scene = Scene::new(live.stage(), &store);
     let discovered = cache
@@ -92,16 +93,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         [TargetPath::Prim(dome), TargetPath::Prim(light)],
         "discover authored emitters in namespace order"
     );
-    let first = cache.capture(&scene, light)?;
+    let first = cache
+        .capture(&scene, light)
+        .map_err(|error| error.display(&store).to_string())?;
     let revisions = first.revisions;
-    let mut staging = EngineLight::capture(first.inputs)?;
+    let mut staging =
+        EngineLight::capture(first.inputs).map_err(|error| error.display(&store).to_string())?;
     assert_eq!(
-        first.inputs.shaping()?.expect("applied shaping").cone_angle,
+        first
+            .inputs
+            .shaping()
+            .map_err(|error| error.display(&store).to_string())?
+            .expect("applied shaping")
+            .cone_angle,
         45.,
         "USD half-angle remains in degrees"
     );
     assert_eq!(
-        first.inputs.shadow()?.expect("applied shadow").distance,
+        first
+            .inputs
+            .shadow()
+            .map_err(|error| error.display(&store).to_string())?
+            .expect("applied shadow")
+            .distance,
         -1.,
         "unlimited shadow distance remains a sentinel"
     );
@@ -109,9 +123,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let trs = factors.to_trs(1e-10)?;
     assert_eq!(trs.scale, [1.; 3], "identity transform admits checked TRS");
     let environment = cache
-        .capture(&scene, dome)?
+        .capture(&scene, dome)
+        .map_err(|error| error.display(&store).to_string())?
         .inputs
-        .environment()?
+        .environment()
+        .map_err(|error| error.display(&store).to_string())?
         .expect("dome");
     let asset = environment
         .texture_file
@@ -135,7 +151,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let targets = [TargetPath::Prim(light), TargetPath::Prim(dome)];
     let mut links = MembershipCache::new();
-    let membership = links.capture_light_links(&scene, light, &targets)?;
+    let membership = links
+        .capture_light_links(&scene, light, &targets)
+        .map_err(|error| error.display(&store).to_string())?;
     assert!(
         membership
             .illumination
@@ -150,11 +168,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The edit handle owns a path, so it survives beyond the view used to obtain it.
     key.light_api().set_intensity(&mut edit, 20.);
     let transaction = edit.finish();
-    let applied = live.apply(&mut store, &transaction)?;
+    let applied = live
+        .apply(&mut store, &transaction)
+        .map_err(|error| error.display(&store).to_string())?;
     let scene = Scene::new(live.stage(), &store);
     cache.apply_changes(&scene, &applied.changes);
     links.apply_changes(&scene, &applied.changes);
-    let membership = links.capture_light_links(&scene, light, &targets)?;
+    let membership = links
+        .capture_light_links(&scene, light, &targets)
+        .map_err(|error| error.display(&store).to_string())?;
     assert_eq!(
         membership.illumination.revisions.decisions, link_revision,
         "photometric changes preserve membership-buffer content"
@@ -163,9 +185,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         !membership.illumination.evaluated,
         "photometric changes preserve compiled link queries"
     );
-    let next = cache.capture(&scene, light)?;
+    let next = cache
+        .capture(&scene, light)
+        .map_err(|error| error.display(&store).to_string())?;
     if next.revisions.parameters != revisions.parameters {
-        staging = EngineLight::capture(next.inputs)?;
+        staging =
+            EngineLight::capture(next.inputs).map_err(|error| error.display(&store).to_string())?;
     }
     assert_eq!(
         next.revisions.transform, revisions.transform,

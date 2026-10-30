@@ -3,6 +3,7 @@
 
 //! Owned lighting inputs for engine evaluation and GPU upload preparation.
 use super::ShaderIdSelection;
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{
     PrimView, Scene, Time, XformCache,
     imageable::Visibility,
@@ -306,13 +307,47 @@ pub struct LightParameterError {
     /// True for a constant with the wrong type or nonfinite numeric data.
     pub invalid_value: bool,
 }
-impl core::fmt::Display for LightParameterError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl LightParameterError {
+    /// The error in words, the light written as its path with `store`,
+    /// the store the stage was composed from: which input, and why it has no value of the
+    /// requested type. `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for LightParameterError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
         write!(
             f,
-            "light {:?} input {}: {:?}, invalid value {}",
-            self.light, self.input, self.status, self.invalid_value
-        )
+            "cannot read the light input {}.inputs:{}: ",
+            names.path(self.light),
+            self.input
+        )?;
+        if self.invalid_value {
+            return f.write_str("its value has the wrong type or is not finite");
+        }
+        f.write_str(match self.status {
+            LightInputStatus::Constant => "it has no readable constant",
+            LightInputStatus::ShaderRequired => {
+                "a shader output provides it; evaluate it with a shading engine"
+            }
+            LightInputStatus::MultipleProviders => {
+                "several providers connect to it; the engine must choose between them"
+            }
+            LightInputStatus::InvalidConnections => {
+                "its connections have invalid targets or a cycle"
+            }
+            LightInputStatus::Unavailable => "it has no value or provider, or its value is blocked",
+        })
+    }
+}
+impl core::fmt::Display for LightParameterError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for LightParameterError {}
@@ -325,9 +360,33 @@ pub enum LightCaptureError {
     /// The prim does not carry `LightAPI`. Filters are discovered separately.
     NotLight(PathId),
 }
+impl LightCaptureError {
+    /// The error in words, the prim written as its path with `store`,
+    /// the store the stage was composed from. `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for LightCaptureError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("cannot capture the light: ")?;
+        match self {
+            Self::MissingPrim(path) => write!(f, "no prim is at {}", names.path(*path)),
+            Self::NotLight(path) => write!(
+                f,
+                "{} does not carry `LightAPI`; capture light filters separately",
+                names.path(*path)
+            ),
+        }
+    }
+}
 impl core::fmt::Display for LightCaptureError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "light capture failed: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for LightCaptureError {}

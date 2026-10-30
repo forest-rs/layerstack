@@ -1023,6 +1023,13 @@ fn tokens_outside_allowed_tokens_are_reported_with_the_allowed_set() {
          default time: the token `crumbly` at index 1 is not one of its `allowedTokens` \
          [\"mossy\", \"smooth\"]"
     );
+    // A layer the store names is written by its identifier, as OpenUSD writes it.
+    store.set_layer_identifier(LayerId(1), "./rock.usda");
+    assert!(
+        alloc::string::ToString::to_string(&report.problems[1].display(&store)).starts_with(
+            "AllowedTokens: /Rock.rock:tags (authored at /Rock.rock:tags in @./rock.usda@)"
+        )
+    );
     assert_eq!(
         BuiltinRule::AllowedTokens.time_domain(),
         RuleTimeDomain::RequestedTimes

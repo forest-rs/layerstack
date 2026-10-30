@@ -305,11 +305,11 @@ impl ValidationProblem {
                 match &source.spec {
                     Some(spec) => write!(
                         f,
-                        " (authored at {} in layer {})",
+                        " (authored at {} in {})",
                         spec.display(paths, tokens),
-                        source.layer.0
+                        Names(Some(store)).layer(source.layer)
                     )?,
-                    None => write!(f, " (in layer {})", source.layer.0)?,
+                    None => write!(f, " (in {})", Names(Some(store)).layer(source.layer))?,
                 }
             }
             match self.time {

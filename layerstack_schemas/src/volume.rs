@@ -7,6 +7,7 @@
 //! Field data decoding and rendering belong to the caller. Composition is
 //! provided by the core (AOUSD Core §12.2–12.5).
 
+use crate::diagnostic::{Describe, Names, with_store};
 use alloc::{collections::BTreeMap, format, string::String};
 use layerstack::{PathId, PropertyKind, TargetPath};
 
@@ -29,9 +30,40 @@ pub enum VolumeError {
     /// The pseudo-root cannot be a field target.
     InvalidTarget(TargetPath),
 }
+impl VolumeError {
+    /// The error in words, the volume and target written as paths with
+    /// `store`, the store the stage was composed from. `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for VolumeError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("invalid volume field binding: ")?;
+        match self {
+            Self::MissingPrim(path) => write!(f, "no prim is at {}", names.path(*path)),
+            Self::InvalidName(name) => {
+                write!(f, "`{name}` is not a namespaced property identifier")
+            }
+            Self::WrongPropertyKind(name) => write!(
+                f,
+                "an attribute already occupies `{name}`, where the field relationship goes"
+            ),
+            Self::InvalidTarget(target) => write!(
+                f,
+                "{} cannot be a field target; target a field prim",
+                names.target(*target)
+            ),
+        }
+    }
+}
 impl core::fmt::Display for VolumeError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid volume field binding: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for VolumeError {}

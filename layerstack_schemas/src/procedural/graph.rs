@@ -234,9 +234,15 @@ pub enum BuildError<E, P> {
 impl<E: fmt::Display, P: fmt::Display> BuildError<E, P> {
     /// The error in words, its recipe, input and output paths written as
     /// text with `store`, the store the registry was created with: which
-    /// producer failed, at which step, and why. The evaluator's and
-    /// publisher's own errors are written with their `Display`. `Display`
-    /// writes the same with ids.
+    /// producer failed, at which step, and why. `Display` writes the same
+    /// with ids.
+    ///
+    /// The evaluator's and publisher's own errors have no store to write
+    /// with, so they are written with their `Display`. A host whose errors
+    /// name paths matches [`Self::Evaluation`] holding
+    /// [`ProceduralError::Evaluation`], and [`Self::Preparation`], and
+    /// writes those errors itself, with their own `display(store)` when
+    /// they have one; this writes the other variants.
     #[must_use]
     pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl fmt::Display + 'a {
         with_store(self, store)

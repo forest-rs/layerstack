@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! Explicit sampled camera math without render resources or clip-space adapters.
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{
     PrimView, Time, XformCache,
     bounds::BoundingBox,
@@ -379,9 +380,65 @@ pub enum CameraWriteError {
     /// The guarded matrix replacement failed.
     Transform(crate::MatrixXformError),
 }
+impl CameraWriteError {
+    /// The error in words, a stronger source's spec and layer written with
+    /// `store`, the store the stage was composed from; a failed inspection through
+    /// [`layerstack::AuthoringInspectionError::display`]. `Display` writes the
+    /// same with ids.
+    #[must_use]
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for CameraWriteError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("cannot author the whole camera: ")?;
+        match self {
+            Self::InvalidDestination => f.write_str(
+                "the destination is not an existing composed `Camera` with schema definitions",
+            ),
+            Self::InvalidParentTransform => f.write_str(
+                "the destination's parent transform is missing, invalid or not invertible",
+            ),
+            Self::InvalidClippingPlanes => {
+                f.write_str("an additional clipping plane is not finite")
+            }
+            Self::Inspection { attribute, error } => {
+                write!(f, "cannot inspect where `{attribute}` would be authored: ")?;
+                match names.0 {
+                    Some(store) => write!(f, "{}", error.display(store)),
+                    None => write!(f, "{error}"),
+                }
+            }
+            Self::InactiveTarget { attribute } => write!(
+                f,
+                "the edit target does not contribute to `{attribute}`; target one of the \
+                 camera's sources"
+            ),
+            Self::StrongerSource { attribute, source } => write!(
+                f,
+                "`{attribute}` has a stronger opinion at {} in {}, which would alter the \
+                 replacement",
+                names.spec(&source.key.spec_path),
+                names.layer(source.key.layer_id)
+            ),
+            Self::IncompatibleType { attribute } => write!(
+                f,
+                "`{attribute}` is declared with an incompatible type, or with none"
+            ),
+            Self::Transform(error) => {
+                f.write_str("cannot replace its transform matrix: ")?;
+                error.reason(f, names)
+            }
+        }
+    }
+}
 impl core::fmt::Display for CameraWriteError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "cannot author whole camera: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for CameraWriteError {

@@ -61,7 +61,7 @@ fn stronger_order_rejects_without_collecting_any_part_of_the_replacement() {
         .set_matrix_transform(&mut edit, identity())
         .unwrap_err();
     assert!(
-        matches!(error, MatrixXformError::StrongerSource { attribute: "xformOpOrder", source } if source.key.layer_id == LayerId(1))
+        matches!(&error, MatrixXformError::StrongerSource { attribute: "xformOpOrder", source } if source.key.layer_id == LayerId(1))
     );
     assert_eq!(edit.transaction(), &before);
     assert!(
@@ -76,6 +76,11 @@ fn stronger_order_rejects_without_collecting_any_part_of_the_replacement() {
         "failed child group preserves the parent's declaration overlay"
     );
     assert_eq!(store.layers().cloned().collect::<Vec<_>>(), original);
+    assert_eq!(
+        error.display(&store).to_string(),
+        "cannot replace the transform matrix: `xformOpOrder` has a stronger opinion at \
+         /P.xformOpOrder in layer 1, which would mask or alter the replacement"
+    );
 }
 
 #[test]

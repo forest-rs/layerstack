@@ -27,6 +27,7 @@ pub use inputs::*;
 mod helpers;
 pub use helpers::*;
 
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{
     PrimView, Scene, SchemaEdit,
     usd_lux::{LightListApi, LightListApiEdit, LightListApiLightListCacheBehavior as Behavior},
@@ -57,9 +58,34 @@ pub enum LightListError {
     /// A cache cannot be authored on the pseudo-root.
     PseudoRoot,
 }
+impl LightListError {
+    /// The error in words, the root written as its path with `store`,
+    /// the store the stage was composed from. `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for LightListError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("invalid light list: ")?;
+        match self {
+            Self::MissingPrim(path) => write!(f, "no prim is at {}", names.path(*path)),
+            Self::WrongPropertyType => {
+                f.write_str("a light list cache property is declared with an incompatible type")
+            }
+            Self::PseudoRoot => f.write_str(
+                "a light list cache cannot be authored on the pseudo-root; author it on a prim",
+            ),
+        }
+    }
+}
 impl core::fmt::Display for LightListError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "invalid light list: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for LightListError {}

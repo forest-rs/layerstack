@@ -8,7 +8,9 @@
 
 use alloc::{format, string::String};
 use core::fmt;
-use layerstack::{EditError, LayerId, LayerStore, PathId, PropertyPath, TargetPath, TokenId};
+use layerstack::{
+    EditError, LayerId, LayerStore, PathId, PropertyPath, SpecPath, TargetPath, TokenId,
+};
 
 /// A `Display` that writes with a closure.
 #[cfg(feature = "usd")]
@@ -49,6 +51,24 @@ impl Names<'_> {
         let mut out = self.path(path.prim_path());
         out.push('.');
         out.push_str(&self.token(path.property()));
+        out
+    }
+
+    /// A spec path (`/World/Lamp{look=warm}.color`); without a store, its
+    /// prim path's id, `{..}` for its variant selections, and its
+    /// property's id.
+    pub(crate) fn spec(self, path: &SpecPath) -> String {
+        if let Some(store) = self.0 {
+            return path.display(store.paths(), store.tokens());
+        }
+        let mut out = self.path(path.prim_path());
+        if path.has_variant_selections() {
+            out.push_str("{..}");
+        }
+        if let Some(name) = path.property() {
+            out.push('.');
+            out.push_str(&self.token(name));
+        }
         out
     }
 

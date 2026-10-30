@@ -773,3 +773,243 @@ fn geometry_scene_and_skeleton_errors_name_paths_with_the_store() {
         ColorError::InvalidColor => "invalid color-space input: an input or output color is not finite",
     );
 }
+
+#[test]
+fn light_physics_and_authoring_errors_name_paths_with_the_store() {
+    use crate::{
+        XformOpError,
+        light::{
+            LightCaptureError, LightHelperError, LightInputStatus, LightListError,
+            LightParameterError,
+        },
+        mass::MassError,
+        physics::CollisionGroupError,
+        physics_scene::PhysicsSceneError,
+        ri_spline::RiSplineError,
+        shading::NodeDefError,
+        ui_hints::UiHintError,
+        volume::VolumeError,
+    };
+    use layerstack::TargetPath;
+
+    let store = InMemoryStore::default();
+    let lamp = store.path("/World/Lamp");
+    let s: &dyn LayerStore = &store;
+    assert_words!(s;
+        LightListError::MissingPrim(lamp) => "invalid light list: no prim is at /World/Lamp",
+        LightListError::WrongPropertyType =>
+            "invalid light list: a light list cache property is declared with an incompatible \
+             type",
+        LightListError::PseudoRoot =>
+            "invalid light list: a light list cache cannot be authored on the pseudo-root; \
+             author it on a prim",
+        LightHelperError::MissingPrim(lamp) =>
+            "cannot author the light helper edit: no prim is at /World/Lamp",
+        LightHelperError::InvalidContext("ri man".into()) =>
+            "cannot author the light helper edit: the renderer context `ri man` is neither \
+             empty nor a namespaced identifier",
+        LightHelperError::WrongPropertyType { prim: lamp, property: "light:shaderId".into() } =>
+            "cannot author the light helper edit: /World/Lamp.light:shaderId is a relationship \
+             or not a scalar `token` attribute",
+        LightHelperError::InvalidOrientationOp(lamp) =>
+            "cannot author the light helper edit: the dome orientation op of /World/Lamp is \
+             missing or not a scalar floating-point attribute",
+        LightHelperError::Transform(XformOpError::InverseOp { op: "!invert!xformOp:rotateX".into() }) =>
+            "cannot author the light helper edit: the transform cannot be authored: \
+             !invert!xformOp:rotateX is an inverse op; set its forward op instead",
+        LightCaptureError::MissingPrim(lamp) => "cannot capture the light: no prim is at /World/Lamp",
+        LightCaptureError::NotLight(lamp) =>
+            "cannot capture the light: /World/Lamp does not carry `LightAPI`; capture light \
+             filters separately",
+    );
+    for (status, invalid_value, reason) in [
+        (
+            LightInputStatus::Constant,
+            true,
+            "its value has the wrong type or is not finite",
+        ),
+        (
+            LightInputStatus::Constant,
+            false,
+            "it has no readable constant",
+        ),
+        (
+            LightInputStatus::ShaderRequired,
+            false,
+            "a shader output provides it; evaluate it with a shading engine",
+        ),
+        (
+            LightInputStatus::MultipleProviders,
+            false,
+            "several providers connect to it; the engine must choose between them",
+        ),
+        (
+            LightInputStatus::InvalidConnections,
+            false,
+            "its connections have invalid targets or a cycle",
+        ),
+        (
+            LightInputStatus::Unavailable,
+            false,
+            "it has no value or provider, or its value is blocked",
+        ),
+    ] {
+        let error = LightParameterError {
+            light: lamp,
+            input: "intensity".into(),
+            status,
+            invalid_value,
+        };
+        assert_eq!(
+            error.display(s).to_string(),
+            alloc::format!("cannot read the light input /World/Lamp.inputs:intensity: {reason}")
+        );
+    }
+    let group = store.path("/Physics/Group");
+    let shade = store.property_path("/Physics/Other.shade");
+    assert_words!(s;
+        MassError::InvalidMass =>
+            "invalid mass properties: a mass is negative or not finite, or an aggregate has no \
+             positive mass",
+        MassError::InvalidInertia =>
+            "invalid mass properties: an inertia is not finite, not symmetric or has a negative \
+             principal moment",
+        MassError::InvalidTransform =>
+            "invalid mass properties: a position or orientation is not finite, or an \
+             orientation is not a unit quaternion",
+        MassError::InvalidUnits =>
+            "invalid mass properties: the stage's length or mass units are not finite and \
+             positive",
+        MassError::InvalidCollider(lamp) =>
+            "invalid mass properties: the collider /World/Lamp has an invalid volume, or no \
+             volume and a positive mass override",
+        MassError::UnreadableTransform(lamp) =>
+            "invalid mass properties: the composed transform of /World/Lamp cannot be evaluated \
+             or factored",
+        PhysicsSceneError::EmptyIncludes =>
+            "cannot capture the physics scene: no include path was supplied",
+        PhysicsSceneError::MissingInclude(lamp) =>
+            "cannot capture the physics scene: the include /World/Lamp is neither an existing \
+             prim nor the pseudo-root",
+        PhysicsSceneError::InvalidAttribute("physics:gravityMagnitude") =>
+            "cannot capture the physics scene: `physics:gravityMagnitude` is missing, of \
+             another type or not finite",
+        PhysicsSceneError::InvalidTransform =>
+            "cannot capture the physics scene: a transform is singular, sheared, not affine or \
+             unreadable",
+        PhysicsSceneError::UnsupportedShape =>
+            "cannot capture the physics scene: a collision API is applied to an unsupported \
+             geometry type",
+        PhysicsSceneError::InvalidJointTarget =>
+            "cannot capture the physics scene: a joint target is not a prim path or names no \
+             existing prim",
+        PhysicsSceneError::EmptyArticulation =>
+            "cannot capture the physics scene: an articulation has no rooted rigid-body topology",
+        PhysicsSceneError::NestedArticulation =>
+            "cannot capture the physics scene: an articulation API is beneath another \
+             articulation API",
+        PhysicsSceneError::InvalidCollection =>
+            "cannot capture the physics scene: a collision group's collection has no valid \
+             membership",
+        CollisionGroupError::InvalidFilteredGroup { group, target: TargetPath::Property(shade) } =>
+            "invalid collision groups: the group /Physics/Group filters /Physics/Other.shade, \
+             which is a property or a group outside default traversal",
+        CollisionGroupError::TooManyGroups =>
+            "invalid collision groups: the merged group pairs do not fit in addressable storage",
+    );
+    assert_words!(s;
+        UiHintError::MissingObject(TargetPath::Prim(lamp)) =>
+            "UI hint: no prim or property is at /World/Lamp",
+        UiHintError::WrongObjectKind => "UI hint: the hint does not apply to this kind of object",
+        UiHintError::InvalidExpandedGroup("Shape".into()) =>
+            "UI hint: the expanded-group entry `Shape` is not a `bool`",
+        UiHintError::InvalidShownIfGroup("Shape".into()) =>
+            "UI hint: the shown-if entry `Shape` is not a `string`",
+        UiHintError::MissingValueLabel("Bright".into()) =>
+            "UI hint: no value is stored for the label `Bright`",
+        UiHintError::IncompatibleValueLabel("Bright".into()) =>
+            "UI hint: the value labeled `Bright` does not match the attribute's declared type",
+        UiHintError::CannotEdit(CannotEdit::BeneathInstance { instance: lamp }) =>
+            "UI hint: the path is beneath the instance /World/Lamp, whose descendants are \
+             instance proxies; edit the instance itself or its prototype's source",
+        VolumeError::MissingPrim(lamp) => "invalid volume field binding: no prim is at /World/Lamp",
+        VolumeError::InvalidName("field:".into()) =>
+            "invalid volume field binding: `field:` is not a namespaced property identifier",
+        VolumeError::WrongPropertyKind("field:density".into()) =>
+            "invalid volume field binding: an attribute already occupies `field:density`, where \
+             the field relationship goes",
+        VolumeError::InvalidTarget(TargetPath::Prim(store.path("/"))) =>
+            "invalid volume field binding: / cannot be a field target; target a field prim",
+        RiSplineError::InvalidName("ri:spline:".into()) =>
+            "invalid Ri spline: `ri:spline:` has empty or invalid namespace components",
+        RiSplineError::MissingPrim(lamp) => "invalid Ri spline: no prim is at /World/Lamp",
+        RiSplineError::MissingAttribute("ri:spline:positions".into()) =>
+            "invalid Ri spline: `ri:spline:positions` is missing or has no compatible default \
+             value",
+        RiSplineError::WrongAttributeType {
+            attribute: "ri:spline:values".into(),
+            expected: "float[]",
+        } => "invalid Ri spline: `ri:spline:values` is not declared as `float[]`",
+        RiSplineError::InvalidInterpolation("cubic".into()) =>
+            "invalid Ri spline: `cubic` is not a supported interpolation",
+        RiSplineError::UnsortedPositions =>
+            "invalid Ri spline: the positions decrease; they must be nondecreasing",
+        RiSplineError::SizeMismatch { positions: 3, values: 2 } =>
+            "invalid Ri spline: there are 3 positions but 2 values",
+        RiSplineError::NonFinite => "invalid Ri spline: a position or value is not finite",
+        NodeDefError::MissingIdAttribute { prim: lamp } =>
+            "cannot author the node definition: /World/Lamp has no `info:id` attribute, \
+             authored or from its schemas",
+        NodeDefError::WrongPropertyType { prim: lamp, property: "info:id".into() } =>
+            "cannot author the node definition: /World/Lamp.info:id is a relationship, an array \
+             or of another type than the setter authors",
+    );
+}
+
+#[test]
+fn transform_and_camera_errors_name_paths_with_the_store() {
+    use crate::{MatrixXformError, camera::CameraWriteError};
+    use layerstack::AuthoringInspectionError;
+
+    let store = InMemoryStore::default();
+    let camera = store.path("/World/Camera");
+    let s: &dyn LayerStore = &store;
+    assert_words!(s;
+        MatrixXformError::Inspection(AuthoringInspectionError::MissingPrim(camera)) =>
+            "cannot replace the transform matrix: no composed prim at /World/Camera",
+        MatrixXformError::InactiveTarget =>
+            "cannot replace the transform matrix: the edit target does not contribute to the \
+             prim; target one of its sources",
+        MatrixXformError::IncompatibleType {
+            attribute: "xformOp:transform",
+            type_name: "float".into(),
+        } =>
+            "cannot replace the transform matrix: `xformOp:transform` is declared as `float`, \
+             which cannot hold the replacement",
+        MatrixXformError::NonfiniteMatrix =>
+            "cannot replace the transform matrix: the matrix has an element that is not finite",
+        CameraWriteError::InvalidDestination =>
+            "cannot author the whole camera: the destination is not an existing composed \
+             `Camera` with schema definitions",
+        CameraWriteError::InvalidParentTransform =>
+            "cannot author the whole camera: the destination's parent transform is missing, \
+             invalid or not invertible",
+        CameraWriteError::InvalidClippingPlanes =>
+            "cannot author the whole camera: an additional clipping plane is not finite",
+        CameraWriteError::Inspection {
+            attribute: "focalLength",
+            error: AuthoringInspectionError::MissingPrim(camera),
+        } =>
+            "cannot author the whole camera: cannot inspect where `focalLength` would be \
+             authored: no composed prim at /World/Camera",
+        CameraWriteError::InactiveTarget { attribute: "focalLength" } =>
+            "cannot author the whole camera: the edit target does not contribute to \
+             `focalLength`; target one of the camera's sources",
+        CameraWriteError::IncompatibleType { attribute: "focalLength" } =>
+            "cannot author the whole camera: `focalLength` is declared with an incompatible \
+             type, or with none",
+        CameraWriteError::Transform(MatrixXformError::NonfiniteMatrix) =>
+            "cannot author the whole camera: cannot replace its transform matrix: the matrix has \
+             an element that is not finite",
+    );
+}

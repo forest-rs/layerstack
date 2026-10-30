@@ -8,6 +8,7 @@
 //! Authoring updates only local dictionary entries and uses explicit legacy
 //! mirroring, rather than process environment variables.
 //! AOUSD Core §12.2.5 (dictionary metadata), §12.3 (attribute values).
+use crate::diagnostic::{Describe, Names, with_store};
 use crate::{CannotEdit, PrimView, Scene, SchemaEdit};
 use alloc::{string::String, sync::Arc, vec::Vec};
 use layerstack::sort;
@@ -33,9 +34,45 @@ pub enum UiHintError {
     /// a prototype ([`SchemaEdit::can_edit`]).
     CannotEdit(CannotEdit),
 }
+impl UiHintError {
+    /// The error in words, the object written as its path with `store`,
+    /// the store the stage was composed from. `Display` writes the same with ids.
+    #[must_use]
+    pub fn display<'a>(
+        &'a self,
+        store: &'a dyn layerstack::LayerStore,
+    ) -> impl core::fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+impl Describe for UiHintError {
+    fn describe(&self, f: &mut core::fmt::Formatter<'_>, names: Names<'_>) -> core::fmt::Result {
+        f.write_str("UI hint: ")?;
+        match self {
+            Self::MissingObject(target) => {
+                write!(f, "no prim or property is at {}", names.target(*target))
+            }
+            Self::WrongObjectKind => f.write_str("the hint does not apply to this kind of object"),
+            Self::InvalidExpandedGroup(group) => {
+                write!(f, "the expanded-group entry `{group}` is not a `bool`")
+            }
+            Self::InvalidShownIfGroup(group) => {
+                write!(f, "the shown-if entry `{group}` is not a `string`")
+            }
+            Self::MissingValueLabel(label) => {
+                write!(f, "no value is stored for the label `{label}`")
+            }
+            Self::IncompatibleValueLabel(label) => write!(
+                f,
+                "the value labeled `{label}` does not match the attribute's declared type"
+            ),
+            Self::CannotEdit(error) => error.describe(f, names),
+        }
+    }
+}
 impl core::fmt::Display for UiHintError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "UI hint: {self:?}")
+        self.describe(f, Names(None))
     }
 }
 impl core::error::Error for UiHintError {

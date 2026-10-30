@@ -24,8 +24,8 @@ use layerstack_schemas::{
     BindingCache, BindingKind, BindingOptions, BindingStrength, BoundMaterial, CoordSysCache,
     MaterialPurpose, PrimView, Scene,
     shading::{ConnectionSourceInfo, MaterialTerminal, PortKind, ValueSourceKind},
-    subset::{SubsetError, SubsetProblem, SubsetProblemKind, SubsetValidation},
-    usd_geom::{GeomSubsetElementType, Imageable},
+    subset::{MeshTopologyError, SubsetError, SubsetProblem, SubsetProblemKind, SubsetValidation},
+    usd_geom::{GeomSubsetElementType, Imageable, Mesh},
     usd_shade::{Material, Shader},
 };
 
@@ -641,6 +641,43 @@ impl Stage {
         Ok(Wire::List(rows))
     }
 
+    /// The mesh's topology at `time` (`Mesh::topology`), `null` when the
+    /// prim is not a `Mesh`: `[faceVertexCounts, faceVertexIndices,
+    /// holeIndices, orientation, subdivisionScheme, pointCount, problem]`,
+    /// the arrays as JS-owned `Int32Array`s and `problem` `null` for a
+    /// valid topology, else `[code, reason]` ([`topology_problem_code`]).
+    ///
+    /// OpenUSD: the `UsdGeomMesh` attribute reads and
+    /// `UsdGeomMesh::ValidateTopology`.
+    ///
+    /// # Errors
+    ///
+    /// `path.invalid`, `prim.not_found`.
+    pub(crate) fn mesh_topology(&self, path: &str, time: Option<f64>) -> Result<Wire, Error> {
+        let prim = self.schema_prim(path)?;
+        let scene = self.scene();
+        let Some(mesh) = Mesh::get(&scene, prim) else {
+            return Ok(Wire::Null);
+        };
+        let topology = mesh.topology(crate::stage::time_of(time));
+        let problem = match &topology.validation {
+            Ok(()) => Wire::Null,
+            Err(error) => Wire::List(vec![
+                Wire::Text(topology_problem_code(error).into()),
+                Wire::Text(error.display(self.document().store()).to_string()),
+            ]),
+        };
+        Ok(Wire::List(vec![
+            Wire::Ints(topology.face_vertex_counts.to_vec()),
+            Wire::Ints(topology.face_vertex_indices.to_vec()),
+            Wire::Ints(topology.hole_indices.to_vec()),
+            Wire::Text(topology.orientation.as_str().into()),
+            Wire::Text(topology.subdivision_scheme.as_str().into()),
+            Wire::Number(topology.point_count as f64),
+            problem,
+        ]))
+    }
+
     /// The type of the prim's subset family `family`
     /// (`subsetFamily:<family>:familyType`), `unrestricted` when
     /// unauthored.
@@ -729,6 +766,19 @@ impl Stage {
                 })
                 .collect(),
         ))
+    }
+}
+
+/// The code of a topology problem in a `meshTopology` record:
+/// `faceCounts` (a negative count, or counts that overflow),
+/// `sizeMismatch`, `vertexIndex`, `missing` or `decode`.
+fn topology_problem_code(error: &MeshTopologyError) -> &'static str {
+    match error {
+        MeshTopologyError::InvalidFaceCounts => "faceCounts",
+        MeshTopologyError::SizeMismatch => "sizeMismatch",
+        MeshTopologyError::InvalidVertexIndex(_) => "vertexIndex",
+        MeshTopologyError::MissingAttribute => "missing",
+        _ => "decode",
     }
 }
 
@@ -902,6 +952,24 @@ def Scope "Looks" {
             "{}",
             error.message
         );
+    }
+
+    #[test]
+    fn a_renderer_reads_a_meshes_topology_and_its_validation() {
+        let stage = open(SHADED);
+        let topology = stage.mesh_topology("/World/Rock", None).unwrap();
+        assert_eq!(
+            show(&topology),
+            "[[4, 4], [0, 1, 2, 3, 3, 2, 4, 5], [], rightHanded, catmullClark, 6, null]"
+        );
+        // No points nor faces: an empty topology is valid and draws nothing.
+        let empty = stage.mesh_topology("/World/Lamp", None).unwrap();
+        assert_eq!(
+            show(&empty),
+            "[[], [], [], rightHanded, catmullClark, 0, null]"
+        );
+        // Not a mesh.
+        assert_eq!(show(&stage.mesh_topology("/World", None).unwrap()), "null");
     }
 
     #[test]

@@ -1193,6 +1193,44 @@ export interface MaterialSubsets {
   readonly problems: readonly SubsetProblem[];
 }
 
+/**
+ * Why a mesh's topology is invalid ({@link MeshTopology.problem}):
+ * `faceCounts` (a negative face count), `sizeMismatch` (the counts do not
+ * sum to the number of indices), `vertexIndex` (an index names no point),
+ * `decode` (an array failed to decode).
+ */
+export type MeshTopologyProblemCode = "faceCounts" | "sizeMismatch" | "vertexIndex" | "missing" | "decode";
+
+/**
+ * A mesh's topology at one time, what a renderer triangulates
+ * ({@link Prim.meshTopology}): the arrays copied out of the module, so
+ * they stay valid and need no release. An absent array is empty, as
+ * OpenUSD's `Get` leaves it: a mesh without faces is valid and draws
+ * nothing.
+ *
+ * OpenUSD: the `UsdGeomMesh` attribute reads and
+ * `UsdGeomMesh::ValidateTopology`, which, unlike this, accepts negative
+ * face counts that sum to the number of indices.
+ */
+export interface MeshTopology {
+  /** `faceVertexCounts`: each face's number of vertices. */
+  readonly faceVertexCounts: Int32Array;
+  /** `faceVertexIndices`: each face's vertices, as indices into `points`. */
+  readonly faceVertexIndices: Int32Array;
+  /** `holeIndices`: the faces a renderer leaves out. */
+  readonly holeIndices: Int32Array;
+  /** `orientation`: `rightHanded` (the fallback) or `leftHanded`. */
+  readonly orientation: string;
+  /** `subdivisionScheme`: `catmullClark` (the fallback), `loop`, `bilinear` or `none`. */
+  readonly subdivisionScheme: string;
+  /** The number of `points` at the time. */
+  readonly pointCount: number;
+  /** Whether the topology is valid: the counts sum to the indices, and every index names a point. */
+  readonly valid: boolean;
+  /** Why it is invalid; `null` when valid. */
+  readonly problem: { readonly code: MeshTopologyProblemCode; readonly reason: string } | null;
+}
+
 /** A bound coordinate system, as OpenUSD's `UsdShadeCoordSysAPI::Binding` describes it. */
 export interface CoordSysBinding {
   /** The `CoordSysAPI` instance name (`paint`). */

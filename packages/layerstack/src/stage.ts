@@ -58,6 +58,8 @@ import type {
   LoadResult,
   MaterialBinding,
   MaterialSubsets,
+  MeshTopology,
+  MeshTopologyProblemCode,
   OpenOptions,
   Opinion,
   PropertyChange,
@@ -150,6 +152,7 @@ export interface NativeStage extends Disposable {
   connectionSourceInfo(path: string): unknown;
   geomSubsets(path: string, element?: string | null, family?: string | null, time?: number | null): unknown;
   subsetFamilyType(path: string, family: string): string;
+  meshTopology(path: string, time?: number | null): unknown;
   validateSubsetFamily(path: string, element: string, family: string, time?: number | null): unknown;
   coordSysBindings(path: string, inherited: boolean): unknown;
   skinning(path: string): unknown;
@@ -2183,6 +2186,31 @@ export class Prim {
       native.geomSubsets(this.path, options.elementType ?? null, options.familyName ?? null, options.time),
     );
     return decodeSubsets(this.stage.layerstack, rows);
+  }
+
+  /**
+   * Its topology at `time` ({@link MeshTopology}): face counts, face
+   * indices and hole indices, orientation, subdivision scheme and point
+   * count, and whether they are valid (`UsdGeomMesh::ValidateTopology`);
+   * `null` when the prim is not a `Mesh`.
+   *
+   * Throws `prim.not_found` when the prim is gone.
+   */
+  meshTopology(options: { readonly time?: number } = {}): MeshTopology | null {
+    const record = this.stage.native("meshTopology", (native) => native.meshTopology(this.path, options.time));
+    if (record === null) return null;
+    const [counts, indices, holes, orientation, scheme, points, problem] = record as Row;
+    const [code, reason] = (problem ?? []) as [MeshTopologyProblemCode?, string?];
+    return {
+      faceVertexCounts: counts as Int32Array,
+      faceVertexIndices: indices as Int32Array,
+      holeIndices: holes as Int32Array,
+      orientation: orientation as string,
+      subdivisionScheme: scheme as string,
+      pointCount: points as number,
+      valid: problem === null,
+      problem: code === undefined ? null : { code, reason: reason! },
+    };
   }
 
   /** The type of its subset family `familyName`, `unrestricted` when unauthored (`UsdGeomSubset::GetFamilyType`). */

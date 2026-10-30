@@ -265,6 +265,84 @@ await stage.resolve(source);
   in (sources) and out (array copies, saved and exported bytes), the views
   built and the bytes they exposed without a copy, and the module's memory.
 
+## Materials, subsets, coordinate systems and skinning
+
+The shading, subset, coordinate-system and skinning schemas are read on the
+stage objects and authored as `Edit`s, as OpenUSD's `UsdShade`,
+`UsdGeomSubset` and `UsdSkel` define them (through `layerstack_schemas`).
+
+| Read | Returns |
+|---|---|
+| `prim.boundMaterial({ purpose? })`, `stage.boundMaterials(paths, { purpose? })` | `MaterialBinding \| null`: `material` (`null` when the target is no material), `target`, `relationship`, `kind` (`direct`, `collection`), `collection`, `strength`, `purpose`, `withoutBindingApi` |
+| `prim.materialSubsets({ purpose?, time? })` | `MaterialSubsets`: `familyType`, `fallback` binding, `subsets` (`path`, `indices` as an `int[]` array, `binding`), `problems` |
+| `stage.material(path)` | `Material \| null`: `baseMaterial`, `surface(contexts?)` / `displacement` / `volume` (`TerminalSource`: `shader`, `context`, `sources`), `inputs()`, `outputs()`, `input(name)`, `output(name)` |
+| `stage.shader(path)` | `Shader \| null`: `id`, `implementationSource`, `sdrMetadata`, `inputs()`, `outputs()`, `input(name)`, `output(name)` |
+| `prim.inputs()`, `prim.outputs()`, `stage.port(path)` | `ShaderPort`: `name`, `kind`, `typeName`, `sdrMetadata`, `connections`, `invalidConnections`, `get(time?)`, `valueSources()` |
+| `prim.geomSubsets({ elementType?, familyName?, time? })`, `subsetFamilyType(family)`, `validateSubsetFamily(family, elementType, { time? })` | `GeomSubset[]`, the family type, `SubsetProblem[]` |
+| `prim.coordSysBindings({ inherited? })` | `CoordSysBinding[]`: `name`, `relationship`, `target` |
+| `stage.skinning(path)`, `prim.skinning()` | `SkinningQuery \| null`: `skeleton`, `joints`, `jointMapping`, `elementSize`, `interpolation`, `rigid`, `method`, `animation`, `blendShapes`; `influences(time?)`, `interleavedInfluences(time?)`, `skinningTransforms(time?)`, `deformedPoints(time?)`, `deformedNormals(time?)` |
+| `layerstack.skinPoints`, `skinNormals`, `skinTransform` | The skinning functions over your own typed arrays, with separate or interleaved influences |
+
+Edits: `bindMaterial`, `unbindMaterial`, `setShaderInput`,
+`connectToSource`, `disconnectSource`, `setBaseMaterial`,
+`createGeomSubset`, `createMaterialSubset`, `setSubsetFamilyType`,
+`bindCoordSys`, `blockCoordSys`, `clearCoordSys`, `setSdrMetadata`. They
+are applied with the others through `stage.apply(edits, target?)`: one edit
+target, one atomic transaction, one receipt that undoes.
+
+**A renderer resolving materials.** For every mesh it draws, a renderer
+calls `stage.boundMaterials(meshPaths)`, which resolves the binding that
+decides each prim's material as `ComputeBoundMaterial` does (the prim's own
+or an ancestor's, direct or through a collection, strength and purpose),
+sharing the ancestors' bindings and the collections' membership across the
+call. For a mesh with face subsets it calls `prim.materialSubsets()`: each
+`materialBind` subset's face indices as an `Int32Array` view and its
+binding, the binding of the faces in no subset, and the family's validation
+problems, which never hide a subset. A binding to a path where no material
+is keeps its `target` with a `null` `material`. It then walks the network:
+`stage.material(path).surface(["mtlx"])` names the surface shader through
+any node graphs; `stage.shader(path)` gives its `id` and `sdrMetadata`;
+`shader.inputs()` gives each input's type, `sdrMetadata` and direct
+connections, `input.get(time)` its own value, and `input.valueSources()`
+where its value comes from: an upstream shader output to evaluate, or an
+attribute whose authored value to read. An unconnected input is its own
+`authoredValue` source.
+
+**An engine skinning a mesh each frame.** `stage.skinning(meshPath)`
+returns the binding once: skeleton, joints, joint mapping, element size,
+interpolation and method. To skin on the GPU, the engine uploads
+`interleavedInfluences()` (one `float2[]` of `[index, weight]` pairs, or
+`influences()` as separate `int[]` and `float[]`) once, and each frame
+`skinningTransforms(time)`, the binding-order joint palette as a
+`Float64Array` view with the geometry bind transform. To skin on the CPU,
+`deformedPoints(time)` and `deformedNormals(time)` return the blend-shaped,
+skinned arrays as `Float32Array` views, or `layerstack.skinPoints({...})`
+skins the engine's own arrays with separate or interleaved influences.
+Nothing is a per-element JavaScript object. The stage keeps one native
+skinning cache, which hears the stage's edits before each read and
+invalidates only what they touch, so a frame recomputes only what changes
+with time, and an edit of the animation (or its undo) shows in the next
+frame. Joint indices without as many weights fail with `skel.influences`;
+influences that do not fit the points with `skel.deformation`.
+
+**An editor authoring materials.** A new material is one `apply`:
+`definePrim` the `Material` and its `Shader`, `setShaderInput` (the input is
+created with the value's type), `connectToSource` the material's
+`outputs:surface` to the shader's (a port that does not exist is created
+with `typeName`), `setSdrMetadata`, `setBaseMaterial`, then `bindMaterial`
+(which applies `MaterialBindingAPI`, as `Apply(prim).Bind(material)`),
+`createMaterialSubset` and a `bindMaterial` of the new subset, and
+`bindCoordSys`. Schema-shaped edits see the prims, types and API schemas
+earlier edits of the same `apply` define, so the material, its shader,
+their connection and its bindings are one undoable step, through the
+edit layer or any edit target (a reference's, to author in the asset), and
+the receipt undoes all of it. A refused edit names its index
+and changes nothing: `material.not_found` for a binding to a path where no
+prim is (as OpenUSD, any existing prim binds, resolving no material when it
+is not a `Material`), `shading.no_port` for connecting an input that does not
+exist, `subset.indices` for a face past the mesh, `coord_sys.no_binding`,
+`schema.cannot_edit` beneath an instance.
+
 ## Error codes
 
 | Code | When |

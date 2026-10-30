@@ -9,6 +9,7 @@ import { describe, it } from "node:test";
 
 import { LayerstackError, Material, Shader, loadLayerstack } from "../dist/index.js";
 import type { Edit, Layerstack, Stage } from "../dist/index.js";
+import { mockSource } from "./fixtures.ts";
 
 const layerstack: Layerstack = await loadLayerstack();
 const text = new TextEncoder();
@@ -337,5 +338,47 @@ describe("an editor authoring materials", () => {
       "argument.invalid",
     );
     assert.equal(decoder.decode(stage.exportLayer(stage.root, "usda")), before);
+  });
+
+  it("binds a material inside a referenced asset through the reference's edit target", async () => {
+    using stage = layerstack.open({
+      identifier: "scene.usda",
+      bytes: text.encode(`#usda 1.0
+def Xform "World" {
+    def "Robot" (
+        prepend references = @./robot.usda@</Robot>
+    ) {
+    }
+}
+`),
+    });
+    await stage.resolve(
+      mockSource({
+        "robot.usda": `#usda 1.0
+def Xform "Robot" {
+    def Cube "Body" {
+    }
+    def Material "Paint" {
+    }
+}
+`,
+      }),
+    );
+    const arc = stage.prim("/World/Robot")!.compositionArcs().find((found) => found.arc === "references")!;
+    const target = arc.editTarget();
+    const receipt = stage.apply(
+      [
+        { type: "bindMaterial", path: "/World/Robot/Body", material: "/World/Robot/Paint" },
+        { type: "setShaderInput", path: "/World/Robot/Paint.inputs:tint", value: { type: "color3f", value: [1, 0, 0] } },
+      ],
+      target,
+    );
+    const asset = stage.layers().find((layer) => layer.identifier === "robot.usda")!;
+    const written = decoder.decode(stage.exportLayer(asset, "usda"));
+    assert.match(written, /rel material:binding = <\/Robot\/Paint>/, "the target is mapped into the asset");
+    assert.match(written, /color3f inputs:tint = \(1, 0, 0\)/);
+    assert.equal(stage.prim("/World/Robot/Body")!.boundMaterial()?.material, "/World/Robot/Paint");
+    receipt.undo();
+    assert.equal(stage.prim("/World/Robot/Body")!.boundMaterial(), null);
   });
 });

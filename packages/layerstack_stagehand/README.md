@@ -81,7 +81,8 @@ viewport with `conformCamera(camera, policy, aspect)`, as
 `list.lights()` (`LightItem`: world `matrix`, `position` and `direction`,
 `emission` with `radiance = color * blackbody * intensity * 2^exposure /
 sizeFactor` in nits as `UsdLux` defines it, `geometry`, `shaping`,
-`shadow` and the `lightLink` and `shadowLink` collections as data), a
+`shadow` and the `lightLink` and `shadowLink` collections with their
+`category`), a
 `Mesh` with `MeshLightAPI` applied (`kind: "mesh"`, normalized by its
 faces' world-space area) and a `GeometryLight` (its target as data).
 Lights and cameras inside a native instance are listed once per instance,
@@ -97,6 +98,25 @@ lights (by key), and `work.camerasRead` and `work.lightsRead`: an edit reads onl
 the lights and cameras it reaches, and `setTime` only those whose inputs
 or transform might vary. A light input connected to a node graph or
 another prim's input reads what the connection leads to.
+
+Light linking is evaluated as Hydra does it, by light-link category:
+each light's `lightLink` and `shadowLink` is a membership query
+(`stage.collectionMembership`: `includeRoot` with the `UsdLux` fallback,
+`expansionRule`, excludes, included collections, `membershipExpression`);
+equal queries share one category (`list.linkSets()`, `list.linkSet(n)`),
+and the fallback, `/` with `expandPrims` alone, has none
+(`lightLink.category === null`) and links everything. Each item's
+`linkPaths` are what is matched (a gprim's path, each instance proxy of a
+prototype's item, a point instancer's path for its instances):
+`list.isLinked(lightKey, "light" | "shadow", { item, path })` answers, and
+`list.linkCategories(target)` gives a target its categories. A diff lists
+`linksChanged` (per light and kind, the targets linked newly or no
+longer, for lights and items it neither adds nor removes) and counts
+`work.linksEvaluated` (queries computed: a new light's, an edited
+`collection:lightLink:*` or `collection:shadowLink:*`, or one including or
+referencing an edited collection) and `work.linksClassified`: a new
+target is classified once against each category, a new category against
+each target. Membership has no time.
 
 It also holds every material its items bind, by path: `list.materials()`
 (`MaterialItem`: the `UsdPreviewSurface` the surface output resolves to
@@ -156,8 +176,8 @@ copies the buffers out. A native engine calls the Rust crate
 
 Subdivision surfaces are drawn as their control cage (`report.refined` is
 false; `report.subdivisionScheme` says what was not applied). Shaders other
-than `UsdPreviewSurface` and its texture, primvar and transform nodes,
-curves, points and light linking evaluation are not covered yet, nor
+than `UsdPreviewSurface` and its texture, primvar and transform nodes
+are not covered yet, nor
 cameras inside a point instancer's prototypes.
 
 Errors are `StagehandError`s with a stable `code` (`argument.invalid`,

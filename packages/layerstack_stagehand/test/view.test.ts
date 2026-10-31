@@ -297,7 +297,10 @@ describe("a draw list's cameras and lights", () => {
           [light.lightLink, "lightLink"],
           [light.shadowLink, "shadowLink"],
         ] as const) {
-          assert.deepEqual({ ...link, includes: [...link.includes], excludes: [...link.excludes] }, row.links[name], where);
+          const { category, ...authored } = link;
+          assert.deepEqual({ ...authored, includes: [...link.includes], excludes: [...link.excludes] }, row.links[name], where);
+          // The fallback alone links everything: no category.
+          assert.equal(category === null, link.includeRoot && link.includes.length === 0 && link.excludes.length === 0, where);
         }
       }
     } finally {

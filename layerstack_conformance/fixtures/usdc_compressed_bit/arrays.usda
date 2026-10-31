@@ -1,0 +1,14 @@
+#usda 1.0
+
+def "Arrays"
+{
+    asset[] files = [@./rock0.png@, @./rock1.png@, @./rock2.png@, @./rock3.png@, @./rock4.png@, @./rock5.png@, @./rock6.png@, @./rock7.png@, @./rock8.png@, @./rock9.png@, @./rock10.png@, @./rock11.png@, @./rock12.png@, @./rock13.png@, @./rock14.png@, @./rock15.png@, @./rock16.png@, @./rock17.png@]
+    bool[] flags = [0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1]
+    uchar[] bytes = [0, 7, 14, 21, 28, 35, 42, 49, 56, 63, 70, 77, 84, 91, 98, 105, 112, 119]
+    float[] widths = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5, 11.5, 12.5, 13.5, 14.5, 15.5, 16.5, 17.5]
+    int[] counts = [-40, -39, -36, -31, -24, -15, -4, 9, 24, 41, 60, 81, 104, 129, 156, 185, 216, 249]
+    pathExpression[] patterns = ["/Lamp0", "/Lamp1", "/Lamp2", "/Lamp3", "/Lamp4", "/Lamp5", "/Lamp6", "/Lamp7", "/Lamp8", "/Lamp9", "/Lamp10", "/Lamp11", "/Lamp12", "/Lamp13", "/Lamp14", "/Lamp15", "/Lamp16", "/Lamp17"]
+    string[] names = ["robot 0", "robot 1", "robot 2", "robot 3", "robot 4", "robot 5", "robot 6", "robot 7", "robot 8", "robot 9", "robot 10", "robot 11", "robot 12", "robot 13", "robot 14", "robot 15", "robot 16", "robot 17"]
+    token[] tags = ["tag0", "tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8", "tag9", "tag10", "tag11", "tag12", "tag13", "tag14", "tag15", "tag16", "tag17"]
+    timecode[] frames = [0.25, 1.25, 2.25, 3.25, 4.25, 5.25, 6.25, 7.25, 8.25, 9.25, 10.25, 11.25, 12.25, 13.25, 14.25, 15.25, 16.25, 17.25]
+}

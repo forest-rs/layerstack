@@ -233,6 +233,7 @@ mod usda_openusd_text;
 mod usda_parity;
 mod usda_streaming;
 mod usdc_binary;
+mod usdc_compressed_bit;
 mod usdc_corpus;
 mod usdc_encodings;
 mod usdc_namespace_depth;

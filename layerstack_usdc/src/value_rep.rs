@@ -1136,7 +1136,7 @@ fn read_integer_array_as<T>(
 
     budget.charge(count)?;
     // Like float arrays, short arrays are stored uncompressed.
-    if rep.is_compressed() && count >= MIN_COMPRESSED_ARRAY_SIZE as u64 {
+    if honours_compression(rep) && count >= MIN_COMPRESSED_ARRAY_SIZE as u64 {
         // `read_compressed_ints` checks the count against the compressed data
         // before allocating.
         let count = usize::try_from(count).map_err(|_| UsdcError::IntegerArrayDecode {
@@ -1183,6 +1183,30 @@ fn read_integer_array_as<T>(
 /// Arrays with fewer elements are never compressed
 /// (`MinCompressedArraySize`, `pxr/usd/sdf/crateFile.cpp:1912`).
 const MIN_COMPRESSED_ARRAY_SIZE: usize = 16;
+
+/// Whether an array value's compressed bit means its elements are stored
+/// compressed. OpenUSD honours the bit only for arrays of `int`, `uint`,
+/// `int64` and `uint64` (crate 0.5.0 on) and of `half`, `float` and
+/// `double` (0.6.0 on), and reads every other element type uncompressed
+/// whatever the bit says: `bool`, `uchar`, the text types (`string`,
+/// `token`, `asset`, `pathExpression`, stored as indices), `timecode` and
+/// `duration` (`_ReadPossiblyCompressedArray`,
+/// `pxr/usd/sdf/crateFile.cpp:2178-2290`). No OpenUSD writer sets the bit
+/// on those, but another writer may, and OpenUSD opens such a file. Every
+/// crate version layerstack reads is 0.7.0 or later.
+fn honours_compression(rep: &RawValueRep) -> bool {
+    rep.is_compressed()
+        && matches!(
+            rep.value_type(),
+            Ok(ValueType::Int
+                | ValueType::UInt
+                | ValueType::Int64
+                | ValueType::UInt64
+                | ValueType::Half
+                | ValueType::Float
+                | ValueType::Double)
+        )
+}
 
 fn decode_float(
     rep: &RawValueRep,
@@ -1323,7 +1347,7 @@ fn read_float_array<T: Clone>(
     // Arrays shorter than `MinCompressedArraySize` are stored uncompressed
     // even when flagged compressed (`_ReadPossiblyCompressedArray`,
     // `pxr/usd/sdf/crateFile.cpp:2259`).
-    if !rep.is_compressed() || count < MIN_COMPRESSED_ARRAY_SIZE as u64 {
+    if !honours_compression(rep) || count < MIN_COMPRESSED_ARRAY_SIZE as u64 {
         let count = element_count(data, arr_start, count, element_size)?;
         let arr = (0..count)
             .map(|i| element(bytes_at(data, arr_start + i * element_size, element_size)?))

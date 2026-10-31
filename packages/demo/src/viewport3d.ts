@@ -63,6 +63,26 @@
 // `UsdGeomCamera::ComputeLinearExposureScale` (1 with the free camera), and
 // AgX tone mapping fits the highlights into the display's range. A stage
 // without lights is lit by a fixed sky and sun, as before.
+//
+// Light linking: three.js lights every lit material with every light in
+// the scene; `Light.layers` only decides whether a camera sees the light
+// at all (r186's `WebGLRenderer` pushes a light when its layers test the
+// camera's), not which objects it lights, and its node materials'
+// `lightsNode` are `WebGPURenderer`'s. So each draw's `MeshStandardMaterial`
+// (or `MeshPhysicalMaterial`) is patched, once, in `onBeforeCompile`: the
+// `lights_fragment_begin` chunk multiplies each point, spot, directional
+// and rect area light's color, and each hemisphere light's irradiance, by
+// a per-material uniform of 0 or 1 for the light in that slot. The slots
+// are three.js's own: `WebGLLights` numbers the lights of each type in the
+// order the renderer meets them (a depth-first walk of the visible scene),
+// shadow-casting and textured ones first, which none here are. Every
+// patched material shares one program; linking a light again rewrites
+// uniforms only. The masks come from the draw list
+// (`ViewportScene.unlit`: stagehand's evaluated `lightLink`s). Limits: one
+// material per `InstancedMesh`, so a prototype's draw is lit as its first
+// instance is; eight lights of a type are linked (more are lit as three.js
+// lights them); lines and points are unlit anyway; and `shadowLink` is
+// shown but not drawn, as the viewport casts no shadows.
 import {
   AgXToneMapping,
   BufferAttribute,
@@ -88,6 +108,7 @@ import {
   Quaternion,
   RectAreaLight,
   Scene,
+  ShaderChunk,
   SpotLight,
   Vector3,
   WebGLRenderer,
@@ -116,6 +137,8 @@ export class Viewport {
   #usdCamera: CameraItem | null = null;
   /** The three.js objects of each `UsdLux` light, by key (its path, or path and instance): the light and, for a directional or spot light, its target. */
   readonly #lights = new Map<string, Object3D[]>();
+  /** The `UsdLux` light each three.js light draws, by object. */
+  readonly #lightKeys = new Map<Object3D, string>();
   /** The sky and sun lighting a stage without lights. */
   readonly #fallback = new Group();
   /** One geometry per stagehand buffer, by key: a sphere of one radius is uploaded once. */
@@ -267,6 +290,7 @@ export class Viewport {
       if (light !== undefined) this.#addLight(light);
     }
     this.#fallback.visible = this.#lights.size === 0;
+    this.#link(scene);
     if (reset || update.cameras.size > 0) this.#usdCamera = scene.camera;
     this.#controls.enabled = this.#looking() === null;
     const framed = JSON.stringify(scene.bounds);
@@ -325,12 +349,39 @@ export class Viewport {
 
   #addLight(light: LightItem): void {
     const objects = threeLights(light);
-    for (const object of objects) this.#scene.add(object);
+    for (const object of objects) {
+      this.#scene.add(object);
+      this.#lightKeys.set(object, light.key);
+    }
     this.#lights.set(light.key, objects);
+  }
+
+  /**
+   * Writes every draw's light-link masks: 0 in the slot of each three.js
+   * light whose `UsdLux` light `scene.unlit` says does not light the draw,
+   * 1 elsewhere. Slots move when lights come and go, so every draw is
+   * written; only uniforms change.
+   */
+  #link(scene: ViewportScene): void {
+    const slots = lightSlots(this.#scene);
+    for (const [id, object] of this.#objects) {
+      const unlit = scene.unlit.get(id);
+      for (const material of [object.material].flat()) {
+        if (!(material instanceof MeshStandardMaterial)) continue;
+        const masks = linkMasks(material);
+        for (const mask of Object.values(masks)) mask.fill(1);
+        if (unlit === undefined) continue;
+        for (const [light, [type, slot]] of slots) {
+          const key = this.#lightKeys.get(light);
+          if (key !== undefined && unlit.has(key) && slot < LINK_SLOTS) masks[type][slot] = 0;
+        }
+      }
+    }
   }
 
   #dropLight(path: string): void {
     for (const object of this.#lights.get(path) ?? []) {
+      this.#lightKeys.delete(object);
       this.#scene.remove(object);
       if ("dispose" in object && typeof object.dispose === "function") object.dispose();
     }
@@ -349,6 +400,7 @@ export class Viewport {
       for (const material of [object.material].flat()) material.dispose();
       object.material = materials(view, this.#selected, scene.materials, this.#textures);
     }
+    this.#link(scene);
     this.#draw();
   }
 
@@ -545,6 +597,106 @@ function makeGeometry(view: ViewItem): BufferGeometry {
   if (mesh.ranges.length > 1) mesh.ranges.forEach((range, index) => geometry.addGroup(range.first, range.count, index));
   geometry.computeBoundingSphere();
   return geometry;
+}
+
+/** The lights of one three.js type a material is linked against; more are lit as three.js lights them. */
+const LINK_SLOTS = 8;
+
+/** The three.js light types whose contributions a link mask scales, by their uniform's suffix. */
+type LinkType = "Point" | "Spot" | "Directional" | "RectArea" | "Hemisphere";
+
+/** A material's link masks: per light type, 1 where the light in that slot lights it, 0 where a light link leaves it out. */
+type LinkMasks = Record<LinkType, Float32Array>;
+
+/**
+ * `lights_fragment_begin` with each light's contribution scaled by its
+ * slot's mask; `null` if this three.js's chunk does not have the lines
+ * patched, and draws are then lit by every light.
+ */
+const LINKED_LIGHTS = ((): string | null => {
+  let chunk = ShaderChunk.lights_fragment_begin;
+  const guarded = (statement: string) => `\n\t\t#if ( UNROLLED_LOOP_INDEX < ${LINK_SLOTS} )\n\t\t${statement}\n\t\t#endif\n`;
+  const patches: [string, string][] = [
+    ["pointLight = pointLights[ i ];", `pointLight = pointLights[ i ];${guarded("pointLight.color *= linkPoint[ i ];")}`],
+    ["spotLight = spotLights[ i ];", `spotLight = spotLights[ i ];${guarded("spotLight.color *= linkSpot[ i ];")}`],
+    ["directionalLight = directionalLights[ i ];", `directionalLight = directionalLights[ i ];${guarded("directionalLight.color *= linkDirectional[ i ];")}`],
+    ["rectAreaLight = rectAreaLights[ i ];", `rectAreaLight = rectAreaLights[ i ];${guarded("rectAreaLight.color *= linkRectArea[ i ];")}`],
+    [
+      "irradiance += getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal );",
+      `${guarded("irradiance += ( linkHemisphere[ i ] - 1.0 ) * getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal );")}irradiance += getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal );`,
+    ],
+  ];
+  for (const [line, patched] of patches) {
+    if (!chunk.includes(line)) return null;
+    chunk = chunk.replace(line, patched);
+  }
+  return chunk;
+})();
+
+/** The uniforms the patched chunk reads. */
+const LINK_UNIFORMS = (["Point", "Spot", "Directional", "RectArea", "Hemisphere"] as const)
+  .map((type) => `uniform float link${type}[ ${LINK_SLOTS} ];`)
+  .join("\n");
+
+/** The material's link masks, patching its shader the first time. */
+function linkMasks(material: MeshStandardMaterial): LinkMasks {
+  const kept = material.userData.linkMasks as LinkMasks | undefined;
+  if (kept !== undefined) return kept;
+  const masks: LinkMasks = {
+    Point: new Float32Array(LINK_SLOTS).fill(1),
+    Spot: new Float32Array(LINK_SLOTS).fill(1),
+    Directional: new Float32Array(LINK_SLOTS).fill(1),
+    RectArea: new Float32Array(LINK_SLOTS).fill(1),
+    Hemisphere: new Float32Array(LINK_SLOTS).fill(1),
+  };
+  material.userData.linkMasks = masks;
+  if (LINKED_LIGHTS === null) return masks;
+  material.onBeforeCompile = (shader) => {
+    for (const type of Object.keys(masks) as LinkType[]) shader.uniforms[`link${type}`] = { value: masks[type] };
+    shader.fragmentShader = shader.fragmentShader
+      .replace("void main() {", `${LINK_UNIFORMS}\nvoid main() {`)
+      .replace("#include <lights_fragment_begin>", LINKED_LIGHTS);
+  };
+  // Every patched material shares one program.
+  material.customProgramCacheKey = () => "light-links";
+  return masks;
+}
+
+/**
+ * Each light's type and slot as `WebGLLights` numbers them: lights of a
+ * type in the order the renderer meets them, a depth-first walk of the
+ * visible objects, shadow-casting and textured ones first (`castShadow`,
+ * `map`), stably.
+ */
+function lightSlots(scene: Scene): Map<Object3D, [LinkType, number]> {
+  const found: Object3D[] = [];
+  const walk = (object: Object3D) => {
+    if (!object.visible) return;
+    if ((object as { isLight?: boolean }).isLight) found.push(object);
+    for (const child of object.children) walk(child);
+  };
+  walk(scene);
+  const rank = (light: Object3D) => ((light as { castShadow?: boolean }).castShadow ? 2 : 0) + ((light as { map?: unknown }).map ? 1 : 0);
+  found.sort((a, b) => rank(b) - rank(a));
+  const counts: Record<LinkType, number> = { Point: 0, Spot: 0, Directional: 0, RectArea: 0, Hemisphere: 0 };
+  const slots = new Map<Object3D, [LinkType, number]>();
+  for (const light of found) {
+    const type: LinkType | null =
+      light instanceof PointLight
+        ? "Point"
+        : light instanceof SpotLight
+          ? "Spot"
+          : light instanceof DirectionalLight
+            ? "Directional"
+            : light instanceof RectAreaLight
+              ? "RectArea"
+              : light instanceof HemisphereLight
+                ? "Hemisphere"
+                : null;
+    if (type === null) continue;
+    slots.set(light, [type, counts[type]++]);
+  }
+  return slots;
 }
 
 /**

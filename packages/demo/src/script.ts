@@ -81,6 +81,10 @@ export const sample = {
   ],
   /** The basis the ring is switched to. */
   ringBasis: "catmullRom",
+  /** The spot light, linked to the robot alone by its `lightLink` collection, and the ground the script adds to it. */
+  spot: "/World/Spot",
+  spotIncludes: "/World/Spot.collection:lightLink:includes",
+  ground: "/World/Ground",
   /** The stage's `documentation`, which a step sets. */
   documentation: "A rock, a robot, two beacons and their lights",
 } as const;
@@ -330,6 +334,16 @@ export const steps: readonly Step[] = [
     async run(session) {
       session.current.setValue(`${sample.ring}.basis`, { type: "token", value: sample.ringBasis });
       session.select(sample.ring, `${sample.ring}.basis`);
+    },
+  },
+  {
+    title: "Light the ground with the spot too",
+    look: "The viewport: the spot's circle is back on the ground. The spot is light-linked: its collection:lightLink includes the robot (the rover since the rename, which repaired the target) with includeRoot = false, so the viewport lit only the robot's draws with it, through a per-material mask three.js multiplies the spot's light by; while the asset is muted the spot lights nothing. One edit adds the ground to the includes. The stats line: the draw list evaluates that one light link again (light links 1 evaluated), classifies each draw once against its new membership, and lists one link change, the ground added; it reads that light again and no draw, camera or material. The inspector: the spot lights 1 of 16 draws, and its shadow link links everything.",
+    async run(session) {
+      const editor = session.current;
+      const targets = editor.stage.relationship(sample.spotIncludes)?.targets() ?? [];
+      editor.apply("light the ground with the spot", [{ type: "setTargets", path: sample.spotIncludes, targets: [...targets, sample.ground] }]);
+      session.select(sample.spot);
     },
   },
 ];

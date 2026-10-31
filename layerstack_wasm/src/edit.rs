@@ -1351,6 +1351,50 @@ def "Spare" (
         stage
     }
 
+    /// Receipts combined with `copy` and `absorb` undo as one atomic
+    /// transaction: a stale older receipt stops the whole undo, and the
+    /// receipts it combined stay as they were.
+    #[test]
+    fn combined_receipts_undo_atomically() {
+        let mut stage = open();
+        let target = root(&stage);
+        let before = text(&stage, target);
+        let set = |stage: &mut Stage, path: &str, value: f64| {
+            let mut batch = EditBatch::new();
+            let value = numbers(&mut batch, "double", &[value]);
+            batch.set_value(path.to_string(), None, value);
+            stage.apply(target.0, &mut batch).unwrap()
+        };
+        let size = set(&mut stage, "/World.size", 3.0);
+        let spin = set(&mut stage, "/World.spin", 4.0);
+        let mut combined = spin.copy().unwrap();
+        combined.absorb(&size).unwrap();
+        assert!(size.undoable() && spin.undoable(), "the parts stay");
+
+        // An edit outside the receipts makes the older one stale.
+        let _outside = set(&mut stage, "/World.size", 5.0);
+        let after = text(&stage, target);
+        let error = stage.undo(&mut combined).unwrap_err();
+        assert_eq!(error.code, "edit.stale");
+        assert_eq!(text(&stage, target), after, "nothing was undone");
+        assert!(combined.undoable());
+
+        let _back = set(&mut stage, "/World.size", 3.0);
+        let mut redo = stage.undo(&mut combined).unwrap();
+        assert_eq!(text(&stage, target), before, "both undone");
+        stage.undo(&mut redo).unwrap();
+
+        let mut other = open();
+        let foreign = set(&mut other, "/World.size", 6.0);
+        let mut copy = size.copy().unwrap();
+        assert_eq!(copy.absorb(&foreign).unwrap_err().code, "receipt.affinity");
+        let mut used = spin.copy().unwrap();
+        stage.undo(&mut used).unwrap();
+        assert!(!combined.undoable() && spin.undoable());
+        assert_eq!(used.copy().unwrap_err().code, "receipt.released");
+        assert_eq!(copy.absorb(&used).unwrap_err().code, "receipt.released");
+    }
+
     fn scalar(type_name: &str, value: Wire) -> Wire {
         Wire::List(vec![Wire::text(type_name), Wire::text("s"), value])
     }

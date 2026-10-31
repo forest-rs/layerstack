@@ -532,3 +532,89 @@ fn a_sublayer_added_to_a_sublayer_composes() {
     assert_eq!(int(&doc, "/Ball.serial"), Some(1));
     assert!(doc.asset_status().is_complete());
 }
+
+const CLIPPED: &str = r#"#usda 1.0
+def "P" (clips = {
+ dictionary a = {
+  asset[] assetPaths=[@c0.usda@,@c1.usda@]
+  string primPath="/C"
+  double2[] active=[(0,0),(10,1)]
+  asset manifestAssetPath=@manifest.usda@
+ }
+}) { float x; }
+"#;
+
+/// The clip sources of `CLIPPED`, which a host fetches as the plan asks.
+const CLIP_SOURCES: [(&str, &str); 3] = [
+    ("manifest.usda", "#usda 1.0\ndef \"C\" {\n float x\n}\n"),
+    (
+        "c0.usda",
+        "#usda 1.0\ndef \"C\" {\n float x.timeSamples={0:1,5:2}\n}\n",
+    ),
+    (
+        "c1.usda",
+        "#usda 1.0\ndef \"C\" {\n float x.timeSamples={10:10}\n}\n",
+    ),
+];
+
+/// A clip source the host has not supplied is listed as unavailable, under
+/// the identifier to supply, not as a failure; supplying what each
+/// preparation lists completes the plan, manifest before clips, and reads
+/// none of the clips the query does not demand.
+#[test]
+fn clip_preparation_lists_sources_not_supplied_yet() {
+    let mut host = Host::default();
+    host.supply("root.usda", CLIPPED.as_bytes());
+    let mut doc = StageDocument::open(host, "root.usda", StageOptions::default()).unwrap();
+    let property = doc.store_mut().property_path("/P.x");
+    let mut rounds = Vec::new();
+    loop {
+        let prepared = doc.prepare_clip_query(property, Time::at(2.), 8, 16);
+        assert!(prepared.failures.is_empty(), "{prepared:?}");
+        if prepared.unavailable.is_empty() {
+            assert!(prepared.plan.is_complete(), "{prepared:?}");
+            break;
+        }
+        assert!(!prepared.plan.is_complete());
+        let mut round: Vec<String> = Vec::new();
+        for asset in prepared.unavailable {
+            assert!(
+                prepared
+                    .plan
+                    .pending()
+                    .any(|demand| demand.request == asset.request),
+                "an unavailable source is one the plan still demands"
+            );
+            let (_, bytes) = CLIP_SOURCES
+                .iter()
+                .find(|(name, _)| *name == asset.identifier)
+                .unwrap();
+            doc.storage_mut()
+                .supply(&asset.identifier, bytes.as_bytes());
+            round.push(asset.identifier);
+        }
+        rounds.push(round);
+    }
+    assert_eq!(rounds, [vec!["manifest.usda"], vec!["c0.usda"]]);
+    let value = doc
+        .view()
+        .attribute(property)
+        .and_then(|a| a.value::<f32>(Time::at(2.)));
+    assert_eq!(value, Some(1.4));
+    assert!(!doc.storage().reads.iter().any(|read| read == "c1.usda"));
+}
+
+/// A clip source the host confirms absent is missing, as from storage
+/// that reads synchronously: the plan completes with a gap.
+#[test]
+fn a_clip_source_confirmed_absent_completes_the_plan() {
+    let mut host = Host::default();
+    host.supply("root.usda", CLIPPED.as_bytes());
+    host.supply("manifest.usda", CLIP_SOURCES[0].1.as_bytes());
+    host.absent.insert("c0.usda".into());
+    let mut doc = StageDocument::open(host, "root.usda", StageOptions::default()).unwrap();
+    let property = doc.store_mut().property_path("/P.x");
+    let prepared = doc.prepare_clip_query(property, Time::at(2.), 8, 16);
+    assert!(prepared.unavailable.is_empty() && prepared.failures.is_empty());
+    assert!(prepared.plan.is_complete(), "{prepared:?}");
+}

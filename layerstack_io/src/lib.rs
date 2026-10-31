@@ -115,7 +115,7 @@ mod clips;
 mod package;
 mod udim;
 pub use asset_bytes::{AssetByteSource, AssetBytes, AssetReadLimits};
-pub use clips::{ClipLoadFailure, ClipQueryPreparation};
+pub use clips::{ClipLoadFailure, ClipQueryPreparation, UnavailableClipAsset};
 pub use package::{PackageInclusion, PackagePreparationLimits, PreparedPackage};
 pub use udim::{UdimDiscovery, UdimDiscoveryWork, UdimTileAsset, UdimTiles};
 

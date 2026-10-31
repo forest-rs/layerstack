@@ -17,6 +17,21 @@ pub struct ClipLoadFailure {
     /// Original load error. A malformed source is never recorded as missing.
     pub error: IoError,
 }
+/// A demanded clip source that storage cannot supply yet
+/// ([`IoErrorKind::Unavailable`]): a host that fetches sources
+/// asynchronously, such as a browser, supplies it under
+/// [`Self::identifier`] and prepares the query again. It may still arrive,
+/// so it is neither a failure nor missing.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct UnavailableClipAsset {
+    /// The demanded source, with its anchor, role and clip set.
+    pub request: ClipAssetRequest,
+    /// The source to supply, as storage named it for the request's
+    /// identifier anchored to its layer: the key a host fetches and
+    /// supplies bytes under, as [`crate::UnavailableAsset::identifier`].
+    pub identifier: String,
+}
 /// Explicit load work and the final resumable query plan.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
@@ -27,6 +42,10 @@ pub struct ClipQueryPreparation {
     pub load_attempts: usize,
     /// Typed failures; malformed resources keep the query incomplete.
     pub failures: Vec<ClipLoadFailure>,
+    /// Demanded sources storage cannot supply yet, each once, in demand
+    /// order. They stay pending in [`Self::plan`] until supplied (or
+    /// confirmed absent) and prepared again.
+    pub unavailable: Vec<UnavailableClipAsset>,
     /// More pending requests remain after consuming the load-attempt budget.
     pub budget_exhausted: bool,
 }
@@ -35,7 +54,10 @@ impl<B: Storage> StageDocument<B> {
     /// successful load. `max_loads` bounds source requests (each may import layer
     /// arcs); `max_demands` bounds each returned plan. Missing files are confirmed
     /// to the store; malformed files retain typed failures and may be retried on
-    /// a later call. Already complete queries perform no I/O. Numeric evaluation
+    /// a later call. Sources storage cannot supply yet are listed as
+    /// [`ClipQueryPreparation::unavailable`], not failures: a host that
+    /// fetches asynchronously supplies them and calls this again, until the
+    /// plan is complete. Already complete queries perform no I/O. Numeric evaluation
     /// remains separate. At [`Time::Default`] it loads what untimed
     /// introspection needs: the clip metadata and single clips that settle
     /// whether the attribute might vary with time
@@ -72,6 +94,7 @@ impl<B: Storage> StageDocument<B> {
         self.synchronize();
         let mut attempted = BTreeSet::new();
         let mut failures = Vec::new();
+        let mut unavailable = Vec::new();
         loop {
             let plan = self
                 .stage
@@ -86,6 +109,7 @@ impl<B: Storage> StageDocument<B> {
                     plan,
                     load_attempts: attempted.len(),
                     failures,
+                    unavailable,
                     budget_exhausted: false,
                 };
             };
@@ -94,17 +118,35 @@ impl<B: Storage> StageDocument<B> {
                     plan,
                     load_attempts: attempted.len(),
                     failures,
+                    unavailable,
                     budget_exhausted: true,
                 };
             }
             attempted.insert((request.anchor, request.identifier.clone()));
             if let Err(error) = self.load_asset(&request.identifier, Some(request.anchor)) {
-                if error.kind == IoErrorKind::NotFound {
-                    self.store
-                        .mark_asset_missing(request.anchor, &request.identifier);
-                    self.synchronize();
-                } else {
-                    failures.push(ClipLoadFailure { request, error });
+                match error.kind {
+                    IoErrorKind::NotFound => {
+                        self.store
+                            .mark_asset_missing(request.anchor, &request.identifier);
+                        self.synchronize();
+                    }
+                    // Not supplied yet: it stays pending, and the host
+                    // supplies it under the identifier storage named.
+                    IoErrorKind::Unavailable => {
+                        let identifier = error
+                            .identifier
+                            .unwrap_or_else(|| request.identifier.to_string());
+                        if !unavailable
+                            .iter()
+                            .any(|asset: &UnavailableClipAsset| asset.identifier == identifier)
+                        {
+                            unavailable.push(UnavailableClipAsset {
+                                request,
+                                identifier,
+                            });
+                        }
+                    }
+                    _ => failures.push(ClipLoadFailure { request, error }),
                 }
             }
         }

@@ -60,6 +60,7 @@ import type {
   LayerFormat,
   LoadResult,
   MaterialBinding,
+  CollectionMembership,
   MaterialSubsets,
   MeshTopology,
   MeshTopologyProblemCode,
@@ -148,6 +149,7 @@ export interface NativeStage extends Disposable {
   exportFlattened(format: string): unknown;
   exportPackage(): unknown;
   boundMaterials(paths: string[], purpose: string): unknown;
+  collectionMembership(path: string, name: string, paths: string[]): unknown;
   materialSubsets(path: string, purpose: string, time?: number | null): unknown;
   material(path: string): unknown;
   materialTerminal(path: string, terminal: string, contexts: string[]): unknown;
@@ -1585,6 +1587,32 @@ export class Stage implements Disposable {
       native.boundMaterials([...paths], options.purpose ?? ""),
     ) as unknown[];
     return records.map(decodeBinding);
+  }
+
+  /**
+   * The membership of the collection `name` (`lightLink`) on the prim at
+   * `path`, asked of each prim of `paths`: OpenUSD's
+   * `UsdCollectionAPI::ComputeMembershipQuery` (the schema's `includeRoot`
+   * fallback, `expansionRule`, excludes, included collections and
+   * `membershipExpression`), then `IsPathIncluded`. Paths inside native
+   * instances are their instance proxies'. Its `key` tells equal
+   * memberships apart, so a caller evaluating many collections (a draw
+   * list's light links) classifies each prim once per distinct one.
+   *
+   * Throws `path.invalid`, or `prim.not_found` naming `path` or the first
+   * of `paths` no prim is at.
+   */
+  collectionMembership(path: string, name: string, paths: readonly string[]): CollectionMembership {
+    const [key, everything, included, reads, readsAny] = this.#call("collectionMembership", (native) =>
+      native.collectionMembership(path, name, [...paths]),
+    ) as [string, boolean, Uint8Array, string[], boolean];
+    return Object.freeze({
+      key,
+      everything,
+      included: Object.freeze(Array.from(included, (byte) => byte !== 0)),
+      reads: Object.freeze(reads),
+      readsAny,
+    });
   }
 
   /**

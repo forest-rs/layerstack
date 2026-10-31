@@ -22,7 +22,8 @@ use alloc::{
 use layerstack::{InMemoryStore, PathId, PropertyPath, TargetPath, Time, TypedArray};
 use layerstack_schemas::{
     BindingCache, BindingKind, BindingOptions, BindingStrength, BoundMaterial, CoordSysCache,
-    MaterialPurpose, PrimView, Scene,
+    ExpansionRule, MaterialPurpose, MembershipProblem, MembershipQuery, MembershipRule, PrimView,
+    Scene,
     shading::{ConnectionSourceInfo, MaterialTerminal, PortKind, ValueSourceKind},
     subset::{MeshTopologyError, SubsetError, SubsetProblem, SubsetProblemKind, SubsetValidation},
     usd_geom::{GeomSubsetElementType, Imageable, Mesh},
@@ -210,6 +211,98 @@ impl Stage {
     /// The prim at `path`, which must exist.
     fn schema_prim(&self, path: &str) -> Result<PathId, Error> {
         Ok(self.existing_prim(path)?.path())
+    }
+
+    /// The membership of the collection `name` on the prim at `path`
+    /// (`UsdCollectionAPI::ComputeMembershipQuery`, the schema's
+    /// `includeRoot` fallback included) and whether it includes each prim
+    /// of `paths` (`IsPathIncluded`): `[key, everything, included, reads,
+    /// readsAny]`.
+    /// `key` is equal for two collections exactly when their rule maps,
+    /// included collections, expansion rules and resolved expressions are,
+    /// so equal memberships can share one evaluation; `everything` is
+    /// whether the rule map is `/` with `expandPrims` alone (`UsdImaging`'s
+    /// trivial collection, as the `UsdLuxLightAPI` link fallback is);
+    /// `included` holds a byte per path; `reads` lists the collections it
+    /// reads, by collection path (those it includes, directly or not, and
+    /// those its expression references), and `readsAny` whether a reference
+    /// names no collection yet, which any collection made later may answer:
+    /// an edit to one of them can change this membership.
+    ///
+    /// OpenUSD: `UsdCollectionAPI::ComputeMembershipQuery`,
+    /// `UsdCollectionMembershipQuery::IsPathIncluded`; `UsdImaging`'s
+    /// `_IsQueryTrivial` (`collectionCache.cpp`). AOUSD Core §15.
+    ///
+    /// # Errors
+    ///
+    /// `path.invalid`, or `prim.not_found` naming `path` or the first of
+    /// `paths` no prim is at.
+    pub(crate) fn collection_membership(
+        &self,
+        path: &str,
+        name: &str,
+        paths: &[String],
+    ) -> Result<Wire, Error> {
+        let owner = self.schema_prim(path)?;
+        let scene = self.scene();
+        let store = self.document().store();
+        let query = MembershipQuery::compute(&scene, owner, name);
+        let root = store.paths().intern(layerstack::Path::root());
+        let mut rules: Vec<(String, &'static str)> = query
+            .rules()
+            .map(|(path, rule)| {
+                let rule = match rule {
+                    MembershipRule::Include(rule) => rule.as_str(),
+                    MembershipRule::Exclude => "exclude",
+                };
+                (path.display(store.paths(), store.tokens()), rule)
+            })
+            .collect();
+        rules.sort_unstable();
+        let mut key = String::from(query.expansion_rule().as_str());
+        for (path, rule) in &rules {
+            key.push_str(&alloc::format!("\n{path} {rule}"));
+        }
+        for collection in query.included_collections() {
+            key.push_str(&alloc::format!(
+                "\n+{}",
+                collection.display(store.paths(), store.tokens())
+            ));
+        }
+        if let Some(expression) = query.expression() {
+            key.push_str(&alloc::format!("\n={}", expression.text()));
+        }
+        let everything = rules.len() == 1
+            && query.rules().all(|(path, rule)| {
+                *path == TargetPath::Prim(root)
+                    && *rule == MembershipRule::Include(ExpansionRule::ExpandPrims)
+            });
+        let mut included = Vec::with_capacity(paths.len());
+        for path in paths {
+            let prim = self.schema_prim(path)?;
+            included.push(u8::from(
+                query
+                    .is_included(&scene, TargetPath::Prim(prim))
+                    .is_included(),
+            ));
+        }
+        let reads = query
+            .included_collections()
+            .iter()
+            .chain(query.referenced_collections())
+            .map(|collection| property_text(store, *collection))
+            .collect();
+        let reads_any = query
+            .problems()
+            .iter()
+            .any(|problem| matches!(problem, MembershipProblem::MissingReference { .. }));
+        Ok(Wire::List(vec![
+            Wire::Text(key),
+            Wire::Bool(everything),
+            Wire::Bytes(included),
+            Wire::List(reads),
+            Wire::Bool(reads_any),
+        ]))
     }
 
     /// The bound material of each prim of `paths` for `purpose` (`""` for

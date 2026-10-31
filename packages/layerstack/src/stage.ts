@@ -1274,9 +1274,10 @@ export class Stage implements Disposable {
    * Whether each attribute's value source might vary with time, the
    * default time included: time samples (even one), a spline or value
    * clips supply it, directly or under sparse edits
-   * (`UsdAttributeQuery::ValueSourceMightBeTimeVarying`). `false` for a
-   * path no attribute is at; `false` means every time reads the same
-   * value. One read for many attributes: {@link Attribute.valueSourceMightBeTimeVarying}
+   * (`UsdAttributeQuery::ValueSourceMightBeTimeVarying`). `true` too
+   * while the clip metadata that settles whether value clips supply it is
+   * not loaded: unknown is answered conservatively. `false` for a path no
+   * attribute is at; `false` means every time reads the same value. One read for many attributes: {@link Attribute.valueSourceMightBeTimeVarying}
    * asks for one.
    *
    * Throws `path.invalid` for a path that is not a property path.

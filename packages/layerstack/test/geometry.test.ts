@@ -177,6 +177,35 @@ def Xform "Base" {
     assert.equal(failure(() => stage.worldTransformsMightVary(["/Gone"])).code, "prim.not_found");
     assert.equal(failure(() => stage.valueSourcesMightBeTimeVarying(["/Base"])).code, "path.invalid");
   });
+
+  it("call an attribute value clips may supply varying while their metadata is not loaded", () => {
+    // Whether clips supply `points` is the manifest's to say, and it is
+    // not loaded: unknown counts as varying, never as a silent `false`.
+    const stage = layerstack.open({
+      identifier: "plate.usda",
+      bytes: new TextEncoder().encode(`#usda 1.0
+def Mesh "Plate" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./motion.usda@]
+            asset manifestAssetPath = @./manifest.usda@
+            string primPath = "/Motion"
+            double2[] active = [(0, 0)]
+        }
+    }
+    prepend references = </Base>
+) {
+}
+class Mesh "Base" {
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0)]
+}
+def Mesh "Still" {
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0)]
+}
+`),
+    });
+    assert.deepEqual(stage.valueSourcesMightBeTimeVarying(["/Plate.points", "/Still.points"]), [true, false]);
+  });
 });
 
 describe("the retained caches", () => {

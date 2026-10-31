@@ -1,9 +1,10 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Which clips a clip set schedules, loads and reads, replayed call by
-//! call from `clip_schedules_oracle.py` (see the script for the scene and
-//! what it records).
+//! Which clips a clip set schedules, loads and reads, and when a clipped
+//! attribute might vary with time, replayed call by call from
+//! `clip_schedules_oracle.py` (see the script for the scene and what it
+//! records).
 //!
 //! The document loads exactly what each clip query plan demands
 //! ([`StageDocument::prepare_clip_query`]); after every OpenUSD call the
@@ -11,7 +12,7 @@
 //! never loads a clip OpenUSD does not open, such as an unscheduled one.
 //!
 //! OpenUSD: `Usd_ClipSet` (`pxr/usd/usd/clipSet.cpp`),
-//! `UsdAttribute::Get` and `GetTimeSamples`.
+//! `UsdAttribute::ValueMightBeTimeVarying`, `Get` and `GetTimeSamples`.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -28,8 +29,16 @@ struct Oracle {
     openusd: String,
     times: Vec<f64>,
     open: Vec<String>,
+    vary: Vec<Vary>,
     get: Vec<Get>,
     samples: Vec<Samples>,
+}
+
+#[derive(Deserialize)]
+struct Vary {
+    attribute: String,
+    might_vary: bool,
+    loaded: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -144,7 +153,65 @@ fn clip_reads_match_openusd() {
     }
 }
 
-/// A rejected schedule demands nothing, and its plans say why;
+/// `ValueMightBeTimeVarying` before any value is read: unknown and
+/// conservative while the clip metadata is not loaded, then OpenUSD's
+/// answer once the untimed plan's demands are.
+#[test]
+fn might_vary_matches_openusd_once_loaded() {
+    let oracle = oracle();
+    let mut document = open();
+    // Before anything is loaded, an attribute whose clip metadata is not
+    // resident might vary: unknown is never a silent `false`.
+    for vary in &oracle.vary {
+        let path = property(&mut document, &vary.attribute);
+        let pending = document
+            .stage()
+            .stage()
+            .plan_clip_query(path, Time::Default, 64)
+            .pending()
+            .next()
+            .is_some();
+        // OpenUSD opens the one clip of `SingleSame` to answer `false`.
+        assert!(pending || vary.attribute != "/SingleSame.size");
+        let view = document.view();
+        let attribute = view.attribute(path).expect("attribute");
+        if pending {
+            assert!(
+                attribute.might_be_time_varying(),
+                "{}: unknown must be conservative",
+                vary.attribute
+            );
+            assert!(
+                attribute.value_source_might_be_time_varying(),
+                "{}: unknown value source must be conservative",
+                vary.attribute
+            );
+        }
+    }
+
+    // `ValueMightBeTimeVarying`, each after loading what the untimed plan
+    // demands.
+    for vary in &oracle.vary {
+        let path = property(&mut document, &vary.attribute);
+        let prepared = document.prepare_clip_query(path, Time::Default, 16, 64);
+        assert!(
+            prepared.failures.is_empty() && prepared.plan.pending().next().is_none(),
+            "{}: untimed plan {prepared:?}",
+            vary.attribute
+        );
+        let view = document.view();
+        let attribute = view.attribute(path).expect("attribute");
+        assert_eq!(
+            attribute.might_be_time_varying(),
+            vary.might_vary,
+            "{} might vary",
+            vary.attribute
+        );
+        assert_loaded_within(&document, &vary.loaded, &format!("vary {}", vary.attribute));
+    }
+}
+
+/// A rejected schedule demands nothing, at any time, and its plans say why;
 /// OpenUSD opens no clip of a set it rejects (`Usd_ClipSet::New`).
 #[test]
 fn rejected_schedules_demand_nothing() {
@@ -152,8 +219,8 @@ fn rejected_schedules_demand_nothing() {
     let mut document = open();
     for name in ["/DupActive.size", "/TripleTimes.size"] {
         let path = property(&mut document, name);
-        for time in oracle.times.iter().map(|&t| Time::at(t))
-        {
+        let times = oracle.times.iter().map(|&t| Time::at(t));
+        for time in std::iter::once(Time::Default).chain(times) {
             let plan = document.stage().stage().plan_clip_query(path, time, 64);
             assert!(plan.demands.is_empty(), "{name} at {time:?}: {plan:?}");
             assert!(

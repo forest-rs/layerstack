@@ -25,6 +25,10 @@ pub enum ClipDemandReason {
     MissingValueSearch,
     /// A stronger sparse or unresolved clip set may advance this set's query.
     StrongerSourceComposition,
+    /// The only clip a set schedules, whose sample count settles whether
+    /// the attribute might vary with time (an untimed plan,
+    /// [`crate::Stage::plan_clip_query`] at [`crate::Time::Default`]).
+    SingleClipSamples,
 }
 /// One anchored demand and its reason. Loaded/missing results are retained so
 /// consumers can distinguish a complete gap from unresolved residency.
@@ -448,6 +452,156 @@ impl Catalog {
         plan.budget_exhausted = plan.demands.len() > max_demands;
         plan.demands.truncate(max_demands);
         plan
+    }
+}
+
+impl Catalog {
+    /// The plan of untimed introspection of `property`, whether it might
+    /// vary with time: the clip metadata that settles which clip set
+    /// supplies it, and the single clip of a set that schedules one.
+    ///
+    /// OpenUSD answers `UsdAttribute::ValueMightBeTimeVarying` from the
+    /// first clip set whose manifest declares the attribute: `true` for a
+    /// set of more than one activation without opening a clip, else from
+    /// the number of samples its one clip holds
+    /// (`_ValueFromClipsMightBeTimeVarying`, `pxr/usd/usd/stage.cpp:9701-9725`).
+    /// So the sets are walked strongest first, as the timed plan walks
+    /// them: each demands its manifest, or for a set without one the
+    /// scheduled clips its manifest is generated from; the walk stops at
+    /// the first set whose metadata is not resident (replan once it is),
+    /// and at the first that declares the attribute, which demands its
+    /// clip when it schedules only one. A set behind a stronger dense
+    /// source (time samples, a spline or a default that does not compose),
+    /// a stronger animation block or an opinion at its own site is
+    /// skipped, as that hides its clips from the answer. AOUSD Core
+    /// §12.3.2, §12.3.4.
+    pub(crate) fn untimed_plan(
+        &self,
+        property: PropertyPath,
+        max_demands: usize,
+        index: Option<&PrimIndex>,
+    ) -> ClipQueryPlan {
+        let mut plan = ClipQueryPlan::empty(property, crate::Time::Default);
+        let Some(index) = index else {
+            return plan;
+        };
+        let ordinary = index
+            .property_opinions(property.property())
+            .unwrap_or_default();
+        let mut sets: Vec<_> = self
+            .demands
+            .get(&property.prim_path())
+            .into_iter()
+            .flatten()
+            .collect();
+        sort::sort_by(&mut sets, |a, b| {
+            index
+                .graph
+                .cmp_nodes(a.key.node, b.key.node)
+                .then_with(|| a.key.layer_strength.cmp(&b.key.layer_strength))
+        });
+        let composes = |value: &Value| {
+            value.array_edit_ref().is_some() || matches!(value, Value::PathExpression(_))
+        };
+        for set in sets {
+            let hidden = ordinary.iter().any(|opinion| {
+                let strength = index.graph.cmp_keys(&opinion.source().key, &set.key);
+                let value = opinion.value();
+                let source = value.time_samples().is_some()
+                    || value.spline().is_some()
+                    || value.has_default_value();
+                let dense = value.spline().is_some()
+                    || value
+                        .time_samples()
+                        .is_some_and(|samples| samples.iter().any(|(_, v)| !composes(v)))
+                    || value.default_value().is_some_and(|v| !composes(v));
+                strength.is_le() && value.blocks_animation()
+                    || strength.is_eq() && source
+                    || strength.is_lt() && dense
+            });
+            if hidden {
+                continue;
+            }
+            let metadata: Vec<_> = match &set.manifest {
+                Some(manifest) => alloc::vec![(manifest, ClipDemandReason::Manifest)],
+                None => {
+                    let reason = if set.template_unresolved {
+                        ClipDemandReason::TemplateSchedule
+                    } else {
+                        ClipDemandReason::AutomaticManifest
+                    };
+                    set.requests
+                        .iter()
+                        .filter(|request| request.role != ClipAssetRole::Manifest)
+                        .map(|request| (request, reason))
+                        .collect()
+                }
+            };
+            for &(request, reason) in &metadata {
+                add_demand(&mut plan.demands, request, reason);
+            }
+            if set.template_unresolved || !metadata.iter().all(|(request, _)| resident(request)) {
+                break;
+            }
+            let declared = match &set.manifest {
+                Some(_) => set.declarations.get(&property.property()).is_some_and(|p| {
+                    p.kind == crate::PropertyKind::Attribute
+                        && p.variability == Variability::Varying
+                }),
+                None => self
+                    .properties
+                    .get(&(property.prim_path(), property.property()))
+                    .into_iter()
+                    .flatten()
+                    .any(|p| p.owner == set.owner && p.set_name == set.name && p.key == set.key),
+            };
+            if !declared {
+                continue;
+            }
+            if let [(_, clip)] = set.active.as_slice()
+                && let Some(name) = set.identifiers.get(*clip)
+                && let Some(request) = set
+                    .requests
+                    .iter()
+                    .find(|r| r.role != ClipAssetRole::Manifest && r.identifier == *name)
+            {
+                add_demand(
+                    &mut plan.demands,
+                    request,
+                    ClipDemandReason::SingleClipSamples,
+                );
+            }
+            break;
+        }
+        for issue in &self.issues {
+            if issue.kind != ClipIssueKind::UnresolvedTemplate
+                && self
+                    .owners
+                    .get(&property.prim_path())
+                    .is_some_and(|owners| owners.contains(&issue.owner))
+            {
+                plan.issues.push(issue.clone());
+            }
+        }
+        plan.budget_exhausted = plan.demands.len() > max_demands;
+        plan.demands.truncate(max_demands);
+        plan
+    }
+
+    /// Whether untimed introspection of `property` waits for clip assets
+    /// the host has not loaded ([`Self::untimed_plan`]): until it has them,
+    /// whether the attribute might vary with time is unknown.
+    pub(crate) fn untimed_pending(
+        &self,
+        property: PropertyPath,
+        index: Option<&PrimIndex>,
+    ) -> bool {
+        self.demands.contains_key(&property.prim_path())
+            && self
+                .untimed_plan(property, usize::MAX, index)
+                .pending()
+                .next()
+                .is_some()
     }
 }
 

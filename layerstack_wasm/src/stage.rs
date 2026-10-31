@@ -894,8 +894,10 @@ impl Stage {
 
     /// Whether each attribute's value source might vary with time, the
     /// default time included: time samples (even one), a spline or value
-    /// clips supply it, directly or under sparse edits. One per path, `1`
-    /// or `0`; `0` for a path no attribute is at.
+    /// clips supply it, directly or under sparse edits; also while the
+    /// clip metadata that settles whether clips supply it is not loaded
+    /// (unknown, answered conservatively). One per path, `1` or `0`; `0`
+    /// for a path no attribute is at.
     ///
     /// Spec: AOUSD Core §12.3.2, §12.3.4 (value clips). OpenUSD:
     /// `UsdAttributeQuery::ValueSourceMightBeTimeVarying`.

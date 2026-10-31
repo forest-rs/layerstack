@@ -468,6 +468,29 @@ describe("applying", () => {
     assert.equal(failure(() => first.undo()).code, "receipt.released");
   });
 
+  it("undoes several receipts as one atomic transaction", async () => {
+    using stage = await openScene();
+    const usda = () => new TextDecoder().decode(stage.exportLayer(stage.root, "usda"));
+    const set = (path: string, value: number) =>
+      stage.apply([{ type: "setValue", path, value: { type: "double", value } }], stage.root);
+    const start = usda();
+    const size = set("/World.size", 3);
+    const spin = set("/World.spin", 3);
+    assert.equal(failure(() => stage.undo([])).code, "argument.invalid");
+    assert.equal(failure(() => stage.undo([size, size])).code, "argument.invalid");
+    const outside = set("/World.size", 4);
+    const after = usda();
+    assert.equal(failure(() => stage.undo([size, spin])).code, "edit.stale");
+    assert.equal(usda(), after, "the newer receipt was not undone either");
+    assert.equal(size.released || spin.released, false, "a refused undo spends neither");
+    outside.undo().release();
+    const redo = stage.undo([size, spin]);
+    assert.equal(usda(), start);
+    assert.equal(size.released && spin.released, true);
+    redo.undo().release();
+    assert.deepEqual(stage.attribute("/World.spin")?.get(), double(3));
+  });
+
   it("switches a variant and fetches the assets it needs", async () => {
     using stage = await openScene();
     const world = stage.prim("/World");

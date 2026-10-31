@@ -226,6 +226,8 @@ export interface NativeReceipt extends Disposable {
   free(): void;
   record(): unknown;
   readonly undoable: boolean;
+  copy(): NativeReceipt;
+  absorb(older: NativeReceipt): void;
 }
 
 /**
@@ -1627,21 +1629,55 @@ export class Stage implements Disposable {
    * Undoes `receipt`: applies its inverse, and returns the receipt of the
    * undo, whose own `undo()` redoes. `receipt` is spent (released).
    *
+   * Given several receipts, in the order their edits were applied, undoes
+   * them all as one atomic transaction, the newest first, and returns one
+   * receipt that redoes them all. Either every receipt is undone and
+   * spent, or none is.
+   *
    * Throws `receipt.affinity` for another stage's receipt (checked before
-   * anything runs), `receipt.released` for a spent one, and `edit.stale`
-   * when a slot the edits wrote changed since: nothing changes, and
-   * `receipt` stays undoable.
+   * anything runs), `receipt.released` for a spent one,
+   * `argument.invalid` for no receipts or one named twice, and
+   * `edit.stale` when a slot the edits wrote changed since: nothing
+   * changes, and every receipt stays undoable.
    */
-  undo(receipt: EditReceipt): EditReceipt {
-    if (!(receipt instanceof EditReceipt) || receipt.stage !== this) {
-      throw new LayerstackError("receipt.affinity", "undo", "the receipt belongs to another stage");
+  undo(receipt: EditReceipt | readonly EditReceipt[]): EditReceipt {
+    const receipts: readonly EditReceipt[] = Array.isArray(receipt) ? receipt : [receipt];
+    if (receipts.length === 0 || new Set(receipts).size !== receipts.length) {
+      throw new LayerstackError("argument.invalid", "undo", "expected one or more distinct receipts");
     }
-    const old = receiptNatives.get(receipt);
-    if (old === undefined) {
-      throw new LayerstackError("receipt.released", "undo", "the receipt was undone or released");
+    const natives = receipts.map((each) => {
+      if (!(each instanceof EditReceipt) || each.stage !== this) {
+        throw new LayerstackError("receipt.affinity", "undo", "the receipt belongs to another stage");
+      }
+      const native = receiptNatives.get(each);
+      if (native === undefined) {
+        throw new LayerstackError("receipt.released", "undo", "the receipt was undone or released");
+      }
+      return native;
+    });
+    const newest = natives[natives.length - 1]!;
+    // Several receipts undo through a combined copy, so a refused undo
+    // leaves each of them as it was.
+    const combined =
+      natives.length === 1
+        ? newest
+        : this.#call("undo", () => {
+            const copy = newest.copy();
+            try {
+              for (let index = natives.length - 2; index >= 0; index -= 1) copy.absorb(natives[index]!);
+            } catch (error) {
+              copy.free();
+              throw error;
+            }
+            return copy;
+          });
+    let native: NativeReceipt;
+    try {
+      native = this.#call("undo", (stage) => stage.undo(combined));
+    } finally {
+      if (combined !== newest) combined.free();
     }
-    const native = this.#call("undo", (stage) => stage.undo(old));
-    receipt.release();
+    for (const each of receipts) each.release();
     const redo = this.#receipt(native);
     this.#notify();
     return redo;

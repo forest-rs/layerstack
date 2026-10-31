@@ -308,7 +308,79 @@ def Xform "Lab" {
         { type: "setValue", path: "/World/Stones.invisibleIds", value: { type: "int64[]", value: [1n] } },
       ]);
       assert.deepEqual(hidden.matrices, [stones]);
+      assert.deepEqual([hidden.instancesAdded, hidden.instancesRemoved], [[], [{ item: stones, id: 1n }]]);
       assert.deepEqual([...list.item(stones)!.ids!], [0n, 2n]);
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+  });
+
+  // As `layerstack_stagehand`'s
+  // `only_an_instancer_whose_instances_might_differ_is_derived_again`.
+  it("derive again only an instancer whose instances might differ", () => {
+    const text = `#usda 1.0
+def PointInstancer "Turning" {
+    rel prototypes = [</Turning/Protos/Lamp>]
+    int[] protoIndices = [0, 0]
+    point3f[] positions = [(0, 0, 0), (2, 0, 0)]
+    quath[] orientations.timeSamples = {
+        0: [(1, 0, 0, 0), (1, 0, 0, 0)],
+        10: [(0, 0, 1, 0), (0, 0, 1, 0)],
+    }
+    def Scope "Protos" {
+        def Xform "Lamp" {
+            def Cube "Base" {
+                double size = 0.5
+                double3 xformOp:translate = (1, 0, 0)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+            }
+            def SphereLight "Bulb" {
+                double3 xformOp:translate = (0, 1, 0)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+            }
+        }
+    }
+}
+def PointInstancer "Hopping" {
+    rel prototypes = [</Hopping/Protos/Rock>]
+    int[] protoIndices = [0, 0]
+    int64[] ids.timeSamples = {
+        0: [1, 2],
+        10: [2, 3],
+    }
+    point3f[] positions = [(0, 0, 4), (1, 0, 4)]
+    def Scope "Protos" {
+        def Sphere "Rock" {
+            double radius = 0.1
+        }
+    }
+}
+`;
+    const stage = layerstack.open({ identifier: "scene.usda", bytes: new TextEncoder().encode(text) });
+    const heard: Changes[] = [];
+    stage.onChange((changes) => heard.push(changes));
+    const list = stagehand.drawList(stage, { time: 0 });
+    try {
+      assert.equal(list.refresh().work.instancersRederived, 2, "both discovered");
+      const base = itemOf(list, "/Turning/Protos/Lamp/Base");
+      const rock = itemOf(list, "/Hopping/Protos/Rock");
+      const lights = list.lights().length;
+      const diff = list.setTime(10);
+      assert.equal(diff.work.instancersRederived, 1, "the hopping one alone");
+      assert.deepEqual(diff.matrices, [base, rock].sort((a, b) => a - b));
+      assert.deepEqual(diff.instancesAdded, [{ item: rock, id: 3n }]);
+      assert.deepEqual(diff.instancesRemoved, [{ item: rock, id: 1n }]);
+      assert.deepEqual([diff.lightsAdded, diff.lightsRemoved], [[], []]);
+      assert.equal(diff.lightsChanged.length, lights, "every bulb turned");
+      assert.deepEqual([...list.item(rock)!.ids!], [2n, 3n]);
+      // A half turn about Y: the base, one along X, ends at -1.
+      const turned = list.item(base)!.matrices[12]!;
+      assert.ok(Math.abs(turned + 1) < 1e-12, `${turned}`);
+      // Sampling the turning one's `protoIndices`: derived from then on.
+      stage.apply([{ type: "setValue", path: "/Turning.protoIndices", value: { type: "int[]", value: new Int32Array([0]) }, time: 0 }], stage.root);
+      for (const changes of heard.splice(0)) list.applyChanges(changes);
+      assert.equal(list.setTime(0).work.instancersRederived, 2);
     } finally {
       list.dispose();
       stage.free();

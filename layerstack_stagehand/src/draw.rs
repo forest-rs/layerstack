@@ -24,6 +24,7 @@ use crate::input::MeshInput;
 use crate::light::{
     InstanceId, LIGHT_INPUTS, LightId, LightInstance, LightItem, LightKind, read_light,
 };
+use crate::links::{LinkCategory, LinkChange, LinkInputs, LinkKind, LinkSet, LinkTarget, Links};
 use crate::material::{MaterialItem, read_material};
 use crate::plan::{MeshBuffers, MeshOptions, MeshPlan};
 use crate::points::{PointBuffers, PointsReport, fill_points, point_shape};
@@ -210,6 +211,10 @@ pub struct DrawItem {
     /// The material bound to each face subset, in the order of the
     /// buffer's [`DrawBuffers::subsets`].
     pub subset_materials: Vec<Option<PathId>>,
+    /// The paths light links are matched against ([`LinkTarget`]): the
+    /// gprim; every instance proxy of a prototype's item, hidden ones
+    /// included; the point instancer, for its items.
+    pub link_paths: Vec<PathId>,
 }
 
 impl DrawItem {
@@ -335,6 +340,14 @@ pub struct DrawWork {
     pub points_refilled: u32,
     /// Point sets read anew: new, or their point count changed.
     pub points_rebuilt: u32,
+    /// Light links (a light's `lightLink` or `shadowLink`) whose membership
+    /// query was computed: a new light's, and those of lights whose link
+    /// collections, or collections they read, a change reached.
+    pub links_evaluated: u32,
+    /// Targets classified against a link category (`IsPathIncluded`): a
+    /// new category's every target, and each new target (or one of an item
+    /// read again entirely) against each category.
+    pub links_classified: u32,
 }
 
 /// What changed in a [`DrawList`] since the diff before, for a renderer to
@@ -396,6 +409,10 @@ pub struct DrawDiff {
     /// Materials read again and found different: an input, a connection,
     /// a texture's file or sampling changed.
     pub materials_changed: Vec<PathId>,
+    /// Light links whose linked targets changed, by light and link
+    /// ([`LinkChange`]); the light is in [`Self::lights_changed`] too when
+    /// its category changed.
+    pub links_changed: Vec<LinkChange>,
     /// The work done.
     pub work: DrawWork,
 }
@@ -425,6 +442,7 @@ impl DrawDiff {
             && self.materials_added.is_empty()
             && self.materials_removed.is_empty()
             && self.materials_changed.is_empty()
+            && self.links_changed.is_empty()
     }
 }
 
@@ -488,7 +506,7 @@ fn reads(inputs: &[&str], name: &str) -> bool {
 /// off the stage again when the pseudo-root changes. OpenUSD reports these
 /// edits as an info change of the pseudo-root
 /// (`UsdStage::_HandleLayersDidChange`).
-fn stage_metadata(scene: &Scene<'_>, prim: PathId) -> bool {
+pub(crate) fn stage_metadata(scene: &Scene<'_>, prim: PathId) -> bool {
     parent(scene, prim).is_none()
 }
 
@@ -863,6 +881,8 @@ pub struct DrawList {
     materials: BTreeMap<PathId, Held<MaterialItem>>,
     /// The point instancers discovered, by path.
     instancers: BTreeMap<PathId, Instancer>,
+    /// The lights' link categories and their members.
+    links: Links,
     next_item: u32,
     next_buffer: u32,
 }
@@ -901,6 +921,7 @@ struct Gather {
     /// adds bind, by gprim: a new mesh buffer is planned once with the
     /// sets all of its groups read.
     groups: HashMap<PathId, Vec<PathId>>,
+    links: Vec<LinkChange>,
     work: DrawWork,
 }
 
@@ -988,6 +1009,7 @@ impl Gather {
             materials_added,
             materials_removed,
             materials_changed,
+            links_changed: self.links,
             work: self.work,
         }
     }
@@ -997,7 +1019,7 @@ impl Gather {
     clippy::cast_possible_truncation,
     reason = "work counts saturate at `u32::MAX`"
 )]
-fn count(n: usize) -> u32 {
+pub(crate) fn count(n: usize) -> u32 {
     n.min(u32::MAX as usize) as u32
 }
 
@@ -1011,6 +1033,14 @@ struct Found {
     lights: Vec<(LightId, LightKind)>,
     instancers: Vec<(PathId, Instancer)>,
     prims: u32,
+}
+
+/// What a diff hands the link pass besides the list's state.
+struct LinkPass<'a> {
+    changes: Option<&'a Changes>,
+    roots: &'a [PathId],
+    relink: BTreeSet<(LightId, LinkKind)>,
+    reclassify: BTreeSet<ItemId>,
 }
 
 /// What one discovery covers.
@@ -1059,6 +1089,7 @@ impl DrawList {
             lights: BTreeMap::new(),
             materials: BTreeMap::new(),
             instancers: BTreeMap::new(),
+            links: Links::default(),
             next_item: 0,
             next_buffer: 0,
         }
@@ -1129,6 +1160,38 @@ impl DrawList {
     #[must_use]
     pub fn light(&self, id: impl Into<LightId>) -> Option<&LightItem> {
         self.lights.get(&id.into()).map(|held| &held.item)
+    }
+
+    /// The light-link categories ([`LinkSet`]): one per distinct membership
+    /// among the lights' `lightLink` and `shadowLink` collections that does
+    /// not link everything.
+    pub fn link_sets(&self) -> impl Iterator<Item = &LinkSet> {
+        self.links.sets()
+    }
+
+    /// The link category `category`, while a light's link uses it.
+    #[must_use]
+    pub fn link_set(&self, category: LinkCategory) -> Option<&LinkSet> {
+        self.links.set(category)
+    }
+
+    /// Whether the light `light`'s `kind` link links `target`: the light
+    /// illuminates it ([`LinkKind::Light`]), or it casts the light's
+    /// shadows ([`LinkKind::Shadow`]). A link with no category links every
+    /// target. As a Hydra render delegate decides it: the light's
+    /// `lightLink` (or `shadowLink`) category is empty or among the
+    /// target's ([`Self::link_categories`]).
+    #[must_use]
+    pub fn is_linked(&self, light: impl Into<LightId>, kind: LinkKind, target: LinkTarget) -> bool {
+        self.links.is_linked(light.into(), kind, target)
+    }
+
+    /// The link categories including `target`, sorted: what Hydra gives an
+    /// rprim (`HdSceneDelegate::GetCategories`) or a native instance
+    /// (`GetInstanceCategories`).
+    #[must_use]
+    pub fn link_categories(&self, target: LinkTarget) -> Vec<LinkCategory> {
+        self.links.categories_of(target)
     }
 
     /// The materials the items bind, by path id.
@@ -1247,7 +1310,7 @@ impl DrawList {
         }
         gather.work.prims_traversed = found.prims;
         gather.work.instancers_rederived = count(found.instancers.len());
-        self.apply_to_views(scene, changes, &found, &mut gather);
+        let relink = self.apply_to_views(scene, changes, &found, &mut gather);
         // The instancers discovered replace those the discovery covered.
         self.instancers.retain(|&path, _| {
             !found.scopes.iter().any(|scope| match *scope {
@@ -1316,6 +1379,14 @@ impl DrawList {
             dirty.remove(&id);
             self.remove(id, &mut gather);
         }
+        // An item read again entirely may match a link's expression
+        // differently: its predicates read the prim's type, schemas, kind
+        // and specifier.
+        let reclassify: BTreeSet<ItemId> = dirty
+            .iter()
+            .filter(|(_, what)| **what == Dirty::ALL)
+            .map(|(id, _)| *id)
+            .collect();
         let mut order: Vec<(ItemId, Dirty)> = dirty.into_iter().collect();
         order.sort_by_key(|(id, _)| *id);
         for (id, what) in order {
@@ -1330,6 +1401,13 @@ impl DrawList {
         }
         read.retain(|id| self.entries.contains_key(id));
         self.apply_to_materials(scene, changes, &roots, &mut gather);
+        let links = LinkPass {
+            changes: Some(changes),
+            roots: &roots,
+            relink,
+            reclassify,
+        };
+        self.apply_to_links(scene, links, &read, &mut gather);
         gather.finish(local_before, self, &read)
     }
 
@@ -1472,6 +1550,15 @@ impl DrawList {
         // A `varname` read at the new time may name other sets.
         self.apply_to_uv_sets(scene, &mut gather);
         read.retain(|id| self.entries.contains_key(id));
+        // Membership has no time: only lights and items a time change
+        // adds or removes are linked.
+        let links = LinkPass {
+            changes: None,
+            roots: &[],
+            relink: BTreeSet::new(),
+            reclassify: BTreeSet::new(),
+        };
+        self.apply_to_links(scene, links, &read, &mut gather);
         gather.finish(local_before, self, &read)
     }
 
@@ -1481,13 +1568,18 @@ impl DrawList {
     /// again: a change of an input it reads, of its transform or
     /// visibility or those above it, an unlisted change of it or above it,
     /// or a resync over it.
+    ///
+    /// Returns the light links whose collections a change reached: a
+    /// light's `collection:lightLink:*` or `collection:shadowLink:*`
+    /// properties, or both for an unlisted change of it or above it, or a
+    /// resync over it.
     fn apply_to_views(
         &mut self,
         scene: &Scene<'_>,
         changes: &Changes,
         found: &Found,
         gather: &mut Gather,
-    ) {
+    ) -> BTreeSet<(LightId, LinkKind)> {
         let tokens = scene.store().tokens();
         let roots: Vec<PathId> = found
             .scopes
@@ -1602,10 +1694,80 @@ impl DrawList {
                 read.entry(*id).or_insert(held.item.kind);
             }
         }
+        let links_reach = |path: PathId, kind: LinkKind| {
+            let prefix = match kind {
+                LinkKind::Light => "collection:lightLink:",
+                LinkKind::Shadow => "collection:shadowLink:",
+            };
+            resynced(path)
+                || reached.iter().any(|(prim, names)| match names {
+                    None => under(scene, path, *prim),
+                    Some(names) => {
+                        *prim == path && names.iter().any(|name| name.starts_with(prefix))
+                    }
+                })
+        };
+        let relink: BTreeSet<(LightId, LinkKind)> = read
+            .keys()
+            .flat_map(|&id| LinkKind::ALL.map(|kind| (id, kind)))
+            .filter(|&(id, kind)| links_reach(id.path, kind))
+            .collect();
         let mut placements = Placements::default();
         for (id, kind) in read {
             self.read_light(scene, id, kind, &mut placements, gather);
         }
+        relink
+    }
+
+    /// Brings the light links up to the lights and items now listed
+    /// ([`Links`]): the links of new lights, and of lights `pass` names or
+    /// whose categories read a collection a change reached, computed
+    /// again; the targets of the items read, added and removed classified
+    /// or dropped; [`DrawDiff::links_changed`] listed; the lights whose
+    /// categories changed updated and listed as changed.
+    fn apply_to_links(
+        &mut self,
+        scene: &Scene<'_>,
+        pass: LinkPass<'_>,
+        read: &HashSet<ItemId>,
+        gather: &mut Gather,
+    ) {
+        let lights: BTreeSet<LightId> = self.lights.keys().copied().collect();
+        let mut updates: BTreeMap<ItemId, Vec<PathId>> = BTreeMap::new();
+        for id in read.iter().chain(&gather.added) {
+            if let Some(entry) = self.entries.get(id) {
+                updates.insert(*id, entry.item.link_paths.clone());
+            }
+        }
+        for id in &gather.removed {
+            updates.insert(*id, Vec::new());
+        }
+        let inputs = LinkInputs {
+            changes: pass.changes,
+            roots: pass.roots,
+            relink: pass.relink,
+            reclassify: pass.reclassify,
+            added: &gather.added,
+            removed: &gather.removed,
+            lights_added: &gather.lights.added,
+        };
+        let outcome = self.links.apply(scene, &lights, updates, &inputs);
+        gather.work.links_evaluated += outcome.evaluated;
+        gather.work.links_classified += outcome.classified;
+        for light in outcome.relinked {
+            let category = |kind| self.links.category(light, kind).flatten();
+            let (lit, shadowed) = (category(LinkKind::Light), category(LinkKind::Shadow));
+            if let Some(held) = self.lights.get_mut(&light) {
+                let changed = held.item.light_link.category != lit
+                    || held.item.shadow_link.category != shadowed;
+                held.item.light_link.category = lit;
+                held.item.shadow_link.category = shadowed;
+                if changed && !gather.lights.added.contains(&light) {
+                    gather.lights.changed.insert(light);
+                }
+            }
+        }
+        gather.links = outcome.changes;
     }
 
     /// Brings the materials up to `scene` after `changes`, once the items
@@ -1877,7 +2039,12 @@ impl DrawList {
             || id
                 .instance
                 .is_some_and(|instance| invisible(instance.instancer));
-        let (item, sources) = read_light(scene, id, kind, time, matrix, hidden);
+        let (mut item, sources) = read_light(scene, id, kind, time, matrix, hidden);
+        // Its categories are the link pass's ([`Self::apply_to_links`]).
+        if let Some(old) = self.lights.get(&id) {
+            item.light_link.category = old.item.light_link.category;
+            item.shadow_link.category = old.item.shadow_link.category;
+        }
         // A connected input's source might vary as well as its own value;
         // a placed light moves with its instancer's placement.
         let varies = self.world_might_vary(scene, path)
@@ -2160,6 +2327,7 @@ impl DrawList {
             ids: Vec::new(),
             material: None,
             subset_materials: Vec::new(),
+            link_paths: Vec::new(),
         });
         let mut depends = self
             .entries
@@ -2177,6 +2345,7 @@ impl DrawList {
             let mut matrices = Vec::new();
             let mut instances = Vec::new();
             let mut ids = Vec::new();
+            let mut link_paths = Vec::new();
             varies.matrices = false;
             varies.visibility = false;
             match source {
@@ -2185,6 +2354,7 @@ impl DrawList {
                         return false;
                     }
                     depends = alloc::vec![path];
+                    link_paths.push(path);
                     varies.visibility = visibility_might_vary(scene, path);
                     if shown(scene, path, time, &purposes) {
                         gather.work.matrices_computed += 1;
@@ -2210,6 +2380,7 @@ impl DrawList {
                             continue;
                         }
                         members += 1;
+                        link_paths.push(proxy);
                         varies.visibility |= visibility_might_vary(scene, proxy);
                         if !shown(scene, proxy, time, &purposes) {
                             continue;
@@ -2246,6 +2417,7 @@ impl DrawList {
                         return false;
                     }
                     depends = alloc::vec![instancer, prototype, prim];
+                    link_paths.push(instancer);
                     varies.visibility = visibility_might_vary(scene, instancer);
                     if shown(scene, instancer, time, &purposes) {
                         // The prim's world chain covers its transform
@@ -2305,6 +2477,7 @@ impl DrawList {
             item.matrices = matrices;
             item.instances = instances;
             item.ids = ids;
+            item.link_paths = link_paths;
         }
 
         // Geometry.
@@ -2828,7 +3001,7 @@ fn parent(scene: &Scene<'_>, path: PathId) -> Option<PathId> {
 }
 
 /// Whether `path` is `root` or beneath it.
-fn under(scene: &Scene<'_>, path: PathId, root: PathId) -> bool {
+pub(crate) fn under(scene: &Scene<'_>, path: PathId, root: PathId) -> bool {
     let paths = scene.store().paths();
     let mut at = Some(path);
     while let Some(current) = at {

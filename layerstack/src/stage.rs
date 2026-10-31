@@ -4734,7 +4734,8 @@ pub(crate) fn value_at_time(
     };
     // A block in effect at the query time, as a sample or a default,
     // resolves to no value.
-    Some(value.filter(|value| *value != Value::Blocked))
+    // A tag test, as `blocks_animation`'s, rather than `!= Value::Blocked`.
+    Some(value.filter(|value| !matches!(value.materialized(), Value::Blocked)))
 }
 
 /// Convert a spline evaluation result to the appropriate [`Value`] type

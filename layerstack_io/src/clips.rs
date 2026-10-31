@@ -36,8 +36,10 @@ impl<B: Storage> StageDocument<B> {
     /// arcs); `max_demands` bounds each returned plan. Missing files are confirmed
     /// to the store; malformed files retain typed failures and may be retried on
     /// a later call. Already complete queries perform no I/O. Numeric evaluation
-    /// remains separate. Clips hold time samples only: at [`Time::Default`] the
-    /// plan demands nothing and no load is attempted. AOUSD Core §12.3, §12.5.
+    /// remains separate. At [`Time::Default`] it loads what untimed
+    /// introspection needs: the clip metadata and single clips that settle
+    /// whether the attribute might vary with time
+    /// ([`layerstack::Stage::plan_clip_query`]). AOUSD Core §12.3, §12.5.
     ///
     /// ```no_run
     /// # #[cfg(feature = "std")]

@@ -503,7 +503,8 @@ const INSTANCE_SET_INPUTS: &[&str] = &["protoIndices", "ids", "positions", "invi
 
 /// Whether any of the prim's attributes `names` might hold another value
 /// at another time, the default time included: time samples (even one), a
-/// spline or value clips supply it.
+/// spline or value clips supply it, or clip metadata not loaded yet leaves
+/// it unknown, which counts as varying.
 /// OpenUSD: `UsdAttributeQuery::ValueSourceMightBeTimeVarying`.
 fn inputs_might_vary(scene: &Scene<'_>, path: PathId, names: &[&str]) -> bool {
     scene.stage().prim(path, scene.store()).is_some_and(|prim| {
@@ -3400,6 +3401,44 @@ def Scope "Looks" {{{}
         let diff = list.set_time(&scene, Time::at(0.0));
         assert_eq!(diff.rebuilt, [key]);
         assert!(list.buffers(key).unwrap().buffers.uv_sets.is_empty());
+    }
+
+    /// Geometry that value clips may supply, while the clip set's manifest
+    /// is not loaded: whether it varies is unknown, so `set_time` reads it
+    /// again rather than skip it as time-invariant.
+    #[test]
+    fn set_time_rereads_geometry_whose_clips_are_not_loaded() {
+        let text = r#"#usda 1.0
+def Mesh "Plate" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./motion.usda@]
+            asset manifestAssetPath = @./manifest.usda@
+            string primPath = "/Motion"
+            double2[] active = [(0, 0)]
+        }
+    }
+    prepend references = </Base>
+) {
+}
+class Mesh "Base" {
+    int[] faceVertexCounts = [4]
+    int[] faceVertexIndices = [0, 1, 2, 3]
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+}
+"#;
+        let (store, live) = compose(text);
+        let scene = Scene::new(live.stage(), &store);
+        let points = store.property_path("/Plate.points");
+        let attribute = live.stage().view(&store).attribute(points).unwrap();
+        assert!(attribute.value_source_might_be_time_varying());
+        let mut list = DrawList::new(DrawOptions {
+            time: Time::at(0.0),
+            ..DrawOptions::default()
+        });
+        list.refresh(&scene);
+        let diff = list.set_time(&scene, Time::at(10.0));
+        assert_eq!(diff.work.items_time_invariant, 0, "the plate is read again");
     }
 
     /// An instancer whose instances only turn over time keeps the matrix

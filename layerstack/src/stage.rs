@@ -1325,9 +1325,19 @@ impl Stage {
     /// templates require broader discovery. `max_demands` limits returned uses,
     /// not metadata preparation work. A complete dense clip source masks weaker
     /// sets; stronger sparse or unresolved sets retain conservative discovery
-    /// until their source composition can be established. Clips hold time
-    /// samples only, so at [`Time::Default`] no clip is consulted and the
-    /// plan is empty. AOUSD Core §12.3, §12.5.
+    /// until their source composition can be established. AOUSD Core
+    /// §12.3, §12.5.
+    ///
+    /// At [`Time::Default`] the plan is untimed introspection's: a default
+    /// read consults no clip, but whether the attribute might vary with
+    /// time ([`crate::Attribute::might_be_time_varying`],
+    /// [`crate::Attribute::value_source_might_be_time_varying`]) needs the
+    /// clip metadata that settles which set supplies it, and the one clip
+    /// of a set that schedules a single clip
+    /// ([`crate::value_clips::ClipDemandReason::SingleClipSamples`]), as
+    /// OpenUSD's `UsdAttribute::ValueMightBeTimeVarying` opens them. Until
+    /// that plan has nothing pending, those answers are unknown and
+    /// conservatively `true`.
     #[must_use]
     pub fn plan_clip_query(
         &self,
@@ -1340,7 +1350,11 @@ impl Stage {
             interpolation,
         } = time
         else {
-            return crate::value_clips::ClipQueryPlan::empty(property, time);
+            return self.clips.untimed_plan(
+                property,
+                max_demands,
+                self.prims.get(&property.prim_path()),
+            );
         };
         self.clips.query_plan(
             property,
@@ -1670,7 +1684,17 @@ impl Stage {
     /// OpenUSD's is: `true` over a single weaker time sample.
     #[must_use]
     pub(crate) fn property_might_be_time_varying(&self, prim: PathId, field: TokenId) -> bool {
-        self.property_time_info(prim, field).1
+        self.property_time_info(prim, field).1 || self.clip_variation_unknown(prim, field)
+    }
+
+    /// Whether a clip set that may supply the property waits for clip
+    /// assets the host has not loaded, so that whether the property might
+    /// vary with time is unknown ([`Self::plan_clip_query`] at
+    /// [`Time::Default`] names them). The time-variation answers are
+    /// conservative, `true`, while it is.
+    fn clip_variation_unknown(&self, prim: PathId, field: TokenId) -> bool {
+        self.clips
+            .untimed_pending(PropertyPath::new(prim, field), self.prims.get(&prim))
     }
 
     /// Whether the property's value source might vary with time: the
@@ -1692,6 +1716,13 @@ impl Stage {
         prim: PathId,
         field: TokenId,
     ) -> bool {
+        self.resident_value_source_might_be_time_varying(prim, field)
+            || self.clip_variation_unknown(prim, field)
+    }
+
+    /// [`Self::property_value_source_might_be_time_varying`] from the
+    /// resident clip metadata alone.
+    fn resident_value_source_might_be_time_varying(&self, prim: PathId, field: TokenId) -> bool {
         let Some(index) = self.prims.get(&prim) else {
             return false;
         };
@@ -1867,7 +1898,7 @@ impl Stage {
         times.dedup_by(|a, b| *a == *b);
         match strongest {
             Some(Strongest::SparseDefault) => {
-                varying = self.property_value_source_might_be_time_varying(prim, field);
+                varying = self.resident_value_source_might_be_time_varying(prim, field);
             }
             Some(Strongest::ComposingSample) => varying = true,
             Some(Strongest::Other) | None => {}

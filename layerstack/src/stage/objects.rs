@@ -1187,7 +1187,17 @@ impl<'a> Attribute<'a> {
     /// [`Self::value_source_might_be_time_varying`], as in OpenUSD, so a
     /// sparse edit over a single weaker time sample might vary.
     ///
-    /// Spec: AOUSD Core §12.3.2 (value sources).
+    /// Value clips are read from resident clip layers only. Whether they
+    /// make the attribute vary depends on the clip set's manifest (or, for
+    /// a set without one, its scheduled clips) and, for a set that
+    /// schedules a single clip, that clip's samples, as OpenUSD's
+    /// `ValueMightBeTimeVarying` opens them. While any of these is not
+    /// loaded the answer is unknown and conservatively `true`, never a
+    /// silent `false`; [`Stage::plan_clip_query`](crate::Stage::plan_clip_query)
+    /// at [`Time::Default`] names what to load, and the answer is settled
+    /// once that plan has nothing pending.
+    ///
+    /// Spec: AOUSD Core §12.3.2 (value sources), §12.3.4 (value clips).
     #[doc(alias = "UsdAttribute::ValueMightBeTimeVarying")]
     #[doc(alias = "ValueMightBeTimeVarying")]
     pub fn might_be_time_varying(self) -> bool {
@@ -1202,7 +1212,9 @@ impl<'a> Attribute<'a> {
     /// [`Self::might_be_time_varying`] it is `true` whenever a numeric-time
     /// read and a [`Time::Default`] read may differ, such as for a single
     /// time sample; `false` means the value is certainly the same at every
-    /// time, the default time included.
+    /// time, the default time included. While the metadata of a clip set
+    /// that may supply the value is not loaded, the answer is unknown and
+    /// conservatively `true`, as for [`Self::might_be_time_varying`].
     ///
     /// Spec: AOUSD Core §12.3.2, §12.3.4 (value clips).
     #[doc(alias = "UsdAttributeQuery::ValueSourceMightBeTimeVarying")]

@@ -1,7 +1,7 @@
 #usda 1.0
 (
     defaultPrim = "World"
-    doc = "The demo editor's sample: a root layer, a sublayer, a class the rock inherits, a robot referenced from its own file with a variant set, two instances of a beacon, a ground mesh with a face subset, a concave path, a point instancer of stones, a spinning top animated by time samples, a camera and lights, a sign with a checker texture, a strip with UDIM tiles, and curves and points: a Catmull-Rom trail, a periodic B-spline ring, a wire between the beacons and sparks."
+    doc = "The demo editor's sample: a root layer, a sublayer, a class the rock inherits, a robot referenced from its own file with a variant set, two instances of a beacon, a ground mesh with a face subset, a concave path, a point instancer of stones, a spinning top animated by time samples, a camera and lights (the spot linked to the robot alone), a sign with a checker texture, a strip with UDIM tiles, and curves and points: a Catmull-Rom trail, a periodic B-spline ring, a wire between the beacons and sparks."
     subLayers = [
         @./library.usda@
     ]
@@ -140,6 +140,8 @@ def Xform "World"
         color3f inputs:color = (0.75, 0.85, 1)
         float inputs:shaping:cone:angle = 30
         float inputs:shaping:cone:softness = 0.4
+        rel collection:lightLink:includes = </World/Robot>
+        uniform bool collection:lightLink:includeRoot = false
         double3 xformOp:translate = (3, 5, 0)
         float3 xformOp:rotateXYZ = (-90, 0, 0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]

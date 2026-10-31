@@ -11,7 +11,8 @@
 // face subsets' draw ranges, the world bounds to frame, the stage's
 // cameras and lights with renderer-ready values, and the bound materials as
 // `UsdPreviewSurface` records (constants, primvars and texture lookups,
-// which `viewport3d.ts` turns into three.js materials). After each
+// which `viewport3d.ts` turns into three.js materials), and the lights'
+// evaluated links (which draws each light illuminates and shadows). After each
 // action the model hands the list the editor's change records, and the
 // list answers with diffs: what to add, remove, move, show or hide, refill
 // or rebuild. Nothing here draws: `viewport3d.ts` applies the diffs to
@@ -26,6 +27,7 @@ import type {
   DrawList,
   DrawWork,
   LightItem,
+  LinkKind,
   MaterialItem,
   MaterialValue,
   Stagehand,
@@ -88,6 +90,25 @@ export interface ViewportScene {
   readonly camera: CameraItem | null;
   /** The materials the draws bind, by path. */
   readonly materials: ReadonlyMap<string, MaterialItem>;
+  /**
+   * The lights each draw is not lit by, by item id: the lights whose
+   * `lightLink` has a category that leaves the draw out. A native
+   * prototype's draw is decided by its first instance (three.js gives one
+   * material to all of an `InstancedMesh`'s instances).
+   */
+  readonly unlit: ReadonlyMap<number, ReadonlySet<string>>;
+  /** Each light link that does not link everything, by light key and kind, sorted. */
+  readonly linking: readonly LinkLine[];
+}
+
+/** A light link that does not link everything: the targets it links of all the draw list's targets. */
+export interface LinkLine {
+  readonly light: string;
+  readonly kind: LinkKind;
+  /** The linked targets' paths, sorted. */
+  readonly linked: readonly string[];
+  /** Every target's count: a draw per instance proxy, one for a point instancer. */
+  readonly of: number;
 }
 
 /**
@@ -123,6 +144,8 @@ export interface ViewportUpdate {
   readonly materialsAdded: ReadonlySet<string>;
   readonly materialsRemoved: ReadonlySet<string>;
   readonly materialsChanged: ReadonlySet<string>;
+  /** Light links whose linked draws changed, summed over the records. */
+  readonly links: number;
   /** The work done, summed. */
   readonly work: DrawWork;
 }
@@ -148,6 +171,8 @@ export interface ViewportSummary {
   readonly curves: readonly string[];
   /** Each drawn point set's report, in brief, sorted: points, shape, ids. */
   readonly points: readonly string[];
+  /** Each light link that does not link everything: `<light> <kind> links <n> of <m> draws: <paths>`, sorted. */
+  readonly links: readonly string[];
 }
 
 /** The counts of an update, as the acceptance script checks them and the page shows them. */
@@ -185,6 +210,12 @@ export interface UpdateSummary {
   readonly pointsRefilled: number;
   /** Point sets read anew, summed. */
   readonly pointsRebuilt: number;
+  /** Light links whose membership was computed, summed. */
+  readonly linksEvaluated: number;
+  /** Draws classified against a light-link category, summed. */
+  readonly linksClassified: number;
+  /** Light links whose linked draws changed. */
+  readonly links: number;
 }
 
 const EMPTY_WORK: DrawWork = {
@@ -206,6 +237,8 @@ const EMPTY_WORK: DrawWork = {
   curvesLaidOut: 0,
   pointsRefilled: 0,
   pointsRebuilt: 0,
+  linksEvaluated: 0,
+  linksClassified: 0,
 };
 
 /** The `diffuseColor` of the surface shader of the material at `material`, if it has one. */
@@ -273,6 +306,8 @@ function addWork(into: DrawWork, work: DrawWork): DrawWork {
     curvesLaidOut: into.curvesLaidOut + work.curvesLaidOut,
     pointsRefilled: into.pointsRefilled + work.pointsRefilled,
     pointsRebuilt: into.pointsRebuilt + work.pointsRebuilt,
+    linksEvaluated: into.linksEvaluated + work.linksEvaluated,
+    linksClassified: into.linksClassified + work.linksClassified,
   };
 }
 
@@ -364,6 +399,7 @@ export class ViewportModel {
       materialsAdded: paths((d) => d.materialsAdded),
       materialsRemoved: paths((d) => d.materialsRemoved),
       materialsChanged: paths((d) => d.materialsChanged),
+      links: diffs.reduce((count, diff) => count + diff.linksChanged.length, 0),
       work: diffs.reduce((work, diff) => addWork(work, diff.work), EMPTY_WORK),
     };
     // Colors: read again for new items, and for items whose materials,
@@ -400,7 +436,7 @@ export class ViewportModel {
   scene(time: number | undefined): ViewportScene {
     const list = this.#list;
     const stage = this.#stage;
-    if (list === null || stage === null) return { items: [], hidden: [], bounds: null, lights: [], camera: null, materials: new Map() };
+    if (list === null || stage === null) return { items: [], hidden: [], bounds: null, lights: [], camera: null, materials: new Map(), unlit: new Map(), linking: [] };
     const items: ViewItem[] = [];
     const hidden = new Set<string>();
     for (const item of list.items()) {
@@ -419,13 +455,40 @@ export class ViewportModel {
     const bounds = stage.worldBounds(["/"], { ...(time === undefined ? {} : { time }), purposes: [...PURPOSES] }).alignedRanges;
     const empty = bounds[0]! > bounds[3]!;
     const cameras = list.cameras().sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+    // Light links: only those with a category leave draws out; the rest
+    // (the `includeRoot` fallback) link everything.
+    const lights = list.lights();
+    const targets = list.items().flatMap((item) => item.linkPaths.map((path) => ({ item: item.id, path })));
+    const unlit = new Map<number, Set<string>>();
+    const linking: LinkLine[] = [];
+    for (const light of [...lights].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))) {
+      for (const [kind, link] of [
+        ["light", light.lightLink],
+        ["shadow", light.shadowLink],
+      ] as const) {
+        if (link.category === null) continue;
+        const linked = targets.filter((target) => list.isLinked(light.key, kind, target));
+        linking.push({ light: light.key, kind, linked: linked.map((target) => target.path).sort(), of: targets.length });
+        if (kind !== "light") continue;
+        for (const item of list.items()) {
+          const first = item.linkPaths[0];
+          if (first !== undefined && !list.isLinked(light.key, kind, { item: item.id, path: first })) {
+            const set = unlit.get(item.id) ?? new Set<string>();
+            set.add(light.key);
+            unlit.set(item.id, set);
+          }
+        }
+      }
+    }
     return {
       items,
       hidden: [...hidden],
       bounds: empty ? null : Array.from(bounds),
-      lights: list.lights(),
+      lights,
       camera: cameras[0] ?? null,
       materials: new Map(list.materials().map((material) => [material.path, material])),
+      unlit,
+      linking,
     };
   }
 
@@ -461,6 +524,9 @@ export function updateSummary(update: ViewportUpdate): UpdateSummary {
     curvesLaidOut: update.work.curvesLaidOut,
     pointsRefilled: update.work.pointsRefilled,
     pointsRebuilt: update.work.pointsRebuilt,
+    linksEvaluated: update.work.linksEvaluated,
+    linksClassified: update.work.linksClassified,
+    links: update.links,
   };
 }
 
@@ -517,6 +583,7 @@ export function viewportSummary(scene: ViewportScene): ViewportSummary {
     materials: [...scene.materials.values()].map(materialLine).sort(),
     curves: curves.sort(),
     points: points.sort(),
+    links: scene.linking.map((line) => `${line.light} ${line.kind} links ${line.linked.length} of ${line.of} draws: ${line.linked.join(", ")}`),
   };
 }
 

@@ -248,11 +248,18 @@ function renderViewport(editor: Editor): void {
         (last.timeChanged ? ` (${work.itemsTimeInvariant} not animated)` : "") +
         `, ${work.localTransforms} local transforms; ${work.lightsRead} lights read, ${work.lights} changed; ${work.camerasRead} cameras read; ` +
         `${work.materialsRead} materials read, ${work.materials} changed; ` +
-        `curves ${work.curvesRefilled} refilled, ${work.curvesLaidOut} laid out; points ${work.pointsRefilled} refilled, ${work.pointsRebuilt} read anew`;
+        `curves ${work.curvesRefilled} refilled, ${work.curvesLaidOut} laid out; points ${work.pointsRefilled} refilled, ${work.pointsRebuilt} read anew; ` +
+        `light links ${work.linksEvaluated} evaluated, ${work.linksClassified} draws classified, ${work.links} changed`;
+  // Each light link that does not link everything: what three.js lights
+  // with its per-material masks (shadow links are shown, not drawn).
+  const linking = scene.linking.map(
+    (line) => `${line.light.slice(line.light.lastIndexOf("/") + 1)} ${line.kind === "light" ? "lights" : "shadows"} ${line.linked.length} of ${line.of} draws`,
+  );
   fill(
     body,
     `${scene.items.length} draws: ${summary.drawn.length} drawn (${summary.instances} instances), ${summary.triangles} triangles, framed on ${bounds}; ` +
       `${summary.lights.length} lights, ${summary.materials.length} materials, ${summary.camera === null ? "no stage camera" : `stage camera ${summary.camera}`}`,
+    linking.length > 0 ? `; ${linking.join(", ")}` : "",
     summary.hidden.length > 0 ? `; hidden: ${summary.hidden.join(", ")}` : "",
     viewport === null ? " (WebGL is unavailable: the summary is all there is)" : "",
     h("div", { class: "viewport-diff" }, changed),
@@ -447,12 +454,33 @@ function renderInspector(editor: Editor): void {
     timeForm(),
     h("table", { class: "attributes" }, h("tbody", {}, ...rows, ...relationships)),
     materialSection(editor.stage, prim.path, time),
+    linkSection(prim.path),
     h("p", { class: "hint" }, "Bold attributes have authored opinions. Select one to explain and edit it; rel rows are relationships and their targets."),
     prim.instanceProxy &&
       h("p", { class: "hint" }, "An instance proxy is read through its instance: edit the asset the instance references, or the instance itself."),
     !prim.instanceProxy && session.attribute !== null && editForm(editor, session.attribute),
     !prim.instanceProxy && namespaceForm(editor, prim),
   );
+}
+
+/**
+ * A light's evaluated links, as the viewport's draw list holds them: the
+ * draws it lights and those casting its shadows, each everything unless
+ * its collection has a category; nothing for a prim that is not a listed
+ * light.
+ */
+function linkSection(path: string): HTMLElement | false {
+  const list = model.list;
+  const light = list?.light(path) ?? null;
+  if (list === null || light === null) return false;
+  const targets = list.items().flatMap((item) => item.linkPaths.map((at) => ({ item: item.id, path: at })));
+  const line = (kind: "light" | "shadow", label: string) => {
+    const link = kind === "light" ? light.lightLink : light.shadowLink;
+    if (link.category === null) return h("p", { class: "hint" }, `${label} every draw (collection:${kind}Link links everything).`);
+    const linked = targets.filter((target) => list.isLinked(light.key, kind, target)).map((target) => target.path);
+    return h("p", {}, `${label} ${linked.length} of ${targets.length} draws (category ${link.category})${linked.length > 0 ? ": " : ""}`, ...linked.map((at) => h("code", {}, `${at} `)));
+  };
+  return h("div", { class: "links" }, line("light", "Lights"), line("shadow", "Shadows from"));
 }
 
 /** The prim's bound material, and its surface shader's inputs; nothing when no material binds it. */

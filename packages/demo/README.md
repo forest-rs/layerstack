@@ -12,8 +12,9 @@ references an asset fetched only when it is selected; two instances of
 a beacon, which share one prototype; a ground mesh; a point instancer
 of five stones; a top spun by time samples on its `xformOp:rotateY`; a
 camera; and lights: the lamp (a sphere light, in the sublayer), a sun
-(distant), a sky (dome), a spot (a disk light with `ShapingAPI`) and a
-panel (rect); a sign bound to a checker texture (`textures/checker.png`,
+(distant), a sky (dome), a spot (a disk light with `ShapingAPI`,
+light-linked to the robot alone: its `collection:lightLink` includes
+`/World/Robot` with `includeRoot = false`) and a panel (rect); a sign bound to a checker texture (`textures/checker.png`,
 turned and scaled by a `UsdTransform2d`, its coordinates' primvar and its
 tint material interface inputs) and a strip bound to a UDIM set
 (`textures/tile.<UDIM>.png`: tiles 1001 and 1002); and under
@@ -53,7 +54,16 @@ with its `ComputeLinearExposureScale` as the tone mapping exposure) until
 "Free camera" is checked. The draw list's lights become three.js lights
 in physical units (`PointLight`, `SpotLight`, `RectAreaLight`,
 `DirectionalLight`, a `HemisphereLight` for the dome); `src/viewport3d.ts`
-documents the conversion from `UsdLux` luminance.
+documents the conversion from `UsdLux` luminance. Light links are the draw
+list's, evaluated as Hydra evaluates them; three.js lights every material
+with every light (`Light.layers` only decides what a camera sees), so the
+view patches each draw's material once to multiply each light by a
+per-material 0 or 1 in three.js's own light slots, and rewrites those
+uniforms when links change. A prototype's draw is lit as its first
+instance is (one material per `InstancedMesh`), and shadow links are
+shown, not drawn (the view casts no shadows). The inspector shows a
+selected light's links, and the stats line which light lights how many
+draws.
 
 After every action the draw list hears the editor's change records and
 answers with a diff, which the view applies in place: an `InstancedMesh`
@@ -174,6 +184,14 @@ The script runs eighteen steps, one button each:
     each segment, so the draw list lays that curve out again (rebuilt 1,
     curves laid out 1) and sweeps a new tube, which now passes through the
     ring's points; nothing else is read.
+21. Light the ground with the spot too: one edit adds `/World/Ground` to
+    the spot's `collection:lightLink:includes` (the robot's target, the
+    rover since the rename, is kept). The draw list computes that one light
+    link again (light links 1 evaluated, its shadow link and the other
+    lights' untouched), classifies each of the 16 draws once against the
+    new membership, and lists one link change, the ground added; the spot
+    is read again and no draw, camera or material is. The spot's circle is
+    back on the ground; the stats line says the spot lights 1 of 16 draws.
 
 `scripts/acceptance.ts` runs the same steps headless in Node, reading the
 sample from disk, and checks the values and explanations after each one,

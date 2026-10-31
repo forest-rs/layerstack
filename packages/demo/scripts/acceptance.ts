@@ -544,6 +544,12 @@ const checks: ((session: Session) => void)[] = [
     assert.equal(prim, sample.ring);
     assert.equal(read(current.stage, `${sample.ring}.basis`).value, JSON.stringify(sample.ringBasis));
   },
+  // 21. The spot's light link gains the ground; the rename repaired its robot target.
+  ({ current, prim }) => {
+    assert.equal(prim, sample.spot);
+    assert.equal(current.changeLog.at(-1)?.cause, "light the ground with the spot");
+    assert.deepEqual(current.stage.relationship(sample.spotIncludes)?.targets(), [sample.rover, sample.ground]);
+  },
 ];
 
 /**
@@ -645,6 +651,14 @@ const curves = (ring = "bspline") => [
   `${sample.wire}: cubic bezier pinned, segments 1, 9 samples, 8 lines`,
 ];
 const points = [`${sample.sparks}: 7 points, spheres, ids used`];
+/**
+ * The spot's light link, the sample's one link with a category: it lights
+ * the draws `linked` (the robot's, `includeRoot` false) of `of`, a draw per
+ * gprim, per instance proxy (the beacons' two each) and one for the stones'
+ * instancer. Its shadow link, and every other light's links, link
+ * everything: no category, not listed.
+ */
+const spot = (linked: readonly string[], of: number) => [`${sample.spot} light links ${linked.length} of ${of} draws: ${linked.join(", ")}`];
 const opened: ViewportSummary = {
   drawn: [
     ...beacons,
@@ -677,6 +691,7 @@ const opened: ViewportSummary = {
   materials: materials(),
   curves: curves(),
   points,
+  links: spot([`${sample.robot}/Body`, `${sample.robot}/Head`], 17),
 };
 /** The rock's radius is 3: it reaches y = -1. */
 const overridden: ViewportSummary = { ...opened, bounds: [-8, -1, -8, 8, 5, 6] };
@@ -685,6 +700,8 @@ const withPebble = (pebble: "sphere" | "cube", robot: string = sample.robot): Vi
   drawn: [...overridden.drawn.filter((path) => !path.startsWith(sample.robot)), sample.pebble, `${robot}/Body`, `${robot}/Head`].sort(),
   triangles: opened.triangles + (pebble === "sphere" ? SPHERE : 12),
   materials: materials(robot),
+  // The rename repaired the spot's target: it links the rover's draws.
+  links: spot([`${robot}/Body`, `${robot}/Head`], 18),
 });
 const viewports: ViewportSummary[] = [
   opened,
@@ -705,6 +722,8 @@ const viewports: ViewportSummary[] = [
     drawn: withPebble("cube", sample.rover).drawn.filter((path) => !path.startsWith(sample.rover)),
     triangles: opened.triangles + 12 - SPHERE - 12,
     materials: materials(null),
+    // The rover has no draws: the spot lights nothing.
+    links: spot([], 16),
   },
   // The rock and stone 3 hidden, the north beacon moved to x = -5, z = -1;
   // the pebble (a cube of 0.8 at the origin) is the lowest now.
@@ -733,6 +752,7 @@ const viewports: ViewportSummary[] = [
     materials: materials(null),
     curves: curves(),
     points,
+    links: spot([], 16),
   },
 ];
 // The lamp brightened: the same draws.
@@ -748,6 +768,8 @@ viewports.push({ ...viewports.at(-1)!, materials: materials(null, "1, 0.85, 0.6,
 viewports.push(viewports.at(-1)!);
 // The ring a Catmull-Rom curve: the same counts, its basis reported.
 viewports.push({ ...viewports.at(-1)!, curves: curves("catmullRom") });
+// The ground added to the spot's link: the spot lights it alone.
+viewports.push({ ...viewports.at(-1)!, links: spot([sample.ground], 16) });
 
 /**
  * What the viewport's draw list did after each step, from the editor's
@@ -777,6 +799,9 @@ const update = (counts: Partial<UpdateSummary>): UpdateSummary => ({
   curvesLaidOut: 0,
   pointsRefilled: 0,
   pointsRebuilt: 0,
+  linksEvaluated: 0,
+  linksClassified: 0,
+  links: 0,
   ...counts,
 });
 const updates: UpdateSummary[] = [
@@ -785,8 +810,25 @@ const updates: UpdateSummary[] = [
   // four meshes planned, six shapes tessellated (the body and the posts
   // share a cube), three curves laid out and one point set read; seven
   // lights (the beacon's glow once per instance), the camera and the three
-  // bound materials read.
-  update({ added: 15, triangulations: 4, tessellations: 6, itemsRead: 15, localTransforms: 31, lightsRead: 7, lights: 7, camerasRead: 1, materialsRead: 3, materials: 3, curvesLaidOut: 3, pointsRebuilt: 1 }),
+  // bound materials read. Each light's two links computed: the spot's
+  // light link alone has a category, and every draw is classified against
+  // it, once.
+  update({
+    added: 15,
+    triangulations: 4,
+    tessellations: 6,
+    itemsRead: 15,
+    localTransforms: 31,
+    lightsRead: 7,
+    lights: 7,
+    camerasRead: 1,
+    materialsRead: 3,
+    materials: 3,
+    curvesLaidOut: 3,
+    pointsRebuilt: 1,
+    linksEvaluated: 14,
+    linksClassified: 17,
+  }),
   // Selecting changes nothing.
   update({}),
   // The rock's radius: one draw read, its sphere tessellated at radius 3.
@@ -795,14 +837,17 @@ const updates: UpdateSummary[] = [
   // (untouched counts the last one's), recolored, nothing rebuilt; the
   // robot is resynced in each, its paint with it: read twice, the same
   // record (its diffuse color is the displayColor primvar either way).
-  update({ itemsRead: 4, itemsUntouched: 13, localTransforms: 3, materialsRead: 2 }),
+  // Resynced, the robot's two draws are classified again against the
+  // spot's link, in each record; no link is computed again.
+  update({ itemsRead: 4, itemsUntouched: 13, localTransforms: 3, materialsRead: 2, linksClassified: 4 }),
   // Undo, undo, redo: the shapes of both radii are still held.
-  update({ itemsRead: 4, itemsUntouched: 14, localTransforms: 3, materialsRead: 1 }),
+  update({ itemsRead: 4, itemsUntouched: 14, localTransforms: 3, materialsRead: 1, linksClassified: 2 }),
   // A new prim: its draw added, and nothing else read. The prim alone is
-  // resynced, as OpenUSD reports it, not `/World` with it.
-  update({ added: 1, tessellations: 1, itemsRead: 1, itemsUntouched: 15, localTransforms: 1 }),
+  // resynced, as OpenUSD reports it, not `/World` with it. Its draw is
+  // classified once, against the spot's link.
+  update({ added: 1, tessellations: 1, itemsRead: 1, itemsUntouched: 15, localTransforms: 1, linksClassified: 1 }),
   // Retyped: the pebble alone, a cube now.
-  update({ tessellations: 1, itemsRead: 1, itemsUntouched: 15, localTransforms: 1 }),
+  update({ tessellations: 1, itemsRead: 1, itemsUntouched: 15, localTransforms: 1, linksClassified: 1 }),
   // The asset's height: the robot's two draws read, nothing rebuilt; no
   // material reads the height.
   update({ itemsRead: 2, itemsUntouched: 14 }),
@@ -810,27 +855,60 @@ const updates: UpdateSummary[] = [
   // buffers; the old and new paths alone are resynced. The lamp's `aim`,
   // which the rename repairs, changes info-only, and no light reads it:
   // the lamp is not read again. The robot's paint is gone and the rover's
-  // read.
-  update({ added: 2, removed: 2, itemsRead: 2, itemsUntouched: 14, localTransforms: 3, materialsRead: 1, materials: 2 }),
+  // read. The spot's `lightLink` includes, repaired to the rover too, are
+  // its link edited: that light read and changed, its link computed again,
+  // a new membership classified against every draw. The robot's draws gone
+  // and the rover's new, no link change is listed.
+  update({
+    added: 2,
+    removed: 2,
+    itemsRead: 2,
+    itemsUntouched: 14,
+    localTransforms: 3,
+    lightsRead: 1,
+    lights: 1,
+    materialsRead: 1,
+    materials: 2,
+    linksEvaluated: 1,
+    linksClassified: 18,
+  }),
   // Time 30, then the default time again: the top alone is animated (its
   // `xformOp:rotateY` samples), so it alone is read and moved; no other
   // draw, light, camera or material is.
   update({ moved: 1, itemsRead: 1, itemsUntouched: 15, itemsTimeInvariant: 15, localTransforms: 1 }),
   update({ moved: 1, itemsRead: 1, itemsUntouched: 15, itemsTimeInvariant: 15, localTransforms: 1 }),
   // Reopened: a new stage, read whole.
-  update({ added: 16, triangulations: 4, tessellations: 7, itemsRead: 16, localTransforms: 32, lightsRead: 7, lights: 7, camerasRead: 1, materialsRead: 3, materials: 3, curvesLaidOut: 3, pointsRebuilt: 1 }),
+  update({
+    added: 16,
+    triangulations: 4,
+    tessellations: 7,
+    itemsRead: 16,
+    localTransforms: 32,
+    lightsRead: 7,
+    lights: 7,
+    camerasRead: 1,
+    materialsRead: 3,
+    materials: 3,
+    curvesLaidOut: 3,
+    pointsRebuilt: 1,
+    linksEvaluated: 14,
+    linksClassified: 18,
+  }),
   // Muted: the rover's draws gone, nothing read; its paint dropped.
   update({ removed: 2, itemsUntouched: 14, materials: 1 }),
   // One edit moves the north beacon (its post and bulb groups' matrices),
   // hides the rock (no matrices, shown or hidden) and stone 3 (the
   // stones' matrices): matrices and visibility only, nothing triangulated,
   // tessellated or refilled. The north beacon's glow alone moves with it:
-  // the south's is not read.
-  update({ moved: 4, shown: 1, itemsRead: 4, itemsUntouched: 10, lightsRead: 1, lights: 1 }),
+  // the south's is not read. The stones' instancer, discovered again for
+  // its `invisibleIds`, is classified again against the spot's link.
+  update({ moved: 4, shown: 1, itemsRead: 4, itemsUntouched: 10, lightsRead: 1, lights: 1, linksClassified: 1 }),
   // The lamp's intensity: that light alone read and changed; no draw or
   // camera read. Its new opinion is a new property spec in the edit layer,
-  // which resyncs that property alone.
-  update({ itemsUntouched: 14, localTransforms: 1, lightsRead: 1, lights: 1 }),
+  // which resyncs that property alone; the lamp's new `over` in the edit
+  // layer is an unlisted change of it, so its two links are computed again
+  // and found unchanged (everything, no category): nothing classified.
+  update({ itemsUntouched: 14, localTransforms: 1, lightsRead: 1, lights: 1, linksEvaluated: 2 }),
   // The checker's tint: that material alone read and changed; no draw,
   // light or camera read.
   update({ itemsUntouched: 14, materialsRead: 1, materials: 1 }),
@@ -846,6 +924,11 @@ const updates: UpdateSummary[] = [
   update({ refilled: 2, itemsRead: 2, itemsUntouched: 12, curvesRefilled: 1, pointsRefilled: 1 }),
   // The ring's basis: that curve laid out again (rebuilt), nothing else read.
   update({ rebuilt: 1, itemsRead: 1, itemsUntouched: 13, curvesLaidOut: 1 }),
+  // The spot's includes gain the ground: that light read and changed, its
+  // light link alone computed again (not its shadow link, nor any other
+  // light's), the new membership classified once per draw, and one link
+  // change listed, the ground added. No draw, camera or material read.
+  update({ itemsUntouched: 14, lightsRead: 1, lights: 1, linksEvaluated: 1, linksClassified: 16, links: 1 }),
 ];
 
 /** The transform cache's counters after the last viewport was built. */

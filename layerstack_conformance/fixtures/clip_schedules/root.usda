@@ -1,0 +1,200 @@
+#usda 1.0
+(
+    subLayers = [@./weak.usda@]
+)
+
+def "Multi" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./clipA.usda@, @./broken.usda@]
+            asset manifestAssetPath = @./manifest.usda@
+            string primPath = "/Model"
+            double2[] active = [(0, 0), (10, 1)]
+        }
+    }
+)
+{
+}
+
+def "SingleSame" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./clipZero.usda@]
+            asset manifestAssetPath = @./manifest.usda@
+            string primPath = "/Model"
+            double2[] active = [(0, 0)]
+        }
+    }
+)
+{
+}
+
+def "SingleTwo" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./clipFive.usda@]
+            asset manifestAssetPath = @./manifest.usda@
+            string primPath = "/Model"
+            double2[] active = [(0, 0)]
+        }
+    }
+)
+{
+}
+
+def "RepeatOne" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./clipZero.usda@]
+            asset manifestAssetPath = @./manifest.usda@
+            string primPath = "/Model"
+            double2[] active = [(0, 0), (10, 0)]
+        }
+    }
+)
+{
+}
+
+def "DupActive" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./clipA.usda@, @./clipB.usda@]
+            asset manifestAssetPath = @./manifest.usda@
+            string primPath = "/Model"
+            double2[] active = [(0, 0), (0, 1)]
+        }
+    }
+)
+{
+}
+
+def "TripleTimes" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./clipLin.usda@]
+            asset manifestAssetPath = @./manifest.usda@
+            string primPath = "/Model"
+            double2[] active = [(0, 0)]
+            double2[] times = [(0, 0), (10, 10), (10, 0), (10, 5), (20, 10)]
+        }
+    }
+)
+{
+}
+
+def "DoubleTimes" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./clipLin.usda@]
+            asset manifestAssetPath = @./manifest.usda@
+            string primPath = "/Model"
+            double2[] active = [(0, 0)]
+            double2[] times = [(0, 0), (10, 10), (10, 0), (20, 10)]
+        }
+    }
+)
+{
+}
+
+def "FirstJump" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./clipLin.usda@]
+            asset manifestAssetPath = @./manifest.usda@
+            string primPath = "/Model"
+            double2[] active = [(0, 0)]
+            double2[] times = [(10, 10), (10, 0), (20, 10)]
+        }
+    }
+)
+{
+}
+
+def "UnschedBroken" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./clipA.usda@, @./broken.usda@]
+            asset manifestAssetPath = @./manifest.usda@
+            string primPath = "/Model"
+            double2[] active = [(0, 0)]
+        }
+    }
+)
+{
+}
+
+def "UnschedNoManifest" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./clipA.usda@, @./clipExtra.usda@]
+            string primPath = "/Model"
+            double2[] active = [(0, 0)]
+        }
+    }
+)
+{
+}
+
+def "UnschedBrokenNoManifest" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./clipA.usda@, @./broken.usda@]
+            string primPath = "/Model"
+            double2[] active = [(0, 0)]
+        }
+    }
+)
+{
+}
+
+def "FracIndex" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./clipA.usda@, @./clipB.usda@]
+            asset manifestAssetPath = @./manifest.usda@
+            string primPath = "/Model"
+            double2[] active = [(0, 0.5), (10, 1)]
+        }
+    }
+)
+{
+}
+
+def "UnsortedActive" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./clipA.usda@, @./clipB.usda@]
+            asset manifestAssetPath = @./manifest.usda@
+            string primPath = "/Model"
+            double2[] active = [(10, 1), (0, 0)]
+        }
+    }
+)
+{
+}
+
+def "PropPrimPath" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./clipA.usda@]
+            asset manifestAssetPath = @./manifest.usda@
+            string primPath = "/Model.size"
+            double2[] active = [(0, 0)]
+        }
+    }
+)
+{
+}
+
+def "RelPrimPath" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./clipA.usda@]
+            asset manifestAssetPath = @./manifest.usda@
+            string primPath = "Model"
+            double2[] active = [(0, 0)]
+        }
+    }
+)
+{
+}

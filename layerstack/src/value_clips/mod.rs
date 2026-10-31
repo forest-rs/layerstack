@@ -180,6 +180,9 @@ pub struct ClipValueSource {
     /// Upper bracketing source.
     pub upper: ClipSampleSource,
 }
+/// A validated explicit schedule: clip paths, activations and `times`
+/// ([`Catalog::explicit_schedule`]).
+type ExplicitSchedule = (Vec<Arc<str>>, Vec<(f64, usize)>, Vec<(f64, f64)>);
 /// A prim's attribute specs in a clip, sorted by name.
 ///
 /// A prim has a few attributes, so a sorted vector rather than a map
@@ -514,6 +517,69 @@ impl Catalog {
             kind,
         });
     }
+    /// The schedule of a set that lists its clips (`assetPaths`): its clip
+    /// paths, its activations `(stage time, clip index)` and its `times`,
+    /// once OpenUSD's `_ValidateClipFields` (`pxr/usd/usd/clipSet.cpp:246-346`)
+    /// accepts them; otherwise the issue is reported and `None` returned.
+    ///
+    /// - every clip path must be non-empty, scheduled or not;
+    /// - a clip index must lie in `[0, clip count)`; a fractional one is
+    ///   accepted and truncated to the whole index below it, as OpenUSD's
+    ///   `(int)` cast does (`clipSet.cpp:418`), so `0.5` activates clip 0;
+    /// - no two activations may start at one time, and no more than two
+    ///   `times` entries (a jump discontinuity) may share a stage time
+    ///   ([`ClipIssueKind::InvalidSchedule`]).
+    fn explicit_schedule(
+        &mut self,
+        def: &Definition,
+        paths: Vec<Arc<str>>,
+    ) -> Option<ExplicitSchedule> {
+        let Some(active_pairs) = pairs(get(&def.dictionary, "active")) else {
+            self.issue(def, ClipIssueKind::InvalidMetadata("active"));
+            return None;
+        };
+        let times = match get(&def.dictionary, "times") {
+            None => Vec::new(),
+            Some(value) => {
+                if let Some(times) = pairs(Some(value)) {
+                    times
+                } else {
+                    self.issue(def, ClipIssueKind::InvalidMetadata("times"));
+                    return None;
+                }
+            }
+        };
+        if paths.iter().any(|path| path.is_empty()) {
+            self.issue(def, ClipIssueKind::InvalidMetadata("assetPaths"));
+            return None;
+        }
+        let count = paths.len() as f64;
+        let mut active = Vec::with_capacity(active_pairs.len());
+        for (time, index) in active_pairs {
+            // `pairs` admits finite numbers only.
+            if !(0. ..count).contains(&index) {
+                self.issue(def, ClipIssueKind::InvalidMetadata("active"));
+                return None;
+            }
+            #[allow(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "a finite index in [0, clip count) truncates as OpenUSD's `(int)` does"
+            )]
+            active.push((time, index as usize));
+        }
+        let mut starts: Vec<f64> = active.iter().map(|&(time, _)| time).collect();
+        sort::sort_by(&mut starts, f64::total_cmp);
+        let mut stage_times: Vec<f64> = times.iter().map(|&(time, _)| time).collect();
+        sort::sort_by(&mut stage_times, f64::total_cmp);
+        if starts.windows(2).any(|pair| pair[0] == pair[1])
+            || stage_times.windows(3).any(|run| run[0] == run[2])
+        {
+            self.issue(def, ClipIssueKind::InvalidSchedule);
+            return None;
+        }
+        Some((paths, active, times))
+    }
     fn prepare_set(
         &mut self,
         store: &mut dyn LayerStore,
@@ -539,6 +605,13 @@ impl Catalog {
                 return None;
             }
         };
+        // An explicit schedule is validated before any of its assets is
+        // requested: OpenUSD opens no clip and no manifest of a set it
+        // rejects (`Usd_ClipSet::New`, `pxr/usd/usd/clipSet.cpp:352-376`).
+        let explicit = match assets(get(&def.dictionary, "assetPaths")) {
+            Some(paths) => Some(self.explicit_schedule(&def, paths)?),
+            None => None,
+        };
         let mut manifest_unavailable = false;
         let manifest = match get(&def.dictionary, "manifestAssetPath") {
             None => None,
@@ -554,115 +627,85 @@ impl Catalog {
             }
         };
         let mut template_unresolved = false;
-        let (clips, active, times, identifiers) =
-            if let Some(paths) = assets(get(&def.dictionary, "assetPaths")) {
-                let Some(active_pairs) = pairs(get(&def.dictionary, "active")) else {
-                    self.issue(&def, ClipIssueKind::InvalidMetadata("active"));
-                    return None;
-                };
-                let active: Option<Vec<_>> = active_pairs
-                    .into_iter()
-                    .map(|(time, index)| {
-                        if index.is_finite()
-                            && index >= 0.
-                            && libm::floor(index) == index
-                            && index < paths.len() as f64
-                        {
-                            #[allow(
-                                clippy::cast_possible_truncation,
-                                clippy::cast_sign_loss,
-                                reason = "validated nonnegative index bounded by clip count"
-                            )]
-                            Some((time, index as usize))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                let Some(active) = active else {
-                    self.issue(&def, ClipIssueKind::InvalidMetadata("active"));
-                    return None;
-                };
-                let times = match get(&def.dictionary, "times") {
-                    None => Vec::new(),
-                    Some(value) => match pairs(Some(value)) {
-                        Some(v) => v,
-                        None => {
-                            self.issue(&def, ClipIssueKind::InvalidMetadata("times"));
-                            return None;
-                        }
-                    },
-                };
-                let mut clips = Vec::new();
-                let mut identifiers = Vec::new();
-                for path in paths {
-                    if path.is_empty() {
-                        self.issue(&def, ClipIssueKind::InvalidMetadata("assetPaths"));
-                        return None;
-                    }
-                    clips.push(self.asset(store, &def, &path, ClipAssetRole::Value, raw));
-                    identifiers.push(path);
-                }
-                (clips, active, times, identifiers)
-            } else if let Some(Value::String(pattern)) = get(&def.dictionary, "templateAssetPath") {
-                let result = template::expand(&def.dictionary, pattern);
-                let Ok(template) = result else {
-                    self.issue(&def, ClipIssueKind::InvalidTemplate);
-                    return None;
-                };
-                let mut clips = Vec::new();
-                let mut active = Vec::new();
-                let mut times = Vec::new();
-                let mut identifiers = Vec::new();
-                let mut unresolved = false;
-                // Derived times are in the template's layer time, re-expressed
-                // like authored `times` when a stronger layer authors those
-                // (OpenUSD 26.11 `clipSetDefinition.cpp:670`).
-                let stage_time = |time: f64| {
-                    let time = def
-                        .times_offset
-                        .map_or(time, |times| reanchor(def.offset, times, time));
-                    external(def.offset, time)
-                };
-                if let Some(time) = template.front {
-                    times.push((stage_time(time), time));
-                }
-                for (time, identifier) in template.candidates {
-                    let availability = store.asset_availability(def.anchor.layer_id, &identifier);
-                    let layer = self.asset(
-                        store,
-                        &def,
-                        &identifier,
-                        ClipAssetRole::TemplateCandidate,
-                        raw,
-                    );
-                    if matches!(availability, AssetAvailability::Missing) {
-                        continue;
-                    }
-                    if layer.is_none() {
-                        unresolved = true;
-                        continue;
-                    }
-                    active.push((
-                        external(def.offset, time + template.active_offset),
-                        clips.len(),
-                    ));
-                    times.push((stage_time(time), time));
-                    clips.push(layer);
-                    identifiers.push(Arc::from(identifier));
-                }
-                if let Some(time) = template.back {
-                    times.push((stage_time(time), time));
-                }
-                if unresolved {
-                    self.issue(&def, ClipIssueKind::UnresolvedTemplate);
-                    template_unresolved = true;
-                }
-                (clips, active, times, identifiers)
-            } else {
-                self.issue(&def, ClipIssueKind::InvalidMetadata("assetPaths"));
+        let (clips, active, times, identifiers) = if let Some((paths, active, times)) = explicit {
+            // Only the clips `active` schedules are clips: OpenUSD builds
+            // `valueClips`, and the manifest it generates without an
+            // authored one, from those alone, and never opens an
+            // unscheduled entry of `assetPaths` (`clipSet.cpp:416-430`, `:518`,
+            // `:537`, `Usd_GenerateClipManifest` at `:64-88`). An
+            // unscheduled slot keeps its index, unrequested and empty.
+            let mut scheduled = alloc::vec![false; paths.len()];
+            for &(_, index) in &active {
+                scheduled[index] = true;
+            }
+            let mut clips = Vec::with_capacity(paths.len());
+            for (path, scheduled) in paths.iter().zip(scheduled) {
+                clips.push(if scheduled {
+                    self.asset(store, &def, path, ClipAssetRole::Value, raw)
+                } else {
+                    None
+                });
+            }
+            (clips, active, times, paths)
+        } else if let Some(Value::String(pattern)) = get(&def.dictionary, "templateAssetPath") {
+            let result = template::expand(&def.dictionary, pattern);
+            let Ok(template) = result else {
+                self.issue(&def, ClipIssueKind::InvalidTemplate);
                 return None;
             };
+            let mut clips = Vec::new();
+            let mut active = Vec::new();
+            let mut times = Vec::new();
+            let mut identifiers = Vec::new();
+            let mut unresolved = false;
+            // Derived times are in the template's layer time, re-expressed
+            // like authored `times` when a stronger layer authors those
+            // (OpenUSD 26.11 `clipSetDefinition.cpp:670`).
+            let stage_time = |time: f64| {
+                let time = def
+                    .times_offset
+                    .map_or(time, |times| reanchor(def.offset, times, time));
+                external(def.offset, time)
+            };
+            if let Some(time) = template.front {
+                times.push((stage_time(time), time));
+            }
+            for (time, identifier) in template.candidates {
+                let availability = store.asset_availability(def.anchor.layer_id, &identifier);
+                let layer = self.asset(
+                    store,
+                    &def,
+                    &identifier,
+                    ClipAssetRole::TemplateCandidate,
+                    raw,
+                );
+                if matches!(availability, AssetAvailability::Missing) {
+                    continue;
+                }
+                if layer.is_none() {
+                    unresolved = true;
+                    continue;
+                }
+                active.push((
+                    external(def.offset, time + template.active_offset),
+                    clips.len(),
+                ));
+                times.push((stage_time(time), time));
+                clips.push(layer);
+                identifiers.push(Arc::from(identifier));
+            }
+            if let Some(time) = template.back {
+                times.push((stage_time(time), time));
+            }
+            if unresolved {
+                self.issue(&def, ClipIssueKind::UnresolvedTemplate);
+                template_unresolved = true;
+            }
+            (clips, active, times, identifiers)
+        } else {
+            self.issue(&def, ClipIssueKind::InvalidMetadata("assetPaths"));
+            return None;
+        };
         if !template_unresolved && (clips.is_empty() || active.is_empty()) {
             return None;
         }

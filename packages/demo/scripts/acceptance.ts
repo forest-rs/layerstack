@@ -185,6 +185,7 @@ const checks: ((session: Session) => void)[] = [
       "/World/Stones",
       sample.sign,
       sample.strip,
+      "/World/Curves",
       "/World/Looks",
     ]);
     assert.equal(current.stage.prim("/Shape")?.abstract, true);
@@ -533,6 +534,16 @@ const checks: ((session: Session) => void)[] = [
     assert.equal(attribute, sample.coordinates);
     assert.equal(read(current.stage, sample.coordinates).value, JSON.stringify(sample.card));
   },
+  // 19. The wire and the sparks moved in one edit, as one change.
+  ({ current, prim }) => {
+    assert.equal(prim, sample.wire);
+    assert.equal(current.changeLog.at(-1)?.cause, "re-hang the wire and move the sparks");
+  },
+  // 20. The ring's basis is Catmull-Rom.
+  ({ current, prim }) => {
+    assert.equal(prim, sample.ring);
+    assert.equal(read(current.stage, `${sample.ring}.basis`).value, JSON.stringify(sample.ringBasis));
+  },
 ];
 
 /**
@@ -618,9 +629,29 @@ const lights = [
   "/World/Spot disk",
   "/World/Sun distant",
 ];
+/**
+ * The curves, sampled 8 times per segment: the trail (Catmull-Rom, 7
+ * points: 4 segments, 33 samples) and the ring (periodic B-spline, 8
+ * points: 8 segments, 64 samples and the first again) swept into 6-sided
+ * tubes, two triangles per side per band; the wire (one Bezier segment, 9
+ * samples) drawn as 8 lines. The sparks: seven points, spheres (no
+ * normals), their ids kept.
+ */
+const TRAIL = 32 * 6 * 2;
+const RING = 64 * 6 * 2;
+const curves = (ring = "bspline") => [
+  `${sample.ring}: cubic ${ring} periodic, segments 8, 65 samples, ${RING} triangles (tubes)`,
+  `${sample.trail}: cubic catmullRom nonperiodic, segments 4, 33 samples, ${TRAIL} triangles (tubes)`,
+  `${sample.wire}: cubic bezier pinned, segments 1, 9 samples, 8 lines`,
+];
+const points = [`${sample.sparks}: 7 points, spheres, ids used`];
 const opened: ViewportSummary = {
   drawn: [
     ...beacons,
+    sample.ring,
+    sample.sparks,
+    sample.trail,
+    sample.wire,
     "/World/Ground",
     "/World/Path",
     `${sample.robot}/Body`,
@@ -635,7 +666,7 @@ const opened: ViewportSummary = {
   // Two meshes of four triangles and two quads, four spheres of 528 (24
   // segments by 12 rings: the rock, the head, two bulbs), four cubes of 12
   // (the body, two posts, the top) and five stones.
-  triangles: 2 * 4 + 2 * 2 + 4 * SPHERE + 4 * 12 + 5 * 12,
+  triangles: 2 * 4 + 2 * 2 + 4 * SPHERE + 4 * 12 + 5 * 12 + TRAIL + RING,
   instances: 5,
   // The ground's corners in x and z; the ground to the spot light's disk
   // (y = 5) in y.
@@ -644,6 +675,8 @@ const opened: ViewportSummary = {
   lights,
   camera: sample.camera,
   materials: materials(),
+  curves: curves(),
+  points,
 };
 /** The rock's radius is 3: it reaches y = -1. */
 const overridden: ViewportSummary = { ...opened, bounds: [-8, -1, -8, 8, 5, 6] };
@@ -676,15 +709,30 @@ const viewports: ViewportSummary[] = [
   // The rock and stone 3 hidden, the north beacon moved to x = -5, z = -1;
   // the pebble (a cube of 0.8 at the origin) is the lowest now.
   {
-    drawn: [...beacons, "/World/Ground", "/World/Path", sample.pebble, sample.sign, `${sample.stones} ×4`, sample.strip, sample.top],
+    drawn: [
+      ...beacons,
+      "/World/Ground",
+      "/World/Path",
+      sample.pebble,
+      sample.ring,
+      sample.sign,
+      sample.sparks,
+      `${sample.stones} ×4`,
+      sample.strip,
+      sample.top,
+      sample.trail,
+      sample.wire,
+    ].sort(),
     hidden: [sample.rock],
-    triangles: 2 * 4 + 2 * 2 + 2 * SPHERE + 4 * 12 + 4 * 12,
+    triangles: 2 * 4 + 2 * 2 + 2 * SPHERE + 4 * 12 + 4 * 12 + TRAIL + RING,
     instances: 4,
     bounds: [-8, -0.4, -8, 8, 5, 6],
     meshes,
     lights,
     camera: sample.camera,
     materials: materials(null),
+    curves: curves(),
+    points,
   },
 ];
 // The lamp brightened: the same draws.
@@ -696,6 +744,10 @@ viewports.push(viewports.at(-1)!);
 // The checker read through the card set: the same draws, its texture
 // reading `card`.
 viewports.push({ ...viewports.at(-1)!, materials: materials(null, "1, 0.85, 0.6, 1", sample.card) });
+// The wire re-hung and the sparks moved: the same draws, counts and reports.
+viewports.push(viewports.at(-1)!);
+// The ring a Catmull-Rom curve: the same counts, its basis reported.
+viewports.push({ ...viewports.at(-1)!, curves: curves("catmullRom") });
 
 /**
  * What the viewport's draw list did after each step, from the editor's
@@ -721,69 +773,79 @@ const update = (counts: Partial<UpdateSummary>): UpdateSummary => ({
   camerasRead: 0,
   materialsRead: 0,
   materials: 0,
+  curvesRefilled: 0,
+  curvesLaidOut: 0,
+  pointsRefilled: 0,
+  pointsRebuilt: 0,
   ...counts,
 });
 const updates: UpdateSummary[] = [
-  // Read whole: eleven draws (the beacons' post and bulb one each for both
-  // instances, the stones one for five), four meshes planned and six
-  // shapes tessellated (the body and the posts share a cube); seven lights
-  // (the beacon's glow once per instance), the camera and the three bound
-  // materials read.
-  update({ added: 11, triangulations: 4, tessellations: 6, itemsRead: 11, localTransforms: 26, lightsRead: 7, lights: 7, camerasRead: 1, materialsRead: 3, materials: 3 }),
+  // Read whole: fifteen draws (the beacons' post and bulb one each for both
+  // instances, the stones one for five, the three curves and the sparks),
+  // four meshes planned, six shapes tessellated (the body and the posts
+  // share a cube), three curves laid out and one point set read; seven
+  // lights (the beacon's glow once per instance), the camera and the three
+  // bound materials read.
+  update({ added: 15, triangulations: 4, tessellations: 6, itemsRead: 15, localTransforms: 31, lightsRead: 7, lights: 7, camerasRead: 1, materialsRead: 3, materials: 3, curvesLaidOut: 3, pointsRebuilt: 1 }),
   // Selecting changes nothing.
   update({}),
   // The rock's radius: one draw read, its sphere tessellated at radius 3.
-  update({ tessellations: 1, itemsRead: 1, itemsUntouched: 10 }),
+  update({ tessellations: 1, itemsRead: 1, itemsUntouched: 14 }),
   // The variant and its asset: the robot's draws read in each record
   // (untouched counts the last one's), recolored, nothing rebuilt; the
   // robot is resynced in each, its paint with it: read twice, the same
   // record (its diffuse color is the displayColor primvar either way).
-  update({ itemsRead: 4, itemsUntouched: 9, localTransforms: 3, materialsRead: 2 }),
+  update({ itemsRead: 4, itemsUntouched: 13, localTransforms: 3, materialsRead: 2 }),
   // Undo, undo, redo: the shapes of both radii are still held.
-  update({ itemsRead: 4, itemsUntouched: 10, localTransforms: 3, materialsRead: 1 }),
+  update({ itemsRead: 4, itemsUntouched: 14, localTransforms: 3, materialsRead: 1 }),
   // A new prim: its draw added, and nothing else read. The prim alone is
   // resynced, as OpenUSD reports it, not `/World` with it.
-  update({ added: 1, tessellations: 1, itemsRead: 1, itemsUntouched: 11, localTransforms: 1 }),
+  update({ added: 1, tessellations: 1, itemsRead: 1, itemsUntouched: 15, localTransforms: 1 }),
   // Retyped: the pebble alone, a cube now.
-  update({ tessellations: 1, itemsRead: 1, itemsUntouched: 11, localTransforms: 1 }),
+  update({ tessellations: 1, itemsRead: 1, itemsUntouched: 15, localTransforms: 1 }),
   // The asset's height: the robot's two draws read, nothing rebuilt; no
   // material reads the height.
-  update({ itemsRead: 2, itemsUntouched: 10 }),
+  update({ itemsRead: 2, itemsUntouched: 14 }),
   // Renamed: the robot's draws gone, the rover's added, drawing the same
   // buffers; the old and new paths alone are resynced. The lamp's `aim`,
   // which the rename repairs, changes info-only, and no light reads it:
   // the lamp is not read again. The robot's paint is gone and the rover's
   // read.
-  update({ added: 2, removed: 2, itemsRead: 2, itemsUntouched: 10, localTransforms: 3, materialsRead: 1, materials: 2 }),
+  update({ added: 2, removed: 2, itemsRead: 2, itemsUntouched: 14, localTransforms: 3, materialsRead: 1, materials: 2 }),
   // Time 30, then the default time again: the top alone is animated (its
   // `xformOp:rotateY` samples), so it alone is read and moved; no other
   // draw, light, camera or material is.
-  update({ moved: 1, itemsRead: 1, itemsUntouched: 11, itemsTimeInvariant: 11, localTransforms: 1 }),
-  update({ moved: 1, itemsRead: 1, itemsUntouched: 11, itemsTimeInvariant: 11, localTransforms: 1 }),
+  update({ moved: 1, itemsRead: 1, itemsUntouched: 15, itemsTimeInvariant: 15, localTransforms: 1 }),
+  update({ moved: 1, itemsRead: 1, itemsUntouched: 15, itemsTimeInvariant: 15, localTransforms: 1 }),
   // Reopened: a new stage, read whole.
-  update({ added: 12, triangulations: 4, tessellations: 7, itemsRead: 12, localTransforms: 27, lightsRead: 7, lights: 7, camerasRead: 1, materialsRead: 3, materials: 3 }),
+  update({ added: 16, triangulations: 4, tessellations: 7, itemsRead: 16, localTransforms: 32, lightsRead: 7, lights: 7, camerasRead: 1, materialsRead: 3, materials: 3, curvesLaidOut: 3, pointsRebuilt: 1 }),
   // Muted: the rover's draws gone, nothing read; its paint dropped.
-  update({ removed: 2, itemsUntouched: 10, materials: 1 }),
+  update({ removed: 2, itemsUntouched: 14, materials: 1 }),
   // One edit moves the north beacon (its post and bulb groups' matrices),
   // hides the rock (no matrices, shown or hidden) and stone 3 (the
   // stones' matrices): matrices and visibility only, nothing triangulated,
   // tessellated or refilled. The north beacon's glow alone moves with it:
   // the south's is not read.
-  update({ moved: 4, shown: 1, itemsRead: 4, itemsUntouched: 6, lightsRead: 1, lights: 1 }),
+  update({ moved: 4, shown: 1, itemsRead: 4, itemsUntouched: 10, lightsRead: 1, lights: 1 }),
   // The lamp's intensity: that light alone read and changed; no draw or
   // camera read. Its new opinion is a new property spec in the edit layer,
   // which resyncs that property alone.
-  update({ itemsUntouched: 10, localTransforms: 1, lightsRead: 1, lights: 1 }),
+  update({ itemsUntouched: 14, localTransforms: 1, lightsRead: 1, lights: 1 }),
   // The checker's tint: that material alone read and changed; no draw,
   // light or camera read.
-  update({ itemsUntouched: 10, materialsRead: 1, materials: 1 }),
+  update({ itemsUntouched: 14, materialsRead: 1, materials: 1 }),
   // The stage's documentation: `/` info-only, which no draw, light,
   // camera or material reads: nothing read.
-  update({ itemsUntouched: 10 }),
+  update({ itemsUntouched: 14 }),
   // The checker's coordinates: that material read again, and the sign's
   // mesh, which now draws the card set as a channel of its own, planned
   // again (rebuilt); no draw, light or camera read.
-  update({ rebuilt: 1, triangulations: 1, itemsUntouched: 10, materialsRead: 1, materials: 1 }),
+  update({ rebuilt: 1, triangulations: 1, itemsUntouched: 14, materialsRead: 1, materials: 1 }),
+  // The wire's and the sparks' points: both buffers refilled by their kept
+  // plans, nothing laid out again, nothing else read.
+  update({ refilled: 2, itemsRead: 2, itemsUntouched: 12, curvesRefilled: 1, pointsRefilled: 1 }),
+  // The ring's basis: that curve laid out again (rebuilt), nothing else read.
+  update({ rebuilt: 1, itemsRead: 1, itemsUntouched: 13, curvesLaidOut: 1 }),
 ];
 
 /** The transform cache's counters after the last viewport was built. */
@@ -831,6 +893,17 @@ try {
   assert.deepEqual(glow("North"), [sample.beaconMoved[0], sample.beaconMoved[1] + 2, sample.beaconMoved[2]]);
   assert.deepEqual(glow("South"), [2, 2, -5]);
   console.log("ok the beacons' glows, one per instance");
+  // The wire re-hung: a Bezier segment passes through its end points. The
+  // sparks keep their ids. The ring, Catmull-Rom now, passes through its
+  // points: its first segment begins at the second.
+  const buffersOf = (prim: string) => model.list!.buffers(model.list!.items().find((item) => item.prim === prim)!.buffer)!;
+  const wire = buffersOf(sample.wire).curves!;
+  assert.deepEqual([...wire.positions.subarray(0, 3)], [-5, 2, -1]);
+  assert.deepEqual([...wire.positions.subarray(-3)], [2, 2, -5]);
+  assert.deepEqual([...buffersOf(sample.sparks).points!.ids], [1n, 2n, 3n, 4n, 5n, 6n, 7n]);
+  const ring = buffersOf(sample.ring).curves!;
+  assert.deepEqual([...ring.positions.subarray(0, 3)], [6.375, Math.fround(0.06), 2.375]);
+  console.log("ok the wire's ends, the sparks' ids and the ring through its points");
   // The sign's buffer draws the card set the checker reads, besides `st`.
   const sign = model.list!.items().find((item) => item.prim === sample.sign)!;
   const signMesh = model.list!.buffers(sign.buffer)!.mesh;

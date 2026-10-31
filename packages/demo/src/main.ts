@@ -247,7 +247,8 @@ function renderViewport(editor: Editor): void {
         `${work.itemsRead} draws read, ${work.itemsUntouched} untouched` +
         (last.timeChanged ? ` (${work.itemsTimeInvariant} not animated)` : "") +
         `, ${work.localTransforms} local transforms; ${work.lightsRead} lights read, ${work.lights} changed; ${work.camerasRead} cameras read; ` +
-        `${work.materialsRead} materials read, ${work.materials} changed`;
+        `${work.materialsRead} materials read, ${work.materials} changed; ` +
+        `curves ${work.curvesRefilled} refilled, ${work.curvesLaidOut} laid out; points ${work.pointsRefilled} refilled, ${work.pointsRebuilt} read anew`;
   fill(
     body,
     `${scene.items.length} draws: ${summary.drawn.length} drawn (${summary.instances} instances), ${summary.triangles} triangles, framed on ${bounds}; ` +

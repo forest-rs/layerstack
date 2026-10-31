@@ -69,6 +69,18 @@ export const sample = {
   /** The checker's coordinates input, and the sign's second texture coordinate set it is pointed at. */
   coordinates: "/World/Looks/Checker.inputs:coordinates",
   card: "card",
+  /** Curves the draw list samples and sweeps: a Catmull-Rom trail, a periodic B-spline ring and a Bezier wire between the beacons; and sparks, a `Points`. */
+  trail: "/World/Curves/Trail",
+  ring: "/World/Curves/Ring",
+  wire: "/World/Curves/Wire",
+  sparks: "/World/Curves/Sparks",
+  /** The wire re-hung from the moved north beacon's bulb to the south's, and the sparks moved along it. */
+  wireMoved: [-5, 2, -1, -2.75, 1, -2.25, -0.25, 1, -3.75, 2, 2, -5],
+  sparksMoved: [
+    -4.125, 2.25, -1.5, -3.25, 2, -2, -2.375, 2.5, -2.5, -1.5, 2.25, -3, -0.625, 2.5, -3.5, 0.25, 2, -4, 1.125, 2.25, -4.5,
+  ],
+  /** The basis the ring is switched to. */
+  ringBasis: "catmullRom",
   /** The stage's `documentation`, which a step sets. */
   documentation: "A rock, a robot, two beacons and their lights",
 } as const;
@@ -299,6 +311,25 @@ export const steps: readonly Step[] = [
     async run(session) {
       session.current.setValue(sample.coordinates, { type: "string", value: sample.card });
       session.select(sample.checker, sample.coordinates);
+    },
+  },
+  {
+    title: "Re-hang the wire from the moved beacon",
+    look: "The viewport: the wire, a Bezier BasisCurves drawn as line segments (it is thinner than 0.05), now runs from the moved north beacon to the south one, and the sparks, a Points, move along it. One edit sets both prims' points. The stats line: the draw list refills both buffers by their kept plans (curves refilled 1, points refilled 1): the wire's segments and samples are not laid out again, and nothing else is read.",
+    async run(session) {
+      session.current.apply("re-hang the wire and move the sparks", [
+        { type: "setValue", path: `${sample.wire}.points`, value: { type: "point3f[]", value: new Float32Array(sample.wireMoved) } },
+        { type: "setValue", path: `${sample.sparks}.points`, value: { type: "point3f[]", value: new Float32Array(sample.sparksMoved) } },
+      ]);
+      session.select(sample.wire, `${sample.wire}.points`);
+    },
+  },
+  {
+    title: "Switch the ring to Catmull-Rom",
+    look: "The viewport: the ring around the top, a periodic B-spline drawn as a tube, now passes through its eight points: a Catmull-Rom curve. Its basis changes which points weigh each segment, so the draw list lays that curve out again (rebuilt 1, curves laid out 1) and sweeps a new tube; no other draw, light, camera or material is read.",
+    async run(session) {
+      session.current.setValue(`${sample.ring}.basis`, { type: "token", value: sample.ringBasis });
+      session.select(sample.ring, `${sample.ring}.basis`);
     },
   },
 ];

@@ -75,12 +75,16 @@ import {
   Group,
   HemisphereLight,
   InstancedMesh,
+  LineBasicMaterial,
+  LineSegments,
   Matrix4,
   Mesh,
   MeshStandardMaterial,
   Object3D,
   PerspectiveCamera,
   PointLight,
+  Points,
+  PointsMaterial,
   Quaternion,
   RectAreaLight,
   Scene,
@@ -116,8 +120,12 @@ export class Viewport {
   readonly #fallback = new Group();
   /** One geometry per stagehand buffer, by key: a sphere of one radius is uploaded once. */
   readonly #geometries = new Map<number, BufferGeometry>();
-  /** One object per draw item, by id: a `Mesh` for a gprim, an `InstancedMesh` for a group. */
-  readonly #objects = new Map<number, Mesh | InstancedMesh>();
+  /**
+   * One object per draw item, by id: a `Mesh` for a gprim, an
+   * `InstancedMesh` for a group, `LineSegments` for curves drawn as lines,
+   * `Points` for a point set.
+   */
+  readonly #objects = new Map<number, Drawn>();
   /** Whether an update was applied yet. */
   #synced = false;
   /** The selection the materials were last made for. */
@@ -204,6 +212,19 @@ export class Viewport {
       const geometry = this.#geometries.get(key);
       const view = scene.items.find((candidate) => candidate.item.buffer === key);
       if (geometry === undefined || view === undefined || update.rebuilt.has(key)) continue;
+      const object = [...this.#objects.entries()].find(([id]) => items.get(id)?.item.buffer === key)?.[1];
+      if (object !== undefined && !fits(object, view.kind)) {
+        // A curve's widths crossed the line width: the same buffers, drawn the other way.
+        this.#geometries.get(key)?.dispose();
+        this.#geometries.set(key, makeGeometry(view));
+        this.#drop(view.item.id);
+        this.#add(view, selected);
+        continue;
+      }
+      if (view.kind === "lines" || view.kind === "points") {
+        refillSamples(geometry, view);
+        continue;
+      }
       const mesh = view.buffers.mesh;
       geometry.setAttribute("position", new BufferAttribute(mesh.positions, 3));
       geometry.setAttribute("normal", new BufferAttribute(mesh.normals, 3));
@@ -264,8 +285,14 @@ export class Viewport {
     }
     const placements = view.item.matrices.length / 16;
     const styled = materials(view, selected, this.#applied?.materials ?? new Map(), this.#textures);
-    const object =
-      view.item.source.kind === "gprim" ? new Mesh(geometry, styled) : new InstancedMesh(geometry, styled, Math.max(1, placements));
+    const object: Drawn =
+      view.kind === "lines"
+        ? new LineSegments(geometry, styled as LineBasicMaterial)
+        : view.kind === "points"
+          ? new Points(geometry, styled as PointsMaterial)
+          : view.item.source.kind === "gprim"
+            ? new Mesh(geometry, styled as MeshStandardMaterial | MeshStandardMaterial[])
+            : new InstancedMesh(geometry, styled as MeshStandardMaterial | MeshStandardMaterial[], Math.max(1, placements));
     object.matrixAutoUpdate = false;
     this.#objects.set(view.item.id, object);
     this.#scene.add(object);
@@ -394,11 +421,26 @@ function materials(
   selected: string | null,
   records: ReadonlyMap<string, MaterialItem>,
   textures: TextureStore,
-): MeshStandardMaterial | MeshStandardMaterial[] {
+): MeshStandardMaterial | MeshStandardMaterial[] | LineBasicMaterial | PointsMaterial {
   const { item } = view;
   const paths = [item.prim, ...item.instances];
   const highlighted =
     selected !== null && paths.some((path) => selected === path || selected.startsWith(`${path}/`) || path.startsWith(`${selected}/`));
+  // Lines and points: unlit, in their per-sample (or prim) display color.
+  const tint = (vertexColors: boolean) =>
+    highlighted ? new Color(0x6f9fff) : vertexColors ? new Color(1, 1, 1) : new Color().setRGB(...(view.color as [number, number, number]));
+  if (view.kind === "lines") {
+    const vertexColors = view.buffers.curves?.colors != null;
+    return new LineBasicMaterial({ color: tint(vertexColors), vertexColors });
+  }
+  if (view.kind === "points") {
+    const points = view.buffers.points!;
+    const vertexColors = points.colors !== null;
+    // One size for the set (three.js points take one): its widest point's
+    // width, in world units with size attenuation.
+    const size = points.widths.reduce((widest, width) => Math.max(widest, width), 0);
+    return new PointsMaterial({ color: tint(vertexColors), vertexColors, size, sizeAttenuation: true });
+  }
   const colors = view.buffers.mesh.colors;
   // One map for every range's material: a subset's reads its sets' channels.
   const channels = uvChannels(view.buffers.mesh);
@@ -453,8 +495,44 @@ function setUvSets(geometry: BufferGeometry, mesh: StagehandMesh): void {
   }
 }
 
+/** The three.js objects a draw item becomes. */
+type Drawn = Mesh | InstancedMesh | LineSegments | Points;
+
+/** Whether `object` draws a view of `kind`: lines, points, or triangles. */
+function fits(object: Drawn, kind: string): boolean {
+  if (kind === "lines") return object instanceof LineSegments;
+  if (kind === "points") return object instanceof Points;
+  return object instanceof Mesh;
+}
+
+/** A curves' samples (with their line segments) or a point set's points, as positions and colors. */
+function samplesOf(view: ViewItem): { positions: Float32Array; colors: Float32Array | null; lines: Uint32Array | null } {
+  const curves = view.buffers.curves;
+  if (curves !== null) return { positions: curves.positions, colors: curves.colors, lines: curves.lines };
+  const points = view.buffers.points!;
+  return { positions: points.positions, colors: points.colors, lines: null };
+}
+
+/** New sample positions and colors in place: a curves' or point set's refill. */
+function refillSamples(geometry: BufferGeometry, view: ViewItem): void {
+  const { positions, colors } = samplesOf(view);
+  geometry.setAttribute("position", new BufferAttribute(positions, 3));
+  if (colors !== null) geometry.setAttribute("color", new BufferAttribute(colors, 3));
+  geometry.computeBoundingSphere();
+}
+
 /** A geometry over the item's stagehand buffer: indexed, with normals, colors and a group per range. */
 function makeGeometry(view: ViewItem): BufferGeometry {
+  if (view.kind === "lines" || view.kind === "points") {
+    // Curves drawn as lines: two sample indices per segment; points: one vertex each.
+    const { positions, colors, lines } = samplesOf(view);
+    const geometry = new BufferGeometry();
+    if (lines !== null) geometry.setIndex(new BufferAttribute(lines, 1));
+    geometry.setAttribute("position", new BufferAttribute(positions, 3));
+    if (colors !== null) geometry.setAttribute("color", new BufferAttribute(colors, 3));
+    geometry.computeBoundingSphere();
+    return geometry;
+  }
   const mesh = view.buffers.mesh;
   const geometry = new BufferGeometry();
   geometry.setIndex(new BufferAttribute(mesh.indices, 1));

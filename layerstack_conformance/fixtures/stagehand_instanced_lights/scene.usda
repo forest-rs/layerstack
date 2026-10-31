@@ -97,6 +97,83 @@ def Xform "World"
         }
     }
 
+    def PointInstancer "Flock"
+    {
+        rel prototypes = [</World/Flock/Protos/Moth>, </World/Flock/Protos/Pebble>]
+        int[] protoIndices.timeSamples = {
+            0: [0, 1],
+            10: [1, 0, 0, 0],
+        }
+        int64[] ids.timeSamples = {
+            0: [1, 2],
+            10: [1, 2, 3, 4],
+        }
+        point3f[] positions.timeSamples = {
+            0: [(0, 0, 0), (1, 0, 0)],
+            10: [(0, 1, 0), (1, 1, 0), (2, 1, 0), (3, 1, 0)],
+        }
+        int64[] invisibleIds.timeSamples = {
+            0: [],
+            10: [4],
+        }
+        double3 xformOp:translate = (0, 0, 8)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+
+        def Scope "Protos"
+        {
+            def Xform "Moth"
+            {
+                def Sphere "Body"
+                {
+                    double radius = 0.1
+                }
+
+                def SphereLight "Glow"
+                {
+                    float inputs:radius = 0.05
+                    double3 xformOp:translate = (0, 0.5, 0)
+                    uniform token[] xformOpOrder = ["xformOp:translate"]
+                }
+            }
+
+            def Cube "Pebble"
+            {
+                double size = 0.3
+            }
+        }
+    }
+
+    def PointInstancer "Beacons"
+    {
+        rel prototypes = [</World/Beacons/Protos/Lantern>]
+        int[] protoIndices = [0, 0, 0]
+        point3f[] positions = [(0, 0, 0), (2, 0, 0), (4, 0, 0)]
+        int64[] invisibleIds.timeSamples = {
+            0: [1],
+            10: [0, 2],
+        }
+        double3 xformOp:translate = (0, 0, -8)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+
+        def Scope "Protos"
+        {
+            def Xform "Lantern"
+            {
+                def Cube "Case"
+                {
+                    double size = 0.2
+                }
+
+                def SphereLight "Wick"
+                {
+                    float inputs:radius = 0.1
+                    double3 xformOp:translate = (0, 0.25, 0)
+                    uniform token[] xformOpOrder = ["xformOp:translate"]
+                }
+            }
+        }
+    }
+
     def Mesh "Panel" (
         prepend apiSchemas = ["MeshLightAPI"]
     )

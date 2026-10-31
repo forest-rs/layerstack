@@ -29,9 +29,9 @@ For filesystem or custom-transport loading and saving, start with
 [layerstack_io](layerstack_io/README.md). Format crates also work directly on
 caller-owned bytes. Applications own rendering and execution policy.
 
-All library crates require Rust **1.89** or later and use `alloc`, except
-`layerstack_stagehand` (and its WebAssembly module), which requires **1.92** for
-its triangulation dependency and is not published yet. See each crate's
+All library crates require Rust **1.89** or later and use `alloc`.
+`layerstack_stagehand` (and its WebAssembly module) is not published yet: its
+triangulation and curve dependencies are Git dependencies. See each crate's
 documentation for features and supported operations.
 
 ## Status and conformance

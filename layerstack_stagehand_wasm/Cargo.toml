@@ -3,8 +3,7 @@ name = "layerstack_stagehand_wasm"
 description = "The WebAssembly module of @forest-rs/layerstack_stagehand: render-ready mesh buffers from typed arrays."
 version.workspace = true
 edition.workspace = true
-# As `layerstack_stagehand`: `exedra_triangulate` needs Rust 1.92.
-rust-version = "1.92"
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme = "README.md"

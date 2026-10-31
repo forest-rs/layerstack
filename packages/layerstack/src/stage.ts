@@ -126,6 +126,7 @@ export interface NativeStage extends Disposable {
   attribute(path: string): unknown;
   get(path: string, time?: number | null): unknown;
   timeSamples(path: string): Float64Array;
+  valuesMightVary(paths: string[]): Uint8Array;
   valueSourcesMightVary(paths: string[]): Uint8Array;
   isA(path: string, schema: string): boolean;
   hasAPI(path: string, schema: string, instance?: string | null): boolean;
@@ -1271,6 +1272,23 @@ export class Stage implements Disposable {
     const flags = this.#call("worldTransformsMightVary", (native) =>
       native.worldTransformsMightVary([...paths], options.time),
     );
+    return Array.from(flags, (flag) => flag === 1);
+  }
+
+  /**
+   * Whether each attribute's value might vary with time: several time
+   * samples, a spline, or value clips that may supply several, directly
+   * or under sparse edits (`UsdAttribute::ValueMightBeTimeVarying`). A
+   * single time sample does not vary; {@link Stage.valueSourcesMightBeTimeVarying}
+   * counts it. `true` too while the clip metadata, or a clip set's single
+   * clip, that settles it is not loaded: unknown is answered
+   * conservatively. `false` for a path no attribute is at. One read for
+   * many attributes: {@link Attribute.mightBeTimeVarying} asks for one.
+   *
+   * Throws `path.invalid` for a path that is not a property path.
+   */
+  valuesMightBeTimeVarying(paths: readonly string[]): boolean[] {
+    const flags = this.#call("valuesMightBeTimeVarying", (native) => native.valuesMightVary([...paths]));
     return Array.from(flags, (flag) => flag === 1);
   }
 
@@ -2628,6 +2646,11 @@ export class Attribute {
   /** Whether its value source might vary with time, the default time included (`UsdAttributeQuery::ValueSourceMightBeTimeVarying`); see {@link Stage.valueSourcesMightBeTimeVarying}. */
   valueSourceMightBeTimeVarying(): boolean {
     return this.stage.valueSourcesMightBeTimeVarying([this.path])[0] === true;
+  }
+
+  /** Whether its value might vary with time, as {@link Stage.valuesMightBeTimeVarying} answers. */
+  mightBeTimeVarying(): boolean {
+    return this.stage.valuesMightBeTimeVarying([this.path])[0] === true;
   }
 
   /** Its composed metadata field `key` (`hidden`, `documentation`), or `null` when nothing authors it. */

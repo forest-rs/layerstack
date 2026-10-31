@@ -31,6 +31,9 @@
 //!   which restores each slot only while it holds what was written there.
 //!   [`LiveStage::apply`](crate::LiveStage::apply) also recomposes the
 //!   prims the edits affect.
+//! - An [`UndoHistory`] keeps applied transactions' inverses as undo and
+//!   redo steps, grouping several transactions into one step, and reports
+//!   a step that an edit it did not record made stale.
 //!
 //! ```
 //! use layerstack::{
@@ -95,6 +98,7 @@ mod apply;
 pub(crate) use apply::{ArgumentInput, ArgumentName};
 mod copy;
 mod error;
+mod history;
 mod layer_fields;
 mod namespace;
 mod prim_fields;
@@ -104,6 +108,8 @@ mod target;
 mod transaction;
 mod variant_sets;
 
+#[cfg(test)]
+mod history_tests;
 #[cfg(test)]
 mod namespace_tests;
 #[cfg(test)]
@@ -115,6 +121,7 @@ use alloc::vec::Vec;
 use crate::path::PathId;
 
 pub use error::{EditError, Rejection, Slot};
+pub use history::{HistoryError, HistoryMark, HistoryStep, Recorded, UndoHistory};
 pub use namespace::{NamespaceEdit, NamespaceError, PathField, UnrepairedPath};
 pub use prim_fields::{ListPosition, PrimField};
 pub use target::{Address, EditTarget};

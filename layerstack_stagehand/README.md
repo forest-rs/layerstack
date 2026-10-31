@@ -36,6 +36,15 @@ browser.
   instances are listed once per instance; lights inside a point
   instancer's prototypes once per unmasked instance.
 
+- **Light linking** (with `stage`): each light's `lightLink` and
+  `shadowLink` collections evaluated over the draw items as Hydra does:
+  equal membership queries share one light-link category, the
+  `includeRoot` fallback links everything without one, and each item's
+  link paths (a gprim, each instance proxy, a point instancer for its
+  instances) are classified once against each category. Diffs list the
+  targets each light links newly or no longer, and count the queries
+  computed and the targets classified.
+
 - **Materials** (with `stage`): each material the items bind as a
   renderer-ready `UsdPreviewSurface` record: every input a constant, a
   primvar or a `UsdUVTexture` lookup (file anchored to its layer, UDIM
@@ -54,8 +63,8 @@ browser.
   geometry is `exedra_curves`'. In a draw list, value edits refill and
   topology edits lay curves out again.
 
-Subdivision surfaces are drawn as their control cage. Other shaders and
-light linking evaluation are not covered yet.
+Subdivision surfaces are drawn as their control cage. Other shaders are
+not covered yet.
 
 ```rust
 use layerstack_stagehand::{MeshInput, MeshOptions, MeshPlan, MeshTopology};

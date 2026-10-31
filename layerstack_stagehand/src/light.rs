@@ -240,8 +240,8 @@ pub struct LightShadow {
     pub falloff_gamma: f32,
 }
 
-/// A light-linking collection's rule as authored (`CollectionAPI`), data
-/// only: which prims it lights or shadows is not evaluated.
+/// A light-linking collection (`CollectionAPI`): its rule as authored, and
+/// its evaluated category in the draw list.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct LightLink {
     /// `collection:<name>:includeRoot` (`true` by the `UsdLux` fallback:
@@ -251,6 +251,11 @@ pub struct LightLink {
     pub includes: Vec<TargetPath>,
     /// `collection:<name>:excludes` targets.
     pub excludes: Vec<TargetPath>,
+    /// Its link category ([`crate::DrawList::link_set`]): the targets it
+    /// links. `None` when it links everything: its membership is `/` with
+    /// `expandPrims` alone, as the `includeRoot` fallback makes it
+    /// (`UsdImaging`'s trivial collection, an empty category token).
+    pub category: Option<crate::LinkCategory>,
 }
 
 /// Which instance of a point instancer places a light: the instancer and
@@ -581,6 +586,7 @@ pub(crate) fn read_light(
             .unwrap_or(true),
         includes: prim.read_targets(&alloc::format!("collection:{name}:includes")),
         excludes: prim.read_targets(&alloc::format!("collection:{name}:excludes")),
+        category: None,
     };
     let item = LightItem {
         path,

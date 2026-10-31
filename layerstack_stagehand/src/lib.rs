@@ -111,7 +111,7 @@
 //! world placement and direction, emission as `color * blackbody *
 //! intensity * 2^exposure`, divided by the light's world-space size when it
 //! normalizes, its shape, `ShapingAPI` and `ShadowAPI` controls, and its
-//! link collections as data), a `Mesh` with `MeshLightAPI` applied (its
+//! link collections with their categories), a `Mesh` with `MeshLightAPI` applied (its
 //! faces emit; normalized by their world-space area) and a `GeometryLight`
 //! (its target as data). Lights and cameras inside a native instance are
 //! listed once per instance, by their instance proxies' paths; lights inside
@@ -126,6 +126,28 @@
 //! only those whose inputs or transform might vary. A light input connected
 //! to a node graph or another prim's input reads what the connection leads
 //! to. Cameras inside a point instancer's prototypes are not listed.
+//!
+//! # Light linking
+//!
+//! Each light's `lightLink` and `shadowLink` collections are evaluated over
+//! the items as Hydra does, by light-link category ([`LinkSet`]): equal
+//! membership queries (`UsdCollectionMembershipQuery`, with `includeRoot`,
+//! `expansionRule`, excludes, included collections and
+//! `membershipExpression`) share one [`LinkCategory`], and the fallback, `/`
+//! with `expandPrims`, has none: it links everything
+//! (`UsdImaging_CollectionCache`). Each item's [`DrawItem::link_paths`] are
+//! what is matched ([`LinkTarget`]): a gprim's path, each instance proxy of
+//! a prototype's item, a point instancer's path for its instances.
+//! [`DrawList::is_linked`] answers for a light and a target, and
+//! [`DrawList::link_categories`] gives a target its categories. A diff lists
+//! [`DrawDiff::links_changed`] ([`LinkChange`]: targets a light links now
+//! and did not, and the reverse) and counts [`DrawWork::links_evaluated`]
+//! (queries computed: a new light's, an edited collection's, or one
+//! including or referencing an edited collection) and
+//! [`DrawWork::links_classified`]: a new target is classified once against
+//! each category, and a new category against each target, never every light
+//! against every item. Membership has no time: [`DrawList::set_time`]
+//! links only the lights and items it adds.
 //!
 //! # Materials
 //!
@@ -181,7 +203,7 @@
 //! and a new point count reads points anew ([`DrawWork::points_rebuilt`]).
 //!
 //! Not yet: shaders other than `UsdPreviewSurface` and its texture,
-//! primvar and transform nodes, and light linking evaluation.
+//! primvar and transform nodes.
 
 #![no_std]
 extern crate alloc;
@@ -194,6 +216,8 @@ mod draw;
 mod input;
 #[cfg(feature = "stage")]
 mod light;
+#[cfg(feature = "stage")]
+mod links;
 #[cfg(feature = "stage")]
 mod material;
 mod plan;
@@ -233,6 +257,8 @@ pub use light::{
     InstanceId, LightEmission, LightGeometry, LightId, LightInstance, LightItem, LightKind,
     LightLink, LightShadow, LightShaping,
 };
+#[cfg(feature = "stage")]
+pub use links::{LinkCategory, LinkChange, LinkKind, LinkSet, LinkTarget};
 #[cfg(feature = "stage")]
 pub use material::{
     AlphaMode, MaterialItem, MaterialNote, MaterialNoteKind, MaterialTexture, MaterialValue,

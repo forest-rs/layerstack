@@ -72,11 +72,12 @@ explanation (every opinion with its layer, arc and role, the value's source,
 and an "Edit here" button that points the edit field at where the opinion
 lives, through the arc that reaches it, and the prim's composition errors),
 the layers (dirty, edit layer, a mute toggle, save and reopen), the undo
-stack, the asset loop (want, fetch, supply, load), the change log (with the
-layers each change muted or unmuted), and the transfer counters in the
-header. The layers panel shows which layers are muted from the changes the
-stage reports (`Changes.mutedIdentifiers` and `unmutedIdentifiers`), not by
-asking the stage again.
+and redo steps of the editor's `UndoHistory` (each step's label and the
+layers it writes), the asset loop (want, fetch, supply, load), the change
+log (with the layers each change muted or unmuted), and the transfer
+counters in the header. The layers panel shows which layers are muted from
+the changes the stage reports (`Changes.mutedIdentifiers` and
+`unmutedIdentifiers`), not by asking the stage again.
 
 The script runs eighteen steps, one button each:
 

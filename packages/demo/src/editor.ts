@@ -1,14 +1,16 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-// The editor's model, with no DOM: a stage, the host's fetch, the undo
-// stack the app keeps, and logs of what crossed the boundary. The page
+// The editor's model, with no DOM: a stage, the host's fetch, the
+// stage's undo history, and logs of what crossed the boundary. The page
 // (`main.ts`) and the headless acceptance script drive the same object.
+import { UndoHistory } from "@forest-rs/layerstack";
 import type {
   Changes,
   Edit,
   EditReceipt,
   EditTarget,
+  HistoryStep,
   Layer,
   Layerstack,
   ResolveResult,
@@ -46,9 +48,15 @@ export interface ChangeEntry {
   readonly changes: Changes;
 }
 
-/** An action on the undo or redo stack: its label and the receipt that reverts it. */
+/** An action on the undo or redo stack. */
 export interface UndoEntry {
   readonly label: string;
+  /** The step of the undo history: its label and the layers it writes. */
+  readonly step: HistoryStep;
+  /**
+   * The receipt of the action that made the step, for its report: what it
+   * asks for, the paths a move leaves. The history holds what undoes it.
+   */
   readonly receipt: EditReceipt;
 }
 
@@ -65,8 +73,8 @@ const MAX_ROUNDS = 16;
 
 /**
  * A stage being edited. Edits go to `stage.editLayer` (the root layer of
- * the sample); the editor keeps the receipts for undo and redo, because the
- * stage keeps no history.
+ * the sample); each action's receipt goes to the editor's `UndoHistory`
+ * as one step.
  */
 export class Editor implements Disposable {
   /** The instance the stage runs in. */
@@ -75,10 +83,8 @@ export class Editor implements Disposable {
   readonly stage: Stage;
   /** The root layer's identifier. */
   readonly root: string;
-  /** Undoable actions, oldest first. */
-  readonly undoStack: UndoEntry[] = [];
-  /** Undone actions, the most recently undone last. */
-  readonly redoStack: UndoEntry[] = [];
+  /** The undo and redo steps of the actions. */
+  readonly history: UndoHistory;
   /** Every recomposition, oldest first. */
   readonly changeLog: ChangeEntry[] = [];
   /** Every step of the asset loop, oldest first. */
@@ -94,6 +100,8 @@ export class Editor implements Disposable {
   readonly #fetch: Fetcher;
   readonly #local: ReadonlyMap<string, Uint8Array>;
   readonly #progress: (() => void) | undefined;
+  /** The receipt that made each step, for its report. */
+  readonly #reports = new WeakMap<HistoryStep, EditReceipt>();
   #cause = "open";
   #fetched = 0;
   #fetchedBytes = 0;
@@ -111,6 +119,7 @@ export class Editor implements Disposable {
     this.#local = options.local ?? new Map();
     this.#progress = options.progress;
     this.stage = layerstack.open({ identifier: root, bytes });
+    this.history = new UndoHistory(this.stage);
     this.stage.onChange((changes) => {
       this.changeLog.push({ cause: this.#cause, changes });
       for (const identifier of changes.mutedIdentifiers) this.muted.add(identifier);
@@ -189,6 +198,16 @@ export class Editor implements Disposable {
     throw new Error(`assets still unavailable after ${MAX_ROUNDS} rounds`);
   }
 
+  /** Undoable actions, oldest first. */
+  get undoStack(): UndoEntry[] {
+    return this.history.undoSteps.map((step) => this.#entry(step));
+  }
+
+  /** Undone actions, the most recently undone last. */
+  get redoStack(): UndoEntry[] {
+    return this.history.redoSteps.map((step) => this.#entry(step));
+  }
+
   /**
    * Applies `edits` to the edit layer as one undoable action. The redo
    * stack is dropped: a new action forks history.
@@ -245,31 +264,25 @@ export class Editor implements Disposable {
     return receipt;
   }
 
-  /** Undoes the newest action; what it brings back may want assets, which are supplied. */
+  /**
+   * Undoes the newest action; what it brings back may want assets, which
+   * are supplied. A step an edit outside the history made stale throws
+   * `history.stale` and stays.
+   */
   async undo(): Promise<void> {
-    const entry = this.undoStack.pop();
-    if (entry === undefined) return;
-    this.#cause = `undo ${entry.label}`;
-    try {
-      this.redoStack.push({ label: entry.label, receipt: entry.receipt.undo() });
-    } catch (error) {
-      this.undoStack.push(entry);
-      throw error;
-    }
+    const step = this.history.nextUndo;
+    if (step === null) return;
+    this.#cause = `undo ${step.label}`;
+    this.history.undo();
     await this.supplyUnavailable(this.#cause);
   }
 
   /** Redoes the most recently undone action. */
   async redo(): Promise<void> {
-    const entry = this.redoStack.pop();
-    if (entry === undefined) return;
-    this.#cause = `redo ${entry.label}`;
-    try {
-      this.undoStack.push({ label: entry.label, receipt: entry.receipt.undo() });
-    } catch (error) {
-      this.redoStack.push(entry);
-      throw error;
-    }
+    const step = this.history.nextRedo;
+    if (step === null) return;
+    this.#cause = `redo ${step.label}`;
+    this.history.redo();
     await this.supplyUnavailable(this.#cause);
   }
 
@@ -317,11 +330,9 @@ export class Editor implements Disposable {
     return Editor.open(this.layerstack, this.root, this.#fetch, { local, progress: this.#progress });
   }
 
-  /** Releases the receipts and the stage. */
+  /** Releases the history's receipts and the stage. */
   free(): void {
-    for (const entry of [...this.undoStack, ...this.redoStack]) entry.receipt.release();
-    this.undoStack.length = 0;
-    this.redoStack.length = 0;
+    this.history.release();
     this.stage.free();
   }
 
@@ -329,13 +340,18 @@ export class Editor implements Disposable {
     this.free();
   }
 
-  /** Runs an action that returns a receipt, and keeps the receipt for undo. */
+  /** Runs an action that returns a receipt, and records it in the history as a step. */
   #record(label: string, action: () => EditReceipt): EditReceipt {
     this.#cause = label;
     const receipt = action();
-    this.undoStack.push({ label, receipt });
-    for (const entry of this.redoStack.splice(0)) entry.receipt.release();
+    if (this.history.record(label, receipt).kind === "step") this.#reports.set(this.history.nextUndo!, receipt);
     return receipt;
+  }
+
+  #entry(step: HistoryStep): UndoEntry {
+    const receipt = this.#reports.get(step);
+    if (receipt === undefined) throw new Error(`no receipt for the step ${step.label}`);
+    return { label: step.label, step, receipt };
   }
 
   async #source(identifier: string): Promise<Uint8Array | null> {

@@ -799,7 +799,7 @@ function renderUndo(editor: Editor): void {
               "li",
               {},
               entry.label,
-              h("span", { class: "detail" }, ` in ${entry.receipt.layers.map(layerName).join(", ") || layerName(entry.receipt.target.layer)}`),
+              h("span", { class: "detail" }, ` in ${entry.step.layers.map(layerName).join(", ") || layerName(entry.receipt.target.layer)}`),
               ...entry.receipt.unrepaired.map((left) =>
                 h("span", { class: "detail unrepaired" }, `; leaves ${left.path} in ${left.spec} (${left.field}, ${layerName(left.layer)})`),
               ),
@@ -810,8 +810,8 @@ function renderUndo(editor: Editor): void {
     h(
       "div",
       { class: "controls" },
-      h("button", { disabled: busy || editor.undoStack.length === 0, onclick: () => void act(() => editor.undo()) }, "Undo"),
-      h("button", { disabled: busy || editor.redoStack.length === 0, onclick: () => void act(() => editor.redo()) }, "Redo"),
+      h("button", { disabled: busy || !editor.history.canUndo, onclick: () => void act(() => editor.undo()) }, "Undo"),
+      h("button", { disabled: busy || !editor.history.canRedo, onclick: () => void act(() => editor.redo()) }, "Redo"),
     ),
     h("h3", {}, "Undo (newest first)"),
     entries(editor.undoStack),

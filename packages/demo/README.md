@@ -16,7 +16,10 @@ camera; and lights: the lamp (a sphere light, in the sublayer), a sun
 panel (rect); a sign bound to a checker texture (`textures/checker.png`,
 turned and scaled by a `UsdTransform2d`, its coordinates' primvar and its
 tint material interface inputs) and a strip bound to a UDIM set
-(`textures/tile.<UDIM>.png`: tiles 1001 and 1002).
+(`textures/tile.<UDIM>.png`: tiles 1001 and 1002); and under
+`/World/Curves`, a Catmull-Rom trail along the ground, a periodic B-spline
+ring around the top, a Bezier wire between the beacons and sparks (a
+`Points` with `ids`).
 
 The viewport (`src/viewport.ts`, drawn by three.js in `src/viewport3d.ts`)
 takes everything from layerstack, with no USD loader, through a
@@ -29,7 +32,12 @@ transforms, over buffers stagehand built from typed arrays read through
 layerstack (a mesh's topology, points, primvars and `materialBind`
 subsets, or a shape's size attributes): indexed buffers with normals,
 per-vertex `displayColor` where it varies, concave faces ear-clipped (the
-path), and a three.js group per subset range (the ground). A draw binding a
+path), and a three.js group per subset range (the ground). Curves are
+laid out by stagehand (8 samples per segment, by OpenUSD's segment rules)
+and swept into 6-sided tubes: the trail and the ring are drawn as their
+tube meshes, the wire, thinner than 0.05, as three.js `LineSegments`
+through its samples; the sparks are three.js `Points` with size
+attenuation, at their widest width. A draw binding a
 material is drawn with it: the draw list's `UsdPreviewSurface` record
 becomes a `MeshStandardMaterial` or `MeshPhysicalMaterial`
 (`src/surfaces.ts` documents the mapping), its textures loaded through
@@ -156,6 +164,16 @@ The script runs eighteen steps, one button each:
     mesh's buffer: each set it draws has one, by name, and a texture
     samples its set's, so the materials of a mesh's subsets reading
     different sets each find their own.
+19. Re-hang the wire from the moved beacon: one edit sets the wire's
+    points (from the north beacon's bulb, moved in step 14, to the south
+    one's) and moves the sparks along it. The draw list refills both
+    buffers by their kept plans (curves refilled 1, points refilled 1): the
+    wire's segments and samples are not laid out again, and nothing else is
+    read.
+20. Switch the ring to Catmull-Rom: its `basis` changes which points weigh
+    each segment, so the draw list lays that curve out again (rebuilt 1,
+    curves laid out 1) and sweeps a new tube, which now passes through the
+    ring's points; nothing else is read.
 
 `scripts/acceptance.ts` runs the same steps headless in Node, reading the
 sample from disk, and checks the values and explanations after each one,

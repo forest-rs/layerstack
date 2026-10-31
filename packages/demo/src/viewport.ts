@@ -39,11 +39,33 @@ export const PURPOSES = ["default", "proxy"] as const;
 /** Segments around and rings from pole to pole of curved implicit shapes. */
 const TESSELLATION = { segments: 24, rings: 12 } as const;
 
+/**
+ * How curves are sampled and swept: 8 samples per segment, tubes of 6
+ * sides (ribbons where normals are authored). Every curve is swept; the
+ * viewport draws the thin ones as lines instead ({@link curveDrawnAs}).
+ */
+const CURVES = { style: "swept", samples: 8, sides: 6 } as const;
+
+/** The width under which a curve is drawn as line segments, not as its tube. */
+export const LINE_WIDTH = 0.05;
+
+/**
+ * Whether the viewport draws a curves buffer as `lines` (every width under
+ * {@link LINE_WIDTH}) or as its swept `tubes`.
+ */
+export function curveDrawnAs(buffers: DrawBuffers): "lines" | "tubes" {
+  const widths = buffers.curves?.widths ?? new Float32Array();
+  return widths.every((width) => width < LINE_WIDTH) ? "lines" : "tubes";
+}
+
 /** One draw: a stagehand item, its buffers and its colors. */
 export interface ViewItem {
   readonly item: DrawItem;
   readonly buffers: DrawBuffers;
-  /** `mesh` for a `Mesh`; else the implicit shape's type (`Sphere`, `Cube`, ...). */
+  /**
+   * `mesh` for a `Mesh`; `lines` or `tubes` for curves ({@link curveDrawnAs});
+   * `points` for a `Points`; else the implicit shape's type (`Sphere`, `Cube`, ...).
+   */
   readonly kind: string;
   /** Linear RGB. */
   readonly color: readonly [number, number, number];
@@ -122,6 +144,10 @@ export interface ViewportSummary {
   readonly camera: string | null;
   /** Each material, `path: input source, ...` for its non-default inputs, its textures and alpha, sorted. */
   readonly materials: readonly string[];
+  /** Each drawn curves prim's stagehand report, in brief, sorted: evaluation, segments, samples, how it is drawn. */
+  readonly curves: readonly string[];
+  /** Each drawn point set's report, in brief, sorted: points, shape, ids. */
+  readonly points: readonly string[];
 }
 
 /** The counts of an update, as the acceptance script checks them and the page shows them. */
@@ -151,6 +177,14 @@ export interface UpdateSummary {
   readonly materialsRead: number;
   /** Materials added, removed or changed. */
   readonly materials: number;
+  /** Curves refilled by their kept plans, summed. */
+  readonly curvesRefilled: number;
+  /** Curves laid out, summed. */
+  readonly curvesLaidOut: number;
+  /** Point sets refilled, summed. */
+  readonly pointsRefilled: number;
+  /** Point sets read anew, summed. */
+  readonly pointsRebuilt: number;
 }
 
 const EMPTY_WORK: DrawWork = {
@@ -168,6 +202,10 @@ const EMPTY_WORK: DrawWork = {
   camerasRead: 0,
   lightsRead: 0,
   materialsRead: 0,
+  curvesRefilled: 0,
+  curvesLaidOut: 0,
+  pointsRefilled: 0,
+  pointsRebuilt: 0,
 };
 
 /** The `diffuseColor` of the surface shader of the material at `material`, if it has one. */
@@ -231,6 +269,10 @@ function addWork(into: DrawWork, work: DrawWork): DrawWork {
     camerasRead: into.camerasRead + work.camerasRead,
     lightsRead: into.lightsRead + work.lightsRead,
     materialsRead: into.materialsRead + work.materialsRead,
+    curvesRefilled: into.curvesRefilled + work.curvesRefilled,
+    curvesLaidOut: into.curvesLaidOut + work.curvesLaidOut,
+    pointsRefilled: into.pointsRefilled + work.pointsRefilled,
+    pointsRebuilt: into.pointsRebuilt + work.pointsRebuilt,
   };
 }
 
@@ -279,6 +321,7 @@ export class ViewportModel {
         ...(time === undefined ? {} : { time }),
         purposes: PURPOSES,
         tessellation: TESSELLATION,
+        curves: CURVES,
       });
       this.#stage = stage;
       this.#seen = editor.changeLog.length;
@@ -369,7 +412,7 @@ export class ViewportModel {
       items.push({
         item,
         buffers,
-        kind: buffers.shape?.kind ?? "mesh",
+        kind: buffers.curves !== null ? curveDrawnAs(buffers) : buffers.points !== null ? "points" : (buffers.shape?.kind ?? "mesh"),
         ...this.#colors.get(item.id)!,
       });
     }
@@ -414,6 +457,10 @@ export function updateSummary(update: ViewportUpdate): UpdateSummary {
     camerasRead: update.work.camerasRead,
     materialsRead: update.work.materialsRead,
     materials: update.materialsAdded.size + update.materialsRemoved.size + update.materialsChanged.size,
+    curvesRefilled: update.work.curvesRefilled,
+    curvesLaidOut: update.work.curvesLaidOut,
+    pointsRefilled: update.work.pointsRefilled,
+    pointsRebuilt: update.work.pointsRebuilt,
   };
 }
 
@@ -423,10 +470,26 @@ export function viewportSummary(scene: ViewportScene): ViewportSummary {
   let instances = 0;
   const drawn: string[] = [];
   const meshes: string[] = [];
-  for (const { item, buffers } of scene.items) {
+  const curves: string[] = [];
+  const points: string[] = [];
+  for (const { item, buffers, kind } of scene.items) {
     if (item.hidden) continue;
     const placements = item.matrices.length / 16;
-    triangles += (buffers.mesh.indices.length / 3) * placements;
+    // Curves drawn as lines draw no triangles; points are sprites.
+    if (kind !== "lines") triangles += (buffers.mesh.indices.length / 3) * placements;
+    if (buffers.curves !== null) {
+      const report = buffers.curves.report;
+      const evaluation =
+        report.evaluation.kind === "basis"
+          ? `${report.evaluation.type} ${report.evaluation.basis ?? ""} ${report.evaluation.wrap}`.replace("  ", " ")
+          : report.evaluation.kind;
+      const drawn = kind === "lines" ? `${report.lines} lines` : `${report.triangles} triangles (${report.geometry.kind})`;
+      curves.push(`${item.prim}: ${evaluation}, segments ${report.segments.join("+")}, ${report.vertices} samples, ${drawn}`);
+    }
+    if (buffers.points !== null) {
+      const report = buffers.points.report;
+      points.push(`${item.prim}: ${report.points} points, ${report.shape}, ids ${report.channels.ids.state}`);
+    }
     const report = buffers.mesh.report;
     if (report !== null) {
       const ranges = buffers.mesh.ranges.map((range) => range.count / 3).join("+");
@@ -452,6 +515,8 @@ export function viewportSummary(scene: ViewportScene): ViewportSummary {
     lights: scene.lights.map((light) => `${light.path} ${light.kind}${light.hidden ? " hidden" : ""}`).sort(),
     camera: scene.camera?.path ?? null,
     materials: [...scene.materials.values()].map(materialLine).sort(),
+    curves: curves.sort(),
+    points: points.sort(),
   };
 }
 

@@ -1,0 +1,7 @@
+#usda 1.0
+
+def "Model"
+{
+    float size.timeSamples = { 0: 8 }
+    float extra.timeSamples = { 0: 9, 5: 10 }
+}

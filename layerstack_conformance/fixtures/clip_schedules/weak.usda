@@ -1,0 +1,77 @@
+#usda 1.0
+
+over "Multi"
+{
+    float size = 42
+}
+
+over "SingleSame"
+{
+    float size = 42
+}
+
+over "SingleTwo"
+{
+    float size = 42
+}
+
+over "RepeatOne"
+{
+    float size = 42
+}
+
+over "DupActive"
+{
+    float size = 42
+}
+
+over "TripleTimes"
+{
+    float size = 42
+}
+
+over "DoubleTimes"
+{
+    float size = 42
+}
+
+over "FirstJump"
+{
+    float size = 42
+}
+
+over "UnschedBroken"
+{
+    float size = 42
+}
+
+over "UnschedNoManifest"
+{
+    float size = 42
+    float extra = 42
+}
+
+over "UnschedBrokenNoManifest"
+{
+    float size = 42
+}
+
+over "FracIndex"
+{
+    float size = 42
+}
+
+over "UnsortedActive"
+{
+    float size = 42
+}
+
+over "PropPrimPath"
+{
+    float size = 42
+}
+
+over "RelPrimPath"
+{
+    float size = 42
+}

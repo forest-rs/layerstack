@@ -1,0 +1,582 @@
+{
+ "get": [
+  {
+   "attribute": "/Multi.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "values": [
+    1.0,
+    2.0,
+    "error",
+    null,
+    null,
+    null
+   ]
+  },
+  {
+   "attribute": "/SingleSame.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "values": [
+    7.0,
+    7.0,
+    7.0,
+    7.0,
+    7.0,
+    7.0
+   ]
+  },
+  {
+   "attribute": "/SingleTwo.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "values": [
+    7.0,
+    7.0,
+    7.0,
+    7.0,
+    7.0,
+    7.0
+   ]
+  },
+  {
+   "attribute": "/RepeatOne.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "values": [
+    7.0,
+    7.0,
+    7.0,
+    7.0,
+    7.0,
+    7.0
+   ]
+  },
+  {
+   "attribute": "/DupActive.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "values": [
+    42.0,
+    42.0,
+    42.0,
+    42.0,
+    42.0,
+    42.0
+   ]
+  },
+  {
+   "attribute": "/TripleTimes.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "values": [
+    42.0,
+    42.0,
+    42.0,
+    42.0,
+    42.0,
+    42.0
+   ]
+  },
+  {
+   "attribute": "/DoubleTimes.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "values": [
+    0.0,
+    5.0,
+    9.5,
+    0.0,
+    5.0,
+    10.0
+   ]
+  },
+  {
+   "attribute": "/FirstJump.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "values": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    5.0,
+    10.0
+   ]
+  },
+  {
+   "attribute": "/UnschedBroken.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "values": [
+    1.0,
+    2.0,
+    2.0,
+    2.0,
+    2.0,
+    2.0
+   ]
+  },
+  {
+   "attribute": "/UnschedNoManifest.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "values": [
+    1.0,
+    2.0,
+    2.0,
+    2.0,
+    2.0,
+    2.0
+   ]
+  },
+  {
+   "attribute": "/UnschedBrokenNoManifest.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "values": [
+    1.0,
+    2.0,
+    2.0,
+    2.0,
+    2.0,
+    2.0
+   ]
+  },
+  {
+   "attribute": "/FracIndex.size",
+   "loaded": [
+    "clipA.usda",
+    "clipB.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "values": [
+    1.0,
+    2.0,
+    2.9000000953674316,
+    3.0,
+    3.0,
+    3.0
+   ]
+  },
+  {
+   "attribute": "/UnsortedActive.size",
+   "loaded": [
+    "clipA.usda",
+    "clipB.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "values": [
+    1.0,
+    2.0,
+    2.9000000953674316,
+    3.0,
+    3.0,
+    3.0
+   ]
+  },
+  {
+   "attribute": "/PropPrimPath.size",
+   "loaded": [
+    "clipA.usda",
+    "clipB.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "values": [
+    42.0,
+    42.0,
+    42.0,
+    42.0,
+    42.0,
+    42.0
+   ]
+  },
+  {
+   "attribute": "/RelPrimPath.size",
+   "loaded": [
+    "clipA.usda",
+    "clipB.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "values": [
+    42.0,
+    42.0,
+    42.0,
+    42.0,
+    42.0,
+    42.0
+   ]
+  },
+  {
+   "attribute": "/UnschedNoManifest.extra",
+   "loaded": [
+    "clipA.usda",
+    "clipB.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "values": [
+    42.0,
+    42.0,
+    42.0,
+    42.0,
+    42.0,
+    42.0
+   ]
+  }
+ ],
+ "open": [
+  "clipA.usda"
+ ],
+ "openusd": "26.11",
+ "samples": [
+  {
+   "attribute": "/Multi.size",
+   "times": [
+    0.0,
+    5.0,
+    10.0
+   ]
+  },
+  {
+   "attribute": "/SingleSame.size",
+   "times": [
+    0.0
+   ]
+  },
+  {
+   "attribute": "/SingleTwo.size",
+   "times": [
+    0.0,
+    5.0
+   ]
+  },
+  {
+   "attribute": "/RepeatOne.size",
+   "times": [
+    0.0,
+    10.0
+   ]
+  },
+  {
+   "attribute": "/DupActive.size",
+   "times": []
+  },
+  {
+   "attribute": "/TripleTimes.size",
+   "times": []
+  },
+  {
+   "attribute": "/DoubleTimes.size",
+   "times": [
+    0.0,
+    9.999999995559108,
+    10.0,
+    20.0
+   ]
+  },
+  {
+   "attribute": "/FirstJump.size",
+   "times": [
+    0.0,
+    10.0,
+    20.0
+   ]
+  },
+  {
+   "attribute": "/UnschedBroken.size",
+   "times": [
+    0.0,
+    5.0
+   ]
+  },
+  {
+   "attribute": "/UnschedNoManifest.size",
+   "times": [
+    0.0,
+    5.0
+   ]
+  },
+  {
+   "attribute": "/UnschedBrokenNoManifest.size",
+   "times": [
+    0.0,
+    5.0
+   ]
+  },
+  {
+   "attribute": "/FracIndex.size",
+   "times": [
+    0.0,
+    5.0,
+    10.0
+   ]
+  },
+  {
+   "attribute": "/UnsortedActive.size",
+   "times": [
+    0.0,
+    5.0,
+    10.0
+   ]
+  },
+  {
+   "attribute": "/PropPrimPath.size",
+   "times": []
+  },
+  {
+   "attribute": "/RelPrimPath.size",
+   "times": []
+  },
+  {
+   "attribute": "/UnschedNoManifest.extra",
+   "times": []
+  }
+ ],
+ "times": [
+  0,
+  5,
+  9.5,
+  10,
+  15,
+  25
+ ],
+ "vary": [
+  {
+   "attribute": "/Multi.size",
+   "loaded": [
+    "clipA.usda",
+    "manifest.usda"
+   ],
+   "might_vary": true
+  },
+  {
+   "attribute": "/SingleSame.size",
+   "loaded": [
+    "clipA.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "might_vary": false
+  },
+  {
+   "attribute": "/SingleTwo.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "might_vary": true
+  },
+  {
+   "attribute": "/RepeatOne.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "might_vary": true
+  },
+  {
+   "attribute": "/DupActive.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "might_vary": false
+  },
+  {
+   "attribute": "/TripleTimes.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "might_vary": false
+  },
+  {
+   "attribute": "/DoubleTimes.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "might_vary": true
+  },
+  {
+   "attribute": "/FirstJump.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "might_vary": true
+  },
+  {
+   "attribute": "/UnschedBroken.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "might_vary": true
+  },
+  {
+   "attribute": "/UnschedNoManifest.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "might_vary": true
+  },
+  {
+   "attribute": "/UnschedBrokenNoManifest.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "might_vary": true
+  },
+  {
+   "attribute": "/FracIndex.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "might_vary": true
+  },
+  {
+   "attribute": "/UnsortedActive.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "might_vary": true
+  },
+  {
+   "attribute": "/PropPrimPath.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "might_vary": false
+  },
+  {
+   "attribute": "/RelPrimPath.size",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "might_vary": false
+  },
+  {
+   "attribute": "/UnschedNoManifest.extra",
+   "loaded": [
+    "clipA.usda",
+    "clipFive.usda",
+    "clipLin.usda",
+    "clipZero.usda",
+    "manifest.usda"
+   ],
+   "might_vary": false
+  }
+ ]
+}

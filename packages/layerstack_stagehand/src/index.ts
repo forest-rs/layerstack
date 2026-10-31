@@ -34,20 +34,35 @@
  * @module
  */
 import init, {
+  CurvesBuilder,
   MeshBuilder,
+  pointShape,
   type StagehandMesh as NativeMesh,
   stagehandAbi,
   tessellateShape,
 } from "../wasm/layerstack_stagehand.js";
 import type { Stage } from "@forest-rs/layerstack";
+import { StagehandCurves, gatherCurves } from "./curves.js";
 import { DrawList } from "./draw.js";
 import type { DrawOptions } from "./draw.js";
-import type { DrawRange, MeshInput, MeshOptions, MeshReport, PrimvarInput, Shape, Tessellation } from "./types.js";
+import type { CurveOptions, CurvesInput, DrawRange, MeshInput, MeshOptions, MeshReport, PrimvarInput, Shape, Tessellation } from "./types.js";
 
 export type * from "./types.js";
 export { DrawList } from "./draw.js";
-export type { DrawBuffers, DrawDiff, DrawItem, DrawOptions, DrawWork, ItemInstance, ItemSource, Purpose } from "./draw.js";
+export type { DrawBuffers, DrawDiff, DrawItem, DrawOptions, DrawWork, ItemInstance, ItemSource, PointStyle, Purpose } from "./draw.js";
 export { SHAPE_SCHEMAS, readMesh, readPoints, readShape, shapeSchema } from "./read.js";
+export {
+  CURVE_SCHEMAS,
+  StagehandCurves,
+  basisDataSizes,
+  basisSegmentCounts,
+  curvesExtent,
+  fillPoints,
+  interpolationForSize,
+  pointsExtent,
+  readCurves,
+  readPointSet,
+} from "./curves.js";
 export { LIGHT_SCHEMAS, lightKey, lightKind, lightSizeFactor, readLight } from "./light.js";
 export { conformCamera } from "./camera.js";
 export { anchorAssetPath, isUdim, readMaterial, udimTiles } from "./material.js";
@@ -80,7 +95,7 @@ export type {
 } from "./light.js";
 
 /** The exports' version this wrapper speaks (`layerstack_stagehand_wasm::ABI`). */
-const ABI = 3;
+const ABI = 4;
 
 /** A failure, with a stable `code`; its message reads `${operation}: ${message}`. */
 export class StagehandError extends Error {
@@ -297,6 +312,57 @@ export class Stagehand {
   buildMesh(input: MeshInput, options: MeshOptions = {}): StagehandMesh {
     const builder = gather("buildMesh", input);
     return new StagehandMesh(builder.build(options.triangulation === "hydraFan", options.normals === "faceOriented"));
+  }
+
+  /**
+   * Lays `input`'s curves out by OpenUSD's segment rules and fills their
+   * buffers, as `layerstack_stagehand::CurvesPlan` does: samples at
+   * `options.samples` per segment drawn as line segments, and with
+   * `style: "swept"` tubes of `options.sides` sides (ribbons where normals
+   * are authored) as {@link StagehandCurves.swept}. Dispose it to free its
+   * plan.
+   *
+   * Throws `argument.invalid` for values that are not whole elements or an
+   * unknown interpolation.
+   */
+  buildCurves(input: CurvesInput, options: CurveOptions = {}): StagehandCurves {
+    const builder = call("argument.invalid", "buildCurves", () => gatherCurves(CurvesBuilder, input));
+    const native = builder.build(options.style === "swept", options.samples ?? 8, options.sides ?? 8);
+    return new StagehandCurves(native, (curves) => {
+      const mesh = new StagehandMesh(curves.swept());
+      mesh.dispose();
+      return mesh;
+    });
+  }
+
+  /**
+   * Fills `curves`' buffers again from `input` by its kept plan: new
+   * points, widths, normals or colors, no layout. Returns `false`, filling
+   * nothing, when `input` is not of the plan's topology (a new
+   * `curveVertexCounts`, `type`, `basis`, `wrap`, or NURBS `order`, `knots`
+   * or `ranges`): then {@link buildCurves} lays them out again.
+   */
+  refillCurves(curves: StagehandCurves, input: CurvesInput): boolean {
+    const builder = call("argument.invalid", "refillFrom", () => gatherCurves(CurvesBuilder, input));
+    try {
+      if (!curves.sameTopology(builder)) return false;
+      call("plan.mismatch", "refillFrom", () => curves.refillWith(builder));
+      return true;
+    } finally {
+      builder.free();
+    }
+  }
+
+  /**
+   * The unit shape a point is instanced as, of diameter 1 at the origin:
+   * a sphere (at `tessellation`), or a disc facing +Z of
+   * `tessellation.segments` segments, as `layerstack_stagehand::point_shape`;
+   * an empty mesh for `sprites`.
+   */
+  pointShape(shape: "spheres" | "discs" | "sprites", tessellation: Tessellation = {}): StagehandMesh {
+    const mesh = new StagehandMesh(pointShape(shape, tessellation.segments ?? 32, tessellation.rings ?? 16));
+    mesh.dispose();
+    return mesh;
   }
 
   /**

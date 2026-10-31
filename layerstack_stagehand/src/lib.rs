@@ -254,5 +254,8 @@ pub use stage::{StageMesh, read_shape};
 pub use stage_curves::{StageCurves, StagePoints};
 pub use triangulate::Triangulation;
 
+/// Why a NURBS curve cannot be evaluated, carried by [`CurveNoteKind::Nurbs`].
+pub use exedra_curves::NurbsError;
+
 /// The ear clipper's error, carried by [`FaceNoteKind::ConcaveFellBack`].
 pub use exedra_triangulate::TriError;

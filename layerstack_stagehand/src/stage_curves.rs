@@ -91,18 +91,16 @@ fn interpolated<T>(
             unread.push(unread_name);
             None
         }
-        Read::Absent => view
-            .read_value_at(name, time, read)
-            .map(|values| Owned {
-                values,
-                indices: None,
-                interpolation: view
-                    .property_metadata(name)
-                    .and_then(|metadata| metadata.interpolation())
-                    .and_then(Interpolation::from_token)
-                    .unwrap_or(Interpolation::Vertex),
-                element_size: 1,
-            }),
+        Read::Absent => view.read_value_at(name, time, read).map(|values| Owned {
+            values,
+            indices: None,
+            interpolation: view
+                .property_metadata(name)
+                .and_then(|metadata| metadata.interpolation())
+                .and_then(Interpolation::from_token)
+                .unwrap_or(Interpolation::Vertex),
+            element_size: 1,
+        }),
     }
 }
 

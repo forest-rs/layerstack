@@ -7,12 +7,24 @@
 // `@forest-rs/layerstack` and building buffers in this package's module.
 import type { Changes, PointInstances, Prim, Stage } from "@forest-rs/layerstack";
 import type { Stagehand, StagehandMesh } from "./index.js";
+import { CURVE_SCHEMAS, fillPoints, readCurves, readPointSet } from "./curves.js";
+import type { StagehandCurves } from "./curves.js";
 import { CAMERA_INPUTS, LIGHT_INPUTS, lightKey, lightKind, readLight } from "./light.js";
 import type { CameraItem, LightInstance, LightItem, LightKind } from "./light.js";
 import { readMaterial } from "./material.js";
 import type { MaterialItem } from "./material.js";
 import { readMesh, readShape, shapeSchema } from "./read.js";
-import type { MeshInput, MeshOptions, PrimvarInput, Shape, Tessellation } from "./types.js";
+import type {
+  CurveOptions,
+  CurvesInput,
+  MeshInput,
+  MeshOptions,
+  PointBuffers,
+  PointsInput,
+  PrimvarInput,
+  Shape,
+  Tessellation,
+} from "./types.js";
 
 /** A `UsdGeomImageable` purpose. */
 export type Purpose = "default" | "render" | "proxy" | "guide";
@@ -33,7 +45,19 @@ export interface DrawOptions {
    * `outputs:surface` after them, or alone when empty.
    */
   readonly renderContexts?: readonly string[];
+  /** How curves are sampled and drawn: line segments (default), or swept into tubes and ribbons. */
+  readonly curves?: CurveOptions;
+  /** How points are drawn ({@link PointStyle}); `sprites` by default. */
+  readonly points?: PointStyle;
 }
+
+/**
+ * How a {@link DrawList} draws `Points`: `sprites` gives
+ * {@link DrawBuffers.points} and an empty {@link DrawBuffers.mesh};
+ * `shapes` also gives the unit sphere, or with normals the unit disc,
+ * as the mesh, for a renderer to draw at each point scaled by its width.
+ */
+export type PointStyle = "sprites" | "shapes";
 
 /** What an item draws, and why its instances are grouped. */
 export type ItemSource =
@@ -95,8 +119,16 @@ export interface DrawBuffers {
   readonly key: number;
   /** The prim it was read from: the mesh, or the first prim drawn with this shape. */
   readonly prim: string;
-  /** The buffers, and for a mesh its report. */
+  /**
+   * The triangles drawn, and for a mesh its report: a mesh's, a shape's,
+   * curves' swept tubes or ribbons, or the unit shape points are instanced
+   * as; empty for curves drawn as lines and for point sprites.
+   */
   readonly mesh: StagehandMesh;
+  /** Curves' samples, line segments and report, for `BasisCurves`, `NurbsCurves` and `HermiteCurves`; their swept triangles are {@link mesh}. */
+  readonly curves: StagehandCurves | null;
+  /** A `Points`' per-point positions, widths, colors and ids, and report. */
+  readonly points: PointBuffers | null;
   /** The mesh's face subsets, in the order of their draw ranges. */
   readonly subsets: readonly string[];
   /** Bumped each time the buffers are refilled or rebuilt. */
@@ -140,6 +172,14 @@ export interface DrawWork {
   readonly lightsRead: number;
   /** Materials read: their networks walked and their records built. */
   readonly materialsRead: number;
+  /** Curves filled again by their kept plan, for new points, widths, normals or colors: no layout. Counted in {@link refills} too. */
+  readonly curvesRefilled: number;
+  /** Curves laid out: new, or a new `curveVertexCounts`, `type`, `basis`, `wrap`, `order`, `knots` or `ranges`. */
+  readonly curvesLaidOut: number;
+  /** Point sets filled again for new values of as many points. Counted in {@link refills} too. */
+  readonly pointsRefilled: number;
+  /** Point sets read anew: new, or their point count changed. */
+  readonly pointsRebuilt: number;
 }
 
 /**
@@ -190,7 +230,7 @@ export interface DrawDiff {
 
 /** What a prim's schema makes of it for a draw list, by `IsA`: a drawn gprim, a point instancer, a face subset. */
 interface Kind {
-  readonly gprim: "mesh" | "shape" | null;
+  readonly gprim: "mesh" | "shape" | "curves" | "points" | null;
   readonly instancer: boolean;
   readonly subset: boolean;
   readonly camera: boolean;
@@ -240,6 +280,21 @@ const GEOMETRY_INPUTS = [
   "primvars:st:indices",
   "primvars:displayColor",
   "primvars:displayColor:indices",
+  "primvars:displayOpacity",
+  "primvars:displayOpacity:indices",
+  "curveVertexCounts",
+  "type",
+  "basis",
+  "wrap",
+  "widths",
+  "primvars:widths",
+  "primvars:widths:indices",
+  "order",
+  "knots",
+  "ranges",
+  "pointWeights",
+  "tangents",
+  "ids",
 ];
 
 /** A `GeomSubset`'s attributes, read by its mesh. */
@@ -379,6 +434,41 @@ function samePrimvar(a: PrimvarInput | null | undefined, b: PrimvarInput | null 
 }
 
 /** Whether the plan built from `a` draws `b`: the same topology and subsets. */
+/** Whether two curves inputs hold the same arrays, value for value. */
+function sameCurves(a: CurvesInput, b: CurvesInput): boolean {
+  const form = (input: CurvesInput): ArrayLike<number>[] =>
+    input.form.kind === "nurbs"
+      ? [input.form.order, input.form.knots, input.form.ranges, input.form.weights]
+      : input.form.kind === "hermite"
+        ? [input.form.tangents]
+        : [];
+  const tokens = (input: CurvesInput) => (input.form.kind === "basis" ? `${input.form.type} ${input.form.basis} ${input.form.wrap}` : input.form.kind);
+  const [fa, fb] = [form(a), form(b)];
+  return (
+    tokens(a) === tokens(b) &&
+    fa.length === fb.length &&
+    fa.every((array, i) => sameArray(array, fb[i])) &&
+    sameArray(a.curveVertexCounts, b.curveVertexCounts) &&
+    sameArray(a.points, b.points) &&
+    samePrimvar(a.widths, b.widths) &&
+    samePrimvar(a.normals, b.normals) &&
+    samePrimvar(a.displayColor, b.displayColor) &&
+    samePrimvar(a.displayOpacity, b.displayOpacity)
+  );
+}
+
+/** Whether two point sets hold the same arrays, value for value. */
+function samePoints(a: PointsInput, b: PointsInput): boolean {
+  return (
+    sameArray(a.points, b.points) &&
+    sameArray(a.ids, b.ids) &&
+    samePrimvar(a.widths, b.widths) &&
+    samePrimvar(a.normals, b.normals) &&
+    samePrimvar(a.displayColor, b.displayColor) &&
+    samePrimvar(a.displayOpacity, b.displayOpacity)
+  );
+}
+
 function sameTopology(a: MeshInput, b: MeshInput): boolean {
   return (
     sameArray(a.faceVertexCounts, b.faceVertexCounts) &&
@@ -534,6 +624,10 @@ interface Retained {
   buffers: DrawBuffers;
   /** The mesh as last read, for a mesh. */
   input: MeshInput | null;
+  /** The curves as last read, for curves. */
+  curvesInput?: CurvesInput;
+  /** The points as last read, for points. */
+  pointsInput?: PointsInput;
   /** The texture coordinate sets besides `st` its items' materials read, sorted: those it was read with. */
   uvSets: readonly string[];
   users: number;
@@ -576,6 +670,10 @@ class Gather {
     camerasRead: 0,
     lightsRead: 0,
     materialsRead: 0,
+    curvesRefilled: 0,
+    curvesLaidOut: 0,
+    pointsRefilled: 0,
+    pointsRebuilt: 0,
   };
 }
 
@@ -634,6 +732,8 @@ export class DrawList implements Disposable {
   readonly #purposes: ReadonlySet<string>;
   readonly #meshOptions: MeshOptions;
   readonly #tessellation: Tessellation;
+  readonly #curveOptions: CurveOptions;
+  readonly #pointStyle: PointStyle;
   readonly #entries = new Map<number, Entry>();
   readonly #keys = new Map<string, number>();
   readonly #buffers = new Map<number, Retained>();
@@ -658,6 +758,8 @@ export class DrawList implements Disposable {
     this.#purposes = new Set(options.purposes ?? ["default", "proxy"]);
     this.#meshOptions = options.mesh ?? {};
     this.#tessellation = options.tessellation ?? {};
+    this.#curveOptions = options.curves ?? {};
+    this.#pointStyle = options.points ?? "sprites";
     this.#contexts = [...(options.renderContexts ?? [])];
   }
 
@@ -1106,8 +1208,10 @@ export class DrawList implements Disposable {
     let kind = this.#kinds.get(key);
     if (kind === undefined) {
       const mesh = prim.typeName === "Mesh" || prim.isA("Mesh");
+      const curves = CURVE_SCHEMAS.some((schema) => prim.typeName === schema || prim.isA(schema));
+      const points = prim.typeName === "Points" || prim.isA("Points");
       kind = {
-        gprim: mesh ? "mesh" : shapeSchema(prim) !== null ? "shape" : null,
+        gprim: mesh ? "mesh" : shapeSchema(prim) !== null ? "shape" : curves ? "curves" : points ? "points" : null,
         instancer: prim.typeName === "PointInstancer" || prim.isA("PointInstancer"),
         subset: prim.typeName === "GeomSubset" || prim.isA("GeomSubset"),
         camera: prim.typeName === "Camera" || prim.isA("Camera"),
@@ -1688,7 +1792,7 @@ export class DrawList implements Disposable {
       const key = this.#nextBuffer++;
       gather.buffersAdded.add(key);
       this.#buffers.set(key, {
-        buffers: { key, prim: item.prim, mesh: this.#stagehand.buildMesh(input, this.#meshOptions), subsets, revision: 0, shape: null },
+        buffers: { key, prim: item.prim, mesh: this.#stagehand.buildMesh(input, this.#meshOptions), subsets, revision: 0, shape: null, curves: null, points: null },
         input,
         uvSets,
         users: 0,
@@ -1696,6 +1800,9 @@ export class DrawList implements Disposable {
       this.#meshBuffers.set(item.prim, key);
       return key;
     }
+    const gprim = this.#kind(stage.prim(item.prim)).gprim;
+    if (gprim === "curves") return this.#curves(item.prim, gather);
+    if (gprim === "points") return this.#points(item.prim, gather);
     const shape = readShape(stage, item.prim, at);
     if (shape === null) return null;
     const shapeKey = JSON.stringify(shape);
@@ -1708,12 +1815,109 @@ export class DrawList implements Disposable {
     const key = this.#nextBuffer++;
     gather.buffersAdded.add(key);
     this.#buffers.set(key, {
-      buffers: { key, prim: item.prim, mesh: this.#stagehand.tessellate(shape, this.#tessellation), subsets: [], revision: 0, shape },
+      buffers: { key, prim: item.prim, mesh: this.#stagehand.tessellate(shape, this.#tessellation), subsets: [], revision: 0, shape, curves: null, points: null },
       input: null,
       uvSets: [],
       users: 0,
     });
     this.#shapeBuffers.set(shapeKey, key);
+    return key;
+  }
+
+  /** Curves' buffer: the kept plan refills when the topology holds, a new plan lays them out when not. */
+  #curves(prim: string, gather: Gather): number | null {
+    const input = readCurves(this.#stage, prim, this.#time === undefined ? {} : { time: this.#time });
+    if (input === null) return null;
+    const known = this.#meshBuffers.get(prim);
+    if (known !== undefined) {
+      const retained = this.#buffers.get(known)!;
+      const old = retained.curvesInput!;
+      const curves = retained.buffers.curves!;
+      if (sameCurves(old, input)) {
+        gather.work.buffersReused++;
+        retained.curvesInput = input;
+        return known;
+      }
+      retained.curvesInput = input;
+      if (this.#stagehand.refillCurves(curves, input)) {
+        gather.work.refills++;
+        gather.work.curvesRefilled++;
+        gather.refilled.add(known);
+        retained.buffers = { ...retained.buffers, mesh: curves.swept, revision: retained.buffers.revision + 1 };
+        return known;
+      }
+      curves.dispose();
+      curves.swept.dispose();
+      const rebuilt = this.#stagehand.buildCurves(input, this.#curveOptions);
+      gather.work.curvesLaidOut++;
+      gather.rebuilt.add(known);
+      retained.buffers = { ...retained.buffers, curves: rebuilt, mesh: rebuilt.swept, revision: retained.buffers.revision + 1 };
+      return known;
+    }
+    const curves = this.#stagehand.buildCurves(input, this.#curveOptions);
+    gather.work.curvesLaidOut++;
+    const key = this.#nextBuffer++;
+    gather.buffersAdded.add(key);
+    this.#buffers.set(key, {
+      buffers: { key, prim, mesh: curves.swept, subsets: [], revision: 0, shape: null, curves, points: null },
+      input: null,
+      curvesInput: input,
+      uvSets: [],
+      users: 0,
+    });
+    this.#meshBuffers.set(prim, key);
+    return key;
+  }
+
+  /** Points' buffer: filled again for new values of as many points, read anew when their count changes. */
+  #points(prim: string, gather: Gather): number | null {
+    const input = readPointSet(this.#stage, prim, this.#time === undefined ? {} : { time: this.#time });
+    if (input === null) return null;
+    const filled = fillPoints(input);
+    const shape = () =>
+      this.#pointStyle === "shapes"
+        ? this.#stagehand.pointShape(filled.report.shape, this.#tessellation)
+        : this.#stagehand.pointShape("sprites");
+    const known = this.#meshBuffers.get(prim);
+    if (known !== undefined) {
+      const retained = this.#buffers.get(known)!;
+      if (samePoints(retained.pointsInput!, input)) {
+        gather.work.buffersReused++;
+        retained.pointsInput = input;
+        return known;
+      }
+      const previous = retained.buffers.points!;
+      retained.pointsInput = input;
+      if (
+        previous.positions.length === filled.positions.length &&
+        previous.report.shape === filled.report.shape &&
+        (previous.normals === null) === (filled.normals === null) &&
+        (previous.colors === null) === (filled.colors === null) &&
+        (previous.opacities === null) === (filled.opacities === null)
+      ) {
+        gather.work.refills++;
+        gather.work.pointsRefilled++;
+        gather.refilled.add(known);
+        retained.buffers = { ...retained.buffers, points: filled, revision: retained.buffers.revision + 1 };
+      } else {
+        gather.work.pointsRebuilt++;
+        gather.rebuilt.add(known);
+        retained.buffers.mesh.dispose();
+        retained.buffers = { ...retained.buffers, points: filled, mesh: shape(), revision: retained.buffers.revision + 1 };
+      }
+      return known;
+    }
+    gather.work.pointsRebuilt++;
+    const key = this.#nextBuffer++;
+    gather.buffersAdded.add(key);
+    this.#buffers.set(key, {
+      buffers: { key, prim, mesh: shape(), subsets: [], revision: 0, shape: null, curves: null, points: filled },
+      input: null,
+      pointsInput: input,
+      uvSets: [],
+      users: 0,
+    });
+    this.#meshBuffers.set(prim, key);
     return key;
   }
 
@@ -1724,6 +1928,7 @@ export class DrawList implements Disposable {
     if (retained.users > 0) return;
     this.#buffers.delete(key);
     retained.buffers.mesh.dispose();
+    retained.buffers.curves?.dispose();
     if (retained.buffers.shape !== null) this.#shapeBuffers.delete(JSON.stringify(retained.buffers.shape));
     else this.#meshBuffers.delete(retained.buffers.prim);
     gather.freed.add(key);

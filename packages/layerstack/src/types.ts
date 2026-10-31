@@ -150,6 +150,130 @@ export interface ResolveOptions {
   readonly maxRounds?: number;
 }
 
+/** What a value clip asset is to its clip set. */
+export type ClipRole = "value" | "manifest" | "templateCandidate";
+
+/**
+ * Why a clip query needs an asset; `""` for a reason this module names
+ * that the package does not.
+ */
+export type ClipDemandReason =
+  | "manifest"
+  | "automaticManifest"
+  | "activeInterval"
+  | "lowerInterpolationBound"
+  | "upperInterpolationBound"
+  | "templateSchedule"
+  | "missingValueSearch"
+  | "strongerSourceComposition"
+  | "singleClipSamples"
+  | "";
+
+/**
+ * A value clip asset a clip query needs, with why and whether the stage
+ * has it: `loaded`, `missing` (confirmed absent: the clip reads as a
+ * gap), `unanswered` (the host has not supplied it) or `notResident`.
+ */
+export interface ClipDemand {
+  /** The asset path as authored, or as a template derives it. */
+  readonly assetPath: string;
+  /** The layer authoring the clip metadata, which `assetPath` is anchored to. */
+  readonly anchor: Layer;
+  /** What the asset is to its clip set. */
+  readonly role: ClipRole;
+  /** Why the query needs it. */
+  readonly reason: ClipDemandReason;
+  /** Whether the stage has it. */
+  readonly status: "loaded" | "missing" | "unanswered" | "notResident";
+  /** The prim whose clip set names it. */
+  readonly owner: string;
+  /** The clip set's name. */
+  readonly clipSet: string;
+}
+
+/** A value clip asset a clip query needs that the host has not supplied yet: it may still arrive. */
+export interface UnavailableClipAsset {
+  /** The key to supply bytes under ({@link Stage.supply}), as {@link UnavailableAsset.identifier}. */
+  readonly identifier: string;
+  /** The asset path as authored, or as a template derives it. */
+  readonly assetPath: string;
+  /** The layer authoring the clip metadata. */
+  readonly anchor: Layer;
+  /** What the asset is to its clip set. */
+  readonly role: ClipRole;
+  /** The prim whose clip set names it. */
+  readonly owner: string;
+  /** The clip set's name. */
+  readonly clipSet: string;
+}
+
+/**
+ * A clip set's preparation issue: its metadata is invalid or
+ * incompatible (`invalidMetadata`), its template range or pattern
+ * (`invalidTemplate`), a template candidate is unresolved
+ * (`unresolvedTemplate`), a clip spline is unsupported
+ * (`unsupportedSpline`), its schedule is malformed (`invalidSchedule`),
+ * or an asset path expression failed (`assetExpression`); `""` for one
+ * the package does not name.
+ */
+export interface ClipIssue {
+  /** The prim whose clip set it is. */
+  readonly owner: string;
+  /** The clip set's name. */
+  readonly clipSet: string;
+  /** The issue. */
+  readonly code: string;
+}
+
+/** What {@link Stage.prepareClipQuery} planned and read. */
+export interface ClipPreparation {
+  /**
+   * Whether every demand is loaded or confirmed missing, nothing failed,
+   * no clip set has an issue and no budget ran out. Once nothing is
+   * {@link ClipPreparation.unavailable}, the attribute's clip values, and
+   * whether it might vary with time, are OpenUSD's, an issue's set
+   * included: OpenUSD rejects the set too.
+   */
+  readonly complete: boolean;
+  /** The assets the query needs, loaded or not. */
+  readonly demands: readonly ClipDemand[];
+  /** The demanded assets to supply before preparing again. */
+  readonly unavailable: readonly UnavailableClipAsset[];
+  /** The supplied assets that failed to read; the query stays incomplete. */
+  readonly failures: readonly AssetFailure[];
+  /** The clip sets' preparation issues. */
+  readonly issues: readonly ClipIssue[];
+  /** The clip evaluator's error code (such as `invalidActivation`), or `null`. */
+  readonly error: string | null;
+  /** Whether `maxLoads` or `maxDemands` ran out: prepare again, or with more. */
+  readonly budgetExhausted: boolean;
+  /** The reads tried, unsupplied and absent assets included. */
+  readonly loadAttempts: number;
+}
+
+/** Options of {@link Stage.prepareClipQuery}. */
+export interface ClipQueryOptions {
+  /** The time the query reads; the default time without one, which plans what untimed introspection needs. */
+  readonly time?: number;
+  /** The most assets read; 64 by default. */
+  readonly maxLoads?: number;
+  /** The most demands planned; 256 by default. */
+  readonly maxDemands?: number;
+}
+
+/** Options of {@link Stage.resolveClipQuery}. */
+export interface ResolveClipQueryOptions extends ClipQueryOptions, ResolveOptions {}
+
+/** What {@link Stage.resolveClipQuery} did: the last preparation, and its rounds. */
+export interface ResolveClipQueryResult extends ClipPreparation {
+  /** The rounds of prepare, fetch and supply. */
+  readonly rounds: number;
+  /** The identifiers fetched. */
+  readonly fetched: number;
+  /** The bytes supplied. */
+  readonly bytes: number;
+}
+
 /**
  * Where {@link Stage.resolve} gets bytes. `fetch` returns the bytes of
  * an identifier, or `null` when it confirmed there is no such asset.

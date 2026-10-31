@@ -38,6 +38,9 @@ import type {
   InstanceOptions,
   Camera,
   CameraOptions,
+  ClipDemand,
+  ClipPreparation,
+  ClipQueryOptions,
   LocalTransform,
   PointInstances,
   Prototype,
@@ -68,6 +71,8 @@ import type {
   Opinion,
   PropertyChange,
   PackageResult,
+  ResolveClipQueryOptions,
+  ResolveClipQueryResult,
   ResolveOptions,
   ResolveResult,
   SaveResult,
@@ -106,6 +111,7 @@ export interface NativeStage extends Disposable {
   suppliedBytes(): bigint;
   confirmAbsent(identifier: string): void;
   loadSupplied(): unknown;
+  prepareClipQuery(path: string, time: number | null | undefined, maxLoads: number, maxDemands: number): unknown;
   layers(): unknown;
   layerDirty(id: bigint): boolean;
   setLayerMuted(id: bigint, muted: boolean): boolean;
@@ -928,6 +934,123 @@ export class Stage implements Disposable {
     return { loaded, failures, rounds, fetched: supplied.size, bytes };
   }
 
+  /**
+   * Plans what value clips the attribute at `path` needs at
+   * `options.time`, and reads those already supplied, replanning after
+   * each read (a manifest can reveal more). Without a time it plans what
+   * untimed introspection needs: the clip metadata, and a set's single
+   * clip, that settle whether the attribute might vary with time
+   * ({@link Stage.valueSourcesMightBeTimeVarying}, which answers `true`
+   * until then). Supply what {@link ClipPreparation.unavailable} lists
+   * ({@link Stage.supply}, `null` for an asset that does not exist) and
+   * prepare again until it is complete, or let
+   * {@link Stage.resolveClipQuery} do so.
+   *
+   * Clips are not stage dependencies ({@link Stage.unavailable} never
+   * lists them): a stage reads only the clips a query needs.
+   *
+   * Spec: AOUSD Core §12.3, §12.5 (value clips). OpenUSD reads clip layers
+   * as it resolves values (`Usd_ClipSet`).
+   *
+   * Throws `path.invalid` for a path that is not a property path.
+   */
+  prepareClipQuery(path: string, options: ClipQueryOptions = {}): ClipPreparation {
+    const { time, maxLoads = 64, maxDemands = 256 } = options;
+    const record = this.#call("prepareClipQuery", (native) =>
+      native.prepareClipQuery(path, time, maxLoads, maxDemands),
+    ) as [boolean, boolean, bigint, string | null, Row[], Row[], Row[], Row[]];
+    this.#notify();
+    const [complete, budgetExhausted, loadAttempts, error, demands, unavailable, failures, issues] = record;
+    return Object.freeze({
+      complete,
+      demands: demands.map(
+        ([assetPath, anchor, role, reason, status, owner, clipSet]) =>
+          Object.freeze({ assetPath, anchor: this.#layer(anchor as bigint), role, reason, status, owner, clipSet }) as ClipDemand,
+      ),
+      unavailable: unavailable.map(([identifier, assetPath, anchor, role, owner, clipSet]) =>
+        Object.freeze({
+          identifier: identifier as string,
+          assetPath: assetPath as string,
+          anchor: this.#layer(anchor as bigint),
+          role: role as ClipDemand["role"],
+          owner: owner as string,
+          clipSet: clipSet as string,
+        }),
+      ),
+      failures: failures.map(([asset, anchor, code, message]) => this.#failure(asset, anchor, code, message)),
+      issues: issues.map(([owner, clipSet, code]) =>
+        Object.freeze({ owner: owner as string, clipSet: clipSet as string, code: code as string }),
+      ),
+      error,
+      budgetExhausted,
+      loadAttempts: Number(loadAttempts),
+    });
+  }
+
+  /**
+   * Runs {@link Stage.prepareClipQuery} until nothing it needs is
+   * unavailable: prepare, fetch every unavailable identifier from `source`
+   * at once, {@link Stage.supply} what arrived, prepare again. The result
+   * is the last preparation; it is incomplete when a supplied clip failed
+   * to read or a budget ran out.
+   *
+   * Fails as {@link Stage.resolve} does: `resolve.fetch`, `resolve.stuck`,
+   * `resolve.limit` and `resolve.aborted`.
+   */
+  async resolveClipQuery(
+    path: string,
+    source: AssetSource,
+    options: ResolveClipQueryOptions = {},
+  ): Promise<ResolveClipQueryResult> {
+    const { signal, maxRounds = 100 } = options;
+    const supplied = new Set<string>();
+    let rounds = 0;
+    let bytes = 0;
+    for (;;) {
+      const prepared = this.prepareClipQuery(path, options);
+      const unavailable = [...new Set(prepared.unavailable.map((asset) => asset.identifier))];
+      if (unavailable.length === 0) {
+        return Object.freeze({ ...prepared, rounds, fetched: supplied.size, bytes });
+      }
+      const stuck = unavailable.find((identifier) => supplied.has(identifier));
+      if (stuck !== undefined) {
+        throw new LayerstackError("resolve.stuck", "resolveClipQuery", "an asset was supplied but is still unavailable", {
+          identifier: stuck,
+        });
+      }
+      if (rounds === maxRounds) {
+        throw new LayerstackError("resolve.limit", "resolveClipQuery", `clips still unavailable after ${maxRounds} rounds`);
+      }
+      rounds += 1;
+      if (signal?.aborted) {
+        throw new LayerstackError("resolve.aborted", "resolveClipQuery", "the signal aborted", { cause: signal.reason });
+      }
+      const settled = await Promise.allSettled(unavailable.map((identifier) => source.fetch(identifier, signal)));
+      if (signal?.aborted) {
+        throw new LayerstackError("resolve.aborted", "resolveClipQuery", "the signal aborted", { cause: signal.reason });
+      }
+      let failed: LayerstackError | null = null;
+      settled.forEach((outcome, index) => {
+        const identifier = unavailable[index] as string;
+        if (outcome.status === "rejected") {
+          failed ??= new LayerstackError("resolve.fetch", "resolveClipQuery", "the asset source failed to fetch", {
+            identifier,
+            cause: outcome.reason,
+          });
+          return;
+        }
+        this.supply(identifier, outcome.value);
+        supplied.add(identifier);
+        bytes += outcome.value?.byteLength ?? 0;
+      });
+      if (failed !== null) {
+        // Read what the round's other fetches returned before failing.
+        this.prepareClipQuery(path, options);
+        throw failed;
+      }
+    }
+  }
+
   /** Every layer the stage holds, read or anonymous. */
   layers(): Layer[] {
     const [root, , rows, editLayer] = this.#call("layers", (native) => native.layers()) as [
@@ -1281,9 +1404,10 @@ export class Stage implements Disposable {
    * or under sparse edits (`UsdAttribute::ValueMightBeTimeVarying`). A
    * single time sample does not vary; {@link Stage.valueSourcesMightBeTimeVarying}
    * counts it. `true` too while the clip metadata, or a clip set's single
-   * clip, that settles it is not loaded: unknown is answered
-   * conservatively. `false` for a path no attribute is at. One read for
-   * many attributes: {@link Attribute.mightBeTimeVarying} asks for one.
+   * clip, that settles it is not loaded: load them with
+   * {@link Stage.resolveClipQuery} without a time. `false` for a path no
+   * attribute is at. One read for many attributes:
+   * {@link Attribute.mightBeTimeVarying} asks for one.
    *
    * Throws `path.invalid` for a path that is not a property path.
    */
@@ -1298,7 +1422,9 @@ export class Stage implements Disposable {
    * clips supply it, directly or under sparse edits
    * (`UsdAttributeQuery::ValueSourceMightBeTimeVarying`). `true` too
    * while the clip metadata that settles whether value clips supply it is
-   * not loaded: unknown is answered conservatively. `false` for a path no
+   * not loaded: unknown is answered conservatively. Load it with
+   * {@link Stage.resolveClipQuery} (or {@link Stage.prepareClipQuery})
+   * without a time. `false` for a path no
    * attribute is at; `false` means every time reads the same value. One read for many attributes: {@link Attribute.valueSourceMightBeTimeVarying}
    * asks for one.
    *

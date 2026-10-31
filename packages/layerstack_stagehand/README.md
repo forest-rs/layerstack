@@ -58,14 +58,19 @@ try {
 
 Each `DrawDiff` lists the items `added`, `removed`, moved (`matrices`),
 shown or hidden (`visibility`), rebound to `materials` or another buffer
-(`rebound`), and the buffers added, `refilled` (same indices, new
-positions, normals, `st` or colors), `rebuilt` or `freed`; its `work`
+(`rebound`), the instances a point instancer's items gain and lose
+(`instancesAdded`, `instancesRemoved`, by item and id), and the buffers
+added, `refilled` (same indices, new positions, normals, `st` or colors),
+`rebuilt` or `freed`; its `work`
 counts the items read and left untouched (and, for `setTime`, the items
 left untouched because nothing they read is animated), the matrices
 computed, the local transforms the stage recomputed, and the buffers
 reused, refilled, triangulated and tessellated. `setTime` reads only the
 items with time samples, splines or value clips on their geometry,
-visibility or transform chain. Matrices are 16 numbers per instance, row by
+visibility or transform chain, and derives again only the point
+instancers whose `protoIndices`, `ids`, `positions` or `invisibleIds` might
+vary (`work.instancersRederived`): their instances, and the lights they
+place, follow the time. Matrices are 16 numbers per instance, row by
 row, as OpenUSD's.
 
 The list also holds the stage's cameras and lights, by path:

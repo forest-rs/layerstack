@@ -354,7 +354,8 @@ describe("lights and cameras inside instances", () => {
   it("match OpenUSD's answers", () => {
     const { oracle, stage, list } = open();
     try {
-      assert.equal(oracle.rows.length, 39);
+      assert.equal(oracle.rows.length, 48);
+      assert.equal(oracle.draws.length, 20);
       for (const time of [undefined, 0, 10]) {
         if (list.time !== time) list.setTime(time);
         const rows = oracle.rows.filter((row: { time: number | null }) => (row.time ?? undefined) === time);
@@ -382,6 +383,22 @@ describe("lights and cameras inside instances", () => {
         }
         assert.deepEqual(list.lights().map((light) => light.key).sort(), lights.sort(), `${time}: every light, and no other`);
         assert.deepEqual(list.cameras().map((camera) => camera.path).sort(), cameras.sort(), `${time}`);
+        // Each point instancer's draws: its instances at this time, in its
+        // order, as `ComputeInstanceTransformsAtTime` keeps them.
+        type Draw = { time: number | null; path: string; instancer: string; id: number; world: number[][] };
+        const draws: Draw[] = oracle.draws.filter((row: Draw) => (row.time ?? undefined) === time);
+        let drawn = 0;
+        for (const item of list.items()) {
+          if (item.source.kind !== "pointInstancer") continue;
+          const { instancer } = item.source;
+          const expected = draws.filter((row) => row.instancer === instancer && row.path === item.prim);
+          const where = `${item.prim} ${time}`;
+          assert.deepEqual([...item.ids!], expected.map((row) => BigInt(row.id)), where);
+          assert.equal(item.matrices.length, 16 * expected.length, where);
+          expected.forEach((row, k) => row.world.flat().forEach((value, i) => close(item.matrices[16 * k + i]!, value)));
+          drawn += expected.length;
+        }
+        assert.equal(drawn, draws.length, `${time}: every instance drawn`);
       }
       const panel = list.light("/World/Panel")!;
       assert.deepEqual(panel.geometry, { kind: "mesh", area: 6 });
@@ -420,6 +437,61 @@ describe("lights and cameras inside instances", () => {
       diff = edit([{ type: "setValue", path: "/LampRig/Bulb.inputs:intensity", value: { type: "float", value: 3 } }]);
       assert.deepEqual(diff.lightsChanged, ["/World/Lamps/Dark/Bulb", "/World/Lamps/North/Bulb", "/World/Lamps/South/Bulb"]);
       assert.deepEqual([diff.work.lightsRead, diff.work.camerasRead], [3, 0]);
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+  });
+
+  // As `layerstack_stagehand`'s `instances_sampled_over_time_come_and_go`:
+  // the flock samples `protoIndices`, `ids`, `positions` and
+  // `invisibleIds`, the beacons only `invisibleIds`; a time change derives
+  // both again, adding and removing draws and lights, and nothing of the
+  // field and the swarm, whose arrays hold no time samples.
+  it("come and go with instances sampled over time", () => {
+    const { stage, list } = open();
+    try {
+      const moth = (id: bigint) => lightKey("/World/Flock/Protos/Moth/Glow", { instancer: "/World/Flock", id });
+      const lantern = (index: number) => lightKey("/World/Beacons/Protos/Lantern/Wick", { instancer: "/World/Beacons", index });
+      const item = (prim: string) => list.items().find((item) => item.prim === prim)!.id;
+      const body = item("/World/Flock/Protos/Moth/Body");
+      const pebble = item("/World/Flock/Protos/Pebble");
+      const lamp = item("/World/Beacons/Protos/Lantern/Case");
+      const shaft = item("/World/Field/Protos/Torch/Shaft");
+      const of = (keys: readonly string[], prefix: string) => keys.filter((key) => key.startsWith(prefix));
+      const instances = (pairs: [number, bigint][]) =>
+        pairs.map(([item, id]) => ({ item, id })).sort((a, b) => a.item - b.item || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      // The flock has no instances at the default time.
+      assert.ok(list.item(body)!.hidden && list.item(pebble)!.hidden);
+      assert.equal(of(list.lights().map((light) => light.key), "/World/Flock/").length, 0);
+
+      let diff = list.setTime(0);
+      assert.equal(diff.work.instancersRederived, 2, "the flock and the beacons");
+      assert.deepEqual(of(diff.lightsAdded, "/World/Flock/"), [moth(1n)]);
+      assert.deepEqual(of(diff.lightsRemoved, "/World/Beacons/"), [lantern(1)]);
+      assert.deepEqual(of(diff.lightsAdded, "/World/Beacons/"), []);
+      assert.deepEqual(diff.instancesAdded, instances([[body, 1n], [pebble, 2n]]));
+      assert.deepEqual(diff.instancesRemoved, instances([[lamp, 1n]]));
+      assert.ok(diff.visibility.includes(body) && diff.visibility.includes(pebble));
+      assert.ok(!diff.matrices.includes(shaft), "the field is not read");
+
+      diff = list.setTime(10);
+      assert.equal(diff.work.instancersRederived, 2);
+      assert.deepEqual(of(diff.lightsAdded, "/World/Flock/"), [moth(2n), moth(3n)]);
+      assert.deepEqual(of(diff.lightsRemoved, "/World/Flock/"), [moth(1n)]);
+      assert.deepEqual(of(diff.lightsAdded, "/World/Beacons/"), [lantern(1)]);
+      assert.deepEqual(of(diff.lightsRemoved, "/World/Beacons/"), [lantern(0), lantern(2)]);
+      assert.deepEqual(diff.instancesAdded, instances([[body, 2n], [body, 3n], [pebble, 1n], [lamp, 1n]]));
+      assert.deepEqual(diff.instancesRemoved, instances([[body, 1n], [pebble, 2n], [lamp, 0n], [lamp, 2n]]));
+      // Id 4 is masked: neither drawn nor lit.
+      assert.deepEqual([...list.item(body)!.ids!], [2n, 3n]);
+      assert.equal(list.light(moth(4n)), null);
+      assert.deepEqual([...list.light(moth(2n))!.position], [1, 1.5, 8]);
+
+      // Back to the default time: every flock instance gone.
+      diff = list.setTime(undefined);
+      assert.deepEqual(of(diff.lightsRemoved, "/World/Flock/"), [moth(2n), moth(3n)]);
+      assert.ok(diff.visibility.includes(body) && diff.visibility.includes(pebble));
     } finally {
       list.dispose();
       stage.free();

@@ -48,6 +48,16 @@ export type ItemSource =
   /** A gprim a `PointInstancer` places: its prototype `index`, or a gprim inside it. */
   | { readonly kind: "pointInstancer"; readonly instancer: string; readonly index: number; readonly prim: string };
 
+/**
+ * One instance of a point instancer's item: the item, and the instance's
+ * id ({@link DrawItem.ids}): its `ids` entry, or its position in the
+ * instancer's arrays when `ids` is unauthored.
+ */
+export interface ItemInstance {
+  readonly item: number;
+  readonly id: bigint;
+}
+
 /** One instanced draw: a retained buffer at one or more world matrices. */
 export interface DrawItem {
   /** Its identity: stable while it exists, never reused. */
@@ -105,6 +115,13 @@ export interface DrawWork {
   readonly itemsUntouched: number;
   /** Items {@link DrawList.setTime} did not read because nothing they read might differ at another time; counted in {@link itemsUntouched} too. */
   readonly itemsTimeInvariant: number;
+  /**
+   * Point instancers whose instances, and the lights they place, were
+   * derived again: each one a change discovered, and each one
+   * {@link DrawList.setTime} read because which instances it places might
+   * differ at another time. One whose instances only move is not.
+   */
+  readonly instancersRederived: number;
   /** Instance world matrices computed. */
   readonly matricesComputed: number;
   /** Local transforms the stage's transform cache computed (the rest it reused). */
@@ -138,6 +155,10 @@ export interface DrawDiff {
   readonly matrices: readonly number[];
   /** Items that became hidden or shown. */
   readonly visibility: readonly number[];
+  /** Instances a point instancer's item draws now and did not before: new in its `protoIndices` or `ids`, unmasked, or shown; sorted by item, then id. Their items are in {@link matrices} too. */
+  readonly instancesAdded: readonly ItemInstance[];
+  /** Instances a point instancer's item no longer draws: gone from its arrays, masked (`invisibleIds`, `inactiveIds`) or hidden. Their items are in {@link matrices} too. */
+  readonly instancesRemoved: readonly ItemInstance[];
   /** Items whose bound materials changed. */
   readonly materials: readonly number[];
   /** Items now drawing another buffer. */
@@ -237,6 +258,15 @@ const INSTANCER_INPUTS = [
   "angularVelocities",
   "invisibleIds",
 ];
+
+/**
+ * The attributes that decide which instances a point instancer places, and
+ * of which prototype, as `layerstack_stagehand` reads them: `protoIndices`,
+ * `ids`, `positions` (none placed when their count is not
+ * `protoIndices`') and `invisibleIds`. `prototypes` is a relationship and
+ * `inactiveIds` prim metadata: neither has time samples.
+ */
+const INSTANCE_SET_INPUTS = ["protoIndices", "ids", "positions", "invisibleIds"];
 
 const GEOMETRY = new Set([...GEOMETRY_INPUTS, ...SUBSET_INPUTS]);
 
@@ -388,14 +418,21 @@ interface Found {
   cameras: string[];
   /** By key ({@link lightKey}). */
   lights: Map<string, FoundLight>;
+  instancers: Map<string, Instancer>;
   prims: number;
 }
 
 /** A point instancer's prototypes and its unmasked instances, by position: prototype index and matrix. */
 interface Placed {
   readonly prototypes: readonly string[];
-  /** By the instance's key ({@link instanceKeys}). */
-  readonly instances: Map<string, [number, Float64Array]>;
+  /** By the instance's key ({@link instanceKey}): its prototype index, matrix and instance. */
+  readonly instances: Map<string, [number, Float64Array, LightInstance]>;
+}
+
+/** A point instancer as last discovered: the lights inside its prototypes (prototype index, path, kind), and whether which instances it places might differ at another time. */
+interface Instancer {
+  readonly lights: readonly [number, string, LightKind][];
+  readonly varies: boolean;
 }
 
 /**
@@ -508,6 +545,9 @@ class Gather {
   removed = new Set<number>();
   matrices = new Set<number>();
   visibility = new Set<number>();
+  /** By `${item}#${id}`. */
+  instancesAdded = new Map<string, ItemInstance>();
+  instancesRemoved = new Map<string, ItemInstance>();
   materials = new Set<number>();
   rebound = new Set<number>();
   buffersAdded = new Set<number>();
@@ -526,6 +566,7 @@ class Gather {
     itemsRead: 0,
     itemsUntouched: 0,
     itemsTimeInvariant: 0,
+    instancersRederived: 0,
     matricesComputed: 0,
     localTransforms: 0,
     buffersReused: 0,
@@ -539,6 +580,13 @@ class Gather {
 }
 
 const sorted = (set: Set<number>) => [...set].sort((a, b) => a - b);
+
+/** The instances, sorted by item then id, but those of the items in `skip`. */
+function sortedInstances(instances: Map<string, ItemInstance>, skip: (item: number) => boolean): ItemInstance[] {
+  return [...instances.values()]
+    .filter((instance) => !skip(instance.item))
+    .sort((a, b) => a.item - b.item || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
 
 /**
  * The items and buffers a renderer draws from a stage, retained and kept
@@ -594,6 +642,8 @@ export class DrawList implements Disposable {
   readonly #cameras = new Map<string, Held<CameraItem>>();
   readonly #lights = new Map<string, Held<LightItem>>();
   readonly #materials = new Map<string, Held<MaterialItem>>();
+  /** The point instancers discovered, by path. */
+  readonly #instancers = new Map<string, Instancer>();
   readonly #contexts: readonly string[];
   /** Each prim type's {@link Kind}: `IsA` depends on the type alone. */
   readonly #kinds = new Map<string, Kind>();
@@ -713,11 +763,32 @@ export class DrawList implements Disposable {
       if (!this.#read(id, entry.item.source, what, false, gather)) this.#remove(id, gather);
     }
     for (const [path, held] of [...this.#cameras]) if (held.varies) this.#readCamera(path, gather);
+    // A point instancer whose instances might differ places its lights
+    // again: those of instances gone or masked are removed, those of new or
+    // unmasked ones added.
     const placements = new Map<string, Placed | null>();
-    for (const held of [...this.#lights.values()]) {
-      const { path, instance, kind } = held.item;
-      if (held.varies) this.#readLight({ path, instance, kind }, placements, gather);
+    const placing = new Map<string, FoundLight>();
+    for (const [instancer, held] of [...this.#instancers]) {
+      if (!held.varies) continue;
+      gather.work.instancersRederived++;
+      if (held.lights.length === 0) continue;
+      const mine = new Map<string, FoundLight>();
+      this.#placeLights(instancer, held.lights, placements, mine);
+      for (const [key, light] of [...this.#lights]) {
+        if (light.item.instance?.instancer === instancer && !mine.has(key)) {
+          this.#lights.delete(key);
+          gather.lights.removed.add(key);
+        }
+      }
+      for (const [key, light] of mine) placing.set(key, light);
     }
+    const lights = new Map<string, FoundLight>();
+    for (const [key, held] of this.#lights) {
+      const { path, instance, kind } = held.item;
+      if (held.varies) lights.set(key, { path, instance, kind });
+    }
+    for (const [key, light] of placing) lights.set(key, light);
+    for (const [, light] of [...lights].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) this.#readLight(light, placements, gather);
     for (const [path, held] of [...this.#materials]) if (held.varies) this.#readMaterial(path, gather);
     // A `varname` read at the new time may name other sets.
     this.#applyToUvSets(gather);
@@ -735,6 +806,7 @@ export class DrawList implements Disposable {
     this.#cameras.clear();
     this.#lights.clear();
     this.#materials.clear();
+    this.#instancers.clear();
   }
 
   [Symbol.dispose](): void {
@@ -751,7 +823,7 @@ export class DrawList implements Disposable {
       if (at === undefined) dirty.set(id, { ...what });
       else merge(at, what);
     };
-    const found: Found = { sources: [], scopes: [], cameras: [], lights: new Map(), prims: 0 };
+    const found: Found = { sources: [], scopes: [], cameras: [], lights: new Map(), instancers: new Map(), prims: 0 };
     const firsts = new Map<string, string>();
     for (const prototype of stage.prototypes()) {
       for (const instance of prototype.instances) firsts.set(instance, prototype.instances[0]!);
@@ -804,7 +876,14 @@ export class DrawList implements Disposable {
       this.#discoverPrototype(first, found, false);
     }
     gather.work.primsTraversed = found.prims;
+    gather.work.instancersRederived = found.instancers.size;
     this.#applyToViews(changes, found, gather);
+    // The instancers discovered replace those the discovery covered.
+    for (const path of [...this.#instancers.keys()]) {
+      const covered = found.scopes.some((scope) => (scope.kind === "resync" ? under(path, scope.root) : scope.kind === "instancer" && scope.path === path));
+      if (covered) this.#instancers.delete(path);
+    }
+    for (const [path, instancer] of found.instancers) this.#instancers.set(path, instancer);
     // New items first, so a buffer a gone item shares with a new one (a
     // renamed prim's shape) is kept rather than freed and made again.
     const seen = new Set(found.sources.map(sourceKey));
@@ -981,6 +1060,8 @@ export class DrawList implements Disposable {
       gather.rebuilt.delete(key);
     }
     for (const key of gather.rebuilt) gather.refilled.delete(key);
+    // An added or removed item's instances are not listed.
+    const skip = (item: number) => gather.added.has(item) || gather.removed.has(item);
     const [camerasAdded, camerasRemoved, camerasChanged] = gather.cameras.finish();
     const [lightsAdded, lightsRemoved, lightsChanged] = gather.lights.finish();
     const [materialsAdded, materialsRemoved, materialsChanged] = gather.shading.finish();
@@ -993,6 +1074,8 @@ export class DrawList implements Disposable {
       removed: sorted(gather.removed),
       matrices: sorted(gather.matrices),
       visibility: sorted(gather.visibility),
+      instancesAdded: sortedInstances(gather.instancesAdded, skip),
+      instancesRemoved: sortedInstances(gather.instancesRemoved, skip),
       materials: sorted(gather.materials),
       rebound: sorted(gather.rebound),
       buffersAdded: sorted(gather.buffersAdded),
@@ -1229,21 +1312,7 @@ export class DrawList implements Disposable {
    * holding the light.
    */
   #placedMatrix(path: string, instance: LightInstance, placements: Map<string, Placed | null>): Float64Array | null {
-    let placed = placements.get(instance.instancer);
-    if (placed === undefined) {
-      placed = null;
-      try {
-        const read = this.#stage.pointInstances(instance.instancer, this.#time === undefined ? {} : { time: this.#time });
-        const instances = new Map<string, [number, Float64Array]>();
-        placedInstances(this.#stage, instance.instancer, read, this.#time).forEach((placed, i) =>
-          instances.set(instanceKey(placed), [read.prototypeIndices[i]!, read.matrices.subarray(16 * i, 16 * i + 16)]),
-        );
-        placed = { prototypes: read.prototypes, instances };
-      } catch (error) {
-        if (!String((error as { code?: string }).code).startsWith("instancer.") && (error as { code?: string }).code !== "prim.not_found") throw error;
-      }
-      placements.set(instance.instancer, placed);
-    }
+    const placed = this.#placed(instance.instancer, placements);
     const found = placed?.instances.get(instanceKey(instance));
     const prototype = found === undefined ? undefined : placed!.prototypes[found[0]];
     if (found === undefined || prototype === undefined || !under(path, prototype)) return null;
@@ -1260,6 +1329,43 @@ export class DrawList implements Disposable {
     multiply(inner, found[1], scratch, 0);
     multiply(scratch, world, out, 0);
     return out;
+  }
+
+  /**
+   * The point instancer `instancer`'s prototypes and unmasked instances at
+   * the list's time, once per diff in `placements`; `null` when it is not
+   * one, or its arrays place nothing.
+   */
+  #placed(instancer: string, placements: Map<string, Placed | null>): Placed | null {
+    let placed = placements.get(instancer);
+    if (placed !== undefined) return placed;
+    placed = null;
+    try {
+      const read = this.#stage.pointInstances(instancer, this.#time === undefined ? {} : { time: this.#time });
+      const instances = new Map<string, [number, Float64Array, LightInstance]>();
+      placedInstances(this.#stage, instancer, read, this.#time).forEach((placed, i) =>
+        instances.set(instanceKey(placed), [read.prototypeIndices[i]!, read.matrices.subarray(16 * i, 16 * i + 16), placed]),
+      );
+      placed = { prototypes: read.prototypes, instances };
+    } catch (error) {
+      if (!String((error as { code?: string }).code).startsWith("instancer.") && (error as { code?: string }).code !== "prim.not_found") throw error;
+    }
+    placements.set(instancer, placed);
+    return placed;
+  }
+
+  /** Adds to `into` each light of `lights` (inside `instancer`'s prototypes) once per unmasked instance of its prototype. */
+  #placeLights(
+    instancer: string,
+    lights: readonly [number, string, LightKind][],
+    placements: Map<string, Placed | null>,
+    into: Map<string, FoundLight>,
+  ): void {
+    for (const [prototype, , instance] of this.#placed(instancer, placements)?.instances.values() ?? []) {
+      for (const [index, path, kind] of lights) {
+        if (index === prototype) into.set(lightKey(path, instance), { path, instance, kind });
+      }
+    }
   }
 
   /**
@@ -1315,22 +1421,8 @@ export class DrawList implements Disposable {
         stack.push(...prim.children());
       }
     });
-    if (lights.length === 0) return;
-    let placed;
-    try {
-      placed = stage.pointInstances(instancer, this.#time === undefined ? {} : { time: this.#time });
-    } catch (error) {
-      if (String((error as { code?: string }).code).startsWith("instancer.")) return;
-      throw error;
-    }
-    const instances = placedInstances(stage, instancer, placed, this.#time);
-    placed.prototypeIndices.forEach((prototype, i) => {
-      for (const [index, path, kind] of lights) {
-        if (index !== prototype) continue;
-        const instance = instances[i]!;
-        found.lights.set(lightKey(path, instance), { path, instance, kind });
-      }
-    });
+    found.instancers.set(instancer, { lights, varies: this.#inputsMightVary([instancer], INSTANCE_SET_INPUTS) });
+    if (lights.length > 0) this.#placeLights(instancer, lights, new Map(), found.lights);
   }
 
   #instancesOf(first: string): readonly string[] {
@@ -1456,7 +1548,18 @@ export class DrawList implements Disposable {
             this.#inputsMightVary([source.instancer], INSTANCER_INPUTS) ||
             this.#worldMightVary([source.instancer]) ||
             (source.prim !== prototype && this.#worldMightVary([source.prim]));
-          const placed = stage.pointInstances(source.instancer, this.#time === undefined ? {} : { time: this.#time });
+          // Arrays that place nothing (none at this time, or of unequal
+          // lengths) draw no instance, as `layerstack_stagehand` reads them.
+          let placed: Pick<PointInstances, "prototypeIndices" | "matrices" | "ids"> = {
+            prototypeIndices: new Int32Array(),
+            matrices: new Float64Array(),
+            ids: new BigInt64Array(),
+          };
+          try {
+            placed = stage.pointInstances(source.instancer, this.#time === undefined ? {} : { time: this.#time });
+          } catch (error) {
+            if (!String((error as { code?: string }).code).startsWith("instancer.")) throw error;
+          }
           const world = this.#world([source.instancer]);
           // A gprim inside the prototype: its transform relative to the
           // prototype's, which the instance matrices already hold.
@@ -1490,6 +1593,12 @@ export class DrawList implements Disposable {
           gather.matrices.add(id);
         }
         if ((matrices.length === 0) !== item.hidden) gather.visibility.add(id);
+        if (!sameArray(ids, item.ids)) {
+          const before = new Set(item.ids ?? []);
+          const after = new Set(ids ?? []);
+          for (const at of after) if (!before.has(at)) gather.instancesAdded.set(`${id}#${at}`, { item: id, id: at });
+          for (const at of before) if (!after.has(at)) gather.instancesRemoved.set(`${id}#${at}`, { item: id, id: at });
+        }
       }
       item = { ...item, matrices, instances, ids, hidden: matrices.length === 0 };
     }

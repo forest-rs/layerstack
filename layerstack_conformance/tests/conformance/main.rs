@@ -19,6 +19,7 @@
 #[path = "../support/mod.rs"]
 mod support;
 
+mod absolute_paths;
 mod affine;
 mod ancestral_arcs;
 mod animation_rates;

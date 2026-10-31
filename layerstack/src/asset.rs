@@ -688,6 +688,10 @@ pub fn normalize_asset_path(path: &str) -> String {
 /// (`` `...` ``), and for a path relative to its layer (`./bark.png`)
 /// when the location is unknown.
 ///
+/// Format arguments (`grid.usda:SDF_FORMAT_ARGS:rows=4`) are split off
+/// first: `exists` is asked about the path without them, and they follow
+/// the identifier as authored, as [`anchor_asset_path`] keeps them.
+///
 /// Spec: AOUSD Core §9.4 (relative asset paths), §9.5 (search paths).
 #[doc(alias = "CreateIdentifier")]
 #[must_use]
@@ -696,6 +700,11 @@ pub fn create_identifier(
     layer_location: &str,
     exists: impl FnOnce(&str) -> bool,
 ) -> Option<String> {
+    let (stripped, arguments) = split_format_arguments(asset_path);
+    if !arguments.is_empty() {
+        return create_identifier(stripped, layer_location, exists)
+            .map(|identifier| identifier + arguments);
+    }
     let path = asset_path.replace('\\', "/");
     let search = !path.starts_with('`') && is_relative(&path) && !is_file_relative(&path);
     if search && !layer_location.is_empty() {
@@ -775,11 +784,25 @@ fn drive_root(path: &str) -> Option<(&str, &str)> {
 /// (`C:\assets\oak.usda`); the anchored path uses `/`, as OpenUSD's
 /// `TfNormPath` writes it on Windows.
 ///
+/// Format arguments (`grid.usda:SDF_FORMAT_ARGS:rows=4`) are split off
+/// before anchoring and follow the anchored path as authored, outside
+/// any package brackets (`pkg.usdz[sub/grid.usda]:SDF_FORMAT_ARGS:rows=4`),
+/// as OpenUSD's `SdfComputeAssetPathRelativeToLayer` splits and rejoins
+/// them (`Sdf_SplitIdentifier`, `Sdf_CreateIdentifier`;
+/// `pxr/usd/sdf/layerUtils.cpp:83-89`). `None` when nothing precedes them.
+///
 /// Spec: AOUSD Core §9.4 (relative asset paths).
 #[must_use]
 pub fn anchor_asset_path(asset_path: &str, layer_location: &str) -> Option<String> {
     if asset_path.starts_with('`') {
         return None;
+    }
+    let (stripped, arguments) = split_format_arguments(asset_path);
+    if !arguments.is_empty() {
+        if stripped.is_empty() {
+            return None;
+        }
+        return anchor_asset_path(stripped, layer_location).map(|anchored| anchored + arguments);
     }
     let asset_path = asset_path.replace('\\', "/");
     if !is_file_relative(&asset_path) {
@@ -811,6 +834,15 @@ pub fn anchor_asset_path(asset_path: &str, layer_location: &str) -> Option<Strin
         None => asset_path,
     };
     Some(normalize_asset_path(&joined))
+}
+
+/// `asset`'s path and its format arguments, the delimiter included, as
+/// authored (`Sdf_SplitIdentifier`, `pxr/usd/sdf/assetPathResolver.cpp`);
+/// the arguments are empty when there are none.
+fn split_format_arguments(asset: &str) -> (&str, &str) {
+    asset
+        .find(FORMAT_ARGS_DELIMITER)
+        .map_or((asset, ""), |at| asset.split_at(at))
 }
 
 /// `location`, a location relative to wherever its host resolves from
@@ -954,6 +986,28 @@ mod tests {
             );
         }
         assert_eq!(anchor_asset_path("../a[b", "/p/a.usdz[b.usda]"), None);
+        // Format arguments follow the anchored path as authored, outside
+        // the package brackets, as `SdfComputeAssetPathRelativeToLayer`
+        // appends them.
+        for (path, location, anchored) in [
+            (
+                "./t/grid.usda:SDF_FORMAT_ARGS:b=2&a=1",
+                "/p/a.usdz[dir/b.usda]",
+                "/p/a.usdz[dir/t/grid.usda]:SDF_FORMAT_ARGS:b=2&a=1",
+            ),
+            (
+                "./t/grid.usda:SDF_FORMAT_ARGS:a=x/y",
+                "/p/set/b.usda",
+                "/p/set/t/grid.usda:SDF_FORMAT_ARGS:a=x/y",
+            ),
+        ] {
+            assert_eq!(
+                anchor_asset_path(path, location).as_deref(),
+                Some(anchored),
+                "{path} in {location}"
+            );
+        }
+        assert_eq!(anchor_asset_path(":SDF_FORMAT_ARGS:a=b", "/p/b.usda"), None);
     }
 
     #[test]

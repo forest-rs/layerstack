@@ -200,6 +200,9 @@ await stage.resolve(source);
   and returns the receipt that redoes them. An undo whose slots another
   edit changed since fails with `edit.stale` and changes nothing. The app
   keeps the receipts it wants; `release()` (or `using`) the rest.
+  `stage.undo([a, b, c])` undoes several receipts as one atomic
+  transaction, and `UndoHistory` keeps them as undo and redo steps
+  ([Undo history](#undo-history)).
 - **Edits go to an explicit layer.** `stage.editLayer` is the default
   target: the root, or for a stage opened with `{ editLayer: "session" }`
   an anonymous session layer in front of it, or with `{ sessionLayer:
@@ -284,6 +287,56 @@ await stage.resolve(source);
 - **Transfer is measured.** `layerstack.transfer()` reports the bytes copied
   in (sources) and out (array copies, saved and exported bytes), the views
   built and the bytes they exposed without a copy, and the module's memory.
+
+## Undo history
+
+`UndoHistory` keeps a stage's receipts as an undo stack and a redo
+stack of labelled steps, for an editor's undo menu. It applies nothing
+itself: apply as usual and `record` the receipt, which the history takes
+(the receipt reads as released after).
+
+```ts
+import { UndoHistory } from "@forest-rs/layerstack";
+
+using history = new UndoHistory(stage, { limit: 100 });
+history.record("set size", stage.apply([setSize]));
+history.group("define and set radius", () => {
+  history.record("define", stage.apply([{ type: "definePrim", path: "/World/Ball", typeName: "Sphere" }]));
+  history.record("radius", stage.apply([{ type: "setValue", path: "/World/Ball.radius", value: { type: "double", value: 2 } }]));
+});
+history.undoSteps.map((step) => step.label); // ["set size", "define and set radius"]
+history.undo(); // the ball and its radius, as one transaction
+history.redo();
+```
+
+- **Groups.** What is recorded inside `group(label, fn)`, or between
+  `beginGroup(label)` and `endGroup()` (a drag that spans events), is one
+  step that undoes as one atomic transaction. Groups nest and flatten
+  into the outermost, whose label names the step. If `fn` throws, what it
+  recorded is undone and its error is thrown; `abandonGroup()` does the
+  same for an open group. A group that recorded nothing, or a receipt that
+  wrote no layer, adds no step.
+- **Stale steps.** An edit the history did not record that changed a slot
+  a step restores makes the step stale: `undo()` throws `history.stale`
+  (its `cause` is the `edit.stale` error), changes nothing and keeps the
+  step. The history never skips a step; `reset()` forgets them all without
+  undoing anything.
+- **The bound.** `limit` keeps at most that many steps, undo and redo
+  together; recording past it drops the oldest undo step, which
+  `record(...).dropped` returns and `history.dropped` counts.
+- **Unwinding.** `mark()` notes where the history stands;
+  `unwindTo(mark)` undoes every step since as one transaction and forgets
+  them, for a cancelled tool. `history.mark_gone` says the mark's step was
+  undone, dropped or reset.
+- **For a UI.** `canUndo` and `canRedo` (false while a group is open),
+  `undoSteps` and `redoSteps` (each `{ label, layers, receipts }`, the next
+  step last), `nextUndo`, `nextRedo`, `openGroup` and `groupDepth`.
+
+The history rests on the receipts' own guarantees: an inverse restores
+exactly the slots its edits wrote, all or nothing, and the inverse of an
+undo redoes. OpenUSD has no counterpart (`usd-core` records no inverses),
+so the tests check those invariants: random edits recorded alone and in
+groups undo and redo to byte-identical layers.
 
 ## Transforms, visibility, primvars, bounds and instances
 
@@ -452,6 +505,12 @@ exist, `subset.indices` for a face past the mesh, `coord_sys.no_binding`,
 | `mute.root_layer` | `muteLayer` or `muteAndUnmuteLayers` was given the root layer, by any spelling, which cannot be muted; nothing changed. |
 | `mute.refused` | The module refused a mute request for a reason this package does not know yet. |
 | `edit.stale` | An undo whose slots changed since; nothing changed and the receipt is still undoable. |
+| `history.empty` | `UndoHistory.undo()` or `redo()` with no step. |
+| `history.group_open` | `undo`, `redo` or `unwindTo` while a group is open; end or abandon it first. |
+| `history.no_group` | `endGroup()` or `abandonGroup()` with no group open. |
+| `history.mark_gone` | `unwindTo(mark)` whose step was undone, dropped by the bound or reset. |
+| `history.stale` | A step whose slots an edit the history did not record changed since; nothing changed and the step stays. `cause` is the `edit.stale` error. |
+| `history.rejected` | A step's undo was refused otherwise; `cause` is the native error. |
 | `edit.rejected.*` | The edits were rejected and nothing changed: `edit.rejected.type_mismatch`, `edit.rejected.reserved_field`, ... |
 | `namespace.*` | A `move` or `delete` cannot be made and nothing changed: `namespace.collision` (the destination is occupied), `namespace.missing_parent`, `namespace.not_found`, `namespace.cycle`, `namespace.instance_proxy`, `namespace.invalid_paths`, `namespace.unmappable`, `namespace.split_opinions`, `namespace.unsupported`. |
 | `subset.*` | `subset.geometry`: a subset read or created on a prim that is not geometry of the subsets' element type (`materialSubsets()` of a prim that is not a mesh); `subset.indices` (an index outside the geometry), `subset.invalid_name`, `subset.name_taken`, `subset.family_declaration`, `subset.unrestricted_material_bind`. |

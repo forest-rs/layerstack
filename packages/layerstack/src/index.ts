@@ -40,6 +40,8 @@ import type { NativeModule } from "./stage.js";
 
 export { ArrayCopy, ArrayHandle } from "./arrays.js";
 export { LayerstackError } from "./errors.js";
+export { UndoHistory } from "./history.js";
+export type { HistoryMark, HistoryStep, Recorded, UndoHistoryOptions } from "./history.js";
 export { Material, Shader, ShaderPort } from "./schemas.js";
 export { Primvar, Xformable } from "./geometry.js";
 export { SkinningQuery } from "./skinning.js";

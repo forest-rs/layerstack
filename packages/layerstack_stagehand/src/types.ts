@@ -200,3 +200,154 @@ export interface Tessellation {
   /** Bands from pole to pole of a sphere, and of a capsule's caps together (at least 2). Default 16. */
   readonly rings?: number;
 }
+
+/** A curve schema and its own attributes, as {@link CurvesInput.form}. */
+export type CurveForm =
+  /** `BasisCurves`: its `type`, `basis` and `wrap` tokens (fallbacks `cubic`, `bezier`, `nonperiodic`). A token the schema does not allow draws the curves as linear (nonperiodic for a wrap), named in {@link CurvesReport.fallbacks}. */
+  | { readonly kind: "basis"; readonly type: string; readonly basis: string; readonly wrap: string }
+  /** `NurbsCurves`: `order` per curve, `knots` one curve after another, `ranges` (pairs, flat; empty for each whole domain), `pointWeights` (empty for all 1). */
+  | {
+      readonly kind: "nurbs";
+      readonly order: Int32Array;
+      readonly knots: Float64Array;
+      readonly ranges: Float64Array;
+      readonly weights: Float64Array;
+    }
+  /** `HermiteCurves`: one tangent per point, three numbers each. */
+  | { readonly kind: "hermite"; readonly tangents: Float32Array };
+
+/** Curves as typed arrays: what {@link Stagehand.buildCurves} lays out. {@link readCurves} reads them off a stage. */
+export interface CurvesInput {
+  readonly form: CurveForm;
+  /** `curveVertexCounts`. */
+  readonly curveVertexCounts: Int32Array;
+  /** `points`, three numbers each. */
+  readonly points: Float32Array;
+  /** `widths` (one number per element), at its interpolation; every width 1 without. */
+  readonly widths?: PrimvarInput | null;
+  /** `normals`: with them the curves sweep as ribbons facing them, without as tubes. */
+  readonly normals?: PrimvarInput | null;
+  /** `primvars:displayColor`. */
+  readonly displayColor?: PrimvarInput | null;
+  /** `primvars:displayOpacity` (one number per element). */
+  readonly displayOpacity?: PrimvarInput | null;
+}
+
+/** How curves are sampled and drawn, as `layerstack_stagehand::CurveOptions`. */
+export interface CurveOptions {
+  /** `lines` (default): line segments only; `swept`: tubes of {@link sides} sides, or ribbons where normals are authored, as triangles too. */
+  readonly style?: "lines" | "swept";
+  /** Samples per cubic segment and per NURBS knot span. Default 8. */
+  readonly samples?: number;
+  /** Sides of a tube (at least 3). Default 8. */
+  readonly sides?: number;
+}
+
+/**
+ * Why a NURBS curve is not drawn, as `exedra_curves::NurbsError`:
+ * `order` (below 2), `tooFewPoints` (fewer than the order), `knotCount`
+ * (not points + order), `knots` (decreasing or not finite), `weightCount`
+ * (not one per point), `weight` (not positive and finite), `emptyDomain`
+ * (its first and last knots are equal), `emptyRange` (its `ranges` entry
+ * meets the domain in a single point or not at all), `point` (a control
+ * coordinate not finite, or not finite once weighted), `other` (a reason this
+ * version of the module does not name).
+ */
+export type NurbsCode =
+  | "order"
+  | "tooFewPoints"
+  | "knotCount"
+  | "knots"
+  | "weightCount"
+  | "weight"
+  | "emptyDomain"
+  | "emptyRange"
+  | "point"
+  | "other";
+
+/** What a curves plan made of its input, as `layerstack_stagehand::CurvesReport`. */
+export interface CurvesReport {
+  /** How the curves were evaluated: the type, basis (`null` for linear) and wrap used. */
+  readonly evaluation:
+    | { readonly kind: "basis"; readonly type: "linear" | "cubic"; readonly basis: "bezier" | "bspline" | "catmullRom" | null; readonly wrap: "nonperiodic" | "periodic" | "pinned" }
+    | { readonly kind: "nurbs" }
+    | { readonly kind: "hermite" };
+  /** Tokens drawn as something else. */
+  readonly fallbacks: readonly { readonly attribute: "type" | "basis" | "wrap"; readonly token: string; readonly used: string }[];
+  readonly curves: number;
+  readonly drawnCurves: number;
+  /** Segments drawn per curve (knot spans for NURBS); 0 for a curve not drawn. */
+  readonly segments: readonly number[];
+  /** Samples per segment; linear curves are drawn through their vertices. */
+  readonly samples: number;
+  /** Samples in the buffers, a closed curve's first repeated at its end. */
+  readonly vertices: number;
+  readonly lines: number;
+  readonly triangles: number;
+  /** What the curves were swept as. */
+  readonly geometry: { readonly kind: "lines" } | { readonly kind: "tubes"; readonly sides: number } | { readonly kind: "ribbons" };
+  readonly channels: {
+    readonly widths: ChannelState;
+    readonly normals: ChannelState;
+    readonly displayColor: ChannelState;
+    readonly displayOpacity: ChannelState;
+  };
+  /** Curves drawn otherwise than authored: `skipped` (too few vertices), `repeated` (fewer than a segment, the last vertex repeated as Hydra does), `unused` (vertices past the last Bezier segment), `nurbs` (not evaluable, by {@link NurbsCode}). */
+  readonly notes: readonly (
+    | { readonly curve: number; readonly kind: "skipped" | "repeated"; readonly count: number }
+    | { readonly curve: number; readonly kind: "unused"; readonly unused: number }
+    | { readonly curve: number; readonly kind: "nurbs"; readonly code: NurbsCode }
+  )[];
+  /** Swept stations at a repeated point, a cusp, a zero width or a ribbon normal along the curve. */
+  readonly degenerateStations: number;
+  /** Samples whose width was negative or not finite, drawn as 0: a Catmull-Rom chain of widths can undershoot, and a pinned end's reflected width can fall below zero. */
+  readonly clampedWidths: number;
+  /** Why nothing is drawn: `negativeCount`, `pointCount` or `arrays`. */
+  readonly problem: { readonly code: "negativeCount" | "pointCount" | "arrays"; readonly reason: string } | null;
+  /** `UsdGeomCurves::ComputeExtent`: the points' bounds grown by half the largest width. */
+  readonly extent: readonly [readonly [number, number, number], readonly [number, number, number]] | null;
+}
+
+/** A `Points` as typed arrays: what {@link fillPoints} fills. {@link readPointSet} reads one off a stage. */
+export interface PointsInput {
+  /** `points`, three numbers each. */
+  readonly points: Float32Array;
+  /** `widths` (diameters, one number per element): `vertex`, `varying` or `constant`; every width 1 without. */
+  readonly widths?: PrimvarInput | null;
+  /** `normals`: with them each point is a disc facing its normal, without a sphere. */
+  readonly normals?: PrimvarInput | null;
+  readonly displayColor?: PrimvarInput | null;
+  readonly displayOpacity?: PrimvarInput | null;
+  /** `ids`: each point's identity over time, one per point, or empty. */
+  readonly ids?: BigInt64Array | null;
+}
+
+/** What {@link fillPoints} made of a point set, as `layerstack_stagehand::PointsReport`. */
+export interface PointsReport {
+  readonly points: number;
+  /** `spheres`, or `discs` when normals are drawn. */
+  readonly shape: "spheres" | "discs";
+  readonly channels: {
+    readonly widths: ChannelState;
+    readonly normals: ChannelState;
+    readonly displayColor: ChannelState;
+    readonly displayOpacity: ChannelState;
+    readonly ids: ChannelState;
+  };
+  /** `UsdGeomPoints::ComputeExtent`; `null` when widths are given but not one per point. */
+  readonly extent: readonly [readonly [number, number, number], readonly [number, number, number]] | null;
+}
+
+/** A point set's buffers, one entry per point. */
+export interface PointBuffers {
+  readonly positions: Float32Array;
+  /** Diameters (1 where `widths` is not drawn). */
+  readonly widths: Float32Array;
+  /** Unit normals, three per point, for discs. */
+  readonly normals: Float32Array | null;
+  readonly colors: Float32Array | null;
+  readonly opacities: Float32Array | null;
+  /** Each point's id when `ids` is drawn; empty otherwise. */
+  readonly ids: BigInt64Array;
+  readonly report: PointsReport;
+}

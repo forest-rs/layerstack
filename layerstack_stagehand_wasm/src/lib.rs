@@ -27,9 +27,10 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use layerstack_stagehand::{
-    Axis, FaceSubsets, Interpolation, MeshBuffers, MeshInput, MeshOptions, MeshPlan, MeshTopology,
-    Orientation, Primvar, Shape, SmoothNormals, SubdivisionScheme, Tessellation, Triangulation,
-    UvSetInput, tessellate,
+    Axis, CurveBuffers, CurveForm, CurveOptions, CurveStyle, CurvesInput, CurvesPlan, FaceSubsets,
+    Interpolation, MeshBuffers, MeshInput, MeshOptions, MeshPlan, MeshTopology, Orientation,
+    PointShape, Primvar, Shape, SmoothNormals, SubdivisionScheme, Tessellation, Triangulation,
+    UvSetInput, point_shape, tessellate,
 };
 use wasm_bindgen::prelude::*;
 
@@ -47,8 +48,8 @@ mod standalone {
     }
 }
 
-/// The version of the exports the TypeScript wrapper speaks: 3.
-pub const ABI: u32 = 3;
+/// The version of the exports the TypeScript wrapper speaks: 4.
+pub const ABI: u32 = 4;
 
 /// [`ABI`], which the wrapper checks before using the module.
 #[wasm_bindgen(js_name = stagehandAbi)]
@@ -275,9 +276,11 @@ impl MeshBuilder {
             ..self.input()
         };
         let plan = MeshPlan::new(&input, &options);
-        let buffers = plan
-            .buffers(&input)
-            .expect("a plan fills from the input it was built from");
+        // Not `expect`: formatting its error would link `Debug` into the
+        // module.
+        let Ok(buffers) = plan.buffers(&input) else {
+            unreachable!("a plan fills from the input it was built from")
+        };
         StagehandMesh {
             plan: Some(plan),
             buffers,
@@ -546,5 +549,384 @@ pub fn tessellate_shape(
     Ok(StagehandMesh {
         plan: None,
         buffers: tessellate(&shape, &Tessellation { segments, rings }),
+    })
+}
+
+/// A primvar of one float per element, copied in.
+#[derive(Debug)]
+struct OwnedScalars {
+    values: Vec<f32>,
+    indices: Option<Vec<i32>>,
+    interpolation: Interpolation,
+}
+
+impl OwnedScalars {
+    fn new(
+        operation: &str,
+        values: &[f32],
+        indices: Option<Vec<i32>>,
+        interpolation: &str,
+    ) -> Result<Self, JsValue> {
+        Ok(Self {
+            values: values.to_vec(),
+            indices,
+            interpolation: Interpolation::from_token(interpolation)
+                .ok_or_else(|| error(operation, "unknown interpolation"))?,
+        })
+    }
+
+    fn primvar(&self) -> Primvar<'_, f32> {
+        Primvar {
+            values: &self.values,
+            indices: self.indices.as_deref(),
+            interpolation: self.interpolation,
+            element_size: 1,
+        }
+    }
+}
+
+/// A curves prim's arrays, gathered call by call, then laid out.
+#[wasm_bindgen]
+#[derive(Debug, Default)]
+pub struct CurvesBuilder {
+    form: String,
+    tokens: [String; 3],
+    counts: Vec<i32>,
+    points: Vec<[f32; 3]>,
+    order: Vec<i32>,
+    knots: Vec<f64>,
+    ranges: Vec<[f64; 2]>,
+    weights: Vec<f64>,
+    tangents: Vec<[f32; 3]>,
+    widths: Option<OwnedScalars>,
+    normals: Option<OwnedPrimvar<3>>,
+    colors: Option<OwnedPrimvar<3>>,
+    opacities: Option<OwnedScalars>,
+}
+
+#[wasm_bindgen]
+impl CurvesBuilder {
+    /// Curves of `form` (`basis`, `nurbs` or `hermite`; for `basis`, the
+    /// `type`, `basis` and `wrap` tokens), `curveVertexCounts` and points.
+    ///
+    /// # Errors
+    ///
+    /// An unknown form, or points that are not whole triples.
+    #[wasm_bindgen(constructor)]
+    pub fn new(
+        form: String,
+        curve_type: String,
+        basis: String,
+        wrap: String,
+        counts: Vec<i32>,
+        points: &[f32],
+    ) -> Result<Self, JsValue> {
+        if !matches!(form.as_str(), "basis" | "nurbs" | "hermite") {
+            return Err(error("buildCurves", "unknown curve form"));
+        }
+        Ok(Self {
+            form,
+            tokens: [curve_type, basis, wrap],
+            counts,
+            points: triples("buildCurves", points)?,
+            ..Self::default()
+        })
+    }
+
+    /// A NURBS form's `order`, `knots`, `ranges` (pairs, flat) and
+    /// `pointWeights`.
+    ///
+    /// # Errors
+    ///
+    /// When `ranges` is not whole pairs.
+    pub fn nurbs(
+        &mut self,
+        order: Vec<i32>,
+        knots: Vec<f64>,
+        ranges: &[f64],
+        weights: Vec<f64>,
+    ) -> Result<(), JsValue> {
+        let (pairs, rest) = ranges.as_chunks::<2>();
+        if !rest.is_empty() {
+            return Err(error("buildCurves", "the ranges are not whole pairs"));
+        }
+        self.order = order;
+        self.knots = knots;
+        self.ranges = pairs.to_vec();
+        self.weights = weights;
+        Ok(())
+    }
+
+    /// A Hermite form's tangents.
+    ///
+    /// # Errors
+    ///
+    /// When they are not whole triples.
+    pub fn tangents(&mut self, tangents: &[f32]) -> Result<(), JsValue> {
+        self.tangents = triples("buildCurves", tangents)?;
+        Ok(())
+    }
+
+    /// Its widths.
+    ///
+    /// # Errors
+    ///
+    /// An unknown interpolation.
+    pub fn widths(
+        &mut self,
+        values: &[f32],
+        indices: Option<Vec<i32>>,
+        interpolation: &str,
+    ) -> Result<(), JsValue> {
+        self.widths = Some(OwnedScalars::new(
+            "buildCurves",
+            values,
+            indices,
+            interpolation,
+        )?);
+        Ok(())
+    }
+
+    /// Its normals.
+    ///
+    /// # Errors
+    ///
+    /// An unknown interpolation, or values that are not whole triples.
+    pub fn normals(
+        &mut self,
+        values: &[f32],
+        indices: Option<Vec<i32>>,
+        interpolation: &str,
+    ) -> Result<(), JsValue> {
+        self.normals = Some(OwnedPrimvar::new(
+            "buildCurves",
+            values,
+            indices,
+            interpolation,
+            1,
+        )?);
+        Ok(())
+    }
+
+    /// Its `displayColor`.
+    ///
+    /// # Errors
+    ///
+    /// An unknown interpolation, or values that are not whole triples.
+    #[wasm_bindgen(js_name = displayColor)]
+    pub fn display_color(
+        &mut self,
+        values: &[f32],
+        indices: Option<Vec<i32>>,
+        interpolation: &str,
+    ) -> Result<(), JsValue> {
+        self.colors = Some(OwnedPrimvar::new(
+            "buildCurves",
+            values,
+            indices,
+            interpolation,
+            1,
+        )?);
+        Ok(())
+    }
+
+    /// Its `displayOpacity`.
+    ///
+    /// # Errors
+    ///
+    /// An unknown interpolation.
+    #[wasm_bindgen(js_name = displayOpacity)]
+    pub fn display_opacity(
+        &mut self,
+        values: &[f32],
+        indices: Option<Vec<i32>>,
+        interpolation: &str,
+    ) -> Result<(), JsValue> {
+        self.opacities = Some(OwnedScalars::new(
+            "buildCurves",
+            values,
+            indices,
+            interpolation,
+        )?);
+        Ok(())
+    }
+
+    /// Lays the curves out and fills their buffers: line segments, and
+    /// with `swept` tubes of `sides` sides or ribbons; `samples` per
+    /// segment.
+    #[must_use]
+    pub fn build(self, swept: bool, samples: u32, sides: u32) -> StagehandCurves {
+        let options = CurveOptions {
+            style: if swept {
+                CurveStyle::Swept
+            } else {
+                CurveStyle::Lines
+            },
+            samples,
+            sides,
+        };
+        let (plan, buffers) = self.with_input(|input| {
+            let plan = CurvesPlan::new(input, &options);
+            let Ok(buffers) = plan.buffers(input) else {
+                unreachable!("a plan fills from the input it was built from")
+            };
+            (plan, buffers)
+        });
+        StagehandCurves { plan, buffers }
+    }
+
+    fn with_input<R>(&self, f: impl FnOnce(&CurvesInput<'_>) -> R) -> R {
+        let input = CurvesInput {
+            form: match self.form.as_str() {
+                "nurbs" => CurveForm::Nurbs {
+                    order: &self.order,
+                    knots: &self.knots,
+                    ranges: &self.ranges,
+                    weights: &self.weights,
+                },
+                "hermite" => CurveForm::Hermite {
+                    tangents: &self.tangents,
+                },
+                _ => CurveForm::Basis {
+                    curve_type: &self.tokens[0],
+                    basis: &self.tokens[1],
+                    wrap: &self.tokens[2],
+                },
+            },
+            vertex_counts: &self.counts,
+            points: &self.points,
+            widths: self.widths.as_ref().map(OwnedScalars::primvar),
+            normals: self.normals.as_ref().and_then(OwnedPrimvar::primvar),
+            colors: self.colors.as_ref().and_then(OwnedPrimvar::primvar),
+            opacities: self.opacities.as_ref().map(OwnedScalars::primvar),
+        };
+        f(&input)
+    }
+}
+
+/// Curves laid out and filled, keeping their plan for
+/// [`Self::refill_from`].
+#[wasm_bindgen]
+#[derive(Debug)]
+pub struct StagehandCurves {
+    plan: CurvesPlan,
+    buffers: CurveBuffers,
+}
+
+#[wasm_bindgen]
+impl StagehandCurves {
+    /// Each sample's position, three numbers each.
+    #[must_use]
+    pub fn positions(&self) -> Vec<f32> {
+        self.buffers.positions.as_flattened().to_vec()
+    }
+
+    /// Each sample's width.
+    #[must_use]
+    pub fn widths(&self) -> Vec<f32> {
+        self.buffers.widths.clone()
+    }
+
+    /// Each sample's normal, when drawn.
+    #[must_use]
+    pub fn normals(&self) -> Option<Vec<f32>> {
+        self.buffers
+            .normals
+            .as_ref()
+            .map(|values| values.as_flattened().to_vec())
+    }
+
+    /// Each sample's display color, when drawn.
+    #[must_use]
+    pub fn colors(&self) -> Option<Vec<f32>> {
+        self.buffers
+            .colors
+            .as_ref()
+            .map(|values| values.as_flattened().to_vec())
+    }
+
+    /// Each sample's display opacity, when drawn.
+    #[must_use]
+    pub fn opacities(&self) -> Option<Vec<f32>> {
+        self.buffers.opacities.clone()
+    }
+
+    /// Two sample indices per line segment.
+    #[must_use]
+    pub fn lines(&self) -> Vec<u32> {
+        self.buffers.lines.clone()
+    }
+
+    /// Each drawn curve's first sample and sample count.
+    #[must_use]
+    pub fn curves(&self) -> Vec<u32> {
+        self.buffers.curves.as_flattened().to_vec()
+    }
+
+    /// The swept triangles as a mesh: empty when drawn as lines.
+    #[must_use]
+    pub fn swept(&self) -> StagehandMesh {
+        StagehandMesh {
+            plan: None,
+            buffers: self.buffers.swept.clone().unwrap_or_default(),
+        }
+    }
+
+    /// The report, as JSON, without its extent ([`Self::extent`]).
+    #[must_use]
+    pub fn report(&self) -> String {
+        report::curves_json(&self.buffers.report)
+    }
+
+    /// `UsdGeomCurves::ComputeExtent` of the points and widths, as six
+    /// numbers (minimum, then maximum); `None` for no points.
+    #[must_use]
+    pub fn extent(&self) -> Option<Vec<f32>> {
+        self.buffers
+            .report
+            .extent
+            .map(|extent| extent.as_flattened().to_vec())
+    }
+
+    /// Whether `builder` has these curves' topology, so
+    /// [`Self::refill_from`] keeps the plan.
+    #[wasm_bindgen(js_name = sameTopology)]
+    #[must_use]
+    pub fn same_topology(&self, builder: &CurvesBuilder) -> bool {
+        builder.with_input(|input| self.plan.same_topology(input))
+    }
+
+    /// Fills the buffers again from `builder`, by the kept plan.
+    ///
+    /// # Errors
+    ///
+    /// When its topology is not the plan's.
+    #[wasm_bindgen(js_name = refillFrom)]
+    pub fn refill_from(&mut self, builder: &CurvesBuilder) -> Result<(), JsValue> {
+        self.buffers = builder
+            .with_input(|input| self.plan.buffers(input))
+            .map_err(|_| error("refillFrom", "the topology is not the plan's"))?;
+        Ok(())
+    }
+}
+
+/// The unit shape points are instanced as (`spheres` or `discs`, at
+/// `segments` and `rings`), or an empty mesh for `sprites`.
+///
+/// # Errors
+///
+/// An unknown kind.
+#[wasm_bindgen(js_name = pointShape)]
+pub fn point_shape_export(kind: &str, segments: u32, rings: u32) -> Result<StagehandMesh, JsValue> {
+    let tessellation = Tessellation { segments, rings };
+    let buffers = match kind {
+        "spheres" => point_shape(PointShape::Spheres, &tessellation),
+        "discs" => point_shape(PointShape::Discs, &tessellation),
+        "sprites" => MeshBuffers::default(),
+        _ => return Err(error("pointShape", "unknown point shape")),
+    };
+    Ok(StagehandMesh {
+        plan: None,
+        buffers,
     })
 }

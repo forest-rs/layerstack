@@ -113,6 +113,36 @@ only when a shading property of it or of a prim its network reads
 changes, or an item comes to bind it, and `setTime` reads only those with
 an input that might vary.
 
+## Curves and points
+
+`readCurves(stage, path, { time })` reads a `BasisCurves`, `NurbsCurves` or
+`HermiteCurves` into typed arrays, and `stagehand.buildCurves(input,
+{ style, samples, sides })` lays it out by OpenUSD's segment rules (`vstep`,
+wrap, pinned ends through the schema's phantom points) in the module:
+`positions`, `widths`, `colors`, `opacities` per sample, `lines` (two
+sample indices per segment), `curves` (each curve's samples), and with
+`style: "swept"` tubes of `sides` sides, or ribbons where normals are
+authored, as `swept` triangles. A NURBS curve that jumps at an interior
+knot of full multiplicity is sampled on both sides of the jump, and no line
+segment or sweep crosses it. `report` gives segments per curve, the
+evaluation and any token drawn as linear (`fallbacks`), samples, each
+primvar's fate, widths below zero drawn as 0 (`clampedWidths`), notes (a
+NURBS curve not drawn says why by its `code`) and the
+`UsdGeomCurves::ComputeExtent` extent.
+`basisSegmentCounts`, `basisDataSizes` and `interpolationForSize` answer as
+`UsdGeomBasisCurves` does. `readPointSet` and `fillPoints` give a `Points`'
+per-point positions, widths, colors and `ids`; `stagehand.pointShape` the
+unit sphere or disc to instance at each point.
+
+In a draw list (`curves` and `points` options), curves and points are
+items with buffers (`buffers.curves`, `buffers.points`; `buffers.mesh` is
+their swept triangles or instanced shape): new points, widths or colors
+refill (`work.curvesRefilled`, `work.pointsRefilled`), a new
+`curveVertexCounts`, `type`, `basis` or `wrap`, or a NURBS curve's `order`,
+`knots`, `ranges` or `pointWeights`, lays curves out again
+(`work.curvesLaidOut`), and a new point count reads points anew
+(`work.pointsRebuilt`).
+
 ## Two modules, typed arrays between them
 
 This package's WebAssembly module is its own (`layerstack_stagehand_wasm`)

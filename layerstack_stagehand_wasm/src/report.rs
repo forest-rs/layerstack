@@ -7,7 +7,8 @@ use alloc::string::String;
 use core::fmt::Write;
 
 use layerstack_stagehand::{
-    ChannelState, FaceNoteKind, MeshReport, NormalsSource, SmoothNormals, Triangulation,
+    ChannelState, CurveEvaluation, CurveGeometry, CurveNoteKind, CurveProblem, CurvesReport,
+    FaceNoteKind, MeshReport, NormalsSource, NurbsError, SmoothNormals, Triangulation,
 };
 
 /// `text` as a JSON string.
@@ -140,6 +141,142 @@ pub(crate) fn json(report: &MeshReport) -> String {
         out.push('}');
     }
     out.push_str("]}");
+    out
+}
+
+/// A curves report as the JSON the TypeScript `CurvesReport` reads.
+pub(crate) fn curves_json(report: &CurvesReport) -> String {
+    let mut out = String::from(r#"{"evaluation":"#);
+    match report.evaluation {
+        CurveEvaluation::Basis {
+            curve_type,
+            basis,
+            wrap,
+        } => {
+            let _ = write!(
+                out,
+                r#"{{"kind":"basis","type":"{}","basis":{},"wrap":"{}"}}"#,
+                curve_type.as_str(),
+                basis.map_or(String::from("null"), |b| alloc::format!(
+                    "\"{}\"",
+                    b.as_str()
+                )),
+                wrap.as_str()
+            );
+        }
+        CurveEvaluation::Nurbs => out.push_str(r#"{"kind":"nurbs"}"#),
+        CurveEvaluation::Hermite => out.push_str(r#"{"kind":"hermite"}"#),
+    }
+    out.push_str(r#","fallbacks":["#);
+    for (i, fallback) in report.fallbacks.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        let _ = write!(out, r#"{{"attribute":"{}","token":"#, fallback.attribute);
+        quoted(&mut out, &fallback.token);
+        let _ = write!(out, r#","used":"{}"}}"#, fallback.used);
+    }
+    out.push_str(r#"],"segments":["#);
+    for (i, segments) in report.segments.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        let _ = write!(out, "{segments}");
+    }
+    out.push(']');
+    for (name, value) in [
+        ("curves", report.curves),
+        ("drawnCurves", report.drawn_curves),
+        ("samples", report.samples),
+        ("vertices", report.vertices),
+        ("lines", report.lines),
+        ("triangles", report.triangles),
+        ("degenerateStations", report.degenerate_stations),
+        ("clampedWidths", report.clamped_widths),
+    ] {
+        let _ = write!(out, r#","{name}":{value}"#);
+    }
+    match report.geometry {
+        CurveGeometry::Lines => out.push_str(r#","geometry":{"kind":"lines"}"#),
+        CurveGeometry::Tubes { sides } => {
+            let _ = write!(out, r#","geometry":{{"kind":"tubes","sides":{sides}}}"#);
+        }
+        CurveGeometry::Ribbons => out.push_str(r#","geometry":{"kind":"ribbons"}"#),
+    }
+    out.push_str(r#","channels":{"widths":"#);
+    channel(&mut out, &report.widths);
+    out.push_str(r#","normals":"#);
+    channel(&mut out, &report.normals);
+    out.push_str(r#","displayColor":"#);
+    channel(&mut out, &report.colors);
+    out.push_str(r#","displayOpacity":"#);
+    channel(&mut out, &report.opacities);
+    out.push_str(r#"},"notes":["#);
+    for (i, note) in report.notes.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        let _ = write!(out, r#"{{"curve":{},"#, note.curve);
+        match note.kind {
+            CurveNoteKind::Skipped { count } => {
+                let _ = write!(out, r#""kind":"skipped","count":{count}}}"#);
+            }
+            CurveNoteKind::Repeated { count } => {
+                let _ = write!(out, r#""kind":"repeated","count":{count}}}"#);
+            }
+            CurveNoteKind::Unused { unused } => {
+                let _ = write!(out, r#""kind":"unused","unused":{unused}}}"#);
+            }
+            CurveNoteKind::Nurbs(error) => {
+                // A code, not the error's text: its `Display` costs the
+                // module more than the TypeScript's own words for it.
+                let code = match error {
+                    NurbsError::Order { .. } => "order",
+                    NurbsError::TooFewPoints { .. } => "tooFewPoints",
+                    NurbsError::KnotCount { .. } => "knotCount",
+                    NurbsError::Knots { .. } => "knots",
+                    NurbsError::WeightCount { .. } => "weightCount",
+                    NurbsError::Weight { .. } => "weight",
+                    NurbsError::EmptyDomain => "emptyDomain",
+                    NurbsError::EmptyRange => "emptyRange",
+                    NurbsError::Point { .. } => "point",
+                    // `NurbsError` may grow; a newer reason reads as `other`.
+                    _ => "other",
+                };
+                let _ = write!(out, r#""kind":"nurbs","code":"{code}"}}"#);
+            }
+        }
+    }
+    out.push_str(r#"],"problem":"#);
+    match report.problem {
+        None => out.push_str("null"),
+        Some(problem) => {
+            let code = match problem {
+                CurveProblem::NegativeCount { .. } => "negativeCount",
+                CurveProblem::PointCount { .. } => "pointCount",
+                CurveProblem::Arrays { .. } => "arrays",
+            };
+            let reason = match problem {
+                CurveProblem::NegativeCount { curve, count } => {
+                    alloc::format!("curve {curve} has the negative vertex count {count}")
+                }
+                CurveProblem::PointCount { expected, found } => {
+                    alloc::format!(
+                        "the vertex counts sum to {expected}, but there are {found} points"
+                    )
+                }
+                CurveProblem::Arrays { attribute } => {
+                    alloc::format!("`{attribute}` does not match the curves")
+                }
+            };
+            let _ = write!(out, r#"{{"code":"{code}","reason":"#);
+            quoted(&mut out, &reason);
+            out.push('}');
+        }
+    }
+    // The extent leaves through `StagehandCurves::extent`, as numbers:
+    // formatting floats as text would cost the module more than the rest.
+    out.push('}');
     out
 }
 

@@ -150,7 +150,11 @@ impl fmt::Display for DropReason {
             }
             Self::Index(index) => write!(f, "the index {index} names no value"),
             Self::Interpolation(interpolation) => {
-                write!(f, "{interpolation:?} interpolation is not drawn here")
+                write!(
+                    f,
+                    "{} interpolation is not drawn here",
+                    interpolation.as_str()
+                )
             }
         }
     }

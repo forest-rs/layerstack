@@ -59,6 +59,15 @@ pub enum CurveWrap {
 }
 
 impl CurveType {
+    /// Its token.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Linear => "linear",
+            Self::Cubic => "cubic",
+        }
+    }
+
     /// The type a token names.
     #[must_use]
     pub fn from_token(token: &str) -> Option<Self> {
@@ -71,6 +80,16 @@ impl CurveType {
 }
 
 impl CurveBasis {
+    /// Its token.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Bezier => "bezier",
+            Self::BSpline => "bspline",
+            Self::CatmullRom => "catmullRom",
+        }
+    }
+
     /// The basis a token names.
     #[must_use]
     pub fn from_token(token: &str) -> Option<Self> {
@@ -101,6 +120,16 @@ impl CurveBasis {
 }
 
 impl CurveWrap {
+    /// Its token.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Nonperiodic => "nonperiodic",
+            Self::Periodic => "periodic",
+            Self::Pinned => "pinned",
+        }
+    }
+
     /// The wrap a token names.
     #[must_use]
     pub fn from_token(token: &str) -> Option<Self> {

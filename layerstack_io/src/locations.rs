@@ -15,7 +15,7 @@ use alloc::string::String;
 
 use layerstack::{
     AssetResolveError, AssetResolver, LayerId, PathInterner, ResolvedAsset, TokenInterner,
-    asset::{FormatArgs, create_identifier, normalize_asset_path},
+    asset::{FORMAT_ARGS_DELIMITER, FormatArgs, create_identifier, normalize_asset_path},
     stage::flatten::{FlattenError, FlattenRequirements, Flattened},
 };
 
@@ -88,6 +88,21 @@ impl<B: Storage> AssetResolver for LayerLocations<'_, B> {
     }
 
     fn anchor_asset_path(&self, asset_path: &str, anchor: LayerId) -> Option<String> {
+        // Format arguments are split off, the path anchored (a search path
+        // looked up without them) and the arguments appended as authored,
+        // as `SdfComputeAssetPathRelativeToLayer` does
+        // (`pxr/usd/sdf/layerUtils.cpp:83-89`).
+        if !asset_path.starts_with('`')
+            && let Some(at) = asset_path.find(FORMAT_ARGS_DELIMITER)
+        {
+            let (path, arguments) = asset_path.split_at(at);
+            if path.is_empty() {
+                return None;
+            }
+            return self
+                .anchor_asset_path(path, anchor)
+                .map(|anchored| anchored + arguments);
+        }
         let location = self.resolved_path(anchor).unwrap_or("");
         let exists = |identifier: &str| self.exists(identifier);
         let Some(package) = self.catalog.source(anchor).and_then(|s| s.package) else {

@@ -558,8 +558,13 @@ impl OpinionValue {
     /// OpenUSD `_GetResolveInfoWithClipsImpl`; AOUSD Core §12.3.
     #[must_use]
     pub fn blocks_animation(&self) -> bool {
+        // A tag test rather than `== Some(Value::AnimationBlock)`: the
+        // comparison would call `Value::eq`, a large function in another
+        // codegen unit, for every opinion of every timed read.
         self.as_property().is_some_and(|spec| {
-            spec.default == Some(Value::AnimationBlock)
+            spec.default
+                .as_ref()
+                .is_some_and(|value| matches!(value.materialized(), Value::AnimationBlock))
                 && self.time_samples().is_none()
                 && spec.spline.is_none()
         })

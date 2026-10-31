@@ -704,6 +704,15 @@ fn clip_times_support_discontinuities_reversal_holds_and_timecode_values() {
             vec![0., 5., 0., 5., 10.],
             vec![0., 10. - safe_step, 10., 20.],
         ),
+        // A jump that starts `times` has no segment before it; OpenUSD
+        // drops it (`clipSet.cpp:460-485`), so clip time 0 holds before 10.
+        (
+            "first-jump",
+            "[(10,10),(10,0),(20,10)]",
+            vec![-1., 5., 9.5, 10., 15., 25.],
+            vec![0., 0., 0., 0., 5., 10.],
+            vec![0., 10., 20.],
+        ),
         (
             "reverse",
             "[(0,10),(10,0)]",

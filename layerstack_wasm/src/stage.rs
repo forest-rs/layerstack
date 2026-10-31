@@ -892,6 +892,33 @@ impl Stage {
             .unwrap_or_default())
     }
 
+    /// Whether each attribute's value might vary with time: several time
+    /// samples, a spline, or value clips that may supply several, directly
+    /// or under sparse edits; also while the clip metadata, or a set's
+    /// single clip, that settles it is not loaded (unknown, answered
+    /// conservatively). One per path, `1` or `0`; `0` for a path no
+    /// attribute is at.
+    ///
+    /// Spec: AOUSD Core §12.3.2, §12.3.4 (value clips). OpenUSD:
+    /// `UsdAttribute::ValueMightBeTimeVarying`.
+    ///
+    /// # Errors
+    ///
+    /// `path.invalid` for a path that is not a property path.
+    pub(crate) fn values_might_vary(&self, paths: &[String]) -> Result<Vec<u8>, Error> {
+        let view = self.document.view();
+        paths
+            .iter()
+            .map(|path| {
+                check_property_path(path)?;
+                Ok(u8::from(
+                    view.attribute(path.as_str())
+                        .is_some_and(layerstack::Attribute::might_be_time_varying),
+                ))
+            })
+            .collect()
+    }
+
     /// Whether each attribute's value source might vary with time, the
     /// default time included: time samples (even one), a spline or value
     /// clips supply it, directly or under sparse edits; also while the
@@ -2364,6 +2391,12 @@ impl Stage {
     #[wasm_bindgen(js_name = timeSamples)]
     pub fn js_time_samples(&self, path: &str) -> Result<Vec<f64>, JsValue> {
         Ok(self.time_samples(path)?)
+    }
+
+    /// The flags `values_might_vary` reads, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = valuesMightVary)]
+    pub fn js_values_might_vary(&self, paths: Vec<String>) -> Result<Vec<u8>, JsValue> {
+        Ok(self.values_might_vary(&paths)?)
     }
 
     /// The flags `value_sources_might_vary` reads, as documented in

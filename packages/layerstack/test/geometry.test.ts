@@ -174,8 +174,16 @@ def Xform "Base" {
       [true, false, true, false],
     );
     assert.equal(stage.attribute("/Base.radius")?.valueSourceMightBeTimeVarying(), true);
+    // A single sample is one value at every numeric time: the value does
+    // not vary, though its source does (`ValueMightBeTimeVarying`).
+    assert.deepEqual(
+      stage.valuesMightBeTimeVarying(["/Base.radius", "/Robot/Arm/Hand.size", "/Robot.xformOp:translate", "/Base.none"]),
+      [true, false, false, false],
+    );
+    assert.equal(stage.attribute("/Robot.xformOp:translate")?.mightBeTimeVarying(), false);
     assert.equal(failure(() => stage.worldTransformsMightVary(["/Gone"])).code, "prim.not_found");
     assert.equal(failure(() => stage.valueSourcesMightBeTimeVarying(["/Base"])).code, "path.invalid");
+    assert.equal(failure(() => stage.valuesMightBeTimeVarying(["/Base"])).code, "path.invalid");
   });
 
   it("call an attribute value clips may supply varying while their metadata is not loaded", () => {
@@ -205,6 +213,7 @@ def Mesh "Still" {
 `),
     });
     assert.deepEqual(stage.valueSourcesMightBeTimeVarying(["/Plate.points", "/Still.points"]), [true, false]);
+    assert.deepEqual(stage.valuesMightBeTimeVarying(["/Plate.points", "/Still.points"]), [true, false]);
   });
 });
 

@@ -1161,6 +1161,38 @@ export type BindingStrength = "weakerThanDescendants" | "strongerThanDescendants
  * prim's own binding or an ancestor's, direct or through a collection,
  * for the purpose asked for and then for all purposes.
  */
+/**
+ * A collection's membership asked of some prims
+ * ({@link Stage.collectionMembership}): `UsdCollectionAPI::
+ * ComputeMembershipQuery`, then `IsPathIncluded` for each.
+ */
+export interface CollectionMembership {
+  /**
+   * Equal for two collections exactly when their memberships are: their
+   * rule maps, included collections, expansion rules and resolved
+   * `membershipExpression`s. Opaque: compare it, do not read it.
+   */
+  readonly key: string;
+  /**
+   * Whether its rule map is the pseudo-root with `expandPrims` alone: it
+   * includes every prim, as the `UsdLuxLightAPI` link fallback
+   * (`includeRoot = true`) does; UsdImaging gives such a collection no
+   * light-link category (`_IsQueryTrivial`).
+   */
+  readonly everything: boolean;
+  /** For each path asked, in order, whether the collection includes it. */
+  readonly included: readonly boolean[];
+  /**
+   * The collections it reads, by collection path
+   * (`/World.collection:robots`): those it includes, directly or through
+   * them, and those its `membershipExpression` references. An edit to one
+   * of them can change this membership.
+   */
+  readonly reads: readonly string[];
+  /** Whether its expression references a collection that does not exist (yet): any collection made later may change it. */
+  readonly readsAny: boolean;
+}
+
 export interface MaterialBinding {
   /** The bound `Material`'s path; `null` when the winning binding targets no material (a missing prim, or one of another type). */
   readonly material: string | null;

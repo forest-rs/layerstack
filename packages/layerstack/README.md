@@ -388,6 +388,7 @@ stage objects and authored as `Edit`s, as OpenUSD's `UsdShade`,
 | Read | Returns |
 |---|---|
 | `prim.boundMaterial({ purpose? })`, `stage.boundMaterials(paths, { purpose? })` | `MaterialBinding \| null`: `material` (`null` when the target is no material), `target`, `relationship`, `kind` (`direct`, `collection`), `collection`, `strength`, `purpose`, `withoutBindingApi` |
+| `stage.collectionMembership(path, name, paths)` | `CollectionMembership`: `key` (equal for equal memberships), `everything` (the rule map is `/` with `expandPrims` alone, as the `UsdLuxLightAPI` link fallback), `included` (per path, `IsPathIncluded`), `reads` (the collections it includes or references) and `readsAny` |
 | `prim.materialSubsets({ purpose?, time? })` | `MaterialSubsets`: `familyType`, `fallback` binding, `subsets` (`path`, `indices` as an `int[]` array, `binding`), `problems` |
 | `stage.material(path)` | `Material \| null`: `baseMaterial`, `surface(contexts?)` / `displacement` / `volume` (`TerminalSource`: `shader`, `context`, `sources`), `inputs()`, `outputs()`, `input(name)`, `output(name)` |
 | `stage.shader(path)` | `Shader \| null`: `id`, `implementationSource`, `sdrMetadata`, `inputs()`, `outputs()`, `input(name)`, `output(name)` |

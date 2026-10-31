@@ -456,3 +456,38 @@ describe("an editor checking a connection source path", () => {
     ]);
   });
 });
+
+describe("a renderer linking lights", () => {
+  // usd-core's answers for `stagehand_links/scene.usda` (`stagehand_links_oracle.py`).
+  const base = new URL("../../../layerstack_conformance/fixtures/stagehand_links/", import.meta.url);
+  const oracle = JSON.parse(readFileSync(new URL("oracle.json", base), "utf8")) as {
+    targets: { path: string }[];
+    links: { light: string; link: string; trivial: boolean; shares: number; included: string[] }[];
+  };
+
+  it("asks each light's link collections what OpenUSD's membership queries answer", () => {
+    using stage = layerstack.open({ identifier: "scene.usda", bytes: readFileSync(new URL("scene.usda", base)) });
+    const targets = oracle.targets.map((target) => target.path);
+    const keys = new Map<number, string>();
+    for (const link of oracle.links) {
+      const membership = stage.collectionMembership(link.light, link.link, targets);
+      assert.equal(membership.everything, link.trivial, `${link.light} ${link.link}`);
+      assert.deepEqual(
+        targets.filter((_, at) => membership.included[at]),
+        link.included,
+        `${link.light} ${link.link}`,
+      );
+      // Equal keys exactly where OpenUSD's queries are equal.
+      const shared = keys.get(link.shares);
+      if (shared === undefined) {
+        assert.ok(![...keys.values()].includes(membership.key), `${link.light} ${link.link}`);
+        keys.set(link.shares, membership.key);
+      } else {
+        assert.equal(membership.key, shared, `${link.light} ${link.link}`);
+      }
+    }
+    const error = failure(() => stage.collectionMembership("/World/Lights/Spot", "lightLink", ["/World/Gone"]));
+    assert.equal(error.code, "prim.not_found");
+    assert.equal(error.path, "/World/Gone");
+  });
+});

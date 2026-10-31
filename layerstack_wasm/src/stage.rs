@@ -2403,6 +2403,18 @@ impl Stage {
         Ok(self.export_package()?.into())
     }
 
+    /// The record `collection_membership` builds, as documented in
+    /// `schemas.rs`.
+    #[wasm_bindgen(js_name = collectionMembership)]
+    pub fn js_collection_membership(
+        &self,
+        path: &str,
+        name: &str,
+        paths: Vec<String>,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self.collection_membership(path, name, &paths)?.into())
+    }
+
     /// The record `bound_materials` builds, as documented in `schemas.rs`.
     #[wasm_bindgen(js_name = boundMaterials)]
     pub fn js_bound_materials(

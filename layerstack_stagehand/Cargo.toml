@@ -24,9 +24,14 @@ default = ["stage"]
 stage = ["dep:layerstack", "dep:layerstack_schemas"]
 
 [dependencies]
-# Ear clipping of concave faces: deterministic, `no_std`, no
-# dependencies of its own. Pinned to a commit until it is published.
-exedra_triangulate = { default-features = false, git = "https://github.com/forest-rs/exedra", rev = "c089c8710f3783be596c416a2e4d3195188df360" }
+# Curve geometry: cubic bases, de Boor, rotation-minimizing frames,
+# tubes and ribbons. `no_std` (through `exedra_math`'s `libm` backend),
+# depends only on `exedra_math`. Pinned to a commit until it is published.
+exedra_curves = { default-features = false, features = ["libm"], git = "https://github.com/forest-rs/exedra", rev = "875e5b0ba52a00f3f1e2d3b963c33aa3bfea2511" }
+# Ear clipping of concave faces: deterministic, `no_std`, depends only on
+# `exedra_math`. Pinned to `exedra_curves`' commit, so the two share one
+# `exedra_math`.
+exedra_triangulate = { default-features = false, git = "https://github.com/forest-rs/exedra", rev = "875e5b0ba52a00f3f1e2d3b963c33aa3bfea2511" }
 # The vertex split's corner keys.
 hashbrown = { workspace = true }
 layerstack = { optional = true, workspace = true }

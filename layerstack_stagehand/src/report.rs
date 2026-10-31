@@ -133,6 +133,9 @@ pub enum DropReason {
     },
     /// An index names no value.
     Index(i32),
+    /// Its interpolation is not drawn for this kind of prim: `faceVarying`
+    /// on curves, `vertex` and `varying` on NURBS curves.
+    Interpolation(Interpolation),
 }
 
 impl fmt::Display for DropReason {
@@ -146,6 +149,9 @@ impl fmt::Display for DropReason {
                 )
             }
             Self::Index(index) => write!(f, "the index {index} names no value"),
+            Self::Interpolation(interpolation) => {
+                write!(f, "{interpolation:?} interpolation is not drawn here")
+            }
         }
     }
 }

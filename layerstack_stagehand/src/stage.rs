@@ -26,15 +26,15 @@ use crate::shapes::{Axis, Shape};
 
 /// A primvar read off the stage: shared values and indices.
 #[derive(Clone, Debug)]
-struct Owned<T> {
-    values: Arc<Vec<T>>,
-    indices: Option<Arc<Vec<i32>>>,
-    interpolation: Interpolation,
-    element_size: u32,
+pub(crate) struct Owned<T> {
+    pub(crate) values: Arc<Vec<T>>,
+    pub(crate) indices: Option<Arc<Vec<i32>>>,
+    pub(crate) interpolation: Interpolation,
+    pub(crate) element_size: u32,
 }
 
 impl<T> Owned<T> {
-    fn primvar(&self) -> Primvar<'_, T> {
+    pub(crate) fn primvar(&self) -> Primvar<'_, T> {
         Primvar {
             values: &self.values,
             indices: self.indices.as_deref().map(Vec::as_slice),
@@ -262,7 +262,10 @@ fn same<T: PartialEq>(a: &Arc<Vec<T>>, b: &Arc<Vec<T>>) -> bool {
 }
 
 /// Whether two primvars are laid out alike and hold the same values.
-fn same_primvar<T: PartialEq>(a: Option<&Primvar<'_, T>>, b: Option<&Primvar<'_, T>>) -> bool {
+pub(crate) fn same_primvar<T: PartialEq>(
+    a: Option<&Primvar<'_, T>>,
+    b: Option<&Primvar<'_, T>>,
+) -> bool {
     match (a, b) {
         (None, None) => true,
         (Some(a), Some(b)) => {
@@ -276,7 +279,7 @@ fn same_primvar<T: PartialEq>(a: Option<&Primvar<'_, T>>, b: Option<&Primvar<'_,
 }
 
 /// What reading one primvar found.
-enum Read<T> {
+pub(crate) enum Read<T> {
     /// No primvar, or no value.
     Absent,
     /// A value of another type, or one that fails to decode.
@@ -286,7 +289,11 @@ enum Read<T> {
 }
 
 impl<T> Read<T> {
-    fn keep(self, name: &'static str, unread: &mut Vec<&'static str>) -> Option<Owned<T>> {
+    pub(crate) fn keep(
+        self,
+        name: &'static str,
+        unread: &mut Vec<&'static str>,
+    ) -> Option<Owned<T>> {
         match self {
             Self::Absent => None,
             Self::Unread => {
@@ -301,7 +308,7 @@ impl<T> Read<T> {
 /// The primvar `name` of `prim` at `time`, its values read by `read`; with
 /// `inherited`, a constant one of an ancestor when the prim has none
 /// (`UsdGeomPrimvarsAPI::FindPrimvarWithInheritance`).
-fn primvar<T>(
+pub(crate) fn primvar<T>(
     scene: &Scene<'_>,
     prim: PathId,
     name: &str,

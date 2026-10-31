@@ -19,15 +19,18 @@ use layerstack_schemas::{
 };
 
 use crate::camera::{CAMERA_INPUTS, CameraItem};
+use crate::curves::{CurveBuffers, CurveOptions, CurvesPlan, CurvesReport};
 use crate::input::MeshInput;
 use crate::light::{
     InstanceId, LIGHT_INPUTS, LightId, LightInstance, LightItem, LightKind, read_light,
 };
 use crate::material::{MaterialItem, read_material};
 use crate::plan::{MeshBuffers, MeshOptions, MeshPlan};
+use crate::points::{PointBuffers, PointsReport, fill_points, point_shape};
 use crate::report::MeshReport;
 use crate::shapes::{Shape, Tessellation, tessellate};
 use crate::stage::{StageMesh, read_shape};
+use crate::stage_curves::{StageCurves, StagePoints};
 
 /// Which `UsdGeomImageable` purposes a draw list draws.
 ///
@@ -92,6 +95,25 @@ pub struct DrawOptions {
     /// `outputs:surface` is read after them, or alone when empty
     /// (`UsdShadeMaterial::ComputeSurfaceSource`).
     pub render_contexts: &'static [&'static str],
+    /// How curves are sampled and drawn: line segments, or swept into
+    /// tubes and ribbons.
+    pub curves: CurveOptions,
+    /// How points are drawn.
+    pub points: PointStyle,
+}
+
+/// How a [`DrawList`] draws `Points`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum PointStyle {
+    /// Point sprites: [`DrawBuffers::points`] alone, and an empty
+    /// [`DrawBuffers::buffers`].
+    #[default]
+    Sprites,
+    /// Instanced shapes too: [`DrawBuffers::buffers`] holds the unit
+    /// sphere, or, when normals are authored, the unit disc
+    /// ([`crate::point_shape`] at [`DrawOptions::tessellation`]), for a
+    /// renderer to draw at each point scaled by its width.
+    Shapes,
 }
 
 impl Default for DrawOptions {
@@ -102,6 +124,8 @@ impl Default for DrawOptions {
             mesh: MeshOptions::default(),
             tessellation: Tessellation::default(),
             render_contexts: &[],
+            curves: CurveOptions::default(),
+            points: PointStyle::Sprites,
         }
     }
 }
@@ -206,8 +230,17 @@ pub struct DrawBuffers {
     /// The prim it was read from: the mesh, or the first prim drawn with
     /// this shape.
     pub prim: PathId,
-    /// The buffers.
+    /// The triangles drawn: a mesh's, a shape's, curves' swept tubes or
+    /// ribbons, or the unit shape points are instanced as
+    /// ([`PointStyle::Shapes`]); empty for curves drawn as lines and for
+    /// point sprites.
     pub buffers: MeshBuffers,
+    /// Curves' samples, line segments and report
+    /// ([`crate::CurveBuffers`]), for `BasisCurves`, `NurbsCurves` and
+    /// `HermiteCurves`; their swept triangles are [`Self::buffers`].
+    pub curves: Option<CurveBuffers>,
+    /// A `Points`' per-point positions, widths, colors and ids, and report.
+    pub points: Option<PointBuffers>,
     /// The mesh's face subsets, in the order of their draw ranges.
     pub subsets: Vec<PathId>,
     /// Bumped each time the buffers are filled again or rebuilt.
@@ -218,6 +251,10 @@ pub struct DrawBuffers {
     plan: Option<MeshPlan>,
     /// The mesh as last read, for a mesh.
     mesh: Option<StageMesh>,
+    /// The curves' plan and the curves as last read, for curves.
+    curve_plan: Option<(CurvesPlan, StageCurves)>,
+    /// The points as last read, for points.
+    stage_points: Option<StagePoints>,
     /// The texture coordinate sets besides `st` the materials its items
     /// bind read, sorted: those it was read with.
     uv_sets: Vec<String>,
@@ -230,6 +267,19 @@ impl DrawBuffers {
     #[must_use]
     pub fn report(&self) -> Option<&MeshReport> {
         self.plan.as_ref().map(MeshPlan::report)
+    }
+
+    /// What the curves plan made of the curves, for curves: segments per
+    /// curve, the evaluation and fallbacks, samples, primvars and notes.
+    #[must_use]
+    pub fn curves_report(&self) -> Option<&CurvesReport> {
+        self.curves.as_ref().map(|curves| &curves.report)
+    }
+
+    /// What was made of the points, for points.
+    #[must_use]
+    pub fn points_report(&self) -> Option<&PointsReport> {
+        self.points.as_ref().map(|points| &points.report)
     }
 }
 
@@ -273,6 +323,18 @@ pub struct DrawWork {
     pub lights_read: u32,
     /// Materials read: their networks captured and their records built.
     pub materials_read: u32,
+    /// Curves filled again by their kept plan, for new points, widths,
+    /// normals or colors: no layout. Counted in [`Self::refills`] too.
+    pub curves_refilled: u32,
+    /// Curves laid out: segments and samples planned, for new curves or a
+    /// new `curveVertexCounts`, `type`, `basis`, `wrap`, `order`, `knots`
+    /// or `ranges`.
+    pub curves_laid_out: u32,
+    /// Point sets filled again for new values of as many points. Counted
+    /// in [`Self::refills`] too.
+    pub points_refilled: u32,
+    /// Point sets read anew: new, or their point count changed.
+    pub points_rebuilt: u32,
 }
 
 /// What changed in a [`DrawList`] since the diff before, for a renderer to
@@ -470,6 +532,21 @@ const GEOMETRY_INPUTS: &[&str] = &[
     "primvars:st:indices",
     "primvars:displayColor",
     "primvars:displayColor:indices",
+    "primvars:displayOpacity",
+    "primvars:displayOpacity:indices",
+    "curveVertexCounts",
+    "type",
+    "basis",
+    "wrap",
+    "widths",
+    "primvars:widths",
+    "primvars:widths:indices",
+    "order",
+    "knots",
+    "ranges",
+    "pointWeights",
+    "tangents",
+    "ids",
 ];
 
 /// A `GeomSubset`'s attributes, read by its mesh.
@@ -590,16 +667,27 @@ struct Varies {
     geometry: bool,
 }
 
-/// The drawn gprim types: a mesh or an implicit shape.
+/// The drawn gprim types: a mesh, an implicit shape, curves or points.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Gprim {
     Mesh,
     Shape,
+    Curves,
+    Points,
 }
 
 fn gprim(scene: &Scene<'_>, path: PathId) -> Option<Gprim> {
     if scene.is_a(path, "Mesh") {
         return Some(Gprim::Mesh);
+    }
+    if ["BasisCurves", "NurbsCurves", "HermiteCurves"]
+        .iter()
+        .any(|schema| scene.is_a(path, schema))
+    {
+        return Some(Gprim::Curves);
+    }
+    if scene.is_a(path, "Points") {
+        return Some(Gprim::Points);
     }
     [
         "Cube",
@@ -2392,6 +2480,10 @@ impl DrawList {
                         shape: None,
                         plan: Some(plan),
                         mesh: None,
+                        curves: None,
+                        points: None,
+                        curve_plan: None,
+                        stage_points: None,
                         uv_sets,
                         users: 0,
                     },
@@ -2426,6 +2518,10 @@ impl DrawList {
                         shape: Some(shape),
                         plan: None,
                         mesh: None,
+                        curves: None,
+                        points: None,
+                        curve_plan: None,
+                        stage_points: None,
                         uv_sets: Vec::new(),
                         users: 0,
                     },
@@ -2433,7 +2529,145 @@ impl DrawList {
                 self.shape_buffers.insert(shape_key, key);
                 Some(key)
             }
+            Gprim::Curves => self.read_curves(scene, item.prim, gather),
+            Gprim::Points => self.read_points(scene, item.prim, gather),
         }
+    }
+
+    /// Reads curves: the kept plan refills when the topology holds, a new
+    /// plan lays them out when it does not.
+    fn read_curves(
+        &mut self,
+        scene: &Scene<'_>,
+        prim: PathId,
+        gather: &mut Gather,
+    ) -> Option<BufferKey> {
+        let curves = StageCurves::read(scene, prim, self.options.time)?;
+        let options = self.options.curves;
+        let fill = |plan: &CurvesPlan, curves: &StageCurves| {
+            let mut filled = plan
+                .buffers(&curves.input())
+                .expect("the plan's own topology");
+            let swept = filled.swept.take().unwrap_or_default();
+            (filled, swept)
+        };
+        if let Some(&key) = self.mesh_buffers.get(&prim) {
+            let buffer = self.buffers.get_mut(&key).expect("a kept buffer");
+            let (plan, old) = buffer.curve_plan.as_ref().expect("a curves buffer");
+            if old.same_values(&curves) {
+                gather.work.buffers_reused += 1;
+                return Some(key);
+            }
+            let plan = if plan.same_topology(&curves.input()) {
+                gather.work.refills += 1;
+                gather.work.curves_refilled += 1;
+                gather.refilled.insert(key);
+                plan.clone()
+            } else {
+                gather.work.curves_laid_out += 1;
+                gather.rebuilt.insert(key);
+                CurvesPlan::new(&curves.input(), &options)
+            };
+            let (filled, swept) = fill(&plan, &curves);
+            buffer.curves = Some(filled);
+            buffer.buffers = swept;
+            buffer.revision += 1;
+            buffer.curve_plan = Some((plan, curves));
+            return Some(key);
+        }
+        let plan = CurvesPlan::new(&curves.input(), &options);
+        gather.work.curves_laid_out += 1;
+        let (filled, swept) = fill(&plan, &curves);
+        let key = self.next_key();
+        gather.buffers_added.insert(key);
+        self.buffers.insert(
+            key,
+            DrawBuffers {
+                key,
+                prim,
+                buffers: swept,
+                subsets: Vec::new(),
+                revision: 0,
+                shape: None,
+                plan: None,
+                mesh: None,
+                curves: Some(filled),
+                points: None,
+                curve_plan: Some((plan, curves)),
+                stage_points: None,
+                uv_sets: Vec::new(),
+                users: 0,
+            },
+        );
+        self.mesh_buffers.insert(prim, key);
+        Some(key)
+    }
+
+    /// Reads points: filled again for new values of as many points, read
+    /// anew when their count changes.
+    fn read_points(
+        &mut self,
+        scene: &Scene<'_>,
+        prim: PathId,
+        gather: &mut Gather,
+    ) -> Option<BufferKey> {
+        let points = StagePoints::read(scene, prim, self.options.time)?;
+        let filled = fill_points(&points.input());
+        let shape = match self.options.points {
+            PointStyle::Sprites => MeshBuffers::default(),
+            PointStyle::Shapes => point_shape(filled.report.shape, &self.options.tessellation),
+        };
+        if let Some(&key) = self.mesh_buffers.get(&prim) {
+            let buffer = self.buffers.get_mut(&key).expect("a kept buffer");
+            let old = buffer.stage_points.as_ref().expect("a points buffer");
+            if old.same_values(&points) {
+                gather.work.buffers_reused += 1;
+                return Some(key);
+            }
+            let previous = buffer.points.as_ref().expect("a points buffer");
+            if previous.positions.len() == filled.positions.len()
+                && previous.report.shape == filled.report.shape
+                && previous.normals.is_some() == filled.normals.is_some()
+                && previous.colors.is_some() == filled.colors.is_some()
+                && previous.opacities.is_some() == filled.opacities.is_some()
+            {
+                gather.work.refills += 1;
+                gather.work.points_refilled += 1;
+                gather.refilled.insert(key);
+            } else {
+                gather.work.points_rebuilt += 1;
+                gather.rebuilt.insert(key);
+                buffer.buffers = shape;
+            }
+            buffer.points = Some(filled);
+            buffer.revision += 1;
+            buffer.stage_points = Some(points);
+            return Some(key);
+        }
+        gather.work.points_rebuilt += 1;
+        let key = self.next_key();
+        gather.buffers_added.insert(key);
+        self.buffers.insert(
+            key,
+            DrawBuffers {
+                key,
+                prim,
+                buffers: shape,
+                subsets: Vec::new(),
+                revision: 0,
+                shape: None,
+                plan: None,
+                mesh: None,
+                curves: None,
+                points: Some(filled),
+                curve_plan: None,
+                stage_points: Some(points),
+                uv_sets: Vec::new(),
+                users: 0,
+            },
+        );
+        self.mesh_buffers.insert(prim, key);
+        Some(key)
     }
 
     fn next_key(&mut self) -> BufferKey {
@@ -3713,5 +3947,138 @@ def PointInstancer "Hopping" {
         assert!(diff.refilled.is_empty());
         assert_eq!(diff.work.triangulations, 1);
         assert_eq!(fixture.list.buffers(buffer).unwrap().revision, 2);
+    }
+
+    const CURVES: &str = r#"#usda 1.0
+def Xform "World" {
+    def BasisCurves "Path" {
+        uniform token type = "cubic"
+        uniform token basis = "catmullRom"
+        int[] curveVertexCounts = [5]
+        point3f[] points.timeSamples = {
+            1: [(0, 0, 0), (1, 0, 0), (2, 0, 1), (3, 0, 1), (4, 0, 0)],
+            2: [(0, 1, 0), (1, 1, 0), (2, 1, 1), (3, 1, 1), (4, 1, 0)],
+        }
+        float[] widths = [0.25] (interpolation = "constant")
+        color3f[] primvars:displayColor = [(0.5, 0.25, 0)]
+    }
+    def Points "Sparks" {
+        point3f[] points = [(0, 2, 0), (1, 2, 0), (2, 2, 0)]
+        float[] widths = [0.1, 0.2, 0.3]
+        int64[] ids = [7, 8, 9]
+    }
+}
+"#;
+
+    #[test]
+    fn curves_and_points_refill_for_values_and_lay_out_again_for_topology() {
+        use crate::{CurveBasis, CurveEvaluation, CurveType, CurveWrap};
+        use layerstack_schemas::usd_geom::{BasisCurvesBasis, BasisCurvesEdit, PointsEdit};
+
+        let (mut store, mut live) = compose(CURVES);
+        let mut list = DrawList::new(DrawOptions {
+            time: Time::at(1.0),
+            ..DrawOptions::default()
+        });
+        let diff = list.refresh(&Scene::new(live.stage(), &store));
+        assert_eq!(diff.added.len(), 2);
+        assert_eq!(diff.work.curves_laid_out, 1);
+        assert_eq!(diff.work.points_rebuilt, 1);
+        let path = store.path("/World/Path");
+        let sparks = store.path("/World/Sparks");
+        let buffer_of =
+            |list: &DrawList, prim| list.items().find(|item| item.prim == prim).unwrap().buffer;
+        let (path_buffer, sparks_buffer) = (buffer_of(&list, path), buffer_of(&list, sparks));
+        let report = list
+            .buffers(path_buffer)
+            .unwrap()
+            .curves_report()
+            .unwrap()
+            .clone();
+        assert_eq!(report.segments, [2]);
+        assert_eq!(
+            report.evaluation,
+            CurveEvaluation::Basis {
+                curve_type: CurveType::Cubic,
+                basis: Some(CurveBasis::CatmullRom),
+                wrap: CurveWrap::Nonperiodic,
+            }
+        );
+        let points = list
+            .buffers(sparks_buffer)
+            .unwrap()
+            .points
+            .as_ref()
+            .unwrap();
+        assert_eq!(points.ids, [7, 8, 9]);
+        assert_eq!(points.widths, [0.1, 0.2, 0.3]);
+
+        fn apply(
+            store: &mut InMemoryStore,
+            live: &mut LiveStage,
+            list: &mut DrawList,
+            author: &dyn Fn(&mut SchemaEdit<'_>),
+        ) -> DrawDiff {
+            let mut edit = SchemaEdit::new(live.stage(), store, EditTarget::for_layer(LayerId(1)));
+            author(&mut edit);
+            let transaction = edit.finish();
+            let applied = live.apply(store, &transaction).unwrap();
+            list.apply_changes(&Scene::new(live.stage(), store), &applied.changes)
+        }
+        // New widths: the kept plan refills.
+        let diff = apply(&mut store, &mut live, &mut list, &|edit| {
+            BasisCurvesEdit::new(edit, path)
+                .unwrap()
+                .unwrap()
+                .set_widths(edit, &[0.5]);
+        });
+        assert_eq!(diff.refilled, [path_buffer]);
+        assert_eq!(diff.work.curves_refilled, 1);
+        assert_eq!(diff.work.curves_laid_out, 0);
+        assert_eq!(diff.work.items_read, 1);
+        // A new basis: laid out again, that buffer alone.
+        let diff = apply(&mut store, &mut live, &mut list, &|edit| {
+            BasisCurvesEdit::new(edit, path)
+                .unwrap()
+                .unwrap()
+                .set_basis(edit, BasisCurvesBasis::Bspline);
+        });
+        assert_eq!(diff.rebuilt, [path_buffer]);
+        assert!(diff.refilled.is_empty());
+        assert_eq!(diff.work.curves_laid_out, 1);
+        // B-spline, 5 vertices: 2 segments too, now through no vertex.
+        let curves = list.buffers(path_buffer).unwrap().curves.as_ref().unwrap();
+        assert_eq!(curves.report.segments, [2]);
+        assert_ne!(curves.positions[0], [1.0, 0.0, 0.0]);
+        // Moved points, as many: refilled.
+        let diff = apply(&mut store, &mut live, &mut list, &|edit| {
+            PointsEdit::new(edit, sparks)
+                .unwrap()
+                .unwrap()
+                .set_points(edit, &[[0.0, 3.0, 0.0], [1.0, 3.0, 0.0], [2.0, 3.0, 0.0]]);
+        });
+        assert_eq!(diff.refilled, [sparks_buffer]);
+        assert_eq!(diff.work.points_refilled, 1);
+        // A point fewer: read anew.
+        let diff = apply(&mut store, &mut live, &mut list, &|edit| {
+            PointsEdit::new(edit, sparks)
+                .unwrap()
+                .unwrap()
+                .set_points(edit, &[[0.0, 3.0, 0.0], [1.0, 3.0, 0.0]]);
+        });
+        assert_eq!(diff.rebuilt, [sparks_buffer]);
+        assert_eq!(diff.work.points_rebuilt, 1);
+        // The ids no longer match the points: dropped, and reported.
+        let points = list
+            .buffers(sparks_buffer)
+            .unwrap()
+            .points_report()
+            .unwrap();
+        assert!(matches!(points.ids, crate::ChannelState::Dropped(_)));
+        // Time: the path's points are sampled, the sparks' are not.
+        let diff = list.set_time(&Scene::new(live.stage(), &store), Time::at(2.0));
+        assert_eq!(diff.refilled, [path_buffer]);
+        assert_eq!(diff.work.items_read, 1);
+        assert_eq!(diff.work.items_time_invariant, 1);
     }
 }

@@ -45,8 +45,17 @@ browser.
   for what cannot be represented; diffed, and read again only when
   something it reads changes.
 
-Subdivision surfaces are drawn as their control cage. Other shaders, curves,
-points and light linking evaluation are not covered yet.
+- **Curves and points**: `BasisCurves` (every type, basis and wrap, laid
+  out by OpenUSD's segment rules, pinned ends through the schema's phantom
+  points), `NurbsCurves` (de Boor) and `HermiteCurves`, sampled at an
+  explicit count per segment into line segments with per-sample widths,
+  colors and opacities, or swept into tubes and ribbons; `Points` as
+  sprites with their `ids`, or instanced spheres and discs. The curve
+  geometry is `exedra_curves`'. In a draw list, value edits refill and
+  topology edits lay curves out again.
+
+Subdivision surfaces are drawn as their control cage. Other shaders and
+light linking evaluation are not covered yet.
 
 ```rust
 use layerstack_stagehand::{MeshInput, MeshOptions, MeshPlan, MeshTopology};

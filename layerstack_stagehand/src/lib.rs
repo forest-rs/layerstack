@@ -177,7 +177,7 @@ pub use camera::CameraItem;
 #[cfg(feature = "stage")]
 pub use draw::{
     BufferKey, DrawBuffers, DrawDiff, DrawItem, DrawList, DrawOptions, DrawWork, ItemId,
-    ItemSource, Purposes,
+    ItemInstance, ItemSource, Purposes,
 };
 pub use input::{
     FaceSubsets, Interpolation, MeshInput, MeshTopology, Orientation, Primvar, SubdivisionScheme,

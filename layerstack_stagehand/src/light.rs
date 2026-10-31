@@ -1210,7 +1210,9 @@ def Xform "World" {
         let (store, live, mut list) = instanced();
         let scene = Scene::new(live.stage(), &store);
         let rows = oracle["rows"].as_array().unwrap();
-        assert_eq!(rows.len(), 39);
+        assert_eq!(rows.len(), 48);
+        let draws = oracle["draws"].as_array().unwrap();
+        assert_eq!(draws.len(), 20);
         for time in [Time::Default, Time::at(0.0), Time::at(10.0)] {
             if list.options().time != time {
                 list.set_time(&scene, time);
@@ -1270,6 +1272,42 @@ def Xform "World" {
             assert_eq!(listed, lights, "{time:?}: every light listed, and no other");
             let listed: Vec<_> = list.cameras().map(|camera| camera.path).collect();
             assert_eq!(listed, cameras, "{time:?}");
+            // Each point instancer's draws: its instances at this time, in
+            // its order, as `ComputeInstanceTransformsAtTime` keeps them.
+            let mut drawn = 0;
+            for item in list.items() {
+                let crate::ItemSource::PointInstancer { instancer, .. } = item.source else {
+                    continue;
+                };
+                let expected: Vec<&Json> = draws
+                    .iter()
+                    .filter(|row| {
+                        row["time"].as_f64().map_or(Time::Default, Time::at) == time
+                            && store.path(row["instancer"].as_str().unwrap()) == instancer
+                            && store.path(row["path"].as_str().unwrap()) == item.prim
+                    })
+                    .collect();
+                let at = alloc::format!("{:?} {time:?}", item.prim);
+                let ids: Vec<i64> = expected
+                    .iter()
+                    .map(|row| row["id"].as_i64().unwrap())
+                    .collect();
+                assert_eq!(item.ids, ids, "{at}");
+                assert_eq!(item.matrices.len(), expected.len(), "{at}");
+                for (matrix, row) in item.matrices.iter().zip(&expected) {
+                    for (i, matrix_row) in matrix.iter().enumerate() {
+                        for (j, value) in matrix_row.iter().enumerate() {
+                            let world = row["world"][i][j].as_f64().unwrap();
+                            assert!((value - world).abs() <= 1e-12, "{at}: world {i} {j}");
+                        }
+                    }
+                }
+                drawn += expected.len();
+            }
+            let rows = draws
+                .iter()
+                .filter(|row| row["time"].as_f64().map_or(Time::Default, Time::at) == time);
+            assert_eq!(drawn, rows.count(), "{time:?}: every instance drawn");
         }
     }
 
@@ -1441,6 +1479,94 @@ def Xform "World" {
         let diff = list.apply_changes(&Scene::new(live.stage(), &store), &applied.changes);
         assert_eq!(diff.lights_removed, [placed(7)]);
         assert!(diff.lights_added.is_empty() && diff.lights_changed.is_empty());
+    }
+
+    /// The flock samples `protoIndices`, `ids`, `positions` and
+    /// `invisibleIds`; the beacons only `invisibleIds`. A time change
+    /// derives both again: draws and lights of instances that exist (or are
+    /// unmasked) only at the new time are added, those of instances gone
+    /// or masked removed. The field and the swarm, whose arrays hold no
+    /// time samples, derive nothing.
+    #[test]
+    fn instances_sampled_over_time_come_and_go() {
+        use crate::{InstanceId, ItemInstance, LightId, LightInstance};
+        let (store, live, mut list) = instanced();
+        let scene = Scene::new(live.stage(), &store);
+        let flock = store.path("/World/Flock");
+        let beacons = store.path("/World/Beacons");
+        let glow = store.path("/World/Flock/Protos/Moth/Glow");
+        let wick = store.path("/World/Beacons/Protos/Lantern/Wick");
+        let moth = |id| LightId {
+            path: glow,
+            instance: Some(LightInstance {
+                instancer: flock,
+                id: InstanceId::Authored(id),
+            }),
+        };
+        let lantern = |index| LightId {
+            path: wick,
+            instance: Some(LightInstance {
+                instancer: beacons,
+                id: InstanceId::Index(index),
+            }),
+        };
+        let item = |prim: &str| {
+            let prim = store.path(prim);
+            list.items().find(|item| item.prim == prim).unwrap().id
+        };
+        let body = item("/World/Flock/Protos/Moth/Body");
+        let pebble = item("/World/Flock/Protos/Pebble");
+        let case = item("/World/Beacons/Protos/Lantern/Case");
+        let shaft = item("/World/Field/Protos/Torch/Shaft");
+        let instances = |pairs: &[(crate::ItemId, i64)]| -> Vec<ItemInstance> {
+            pairs
+                .iter()
+                .map(|&(item, id)| ItemInstance { item, id })
+                .collect()
+        };
+        let of = |ids: &[LightId], path: layerstack::PathId| -> Vec<LightId> {
+            ids.iter().copied().filter(|id| id.path == path).collect()
+        };
+        // The flock has no instances at the default time.
+        assert!(list.item(body).unwrap().hidden() && list.item(pebble).unwrap().hidden());
+        assert_eq!(list.lights().filter(|light| light.path == glow).count(), 0);
+
+        let diff = list.set_time(&scene, Time::at(0.0));
+        assert_eq!(
+            diff.work.instancers_rederived, 2,
+            "the flock and the beacons"
+        );
+        assert_eq!(of(&diff.lights_added, glow), [moth(1)]);
+        assert_eq!(of(&diff.lights_removed, wick), [lantern(1)]);
+        assert!(of(&diff.lights_added, wick).is_empty());
+        assert_eq!(diff.instances_added, instances(&[(body, 1), (pebble, 2)]));
+        assert_eq!(diff.instances_removed, instances(&[(case, 1)]));
+        assert!(diff.visibility.contains(&body) && diff.visibility.contains(&pebble));
+        assert!(!diff.matrices.contains(&shaft), "the field is not read");
+
+        let diff = list.set_time(&scene, Time::at(10.0));
+        assert_eq!(diff.work.instancers_rederived, 2);
+        assert_eq!(of(&diff.lights_added, glow), [moth(2), moth(3)]);
+        assert_eq!(of(&diff.lights_removed, glow), [moth(1)]);
+        assert_eq!(of(&diff.lights_added, wick), [lantern(1)]);
+        assert_eq!(of(&diff.lights_removed, wick), [lantern(0), lantern(2)]);
+        assert_eq!(
+            diff.instances_added,
+            instances(&[(body, 2), (body, 3), (pebble, 1), (case, 1)])
+        );
+        assert_eq!(
+            diff.instances_removed,
+            instances(&[(body, 1), (pebble, 2), (case, 0), (case, 2)])
+        );
+        // Id 4 is masked: neither drawn nor lit.
+        assert_eq!(list.item(body).unwrap().ids, [2, 3]);
+        assert!(list.light(moth(4)).is_none());
+        assert_eq!(list.light(moth(2)).unwrap().position, [1., 1.5, 8.]);
+
+        // Back to the default time: every flock instance gone.
+        let diff = list.set_time(&scene, Time::Default);
+        assert_eq!(of(&diff.lights_removed, glow), [moth(2), moth(3)]);
+        assert!(diff.visibility.contains(&body) && diff.visibility.contains(&pebble));
     }
 
     /// Every light of `stagehand_lights/scene.usda` at four times against

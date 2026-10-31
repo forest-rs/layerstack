@@ -116,6 +116,17 @@ pub struct ItemId(pub u32);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BufferKey(pub u32);
 
+/// One instance of a point instancer's item: the item, and the instance's
+/// id ([`DrawItem::ids`]): its `ids` entry, or its position in the
+/// instancer's arrays when `ids` is unauthored.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ItemInstance {
+    /// The item.
+    pub item: ItemId,
+    /// The instance's id.
+    pub id: i64,
+}
+
 /// What an item draws, and why its instances are grouped.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ItemSource {
@@ -237,6 +248,11 @@ pub struct DrawWork {
     /// might differ at another time; counted in [`Self::items_untouched`]
     /// too.
     pub items_time_invariant: u32,
+    /// Point instancers whose instances, and the lights they place, were
+    /// derived again: each one a change discovered, and each one
+    /// [`DrawList::set_time`] read because which instances it places might
+    /// differ at another time. One whose instances only move is not.
+    pub instancers_rederived: u32,
     /// Instance world matrices computed.
     pub matrices_computed: u32,
     /// Local transforms the transform cache computed (the rest it reused).
@@ -275,6 +291,14 @@ pub struct DrawDiff {
     pub matrices: Vec<ItemId>,
     /// Items that became hidden or shown ([`DrawItem::hidden`]).
     pub visibility: Vec<ItemId>,
+    /// Instances a point instancer's item draws now and did not before:
+    /// new in its `protoIndices` or `ids`, unmasked, or shown. Their items
+    /// are in [`Self::matrices`] too.
+    pub instances_added: Vec<ItemInstance>,
+    /// Instances a point instancer's item no longer draws: gone from its
+    /// arrays, masked (`invisibleIds`, `inactiveIds`) or hidden. Their
+    /// items are in [`Self::matrices`] too.
+    pub instances_removed: Vec<ItemInstance>,
     /// Items whose bound materials changed.
     pub materials: Vec<ItemId>,
     /// Items now drawing another buffer: a shape resized to one another
@@ -322,6 +346,8 @@ impl DrawDiff {
             && self.removed.is_empty()
             && self.matrices.is_empty()
             && self.visibility.is_empty()
+            && self.instances_added.is_empty()
+            && self.instances_removed.is_empty()
             && self.materials.is_empty()
             && self.rebound.is_empty()
             && self.buffers_added.is_empty()
@@ -463,6 +489,17 @@ const INSTANCER_INPUTS: &[&str] = &[
     "angularVelocities",
     "invisibleIds",
 ];
+
+/// The attributes that decide which instances a point instancer places,
+/// and of which prototype: its `protoIndices` and `ids`, its `positions`
+/// (`ComputeInstanceTransformsAtTime` places none when their count is not
+/// `protoIndices`'), and its `invisibleIds` (`ComputeMaskAtTime`). Its
+/// `prototypes` are a relationship and its `inactiveIds` prim metadata
+/// (an `int64` list op, read with `GetMetadata`): neither has time
+/// samples, so only a change record changes them.
+/// OpenUSD: `pxr/usd/usdGeom/pointInstancer.cpp`,
+/// `_ComputePointInstancerAttributesPreamble`.
+const INSTANCE_SET_INPUTS: &[&str] = &["protoIndices", "ids", "positions", "invisibleIds"];
 
 /// Whether any of the prim's attributes `names` might hold another value
 /// at another time, the default time included: time samples (even one), a
@@ -639,6 +676,22 @@ struct Entry {
     varies: Varies,
 }
 
+/// A light inside a point instancer's prototype: the prototype's index in
+/// its `prototypes`, the light's path and kind.
+type PrototypeLight = (usize, PathId, LightKind);
+
+/// A point instancer as last discovered: the lights inside its prototypes,
+/// and whether which instances it places might differ at another time.
+#[derive(Clone, Debug)]
+struct Instancer {
+    /// Each light inside a prototype: the prototype's index, its path and
+    /// kind.
+    lights: Vec<PrototypeLight>,
+    /// Whether an attribute of [`INSTANCE_SET_INPUTS`] might vary: then
+    /// [`DrawList::set_time`] derives its placed lights again.
+    varies: bool,
+}
+
 /// The items and buffers a renderer draws from a stage, retained and kept
 /// up to date from change records.
 ///
@@ -719,6 +772,8 @@ pub struct DrawList {
     cameras: BTreeMap<PathId, Held<CameraItem>>,
     lights: BTreeMap<LightId, Held<LightItem>>,
     materials: BTreeMap<PathId, Held<MaterialItem>>,
+    /// The point instancers discovered, by path.
+    instancers: BTreeMap<PathId, Instancer>,
     next_item: u32,
     next_buffer: u32,
 }
@@ -740,6 +795,8 @@ struct Gather {
     removed: BTreeSet<ItemId>,
     matrices: BTreeSet<ItemId>,
     visibility: BTreeSet<ItemId>,
+    instances_added: BTreeSet<ItemInstance>,
+    instances_removed: BTreeSet<ItemInstance>,
     materials: BTreeSet<ItemId>,
     rebound: BTreeSet<ItemId>,
     buffers_added: BTreeSet<BufferKey>,
@@ -795,6 +852,12 @@ impl Gather {
             self.materials.remove(id);
             self.rebound.remove(id);
         }
+        // An added or removed item's instances are not listed.
+        let listed = |instance: &ItemInstance| {
+            !self.added.contains(&instance.item) && !self.removed.contains(&instance.item)
+        };
+        self.instances_added.retain(listed);
+        self.instances_removed.retain(listed);
         for key in &self.buffers_added {
             self.refilled.remove(key);
             self.rebuilt.remove(key);
@@ -819,6 +882,8 @@ impl Gather {
             removed: self.removed.into_iter().collect(),
             matrices: self.matrices.into_iter().collect(),
             visibility: self.visibility.into_iter().collect(),
+            instances_added: self.instances_added.into_iter().collect(),
+            instances_removed: self.instances_removed.into_iter().collect(),
             materials: self.materials.into_iter().collect(),
             rebound: self.rebound.into_iter().collect(),
             buffers_added: self.buffers_added.into_iter().collect(),
@@ -855,6 +920,7 @@ struct Found {
     scopes: Vec<Scope>,
     cameras: Vec<PathId>,
     lights: Vec<(LightId, LightKind)>,
+    instancers: Vec<(PathId, Instancer)>,
     prims: u32,
 }
 
@@ -903,6 +969,7 @@ impl DrawList {
             cameras: BTreeMap::new(),
             lights: BTreeMap::new(),
             materials: BTreeMap::new(),
+            instancers: BTreeMap::new(),
             next_item: 0,
             next_buffer: 0,
         }
@@ -1090,7 +1157,17 @@ impl DrawList {
             self.discover_prototype(scene, first, false, &mut found);
         }
         gather.work.prims_traversed = found.prims;
+        gather.work.instancers_rederived = count(found.instancers.len());
         self.apply_to_views(scene, changes, &found, &mut gather);
+        // The instancers discovered replace those the discovery covered.
+        self.instancers.retain(|&path, _| {
+            !found.scopes.iter().any(|scope| match *scope {
+                Scope::Resync(root) => under(scene, path, root),
+                Scope::Instancer(at) => at == path,
+                Scope::Prototype(_) => false,
+            })
+        });
+        self.instancers.extend(found.instancers.iter().cloned());
 
         // Discovered items: new ones are added, known ones read again; known
         // items a discovery covers but did not find are gone. Added first,
@@ -1185,6 +1262,16 @@ impl DrawList {
     /// date: a time sample authored on a static input makes its item read
     /// at the next time.
     ///
+    /// A point instancer whose instances might differ at another time
+    /// (its `protoIndices`, `ids`, `positions` or `invisibleIds` might
+    /// vary) is derived again: its items' instances are read at `time`,
+    /// listed in [`DrawDiff::instances_added`] and
+    /// [`DrawDiff::instances_removed`], and the lights it places follow
+    /// them, the lights of instances new at `time` added and those of
+    /// instances gone or masked removed; counted in
+    /// [`DrawWork::instancers_rederived`]. One whose instances only move
+    /// has its matrices read again, and nothing derived.
+    ///
     /// Cameras, lights and materials whose inputs might vary are read
     /// again too. A material's `UsdPrimvarReader_float2` `varname` (or the
     /// interface input it connects to) is one of them: when the sets the
@@ -1226,13 +1313,61 @@ impl DrawList {
         for path in cameras {
             self.read_camera(scene, path, &mut gather);
         }
-        let lights: Vec<(LightId, LightKind)> = self
+        // A point instancer whose instances might differ places its lights
+        // again: those of instances gone or masked are removed, those of new
+        // or unmasked ones added.
+        let mut placements = Placements::default();
+        let mut placing: BTreeMap<LightId, LightKind> = BTreeMap::new();
+        let instancers: Vec<(PathId, Vec<PrototypeLight>)> = self
+            .instancers
+            .iter()
+            .filter(|(_, instancer)| instancer.varies)
+            .map(|(path, instancer)| (*path, instancer.lights.clone()))
+            .collect();
+        for (instancer, lights) in instancers {
+            gather.work.instancers_rederived += 1;
+            if lights.is_empty() {
+                continue;
+            }
+            let placed = placements
+                .entry(instancer)
+                .or_insert_with(|| place_instances(scene, instancer, time));
+            for (key, &(index, _)) in placed.iter().flat_map(|placed| &placed.instances) {
+                for &(at, path, kind) in &lights {
+                    if at == index {
+                        let id = LightId {
+                            path,
+                            instance: Some(LightInstance {
+                                instancer,
+                                id: *key,
+                            }),
+                        };
+                        placing.insert(id, kind);
+                    }
+                }
+            }
+            let gone: Vec<LightId> = self
+                .lights
+                .keys()
+                .filter(|id| {
+                    id.instance
+                        .is_some_and(|instance| instance.instancer == instancer)
+                        && !placing.contains_key(id)
+                })
+                .copied()
+                .collect();
+            for id in gone {
+                self.lights.remove(&id);
+                gather.lights.removed.insert(id);
+            }
+        }
+        let mut lights: BTreeMap<LightId, LightKind> = self
             .lights
             .iter()
             .filter(|(_, held)| held.varies)
             .map(|(id, held)| (*id, held.item.kind))
             .collect();
-        let mut placements = Placements::default();
+        lights.extend(placing);
         for (id, kind) in lights {
             self.read_light(scene, id, kind, &mut placements, &mut gather);
         }
@@ -1702,25 +1837,7 @@ impl DrawList {
         let time = self.options.time;
         let placed = placements
             .entry(instance.instancer)
-            .or_insert_with(|| {
-                let view = PointInstancer::get(scene, instance.instancer)?;
-                let instances = view
-                    .compute_instance_transforms(time, time, InstanceTransformOptions::default())
-                    .ok()?;
-                let ids = instance_ids(&view, time, &instances);
-                Some(Placed {
-                    prototypes: view
-                        .prototypes()
-                        .iter()
-                        .map(|target| target.prim_path())
-                        .collect(),
-                    instances: ids
-                        .into_iter()
-                        .zip(instances)
-                        .map(|(id, placed)| (id, (placed.prototype_index, placed.matrix)))
-                        .collect(),
-                })
-            })
+            .or_insert_with(|| place_instances(scene, instance.instancer, time))
             .as_ref()?;
         let &(index, matrix) = placed.instances.get(&instance.id)?;
         let prototype = *placed.prototypes.get(index)?;
@@ -1872,7 +1989,7 @@ impl DrawList {
         };
         let stage = scene.stage();
         let store = scene.store();
-        let mut lights: Vec<(usize, PathId, LightKind)> = Vec::new();
+        let mut lights: Vec<PrototypeLight> = Vec::new();
         for (index, target) in view.prototypes().iter().enumerate() {
             let prototype = target.prim_path();
             let mut stack = alloc::vec![prototype];
@@ -1897,6 +2014,13 @@ impl DrawList {
                 stack.extend(prim.all_children().map(|child| child.path()));
             }
         }
+        found.instancers.push((
+            instancer,
+            Instancer {
+                lights: lights.clone(),
+                varies: inputs_might_vary(scene, instancer, INSTANCE_SET_INPUTS),
+            },
+        ));
         if lights.is_empty() {
             return;
         }
@@ -2070,6 +2194,20 @@ impl DrawList {
             if !new {
                 if matrices != item.matrices || ids != item.ids || instances != item.instances {
                     gather.matrices.insert(id);
+                }
+                if ids != item.ids {
+                    let before: BTreeSet<i64> = item.ids.iter().copied().collect();
+                    let after: BTreeSet<i64> = ids.iter().copied().collect();
+                    let instance = |id_of: &i64| ItemInstance {
+                        item: id,
+                        id: *id_of,
+                    };
+                    gather
+                        .instances_added
+                        .extend(after.difference(&before).map(instance));
+                    gather
+                        .instances_removed
+                        .extend(before.difference(&after).map(instance));
                 }
                 if matrices.is_empty() != item.matrices.is_empty() {
                     gather.visibility.insert(id);
@@ -2346,6 +2484,29 @@ type Placements = HashMap<PathId, Option<Placed>>;
 struct Placed {
     prototypes: Vec<PathId>,
     instances: HashMap<InstanceId, (usize, [[f64; 4]; 4])>,
+}
+
+/// The prototypes of the point instancer at `instancer` and its unmasked
+/// instances at `time`; `None` when it is not one, or its arrays place
+/// nothing.
+fn place_instances(scene: &Scene<'_>, instancer: PathId, time: Time) -> Option<Placed> {
+    let view = PointInstancer::get(scene, instancer)?;
+    let instances = view
+        .compute_instance_transforms(time, time, InstanceTransformOptions::default())
+        .ok()?;
+    let ids = instance_ids(&view, time, &instances);
+    Some(Placed {
+        prototypes: view
+            .prototypes()
+            .iter()
+            .map(|target| target.prim_path())
+            .collect(),
+        instances: ids
+            .into_iter()
+            .zip(instances)
+            .map(|(id, placed)| (id, (placed.prototype_index, placed.matrix)))
+            .collect(),
+    })
 }
 
 /// The [`InstanceId`] of each of `placed`, a point instancer's unmasked
@@ -3241,6 +3402,95 @@ def Scope "Looks" {{{}
         assert!(list.buffers(key).unwrap().buffers.uv_sets.is_empty());
     }
 
+    /// An instancer whose instances only turn over time keeps the matrix
+    /// path: its items' matrices and its lights are read again, and nothing
+    /// is derived; one sampling `ids` is derived again. A time sample
+    /// authored on the turning one's `protoIndices` makes the next time
+    /// change derive it too.
+    #[test]
+    fn only_an_instancer_whose_instances_might_differ_is_derived_again() {
+        let text = r#"#usda 1.0
+def PointInstancer "Turning" {
+    rel prototypes = [</Turning/Protos/Lamp>]
+    int[] protoIndices = [0, 0]
+    point3f[] positions = [(0, 0, 0), (2, 0, 0)]
+    quath[] orientations.timeSamples = {
+        0: [(1, 0, 0, 0), (1, 0, 0, 0)],
+        10: [(0, 0, 1, 0), (0, 0, 1, 0)],
+    }
+    def Scope "Protos" {
+        def Xform "Lamp" {
+            def Cube "Base" {
+                double size = 0.5
+                double3 xformOp:translate = (1, 0, 0)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+            }
+            def SphereLight "Bulb" {
+                double3 xformOp:translate = (0, 1, 0)
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+            }
+        }
+    }
+}
+def PointInstancer "Hopping" {
+    rel prototypes = [</Hopping/Protos/Rock>]
+    int[] protoIndices = [0, 0]
+    int64[] ids.timeSamples = {
+        0: [1, 2],
+        10: [2, 3],
+    }
+    point3f[] positions = [(0, 0, 4), (1, 0, 4)]
+    def Scope "Protos" {
+        def Sphere "Rock" {
+            double radius = 0.1
+        }
+    }
+}
+"#;
+        let (mut store, mut live) = compose(text);
+        let mut list = DrawList::new(DrawOptions {
+            time: Time::at(0.0),
+            ..DrawOptions::default()
+        });
+        let diff = list.refresh(&Scene::new(live.stage(), &store));
+        assert_eq!(diff.work.instancers_rederived, 2, "both discovered");
+        let item = |list: &DrawList, prim: &str| {
+            let prim = store.path(prim);
+            list.items().find(|item| item.prim == prim).unwrap().id
+        };
+        let base = item(&list, "/Turning/Protos/Lamp/Base");
+        let rock = item(&list, "/Hopping/Protos/Rock");
+        let lights = list.lights().count();
+
+        let diff = list.set_time(&Scene::new(live.stage(), &store), Time::at(10.0));
+        assert_eq!(diff.work.instancers_rederived, 1, "the hopping one alone");
+        assert_eq!(diff.matrices, [base, rock]);
+        let instance = |id| super::ItemInstance { item: rock, id };
+        assert_eq!(diff.instances_added, [instance(3)]);
+        assert_eq!(diff.instances_removed, [instance(1)]);
+        assert!(diff.lights_added.is_empty() && diff.lights_removed.is_empty());
+        assert_eq!(diff.lights_changed.len(), lights, "every bulb turned");
+        assert_eq!(list.item(rock).unwrap().ids, [2, 3]);
+        // A half turn about Y: the base, one along X, ends at -1.
+        let turned = list.item(base).unwrap().matrices[0][3];
+        assert!((turned[0] + 1.).abs() < 1e-12, "{turned:?}");
+
+        // Sampling the turning one's `protoIndices`: derived from then on.
+        let turning = store.path("/Turning");
+        let indices = store.tokens().intern("protoIndices");
+        let mut sampling = Transaction::new();
+        sampling.set_time_sample(
+            EditTarget::for_layer(LayerId(1))
+                .property(layerstack::PropertyPath::new(turning, indices)),
+            0.0,
+            Value::array(alloc::vec![Value::Int(0)]),
+        );
+        let applied = live.apply(&mut store, &sampling).unwrap();
+        list.apply_changes(&Scene::new(live.stage(), &store), &applied.changes);
+        let diff = list.set_time(&Scene::new(live.stage(), &store), Time::at(0.0));
+        assert_eq!(diff.work.instancers_rederived, 2);
+    }
+
     #[test]
     fn an_instancer_edit_only_changes_matrices() {
         let (mut fixture, _) = Fixture::new();
@@ -3270,6 +3520,14 @@ def Scope "Looks" {{{}
         });
         assert_eq!(diff.matrices, [stones]);
         assert!(diff.visibility.is_empty());
+        assert_eq!(
+            diff.instances_removed,
+            [super::ItemInstance {
+                item: stones,
+                id: 1
+            }]
+        );
+        assert!(diff.instances_added.is_empty());
         assert_eq!(fixture.list.item(stones).unwrap().ids, [0, 2]);
     }
 

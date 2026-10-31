@@ -1,4 +1,666 @@
 {
+ "draws": [
+  {
+   "id": 0,
+   "index": 0,
+   "instancer": "/World/Field",
+   "path": "/World/Field/Protos/Torch/Shaft",
+   "time": null,
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "id": 1,
+   "index": 1,
+   "instancer": "/World/Field",
+   "path": "/World/Field/Protos/Stake",
+   "time": null,
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     1.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "id": 2,
+   "index": 2,
+   "instancer": "/World/Field",
+   "path": "/World/Field/Protos/Torch/Shaft",
+   "time": null,
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     2.0,
+     2.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "id": 0,
+   "index": 0,
+   "instancer": "/World/Beacons",
+   "path": "/World/Beacons/Protos/Lantern/Case",
+   "time": null,
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     -8.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "id": 1,
+   "index": 1,
+   "instancer": "/World/Beacons",
+   "path": "/World/Beacons/Protos/Lantern/Case",
+   "time": null,
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     2.0,
+     0.0,
+     -8.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "id": 2,
+   "index": 2,
+   "instancer": "/World/Beacons",
+   "path": "/World/Beacons/Protos/Lantern/Case",
+   "time": null,
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     4.0,
+     0.0,
+     -8.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "id": 0,
+   "index": 0,
+   "instancer": "/World/Field",
+   "path": "/World/Field/Protos/Torch/Shaft",
+   "time": 0.0,
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "id": 1,
+   "index": 1,
+   "instancer": "/World/Field",
+   "path": "/World/Field/Protos/Stake",
+   "time": 0.0,
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     1.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "id": 2,
+   "index": 2,
+   "instancer": "/World/Field",
+   "path": "/World/Field/Protos/Torch/Shaft",
+   "time": 0.0,
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     2.0,
+     2.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "id": 1,
+   "index": 0,
+   "instancer": "/World/Flock",
+   "path": "/World/Flock/Protos/Moth/Body",
+   "time": 0.0,
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     8.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "id": 2,
+   "index": 1,
+   "instancer": "/World/Flock",
+   "path": "/World/Flock/Protos/Pebble",
+   "time": 0.0,
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     1.0,
+     0.0,
+     8.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "id": 0,
+   "index": 0,
+   "instancer": "/World/Beacons",
+   "path": "/World/Beacons/Protos/Lantern/Case",
+   "time": 0.0,
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     -8.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "id": 2,
+   "index": 2,
+   "instancer": "/World/Beacons",
+   "path": "/World/Beacons/Protos/Lantern/Case",
+   "time": 0.0,
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     4.0,
+     0.0,
+     -8.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "id": 0,
+   "index": 0,
+   "instancer": "/World/Field",
+   "path": "/World/Field/Protos/Torch/Shaft",
+   "time": 10.0,
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "id": 1,
+   "index": 1,
+   "instancer": "/World/Field",
+   "path": "/World/Field/Protos/Stake",
+   "time": 10.0,
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     1.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "id": 2,
+   "index": 2,
+   "instancer": "/World/Field",
+   "path": "/World/Field/Protos/Torch/Shaft",
+   "time": 10.0,
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     2.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     2.0,
+     2.0,
+     0.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "id": 1,
+   "index": 0,
+   "instancer": "/World/Flock",
+   "path": "/World/Flock/Protos/Pebble",
+   "time": 10.0,
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     8.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "id": 2,
+   "index": 1,
+   "instancer": "/World/Flock",
+   "path": "/World/Flock/Protos/Moth/Body",
+   "time": 10.0,
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     1.0,
+     1.0,
+     8.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "id": 3,
+   "index": 2,
+   "instancer": "/World/Flock",
+   "path": "/World/Flock/Protos/Moth/Body",
+   "time": 10.0,
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     2.0,
+     1.0,
+     8.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "id": 1,
+   "index": 1,
+   "instancer": "/World/Beacons",
+   "path": "/World/Beacons/Protos/Lantern/Case",
+   "time": 10.0,
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     2.0,
+     0.0,
+     -8.0,
+     1.0
+    ]
+   ]
+  }
+ ],
  "rows": [
   {
    "camera": false,
@@ -473,6 +1135,123 @@
   },
   {
    "camera": false,
+   "instance": {
+    "id": null,
+    "index": 0,
+    "instancer": "/World/Beacons"
+   },
+   "path": "/World/Beacons/Protos/Lantern/Wick",
+   "proxy": false,
+   "time": null,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.25,
+     -8.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": {
+    "id": null,
+    "index": 1,
+    "instancer": "/World/Beacons"
+   },
+   "path": "/World/Beacons/Protos/Lantern/Wick",
+   "proxy": false,
+   "time": null,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     2.0,
+     0.25,
+     -8.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": {
+    "id": null,
+    "index": 2,
+    "instancer": "/World/Beacons"
+   },
+   "path": "/World/Beacons/Protos/Lantern/Wick",
+   "proxy": false,
+   "time": null,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     4.0,
+     0.25,
+     -8.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
    "instance": null,
    "path": "/World/Lamps/North/Bulb",
    "proxy": true,
@@ -944,6 +1723,123 @@
   },
   {
    "camera": false,
+   "instance": {
+    "id": 1,
+    "index": 0,
+    "instancer": "/World/Flock"
+   },
+   "path": "/World/Flock/Protos/Moth/Glow",
+   "proxy": false,
+   "time": 0.0,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.5,
+     8.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": {
+    "id": null,
+    "index": 0,
+    "instancer": "/World/Beacons"
+   },
+   "path": "/World/Beacons/Protos/Lantern/Wick",
+   "proxy": false,
+   "time": 0.0,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.25,
+     -8.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": {
+    "id": null,
+    "index": 2,
+    "instancer": "/World/Beacons"
+   },
+   "path": "/World/Beacons/Protos/Lantern/Wick",
+   "proxy": false,
+   "time": 0.0,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     4.0,
+     0.25,
+     -8.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
    "instance": null,
    "path": "/World/Lamps/North/Bulb",
    "proxy": true,
@@ -1409,6 +2305,123 @@
      2.0,
      2.0,
      5.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": {
+    "id": 2,
+    "index": 1,
+    "instancer": "/World/Flock"
+   },
+   "path": "/World/Flock/Protos/Moth/Glow",
+   "proxy": false,
+   "time": 10.0,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     1.0,
+     1.5,
+     8.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": {
+    "id": 3,
+    "index": 2,
+    "instancer": "/World/Flock"
+   },
+   "path": "/World/Flock/Protos/Moth/Glow",
+   "proxy": false,
+   "time": 10.0,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     2.0,
+     1.5,
+     8.0,
+     1.0
+    ]
+   ]
+  },
+  {
+   "camera": false,
+   "instance": {
+    "id": null,
+    "index": 1,
+    "instancer": "/World/Beacons"
+   },
+   "path": "/World/Beacons/Protos/Lantern/Wick",
+   "proxy": false,
+   "time": 10.0,
+   "type": "SphereLight",
+   "visibility": "inherited",
+   "world": [
+    [
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     1.0,
+     0.0,
+     0.0
+    ],
+    [
+     0.0,
+     0.0,
+     1.0,
+     0.0
+    ],
+    [
+     2.0,
+     0.25,
+     -8.0,
      1.0
     ]
    ]

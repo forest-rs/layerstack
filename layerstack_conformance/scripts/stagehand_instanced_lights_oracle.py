@@ -18,7 +18,15 @@ at times 0 and 10, the lights and cameras a draw list lists:
   (`invisibleIds` naming ids, not positions), and the light's transform relative to its prototype
   (`UsdGeomXformCache.ComputeRelativeTransform`) times the instance's
   times the instancer's `ComputeLocalToWorldTransform`, and the
-  instancer's visibility.
+  instancer's visibility;
+- under `draws`, for each gprim inside a `PointInstancer`'s prototype,
+  once per instance of that prototype `ComputeInstanceTransformsAtTime`
+  keeps, in the instancer's order: the instance's position, its `ids`
+  entry (or its position when `ids` is unauthored), and the gprim's
+  transform relative to its prototype times the instance's times the
+  instancer's. Two instancers sample `protoIndices`, `ids`, `positions`
+  and `invisibleIds` (`ComputeMaskAtTime`), so their instances differ
+  at each time: none at the default time, where they have no values.
 
 The scene uses translations and scales only, so every product is exact
 on every platform. `--check` requires `oracle.json` to be exactly what
@@ -44,6 +52,7 @@ def matrix(m):
 
 
 rows = []
+draws = []
 for time in [None, 0.0, 10.0]:
     tc = Usd.TimeCode.Default() if time is None else Usd.TimeCode(time)
     walk = iter(Usd.PrimRange(stage.GetPseudoRoot(), Usd.TraverseInstanceProxies()))
@@ -74,6 +83,9 @@ for time in [None, 0.0, 10.0]:
             continue
         prototypes = instancer.GetPrototypesRel().GetTargets()
         indices = instancer.GetProtoIndicesAttr().Get(tc)
+        if indices is None:
+            # Nothing authored at this time: no instances.
+            continue
         ids = instancer.GetIdsAttr().Get(tc)
         mask = instancer.ComputeMaskAtTime(tc)
         placed = instancer.ComputeInstanceTransformsAtTime(tc, tc)
@@ -84,6 +96,16 @@ for time in [None, 0.0, 10.0]:
         for at, index in enumerate(kept):
             prototype = stage.GetPrimAtPath(prototypes[indices[index]])
             for inner in Usd.PrimRange(prototype):
+                if inner.IsA(UsdGeom.Gprim):
+                    relative, _ = cache.ComputeRelativeTransform(inner, prototype)
+                    draws.append({
+                        "time": time,
+                        "path": str(inner.GetPath()),
+                        "instancer": str(prim.GetPath()),
+                        "index": index,
+                        "id": index if ids is None else int(ids[index]),
+                        "world": matrix(relative * placed[at] * world),
+                    })
                 if not inner.HasAPI(UsdLux.LightAPI):
                     continue
                 relative, _ = cache.ComputeRelativeTransform(inner, prototype)
@@ -101,7 +123,7 @@ for time in [None, 0.0, 10.0]:
                     "world": matrix(relative * placed[at] * world),
                     "visibility": visibility,
                 })
-result = {"version": ".".join(map(str, Usd.GetVersion()[1:])), "rows": rows}
+result = {"version": ".".join(map(str, Usd.GetVersion()[1:])), "rows": rows, "draws": draws}
 output = here / "oracle.json"
 if args.check:
     assert json.loads(output.read_text()) == result, "stagehand instanced lights oracle differs from OpenUSD"

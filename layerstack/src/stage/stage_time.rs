@@ -332,10 +332,15 @@ fn holds_time_value(value: &Value) -> bool {
 /// or `duration` values. Declarations are hints, not proof of the stored kind: low-level
 /// source data can contain time codes under a different declared type.
 /// Native arrays of other kinds answer this check without visiting elements.
+// Inlined so the identity test, which settles most opinions, runs inside
+// `opinions_in_stage_time`'s loop instead of as a call per opinion.
+#[inline]
 fn needs_retiming(opinion: OpinionRef<'_>) -> bool {
-    if opinion.layer_offset().is_identity() {
-        return false;
-    }
+    !opinion.layer_offset().is_identity() && holds_time_values(opinion)
+}
+
+/// Whether `opinion` holds a `timecode` or `duration` value anywhere.
+fn holds_time_values(opinion: OpinionRef<'_>) -> bool {
     let field = |value: &FieldValue| matches!(value, FieldValue::Value(v) if holds_time_value(v));
     match opinion.value() {
         OpinionValue::Field(value) => field(value),

@@ -175,6 +175,18 @@ impl PreparedClipProperty {
                 mappings[i].jump = true;
             }
         }
+        // A jump needs a real segment before it: OpenUSD removes a jump that
+        // starts `times` or follows another jump, so before the stage time
+        // of `[(10, 10), (10, 0), (20, 10)]` the clip time is 0, not 10
+        // (`Usd_ClipSet::Usd_ClipSet`, `pxr/usd/usd/clipSet.cpp:460-485`).
+        let mut previous_jump = true;
+        mappings.retain(|mapping| {
+            let keep = !(previous_jump && mapping.jump);
+            if keep {
+                previous_jump = mapping.jump;
+            }
+            keep
+        });
         if mappings.windows(2).any(|p| {
             !(p[1].external - p[0].external).is_finite()
                 || !(p[1].internal - p[0].internal).is_finite()

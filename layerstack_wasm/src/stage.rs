@@ -17,7 +17,12 @@ use layerstack::{
     FlattenError, FlattenRequirements, IgnoreCause, InMemoryStore, Layer, LayerId, LayerMuteError,
     LayerStore, NamespaceEdit, NamespaceError, OpinionRole, PathField, PathId, PropertyField,
     ResolvedValue, Specifier, StageOptions, TargetPath, Time, Transaction, UnrepairedPath,
-    ValueSource, Variability, asset_dependencies::DependencyTarget,
+    ValueSource, Variability,
+    asset_dependencies::DependencyTarget,
+    value_clips::{
+        ClipAssetRequest, ClipAssetRole, ClipAssetStatus, ClipAssetUnavailable, ClipDemandReason,
+        ClipEvalError, ClipIssueKind,
+    },
 };
 use layerstack_io::{
     ApplyError, FlattenFailure, ImportPolicy, IoError, LoadOptions, LoadReport, OpenOptions,
@@ -387,6 +392,132 @@ impl Stage {
     pub(crate) fn load_supplied(&mut self) -> Result<Wire, Error> {
         let report = self.document.load_requested_assets()?;
         Ok(load_result(&report))
+    }
+
+    /// Plans what value clips the attribute at `path` needs at `time`
+    /// (`None`: the default time, untimed introspection's plan) and reads
+    /// those the host supplied, at most `max_loads` reads, replanning after
+    /// each ([`StageDocument::prepare_clip_query`]):
+    /// `[complete, budgetExhausted, loadAttempts, error, demands, unavailable, failures, issues]`.
+    ///
+    /// - `complete`: no demand awaits a source, nothing failed and no
+    ///   budget ran out ([`layerstack::value_clips::ClipQueryPlan::is_complete`]).
+    /// - `error`: the evaluator's error code, or `null`.
+    /// - each demand `[assetPath, anchor, role, reason, status, owner, clipSet]`:
+    ///   the asset path as authored or derived from a template, the layer
+    ///   authoring the clip metadata, `value`, `manifest` or
+    ///   `templateCandidate`, why the query needs it (as
+    ///   [`clip_demand_reason`] names it), `loaded`, `missing`,
+    ///   `unanswered` or `notResident`, and the prim and clip set that
+    ///   define it.
+    /// - each unavailable source `[identifier, assetPath, anchor, role, owner, clipSet]`:
+    ///   one the host has not supplied, under the identifier to supply.
+    /// - each failure `[asset, anchor, code, message]`, as `loadSupplied`'s.
+    /// - each issue `[owner, clipSet, code]`, as [`clip_issue_code`] names it.
+    ///
+    /// Spec: AOUSD Core §12.3, §12.5 (value clips). OpenUSD reads clip
+    /// layers synchronously as it resolves (`Usd_ClipSet`), where a
+    /// browser supplies them first.
+    ///
+    /// # Errors
+    ///
+    /// `path.invalid` for a path that is not a property path.
+    pub(crate) fn prepare_clip_query(
+        &mut self,
+        path: &str,
+        time: Option<f64>,
+        max_loads: usize,
+        max_demands: usize,
+    ) -> Result<Wire, Error> {
+        check_property_path(path)?;
+        let property = self
+            .document
+            .store()
+            .try_property_path(path)
+            .map_err(|_| Error::new("path.invalid", "not a property path").at_path(path))?;
+        let prepared =
+            self.document
+                .prepare_clip_query(property, time_of(time), max_loads, max_demands);
+        let store = self.document.store();
+        let owner = |request: &ClipAssetRequest| {
+            Wire::Text(store.paths().display(request.owner, store.tokens()))
+        };
+        let demands = prepared
+            .plan
+            .demands
+            .iter()
+            .map(|demand| {
+                let request = &demand.request;
+                Wire::List(vec![
+                    Wire::text(&*request.identifier),
+                    Wire::UInt64(request.anchor.0),
+                    Wire::text(clip_role(request.role)),
+                    Wire::text(clip_demand_reason(demand.reason)),
+                    Wire::text(match request.status {
+                        ClipAssetStatus::Loaded(_) => "loaded",
+                        ClipAssetStatus::Unavailable(ClipAssetUnavailable::Missing) => "missing",
+                        ClipAssetStatus::Unavailable(ClipAssetUnavailable::NotResident(_)) => {
+                            "notResident"
+                        }
+                        ClipAssetStatus::Unavailable(_) => "unanswered",
+                    }),
+                    owner(request),
+                    Wire::text(&*request.set_name),
+                ])
+            })
+            .collect();
+        let unavailable = prepared
+            .unavailable
+            .iter()
+            .map(|asset| {
+                let request = &asset.request;
+                Wire::List(vec![
+                    Wire::text(&*asset.identifier),
+                    Wire::text(&*request.identifier),
+                    Wire::UInt64(request.anchor.0),
+                    Wire::text(clip_role(request.role)),
+                    owner(request),
+                    Wire::text(&*request.set_name),
+                ])
+            })
+            .collect();
+        let failures = prepared
+            .failures
+            .iter()
+            .map(|failure| {
+                Wire::List(vec![
+                    Wire::text(&*failure.request.identifier),
+                    Wire::UInt64(failure.request.anchor.0),
+                    Wire::text(failure.error.code()),
+                    Wire::text(failure.error.message.clone()),
+                ])
+            })
+            .collect();
+        let issues = prepared
+            .plan
+            .issues
+            .iter()
+            .map(|issue| {
+                Wire::List(vec![
+                    Wire::Text(store.paths().display(issue.owner, store.tokens())),
+                    Wire::text(&*issue.set_name),
+                    Wire::text(clip_issue_code(&issue.kind)),
+                ])
+            })
+            .collect();
+        Ok(Wire::List(vec![
+            Wire::Bool(prepared.plan.is_complete()),
+            Wire::Bool(prepared.budget_exhausted || prepared.plan.budget_exhausted),
+            Wire::UInt64(prepared.load_attempts as u64),
+            prepared
+                .plan
+                .error
+                .map_or(Wire::Null, |error| Wire::text(clip_eval_code(error))),
+            Wire::List(demands),
+            Wire::List(unavailable),
+            Wire::List(failures),
+            Wire::List(issues),
+        ]))
     }
 
     /// Every layer of the document:
@@ -2274,6 +2405,20 @@ impl Stage {
         Ok(self.load_supplied()?.into())
     }
 
+    /// The record `prepare_clip_query` builds, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = prepareClipQuery)]
+    pub fn js_prepare_clip_query(
+        &mut self,
+        path: &str,
+        time: Option<f64>,
+        max_loads: u32,
+        max_demands: u32,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self
+            .prepare_clip_query(path, time, max_loads as usize, max_demands as usize)?
+            .into())
+    }
+
     /// The record `layers` builds, as documented in `stage.rs`.
     #[wasm_bindgen(js_name = layers)]
     pub fn js_layers(&self) -> JsValue {
@@ -2929,6 +3074,61 @@ fn unavailable_row(asset: UnavailableAsset, store: &InMemoryStore) -> Wire {
         Wire::text(asset.used_by.name()),
         Wire::List(prims),
     ])
+}
+
+/// The name of a clip asset's role.
+fn clip_role(role: ClipAssetRole) -> &'static str {
+    match role {
+        ClipAssetRole::Value => "value",
+        ClipAssetRole::Manifest => "manifest",
+        ClipAssetRole::TemplateCandidate => "templateCandidate",
+    }
+}
+
+/// The name of why a clip query needs an asset; `""` for a reason this
+/// build does not name.
+fn clip_demand_reason(reason: ClipDemandReason) -> &'static str {
+    match reason {
+        ClipDemandReason::Manifest => "manifest",
+        ClipDemandReason::AutomaticManifest => "automaticManifest",
+        ClipDemandReason::ActiveInterval => "activeInterval",
+        ClipDemandReason::LowerInterpolationBound => "lowerInterpolationBound",
+        ClipDemandReason::UpperInterpolationBound => "upperInterpolationBound",
+        ClipDemandReason::TemplateSchedule => "templateSchedule",
+        ClipDemandReason::MissingValueSearch => "missingValueSearch",
+        ClipDemandReason::StrongerSourceComposition => "strongerSourceComposition",
+        ClipDemandReason::SingleClipSamples => "singleClipSamples",
+        _ => "",
+    }
+}
+
+/// The code of a clip set's preparation issue; `""` for a kind this build
+/// does not name.
+fn clip_issue_code(kind: &ClipIssueKind) -> &'static str {
+    match kind {
+        ClipIssueKind::InvalidMetadata(_) => "invalidMetadata",
+        ClipIssueKind::InvalidTemplate => "invalidTemplate",
+        ClipIssueKind::UnresolvedTemplate => "unresolvedTemplate",
+        ClipIssueKind::UnsupportedSpline => "unsupportedSpline",
+        ClipIssueKind::InvalidSchedule => "invalidSchedule",
+        ClipIssueKind::AssetExpression { .. } => "assetExpression",
+        _ => "",
+    }
+}
+
+/// The code of a clip evaluation error; `""` for one this build does not
+/// name.
+fn clip_eval_code(error: ClipEvalError) -> &'static str {
+    match error {
+        ClipEvalError::EmptySchedule => "emptySchedule",
+        ClipEvalError::InvalidActivation => "invalidActivation",
+        ClipEvalError::InvalidTimeMapping => "invalidTimeMapping",
+        ClipEvalError::InvalidSamples => "invalidSamples",
+        ClipEvalError::InvalidQuery => "invalidQuery",
+        ClipEvalError::UnsupportedSpline => "unsupportedSpline",
+        ClipEvalError::InvalidSpline => "invalidSpline",
+        _ => "",
+    }
 }
 
 /// `[loaded, failures]` for a load's report.

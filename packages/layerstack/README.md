@@ -95,6 +95,16 @@ await stage.resolve(source);
   like anything else. Identifiers are the authored path anchored to the anchor layer's
   directory (`./a.usda` from `set/scene.usda` is `set/a.usda`); map them to
   URLs however you like.
+- **Value clips load per query.** Clips are not arcs: `unavailable()` never
+  lists them, and a stage reads only the clips a query needs.
+  `prepareClipQuery(path, { time? })` plans what the attribute needs at
+  `time` (without one, what settles whether it might vary with time), reads
+  what was supplied, and returns a `ClipPreparation`: its `demands` (each
+  with the `reason` the query needs it and its `status`), the `unavailable`
+  clips to `supply`, `failures`, the clip sets' `issues`, and whether it is
+  `complete`. `resolveClipQuery(path, source, { time? })` runs that loop as
+  `resolve` does. Until a clip set's metadata is loaded, whether the
+  attribute might vary is unknown and answered `true`.
 - **Reads are snapshots, queries are live.** `stage.prim(path)`,
   `stage.attribute(path)` and `stage.relationship(path)` return a `Prim`,
   `Attribute` or `Relationship` whose fields are read once; their methods
@@ -351,7 +361,7 @@ JS-owned typed array.
 | `stage.worldTransforms(paths, { time? })`, `parentToWorldTransforms(...)`, `prim.worldTransform({ time? })` | One `Float64Array`, 16 numbers per prim, row by row (row-vector `GfMatrix4d`: translation in the last row; read as column-major, the matrix WebGL takes) |
 | `stage.localTransform(path, { time? })`, `prim.localTransform(...)` | `LocalTransform`: `matrix`, `resetsXformStack`, `problems` |
 | `stage.worldTransformsMightVary(paths, { time? })` | `boolean[]`: whether each world transform might differ at another time (an op of its chain, up to a reset, has samples, a spline or clips): what a renderer skips when the time changes |
-| `stage.valuesMightBeTimeVarying(paths)`, `attribute.mightBeTimeVarying()` | `boolean[]` (one `boolean`): whether each attribute's value might vary with time: several samples, a spline, or clips that may supply several (`UsdAttribute::ValueMightBeTimeVarying`); `true` until the clips that settle it are loaded |
+| `stage.valuesMightBeTimeVarying(paths)`, `attribute.mightBeTimeVarying()` | `boolean[]` (one `boolean`): whether each attribute's value might vary with time: several samples, a spline, or clips that may supply several (`UsdAttribute::ValueMightBeTimeVarying`); `true` until `resolveClipQuery(path, source)` loads the clips that settle it |
 | `stage.valueSourcesMightBeTimeVarying(paths)`, `attribute.valueSourceMightBeTimeVarying()` | `boolean[]` (one `boolean`): whether each attribute's value source might vary with time, the default time included (`UsdAttributeQuery::ValueSourceMightBeTimeVarying`) |
 | `stage.xformable(path)`, `prim.xformable()` | `Xformable \| null`: `resetsXformStack`, `ops`, `transformMightBeTimeVarying`, `transformTimeSamples` |
 | `stage.camera(path, { time?, conform? })` | `Camera \| null`: a `UsdGeomCamera` as a renderer reads it: `view` and `projectionMatrix` as `GfFrustum` computes them, `cameraToWorld`, `window`, `clippingRange`, lens (`aperture`, `apertureOffset`, `focalLength`, `fStop`, `focusDistance`), `clippingPlanes`, `shutter`, `exposure` and `linearExposureScale`; with `conform: { policy, aspect }` fitted to a viewport as `CameraUtilConformWindow` fits it |

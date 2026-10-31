@@ -124,12 +124,19 @@ export interface LightShadow {
   readonly falloffGamma: number;
 }
 
-/** A light-linking collection's rule as authored, data only: not evaluated. */
+/** A light-linking collection: its rule as authored, and its evaluated category in the draw list. */
 export interface LightLink {
   /** `collection:<name>:includeRoot` (true by the `UsdLux` fallback). */
   readonly includeRoot: boolean;
   readonly includes: readonly string[];
   readonly excludes: readonly string[];
+  /**
+   * Its link category ({@link DrawList.linkSet}): the targets it links.
+   * `null` when it links everything: its membership is `/` with
+   * `expandPrims` alone, as the `includeRoot` fallback makes it
+   * (UsdImaging's trivial collection, an empty category token).
+   */
+  readonly category: number | null;
 }
 
 /**
@@ -421,6 +428,7 @@ export function readLight(
       includeRoot: boolean(`collection:${name}:includeRoot`, true),
       includes: stage.relationship(`${path}.collection:${name}:includes`)?.targets() ?? [],
       excludes: stage.relationship(`${path}.collection:${name}:excludes`)?.targets() ?? [],
+      category: null,
     });
   return Object.freeze({
     key: lightKey(path, instance),

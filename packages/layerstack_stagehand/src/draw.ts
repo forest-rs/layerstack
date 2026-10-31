@@ -11,6 +11,8 @@ import { CURVE_SCHEMAS, fillPoints, readCurves, readPointSet } from "./curves.js
 import type { StagehandCurves } from "./curves.js";
 import { CAMERA_INPUTS, LIGHT_INPUTS, lightKey, lightKind, readLight } from "./light.js";
 import type { CameraItem, LightInstance, LightItem, LightKind } from "./light.js";
+import { Links, linkKey } from "./links.js";
+import type { LinkChange, LinkKind, LinkSet, LinkTarget } from "./links.js";
 import { readMaterial } from "./material.js";
 import type { MaterialItem } from "./material.js";
 import { readMesh, readShape, shapeSchema } from "./read.js";
@@ -107,6 +109,12 @@ export interface DrawItem {
   readonly material: string | null;
   /** Each face subset's bound material, in the order of {@link DrawBuffers.subsets}. */
   readonly subsetMaterials: readonly (string | null)[];
+  /**
+   * The paths light links are matched against ({@link LinkTarget}): the
+   * gprim; every instance proxy of a prototype's item, hidden ones
+   * included; the point instancer, for its items.
+   */
+  readonly linkPaths: readonly string[];
 }
 
 /**
@@ -180,6 +188,10 @@ export interface DrawWork {
   readonly pointsRefilled: number;
   /** Point sets read anew: new, or their point count changed. */
   readonly pointsRebuilt: number;
+  /** Light links (a light's `lightLink` or `shadowLink`) whose membership was computed: a new light's, and those whose collections, or collections they read, a change reached. */
+  readonly linksEvaluated: number;
+  /** Targets classified against a link category (`IsPathIncluded`): a new category's every target, and each new target (or one of an item read again entirely) against each category. */
+  readonly linksClassified: number;
 }
 
 /**
@@ -225,6 +237,8 @@ export interface DrawDiff {
   readonly materialsRemoved: readonly string[];
   /** Materials read again and found different: an input, a connection, a texture's file or sampling. */
   readonly materialsChanged: readonly string[];
+  /** Light links whose linked targets changed ({@link LinkChange}), by light then kind; a light whose category changed is in {@link lightsChanged} too. */
+  readonly linksChanged: readonly LinkChange[];
   readonly work: DrawWork;
 }
 
@@ -655,6 +669,7 @@ class Gather {
   materialsRead = new Set<string>();
   /** The materials the native instancing prototype groups this diff adds bind, by gprim: a new mesh buffer is planned once with the sets all of its groups read. */
   groups = new Map<string, string[]>();
+  links: LinkChange[] = [];
   work = {
     primsTraversed: 0,
     itemsRead: 0,
@@ -674,6 +689,8 @@ class Gather {
     curvesLaidOut: 0,
     pointsRefilled: 0,
     pointsRebuilt: 0,
+    linksEvaluated: 0,
+    linksClassified: 0,
   };
 }
 
@@ -705,6 +722,10 @@ function sortedInstances(instances: Map<string, ItemInstance>, skip: (item: numb
  *   {@link dispose} frees them all.
  * - Cameras ({@link CameraItem}) and lights ({@link LightItem}) are held
  *   by path beside the items, and diffed as added, removed and changed.
+ * - Light links: each light's `lightLink` and `shadowLink` evaluated over
+ *   the items' {@link DrawItem.linkPaths} by light-link category, as
+ *   Hydra does ({@link linkSets}, {@link isLinked},
+ *   {@link linkCategories}), diffed by {@link DrawDiff.linksChanged}.
  * - Materials ({@link MaterialItem}) are held for the materials the items
  *   bind, by path, and diffed the same way: one is read when an item comes
  *   to bind it, and again only when a shading property (`inputs:*`,
@@ -744,6 +765,8 @@ export class DrawList implements Disposable {
   readonly #materials = new Map<string, Held<MaterialItem>>();
   /** The point instancers discovered, by path. */
   readonly #instancers = new Map<string, Instancer>();
+  /** The lights' link categories and their members. */
+  readonly #links = new Links();
   readonly #contexts: readonly string[];
   /** Each prim type's {@link Kind}: `IsA` depends on the type alone. */
   readonly #kinds = new Map<string, Kind>();
@@ -815,6 +838,31 @@ export class DrawList implements Disposable {
   /** The material at `path`, while an item binds it. */
   material(path: string): MaterialItem | null {
     return this.#materials.get(path)?.item ?? null;
+  }
+
+  /** The light-link categories ({@link LinkSet}): one per distinct membership among the lights' links that does not link everything. */
+  linkSets(): LinkSet[] {
+    return this.#links.sets();
+  }
+
+  /** The link category `category`, while a light's link uses it. */
+  linkSet(category: number): LinkSet | null {
+    return this.#links.set(category);
+  }
+
+  /**
+   * Whether the light `light` (by key) links `target` by `kind`: it
+   * illuminates it (`light`), or the target casts its shadows (`shadow`).
+   * A link with no category ({@link LightLink.category} `null`) links every
+   * target, as a Hydra render delegate decides it.
+   */
+  isLinked(light: string, kind: LinkKind, target: LinkTarget): boolean {
+    return this.#links.isLinked(light, kind, target);
+  }
+
+  /** The link categories including `target`, sorted: what Hydra gives an rprim (`GetCategories`) or a native instance (`GetInstanceCategories`). */
+  linkCategories(target: LinkTarget): number[] {
+    return this.#links.categoriesOf(target).sort((a, b) => a - b);
   }
 
   /** Reads the whole stage: the first call adds every item; a later one reports what differs, reusing what did not change. */
@@ -894,6 +942,9 @@ export class DrawList implements Disposable {
     for (const [path, held] of [...this.#materials]) if (held.varies) this.#readMaterial(path, gather);
     // A `varname` read at the new time may name other sets.
     this.#applyToUvSets(gather);
+    // Membership has no time: only lights and items a time change adds or
+    // removes are linked.
+    this.#applyToLinks({ changes: null, roots: [], relink: new Set(), reclassify: new Set() }, read, gather);
     return this.#finish(gather, read, before);
   }
 
@@ -979,7 +1030,7 @@ export class DrawList implements Disposable {
     }
     gather.work.primsTraversed = found.prims;
     gather.work.instancersRederived = found.instancers.size;
-    this.#applyToViews(changes, found, gather);
+    const relink = this.#applyToViews(changes, found, gather);
     // The instancers discovered replace those the discovery covered.
     for (const path of [...this.#instancers.keys()]) {
       const covered = found.scopes.some((scope) => (scope.kind === "resync" ? under(path, scope.root) : scope.kind === "instancer" && scope.path === path));
@@ -1015,13 +1066,19 @@ export class DrawList implements Disposable {
       dirty.delete(id);
       this.#remove(id, gather);
     }
+    // An item read again entirely may match a link's expression
+    // differently: its predicates read the prim's type, schemas, kind and
+    // specifier.
+    const reclassify = new Set([...dirty].filter(([, what]) => what.instances && what.transform && what.visibility && what.geometry && what.material).map(([id]) => id));
     for (const [id, what] of [...dirty].sort(([a], [b]) => a - b)) {
       const entry = this.#entries.get(id);
       if (entry === undefined) continue;
       read.add(id);
       if (!this.#read(id, entry.item.source, what, false, gather)) this.#remove(id, gather);
     }
-    this.#applyToMaterials(changes, found.scopes.flatMap((scope) => (scope.kind === "resync" ? [scope.root] : [])), gather);
+    const roots = found.scopes.flatMap((scope) => (scope.kind === "resync" ? [scope.root] : []));
+    this.#applyToMaterials(changes, roots, gather);
+    this.#applyToLinks({ changes, roots, relink, reclassify }, read, gather);
     return this.#finish(gather, read, before);
   }
 
@@ -1193,6 +1250,7 @@ export class DrawList implements Disposable {
       materialsAdded,
       materialsRemoved,
       materialsChanged,
+      linksChanged: gather.links,
       work: { ...gather.work },
     };
   }
@@ -1289,7 +1347,7 @@ export class DrawList implements Disposable {
     changes: Pick<Changes, "resynced" | "changedInfoOnly" | "properties" | "resyncedProperties">,
     found: Found,
     gather: Gather,
-  ): void {
+  ): Set<string> {
     const roots = found.scopes.flatMap((scope) => (scope.kind === "resync" ? [scope.root] : []));
     const resynced = (path: string) => roots.some((root) => under(path, root));
     // The properties changed on each prim; `null` when the record has no
@@ -1344,8 +1402,73 @@ export class DrawList implements Disposable {
       const touched = reaches(held.item.path, LIGHT_INPUTS) || held.sources.some((source) => shadingTouched(changes, roots, source));
       if (touched && !lights.has(key)) lights.set(key, { path: held.item.path, instance: held.item.instance, kind: held.item.kind });
     }
+    // The light links whose collections a change reached: a light's
+    // `collection:lightLink:*` or `collection:shadowLink:*`, both for an
+    // unlisted change of it or above it, or a resync over it.
+    const relink = new Set<string>();
+    for (const [key, light] of lights) {
+      for (const [kind, prefix] of [
+        ["light", "collection:lightLink:"],
+        ["shadow", "collection:shadowLink:"],
+      ] as const) {
+        const reach =
+          resynced(light.path) ||
+          reached.some(([prim, names]) => (names === null ? under(light.path, prim) : prim === light.path && names.some((name) => name.startsWith(prefix))));
+        if (reach) relink.add(linkKey(key, kind));
+      }
+    }
     const placements = new Map<string, Placed | null>();
     for (const [, light] of [...lights].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) this.#readLight(light, placements, gather);
+    return relink;
+  }
+
+  /**
+   * Brings the light links up to the lights and items now listed, as
+   * `layerstack_stagehand` does ({@link Links}): new lights' links, and
+   * those `pass` names or whose categories read a collection a change
+   * reached, computed again; the targets of the items read, added and
+   * removed classified or dropped; {@link DrawDiff.linksChanged} listed;
+   * the lights whose categories changed updated and listed as changed.
+   */
+  #applyToLinks(
+    pass: {
+      changes: Pick<Changes, "changedInfoOnly" | "properties" | "resyncedProperties"> | null;
+      roots: readonly string[];
+      relink: ReadonlySet<string>;
+      reclassify: ReadonlySet<number>;
+    },
+    read: ReadonlySet<number>,
+    gather: Gather,
+  ): void {
+    const lights = new Map([...this.#lights].map(([key, held]) => [key, held.item.path]));
+    const updates = new Map<number, readonly string[]>();
+    for (const id of [...read, ...gather.added]) {
+      const entry = this.#entries.get(id);
+      if (entry !== undefined) updates.set(id, entry.item.linkPaths);
+    }
+    for (const id of gather.removed) updates.set(id, []);
+    const outcome = this.#links.apply(this.#stage, lights, updates, {
+      ...pass,
+      added: gather.added,
+      removed: gather.removed,
+      lightsAdded: gather.lights.added,
+    });
+    gather.work.linksEvaluated += outcome.evaluated;
+    gather.work.linksClassified += outcome.classified;
+    for (const key of outcome.relinked) {
+      const held = this.#lights.get(key);
+      if (held === undefined) continue;
+      const lit = this.#links.category(key, "light") ?? null;
+      const shadowed = this.#links.category(key, "shadow") ?? null;
+      if (held.item.lightLink.category === lit && held.item.shadowLink.category === shadowed) continue;
+      held.item = Object.freeze({
+        ...held.item,
+        lightLink: Object.freeze({ ...held.item.lightLink, category: lit }),
+        shadowLink: Object.freeze({ ...held.item.shadowLink, category: shadowed }),
+      });
+      if (!gather.lights.added.has(key)) gather.lights.changed.add(key);
+    }
+    gather.links = outcome.changes;
   }
 
   /** Computes the camera at `path` again ({@link Stage.camera}) and records whether it changed. */
@@ -1389,7 +1512,16 @@ export class DrawList implements Disposable {
     const visibility = this.#stage.visibilities(instance === null ? [path] : [path, instance.instancer], at);
     const hidden = visibility.includes("invisible");
     const sources: string[] = [];
-    const item = readLight(this.#stage, path, kind, this.#time, matrix, hidden, sources, instance);
+    let item = readLight(this.#stage, path, kind, this.#time, matrix, hidden, sources, instance);
+    // Its categories are the link pass's ({@link DrawList.#applyToLinks}).
+    const kept = this.#lights.get(key)?.item;
+    if (kept !== undefined) {
+      item = Object.freeze({
+        ...item,
+        lightLink: Object.freeze({ ...item.lightLink, category: kept.lightLink.category }),
+        shadowLink: Object.freeze({ ...item.shadowLink, category: kept.shadowLink.category }),
+      });
+    }
     // A connected input's source might vary as well as its own value; a
     // placed light moves with its instancer's placement.
     const varies =
@@ -1605,6 +1737,7 @@ export class DrawList implements Disposable {
       hidden: true,
       material: null,
       subsetMaterials: [],
+      linkPaths: [],
     };
     let depends = previous?.depends ?? [];
     const varies: Varies = { ...(previous?.varies ?? { matrices: false, visibility: false, geometry: false }) };
@@ -1612,10 +1745,12 @@ export class DrawList implements Disposable {
       let matrices: Float64Array = new Float64Array();
       let instances: string[] = [];
       let ids: BigInt64Array | null = null;
+      let linkPaths: readonly string[];
       varies.matrices = false;
       if (source.kind === "gprim") {
         if (stage.prim(source.path) === null) return false;
         depends = [source.path];
+        linkPaths = [source.path];
         varies.visibility = this.#visibilityMightVary([source.path]);
         if (this.#shown([source.path])[0]) {
           gather.work.matricesComputed++;
@@ -1631,6 +1766,7 @@ export class DrawList implements Disposable {
         const everyProxy = proxies(first, source.prim, roots);
         const members = everyProxy.filter((proxy) => this.#material(proxy) === source.material);
         if (members.length === 0) return false;
+        linkPaths = members;
         const shown = this.#shown(members);
         instances = members.filter((_, i) => shown[i]);
         gather.work.matricesComputed += instances.length;
@@ -1643,6 +1779,7 @@ export class DrawList implements Disposable {
         const prototype = targets[source.index];
         if (prototype === undefined || !under(source.prim, prototype) || stage.prim(source.prim) === null) return false;
         depends = [source.instancer, prototype, source.prim];
+        linkPaths = [source.instancer];
         ids = new BigInt64Array();
         varies.visibility = this.#visibilityMightVary([source.instancer]);
         if (this.#shown([source.instancer])[0]) {
@@ -1704,7 +1841,7 @@ export class DrawList implements Disposable {
           for (const at of before) if (!after.has(at)) gather.instancesRemoved.set(`${id}#${at}`, { item: id, id: at });
         }
       }
-      item = { ...item, matrices, instances, ids, hidden: matrices.length === 0 };
+      item = { ...item, matrices, instances, ids, hidden: matrices.length === 0, linkPaths };
     }
     if (what.geometry || isNew) {
       const key = this.#geometry(item, gather);

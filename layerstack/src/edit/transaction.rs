@@ -414,6 +414,17 @@ impl Transaction {
         self.ops.len()
     }
 
+    /// The layers the edits write, ascending, each once: the layer of each
+    /// edit's address, or the layer a layer-field edit names. For an
+    /// inverse, the layers it restores.
+    #[must_use]
+    pub fn layers(&self) -> Vec<LayerId> {
+        let mut layers: Vec<LayerId> = self.ops.iter().map(Op::layer).collect();
+        crate::sort::sort_unstable(&mut layers);
+        layers.dedup();
+        layers
+    }
+
     /// Consumes `other`, appending its edits and preconditions without applying
     /// either transaction. Edits retain their order; all preconditions are checked
     /// against the initial store before any combined edit runs.
@@ -1209,14 +1220,7 @@ impl Transaction {
         let mut layers: Vec<LayerId> = Vec::new();
         let mut expectations = Vec::new();
         for op in &self.ops {
-            let layer = match op {
-                Op::Raw(guarded) => guarded.step.layer(),
-                Op::LayerMetadata { layer, .. } => *layer,
-                _ => op
-                    .slot()
-                    .map(|(at, _)| at.layer())
-                    .expect("a slot per edit"),
-            };
+            let layer = op.layer();
             if !layers.contains(&layer) {
                 layers.push(layer);
             }
@@ -1273,6 +1277,20 @@ impl Transaction {
 }
 
 impl Op {
+    /// The layer this edit writes.
+    fn layer(&self) -> LayerId {
+        match self {
+            Self::Raw(guarded) => guarded.step.layer(),
+            Self::LayerMetadata { layer, .. }
+            | Self::EditSublayers { layer, .. }
+            | Self::SetRelocates { layer, .. } => *layer,
+            _ => self
+                .slot()
+                .map(|(at, _)| at.layer())
+                .expect("a spec edit names its slot"),
+        }
+    }
+
     /// The slot this edit writes, for [`Transaction::expect_unchanged`].
     fn slot(&self) -> Option<(&Address, Slot)> {
         Some(match self {

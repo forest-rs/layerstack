@@ -1274,6 +1274,42 @@ fn an_inverse_applies_after_unrelated_edits() {
     );
 }
 
+/// `expect_unchanged` guards layer-field edits by their layer's
+/// generation: a sublayer or relocates edit names no spec slot, and
+/// preparing one used to panic looking for it. `Transaction::layers`
+/// names their layers too.
+#[test]
+fn layer_field_edits_prepare_against_generations() {
+    let mut store = rocks();
+    let mut edit = Transaction::new();
+    edit.set_sublayer_offset(
+        SCENE,
+        0,
+        LayerOffset {
+            offset: 7.0,
+            scale: 1.0,
+        },
+    )
+    .clear_layer_relocates(SCENE_SUB)
+    .expect_unchanged(&mut store);
+    assert_eq!(edit.layers(), [SCENE, SCENE_SUB]);
+    let mut unrelated = Transaction::new();
+    let kind = store.tokens.intern("kind");
+    unrelated.set_metadata(
+        Address::spec(SCENE_SUB, spec(&mut store, "/World")),
+        kind,
+        FieldValue::Value(Value::string("group")),
+    );
+    unrelated.apply(&mut store).expect("applies");
+    assert!(matches!(
+        edit.apply(&mut store),
+        Err(EditError::StaleGeneration {
+            layer: SCENE_SUB,
+            ..
+        })
+    ));
+}
+
 /// `expect_unchanged` prepares an inverse, or the redo an inverse returns,
 /// against its layers' generations: any later edit of them, even of
 /// another slot, makes it stale.

@@ -1,0 +1,209 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    doc = "Light and shadow linking over a draw list's items: the fallback (includeRoot) link, explicit includes and excludes, a membership expression, expandPrims against explicitOnly, a collection included by another, instance proxies (items and a light inside native instances), a point instancer (its instances matched by the instancer prim), curves and points included and excluded like any gprim, and a shadow link differing from the light link. The rock's visibility is animated: membership does not depend on time."
+)
+
+def Xform "World" (
+    prepend apiSchemas = ["CollectionAPI:robots"]
+)
+{
+    rel collection:robots:includes = </World/Robot>
+    uniform bool collection:robots:includeRoot = false
+
+    def Xform "Robot"
+    {
+        def Cube "Body"
+        {
+        }
+
+        def Sphere "Head"
+        {
+        }
+    }
+
+    def Xform "Rocks"
+    {
+        def Cube "Rock"
+        {
+            token visibility.timeSamples = {
+                0: "inherited",
+                10: "invisible",
+            }
+        }
+
+        def Sphere "Pebble"
+        {
+        }
+    }
+
+    def Xform "Beacons"
+    {
+        def Xform "North" (
+            instanceable = true
+            prepend references = </Beacon>
+        )
+        {
+        }
+
+        def Xform "South" (
+            instanceable = true
+            prepend references = </Beacon>
+        )
+        {
+        }
+    }
+
+    def PointInstancer "Stones"
+    {
+        rel prototypes = </World/Stones/Prototypes/Stone>
+        int[] protoIndices = [0, 0]
+        point3f[] positions = [(0, 0, 0), (1, 0, 0)]
+
+        def Scope "Prototypes"
+        {
+            def Cube "Stone"
+            {
+            }
+        }
+    }
+
+    def Xform "Strands"
+    {
+        def BasisCurves "Hair"
+        {
+            int[] curveVertexCounts = [4]
+            point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+            uniform token type = "linear"
+        }
+
+        def Points "Sparks"
+        {
+            point3f[] points = [(0, 0, 0), (1, 1, 1)]
+        }
+    }
+
+    def Scope "Lights"
+    {
+        def SphereLight "Everything"
+        {
+        }
+
+        def DiskLight "Spot"
+        {
+            rel collection:lightLink:includes = </World/Robot>
+            uniform bool collection:lightLink:includeRoot = false
+        }
+
+        def SphereLight "Twin"
+        {
+            rel collection:lightLink:includes = </World/Robot>
+            uniform bool collection:lightLink:includeRoot = false
+        }
+
+        def SphereLight "Rocky"
+        {
+            rel collection:lightLink:excludes = </World/Rocks/Pebble>
+            rel collection:lightLink:includes = </World/Rocks>
+            uniform bool collection:lightLink:includeRoot = false
+        }
+
+        def SphereLight "Shunned"
+        {
+            rel collection:lightLink:excludes = [
+                </World/Robot>,
+                </World/Beacons/South>,
+            ]
+        }
+
+        def RectLight "Pattern"
+        {
+            uniform bool collection:lightLink:includeRoot = false
+            uniform pathExpression collection:lightLink:membershipExpression = "/World/Robot/Head /World/Beacons/South//"
+        }
+
+        def SphereLight "Exact"
+        {
+            uniform token collection:lightLink:expansionRule = "explicitOnly"
+            rel collection:lightLink:includes = [
+                </World/Robot>,
+                </World/Rocks/Rock>,
+            ]
+            uniform bool collection:lightLink:includeRoot = false
+        }
+
+        def SphereLight "Wide"
+        {
+            uniform token collection:lightLink:expansionRule = "expandPrimsAndProperties"
+        }
+
+        def SphereLight "Northern"
+        {
+            rel collection:lightLink:includes = </World/Beacons/North>
+            uniform bool collection:lightLink:includeRoot = false
+        }
+
+        def SphereLight "Stony"
+        {
+            rel collection:lightLink:includes = </World/Stones>
+            uniform bool collection:lightLink:includeRoot = false
+        }
+
+        def SphereLight "Prototype"
+        {
+            rel collection:lightLink:includes = </World/Stones/Prototypes/Stone>
+            uniform bool collection:lightLink:includeRoot = false
+        }
+
+        def SphereLight "Collected"
+        {
+            rel collection:lightLink:includes = </World.collection:robots>
+            uniform bool collection:lightLink:includeRoot = false
+        }
+
+        def SphereLight "Strung"
+        {
+            rel collection:lightLink:includes = [
+                </World/Strands/Hair>,
+                </World/Strands/Sparks>,
+            ]
+            uniform bool collection:lightLink:includeRoot = false
+        }
+
+        def SphereLight "Combed"
+        {
+            rel collection:lightLink:excludes = </World/Strands/Sparks>
+            rel collection:lightLink:includes = </World/Strands>
+            uniform bool collection:lightLink:includeRoot = false
+        }
+
+        def SphereLight "Unstrung"
+        {
+            rel collection:lightLink:excludes = </World/Strands/Hair>
+            rel collection:shadowLink:excludes = </World/Strands/Sparks>
+        }
+
+        def DistantLight "Sun"
+        {
+            rel collection:shadowLink:includes = </World/Rocks>
+            uniform bool collection:shadowLink:includeRoot = false
+        }
+    }
+}
+
+class Xform "Beacon"
+{
+    def Cube "Post"
+    {
+    }
+
+    def Sphere "Bulb"
+    {
+    }
+
+    def SphereLight "Glow"
+    {
+        rel collection:lightLink:includes = </Beacon/Bulb>
+        uniform bool collection:lightLink:includeRoot = false
+    }
+}

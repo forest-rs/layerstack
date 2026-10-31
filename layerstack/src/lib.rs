@@ -303,9 +303,10 @@ pub use dynamic_format::{
     DynamicFormatRegistrationError, DynamicFormats, UnregisteredField,
 };
 pub use edit::{
-    Address, Applied, Changes, EditError, EditTarget, ListPosition, NamespaceEdit, NamespaceError,
-    PathField, PrimField, PrimPropertyChanges, PropertyChange, PropertyField, Rejection, Slot,
-    Transaction, UnrepairedPath,
+    Address, Applied, Changes, EditError, EditTarget, HistoryError, HistoryMark, HistoryStep,
+    ListPosition, NamespaceEdit, NamespaceError, PathField, PrimField, PrimPropertyChanges,
+    PropertyChange, PropertyField, Recorded, Rejection, Slot, Transaction, UndoHistory,
+    UnrepairedPath,
 };
 pub use interner::{TokenId, TokenInterner};
 pub use layer_stack::{LayerStack, LayerStackIdentifier};

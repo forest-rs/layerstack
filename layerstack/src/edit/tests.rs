@@ -10,9 +10,9 @@ use crate::{
     TargetPath, Time, TokenId, Value, VariantSetSpec, VariantSpec,
 };
 
-const SCENE: LayerId = LayerId(1);
-const ROCK: LayerId = LayerId(2);
-const SCENE_SUB: LayerId = LayerId(3);
+pub(super) const SCENE: LayerId = LayerId(1);
+pub(super) const ROCK: LayerId = LayerId(2);
+pub(super) const SCENE_SUB: LayerId = LayerId(3);
 
 fn double() -> PropertyType {
     PropertyType::parse("double").unwrap()
@@ -27,7 +27,7 @@ fn attr(value: f64) -> PropertySpec {
 /// `spin` samples `0: 0, 10: 100`, and a `shape` variant set selecting
 /// `round` (`roughness = 0.1`) over `jagged` (`roughness = 0.9`). The scene
 /// has a sublayer offset by 5 frames.
-fn rocks() -> InMemoryStore {
+pub(super) fn rocks() -> InMemoryStore {
     let mut store = InMemoryStore::default();
     let t = |store: &mut InMemoryStore, s: &str| store.tokens.intern(s);
     let (size, spin, roughness, shape, round, jagged) = (
@@ -121,7 +121,7 @@ fn compose(store: &mut InMemoryStore) -> Stage {
     Stage::compose(store, SCENE, StageOptions::default())
 }
 
-fn spec(store: &mut InMemoryStore, text: &str) -> SpecPath {
+pub(super) fn spec(store: &mut InMemoryStore, text: &str) -> SpecPath {
     SpecPath::parse(text, &store.tokens, &store.paths).expect("spec path")
 }
 
@@ -134,7 +134,7 @@ fn node(stage: &Stage, prim: PathId, kind: ArcKind) -> NodeId {
         .expect("node of that kind")
 }
 
-fn layers(store: &InMemoryStore) -> Vec<Layer> {
+pub(super) fn layers(store: &InMemoryStore) -> Vec<Layer> {
     let mut out: Vec<Layer> = store.layers.values().cloned().collect();
     out.sort_by_key(|layer| layer.id);
     out
@@ -871,7 +871,7 @@ fn stale_preparations_fail_even_when_the_value_is_back() {
 }
 
 /// A small deterministic generator (xorshift64*).
-struct Rng(u64);
+pub(super) struct Rng(pub(super) u64);
 
 impl Rng {
     fn next(&mut self) -> u64 {
@@ -881,14 +881,14 @@ impl Rng {
         self.0.wrapping_mul(0x2545_F491_4F6C_DD1D)
     }
 
-    fn below(&mut self, n: usize) -> usize {
+    pub(super) fn below(&mut self, n: usize) -> usize {
         usize::try_from(self.next() % n as u64).expect("small")
     }
 }
 
 /// A random edit over a small vocabulary of rock specs; many are invalid
 /// or no-ops on purpose.
-fn random_edit(rng: &mut Rng, store: &mut InMemoryStore, txn: &mut Transaction) {
+pub(super) fn random_edit(rng: &mut Rng, store: &mut InMemoryStore, txn: &mut Transaction) {
     const PRIMS: &[&str] = &[
         "/Rock",
         "/Rock{shape=jagged}",
@@ -998,7 +998,11 @@ fn generations_move_once_per_edited_layer() {
 }
 
 /// Asserts that `live` serves what a fresh composition of `store` does.
-fn assert_live_matches_fresh(live: &crate::LiveStage, store: &mut InMemoryStore, context: &str) {
+pub(super) fn assert_live_matches_fresh(
+    live: &crate::LiveStage,
+    store: &mut InMemoryStore,
+    context: &str,
+) {
     let fresh = compose(store);
     let stage = live.stage();
     let root = store.path("/");

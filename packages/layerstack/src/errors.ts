@@ -30,6 +30,17 @@
  * - `listener.failed`: a change listener threw. Not thrown: reported
  *   (`reportError`, else `console.error`) with the listener's error as
  *   `cause`, after the other listeners ran.
+ * - `history.empty`: {@link UndoHistory.undo} or `redo` with no step.
+ * - `history.group_open`: `undo`, `redo` or `unwindTo` of an
+ *   {@link UndoHistory} while a group is open.
+ * - `history.no_group`: `endGroup` or `abandonGroup` with no group open.
+ * - `history.mark_gone`: `unwindTo` a mark whose step was undone, dropped
+ *   by the bound or reset.
+ * - `history.stale`: a step whose slots an edit the history did not record
+ *   changed since; nothing changed and the step stays. The `cause` is the
+ *   `edit.stale` error.
+ * - `history.rejected`: a step's undo was refused for another reason; the
+ *   `cause` is the native error.
  *
  * Codes from the native module:
  * - `io.*`: a read or import failure (`io.rejected` for a layer that does
@@ -156,6 +167,12 @@ export type ErrorCode =
   | "array.released"
   | "array.no_memory"
   | "listener.failed"
+  | "history.empty"
+  | "history.group_open"
+  | "history.no_group"
+  | "history.mark_gone"
+  | "history.stale"
+  | "history.rejected"
   | "path.invalid"
   | "prim.not_found"
   | "layer.unknown"

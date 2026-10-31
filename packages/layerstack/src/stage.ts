@@ -1632,7 +1632,7 @@ export class Stage implements Disposable {
    * Given several receipts, in the order their edits were applied, undoes
    * them all as one atomic transaction, the newest first, and returns one
    * receipt that redoes them all. Either every receipt is undone and
-   * spent, or none is.
+   * spent, or none is. {@link UndoHistory} undoes its grouped steps so.
    *
    * Throws `receipt.affinity` for another stage's receipt (checked before
    * anything runs), `receipt.released` for a spent one,
@@ -2714,6 +2714,35 @@ export class EditReceipt implements Disposable {
   [Symbol.dispose](): void {
     this.release();
   }
+}
+
+/**
+ * @internal Moves `receipt`'s native inverse into a new receipt with the
+ * same report, which the caller owns: `receipt` reads as released, and
+ * releasing it no longer frees the inverse. For {@link UndoHistory}, which
+ * takes the receipts it records.
+ */
+export function takeReceipt(receipt: EditReceipt, operation: string): EditReceipt {
+  if (!(receipt instanceof EditReceipt)) {
+    throw new LayerstackError("argument.invalid", operation, "expected an EditReceipt");
+  }
+  const native = receiptNatives.get(receipt);
+  if (native === undefined) {
+    throw new LayerstackError("receipt.released", operation, "the receipt was undone or released");
+  }
+  const taken = new EditReceipt(
+    receipt.stage,
+    receipt.target,
+    receipt.layers,
+    receipt.changes,
+    receipt.loaded,
+    receipt.failures,
+    receipt.unavailable,
+    receipt.unrepaired,
+  );
+  receiptNatives.delete(receipt);
+  receiptNatives.set(taken, native);
+  return taken;
 }
 
 function readMetadata(stage: Stage, path: string, key: string): Value | null {

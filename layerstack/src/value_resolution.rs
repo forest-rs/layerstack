@@ -1483,11 +1483,15 @@ fn lerp_array_values(lower: &Value, upper: &Value, alpha: f64) -> Option<Value> 
     if a.len() != b.len() {
         return None;
     }
-    let values = a
-        .iter()
-        .zip(b.iter())
-        .map(|(a, b)| lerp_element(&a, &b, alpha))
-        .collect::<Option<Vec<_>>>()?;
+    // A plain loop rather than `collect::<Option<Vec<_>>>()`: the collect's
+    // adapters are generic instances of `core`, which the compiler places in
+    // codegen units by their own type, so the per-element step could land
+    // apart from this function and pass each element through the stack. The
+    // loop keeps the step here with `lerp_element`, whatever the partition.
+    let mut values = Vec::with_capacity(a.len());
+    for (a, b) in a.iter().zip(b.iter()) {
+        values.push(lerp_element(&a, &b, alpha)?);
+    }
     Some(Value::array(values))
 }
 

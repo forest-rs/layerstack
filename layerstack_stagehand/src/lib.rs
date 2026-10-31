@@ -146,15 +146,49 @@
 //! it reads, changes, or when an item comes to bind it, and a time change
 //! reads only those whose inputs might vary.
 //!
+//! # Curves and points
+//!
+//! A [`CurvesPlan`] lays out `BasisCurves`, `NurbsCurves` and
+//! `HermiteCurves` ([`CurvesInput`]) once per topology: each curve's
+//! segments by OpenUSD's rules (`vstep`, wrap, pinned phantom points;
+//! [`basis_segment_counts`], [`basis_data_sizes`] and
+//! [`interpolation_for_size`] answer as `UsdGeomBasisCurves` does), sampled
+//! [`CurveOptions::samples`] times per segment, and fills [`CurveBuffers`]:
+//! line segments with a width, color and opacity per sample, and with
+//! [`CurveStyle::Swept`] tubes of [`CurveOptions::sides`] sides (or
+//! ribbons facing authored normals) as triangles. Widths, normals and
+//! colors follow their `constant`, `uniform`, `varying` or `vertex`
+//! interpolation; a width below zero (a Catmull-Rom chain of widths
+//! undershoots) is drawn as 0. A NURBS curve that jumps at an interior knot
+//! of full multiplicity is sampled on both sides of the jump, and no line
+//! segment or sweep crosses it. The basis matrices, de Boor's algorithm,
+//! rotation-minimizing frames and the sweeps are `exedra_curves`'. The
+//! [`CurvesReport`] gives segments per curve, the evaluation and any token
+//! fallback, samples, triangles, each primvar's fate, clamped widths,
+//! notes for curves drawn otherwise than authored, and the `ComputeExtent`
+//! extent.
+//!
+//! [`fill_points`] turns `Points` ([`PointsInput`]) into per-point
+//! positions, widths, colors and `ids` ([`PointBuffers`]), for sprites, or
+//! for a sphere or (with normals) a disc instanced at each point
+//! ([`point_shape`]).
+//!
+//! In a draw list, curves and points are items like meshes: new points,
+//! widths or colors refill their buffers ([`DrawWork::curves_refilled`],
+//! [`DrawWork::points_refilled`]); a new `curveVertexCounts`, `type`,
+//! `basis` or `wrap`, or a NURBS curve's `order`, `knots`, `ranges` or
+//! `pointWeights`, lays curves out again ([`DrawWork::curves_laid_out`]),
+//! and a new point count reads points anew ([`DrawWork::points_rebuilt`]).
+//!
 //! Not yet: shaders other than `UsdPreviewSurface` and its texture,
-//! primvar and transform nodes, curves, points and light linking
-//! evaluation.
+//! primvar and transform nodes, and light linking evaluation.
 
 #![no_std]
 extern crate alloc;
 
 #[cfg(feature = "stage")]
 mod camera;
+mod curves;
 #[cfg(feature = "stage")]
 mod draw;
 mod input;
@@ -163,21 +197,32 @@ mod light;
 #[cfg(feature = "stage")]
 mod material;
 mod plan;
+mod points;
 mod report;
 mod shapes;
 #[cfg(feature = "stage")]
 mod stage;
+#[cfg(feature = "stage")]
+mod stage_curves;
 mod triangulate;
 
+#[cfg(test)]
+mod curve_tests;
 #[cfg(test)]
 mod tests;
 
 #[cfg(feature = "stage")]
 pub use camera::CameraItem;
+pub use curves::{
+    CurveBasis, CurveBuffers, CurveDataSizes, CurveEvaluation, CurveFallback, CurveForm,
+    CurveGeometry, CurveNote, CurveNoteKind, CurveOptions, CurveProblem, CurveStyle, CurveType,
+    CurveWrap, CurvesInput, CurvesMismatch, CurvesPlan, CurvesReport, basis_data_sizes,
+    basis_segment_counts, curves_extent, interpolation_for_size,
+};
 #[cfg(feature = "stage")]
 pub use draw::{
     BufferKey, DrawBuffers, DrawDiff, DrawItem, DrawList, DrawOptions, DrawWork, ItemId,
-    ItemInstance, ItemSource, Purposes,
+    ItemInstance, ItemSource, PointStyle, Purposes,
 };
 pub use input::{
     FaceSubsets, Interpolation, MeshInput, MeshTopology, Orientation, Primvar, SubdivisionScheme,
@@ -195,6 +240,9 @@ pub use material::{
     TextureWrap, UdimTileFile,
 };
 pub use plan::{DrawRange, MeshBuffers, MeshOptions, MeshPlan, PlanMismatch, SmoothNormals, UvSet};
+pub use points::{
+    PointBuffers, PointShape, PointsInput, PointsReport, fill_points, point_shape, points_extent,
+};
 pub use report::{
     ChannelState, DropReason, FaceNote, FaceNoteKind, MeshReport, NormalsSource, SubsetReport,
     TopologyProblem, UvSetReport,
@@ -202,6 +250,8 @@ pub use report::{
 pub use shapes::{Axis, Shape, Tessellation, tessellate};
 #[cfg(feature = "stage")]
 pub use stage::{StageMesh, read_shape};
+#[cfg(feature = "stage")]
+pub use stage_curves::{StageCurves, StagePoints};
 pub use triangulate::Triangulation;
 
 /// The ear clipper's error, carried by [`FaceNoteKind::ConcaveFellBack`].

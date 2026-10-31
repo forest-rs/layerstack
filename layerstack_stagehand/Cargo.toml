@@ -3,10 +3,7 @@ name = "layerstack_stagehand"
 description = "Render-ready buffers from a composed Layerstack stage: triangulated meshes, face-varying primvars, normals, subset draw ranges and tessellated implicit shapes."
 version.workspace = true
 edition.workspace = true
-# `exedra_triangulate` needs Rust 1.92, above the workspace's 1.89, so
-# this crate (not a core crate) sets its own MSRV and stays out of CI's
-# MSRV job (`RUST_MIN_VER_PKGS`).
-rust-version = "1.92"
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme = "README.md"

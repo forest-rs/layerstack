@@ -79,7 +79,7 @@ With the `stage` feature (default), `StageMesh::read` and `read_shape` read
 from a `layerstack_schemas::Scene`. Without it, the crate depends on neither
 `layerstack` nor its schemas.
 
-Requires Rust **1.92** or later (for `exedra_triangulate`). `no_std + alloc`.
+Requires Rust **1.89** or later. `no_std + alloc`.
 
 The TypeScript package `@forest-rs/layerstack_stagehand` (`packages/layerstack_stagehand`)
 wraps this crate's WebAssembly module (`layerstack_stagehand_wasm`).

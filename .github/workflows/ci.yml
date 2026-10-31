@@ -11,9 +11,6 @@ env:
   RUST_MIN_VER: "1.89"
   # List of packages that will be checked with the minimum supported Rust version.
   # This should be limited to packages that are intended for publishing.
-  # `layerstack_stagehand` is left out: it sets its own MSRV, 1.92, which
-  # `exedra_triangulate` needs, and is not published while that is a Git
-  # dependency.
   RUST_MIN_VER_PKGS: >-
     -p opinionated
     -p layerstack
@@ -23,6 +20,11 @@ env:
     -p layerstack_usdz
     -p layerstack_io
     -p layerstack_mesh_export
+  # Packages that hold to the minimum supported Rust version but are not
+  # published yet, so `cargo package` leaves them out: `layerstack_stagehand`
+  # waits on its `exedra` Git dependencies.
+  RUST_MIN_VER_UNPUBLISHED_PKGS: >-
+    -p layerstack_stagehand
   # List of packages that don't support `no_std`.
   # `layerstack_wasm` and `layerstack_stagehand_wasm` are WebAssembly
   # modules; their no_std builds are checked by the gate, and a `cdylib` is
@@ -349,10 +351,10 @@ jobs:
           save-if: ${{ github.event_name != 'merge_group' }}
 
       - name: cargo check (no_std)
-        run: cargo hack check ${{ env.RUST_MIN_VER_PKGS }} ${{ env.RUST_NO_STD_PKGS }} --locked --optional-deps --each-feature --ignore-unknown-features --features libm --exclude-features ${{ env.FEATURES_DEPENDING_ON_STD }} --target x86_64-unknown-none
+        run: cargo hack check ${{ env.RUST_MIN_VER_PKGS }} ${{ env.RUST_MIN_VER_UNPUBLISHED_PKGS }} ${{ env.RUST_NO_STD_PKGS }} --locked --optional-deps --each-feature --ignore-unknown-features --features libm --exclude-features ${{ env.FEATURES_DEPENDING_ON_STD }} --target x86_64-unknown-none
 
       - name: cargo check
-        run: cargo hack check ${{ env.RUST_MIN_VER_PKGS }} --locked --optional-deps --each-feature --ignore-unknown-features --features std
+        run: cargo hack check ${{ env.RUST_MIN_VER_PKGS }} ${{ env.RUST_MIN_VER_UNPUBLISHED_PKGS }} --locked --optional-deps --each-feature --ignore-unknown-features --features std
 
   check-msrv-wasm:
     name: cargo check (msrv) (wasm32)
@@ -377,7 +379,7 @@ jobs:
           save-if: ${{ github.event_name != 'merge_group' }}
 
       - name: cargo check
-        run: cargo hack check ${{ env.RUST_MIN_VER_PKGS }} ${{ env.RUST_NO_WASM_PKGS }} --locked --target wasm32-unknown-unknown --optional-deps --each-feature --ignore-unknown-features --features std
+        run: cargo hack check ${{ env.RUST_MIN_VER_PKGS }} ${{ env.RUST_MIN_VER_UNPUBLISHED_PKGS }} ${{ env.RUST_NO_WASM_PKGS }} --locked --target wasm32-unknown-unknown --optional-deps --each-feature --ignore-unknown-features --features std
 
   # The `@forest-rs/layerstack` package over the default module: build the
   # module as it ships (the `wasm` profile, the `wasm-bindgen` CLI at the

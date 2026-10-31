@@ -1,0 +1,631 @@
+{
+ "links": [
+  {
+   "included": [
+    "/World/Beacons/North/Bulb"
+   ],
+   "light": "/World/Beacons/North/Glow",
+   "link": "lightLink",
+   "proxy": true,
+   "shares": 0,
+   "trivial": false
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head",
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb",
+    "/World/Stones",
+    "/World/Strands/Hair",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Beacons/North/Glow",
+   "link": "shadowLink",
+   "proxy": true,
+   "shares": 1,
+   "trivial": true
+  },
+  {
+   "included": [
+    "/World/Beacons/South/Bulb"
+   ],
+   "light": "/World/Beacons/South/Glow",
+   "link": "lightLink",
+   "proxy": true,
+   "shares": 2,
+   "trivial": false
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head",
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb",
+    "/World/Stones",
+    "/World/Strands/Hair",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Beacons/South/Glow",
+   "link": "shadowLink",
+   "proxy": true,
+   "shares": 1,
+   "trivial": true
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head",
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb",
+    "/World/Stones",
+    "/World/Strands/Hair",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Lights/Everything",
+   "link": "lightLink",
+   "proxy": false,
+   "shares": 1,
+   "trivial": true
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head",
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb",
+    "/World/Stones",
+    "/World/Strands/Hair",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Lights/Everything",
+   "link": "shadowLink",
+   "proxy": false,
+   "shares": 1,
+   "trivial": true
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head"
+   ],
+   "light": "/World/Lights/Spot",
+   "link": "lightLink",
+   "proxy": false,
+   "shares": 6,
+   "trivial": false
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head",
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb",
+    "/World/Stones",
+    "/World/Strands/Hair",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Lights/Spot",
+   "link": "shadowLink",
+   "proxy": false,
+   "shares": 1,
+   "trivial": true
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head"
+   ],
+   "light": "/World/Lights/Twin",
+   "link": "lightLink",
+   "proxy": false,
+   "shares": 6,
+   "trivial": false
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head",
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb",
+    "/World/Stones",
+    "/World/Strands/Hair",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Lights/Twin",
+   "link": "shadowLink",
+   "proxy": false,
+   "shares": 1,
+   "trivial": true
+  },
+  {
+   "included": [
+    "/World/Rocks/Rock"
+   ],
+   "light": "/World/Lights/Rocky",
+   "link": "lightLink",
+   "proxy": false,
+   "shares": 10,
+   "trivial": false
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head",
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb",
+    "/World/Stones",
+    "/World/Strands/Hair",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Lights/Rocky",
+   "link": "shadowLink",
+   "proxy": false,
+   "shares": 1,
+   "trivial": true
+  },
+  {
+   "included": [
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Stones",
+    "/World/Strands/Hair",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Lights/Shunned",
+   "link": "lightLink",
+   "proxy": false,
+   "shares": 12,
+   "trivial": false
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head",
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb",
+    "/World/Stones",
+    "/World/Strands/Hair",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Lights/Shunned",
+   "link": "shadowLink",
+   "proxy": false,
+   "shares": 1,
+   "trivial": true
+  },
+  {
+   "included": [
+    "/World/Robot/Head",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb"
+   ],
+   "light": "/World/Lights/Pattern",
+   "link": "lightLink",
+   "proxy": false,
+   "shares": 14,
+   "trivial": false
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head",
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb",
+    "/World/Stones",
+    "/World/Strands/Hair",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Lights/Pattern",
+   "link": "shadowLink",
+   "proxy": false,
+   "shares": 1,
+   "trivial": true
+  },
+  {
+   "included": [
+    "/World/Rocks/Rock"
+   ],
+   "light": "/World/Lights/Exact",
+   "link": "lightLink",
+   "proxy": false,
+   "shares": 16,
+   "trivial": false
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head",
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb",
+    "/World/Stones",
+    "/World/Strands/Hair",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Lights/Exact",
+   "link": "shadowLink",
+   "proxy": false,
+   "shares": 1,
+   "trivial": true
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head",
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb",
+    "/World/Stones",
+    "/World/Strands/Hair",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Lights/Wide",
+   "link": "lightLink",
+   "proxy": false,
+   "shares": 18,
+   "trivial": false
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head",
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb",
+    "/World/Stones",
+    "/World/Strands/Hair",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Lights/Wide",
+   "link": "shadowLink",
+   "proxy": false,
+   "shares": 1,
+   "trivial": true
+  },
+  {
+   "included": [
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb"
+   ],
+   "light": "/World/Lights/Northern",
+   "link": "lightLink",
+   "proxy": false,
+   "shares": 20,
+   "trivial": false
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head",
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb",
+    "/World/Stones",
+    "/World/Strands/Hair",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Lights/Northern",
+   "link": "shadowLink",
+   "proxy": false,
+   "shares": 1,
+   "trivial": true
+  },
+  {
+   "included": [
+    "/World/Stones"
+   ],
+   "light": "/World/Lights/Stony",
+   "link": "lightLink",
+   "proxy": false,
+   "shares": 22,
+   "trivial": false
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head",
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb",
+    "/World/Stones",
+    "/World/Strands/Hair",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Lights/Stony",
+   "link": "shadowLink",
+   "proxy": false,
+   "shares": 1,
+   "trivial": true
+  },
+  {
+   "included": [],
+   "light": "/World/Lights/Prototype",
+   "link": "lightLink",
+   "proxy": false,
+   "shares": 24,
+   "trivial": false
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head",
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb",
+    "/World/Stones",
+    "/World/Strands/Hair",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Lights/Prototype",
+   "link": "shadowLink",
+   "proxy": false,
+   "shares": 1,
+   "trivial": true
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head"
+   ],
+   "light": "/World/Lights/Collected",
+   "link": "lightLink",
+   "proxy": false,
+   "shares": 26,
+   "trivial": false
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head",
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb",
+    "/World/Stones",
+    "/World/Strands/Hair",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Lights/Collected",
+   "link": "shadowLink",
+   "proxy": false,
+   "shares": 1,
+   "trivial": true
+  },
+  {
+   "included": [
+    "/World/Strands/Hair",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Lights/Strung",
+   "link": "lightLink",
+   "proxy": false,
+   "shares": 28,
+   "trivial": false
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head",
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb",
+    "/World/Stones",
+    "/World/Strands/Hair",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Lights/Strung",
+   "link": "shadowLink",
+   "proxy": false,
+   "shares": 1,
+   "trivial": true
+  },
+  {
+   "included": [
+    "/World/Strands/Hair"
+   ],
+   "light": "/World/Lights/Combed",
+   "link": "lightLink",
+   "proxy": false,
+   "shares": 30,
+   "trivial": false
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head",
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb",
+    "/World/Stones",
+    "/World/Strands/Hair",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Lights/Combed",
+   "link": "shadowLink",
+   "proxy": false,
+   "shares": 1,
+   "trivial": true
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head",
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb",
+    "/World/Stones",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Lights/Unstrung",
+   "link": "lightLink",
+   "proxy": false,
+   "shares": 32,
+   "trivial": false
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head",
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb",
+    "/World/Stones",
+    "/World/Strands/Hair"
+   ],
+   "light": "/World/Lights/Unstrung",
+   "link": "shadowLink",
+   "proxy": false,
+   "shares": 33,
+   "trivial": false
+  },
+  {
+   "included": [
+    "/World/Robot/Body",
+    "/World/Robot/Head",
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble",
+    "/World/Beacons/North/Post",
+    "/World/Beacons/North/Bulb",
+    "/World/Beacons/South/Post",
+    "/World/Beacons/South/Bulb",
+    "/World/Stones",
+    "/World/Strands/Hair",
+    "/World/Strands/Sparks"
+   ],
+   "light": "/World/Lights/Sun",
+   "link": "lightLink",
+   "proxy": false,
+   "shares": 1,
+   "trivial": true
+  },
+  {
+   "included": [
+    "/World/Rocks/Rock",
+    "/World/Rocks/Pebble"
+   ],
+   "light": "/World/Lights/Sun",
+   "link": "shadowLink",
+   "proxy": false,
+   "shares": 35,
+   "trivial": false
+  }
+ ],
+ "targets": [
+  {
+   "kind": "gprim",
+   "path": "/World/Robot/Body"
+  },
+  {
+   "kind": "gprim",
+   "path": "/World/Robot/Head"
+  },
+  {
+   "kind": "gprim",
+   "path": "/World/Rocks/Rock"
+  },
+  {
+   "kind": "gprim",
+   "path": "/World/Rocks/Pebble"
+  },
+  {
+   "kind": "proxy",
+   "path": "/World/Beacons/North/Post"
+  },
+  {
+   "kind": "proxy",
+   "path": "/World/Beacons/North/Bulb"
+  },
+  {
+   "kind": "proxy",
+   "path": "/World/Beacons/South/Post"
+  },
+  {
+   "kind": "proxy",
+   "path": "/World/Beacons/South/Bulb"
+  },
+  {
+   "kind": "instancer",
+   "path": "/World/Stones"
+  },
+  {
+   "kind": "gprim",
+   "path": "/World/Strands/Hair"
+  },
+  {
+   "kind": "gprim",
+   "path": "/World/Strands/Sparks"
+  }
+ ],
+ "version": "26.11"
+}

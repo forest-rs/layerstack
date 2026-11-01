@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { formatValue, releaseValue } from "../model/values.ts";
 import type { EditorStore } from "../store.ts";
+import { AssetLoopView } from "./AssetLoop.tsx";
 import { useStore } from "./context.ts";
 import { formatTime, layerName } from "./format.ts";
 import { targetText } from "./TargetPicker.tsx";
@@ -43,8 +44,8 @@ export function BottomPanel() {
       <TabsContent id="history" className="min-h-0 overflow-y-auto">
         <HistoryView store={store} />
       </TabsContent>
-      <TabsContent id="assets" className="min-h-0 overflow-y-auto">
-        <AssetsView store={store} />
+      <TabsContent id="assets" className="min-h-0">
+        <AssetLoopView store={store} />
       </TabsContent>
       <TabsContent id="notices" className="min-h-0 overflow-y-auto">
         <NoticesView store={store} />
@@ -187,41 +188,6 @@ function HistoryView({ store }: { store: EditorStore }) {
       <ol>
         {redo.map((step, index) => row(step.label, step.layers, "undone", `redo-${index}`))}
         {undo.map((step, index) => row(step.label, step.layers, "done", `undo-${index}`))}
-      </ol>
-    </div>
-  );
-}
-
-/** The asset loop, newest first: what the stage wanted, what the host fetched and supplied, what it read. */
-function AssetsView({ store }: { store: EditorStore }) {
-  const log = (store.session ?? store.opening)?.loopLog ?? [];
-  if (log.length === 0) return <p className="p-3 text-xs text-muted-foreground">The stage has asked for nothing yet.</p>;
-  const tone: Record<string, string> = {
-    want: "text-sky-400",
-    fetch: "text-muted-foreground",
-    supply: "text-foreground",
-    load: "text-emerald-400",
-    fail: "text-destructive",
-  };
-  return (
-    <div>
-      <p className="px-3 py-1.5 text-[11px] text-muted-foreground">
-        {log.length} steps{log.length > SHOWN && `, the newest ${SHOWN} shown`}
-      </p>
-      <ol className="font-mono text-[11px]">
-        {log
-          .slice(-SHOWN)
-          .reverse()
-          .map((entry, index) => (
-            <li key={log.length - index} className="flex gap-3 border-b px-3 py-1">
-              <span className={cn("w-12 shrink-0", tone[entry.phase])}>{entry.phase}</span>
-              <span className="w-56 shrink-0 truncate" title={entry.identifier}>
-                {entry.identifier}
-              </span>
-              <span className="truncate text-muted-foreground">{entry.detail}</span>
-              <span className="ml-auto shrink-0 text-muted-foreground">{entry.cause}</span>
-            </li>
-          ))}
       </ol>
     </div>
   );

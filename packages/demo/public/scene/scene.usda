@@ -1,7 +1,7 @@
 #usda 1.0
 (
     defaultPrim = "World"
-    doc = "The demo editor's sample: a root layer, a sublayer, a class the rock inherits, a robot referenced from its own file with a variant set, two instances of a beacon, a ground mesh with a face subset, a concave path, a point instancer of stones, a spinning top animated by time samples, a camera and lights (the spot linked to the robot alone), a sign with a checker texture, a strip with UDIM tiles, and curves and points: a Catmull-Rom trail, a periodic B-spline ring, a wire between the beacons and sparks."
+    doc = "The demo's sample: a root layer, a sublayer, a class the rock inherits, a robot referenced from its own file with a variant set, two instances of a beacon, a ground, and a spot light linked to the robot alone."
     subLayers = [
         @./library.usda@
     ]
@@ -13,8 +13,6 @@ def Xform "World"
         inherits = </Shape>
     )
     {
-        double3 xformOp:translate = (-4, 2, 0)
-        uniform token[] xformOpOrder = ["xformOp:translate"]
     }
 
     def Xform "Robot" (
@@ -25,8 +23,6 @@ def Xform "World"
         prepend variantSets = "finish"
     )
     {
-        double3 xformOp:translate = (3, 0, 0)
-        uniform token[] xformOpOrder = ["xformOp:translate"]
         variantSet "finish" = {
             "chrome" (
                 prepend references = @./assets/chrome.usda@
@@ -47,8 +43,6 @@ def Xform "World"
             prepend references = @./assets/beacon.usda@
         )
         {
-            double3 xformOp:translate = (-2, 0, -5)
-            uniform token[] xformOpOrder = ["xformOp:translate"]
         }
 
         def "South" (
@@ -56,296 +50,22 @@ def Xform "World"
             prepend references = @./assets/beacon.usda@
         )
         {
-            double3 xformOp:translate = (2, 0, -5)
-            uniform token[] xformOpOrder = ["xformOp:translate"]
         }
     }
 
     def Mesh "Ground"
     {
-        int[] faceVertexCounts = [4, 4]
-        int[] faceVertexIndices = [0, 1, 4, 3, 1, 2, 5, 4]
-        point3f[] points = [(-8, 0, 6), (0, 0, 6), (8, 0, 6), (-8, 0, -8), (0, 0, -8), (8, 0, -8)]
-        color3f[] primvars:displayColor = [(0.36, 0.42, 0.3), (0.42, 0.38, 0.3)] (
-            interpolation = "uniform"
-        )
-        uniform token subdivisionScheme = "none"
-
-        def GeomSubset "West"
-        {
-            uniform token elementType = "face"
-            uniform token familyName = "materialBind"
-            int[] indices = [0]
-        }
-    }
-
-    def Mesh "Path"
-    {
-        int[] faceVertexCounts = [6]
-        int[] faceVertexIndices = [0, 1, 2, 3, 4, 5]
-        point3f[] points = [(-3, 0.01, 3), (-5, 0.01, 3), (-5, 0.01, 1), (-7, 0.01, 1), (-7, 0.01, 5), (-3, 0.01, 5)]
-        color3f[] primvars:displayColor = [(0.62, 0.58, 0.5)]
-        normal3f[] normals = [(0, 1, 0)] (
-            interpolation = "uniform"
-        )
-        uniform token subdivisionScheme = "none"
-    }
-
-    def Cube "Top"
-    {
-        double size = 0.6
-        color3f[] primvars:displayColor = [(0.2, 0.62, 0.6)]
-        double3 xformOp:translate = (5.5, 0.8, 1.5)
-        double xformOp:rotateY = 0
-        double xformOp:rotateY.timeSamples = {
-            0: 0,
-            48: 360,
-        }
-        double xformOp:rotateX = 35
-        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateY", "xformOp:rotateX"]
-    }
-
-    def Camera "Camera"
-    {
-        float focalLength = 24
-        float horizontalAperture = 36
-        float verticalAperture = 20.25
-        float2 clippingRange = (0.1, 300)
-        double3 xformOp:translate = (10, 7, 14)
-        float3 xformOp:rotateXYZ = (-18.4, 33.69, 0)
-        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
-    }
-
-    def DistantLight "Sun"
-    {
-        float inputs:intensity = 2.5
-        bool inputs:normalize = true
-        color3f inputs:color = (1, 0.95, 0.88)
-        float3 xformOp:rotateXYZ = (-55, 40, 0)
-        uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
-    }
-
-    def DomeLight "Sky"
-    {
-        float inputs:intensity = 0.35
-        color3f inputs:color = (0.62, 0.72, 0.95)
+        int[] faceVertexCounts = [4]
+        int[] faceVertexIndices = [0, 1, 2, 3]
+        point3f[] points = [(-8, 0, 6), (8, 0, 6), (8, 0, -8), (-8, 0, -8)]
     }
 
     def DiskLight "Spot" (
-        prepend apiSchemas = ["ShapingAPI"]
+        doc = "Linked to the robot alone: its lightLink collection includes /World/Robot, and not the root."
     )
     {
-        float inputs:radius = 0.15
         float inputs:intensity = 4000
-        color3f inputs:color = (0.75, 0.85, 1)
-        float inputs:shaping:cone:angle = 30
-        float inputs:shaping:cone:softness = 0.4
         rel collection:lightLink:includes = </World/Robot>
         uniform bool collection:lightLink:includeRoot = false
-        double3 xformOp:translate = (3, 5, 0)
-        float3 xformOp:rotateXYZ = (-90, 0, 0)
-        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
-    }
-
-    def RectLight "Panel"
-    {
-        float inputs:width = 3
-        float inputs:height = 1.2
-        float inputs:intensity = 6
-        color3f inputs:color = (1, 0.75, 0.5)
-        double3 xformOp:translate = (-7.5, 1.5, -2)
-        float3 xformOp:rotateXYZ = (0, -90, 0)
-        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
-    }
-
-    def PointInstancer "Stones"
-    {
-        rel prototypes = </World/Stones/Stone>
-        int[] protoIndices = [0, 0, 0, 0, 0]
-        point3f[] positions = [(-1, 0.25, 3), (0, 0.25, 3.5), (1, 0.25, 3), (2, 0.25, 3.5), (3, 0.25, 3)]
-        quath[] orientations = [(1, 0, 0, 0), (0.92, 0, 0.38, 0), (1, 0, 0, 0), (0.92, 0, -0.38, 0), (1, 0, 0, 0)]
-        int64[] ids = [1, 2, 3, 4, 5]
-        int64[] invisibleIds = []
-
-        def Cube "Stone"
-        {
-            double size = 0.5
-            color3f[] primvars:displayColor = [(0.55, 0.53, 0.5)]
-        }
-    }
-
-    def Mesh "Sign" (
-        prepend apiSchemas = ["MaterialBindingAPI"]
-    )
-    {
-        int[] faceVertexCounts = [4]
-        int[] faceVertexIndices = [0, 1, 2, 3]
-        point3f[] points = [(-1, 0, 0), (1, 0, 0), (1, 1.5, 0), (-1, 1.5, 0)]
-        texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1)] (
-            interpolation = "vertex"
-        )
-        texCoord2f[] primvars:card = [(0, 0), (1.3333334, 0), (1.3333334, 1), (0, 1)] (
-            doc = "Square checks on the 2 x 1.5 sign: the set the last step reads."
-            interpolation = "vertex"
-        )
-        uniform token subdivisionScheme = "none"
-        rel material:binding = </World/Looks/Checker>
-        double3 xformOp:translate = (-0.5, 0, 1.2)
-        uniform token[] xformOpOrder = ["xformOp:translate"]
-    }
-
-    def Mesh "Strip" (
-        prepend apiSchemas = ["MaterialBindingAPI"]
-    )
-    {
-        int[] faceVertexCounts = [4]
-        int[] faceVertexIndices = [0, 1, 2, 3]
-        point3f[] points = [(-1, 0.02, 0.5), (1, 0.02, 0.5), (1, 0.02, -0.5), (-1, 0.02, -0.5)]
-        texCoord2f[] primvars:st = [(0, 0), (2, 0), (2, 1), (0, 1)] (
-            interpolation = "vertex"
-        )
-        uniform token subdivisionScheme = "none"
-        rel material:binding = </World/Looks/Tiles>
-        double3 xformOp:translate = (5, 0, -2)
-        uniform token[] xformOpOrder = ["xformOp:translate"]
-    }
-
-    def Scope "Curves" (
-        doc = "Curves and points the draw list samples (8 per segment) and sweeps (6-sided tubes): the trail and the ring are drawn as tubes, the wire, thinner than 0.05, as lines, the sparks as points."
-    )
-    {
-        def BasisCurves "Trail" (
-            doc = "A Catmull-Rom path along the ground: it runs from its second point to its second to last."
-        )
-        {
-            uniform token type = "cubic"
-            uniform token basis = "catmullRom"
-            uniform token wrap = "nonperiodic"
-            int[] curveVertexCounts = [7]
-            point3f[] points = [(-6.5, 0.06, 5.25), (-5, 0.06, 5.5), (-3, 0.06, 4.75), (-1, 0.06, 5.25), (1, 0.06, 4.75), (3, 0.06, 5.25), (5, 0.06, 5)]
-            float[] widths = [0.12] (
-                interpolation = "constant"
-            )
-            color3f[] primvars:displayColor = [(0.7, 0.62, 0.45)]
-        }
-
-        def BasisCurves "Ring" (
-            doc = "A periodic uniform B-spline around the spinning top: eight points, eight segments, closed."
-        )
-        {
-            uniform token type = "cubic"
-            uniform token basis = "bspline"
-            uniform token wrap = "periodic"
-            int[] curveVertexCounts = [8]
-            point3f[] points = [(6.75, 0.06, 1.5), (6.375, 0.06, 2.375), (5.5, 0.06, 2.75), (4.625, 0.06, 2.375), (4.25, 0.06, 1.5), (4.625, 0.06, 0.625), (5.5, 0.06, 0.25), (6.375, 0.06, 0.625)]
-            float[] widths = [0.08] (
-                interpolation = "constant"
-            )
-            color3f[] primvars:displayColor = [(0.2, 0.62, 0.6)]
-        }
-
-        def BasisCurves "Wire" (
-            doc = "A Bezier wire between the beacons' bulbs, sagging; pinned, which a Bezier curve draws as nonperiodic."
-        )
-        {
-            uniform token type = "cubic"
-            uniform token basis = "bezier"
-            uniform token wrap = "pinned"
-            int[] curveVertexCounts = [4]
-            point3f[] points = [(-2, 2, -5), (-0.75, 1, -5), (0.75, 1, -5), (2, 2, -5)]
-            float[] widths = [0.02, 0.03, 0.03, 0.02] (
-                interpolation = "vertex"
-            )
-            color3f[] primvars:displayColor = [(0.15, 0.15, 0.17)]
-        }
-
-        def Points "Sparks" (
-            doc = "Sparks above the wire, each with an id."
-        )
-        {
-            point3f[] points = [(-1.5, 2.25, -5), (-1, 2, -5), (-0.5, 2.5, -5), (0, 2.25, -5), (0.5, 2.5, -5), (1, 2, -5), (1.5, 2.25, -5)]
-            float[] widths = [0.08, 0.06, 0.1, 0.08, 0.1, 0.06, 0.08] (
-                interpolation = "vertex"
-            )
-            int64[] ids = [1, 2, 3, 4, 5, 6, 7]
-            color3f[] primvars:displayColor = [(1, 0.7, 0.2), (1, 0.5, 0.1), (1, 0.8, 0.3), (1, 0.6, 0.2), (1, 0.8, 0.3), (1, 0.5, 0.1), (1, 0.7, 0.2)] (
-                interpolation = "vertex"
-            )
-        }
-    }
-
-    def Scope "Looks"
-    {
-        def Material "Checker"
-        {
-            string inputs:coordinates = "st"
-            float4 inputs:tint = (1, 1, 1, 1)
-            token outputs:surface.connect = </World/Looks/Checker/Surface.outputs:surface>
-
-            def Shader "Surface"
-            {
-                uniform token info:id = "UsdPreviewSurface"
-                color3f inputs:diffuseColor.connect = </World/Looks/Checker/Texture.outputs:rgb>
-                float inputs:roughness = 0.45
-                token outputs:surface
-            }
-
-            def Shader "Reader"
-            {
-                uniform token info:id = "UsdPrimvarReader_float2"
-                string inputs:varname.connect = </World/Looks/Checker.inputs:coordinates>
-                float2 outputs:result
-            }
-
-            def Shader "Place"
-            {
-                uniform token info:id = "UsdTransform2d"
-                float2 inputs:in.connect = </World/Looks/Checker/Reader.outputs:result>
-                float inputs:rotation = 15
-                float2 inputs:scale = (2, 2)
-                float2 outputs:result
-            }
-
-            def Shader "Texture"
-            {
-                uniform token info:id = "UsdUVTexture"
-                asset inputs:file = @./textures/checker.png@
-                float2 inputs:st.connect = </World/Looks/Checker/Place.outputs:result>
-                token inputs:wrapS = "repeat"
-                token inputs:wrapT = "repeat"
-                token inputs:sourceColorSpace = "sRGB"
-                float4 inputs:scale.connect = </World/Looks/Checker.inputs:tint>
-                float3 outputs:rgb
-            }
-        }
-
-        def Material "Tiles"
-        {
-            token outputs:surface.connect = </World/Looks/Tiles/Surface.outputs:surface>
-
-            def Shader "Surface"
-            {
-                uniform token info:id = "UsdPreviewSurface"
-                color3f inputs:diffuseColor.connect = </World/Looks/Tiles/Texture.outputs:rgb>
-                float inputs:roughness = 0.8
-                token outputs:surface
-            }
-
-            def Shader "Reader"
-            {
-                uniform token info:id = "UsdPrimvarReader_float2"
-                string inputs:varname = "st"
-                float2 outputs:result
-            }
-
-            def Shader "Texture"
-            {
-                uniform token info:id = "UsdUVTexture"
-                asset inputs:file = @./textures/tile.<UDIM>.png@
-                float2 inputs:st.connect = </World/Looks/Tiles/Reader.outputs:result>
-                token inputs:sourceColorSpace = "sRGB"
-                float3 outputs:rgb
-            }
-        }
     }
 }

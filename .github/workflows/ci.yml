@@ -495,6 +495,10 @@ jobs:
         working-directory: packages/editor
         run: npm run build
 
+      - name: run the editor's model tests
+        working-directory: packages/editor
+        run: npm test
+
   doc:
     name: cargo doc
     # NOTE: We don't have any platform specific docs in this workspace, so we only run on Ubuntu.

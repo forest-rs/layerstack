@@ -13,6 +13,7 @@ import { CAMERA_INPUTS, LIGHT_INPUTS, lightKey, lightKind, readLight } from "./l
 import type { CameraItem, LightInstance, LightItem, LightKind } from "./light.js";
 import { Links, linkKey } from "./links.js";
 import type { LinkChange, LinkKind, LinkSet, LinkTarget } from "./links.js";
+import { fingerprint } from "./fingerprint.js";
 import { readMaterial } from "./material.js";
 import type { MaterialItem } from "./material.js";
 import { readMesh, readShape, shapeSchema } from "./read.js";
@@ -680,8 +681,14 @@ interface Entry {
 
 interface Retained {
   buffers: DrawBuffers;
-  /** The mesh as last read, for a mesh. */
+  /**
+   * The mesh as last read, for a mesh whose geometry might vary: a refill
+   * compares it with the next read. `null` for a static mesh, which keeps
+   * only its {@link fingerprint}, and for anything else.
+   */
   input: MeshInput | null;
+  /** The fingerprint of a static mesh's input, in place of the input: a read that returns the same input reuses the buffers. */
+  fingerprint?: string;
   /** The curves as last read, for curves. */
   curvesInput?: CurvesInput;
   /** The points as last read, for points. */
@@ -1183,7 +1190,7 @@ export class DrawList implements Disposable {
     const wanted = new Map<number, Set<string>>();
     for (const entry of this.#entries.values()) {
       const retained = this.#buffers.get(entry.item.buffer);
-      if (retained === undefined || retained.input === null) continue;
+      if (retained === undefined || (retained.input === null && retained.fingerprint === undefined)) continue;
       let names = wanted.get(entry.item.buffer);
       if (names === undefined) wanted.set(entry.item.buffer, (names = new Set()));
       for (const material of [entry.item.material, ...entry.item.subsetMaterials]) {
@@ -1247,17 +1254,24 @@ export class DrawList implements Disposable {
   /**
    * Frees the module's side of the mesh buffer `key` unless its geometry
    * might vary: its buffers are copied out already, and only a refill
-   * ({@link StagehandMesh.refill}) reads the plan. A static mesh then holds
+   * ({@link StagehandMesh.refill}) reads the plan. Its input goes too,
+   * replaced by a fingerprint that tells a later read of the same input. A static mesh then holds
    * no module memory, so a scene's meshes need not fit in the module's
    * address space together, only one at a time; an edit that changes one
    * builds it again (one triangulation), and keeps the plan if its
    * geometry might vary by then.
    */
   #keepPlan(prim: string, key: number, gather: Gather): void {
-    if (!this.#geometryMightVary(prim, key)) {
-      this.#buffers.get(key)!.buffers.mesh.dispose();
-      gather.work.plansFreed++;
+    const retained = this.#buffers.get(key)!;
+    if (this.#geometryMightVary(prim, key)) {
+      delete retained.fingerprint;
+      return;
     }
+    retained.buffers.mesh.dispose();
+    // Nor is its input compared again: its fingerprint stands in for it.
+    retained.fingerprint = fingerprint(retained.input);
+    retained.input = null;
+    gather.work.plansFreed++;
   }
 
   #geometryMightVary(prim: string, key: number): boolean {
@@ -1978,9 +1992,15 @@ export class DrawList implements Disposable {
       const subsets = (input.subsets ?? []).map((subset) => subset.path ?? "");
       if (known !== undefined) {
         const retained = this.#buffers.get(known)!;
-        const old = retained.input!;
+        const old = retained.input;
         const mesh = retained.buffers.mesh;
-        if (sameTopology(old, input)) {
+        if (old === null) {
+          // A static mesh: only its input's fingerprint is kept.
+          if (retained.fingerprint === fingerprint(input)) {
+            gather.work.buffersReused++;
+            return known;
+          }
+        } else if (sameTopology(old, input)) {
           const samePoints = sameArray(old.points, input.points) && samePrimvar(old.normals, input.normals);
           const samePrimvars =
             samePrimvar(old.st, input.st) &&

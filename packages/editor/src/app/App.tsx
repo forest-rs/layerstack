@@ -6,6 +6,7 @@
 // panel of what happened at the bottom (explain, changes, history, the
 // asset loop).
 import { useEffect } from "react";
+import { usePanelRef } from "react-resizable-panels";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { BottomPanel } from "./BottomPanel.tsx";
 import { useStore } from "./context.ts";
@@ -14,8 +15,17 @@ import { ScenePanel } from "./ScenePanel.tsx";
 import { Toolbar } from "./Toolbar.tsx";
 import { ViewportPane } from "./ViewportPane.tsx";
 
+/** The share of the window the bottom panel takes, at least, while it draws a shading network. */
+const GRAPH_PANEL = 45;
+
 export function App() {
   const store = useStore();
+  const bottom = usePanelRef();
+  // A network wants height: the Shading tab grows a short panel, never shrinks one.
+  const onTab = (tab: string) => {
+    const panel = bottom.current;
+    if (tab === "shading" && panel !== null && panel.getSize().asPercentage < GRAPH_PANEL) panel.resize(`${GRAPH_PANEL}`);
+  };
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -61,8 +71,8 @@ export function App() {
           </ResizablePanelGroup>
         </ResizablePanel>
         <ResizableHandle />
-        <ResizablePanel defaultSize="28" minSize="10">
-          <BottomPanel />
+        <ResizablePanel defaultSize="28" minSize="10" panelRef={bottom}>
+          <BottomPanel onTab={onTab} />
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>

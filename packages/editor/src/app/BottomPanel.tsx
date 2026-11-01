@@ -21,11 +21,12 @@ import { targetText } from "./TargetPicker.tsx";
 /** The most log rows shown, newest first. */
 const SHOWN = 400;
 
-export function BottomPanel() {
+/** The bottom panel; `onTab` hears which tab is chosen, so the frame can give a tab that draws a graph more room. */
+export function BottomPanel({ onTab }: { onTab?: (tab: string) => void }) {
   const store = useStore();
   const notices = store.notices.length;
   return (
-    <Tabs className="flex h-full flex-col gap-0">
+    <Tabs className="flex h-full flex-col gap-0" onSelectionChange={(key) => onTab?.(String(key))}>
       <TabsList variant="line" className="w-full justify-start border-b px-2">
         <TabsTrigger className="flex-none px-2.5" id="explain">Explain</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="changes">Changes</TabsTrigger>

@@ -6,11 +6,25 @@
 // to right, ending in the material's outputs. Ports are rows; a
 // connection is a curve from its source's row to the row that reads it.
 // Drag to pan, scroll to zoom; click a node to select its prim, a port to
-// explain its value.
+// explain its value. Ports no connection touches fold away until asked
+// for, and a network whose authors placed its nodes is drawn in their
+// arrangement unless the automatic layout is chosen.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { GRAPH, layoutNetwork, type NetworkLayout, type NetworkNode, type NetworkPort, networkRoot, type PlacedNode, portOffset, readNetwork } from "../model/network.ts";
+import {
+  connectedOnly,
+  GRAPH,
+  hasAuthoredLayout,
+  layoutNetwork,
+  type NetworkLayout,
+  type NetworkNode,
+  type NetworkPort,
+  networkRoot,
+  type PlacedNode,
+  portOffset,
+  readNetwork,
+} from "../model/network.ts";
 import type { EditorStore } from "../store.ts";
 import { useStore } from "./context.ts";
 
@@ -21,17 +35,34 @@ export function ShadingView() {
   const root = stage === null || store.selection === null ? null : networkRoot(stage, store.selection);
   // The network is read again only after a recomposition.
   const recompositions = session?.changeLog.length ?? 0;
-  const layout = useMemo(() => {
-    if (stage === null || root === null) return null;
-    return layoutNetwork(readNetwork(stage, root));
-  }, [session, root, recompositions]);
+  const [allPorts, setAllPorts] = useState(false);
+  const [automatic, setAutomatic] = useState(false);
+  const network = useMemo(() => (stage === null || root === null ? null : readNetwork(stage, root)), [session, root, recompositions]);
+  const authored = network !== null && hasAuthoredLayout(network);
+  const { layout, hidden } = useMemo(() => {
+    if (network === null) return { layout: null, hidden: 0 };
+    const shown = allPorts ? { network, hidden: 0 } : connectedOnly(network);
+    return { layout: layoutNetwork(shown.network, authored && !automatic), hidden: shown.hidden };
+  }, [network, allPorts, automatic, authored]);
   if (stage === null || root === null || layout === null) {
     return <p className="p-3 text-xs text-muted-foreground">Select a material, a node graph or a shader to see its network.</p>;
   }
   if (layout.nodes.length === 0) {
     return <p className="p-3 text-xs text-muted-foreground">{root} has no shaders, inputs or outputs.</p>;
   }
-  return <Graph key={root} store={store} root={root} layout={layout} />;
+  const options = (
+    <>
+      <Button variant="ghost" size="xs" onPress={() => setAllPorts(!allPorts)}>
+        {allPorts ? "Fold unconnected ports" : `Show ${hidden} unconnected ports`}
+      </Button>
+      {authored && (
+        <Button variant="ghost" size="xs" onPress={() => setAutomatic(!automatic)}>
+          {automatic ? "Authored layout" : "Automatic layout"}
+        </Button>
+      )}
+    </>
+  );
+  return <Graph key={`${root} ${allPorts} ${automatic}`} store={store} root={root} layout={layout} options={options} arrangement={authored && !automatic ? "authored" : "automatic"} />;
 }
 
 /** Where the drawing is: its translation and zoom. */
@@ -47,7 +78,19 @@ const MAX_SCALE = 2.5;
 const READABLE = 0.8;
 const PADDING = 24;
 
-function Graph({ store, root, layout }: { store: EditorStore; root: string; layout: NetworkLayout }) {
+function Graph({
+  store,
+  root,
+  layout,
+  options,
+  arrangement,
+}: {
+  store: EditorStore;
+  root: string;
+  layout: NetworkLayout;
+  options: React.ReactNode;
+  arrangement: "authored" | "automatic";
+}) {
   const frame = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View | null>(null);
   const drag = useRef<{ x: number; y: number; view: View; moved: boolean } | null>(null);
@@ -110,9 +153,10 @@ function Graph({ store, root, layout }: { store: EditorStore; root: string; layo
       <div className="flex items-center gap-2 border-b px-3 py-1 text-[11px] text-muted-foreground">
         <span className="truncate font-mono text-foreground">{root}</span>
         <span>
-          {layout.nodes.length} nodes · {layout.edges.length} connections
+          {layout.nodes.length} nodes · {layout.edges.length} connections · {arrangement === "authored" ? "as its authors placed them" : "laid out automatically"}
         </span>
         <span className="ml-auto">Drag to pan, scroll to zoom</span>
+        {options}
         <Button variant="ghost" size="xs" onPress={() => setView(fit(false, null))}>
           Fit
         </Button>

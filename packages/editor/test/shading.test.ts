@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { loadLayerstack } from "@forest-rs/layerstack";
-import { layoutNetwork, networkRoot, readNetwork } from "../src/model/network.ts";
+import { connectedOnly, hasAuthoredLayout, layoutNetwork, networkRoot, readNetwork, type ShadingNetwork } from "../src/model/network.ts";
 import { readOpenPbr } from "../src/model/openpbr.ts";
 import { clampToBounds, groupInputs, sliderRange } from "../src/model/shadingInputs.ts";
 
@@ -124,4 +124,46 @@ test("an OpenPBR surface reads its image through the interface", () => {
   assert.deepEqual(surface.specularRoughness, { value: 0.25, texture: null });
   assert.equal(surface.normal, null);
   assert.equal(readOpenPbr(stage, "/base", undefined), null);
+});
+
+/** A chain `a → b → out` with an unconnected port on each shader, placed by hand. */
+function chain(positions: ReadonlyMap<string, readonly [number, number]>): ShadingNetwork {
+  const port = (path: string, kind: "input" | "output", connections: string[] = []) => ({ path, name: path.split(":").pop()!, kind, typeName: "float", connections });
+  return {
+    root: "/M",
+    nodes: [
+      { key: "/M/A", path: "/M/A", name: "A", role: "shader", detail: "ND_a", ports: [port("/M/A.inputs:unused", "input"), port("/M/A.outputs:out", "output")] },
+      { key: "/M/B", path: "/M/B", name: "B", role: "shader", detail: "ND_b", ports: [port("/M/B.inputs:in", "input", ["/M/A.outputs:out"]), port("/M/B.inputs:spare", "input"), port("/M/B.outputs:out", "output")] },
+      { key: "/M#outputs", path: "/M", name: "M", role: "outputs", detail: "Material", ports: [port("/M.outputs:surface", "output", ["/M/B.outputs:out"])] },
+    ],
+    edges: [
+      { from: "/M/A.outputs:out", to: "/M/B.inputs:in" },
+      { from: "/M/B.outputs:out", to: "/M.outputs:surface" },
+    ],
+    positions,
+  };
+}
+
+test("unconnected ports fold away, and say how many", () => {
+  const { network, hidden } = connectedOnly(chain(new Map()));
+  assert.equal(hidden, 2);
+  assert.deepEqual(
+    network.nodes.map((node) => node.ports.map((port) => port.name)),
+    [["out"], ["in", "out"], ["surface"]],
+  );
+});
+
+test("authored positions order the columns and rows; without them the layout is automatic", () => {
+  // Authored right to left: B before A, so the authored layout swaps their columns.
+  const authored = chain(new Map([["/M/A", [5, 0]], ["/M/B", [0, 0]]]));
+  assert.equal(hasAuthoredLayout(authored), true);
+  const column = (layout: ReturnType<typeof layoutNetwork>, key: string) => layout.nodes.find((placed) => placed.node.key === key)!.column;
+  const followed = layoutNetwork(authored, true);
+  assert.ok(column(followed, "/M/B") < column(followed, "/M/A"), "B left of A, as authored");
+  assert.ok(column(followed, "/M#outputs") > column(followed, "/M/A"), "outputs last");
+  const automatic = layoutNetwork(authored, false);
+  assert.ok(column(automatic, "/M/A") < column(automatic, "/M/B"), "A feeds B, so A is left of it");
+  // One shader without a position: the automatic layout.
+  const partial = chain(new Map([["/M/A", [5, 0]]]));
+  assert.equal(hasAuthoredLayout(partial), false);
 });

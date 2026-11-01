@@ -25,6 +25,13 @@
 // before the nearest of its consumers' columns that can hold it; nodes in
 // a column are ordered and placed by where the ports they connect to are
 // (a few barycentre sweeps), so edges run as straight as they can.
+//
+// Where the network's authors placed their nodes
+// (`ui:nodegraph:node:pos`, `UsdUINodeGraphNodeAPI`), the layout follows
+// them instead: columns in the order of the authored x, nodes in a column
+// in the order of the authored y, stacked so none overlap. The authored
+// units are the editing tool's own, so they order the drawing rather than
+// scale it.
 import type { Stage } from "@forest-rs/layerstack";
 
 /** A port of a node: a shading input or output. */
@@ -66,6 +73,30 @@ export interface ShadingNetwork {
   readonly root: string;
   readonly nodes: readonly NetworkNode[];
   readonly edges: readonly NetworkEdge[];
+  /** Each shader node's authored `ui:nodegraph:node:pos` (x right, y down), by node key; empty when none is authored. */
+  readonly positions: ReadonlyMap<string, readonly [number, number]>;
+}
+
+/** The authored node position attribute (`UsdUINodeGraphNodeAPI`). */
+const POSITION = "ui:nodegraph:node:pos";
+
+/**
+ * `network` with only the ports some connection touches; a node keeps its
+ * header even with none. Returns how many ports were left out.
+ */
+export function connectedOnly(network: ShadingNetwork): { readonly network: ShadingNetwork; readonly hidden: number } {
+  const used = new Set<string>();
+  for (const edge of network.edges) {
+    used.add(edge.from);
+    used.add(edge.to);
+  }
+  let hidden = 0;
+  const nodes = network.nodes.map((node) => {
+    const ports = node.ports.filter((port) => used.has(port.path));
+    hidden += node.ports.length - ports.length;
+    return ports.length === node.ports.length ? node : { ...node, ports };
+  });
+  return { network: { ...network, nodes }, hidden };
 }
 
 /**
@@ -156,7 +187,13 @@ export function readNetwork(stage: Stage, root: string): ShadingNetwork {
       for (const source of port.connections) if (owner.has(source)) edges.push({ from: source, to: port.path });
     }
   }
-  return { root, nodes, edges };
+  const positions = new Map<string, readonly [number, number]>();
+  for (const node of nodes) {
+    if (node.role !== "shader") continue;
+    const value = stage.attribute(`${node.path}.${POSITION}`)?.get() ?? null;
+    if (value?.kind === "tuple" && value.value.length === 2) positions.set(node.key, [value.value[0]!, value.value[1]!]);
+  }
+  return { root, nodes, edges, positions };
 }
 
 /** The ports of a prim that is neither a shader nor a material (a node graph): through the stage's port reader. */
@@ -243,8 +280,12 @@ function nodeWidth(node: NetworkNode): number {
   return Math.min(GRAPH.maxWidth, Math.max(GRAPH.minWidth, Math.round(text * GRAPH.character + 28)));
 }
 
-/** Lays `network` out left to right, as the header of this file describes. */
-export function layoutNetwork(network: ShadingNetwork): NetworkLayout {
+/**
+ * Lays `network` out left to right, as the header of this file describes;
+ * with `authored`, by its authors' node positions when every shader has
+ * one.
+ */
+export function layoutNetwork(network: ShadingNetwork, authored = false): NetworkLayout {
   const nodes = network.nodes;
   const owner = portOwners(nodes);
   const index = new Map(nodes.map((node, at) => [node.key, at]));
@@ -277,9 +318,10 @@ export function layoutNetwork(network: ShadingNetwork): NetworkLayout {
     return best;
   };
   nodes.forEach((_, at) => rankOf(at));
+  const follow = authored && hasAuthoredLayout(network);
   const top = Math.max(0, ...rank);
-  const columnOf = rank.map((r) => top - r);
-  const columns: number[][] = Array.from({ length: top + 1 }, () => []);
+  const columnOf = follow ? authoredColumns(network, nodes) : rank.map((r) => top - r);
+  const columns: number[][] = Array.from({ length: Math.max(0, ...columnOf) + 1 }, () => []);
   nodes.forEach((_, at) => columns[columnOf[at]!]!.push(at));
   const width = nodes.map(nodeWidth);
   const height = nodes.map((node) => GRAPH.header + node.ports.length * GRAPH.row + GRAPH.footer);
@@ -292,6 +334,43 @@ export function layoutNetwork(network: ShadingNetwork): NetworkLayout {
   // Initial placement: stacked in discovery order.
   const y = new Array<number>(nodes.length).fill(0);
   for (const column of columns) stack(column, y, height, (at) => y[at]!);
+  if (follow) {
+    // The authored y, scaled to the drawing: one scale for every column, so
+    // what the authors lined up stays lined up, the one that keeps a typical
+    // pair of neighbours apart (the median, so two nodes authored on one
+    // line do not blow it up); then any overlap left is pushed down.
+    const authoredY = (at: number) => network.positions.get(nodes[at]!.key)?.[1];
+    const needed: number[] = [];
+    for (const column of columns) {
+      const placed = column.filter((at) => authoredY(at) !== undefined).sort((a, b) => authoredY(a)! - authoredY(b)!);
+      for (let i = 1; i < placed.length; i++) {
+        const gap = authoredY(placed[i]!)! - authoredY(placed[i - 1]!)!;
+        if (gap > 1e-6) needed.push((height[placed[i - 1]!]! + GRAPH.nodeGap) / gap);
+      }
+    }
+    needed.sort((a, b) => a - b);
+    const scale = Math.min(400, Math.max(20, needed[Math.floor(needed.length / 2)] ?? 60));
+    const ys = nodes.flatMap((_, at) => (authoredY(at) === undefined ? [] : [authoredY(at)!]));
+    const top = Math.min(0, ...ys);
+    for (const column of columns) {
+      // A boundary has no authored place: level with the middle of what it connects to.
+      for (const at of column) y[at] = authoredY(at) === undefined ? 0 : (authoredY(at)! - top) * scale;
+      column.sort((a, b) => y[a]! - y[b]!);
+      let bottom = -Infinity;
+      for (const at of column) {
+        y[at] = Math.max(y[at]!, bottom + GRAPH.nodeGap);
+        bottom = y[at]! + height[at]!;
+      }
+    }
+    // Boundaries (unplaced) sit level with the middle of the nodes they connect to.
+    for (const column of columns) {
+      for (const at of column) {
+        if (authoredY(at) !== undefined) continue;
+        const linked = [...consumers[at]!, ...producers[at]!];
+        if (linked.length > 0) y[at] = linked.reduce((sum, other) => sum + y[other]! + height[other]! / 2, 0) / linked.length - height[at]! / 2;
+      }
+    }
+  }
   // Sweeps: a node wants each of its ports level with the ports it connects to.
   const wanted = (at: number, toward: "consumers" | "producers"): number | null => {
     let sum = 0;
@@ -310,7 +389,7 @@ export function layoutNetwork(network: ShadingNetwork): NetworkLayout {
     }
     return count === 0 ? null : sum / count;
   };
-  for (let sweep = 0; sweep < 4; sweep++) {
+  for (let sweep = 0; sweep < (follow ? 0 : 4); sweep++) {
     for (let c = columns.length - 2; c >= 0; c--) {
       const column = columns[c]!;
       const want = new Map(column.map((at) => [at, wanted(at, "consumers") ?? y[at]!]));
@@ -352,6 +431,38 @@ export function layoutNetwork(network: ShadingNetwork): NetworkLayout {
     width: Math.max(0, x - GRAPH.columnGap),
     height: Math.max(0, ...placed.map((p) => p.y + p.height)),
   };
+}
+
+/** Whether every shader node of `network` has an authored position. */
+export function hasAuthoredLayout(network: ShadingNetwork): boolean {
+  const shaders = network.nodes.filter((node) => node.role === "shader");
+  return shaders.length > 0 && shaders.every((node) => network.positions.has(node.key));
+}
+
+/**
+ * Each node's column by its authored x: shaders whose x lie within a unit
+ * of each other share a column, in x order; a container's inputs come
+ * first and its outputs last.
+ */
+function authoredColumns(network: ShadingNetwork, nodes: readonly NetworkNode[]): number[] {
+  const xs = [...new Set(nodes.flatMap((node) => {
+    const at = network.positions.get(node.key);
+    return at === undefined ? [] : [at[0]];
+  }))].sort((a, b) => a - b);
+  // Clusters: a new column wherever x jumps by a unit or more.
+  const cluster = new Map<number, number>();
+  let column = 0;
+  xs.forEach((x, index) => {
+    if (index > 0 && x - xs[index - 1]! >= 1) column++;
+    cluster.set(x, column);
+  });
+  const last = column + 2;
+  return nodes.map((node) => {
+    if (node.role === "inputs") return 0;
+    if (node.role === "outputs") return last;
+    const at = network.positions.get(node.key);
+    return at === undefined ? last - 1 : cluster.get(at[0])! + 1;
+  });
 }
 
 /**

@@ -132,6 +132,45 @@ describe("the resolve loop", () => {
     assert.ok(layerstack.transfer().bytesIn > 0);
   });
 
+  it("reports each layer it read and the composition after, on performance.now()'s timeline", () => {
+    using stage = openScene();
+    for (const need of stage.unavailable()) stage.supply(need.identifier, bytes(need.identifier));
+    const before = performance.now();
+    const { loaded, reads, compositions } = stage.loadSupplied();
+    const after = performance.now();
+    // One read per layer kept (`loaded` is in id order), with its bytes
+    // and prims.
+    const byIdentifier = (a: readonly unknown[], b: readonly unknown[]) => String(a[0]).localeCompare(String(b[0]));
+    assert.deepEqual(
+      reads.map((read) => [read.identifier, read.layer, read.bytes, read.prims > 0]).sort(byIdentifier),
+      loaded.map((layer) => [layer.identifier, layer, bytes(layer.identifier!).byteLength, true]).sort(byIdentifier),
+    );
+    // In the order the reads began, each inside the call, its own time
+    // within its span; then the composition after the last read.
+    let previous = before;
+    for (const read of reads) {
+      const time = read.time;
+      assert.ok(time !== null, "the module times its reads");
+      assert.ok(previous <= time.start && time.start <= time.end && time.end <= after);
+      assert.ok(time.own >= 0 && time.own <= time.end - time.start + 1e-6);
+      previous = time.start;
+    }
+    assert.ok(compositions.length >= 1);
+    assert.equal(compositions[0]!.layers, loaded.length);
+    const composed = compositions[0]!.time!;
+    assert.ok(Math.max(...reads.map((read) => read.time!.end)) <= composed.start && composed.end <= after);
+  });
+
+  it("gathers every round's reads and compositions when it resolves", async () => {
+    using stage = openScene();
+    const result = await stage.resolve(mockSource(scene));
+    assert.deepEqual(
+      result.reads.map((read) => read.identifier).sort(),
+      result.loaded.map((layer) => layer.identifier).sort(),
+    );
+    assert.ok(result.compositions.length >= result.rounds);
+  });
+
   it("keeps a confirmed-absent asset unresolved, with composition codes", async () => {
     using stage = openScene();
     const result = await stage.resolve(mockSource({ ...scene, "sub.usda": null, "parts/ball.usda": null }));

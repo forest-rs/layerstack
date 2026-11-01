@@ -90,6 +90,7 @@ extern crate alloc;
 extern crate std;
 
 mod array;
+mod clock;
 mod edit;
 mod error;
 mod geom;

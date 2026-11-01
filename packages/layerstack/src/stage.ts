@@ -62,6 +62,8 @@ import type {
   Issue,
   LayerFormat,
   LoadResult,
+  LayerRead,
+  Composition,
   MaterialBinding,
   CollectionMembership,
   MaterialSubsets,
@@ -875,11 +877,28 @@ export class Stage implements Disposable {
    * strict import policy; the layers read before it stay.
    */
   loadSupplied(): LoadResult {
-    const [loaded, failures] = this.#call("loadSupplied", (native) => native.loadSupplied()) as [bigint[], Row[]];
+    const [loaded, failures, reads, compositions] = this.#call("loadSupplied", (native) => native.loadSupplied()) as [
+      bigint[],
+      Row[],
+      [bigint, string | null, number, number, number | null, number | null, number | null][],
+      [number, number | null, number | null][],
+    ];
     this.#notify();
+    const kept = new Set(loaded);
     return {
       loaded: loaded.map((id) => this.#layer(id)),
       failures: failures.map(([asset, anchor, code, message]) => this.#failure(asset, anchor, code, message)),
+      reads: reads.map(([id, identifier, bytes, prims, start, end, own]) => ({
+        layer: kept.has(id) ? this.#layer(id) : null,
+        identifier,
+        bytes,
+        prims,
+        time: start === null || end === null || own === null ? null : { start, end, own },
+      })),
+      compositions: compositions.map(([layers, start, end]) => ({
+        layers,
+        time: start === null || end === null ? null : { start, end },
+      })),
     };
   }
 
@@ -896,6 +915,8 @@ export class Stage implements Disposable {
     const { signal, maxRounds = 100 } = options;
     const loaded: Layer[] = [];
     const failures: AssetFailure[] = [];
+    const reads: LayerRead[] = [];
+    const compositions: Composition[] = [];
     const supplied = new Set<string>();
     let rounds = 0;
     let bytes = 0;
@@ -936,9 +957,11 @@ export class Stage implements Disposable {
       const result = this.loadSupplied();
       loaded.push(...result.loaded);
       failures.push(...result.failures);
+      reads.push(...result.reads);
+      compositions.push(...result.compositions);
       if (failed !== null) throw failed;
     }
-    return { loaded, failures, rounds, fetched: supplied.size, bytes };
+    return { loaded, failures, reads, compositions, rounds, fetched: supplied.size, bytes };
   }
 
   /**

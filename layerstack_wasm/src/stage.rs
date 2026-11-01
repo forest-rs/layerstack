@@ -286,6 +286,7 @@ impl Stage {
                 stage: options,
                 loading: LoadOptions {
                     import_policy: policy,
+                    clock: crate::clock::load_clock(),
                     ..LoadOptions::default()
                 },
                 store: Some(store),
@@ -380,10 +381,11 @@ impl Stage {
     }
 
     /// Reads what the host supplied for the assets the stage wants
-    /// ([`StageDocument::load_requested_assets`]): `[loaded, failures]`,
-    /// the ids of the layers it read and, for each asset that failed,
-    /// `[asset, anchor, code, message]` (a confirmed-absent asset fails
-    /// with `io.not_found`).
+    /// ([`StageDocument::load_requested_assets`]):
+    /// `[loaded, failures, reads, compositions]`, the ids of the layers it
+    /// read, for each asset that failed `[asset, anchor, code, message]`
+    /// (a confirmed-absent asset fails with `io.not_found`), and where its
+    /// work went ([`load_work`]).
     ///
     /// # Errors
     ///
@@ -391,7 +393,11 @@ impl Stage {
     /// the layers read before it kept.
     pub(crate) fn load_supplied(&mut self) -> Result<Wire, Error> {
         let report = self.document.load_requested_assets()?;
-        Ok(load_result(&report))
+        let Wire::List(mut result) = load_result(&report) else {
+            unreachable!("a load result is a list")
+        };
+        result.extend(load_work(&report, &self.document));
+        Ok(Wire::List(result))
     }
 
     /// Plans what value clips the attribute at `path` needs at `time`
@@ -3263,6 +3269,48 @@ fn load_result(report: &LoadReport) -> Wire {
     Wire::List(vec![Wire::List(loaded), Wire::List(failures)])
 }
 
+/// `[reads, compositions]` for a load's report, times in milliseconds on
+/// the stage's clock (`performance.now()` in a JavaScript host,
+/// [`crate::clock`]), `null` without one:
+///
+/// - each read `[layer, bytes, prims, start, end, own]`
+///   ([`layerstack_io::LayerRead`]): the layer's id, the encoded bytes and
+///   prim specs, its span, nested reads included, and its own time;
+/// - each composition `[layers, start, end]`
+///   ([`layerstack_io::Composition`]).
+fn load_work(report: &LoadReport, document: &StageDocument<HostStorage>) -> [Wire; 2] {
+    let time = |reading| Wire::Number(crate::clock::millis(reading));
+    let reads = report
+        .reads
+        .iter()
+        .map(|read| {
+            let (start, end, own) = read.time.map_or((Wire::Null, Wire::Null, Wire::Null), |t| {
+                (time(t.span.start), time(t.span.end), time(t.own))
+            });
+            Wire::List(vec![
+                Wire::UInt64(read.layer.0),
+                Wire::text_or_null(document.identifier(read.layer)),
+                Wire::Number(read.bytes as f64),
+                Wire::Number(read.prims as f64),
+                start,
+                end,
+                own,
+            ])
+        })
+        .collect();
+    let compositions = report
+        .compositions
+        .iter()
+        .map(|composition| {
+            let (start, end) = composition
+                .time
+                .map_or((Wire::Null, Wire::Null), |t| (time(t.start), time(t.end)));
+            Wire::List(vec![Wire::Number(composition.layers as f64), start, end])
+        })
+        .collect();
+    [Wire::List(reads), Wire::List(compositions)]
+}
+
 /// The time a query reads: the default time, or a time code interpolated
 /// linearly (OpenUSD's default).
 pub(crate) fn time_of(time: Option<f64>) -> Time {
@@ -3565,7 +3613,43 @@ def "Ball" {
             .storage_mut()
             .supply("parts/ball.usda", BALL.as_bytes().to_vec());
         let loaded = stage.load_supplied().unwrap();
-        assert_eq!(loaded.as_list().unwrap()[0].as_list().unwrap().len(), 2);
+        let loaded = loaded.as_list().unwrap();
+        assert_eq!(loaded[0].as_list().unwrap().len(), 2);
+        // Each read: its layer, bytes and prims, and its time on the
+        // stage's clock; then the composition after them.
+        let reads = loaded[2].as_list().unwrap();
+        let mut bytes: Vec<f64> = reads
+            .iter()
+            .map(|read| {
+                let read = read.as_list().unwrap();
+                assert!(loaded[0].as_list().unwrap().contains(&read[0]));
+                if let [
+                    _,
+                    Wire::Text(_),
+                    _,
+                    _,
+                    Wire::Number(start),
+                    Wire::Number(end),
+                    Wire::Number(own),
+                ] = read
+                {
+                    // Within a nanosecond: the readings are converted apart.
+                    assert!(start <= end && *own <= end - start + 1e-6);
+                } else {
+                    assert!(read[4..].iter().all(|time| *time == Wire::Null), "{read:?}");
+                }
+                match read[2] {
+                    Wire::Number(bytes) => bytes,
+                    _ => panic!("bytes are a number"),
+                }
+            })
+            .collect();
+        bytes.sort_by(f64::total_cmp);
+        let mut expected = [SUB.len() as f64, BALL.len() as f64];
+        expected.sort_by(f64::total_cmp);
+        assert_eq!(bytes, expected);
+        let compositions = loaded[3].as_list().unwrap();
+        assert_eq!(compositions[0].as_list().unwrap()[0], Wire::Number(2.0));
         assert!(stage.unavailable().as_list().unwrap().is_empty());
         assert_eq!(
             stage.get("/Ball.serial", None).unwrap(),

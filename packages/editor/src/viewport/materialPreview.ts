@@ -26,7 +26,7 @@
 //   `transmission_depth` → `attenuationColor` and `attenuationDistance`.
 // - `geometry_opacity` → `opacity` (`alphaMap`, green), blended.
 // - `thin_film_*` → `iridescence`, `iridescenceIOR`, and its thickness
-//   (micrometres) as `iridescenceThicknessRange` (nanometres).
+//   (micrometres) as `iridescenceThicknessMinimum` and `Maximum` (nanometres).
 // - `geometry_normal`'s image → `normalMap` at the `ND_normalmap` scale; a
 //   flipped red or green channel negates `normalScale`'s x or y.
 //
@@ -198,7 +198,8 @@ export function openPbrMaterial(surface: OpenPbrSurface, store: TextureStore): M
   }
   material.iridescence = surface.thinFilmWeight;
   material.iridescenceIOR = surface.thinFilmIor;
-  material.iridescenceThicknessRange = [surface.thinFilmThickness * 1000, surface.thinFilmThickness * 1000];
+  material.iridescenceThicknessMinimum = surface.thinFilmThickness * 1000;
+  material.iridescenceThicknessMaximum = surface.thinFilmThickness * 1000;
   const normal = surface.normal;
   if (normal !== null) {
     material.normalMap = use(store, NO_CHANNELS, normal.texture, false);

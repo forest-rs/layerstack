@@ -29,7 +29,7 @@ pub enum PreviewType {
     /// String/token spelling, used for categorical policies.
     Text,
 }
-/// Standard texture result channel selected by a connected output.
+/// A `UsdUVTexture` output, or the channels of one an input reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextureChannel {
     /// First channel.
@@ -74,7 +74,11 @@ pub struct PreviewTexture {
     pub node: PathId,
     /// Source spelling and winning authoring layer, without host resolution.
     pub file: AssetReference,
-    /// Selected output channel.
+    /// The output the input connects to.
+    pub output: TextureChannel,
+    /// The channels the input reads: the output's own, except that a
+    /// one-channel input reading `rgb` reads its red channel, as OpenUSD's
+    /// reference renderer does (see [`texture_channel`]).
     pub channel: TextureChannel,
     /// Coordinate expression; transforms remain explicit and unevaluated.
     pub coordinates: Box<PreviewExpression>,
@@ -175,8 +179,14 @@ pub enum PreviewIssueKind {
     MultipleProviders,
     /// Unsupported shader identifier/implementation.
     UnknownNode,
-    /// A connected output does not have a supported name/shape.
+    /// A connected output does not have a supported name/shape: one the
+    /// shader does not define (`rgba` of a `UsdUVTexture`), or a primvar
+    /// reader of another shape.
     UnsupportedOutput,
+    /// A three-channel input (`diffuseColor`, `normal`) connects to a
+    /// one-channel texture output (`r`, `g`, `b`, `a`). OpenUSD's reference
+    /// renderer cannot read it either (see [`texture_channel`]).
+    ChannelMismatch,
     /// Constant storage or declaration has the wrong exact type.
     TypeMismatch,
     /// Missing, blocked or failed decoding; definition defaults do not hide it.
@@ -486,11 +496,28 @@ fn source_expression(
         return Err(issue(Some(node.path), None, PreviewIssueKind::DepthLimit));
     }
     let output_name = output_name(network, output).unwrap_or("");
+    let texture_output = match node.identifier.as_deref() {
+        Some("UsdUVTexture") => Some(texture_output(output_name).ok_or_else(|| {
+            issue(
+                Some(node.path),
+                Some(output_name),
+                PreviewIssueKind::UnsupportedOutput,
+            )
+        })?),
+        _ => None,
+    };
+    // A texture output is declared as its own shape, which need not be the
+    // input's (see `texture_channel`); every other output as the input's.
+    let declared = match texture_output {
+        Some(TextureChannel::Rgb) => PreviewType::Float3,
+        Some(_) => PreviewType::Float,
+        None => ty,
+    };
     if !node
         .ports
         .iter()
         .find(|p| p.property == Some(output))
-        .is_some_and(|p| declaration_matches(p, ty))
+        .is_some_and(|p| declaration_matches(p, declared))
     {
         return Err(issue(
             Some(node.path),
@@ -561,14 +588,14 @@ fn source_expression(
             })
         }
         "UsdUVTexture" => {
-            let channel = match (output_name, ty) {
-                ("r", PreviewType::Float) => TextureChannel::R,
-                ("g", PreviewType::Float) => TextureChannel::G,
-                ("b", PreviewType::Float) => TextureChannel::B,
-                ("a", PreviewType::Float) => TextureChannel::A,
-                ("rgb", PreviewType::Float3) => TextureChannel::Rgb,
-                _ => return Err(unsupported()),
-            };
+            let output = texture_output.ok_or_else(unsupported)?;
+            let channel = texture_channel(output, ty).ok_or_else(|| {
+                issue(
+                    Some(node.path),
+                    Some(output_name),
+                    PreviewIssueKind::ChannelMismatch,
+                )
+            })?;
             let file_port = node.input("file").ok_or_else(unsupported)?;
             if file_port
                 .property_type
@@ -620,6 +647,7 @@ fn source_expression(
             Ok(PreviewExpression::Texture(PreviewTexture {
                 node: node.path,
                 file,
+                output,
                 channel,
                 coordinates: Box::new(expression(
                     network,
@@ -640,6 +668,53 @@ fn source_expression(
         _ => Err(issue(Some(node.path), None, PreviewIssueKind::UnknownNode)),
     }
 }
+/// A `UsdUVTexture` output by name: `r`, `g`, `b`, `a` and `rgb` are the
+/// ones its definition has (`shaderDefs.usda`).
+fn texture_output(name: &str) -> Option<TextureChannel> {
+    match name {
+        "r" => Some(TextureChannel::R),
+        "g" => Some(TextureChannel::G),
+        "b" => Some(TextureChannel::B),
+        "a" => Some(TextureChannel::A),
+        "rgb" => Some(TextureChannel::Rgb),
+        _ => None,
+    }
+}
+
+/// The channels an input of type `ty` reads from the texture `output` it
+/// connects to; `None` where OpenUSD's reference renderer cannot read it.
+///
+/// OpenUSD defines no conversion between a connection's two ends:
+/// `UsdShadeConnectableAPI::CanConnect` checks connectability and
+/// encapsulation, not types (`connectableAPIBehavior.cpp`), and
+/// `UsdShadeInput::GetValueProducingAttributes` follows node graph outputs
+/// and interface inputs whatever they are declared as, so `UsdImaging` hands
+/// the renderer the texture node and its output name
+/// (`materialParamUtils.cpp`, `_WalkGraph`). The `UsdPreviewSurface`
+/// specification is silent. What a mismatch reads is the renderer's, and
+/// this is Storm's, OpenUSD 26.11's reference renderer:
+///
+/// - Storm types a texture lookup by the output's `swizzle` metadata
+///   (`shaderDefs.usda`: `r` `x`, ..., `rgb` `xyz`), not by the input:
+///   `_MakeMaterialParamsForTexture` (`hdSt/materialNetwork.cpp`) and
+///   `_AdjustHdType` (`hdSt/resourceBinder.cpp`).
+/// - `previewSurface.glslfx` reads a one-channel input with
+///   `HdGetScalar_<input>()`, which is `HdGet_<input>().x` for a vector
+///   lookup (`_EmitScalarAccessor`, `hdSt/codeGen.cpp`): `metallic` on
+///   `rgb` reads red, after that channel's `scale` and `bias`.
+/// - It reads a three-channel input with `HdGet_<input>().xyz`, which does
+///   not compile for a one-channel lookup: `diffuseColor` on `r` is not
+///   drawn by Storm, so it is reported here.
+#[must_use]
+pub fn texture_channel(output: TextureChannel, ty: PreviewType) -> Option<TextureChannel> {
+    match (output, ty) {
+        (TextureChannel::Rgb, PreviewType::Float3) => Some(TextureChannel::Rgb),
+        (TextureChannel::Rgb, PreviewType::Float) => Some(TextureChannel::R),
+        (_, PreviewType::Float) => Some(output),
+        _ => None,
+    }
+}
+
 fn float(node: &MaterialNode, name: &str) -> Result<f32, PreviewIssue> {
     match constant(node, name, PreviewType::Float)?.value.value {
         Some(Value::Float(v)) => Ok(v),

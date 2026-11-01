@@ -14,7 +14,12 @@ render context and under `["mtlx"]`:
 - for a `UsdPreviewSurface`, each of its inputs'
   `UsdShadeInput::GetValueProducingAttributes`, with the value of an
   input that produces one (`Get` at the default time and at time 10) or
-  the shader `info:id` and output of a shader output;
+  the shader `info:id`, output and declared type of a shader output, and
+  each input's declared type. A connection's two ends need not have the
+  same type: OpenUSD neither refuses nor converts it (`Channels`: a float
+  reads a texture's `rgb` through a referenced node graph's `float3`
+  output, a color reads `r`), and `UsdShadeConnectableAPI::CanConnect`
+  is recorded for each connected input to show it;
 - for each `UsdUVTexture`, `UsdPrimvarReader_float2` and `UsdTransform2d`
   reached, the same for each of their inputs, and for a texture's file its
   authored path, `Sdf.ComputeAssetPathRelativeToLayer` against the layer
@@ -123,6 +128,14 @@ def Xform "World"
     {
         double size = 6
         rel material:binding = </Looks/Bare>
+    }
+
+    def Cube "Channels" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        double size = 7
+        rel material:binding = </Looks/Channels>
     }
 }
 
@@ -374,6 +387,67 @@ def Scope "Looks"
     def Material "Bare"
     {
     }
+
+    def Material "Channels"
+    {
+        token outputs:surface.connect = </Looks/Channels/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor.connect = </Looks/Channels/Mask.outputs:r>
+            float inputs:metallic.connect = </Looks/Channels/Metal.outputs:rgb>
+            float inputs:roughness.connect = </Looks/Channels/Rough.outputs:rgb>
+            float inputs:occlusion.connect = </Looks/Channels/Mask.outputs:rgba>
+            float inputs:opacity.connect = </Looks/Channels/Mask.outputs:a>
+            normal3f inputs:normal.connect = </Looks/Channels/Metal.outputs:rgb>
+            token outputs:surface
+        }
+
+        def NodeGraph "Metal" (
+            prepend references = </Looks/MetalGraph>
+        )
+        {
+        }
+
+        def Shader "Rough"
+        {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @./textures/packed.png@
+            float4 inputs:scale = (0.5, 1, 1, 1)
+            float3 outputs:rgb
+        }
+
+        def Shader "Mask"
+        {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @./textures/grid.png@
+            float outputs:r
+            float outputs:a
+            float4 outputs:rgba
+        }
+    }
+
+    def NodeGraph "MetalGraph"
+    {
+        token inputs:frame:st = "st"
+        float3 outputs:rgb.connect = </Looks/MetalGraph/Texture.outputs:rgb>
+
+        def Shader "Texture"
+        {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @./textures/packed.png@
+            float2 inputs:st.connect = </Looks/MetalGraph/Reader.outputs:result>
+            float3 outputs:rgb
+        }
+
+        def Shader "Reader"
+        {
+            uniform token info:id = "UsdPrimvarReader_float2"
+            token inputs:varname.connect = </Looks/MetalGraph.inputs:frame:st>
+            float2 outputs:result
+        }
+    }
 }
 
 def Scope "Lights"
@@ -454,6 +528,7 @@ def producing(attribute, root):
             shader = UsdShade.Shader(source.GetPrim())
             row["shader"] = shader.GetIdAttr().Get() if shader else None
             row["output"] = UsdShade.Utils.GetBaseNameAndType(source.GetName())[0]
+            row["type"] = str(source.GetTypeName())
         else:
             row["value"] = plain(source.Get(), root)
             row["value10"] = plain(source.Get(10), root)
@@ -464,9 +539,17 @@ def producing(attribute, root):
 def shader_record(prim, root):
     shader = UsdShade.Shader(prim)
     inputs = {}
+    types = {}
+    can_connect = {}
     for input in shader.GetInputs():
         inputs[input.GetBaseName()] = producing(input.GetAttr(), root)
-    record = {"id": shader.GetIdAttr().Get(), "inputs": inputs}
+        types[input.GetBaseName()] = str(input.GetTypeName())
+        for source in input.GetConnectedSources()[0]:
+            output = source.source.GetOutput(source.sourceName)
+            if output:
+                can_connect[input.GetBaseName()] = UsdShade.ConnectableAPI.CanConnect(input, output)
+    record = {"id": shader.GetIdAttr().Get(), "inputs": inputs, "types": types,
+              "canConnect": can_connect}
     file = shader.GetInput("file")
     if file and file.GetAttr().HasAuthoredValue():
         attribute = file.GetAttr()

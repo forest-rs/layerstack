@@ -25,7 +25,11 @@
 //!   whole response ([`AlphaMode`]).
 //! - **Textures.** A lookup is `texel * scale + bias`, per channel, after
 //!   8-bit texels are mapped to [0, 1]; the output channel the input
-//!   connects to (`r`, `g`, `b`, `a`, `rgb`) is the one used. A normal map
+//!   connects to (`r`, `g`, `b`, `a`, `rgb`) is the one used, except that
+//!   a one-channel input on `rgb` reads its red channel and a color on a
+//!   one-channel output is not read, as OpenUSD's reference renderer,
+//!   Storm, does (`layerstack_schemas::shading::preview_surface::
+//!   texture_channel` has the sources). A normal map
 //!   carries its own decoding as `scale` (2, 2, 2, 1) and `bias`
 //!   (-1, -1, -1, 0), and `sourceColorSpace` `raw`: the `normal` input
 //!   expects tangent-space values in [-1, 1] and the renderer applies the
@@ -72,7 +76,8 @@ pub enum MaterialValue<T> {
     /// input, or the shader definition's fallback.
     Constant(T),
     /// A texture lookup: the [`MaterialItem::textures`] entry `texture`,
-    /// its output `channel` (`rgb` for a color, one channel for a float).
+    /// the `channel` read: `rgb` for a color; for a float the one-channel
+    /// output it connects to, or `r` when it connects to `rgb`.
     Texture {
         /// The index in [`MaterialItem::textures`].
         texture: usize,
@@ -252,9 +257,18 @@ pub enum MaterialNoteKind {
     InvalidValue,
     /// A texture's `file` is empty or cannot be anchored.
     MissingTexture,
-    /// The input's expression is not representable here (an output of
-    /// the wrong shape, a constant-only input connected to a shader, nested
-    /// transforms); the fallback is used.
+    /// The input reads an output a standard shader does not define (`rgba`
+    /// of a `UsdUVTexture`) or one of another shape (a
+    /// `UsdPrimvarReader_float3` read by a float); the output's name. The
+    /// fallback is used.
+    UnsupportedOutput(String),
+    /// A color or normal reads a one-channel texture output (`r`); the
+    /// output's name. Storm, OpenUSD's reference renderer, does not draw
+    /// that read either; the fallback is used.
+    ChannelMismatch(String),
+    /// The input's expression is not representable here (a constant-only
+    /// input connected to a shader, nested transforms); the fallback is
+    /// used.
     Unsupported,
 }
 
@@ -518,6 +532,12 @@ impl Builder<'_, '_> {
                     MaterialNoteKind::InvalidValue
                 }
                 PreviewIssueKind::Cycle => MaterialNoteKind::Cycle,
+                PreviewIssueKind::UnsupportedOutput => {
+                    MaterialNoteKind::UnsupportedOutput(issue.port.clone().unwrap_or_default())
+                }
+                PreviewIssueKind::ChannelMismatch => {
+                    MaterialNoteKind::ChannelMismatch(issue.port.clone().unwrap_or_default())
+                }
                 PreviewIssueKind::Unavailable => {
                     // Why nothing is there: a broken connection, a cycle, or
                     // no value at this time.
@@ -865,18 +885,52 @@ mod tests {
                     .unwrap()];
                 match shader {
                     "UsdUVTexture" => {
-                        let MaterialValue::Texture { texture, channel } = ours else {
-                            panic!("{at}: {ours:?} is not a texture");
-                        };
-                        let expected = match one["output"].as_str().unwrap() {
-                            "r" => TextureChannel::R,
-                            "g" => TextureChannel::G,
-                            "b" => TextureChannel::B,
-                            "a" => TextureChannel::A,
-                            _ => TextureChannel::Rgb,
-                        };
-                        assert_eq!(*channel, expected, "{at}");
-                        assert!(item.textures.len() > *texture, "{at}");
+                        // OpenUSD connects any types (`canConnect`); what is
+                        // read is Storm's (`texture_channel`).
+                        assert_eq!(surface["canConnect"][name], true, "{at}");
+                        let output = one["output"].as_str().unwrap();
+                        let expected = match output {
+                            "r" => Some(TextureChannel::R),
+                            "g" => Some(TextureChannel::G),
+                            "b" => Some(TextureChannel::B),
+                            "a" => Some(TextureChannel::A),
+                            "rgb" => Some(TextureChannel::Rgb),
+                            _ => None,
+                        }
+                        .map(|output| {
+                            match surface["types"][name].as_str().unwrap() {
+                                "float" => Some(match output {
+                                    TextureChannel::Rgb => TextureChannel::R,
+                                    one => one,
+                                }),
+                                _ => (output == TextureChannel::Rgb).then_some(output),
+                            }
+                        });
+                        let noted =
+                            |kind: MaterialNoteKind| {
+                                assert_eq!(
+                                    ours.constant().map(&to_floats),
+                                    Some(default.clone()),
+                                    "{at}"
+                                );
+                                assert!(
+                                    item.notes.iter().any(|note| note.kind == kind
+                                        && note.input.as_deref() == Some(name)),
+                                    "{at}: {:?}",
+                                    item.notes
+                                );
+                            };
+                        match expected {
+                            None => noted(MaterialNoteKind::UnsupportedOutput(output.into())),
+                            Some(None) => noted(MaterialNoteKind::ChannelMismatch(output.into())),
+                            Some(Some(expected)) => {
+                                let MaterialValue::Texture { texture, channel } = ours else {
+                                    panic!("{at}: {ours:?} is not a texture");
+                                };
+                                assert_eq!(*channel, expected, "{at}");
+                                assert!(item.textures.len() > *texture, "{at}");
+                            }
+                        }
                     }
                     id if id.starts_with("UsdPrimvarReader_") => {
                         let MaterialValue::Primvar {
@@ -945,7 +999,7 @@ mod tests {
         let (store, live) = open();
         let scene = Scene::new(live.stage(), &store);
         let rows = oracle["materials"].as_array().unwrap();
-        assert_eq!(rows.len(), 18);
+        assert_eq!(rows.len(), 20);
         for (contexts, key, time) in [
             (&[][..], "value", Time::Default),
             (&["mtlx"][..], "value", Time::Default),
@@ -1183,6 +1237,63 @@ mod tests {
     }
 
     #[test]
+    fn texture_channels_are_read_as_storm_reads_them() {
+        let (store, live) = open();
+        let scene = Scene::new(live.stage(), &store);
+        let mut list = DrawList::new(DrawOptions::default());
+        list.refresh(&scene);
+        let item = list.material(store.path("/Looks/Channels")).unwrap();
+        let read = |value: &MaterialValue<f32>| match value {
+            MaterialValue::Texture { texture, channel } => (
+                store
+                    .paths()
+                    .display(item.textures[*texture].shader, store.tokens()),
+                *channel,
+            ),
+            other => panic!("{other:?}"),
+        };
+        // Through a referenced node graph's `float3` output, as the public
+        // production scenes connect metalness and roughness maps.
+        assert_eq!(
+            read(&item.metallic),
+            ("/Looks/Channels/Metal/Texture".into(), TextureChannel::R)
+        );
+        assert_eq!(
+            read(&item.roughness),
+            ("/Looks/Channels/Rough".into(), TextureChannel::R)
+        );
+        assert_eq!(
+            read(&item.opacity),
+            ("/Looks/Channels/Mask".into(), TextureChannel::A)
+        );
+        assert!(matches!(
+            item.normal,
+            MaterialValue::Texture {
+                channel: TextureChannel::Rgb,
+                ..
+            }
+        ));
+        assert_eq!(item.diffuse_color, MaterialValue::Constant([0.18; 3]));
+        assert_eq!(item.occlusion, MaterialValue::Constant(1.0));
+        let mask = Some(store.path("/Looks/Channels/Mask"));
+        assert_eq!(
+            item.notes,
+            [
+                super::MaterialNote {
+                    kind: MaterialNoteKind::ChannelMismatch("r".into()),
+                    prim: mask,
+                    input: Some("diffuseColor".into()),
+                },
+                super::MaterialNote {
+                    kind: MaterialNoteKind::UnsupportedOutput("rgba".into()),
+                    prim: mask,
+                    input: Some("occlusion".into()),
+                },
+            ]
+        );
+    }
+
+    #[test]
     fn broken_inputs_are_noted_per_input() {
         let (store, live) = open();
         let scene = Scene::new(live.stage(), &store);
@@ -1234,8 +1345,8 @@ mod tests {
         let (mut store, mut live) = open();
         let mut list = DrawList::new(DrawOptions::default());
         let diff = list.refresh(&Scene::new(live.stage(), &store));
-        assert_eq!(diff.materials_added.len(), 9);
-        assert_eq!(diff.work.materials_read, 9);
+        assert_eq!(diff.materials_added.len(), 10);
+        assert_eq!(diff.work.materials_read, 10);
         let edit = |store: &mut InMemoryStore,
                     live: &mut LiveStage,
                     list: &mut DrawList,

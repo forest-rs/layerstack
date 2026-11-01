@@ -73,7 +73,7 @@ export {
 } from "./curves.js";
 export { LIGHT_SCHEMAS, lightKey, lightKind, lightSizeFactor, readLight } from "./light.js";
 export { conformCamera } from "./camera.js";
-export { anchorAssetPath, isUdim, readMaterial, udimTiles } from "./material.js";
+export { anchorAssetPath, isUdim, readMaterial, textureChannel, udimTiles } from "./material.js";
 export type {
   AlphaMode,
   MaterialItem,

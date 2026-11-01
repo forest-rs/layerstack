@@ -739,6 +739,21 @@ impl Builder<'_, '_> {
 
 /// `asset_path` anchored to the layer `layer` names, as
 /// `SdfComputeAssetPathRelativeToLayer` anchors it (AOUSD Core §9.4).
+/// The file of an asset attribute's value, anchored to the layer
+/// authoring it, as a material's texture's is.
+pub(crate) fn texture_file(
+    scene: &Scene<'_>,
+    asset: &layerstack_schemas::assets::AssetReference,
+) -> TextureFile {
+    let layer = asset.source.as_ref().map(|source| source.layer);
+    TextureFile {
+        identifier: anchor(scene, &asset.asset_path, layer),
+        udim: UdimPattern::parse(&asset.asset_path).is_some(),
+        asset_path: asset.asset_path.clone(),
+        layer,
+    }
+}
+
 fn anchor(scene: &Scene<'_>, asset_path: &str, layer: Option<LayerId>) -> Option<String> {
     if asset_path.is_empty() {
         return None;

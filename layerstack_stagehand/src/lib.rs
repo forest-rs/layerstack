@@ -202,6 +202,28 @@
 //! `pointWeights`, lays curves out again ([`DrawWork::curves_laid_out`]),
 //! and a new point count reads points anew ([`DrawWork::points_rebuilt`]).
 //!
+//! # Draw modes
+//!
+//! A model drawn by its draw mode (`UsdGeomModelAPI`'s `model:drawMode`)
+//! is one [`ItemSource::DrawMode`] item in place of everything beneath it,
+//! its buffer a [`StandinBuffers`]: the axes of `origin`, the box edges of
+//! `bounds`, or the cards of `cards` with their textures and
+//! `model:drawModeColor`, built by [`draw_mode_standin`] as OpenUSD 26.11's
+//! Hydra builds them (`UsdImaging_DrawModeStandin`). A prim is drawn so when
+//! it has `GeomModelAPI` applied, its draw mode (its own, or inherited
+//! from the nearest prim above with the API that authors one) is `origin`,
+//! `bounds` or `cards`, and it applies it: `model:applyDrawMode = true`, or
+//! none authored and a `component` kind. Boxes and cards span the model's
+//! `extent`, or the union of its `extentsHint` for the `default`, `render`
+//! and `proxy` purposes. A change of a prim's `model:drawMode`,
+//! `model:applyDrawMode`, `kind` or applied schemas discovers its subtree
+//! again ([`DrawWork::draw_mode_roots`]); a change of a card setting, a
+//! card texture, the color or the extent reads only the stand-ins it
+//! reaches ([`DrawWork::standins_read`]). Stand-ins replace items only:
+//! the cameras and lights beneath a model so drawn are still listed, and a
+//! draw mode inside a native instancing or point instancer prototype is
+//! not applied.
+//!
 //! Not yet: shaders other than `UsdPreviewSurface` and its texture,
 //! primvar and transform nodes.
 
@@ -213,6 +235,7 @@ mod camera;
 mod curves;
 #[cfg(feature = "stage")]
 mod draw;
+mod draw_mode;
 mod input;
 #[cfg(feature = "stage")]
 mod light;
@@ -232,6 +255,8 @@ mod triangulate;
 
 #[cfg(test)]
 mod curve_tests;
+#[cfg(all(test, feature = "stage"))]
+mod standin_tests;
 #[cfg(test)]
 mod tests;
 
@@ -246,7 +271,10 @@ pub use curves::{
 #[cfg(feature = "stage")]
 pub use draw::{
     BufferKey, DrawBuffers, DrawDiff, DrawItem, DrawList, DrawOptions, DrawWork, ItemId,
-    ItemInstance, ItemSource, PointStyle, Purposes,
+    ItemInstance, ItemSource, PointStyle, Purposes, StandinBuffers,
+};
+pub use draw_mode::{
+    Card, CardFace, CardGeometry, DrawMode, Standin, StandinInput, draw_mode_standin,
 };
 pub use input::{
     FaceSubsets, Interpolation, MeshInput, MeshTopology, Orientation, Primvar, SubdivisionScheme,

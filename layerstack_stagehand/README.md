@@ -62,6 +62,14 @@ browser.
   sprites with their `ids`, or instanced spheres and discs. The curve
   geometry is `exedra_curves`'. In a draw list, value edits refill and
   topology edits lay curves out again.
+- **Draw modes**: a model whose `model:drawMode` is `origin`, `bounds` or
+  `cards` (its own, or inherited through prims with `GeomModelAPI`) and
+  that applies it is one stand-in item in place of its subtree, built as
+  OpenUSD 26.11's Hydra builds it (`draw_mode_standin`): unit axes, the
+  edges of its `extent` or `extentsHint`, or cards on or through that box
+  with their textures and `model:drawModeColor`. A draw mode edit
+  rediscovers only its prim's subtree; a card setting edit reads only the
+  stand-ins it reaches.
 
 Subdivision surfaces are drawn as their control cage. Other shaders are
 not covered yet.

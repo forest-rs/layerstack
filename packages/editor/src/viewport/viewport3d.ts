@@ -87,7 +87,7 @@
 //
 // Skinning (`../model/skinning.ts`): a draw a skeleton deforms on the GPU
 // is a `SkinnedMesh` over its stagehand buffer, whose `skinIndex` and
-// `skinWeight` (eight per vertex, see `patchSkinning`) are the joint
+// `skinWeight` (eight per vertex, see `SKINNING`) are the joint
 // influences gathered into vertex order, with a
 // `Skeleton` of its own: one bone per joint of the binding, each bone's
 // world matrix the joint's skinning transform at the time and each bone
@@ -99,11 +99,13 @@
 // else. Normals are skinned through each joint matrix's inverse transpose,
 // blended and normalized, as `UsdSkelSkinNormals` skins them: three.js's
 // own `skinnormal_vertex` blends the matrices themselves, which bends
-// normals wrong under joints that scale (so the chunks are replaced, below,
-// for every skinned material). A mesh with blend shapes skins its
-// blend-shaped rest pose, uploaded once (again only when the animation's
-// weights vary). A draw deformed on the CPU (dual quaternions) is a plain
-// mesh whose positions and normals are refilled each time.
+// normals wrong under joints that scale. So the skinned draws' materials
+// are patched in `onBeforeCompile`, beside their light-link patch, and
+// keyed apart (`patches`); three.js's chunks stay as they are. A mesh with
+// blend shapes skins its blend-shaped rest pose, uploaded once (again only
+// when the animation's weights vary). A draw deformed on the CPU (dual
+// quaternions) is a plain mesh whose positions and normals are refilled
+// each time.
 import {
   AgXToneMapping,
   Bone,
@@ -151,39 +153,22 @@ import type { AssetExists, AssetReader } from "./surfaces.ts";
 import type { ViewItem, ViewportScene, ViewportUpdate } from "../model/draws.ts";
 
 /**
- * The editor's skinning shader, for every `SkinnedMesh` (only skinned
- * draws are): eight influences per vertex (`skinIndex` and `skinWeight`,
- * then `skinIndex1` and `skinWeight1`, which every skinned geometry here
- * has, zero-weighted where unused) where three.js reads four, since
- * production rigs weight more joints than four and dropping the rest moves
- * points visibly; and normals as `UsdSkelSkinNormals` computes them
- * (OpenUSD `pxr/usd/usdSkel/utils.cpp`, `_SkinNormalsLBS`): each joint
- * matrix's linear part inverse transposed (by its cofactors), weighted and
- * summed, then normalized by the fragment shader; a singular joint
- * contributes nothing. three.js's own `skinnormal_vertex` blends the
- * matrices themselves, which bends normals wrong under scaling joints.
+ * The editor's skinning shader, for the editor's own skinned materials
+ * ({@link skinnedMaterials}; the chunks of three.js stay as they are, so
+ * any other `SkinnedMesh` on the page skins as three.js does): eight
+ * influences per vertex (`skinIndex` and `skinWeight`, then `skinIndex1`
+ * and `skinWeight1`, which every skinned geometry here has, zero-weighted
+ * where unused) where three.js reads four, since production rigs weight
+ * more joints than four and dropping the rest moves points visibly; and
+ * normals as `UsdSkelSkinNormals` computes them (OpenUSD
+ * `pxr/usd/usdSkel/utils.cpp`, `_SkinNormalsLBS`): each joint matrix's
+ * linear part inverse transposed (by its cofactors), weighted and summed,
+ * then normalized by the fragment shader; a singular joint contributes
+ * nothing. three.js's own `skinnormal_vertex` blends the matrices
+ * themselves, which bends normals wrong under scaling joints. Each entry
+ * replaces one `#include` of the vertex shader.
  */
-function patchSkinning(): void {
-  if (ShaderChunk.skinning_pars_vertex.includes("skinNormalMatrix")) return;
-  ShaderChunk.skinning_pars_vertex += `
-#ifdef USE_SKINNING
-	attribute vec4 skinIndex1;
-	attribute vec4 skinWeight1;
-	mat3 skinNormalMatrix( mat3 m ) {
-		vec3 bc = cross( m[ 1 ], m[ 2 ] );
-		float det = dot( m[ 0 ], bc );
-		return det == 0.0 ? mat3( 0.0 ) : mat3( bc, cross( m[ 2 ], m[ 0 ] ), cross( m[ 0 ], m[ 1 ] ) ) / det;
-	}
-#endif
-`;
-  ShaderChunk.skinbase_vertex += `
-#ifdef USE_SKINNING
-	mat4 boneMat1X = getBoneMatrix( skinIndex1.x );
-	mat4 boneMat1Y = getBoneMatrix( skinIndex1.y );
-	mat4 boneMat1Z = getBoneMatrix( skinIndex1.z );
-	mat4 boneMat1W = getBoneMatrix( skinIndex1.w );
-#endif
-`;
+const SKINNING: readonly (readonly [string, string])[] = (() => {
   const slots: [string, string][] = [
     ["boneMatX", "skinWeight.x"],
     ["boneMatY", "skinWeight.y"],
@@ -195,16 +180,42 @@ function patchSkinning(): void {
     ["boneMat1W", "skinWeight1.w"],
   ];
   const sum = (term: (matrix: string, weight: string) => string) => slots.map(([matrix, weight]) => `\t${term(matrix, weight)}`).join("\n");
-  ShaderChunk.skinning_vertex = `
+  return [
+    [
+      "#include <skinning_pars_vertex>",
+      `#include <skinning_pars_vertex>
 #ifdef USE_SKINNING
+	attribute vec4 skinIndex1;
+	attribute vec4 skinWeight1;
+	mat3 skinNormalMatrix( mat3 m ) {
+		vec3 bc = cross( m[ 1 ], m[ 2 ] );
+		float det = dot( m[ 0 ], bc );
+		return det == 0.0 ? mat3( 0.0 ) : mat3( bc, cross( m[ 2 ], m[ 0 ] ), cross( m[ 0 ], m[ 1 ] ) ) / det;
+	}
+#endif`,
+    ],
+    [
+      "#include <skinbase_vertex>",
+      `#include <skinbase_vertex>
+#ifdef USE_SKINNING
+	mat4 boneMat1X = getBoneMatrix( skinIndex1.x );
+	mat4 boneMat1Y = getBoneMatrix( skinIndex1.y );
+	mat4 boneMat1Z = getBoneMatrix( skinIndex1.z );
+	mat4 boneMat1W = getBoneMatrix( skinIndex1.w );
+#endif`,
+    ],
+    [
+      "#include <skinning_vertex>",
+      `#ifdef USE_SKINNING
 	vec4 skinVertex = bindMatrix * vec4( transformed, 1.0 );
 	vec4 skinned = vec4( 0.0 );
 ${sum((matrix, weight) => `skinned += ${matrix} * skinVertex * ${weight};`)}
 	transformed = ( bindMatrixInverse * skinned ).xyz;
-#endif
-`;
-  ShaderChunk.skinnormal_vertex = `
-#ifdef USE_SKINNING
+#endif`,
+    ],
+    [
+      "#include <skinnormal_vertex>",
+      `#ifdef USE_SKINNING
 	mat3 skinBind = mat3( bindMatrix );
 	mat3 skinUnbind = mat3( bindMatrixInverse );
 	vec3 skinnedNormal = vec3( 0.0 );
@@ -216,10 +227,10 @@ ${sum((matrix, weight) => `\tskinMatrix += ${weight} * ${matrix};`)}
 		objectTangent = vec4( skinMatrix * vec4( objectTangent, 0.0 ) ).xyz;
 	#endif
 	objectNormal = skinnedNormal;
-#endif
-`;
-}
-patchSkinning();
+#endif`,
+    ],
+  ];
+})();
 
 /** A three.js view of a {@link ViewportScene}, updated in place from each {@link ViewportUpdate}. */
 export class Viewport {
@@ -457,7 +468,7 @@ export class Viewport {
       const object = this.#objects.get(id);
       if (view === undefined || object === undefined || added.has(id)) continue;
       for (const material of [object.material].flat()) material.dispose();
-      object.material = materials(view, selected, scene.materials, this.#textures);
+      object.material = restyled(object, materials(view, selected, scene.materials, this.#textures));
     }
     this.#selected = selected;
     // Lights: those the update names made again, the rest left as they are.
@@ -614,7 +625,7 @@ export class Viewport {
       const object = this.#objects.get(view.item.id);
       if (object === undefined) continue;
       for (const material of [object.material].flat()) material.dispose();
-      object.material = materials(view, this.#selected, scene.materials, this.#textures);
+      object.material = restyled(object, materials(view, this.#selected, scene.materials, this.#textures));
     }
     this.#link(scene);
     this.#draw();
@@ -819,6 +830,11 @@ function refillSamples(geometry: BufferGeometry, view: ViewItem): void {
   geometry.computeBoundingSphere();
 }
 
+/** New materials for `object`: a skinned draw's patched for its skinning. */
+function restyled(object: Drawn, styled: ReturnType<typeof materials>): ReturnType<typeof materials> {
+  return object instanceof SkinnedMesh ? skinnedMaterials(styled as MeshStandardMaterial | MeshStandardMaterial[]) : styled;
+}
+
 /**
  * A `SkinnedMesh` drawing a GPU-skinned item: its geometry gets the
  * gathered influences as `skinIndex`, `skinWeight`, `skinIndex1` and
@@ -843,7 +859,7 @@ function skinnedMesh(geometry: BufferGeometry, material: MeshStandardMaterial | 
     return bone;
   });
   const inverse = new Matrix4().fromArray(skin.bind);
-  const mesh = new SkinnedMesh(geometry, material);
+  const mesh = new SkinnedMesh(geometry, skinnedMaterials(material));
   mesh.bindMode = DetachedBindMode;
   mesh.bind(new Skeleton(bones, bones.map(() => inverse.clone())), new Matrix4());
   mesh.frustumCulled = false;
@@ -915,28 +931,66 @@ const LINK_UNIFORMS = (["Point", "Spot", "Directional", "RectArea", "Hemisphere"
   .map((type) => `uniform float link${type}[ ${LINK_SLOTS} ];`)
   .join("\n");
 
-/** The material's link masks, patching its shader the first time. */
-function linkMasks(material: MeshStandardMaterial): LinkMasks {
-  const kept = material.userData.linkMasks as LinkMasks | undefined;
+/**
+ * The patches a material's shader carries: its light-link masks
+ * ({@link linkMasks}) and the editor's skinning ({@link skinnedMaterials}).
+ * One `onBeforeCompile` applies whichever it has, so both compose on one
+ * material, and its `customProgramCacheKey` names them, so materials
+ * patched alike share one program and never one patched otherwise (three.js
+ * would key every material with a custom `onBeforeCompile` by the
+ * function's source, the same for all of them).
+ */
+interface Patches {
+  links: LinkMasks | null;
+  skinning: boolean;
+}
+
+/** The material's patches, its shader hooked the first time. */
+function patches(material: MeshStandardMaterial): Patches {
+  const kept = material.userData.patches as Patches | undefined;
   if (kept !== undefined) return kept;
-  const masks: LinkMasks = {
+  const patched: Patches = { links: null, skinning: false };
+  material.userData.patches = patched;
+  material.onBeforeCompile = (shader) => {
+    const { links, skinning } = patched;
+    if (links !== null && LINKED_LIGHTS !== null) {
+      for (const type of Object.keys(links) as LinkType[]) shader.uniforms[`link${type}`] = { value: links[type] };
+      shader.fragmentShader = shader.fragmentShader
+        .replace("void main() {", `${LINK_UNIFORMS}\nvoid main() {`)
+        .replace("#include <lights_fragment_begin>", LINKED_LIGHTS);
+    }
+    if (skinning) for (const [include, chunk] of SKINNING) shader.vertexShader = shader.vertexShader.replace(include, chunk);
+  };
+  material.customProgramCacheKey = () =>
+    [patched.links !== null && LINKED_LIGHTS !== null ? "light-links" : "", patched.skinning ? "usdskel-skinning" : ""].join("|");
+  return patched;
+}
+
+/** The material's link masks, its shader patched the first time. */
+function linkMasks(material: MeshStandardMaterial): LinkMasks {
+  const patched = patches(material);
+  if (patched.links !== null) return patched.links;
+  patched.links = {
     Point: new Float32Array(LINK_SLOTS).fill(1),
     Spot: new Float32Array(LINK_SLOTS).fill(1),
     Directional: new Float32Array(LINK_SLOTS).fill(1),
     RectArea: new Float32Array(LINK_SLOTS).fill(1),
     Hemisphere: new Float32Array(LINK_SLOTS).fill(1),
   };
-  material.userData.linkMasks = masks;
-  if (LINKED_LIGHTS === null) return masks;
-  material.onBeforeCompile = (shader) => {
-    for (const type of Object.keys(masks) as LinkType[]) shader.uniforms[`link${type}`] = { value: masks[type] };
-    shader.fragmentShader = shader.fragmentShader
-      .replace("void main() {", `${LINK_UNIFORMS}\nvoid main() {`)
-      .replace("#include <lights_fragment_begin>", LINKED_LIGHTS);
-  };
-  // Every patched material shares one program.
-  material.customProgramCacheKey = () => "light-links";
-  return masks;
+  // A program compiled without the masks is compiled again.
+  material.needsUpdate = true;
+  return patched.links;
+}
+
+/** The materials of a {@link skinnedMesh}, their shaders patched with the editor's skinning ({@link SKINNING}). */
+function skinnedMaterials<T extends MeshStandardMaterial | MeshStandardMaterial[]>(styled: T): T {
+  for (const material of [styled].flat()) {
+    const patched = patches(material);
+    if (patched.skinning) continue;
+    patched.skinning = true;
+    material.needsUpdate = true;
+  }
+  return styled;
 }
 
 /**

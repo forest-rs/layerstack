@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 import { execFileSync } from "node:child_process";
-import { createReadStream, existsSync, readdirSync, statSync } from "node:fs";
+import { type Dirent, createReadStream, existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -27,6 +27,22 @@ function scenesDirectory(): string | null {
   }
 }
 
+/**
+ * What `entry` of `directory` is, following a symbolic link (a scene kept on
+ * another volume and linked in): `null` for a broken link or anything else.
+ */
+function entryKind(directory: string, entry: Dirent): "file" | "directory" | null {
+  if (entry.isFile()) return "file";
+  if (entry.isDirectory()) return "directory";
+  if (!entry.isSymbolicLink()) return null;
+  try {
+    const target = statSync(path.join(directory, entry.name));
+    return target.isFile() ? "file" : target.isDirectory() ? "directory" : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The layers two levels under each of `root`'s directories: the roots a scene there likely opens. */
 function sceneRoots(root: string): { path: string }[] {
   const found: { path: string }[] = [];
@@ -34,8 +50,9 @@ function sceneRoots(root: string): { path: string }[] {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       if (entry.name.startsWith(".")) continue;
       const full = path.join(directory, entry.name);
-      if (entry.isFile() && LAYER.test(entry.name) && depth < 3) found.push({ path: path.relative(root, full).split(path.sep).join("/") });
-      else if (entry.isDirectory() && depth < 2) walk(full, depth + 1);
+      const kind = entryKind(directory, entry);
+      if (kind === "file" && LAYER.test(entry.name) && depth < 3) found.push({ path: path.relative(root, full).split(path.sep).join("/") });
+      else if (kind === "directory" && depth < 2) walk(full, depth + 1);
     }
   };
   walk(root, 0);
@@ -78,8 +95,8 @@ function localScenes(): Plugin {
           response.setHeader("content-type", "application/json");
           response.end(
             JSON.stringify({
-              folders: entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort(),
-              layers: entries.filter((entry) => entry.isFile() && LAYER.test(entry.name)).map((entry) => entry.name).sort(),
+              folders: entries.filter((entry) => entryKind(directory, entry) === "directory").map((entry) => entry.name).sort(),
+              layers: entries.filter((entry) => entryKind(directory, entry) === "file" && LAYER.test(entry.name)).map((entry) => entry.name).sort(),
             }),
           );
           return;

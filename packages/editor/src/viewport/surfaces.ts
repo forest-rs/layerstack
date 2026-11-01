@@ -11,23 +11,22 @@
 // - `diffuseColor` → `color`; a texture's `rgb` → `map` (with `color` its
 //   `scale`); the `displayColor` primvar → `vertexColors`.
 // - `emissiveColor` → `emissive`; a texture's `rgb` → `emissiveMap`.
-// - `metallic` → `metalness`; a texture's `b` → `metalnessMap` (three.js
-//   reads blue). `roughness` → `roughness`; a texture's `g` →
-//   `roughnessMap` (green). `occlusion`: a texture's `r` → `aoMap` (red).
-//   These are the packed occlusion-roughness-metallic channels three.js
-//   expects; a lookup of another channel cannot be swizzled without a
-//   custom shader, so its input takes the texture's `fallback` channel.
-//   The texture's `scale` on that channel multiplies the factor.
+// - `metallic` → `metalness`, a texture → `metalnessMap`; `roughness` →
+//   `roughness`, a texture → `roughnessMap`; `occlusion`: a texture →
+//   `aoMap`. Each map reads the input's channel (three.js's own are the
+//   packed occlusion-roughness-metallic `r`, `g`, `b`; `readChannels`
+//   patches the shader for another). The texture's `scale` on that
+//   channel multiplies the factor.
 // - `useSpecularWorkflow` 1 → `metalness` 0 and `specularColor` (or a
 //   texture's `rgb` as `specularColorMap`), `specularIntensity` 1.
 // - `clearcoat`, `clearcoatRoughness` → `clearcoat`, `clearcoatRoughness`
-//   (maps on `r` and `g`). `ior` → `ior` (three.js clamps it to [1, 2.333]).
+//   (maps, any channel). `ior` → `ior` (three.js clamps it to [1, 2.333]).
 // - `normal`: a texture's `rgb` → `normalMap`. The spec has the texture
 //   decode tangent-space normals itself, `scale` (2, 2, 2, 1) and `bias`
 //   (-1, -1, -1, 0); three.js decodes `* 2 - 1` in its shader, so a map
 //   with exactly that scale and bias is used as is, and another is not
 //   used.
-// - `displacement`: a texture's `r` → `displacementMap` (three.js moves
+// - `displacement`: a texture → `displacementMap` (three.js moves
 //   vertices, so it shows on dense meshes only); a constant is ignored.
 // - Opacity (`AlphaMode`): `mask` → `alphaTest` at `opacityThreshold`,
 //   opaque above it; `blend` with `presence` → `transparent` with
@@ -35,7 +34,7 @@
 //   `blend` with `transparent` (opacity scales only the diffuse response,
 //   reflections stay) → `MeshPhysicalMaterial.transmission = 1 - opacity`,
 //   three.js's closest model. A textured opacity reads the `a` of the
-//   diffuse texture through `map`, or a texture's `g` through `alphaMap`.
+//   diffuse texture through `map`, or another lookup through `alphaMap`.
 //
 // Textures: `file`'s identifier is fetched from the stage's asset loop's
 // host and decoded by `TextureLoader` from a blob of the bytes; one image
@@ -89,6 +88,8 @@ import {
 import type { Wrapping } from "three";
 import { udimTiles } from "@forest-rs/layerstack_stagehand";
 import type { MaterialItem, MaterialTexture, MaterialValue, TextureWrap } from "@forest-rs/layerstack_stagehand";
+import { readChannels } from "./channels.ts";
+import type { ChannelMap, MapChannels } from "./channels.ts";
 
 /**
  * Reads an asset's bytes from the host: `null` when it has none. `anchor`
@@ -306,19 +307,23 @@ export function surfaceMaterial(
   } else {
     material.emissive.setRGB(...(constant(emissive, [0, 0, 0] as const) as [number, number, number]));
   }
-  // Metal and roughness: the channels three.js reads (b, g), else the fallback channel.
-  const channel = (value: MaterialValue<number>, wanted: "r" | "g" | "b") =>
-    value.kind === "texture" && value.channel === wanted ? map(value, false) : null;
-  material.metalnessMap = channel(record.metallic, "b");
+  // One-channel maps, each reading the input's channel (`readChannels`).
+  const reads: MapChannels = {};
+  const channel = (value: MaterialValue<number>, read: ChannelMap) => {
+    if (value.kind !== "texture" || value.channel === "rgb") return null;
+    reads[read] = value.channel;
+    return map(value, false);
+  };
+  material.metalnessMap = channel(record.metallic, "metalness");
   material.metalness = record.useSpecularWorkflow
     ? 0
     : material.metalnessMap !== null
       ? channelScale(record, record.metallic)
       : constant(record.metallic, fallbackChannel(record, record.metallic, 0));
-  material.roughnessMap = channel(record.roughness, "g");
+  material.roughnessMap = channel(record.roughness, "roughness");
   material.roughness =
     material.roughnessMap !== null ? channelScale(record, record.roughness) : constant(record.roughness, fallbackChannel(record, record.roughness, 0.5));
-  material.aoMap = channel(record.occlusion, "r");
+  material.aoMap = channel(record.occlusion, "ao");
   if (material.aoMap !== null) material.aoMapIntensity = channelScale(record, record.occlusion);
   // Normals: a map that decodes as three.js does.
   if (record.normal.kind === "texture") {
@@ -326,7 +331,7 @@ export function surfaceMaterial(
     const decodes = texture.scale.slice(0, 3).every((v) => v === 2) && texture.bias.slice(0, 3).every((v) => v === -1);
     if (decodes) material.normalMap = use(store, options.uvChannels, texture, false);
   }
-  material.displacementMap = channel(record.displacement, "r");
+  material.displacementMap = channel(record.displacement, "displacement");
   // Opacity.
   if (record.alpha.kind === "mask") {
     material.alphaTest = record.alpha.threshold;
@@ -337,14 +342,14 @@ export function surfaceMaterial(
   }
   const opacity = record.opacity;
   if (opacity.kind === "texture" && !(diffuse.kind === "texture" && opacity.texture === diffuse.texture && opacity.channel === "a")) {
-    material.alphaMap = channel(opacity, "g");
+    material.alphaMap = channel(opacity, "alpha");
   }
   if (material instanceof MeshPhysicalMaterial) {
     material.ior = Math.min(2.333, Math.max(1, constant(record.ior, 1.5)));
     material.clearcoat = constant(record.clearcoat, record.clearcoat.kind === "texture" ? channelScale(record, record.clearcoat) : 0);
-    material.clearcoatMap = channel(record.clearcoat, "r");
+    material.clearcoatMap = channel(record.clearcoat, "clearcoat");
     material.clearcoatRoughness = constant(record.clearcoatRoughness, 0.01);
-    material.clearcoatRoughnessMap = channel(record.clearcoatRoughness, "g");
+    material.clearcoatRoughnessMap = channel(record.clearcoatRoughness, "clearcoatRoughness");
     if (record.useSpecularWorkflow) {
       material.specularIntensity = 1;
       const specular = record.specularColor;
@@ -353,6 +358,7 @@ export function surfaceMaterial(
     }
     if (transmissive) material.transmission = 1 - constant(record.opacity, 1);
   }
+  readChannels(material, reads);
   if (options.doubleSided) material.side = DoubleSide;
   if (options.highlighted) {
     material.emissive = new Color(0x2f5fd0);

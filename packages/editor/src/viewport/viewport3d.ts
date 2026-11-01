@@ -957,8 +957,8 @@ const LINK_UNIFORMS = (["Point", "Spot", "Directional", "RectArea", "Hemisphere"
 /**
  * The patches a material's shader carries: its light-link masks
  * ({@link linkMasks}) and the editor's skinning ({@link skinnedMaterials}).
- * One `onBeforeCompile` applies whichever it has, so both compose on one
- * material, and its `customProgramCacheKey` names them, so materials
+ * One `onBeforeCompile` applies whichever it has, after the material's own
+ * (its maps' channels, `readChannels`), so all compose on one material, and its `customProgramCacheKey` names them, so materials
  * patched alike share one program and never one patched otherwise (three.js
  * would key every material with a custom `onBeforeCompile` by the
  * function's source, the same for all of them).
@@ -974,7 +974,11 @@ function patches(material: MeshStandardMaterial): Patches {
   if (kept !== undefined) return kept;
   const patched: Patches = { links: null, skinning: false };
   material.userData.patches = patched;
-  material.onBeforeCompile = (shader) => {
+  // After the material's own patch (`readChannels`, the maps' channels), keyed with it.
+  const before = material.onBeforeCompile;
+  const own = material.customProgramCacheKey();
+  material.onBeforeCompile = (shader, renderer) => {
+    before.call(material, shader, renderer);
     const { links, skinning } = patched;
     if (links !== null && LINKED_LIGHTS !== null) {
       for (const type of Object.keys(links) as LinkType[]) shader.uniforms[`link${type}`] = { value: links[type] };
@@ -985,7 +989,7 @@ function patches(material: MeshStandardMaterial): Patches {
     if (skinning) for (const [include, chunk] of SKINNING) shader.vertexShader = shader.vertexShader.replace(include, chunk);
   };
   material.customProgramCacheKey = () =>
-    [patched.links !== null && LINKED_LIGHTS !== null ? "light-links" : "", patched.skinning ? "usdskel-skinning" : ""].join("|");
+    [own, patched.links !== null && LINKED_LIGHTS !== null ? "light-links" : "", patched.skinning ? "usdskel-skinning" : ""].join("|");
   return patched;
 }
 

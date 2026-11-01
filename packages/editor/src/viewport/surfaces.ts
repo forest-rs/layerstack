@@ -90,11 +90,16 @@ import type { Wrapping } from "three";
 import { udimTiles } from "@forest-rs/layerstack_stagehand";
 import type { MaterialItem, MaterialTexture, MaterialValue, TextureWrap } from "@forest-rs/layerstack_stagehand";
 
-/** Reads an asset's bytes from the host: `null` when it has none. */
-export type AssetReader = (identifier: string) => Promise<Uint8Array | null>;
+/**
+ * Reads an asset's bytes from the host: `null` when it has none. `anchor`
+ * is the identifier of the layer that authored the path, against which the
+ * host resolves a search path (`textures/wood.png`), as OpenUSD's resolver
+ * does; `null` for a fallback.
+ */
+export type AssetReader = (identifier: string, anchor: string | null) => Promise<Uint8Array | null>;
 
-/** Whether the host's storage has an asset, for a UDIM set's tiles. */
-export type AssetExists = (identifier: string) => Promise<boolean>;
+/** Whether the host's storage has an asset, for a UDIM set's tiles; `anchor` as {@link AssetReader}'s. */
+export type AssetExists = (identifier: string, anchor: string | null) => Promise<boolean>;
 
 /** A decoded image, or a UDIM atlas, and the grid it covers. */
 interface Image {
@@ -125,7 +130,8 @@ export class TextureStore {
     if (identifier === null) return null;
     if (this.#ready.has(identifier)) return this.#ready.get(identifier);
     if (!this.#images.has(identifier)) {
-      const loading = (texture.file.udim ? this.#atlas(texture) : this.#decode(identifier).then((image) => image && { texture: image, columns: 1, rows: 1 })).catch(
+      const anchor = texture.file.layer;
+      const loading = (texture.file.udim ? this.#atlas(texture) : this.#decode(identifier, anchor).then((image) => image && { texture: image, columns: 1, rows: 1 })).catch(
         (error: unknown) => {
           console.error(error);
           return null;
@@ -140,8 +146,8 @@ export class TextureStore {
     return undefined;
   }
 
-  async #decode(identifier: string): Promise<Texture | null> {
-    const bytes = await this.#read(identifier);
+  async #decode(identifier: string, anchor: string | null): Promise<Texture | null> {
+    const bytes = await this.#read(identifier, anchor);
     if (bytes === null) return null;
     const url = URL.createObjectURL(new Blob([bytes.slice()]));
     try {
@@ -153,9 +159,10 @@ export class TextureStore {
 
   /** A UDIM set's tiles laid into one canvas, a column per tile's units digit, a row per ten. */
   async #atlas(texture: MaterialTexture): Promise<Image | null> {
-    const tiles = await udimTiles(texture.file, this.#exists);
+    const anchor = texture.file.layer;
+    const tiles = await udimTiles(texture.file, (identifier) => this.#exists(identifier, anchor));
     if (tiles.length === 0) return null;
-    const images = await Promise.all(tiles.map((tile) => this.#decode(tile.identifier)));
+    const images = await Promise.all(tiles.map((tile) => this.#decode(tile.identifier, anchor)));
     const cell = Math.max(...images.map((image) => (image?.image as { width?: number } | undefined)?.width ?? 1));
     const columns = Math.max(...tiles.map((tile) => ((tile.tile - 1001) % 10) + 1));
     const rows = Math.max(...tiles.map((tile) => Math.floor((tile.tile - 1001) / 10) + 1));

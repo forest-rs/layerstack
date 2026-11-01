@@ -62,8 +62,12 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
   translation, rotation, scale and pivot, each field authoring its one op as
   `UsdGeomXformCommonAPI` does (ops that are not a common stack shown as the
   stage factors them, read-only); its variant sets; its
-  properties (those layers author, then those only its schemas define, at
-  their fallbacks); its bound material; the arcs it composes from. Each
+  properties (those layers author, then, when shown, those only its schemas
+  define, at their fallbacks), nested by namespace (`primvars:`, `xformOp:`,
+  `inputs:`, `collection:lightLink:`; a namespace of one stays inline) and
+  labelled by `displayName` where the schema gives one, each name's tooltip
+  giving its full name, type, variability, source, `displayGroup` and
+  `documentation`; its bound material; the arcs it composes from. Each
   editor is chosen by what the stage knows of the property (an animated
   one, marked with a key, is edited by a sample at the current time): a
   token the schema gives `allowedTokens` is a picker of them, a `bool` a

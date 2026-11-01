@@ -194,6 +194,100 @@ impl PayloadLoadRules {
     pub fn is_loaded(&self, path: &Path) -> bool {
         self.effective_rule(path) != PayloadRule::None
     }
+
+    /// Whether `path` and everything beneath it is loaded: no rule, or
+    /// `All` as the nearest rule at or above it and every rule beneath it.
+    /// Loading it with its descendants then changes nothing.
+    ///
+    /// OpenUSD: `UsdStageLoadRules::IsLoadedWithAllDescendants`.
+    #[must_use]
+    #[doc(alias = "IsLoadedWithAllDescendants")]
+    pub fn is_loaded_with_all_descendants(&self, path: &Path) -> bool {
+        if self.rules.is_empty() {
+            return true;
+        }
+        if self
+            .longest_prefix(path)
+            .is_some_and(|(_, rule)| rule != PayloadRule::All)
+        {
+            return false;
+        }
+        self.prefixed(path.segments())
+            .all(|(_, rule)| rule == PayloadRule::All)
+    }
+
+    /// Whether `path` is loaded without its descendants: an `Only` rule
+    /// at `path`, and no rule beneath it but `None` until a rule outside
+    /// it. Loading it without its descendants then changes nothing.
+    ///
+    /// OpenUSD: `UsdStageLoadRules::IsLoadedWithNoDescendants`.
+    #[must_use]
+    #[doc(alias = "IsLoadedWithNoDescendants")]
+    pub fn is_loaded_with_no_descendants(&self, path: &Path) -> bool {
+        if self.rules.get(path) != Some(&PayloadRule::Only) {
+            return false;
+        }
+        // OpenUSD scans the rules after `path` in path order to the first
+        // that is not `None`: it must not be beneath `path`.
+        self.prefixed(path.segments())
+            .filter(|(p, _)| *p != path)
+            .all(|(_, rule)| rule == PayloadRule::None)
+    }
+}
+
+/// Why a load or unload request left a path out
+/// ([`crate::LiveStage::load_and_unload`]).
+///
+/// OpenUSD: the errors `UsdStage::_IsValidForLoad` and
+/// `_IsValidForUnload` report for each path they skip.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum LoadRefusal {
+    /// A path to load with neither itself nor any ancestor below the
+    /// pseudo-root on the stage.
+    NotOnStage,
+    /// A path to load whose nearest prim on the stage, at or above it, is
+    /// inactive.
+    Inactive,
+    /// A path in an instance prototype's namespace, whose root prim is
+    /// named `__Prototype_...`, to load or unload: prototypes are loaded
+    /// through their instances. layerstack names no prototype prims, so
+    /// this answers only a path spelled so.
+    Prototype,
+}
+
+impl LoadRefusal {
+    /// `not_on_stage`, `inactive` or `prototype`.
+    #[must_use]
+    pub fn code(self) -> &'static str {
+        match self {
+            Self::NotOnStage => "not_on_stage",
+            Self::Inactive => "inactive",
+            Self::Prototype => "prototype",
+        }
+    }
+}
+
+impl core::fmt::Display for LoadRefusal {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(match self {
+            Self::NotOnStage => "the path to load is not on the stage",
+            Self::Inactive => "the path to load is inactive",
+            Self::Prototype => "the path is in an instance prototype",
+        })
+    }
+}
+
+/// What a load or unload request did
+/// ([`crate::LiveStage::load_and_unload`]): whether the rules changed,
+/// and the paths it left out, each with why, in the order given, those to
+/// unload after those to load.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct LoadOutcome {
+    /// Whether the load rules changed.
+    pub changed: bool,
+    /// The paths left out, with why; the others were applied.
+    pub refused: Vec<(PathId, LoadRefusal)>,
 }
 
 /// An invalid atomic layer-muting request. No control changes are applied.

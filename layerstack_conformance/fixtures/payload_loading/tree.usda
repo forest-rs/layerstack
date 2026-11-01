@@ -1,0 +1,14 @@
+#usda 1.0
+
+def Xform "Tree"
+{
+    def Mesh "Trunk"
+    {
+    }
+
+    def Xform "Branch" (
+        prepend payload = @./leaf.usda@</Leaf>
+    )
+    {
+    }
+}

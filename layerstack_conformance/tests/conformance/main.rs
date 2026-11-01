@@ -137,6 +137,7 @@ mod openusd_schemas;
 mod package_external;
 mod particles;
 mod path_expression;
+mod payload_loading;
 mod peer_regressions;
 mod physics_parse;
 mod plugin_kinds;

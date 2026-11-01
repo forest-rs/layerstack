@@ -246,6 +246,19 @@ impl<'a> Prim<'a> {
     pub fn is_loaded(self) -> bool {
         self.stage.is_loaded(self.path, self.store.paths())
     }
+    /// Whether the prim's own composition authors payloads, whether the
+    /// stage's load rules include them or not: the prims
+    /// [`Stage::loadable_paths`] lists, and inactive ones.
+    ///
+    /// Spec: AOUSD Core §10.3.2.2 (payloads). OpenUSD:
+    /// `UsdPrim::HasAuthoredPayloads`, which reads `PcpPrimIndex::HasAnyPayloads`.
+    #[doc(alias = "UsdPrim::HasAuthoredPayloads")]
+    #[doc(alias = "HasAuthoredPayloads")]
+    #[doc(alias = "HasPayload")]
+    #[must_use]
+    pub fn has_authored_payloads(self) -> bool {
+        self.stage.has_payloads(self.path)
+    }
     /// Whether the prim and all its ancestors resolve a defining specifier
     /// (`def` or `class`).
     ///

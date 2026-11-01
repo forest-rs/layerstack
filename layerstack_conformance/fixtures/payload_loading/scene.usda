@@ -1,0 +1,33 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+)
+
+def Xform "World"
+{
+    def Xform "Rock" (
+        prepend payload = @./rock.usda@</Rock>
+    )
+    {
+    }
+
+    def Xform "Tree" (
+        prepend payload = @./tree.usda@</Tree>
+    )
+    {
+        def Xform "Local"
+        {
+        }
+    }
+
+    def Xform "Off" (
+        active = false
+        prepend payload = @./rock.usda@</Rock>
+    )
+    {
+    }
+
+    def Xform "Plain"
+    {
+    }
+}

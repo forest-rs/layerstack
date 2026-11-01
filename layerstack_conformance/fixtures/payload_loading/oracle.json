@@ -1,0 +1,2302 @@
+{
+ "openusd_version": "0.26.11",
+ "paths": [
+  "/",
+  "/World",
+  "/World/Rock",
+  "/World/Tree",
+  "/World/Tree/Local",
+  "/World/Tree/Trunk",
+  "/World/Tree/Branch",
+  "/World/Off",
+  "/World/Plain",
+  "/World/Nope"
+ ],
+ "cases": [
+  {
+   "load": "none",
+   "opened": {
+    "rules": [
+     [
+      "/",
+      "none"
+     ]
+    ],
+    "loadSet": [],
+    "loadable": [
+     "/World/Rock",
+     "/World/Tree"
+    ],
+    "usedPayloadLayers": [],
+    "prims": {
+     "/": [
+      true,
+      true,
+      false
+     ],
+     "/World": [
+      true,
+      true,
+      false
+     ],
+     "/World/Rock": [
+      true,
+      false,
+      true
+     ],
+     "/World/Tree": [
+      true,
+      false,
+      true
+     ],
+     "/World/Tree/Local": [
+      true,
+      false,
+      false
+     ],
+     "/World/Tree/Trunk": [
+      false,
+      false,
+      false
+     ],
+     "/World/Tree/Branch": [
+      false,
+      false,
+      false
+     ],
+     "/World/Off": [
+      true,
+      false,
+      true
+     ],
+     "/World/Plain": [
+      true,
+      true,
+      false
+     ],
+     "/World/Nope": [
+      false,
+      false,
+      false
+     ]
+    }
+   },
+   "steps": [
+    {
+     "call": [
+      "load",
+      "/World/Tree",
+      "withoutDescendants"
+     ],
+     "result": "prim",
+     "refused": [],
+     "after": {
+      "rules": [
+       [
+        "/",
+        "none"
+       ],
+       [
+        "/World/Tree",
+        "only"
+       ]
+      ],
+      "loadSet": [
+       "/World/Tree"
+      ],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "usedPayloadLayers": [
+       "tree.usda"
+      ],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        false,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Branch": [
+        true,
+        false,
+        true
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    },
+    {
+     "call": [
+      "load",
+      "/World/Tree/Branch",
+      "withDescendants"
+     ],
+     "result": "prim",
+     "refused": [],
+     "after": {
+      "rules": [
+       [
+        "/",
+        "none"
+       ],
+       [
+        "/World/Tree",
+        "only"
+       ],
+       [
+        "/World/Tree/Branch",
+        "all"
+       ]
+      ],
+      "loadSet": [
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "usedPayloadLayers": [
+       "tree.usda",
+       "leaf.usda"
+      ],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        false,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Branch": [
+        true,
+        true,
+        true
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    },
+    {
+     "call": [
+      "unload",
+      "/World"
+     ],
+     "result": null,
+     "refused": [],
+     "after": {
+      "rules": [
+       [
+        "/",
+        "none"
+       ],
+       [
+        "/World",
+        "none"
+       ]
+      ],
+      "loadSet": [],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree"
+      ],
+      "usedPayloadLayers": [],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        false,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        false,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        false,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        false,
+        false,
+        false
+       ],
+       "/World/Tree/Branch": [
+        false,
+        false,
+        false
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    },
+    {
+     "call": [
+      "loadAndUnload",
+      [
+       "/World/Rock",
+       "/World/Tree"
+      ],
+      [
+       "/World"
+      ],
+      "withDescendants"
+     ],
+     "result": null,
+     "refused": [],
+     "after": {
+      "rules": [
+       [
+        "/",
+        "none"
+       ],
+       [
+        "/World",
+        "none"
+       ],
+       [
+        "/World/Rock",
+        "all"
+       ],
+       [
+        "/World/Tree",
+        "all"
+       ]
+      ],
+      "loadSet": [
+       "/World/Rock",
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "usedPayloadLayers": [
+       "rock.usda",
+       "tree.usda",
+       "leaf.usda"
+      ],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Branch": [
+        true,
+        true,
+        true
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    },
+    {
+     "call": [
+      "unload",
+      "/World/Tree/Branch"
+     ],
+     "result": null,
+     "refused": [],
+     "after": {
+      "rules": [
+       [
+        "/",
+        "none"
+       ],
+       [
+        "/World",
+        "none"
+       ],
+       [
+        "/World/Rock",
+        "all"
+       ],
+       [
+        "/World/Tree",
+        "all"
+       ],
+       [
+        "/World/Tree/Branch",
+        "none"
+       ]
+      ],
+      "loadSet": [
+       "/World/Rock",
+       "/World/Tree"
+      ],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "usedPayloadLayers": [
+       "rock.usda",
+       "tree.usda"
+      ],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Branch": [
+        true,
+        false,
+        true
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    },
+    {
+     "call": [
+      "load",
+      "/World/Nope",
+      "withDescendants"
+     ],
+     "result": "invalid",
+     "refused": [],
+     "after": {
+      "rules": [
+       [
+        "/",
+        "none"
+       ],
+       [
+        "/World",
+        "none"
+       ],
+       [
+        "/World/Nope",
+        "all"
+       ],
+       [
+        "/World/Rock",
+        "all"
+       ],
+       [
+        "/World/Tree",
+        "all"
+       ],
+       [
+        "/World/Tree/Branch",
+        "none"
+       ]
+      ],
+      "loadSet": [
+       "/World/Rock",
+       "/World/Tree"
+      ],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "usedPayloadLayers": [
+       "rock.usda",
+       "tree.usda"
+      ],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Branch": [
+        true,
+        false,
+        true
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    },
+    {
+     "call": [
+      "load",
+      "/World/Off",
+      "withDescendants"
+     ],
+     "result": "prim",
+     "refused": [
+      [
+       "/World/Off",
+       "inactive"
+      ]
+     ],
+     "after": {
+      "rules": [
+       [
+        "/",
+        "none"
+       ],
+       [
+        "/World",
+        "none"
+       ],
+       [
+        "/World/Nope",
+        "all"
+       ],
+       [
+        "/World/Rock",
+        "all"
+       ],
+       [
+        "/World/Tree",
+        "all"
+       ],
+       [
+        "/World/Tree/Branch",
+        "none"
+       ]
+      ],
+      "loadSet": [
+       "/World/Rock",
+       "/World/Tree"
+      ],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "usedPayloadLayers": [
+       "rock.usda",
+       "tree.usda"
+      ],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Branch": [
+        true,
+        false,
+        true
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    },
+    {
+     "call": [
+      "load",
+      "/World/Plain",
+      "withDescendants"
+     ],
+     "result": "prim",
+     "refused": [],
+     "after": {
+      "rules": [
+       [
+        "/",
+        "none"
+       ],
+       [
+        "/World",
+        "none"
+       ],
+       [
+        "/World/Nope",
+        "all"
+       ],
+       [
+        "/World/Plain",
+        "all"
+       ],
+       [
+        "/World/Rock",
+        "all"
+       ],
+       [
+        "/World/Tree",
+        "all"
+       ],
+       [
+        "/World/Tree/Branch",
+        "none"
+       ]
+      ],
+      "loadSet": [
+       "/World/Rock",
+       "/World/Tree"
+      ],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "usedPayloadLayers": [
+       "rock.usda",
+       "tree.usda"
+      ],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Branch": [
+        true,
+        false,
+        true
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    },
+    {
+     "call": [
+      "setLoadRules",
+      [
+       [
+        "/",
+        "all"
+       ]
+      ]
+     ],
+     "result": null,
+     "refused": [],
+     "after": {
+      "rules": [
+       [
+        "/",
+        "all"
+       ]
+      ],
+      "loadSet": [
+       "/World/Off",
+       "/World/Rock",
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "usedPayloadLayers": [
+       "rock.usda",
+       "tree.usda",
+       "leaf.usda"
+      ],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Branch": [
+        true,
+        true,
+        true
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    },
+    {
+     "call": [
+      "unload",
+      "/World/Tree/Branch"
+     ],
+     "result": null,
+     "refused": [],
+     "after": {
+      "rules": [
+       [
+        "/",
+        "all"
+       ],
+       [
+        "/World/Tree/Branch",
+        "none"
+       ]
+      ],
+      "loadSet": [
+       "/World/Off",
+       "/World/Rock",
+       "/World/Tree"
+      ],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "usedPayloadLayers": [
+       "rock.usda",
+       "tree.usda"
+      ],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Branch": [
+        true,
+        false,
+        true
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    },
+    {
+     "call": [
+      "setLoadRules",
+      [
+       [
+        "/",
+        "none"
+       ],
+       [
+        "/World/Rock",
+        "all"
+       ]
+      ]
+     ],
+     "result": null,
+     "refused": [],
+     "after": {
+      "rules": [
+       [
+        "/",
+        "none"
+       ],
+       [
+        "/World/Rock",
+        "all"
+       ]
+      ],
+      "loadSet": [
+       "/World/Rock"
+      ],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree"
+      ],
+      "usedPayloadLayers": [
+       "rock.usda"
+      ],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        false,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        false,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        false,
+        false,
+        false
+       ],
+       "/World/Tree/Branch": [
+        false,
+        false,
+        false
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    },
+    {
+     "call": [
+      "load",
+      "/",
+      "withDescendants"
+     ],
+     "result": "prim",
+     "refused": [],
+     "after": {
+      "rules": [
+       [
+        "/",
+        "all"
+       ]
+      ],
+      "loadSet": [
+       "/World/Off",
+       "/World/Rock",
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "usedPayloadLayers": [
+       "rock.usda",
+       "tree.usda",
+       "leaf.usda"
+      ],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Branch": [
+        true,
+        true,
+        true
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    },
+    {
+     "call": [
+      "loadAndUnload",
+      [
+       "/World/Off",
+       "/World/Rock",
+       "/Nowhere/Deep",
+       "/__Prototype_1/Leaf"
+      ],
+      [
+       "/World/Tree",
+       "/__Prototype_2"
+      ],
+      "withDescendants"
+     ],
+     "result": null,
+     "refused": [
+      [
+       "/Nowhere/Deep",
+       "not_on_stage"
+      ],
+      [
+       "/World/Off",
+       "inactive"
+      ],
+      [
+       "/__Prototype_1/Leaf",
+       "prototype"
+      ],
+      [
+       "/__Prototype_2",
+       "prototype"
+      ]
+     ],
+     "after": {
+      "rules": [
+       [
+        "/",
+        "all"
+       ],
+       [
+        "/World/Rock",
+        "all"
+       ],
+       [
+        "/World/Tree",
+        "none"
+       ]
+      ],
+      "loadSet": [
+       "/World/Off",
+       "/World/Rock"
+      ],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree"
+      ],
+      "usedPayloadLayers": [
+       "rock.usda"
+      ],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        false,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        false,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        false,
+        false,
+        false
+       ],
+       "/World/Tree/Branch": [
+        false,
+        false,
+        false
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    },
+    {
+     "call": [
+      "unload",
+      "/__Prototype_1"
+     ],
+     "result": null,
+     "refused": [
+      [
+       "/__Prototype_1",
+       "prototype"
+      ]
+     ],
+     "after": {
+      "rules": [
+       [
+        "/",
+        "all"
+       ],
+       [
+        "/World/Rock",
+        "all"
+       ],
+       [
+        "/World/Tree",
+        "none"
+       ]
+      ],
+      "loadSet": [
+       "/World/Off",
+       "/World/Rock"
+      ],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree"
+      ],
+      "usedPayloadLayers": [
+       "rock.usda"
+      ],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        false,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        false,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        false,
+        false,
+        false
+       ],
+       "/World/Tree/Branch": [
+        false,
+        false,
+        false
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    },
+    {
+     "call": [
+      "load",
+      "/World/Off",
+      "withDescendants"
+     ],
+     "result": "prim",
+     "refused": [],
+     "after": {
+      "rules": [
+       [
+        "/",
+        "all"
+       ],
+       [
+        "/World/Rock",
+        "all"
+       ],
+       [
+        "/World/Tree",
+        "none"
+       ]
+      ],
+      "loadSet": [
+       "/World/Off",
+       "/World/Rock"
+      ],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree"
+      ],
+      "usedPayloadLayers": [
+       "rock.usda"
+      ],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        false,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        false,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        false,
+        false,
+        false
+       ],
+       "/World/Tree/Branch": [
+        false,
+        false,
+        false
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    },
+    {
+     "call": [
+      "loadAndUnload",
+      [
+       "/World/Off",
+       "/World/Tree"
+      ],
+      [
+       "/World/Plain"
+      ],
+      "withoutDescendants"
+     ],
+     "result": null,
+     "refused": [
+      [
+       "/World/Off",
+       "inactive"
+      ]
+     ],
+     "after": {
+      "rules": [
+       [
+        "/",
+        "all"
+       ],
+       [
+        "/World/Plain",
+        "none"
+       ],
+       [
+        "/World/Rock",
+        "all"
+       ],
+       [
+        "/World/Tree",
+        "only"
+       ]
+      ],
+      "loadSet": [
+       "/World/Off",
+       "/World/Rock",
+       "/World/Tree"
+      ],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "usedPayloadLayers": [
+       "rock.usda",
+       "tree.usda"
+      ],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Branch": [
+        true,
+        false,
+        true
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "load": "all",
+   "opened": {
+    "rules": [],
+    "loadSet": [
+     "/World/Off",
+     "/World/Rock",
+     "/World/Tree",
+     "/World/Tree/Branch"
+    ],
+    "loadable": [
+     "/World/Rock",
+     "/World/Tree",
+     "/World/Tree/Branch"
+    ],
+    "usedPayloadLayers": [
+     "rock.usda",
+     "tree.usda",
+     "leaf.usda"
+    ],
+    "prims": {
+     "/": [
+      true,
+      true,
+      false
+     ],
+     "/World": [
+      true,
+      true,
+      false
+     ],
+     "/World/Rock": [
+      true,
+      true,
+      true
+     ],
+     "/World/Tree": [
+      true,
+      true,
+      true
+     ],
+     "/World/Tree/Local": [
+      true,
+      true,
+      false
+     ],
+     "/World/Tree/Trunk": [
+      true,
+      true,
+      false
+     ],
+     "/World/Tree/Branch": [
+      true,
+      true,
+      true
+     ],
+     "/World/Off": [
+      true,
+      false,
+      true
+     ],
+     "/World/Plain": [
+      true,
+      true,
+      false
+     ],
+     "/World/Nope": [
+      false,
+      false,
+      false
+     ]
+    }
+   },
+   "steps": [
+    {
+     "call": [
+      "unload",
+      "/World/Tree"
+     ],
+     "result": null,
+     "refused": [],
+     "after": {
+      "rules": [
+       [
+        "/World/Tree",
+        "none"
+       ]
+      ],
+      "loadSet": [
+       "/World/Off",
+       "/World/Rock"
+      ],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree"
+      ],
+      "usedPayloadLayers": [
+       "rock.usda"
+      ],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        false,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        false,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        false,
+        false,
+        false
+       ],
+       "/World/Tree/Branch": [
+        false,
+        false,
+        false
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    },
+    {
+     "call": [
+      "load",
+      "/World/Tree/Branch",
+      "withDescendants"
+     ],
+     "result": "prim",
+     "refused": [],
+     "after": {
+      "rules": [
+       [
+        "/World/Tree",
+        "none"
+       ],
+       [
+        "/World/Tree/Branch",
+        "all"
+       ]
+      ],
+      "loadSet": [
+       "/World/Off",
+       "/World/Rock",
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "usedPayloadLayers": [
+       "rock.usda",
+       "tree.usda",
+       "leaf.usda"
+      ],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Branch": [
+        true,
+        true,
+        true
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    },
+    {
+     "call": [
+      "load",
+      "/World/Tree",
+      "withoutDescendants"
+     ],
+     "result": "prim",
+     "refused": [],
+     "after": {
+      "rules": [
+       [
+        "/World/Tree",
+        "only"
+       ]
+      ],
+      "loadSet": [
+       "/World/Off",
+       "/World/Rock",
+       "/World/Tree"
+      ],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "usedPayloadLayers": [
+       "rock.usda",
+       "tree.usda"
+      ],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Branch": [
+        true,
+        false,
+        true
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    },
+    {
+     "call": [
+      "unload",
+      "/"
+     ],
+     "result": null,
+     "refused": [],
+     "after": {
+      "rules": [
+       [
+        "/",
+        "none"
+       ]
+      ],
+      "loadSet": [],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree"
+      ],
+      "usedPayloadLayers": [],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        false,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        false,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        false,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        false,
+        false,
+        false
+       ],
+       "/World/Tree/Branch": [
+        false,
+        false,
+        false
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    },
+    {
+     "call": [
+      "loadAndUnload",
+      [
+       "/World/Tree/Branch"
+      ],
+      [
+       "/World/Rock"
+      ],
+      "withDescendants"
+     ],
+     "result": null,
+     "refused": [],
+     "after": {
+      "rules": [
+       [
+        "/",
+        "none"
+       ],
+       [
+        "/World/Rock",
+        "none"
+       ],
+       [
+        "/World/Tree/Branch",
+        "all"
+       ]
+      ],
+      "loadSet": [
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "usedPayloadLayers": [
+       "tree.usda",
+       "leaf.usda"
+      ],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        false,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Branch": [
+        true,
+        true,
+        true
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    },
+    {
+     "call": [
+      "load",
+      "/World/Off",
+      "withDescendants"
+     ],
+     "result": "prim",
+     "refused": [
+      [
+       "/World/Off",
+       "inactive"
+      ]
+     ],
+     "after": {
+      "rules": [
+       [
+        "/",
+        "none"
+       ],
+       [
+        "/World/Rock",
+        "none"
+       ],
+       [
+        "/World/Tree/Branch",
+        "all"
+       ]
+      ],
+      "loadSet": [
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "usedPayloadLayers": [
+       "tree.usda",
+       "leaf.usda"
+      ],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        false,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Branch": [
+        true,
+        true,
+        true
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    },
+    {
+     "call": [
+      "loadAndUnload",
+      [
+       "/World/Rock",
+       "/World/Off/Deep",
+       "/Nowhere"
+      ],
+      [],
+      "withDescendants"
+     ],
+     "result": null,
+     "refused": [
+      [
+       "/Nowhere",
+       "not_on_stage"
+      ],
+      [
+       "/World/Off/Deep",
+       "inactive"
+      ]
+     ],
+     "after": {
+      "rules": [
+       [
+        "/",
+        "none"
+       ],
+       [
+        "/World/Rock",
+        "all"
+       ],
+       [
+        "/World/Tree/Branch",
+        "all"
+       ]
+      ],
+      "loadSet": [
+       "/World/Rock",
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "loadable": [
+       "/World/Rock",
+       "/World/Tree",
+       "/World/Tree/Branch"
+      ],
+      "usedPayloadLayers": [
+       "rock.usda",
+       "tree.usda",
+       "leaf.usda"
+      ],
+      "prims": {
+       "/": [
+        true,
+        true,
+        false
+       ],
+       "/World": [
+        true,
+        true,
+        false
+       ],
+       "/World/Rock": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree": [
+        true,
+        true,
+        true
+       ],
+       "/World/Tree/Local": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Trunk": [
+        true,
+        true,
+        false
+       ],
+       "/World/Tree/Branch": [
+        true,
+        true,
+        true
+       ],
+       "/World/Off": [
+        true,
+        false,
+        true
+       ],
+       "/World/Plain": [
+        true,
+        true,
+        false
+       ],
+       "/World/Nope": [
+        false,
+        false,
+        false
+       ]
+      }
+     }
+    }
+   ]
+  }
+ ]
+}

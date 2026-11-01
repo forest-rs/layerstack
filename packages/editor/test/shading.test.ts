@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { loadLayerstack } from "@forest-rs/layerstack";
 import { layoutNetwork, networkRoot, readNetwork } from "../src/model/network.ts";
+import { readOpenPbr } from "../src/model/openpbr.ts";
 import { clampToBounds, groupInputs, sliderRange } from "../src/model/shadingInputs.ts";
 
 const LAYER = `#usda 1.0
@@ -107,4 +108,20 @@ test("inputs are grouped, labelled and ordered by their metadata", () => {
   assert.deepEqual(sliderRange(roughness.bounds), [0, 0.8]);
   assert.equal(clampToBounds(1.5, roughness.bounds), 1);
   assert.equal(sliderRange({ min: null, max: 1, softMin: null, softMax: null }), null);
+});
+
+test("an OpenPBR surface reads its image through the interface", () => {
+  const surface = readOpenPbr(stage, "/Stone", undefined);
+  assert.ok(surface !== null);
+  assert.equal(surface.shader, "/Stone/surface");
+  const texture = surface.baseColor.texture;
+  assert.ok(texture !== null);
+  assert.equal(texture.file.assetPath, "textures/stone.png");
+  assert.equal(texture.file.layer, "looks/stone.usda");
+  assert.equal(texture.colorSpace, "sRGB");
+  assert.deepEqual(texture.coordinates.transform?.scale, [2, 3]);
+  assert.deepEqual(surface.baseColor.value, [0.8, 0.8, 0.8].map(Math.fround));
+  assert.deepEqual(surface.specularRoughness, { value: 0.25, texture: null });
+  assert.equal(surface.normal, null);
+  assert.equal(readOpenPbr(stage, "/base", undefined), null);
 });

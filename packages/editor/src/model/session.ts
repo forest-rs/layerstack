@@ -14,11 +14,11 @@ import type {
   Layer,
   Layerstack,
   OpenOptions,
-  ResolveResult,
   SaveResult,
   Stage,
   ValueInput,
 } from "@forest-rs/layerstack";
+import { LoopRecorder } from "./timeline.ts";
 
 /**
  * Where the editor gets an asset's bytes: HTTP in a browser, the disk in
@@ -72,9 +72,9 @@ export interface SessionOptions {
 }
 
 /**
- * The most rounds of the step-by-step asset loop before the session gives
- * up, as `Stage.resolve`'s default: each round reads what the last one's
- * layers name, so a deeply nested asset needs one per level.
+ * The most rounds of the asset loop before the session gives up, as
+ * `Stage.resolve`'s default: each round reads what the last one's layers
+ * name, so a deeply nested asset needs one per level.
  */
 const MAX_ROUNDS = 100;
 
@@ -96,6 +96,8 @@ export class Session implements Disposable {
   readonly changeLog: ChangeEntry[] = [];
   /** Every step of the asset loop, oldest first. */
   readonly loopLog: LoopEntry[] = [];
+  /** When each step of the asset loop happened, run by run, for the waterfall. */
+  readonly loops: LoopRecorder;
   /** The layers last saved: what a reopen reads before fetching. */
   saved: readonly LayerFile[] = [];
   /**
@@ -126,8 +128,10 @@ export class Session implements Disposable {
     bytes: Uint8Array,
     fetch: Fetcher,
     options: SessionOptions,
+    loops: LoopRecorder,
   ) {
     this.layerstack = layerstack;
+    this.loops = loops;
     this.root = root;
     this.#fetch = fetch;
     this.#local = options.local ?? new Map();
@@ -144,21 +148,27 @@ export class Session implements Disposable {
 
   /**
    * Opens `root` and resolves everything it depends on: the stage composes
-   * the root alone, then `Stage.resolve` fetches what it wants, round by
-   * round.
+   * the root alone, then {@link Session.supplyUnavailable} fetches what it
+   * wants, round by round, timing each step ({@link Session.loops}).
    */
   static async open(layerstack: Layerstack, root: string, fetch: Fetcher, options: SessionOptions = {}): Promise<Session> {
+    const loops = new LoopRecorder();
+    const start = performance.now();
+    loops.begin("open", start);
     const local = options.local?.get(root);
     const bytes = local ?? (await fetch(root));
     if (bytes === null) throw new Error(`the root layer ${root} does not exist`);
-    const session = new Session(layerstack, root, bytes, fetch, options);
+    const readStart = performance.now();
+    loops.root(root, start, readStart, bytes.byteLength, local === undefined ? "fetched" : "saved");
+    const session = new Session(layerstack, root, bytes, fetch, options, loops);
+    loops.rootRead(readStart, performance.now());
     if (local === undefined) {
       session.#fetched += 1;
       session.#fetchedBytes += bytes.byteLength;
     }
     session.#log("supply", root, `${bytes.byteLength} B ${local === undefined ? "fetched" : "from the saved layers"} (the root)`);
     try {
-      await session.resolve("open");
+      await session.supplyUnavailable("open");
     } catch (error) {
       session.free();
       throw error;
@@ -172,45 +182,31 @@ export class Session implements Disposable {
   }
 
   /**
-   * Fetches what the stage wants with `Stage.resolve`, logging each fetch:
-   * the one-call form of the loop.
-   */
-  async resolve(cause: string): Promise<ResolveResult> {
-    this.#cause = cause;
-    for (const asset of this.stage.unavailable()) {
-      this.#log("want", asset.identifier, `${asset.usedBy} of ${asset.prims.join(", ")} (authored @${asset.assetPath}@ in ${asset.anchor.identifier})`);
-    }
-    const result = await this.stage.resolve({ fetch: (identifier) => this.#source(identifier) });
-    for (const layer of result.loaded) this.#log("load", layer.identifier ?? "(anonymous)", "read");
-    for (const failure of result.failures) this.#log("fail", failure.assetPath, `${failure.code}: ${failure.message}`);
-    return result;
-  }
-
-  /**
    * Fetches what the stage wants step by step, the loop `Stage.resolve`
-   * runs, so each phase is visible: `unavailable()`, fetch, `supply()`,
-   * `loadSupplied()`, until nothing is unavailable. Returns the rounds run.
+   * runs: `unavailable()`, fetch every identifier at once, `supply()` what
+   * arrived, `loadSupplied()`, until nothing is unavailable. Returns the
+   * rounds run.
+   *
+   * The session runs the loop itself rather than calling `Stage.resolve`
+   * so that each phase is logged and timed ({@link Session.loops}):
+   * `resolve` hands its fetch only an identifier, so what later rounds
+   * want (their uses and prims), when they are supplied and how long the
+   * stage reads are hidden in it. As `resolve` does, a fetch that throws
+   * fails the loop after what the round's other fetches returned is read,
+   * and an asset supplied but wanted again fails it.
    */
   async supplyUnavailable(cause: string): Promise<number> {
     this.#cause = cause;
-    for (let round = 0; round < MAX_ROUNDS; round += 1) {
-      const wanted = this.stage.unavailable();
-      if (wanted.length === 0) return round;
-      for (const asset of wanted) {
-        this.#log("want", asset.identifier, `${asset.usedBy} of ${asset.prims.join(", ")} (authored @${asset.assetPath}@ in ${asset.anchor.identifier})`);
-      }
-      const identifiers = [...new Set(wanted.map((asset) => asset.identifier))];
-      const arrived = await Promise.all(identifiers.map((identifier) => this.#source(identifier)));
-      identifiers.forEach((identifier, index) => {
-        const bytes = arrived[index] ?? null;
-        this.stage.supply(identifier, bytes);
-        this.#log("supply", identifier, bytes === null ? "confirmed absent" : `${bytes.byteLength} B`);
-      });
-      const result = this.stage.loadSupplied();
-      for (const layer of result.loaded) this.#log("load", layer.identifier ?? "(anonymous)", "read");
-      for (const failure of result.failures) this.#log("fail", failure.assetPath, `${failure.code}: ${failure.message}`);
+    const run = this.loops.current ?? this.loops.begin(cause, performance.now());
+    try {
+      const rounds = await this.#rounds();
+      if (run.assets.length === 0) this.loops.discard();
+      else this.loops.end(performance.now());
+      return rounds;
+    } catch (error) {
+      this.loops.end(performance.now(), error instanceof Error ? error.message : String(error));
+      throw error;
     }
-    throw new Error(`assets still unavailable after ${MAX_ROUNDS} rounds`);
   }
 
   /** Undoable actions, oldest first. */
@@ -369,18 +365,71 @@ export class Session implements Disposable {
     return { label: step.label, step, receipt };
   }
 
+  /** The rounds of {@link Session.supplyUnavailable}, recorded into the current run. */
+  async #rounds(): Promise<number> {
+    const supplied = new Set<string>();
+    for (let round = 0; round < MAX_ROUNDS; round += 1) {
+      const wantStart = performance.now();
+      const wanted = this.stage.unavailable();
+      this.loops.want(wanted, wantStart, performance.now());
+      if (wanted.length === 0) return round;
+      for (const asset of wanted) {
+        this.#log("want", asset.identifier, `${asset.usedBy} of ${asset.prims.join(", ")} (authored @${asset.assetPath}@ in ${asset.anchor.identifier})`);
+      }
+      const identifiers = [...new Set(wanted.map((asset) => asset.identifier))];
+      const stuck = identifiers.find((identifier) => supplied.has(identifier));
+      if (stuck !== undefined) throw new Error(`${stuck} was supplied but the stage still wants it`);
+      const settled = await Promise.allSettled(identifiers.map((identifier) => this.#source(identifier)));
+      this.loops.fetched(performance.now());
+      let failed: Error | null = null;
+      settled.forEach((outcome, index) => {
+        const identifier = identifiers[index] as string;
+        if (outcome.status === "rejected") {
+          failed ??= new Error(`fetching ${identifier} failed`, { cause: outcome.reason });
+          return;
+        }
+        const bytes = outcome.value;
+        this.stage.supply(identifier, bytes);
+        supplied.add(identifier);
+        this.loops.supplied(identifier, performance.now());
+        this.#log("supply", identifier, bytes === null ? "confirmed absent" : `${bytes.byteLength} B`);
+      });
+      this.loops.suppliesDone(performance.now());
+      const readStart = performance.now();
+      const result = this.stage.loadSupplied();
+      this.loops.read(result, readStart, performance.now());
+      for (const layer of result.loaded) this.#log("load", layer.identifier ?? "(anonymous)", "read");
+      for (const failure of result.failures) this.#log("fail", failure.assetPath, `${failure.code}: ${failure.message}`);
+      if (failed !== null) throw failed;
+    }
+    throw new Error(`assets still unavailable after ${MAX_ROUNDS} rounds`);
+  }
+
+  /** The host's bytes for `identifier`: the saved layers first, then the fetch; logged and timed. */
   async #source(identifier: string): Promise<Uint8Array | null> {
+    this.loops.fetchStarted(identifier, performance.now());
     const local = this.#local.get(identifier);
     if (local !== undefined) {
+      this.loops.fetchSettled(identifier, performance.now(), local.byteLength, "saved");
       this.#log("fetch", identifier, `${local.byteLength} B from the saved layers`);
       return local;
     }
-    const bytes = await this.#fetch(identifier);
+    let bytes: Uint8Array | null;
+    try {
+      bytes = await this.#fetch(identifier);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.loops.fetchSettled(identifier, performance.now(), null, "error", message);
+      this.#log("fail", identifier, `fetch failed: ${message}`);
+      throw error;
+    }
     if (bytes === null) {
+      this.loops.fetchSettled(identifier, performance.now(), null, "absent");
       this.#log("fetch", identifier, "not found");
     } else {
       this.#fetched += 1;
       this.#fetchedBytes += bytes.byteLength;
+      this.loops.fetchSettled(identifier, performance.now(), bytes.byteLength, "fetched");
       this.#log("fetch", identifier, `${bytes.byteLength} B`);
     }
     return bytes;

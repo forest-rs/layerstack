@@ -13,6 +13,8 @@ import { CAMERA_INPUTS, LIGHT_INPUTS, lightKey, lightKind, readLight } from "./l
 import type { CameraItem, LightInstance, LightItem, LightKind } from "./light.js";
 import { Links, linkKey } from "./links.js";
 import type { LinkChange, LinkKind, LinkSet, LinkTarget } from "./links.js";
+import { byBytes, bufferCost, estimateCurves, estimateMesh, estimatePoints, itemCost, totals } from "./cost.js";
+import type { BufferCost, DrawCost, ItemCost } from "./cost.js";
 import { fingerprint } from "./fingerprint.js";
 import { readMaterial } from "./material.js";
 import type { MaterialItem } from "./material.js";
@@ -1083,6 +1085,119 @@ export class DrawList implements Disposable {
     }
     for (const path of [...this.#instancers.keys()]) if (!this.#inScope(path)) this.#instancers.delete(path);
     return this.#apply({ resynced: [...this.#scope.roots], changedInfoOnly: [], properties: [], resyncedProperties: [] }, gather, before);
+  }
+
+  /**
+   * What its items cost as built ({@link DrawCost}, `measured`): each
+   * item's buffer and instances, and totals counting each buffer once.
+   */
+  cost(): DrawCost {
+    const items: ItemCost[] = [];
+    let matrixBytes = 0;
+    for (const { item } of this.#entries.values()) {
+      const buffers = this.#buffers.get(item.buffer)?.buffers;
+      if (buffers === undefined) continue;
+      items.push(itemCost(item.id, item.source, item.prim, item.buffer, bufferCost(buffers), item.matrices.length / 16));
+      matrixBytes += item.matrices.byteLength;
+    }
+    return { basis: "measured", time: this.#time, total: totals(items, (cost) => String(cost.buffer), matrixBytes), items: items.sort(byBytes) };
+  }
+
+  /**
+   * What drawing `scope` (the list's own by default) would cost, read from
+   * counts at the list's time and building nothing ({@link DrawCost},
+   * `estimated`): the items discovered as {@link refresh} would discover
+   * them, each mesh's triangles and vertices from its `faceVertexCounts`
+   * and `faceVertexIndices` lengths, each item's instances counted. For
+   * deciding what to draw before paying for it; the list is left as it
+   * is.
+   */
+  estimate(scope?: DrawScope): DrawCost {
+    const saved = this.#scope;
+    if (scope !== undefined) this.#scope = normalizeScope(scope);
+    try {
+      return this.#estimate();
+    } finally {
+      this.#scope = saved;
+    }
+  }
+
+  #estimate(): DrawCost {
+    const stage = this.#stage;
+    const found: Found = { sources: [], scopes: [], cameras: [], lights: new Map(), instancers: new Map(), prims: 0 };
+    const firsts = this.#firsts();
+    for (const root of this.#scope.roots) this.#discover(root, firsts, found);
+    const keys = new Set<string>();
+    const sources = found.sources.filter((source) => {
+      const key = sourceKey(source);
+      if (keys.has(key) || !this.#reaches(source)) return false;
+      keys.add(key);
+      return true;
+    });
+    // Each source's instance prims, then which are shown, in one batch.
+    const anchors = sources.map((source): string[] => {
+      if (source.kind === "gprim" || source.kind === "drawMode") return [source.path];
+      if (source.kind === "pointInstancer") return [source.instancer];
+      const first = this.#instanceRoot(source.prim);
+      if (first === null) return [];
+      return proxies(first, source.prim, this.#instancesOf(first)).filter((proxy) => this.#inScope(proxy) && this.#material(proxy) === source.material);
+    });
+    const flat = [...new Set(anchors.flat())];
+    const shown = new Map(this.#shown(flat).map((visible, i) => [flat[i]!, visible]));
+    const at = this.#time;
+    const geometry = new Map<string, BufferCost>();
+    const instancerCounts = new Map<string, Map<number, number>>();
+    const items: ItemCost[] = [];
+    const bufferKeys = new Map<ItemCost, string>();
+    const empty: BufferCost = { triangles: 0, vertices: 0, cpuBytes: 0, gpuBytes: 0 };
+    sources.forEach((source, i) => {
+      const prim = sourcePath(source);
+      let instances = anchors[i]!.filter((path) => shown.get(path)).length;
+      if (source.kind === "pointInstancer" && instances > 0) {
+        let counts = instancerCounts.get(source.instancer);
+        if (counts === undefined) {
+          counts = new Map();
+          const value = stage.attribute(`${source.instancer}.protoIndices`)?.get(at) ?? null;
+          if (value?.kind === "array") {
+            for (const index of Array.from(value.array.copy() as ArrayLike<number>)) counts.set(index, (counts.get(index) ?? 0) + 1);
+            value.array.release();
+          }
+          instancerCounts.set(source.instancer, counts);
+        }
+        instances = counts.get(source.index) ?? 0;
+      }
+      let key = `m ${prim}`;
+      let cost: BufferCost = empty;
+      if (source.kind === "drawMode") {
+        key = `d ${prim}`;
+      } else {
+        const gprim = this.#kind(stage.prim(prim)).gprim;
+        if (gprim === "shape") {
+          const shape = readShape(stage, prim, at === undefined ? {} : { time: at });
+          key = JSON.stringify(shape);
+          if (shape !== null && !geometry.has(key)) {
+            const mesh = this.#stagehand.tessellate(shape, this.#tessellation);
+            geometry.set(key, bufferCost({ key: -1, prim, mesh, curves: null, points: null, subsets: [], revision: 0, shape, standin: null }));
+          }
+        } else if (!geometry.has(key)) {
+          const read =
+            gprim === "mesh"
+              ? estimateMesh(stage, prim, at, 0)
+              : gprim === "curves"
+                ? estimateCurves(stage, prim, at, this.#curveOptions)
+                : gprim === "points"
+                  ? estimatePoints(stage, prim, at)
+                  : null;
+          geometry.set(key, read ?? empty);
+        }
+        cost = geometry.get(key) ?? empty;
+      }
+      const item = itemCost(null, source, prim, null, cost, instances);
+      bufferKeys.set(item, key);
+      items.push(item);
+    });
+    const instances = items.reduce((sum, item) => sum + item.instances, 0);
+    return { basis: "estimated", time: at, total: totals(items, (item) => bufferKeys.get(item)!, instances * 128), items: items.sort(byBytes) };
   }
 
   /** Whether `path` is one of the scope's roots or beneath one. */

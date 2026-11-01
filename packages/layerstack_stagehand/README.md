@@ -86,6 +86,21 @@ const list = stagehand.drawList(stage, { scope: { roots: [] } }); // opens drawi
 upload(list.setScope({ roots: [selected], space: selected })); // the selection alone, framed at the origin
 ```
 
+`cost()` measures what the items hold and draw: per item its buffer's
+triangles, vertices, JavaScript bytes and the bytes a renderer uploads
+(`f32` vertex attributes, `u32` indices), and its instances (64 bytes
+each on the GPU); totals count each shared buffer once. `estimate(scope)`
+answers in the same units before anything is built: it discovers the
+items as a refresh would and reads only array lengths (a mesh's
+triangles are `faceVertexIndices` less twice its faces), so a viewer can
+decide what to draw before paying for it.
+
+```ts
+const planned = list.estimate({ roots: ["/"] }).total; // { trianglesDrawn, gpuBytes, cpuBytes, instances, ... }
+if (planned.gpuBytes < budget) upload(list.setScope({ roots: ["/"] }));
+list.cost().items; // what each drawn item holds, most bytes first
+```
+
 The list also holds the stage's cameras and lights, by path:
 `list.cameras()` (`CameraItem`: the `Camera` `stage.camera` computes, view
 and projection matrices as `GfFrustum` computes them; conform it to a

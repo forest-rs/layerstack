@@ -487,6 +487,107 @@ def PointInstancer "Hopping" {
   });
 });
 
+describe("draw costs", () => {
+  it("measure each buffer once and each instance, as the estimate reads them from counts", () => {
+    const { stage, list } = fixture();
+    try {
+      const cost = list.cost();
+      assert.equal(cost.basis, "measured");
+      // A mesh and four shapes (the pebble and the stone share a sphere).
+      assert.equal(cost.total.items, 6);
+      assert.equal(cost.total.buffers, 5);
+      // The rock, the pebble, the stone, two beacons' post and bulb, three stones.
+      assert.equal(cost.total.instances, 10);
+      assert.equal(cost.total.instanceBytes, 640);
+      const rock = cost.items.find((item) => item.prim === "/World/Rocks/Rock")!;
+      // One quad: two triangles over four vertices; f32 positions and
+      // normals and u32 indices uploaded, triangle faces and vertex points
+      // held besides.
+      assert.deepEqual(rock.geometry, { triangles: 2, vertices: 4, cpuBytes: 144, gpuBytes: 120 });
+      const stones = cost.items.find((item) => item.prim === "/World/Stones/Prototypes/Stone")!;
+      assert.equal(stones.instances, 3);
+      assert.equal(stones.trianglesDrawn, 3 * stones.geometry.triangles);
+      // Sorted by bytes uploaded, most first.
+      const bytes = cost.items.map((item) => item.geometry.gpuBytes + item.instanceBytes);
+      assert.deepEqual(bytes, [...bytes].sort((a, b) => b - a));
+      // The estimate builds nothing and agrees for faces without holes.
+      const estimate = list.estimate();
+      assert.equal(estimate.basis, "estimated");
+      assert.deepEqual(estimate.total, cost.total);
+      assert.equal(list.estimate({ roots: ["/World/Rocks"] }).total.items, 3);
+      assert.equal(list.items().length, 6);
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+  });
+
+  it("estimate face-varying primvars as split at every corner", () => {
+    const stage = layerstack.open({
+      identifier: "split.usda",
+      bytes: new TextEncoder().encode(`#usda 1.0
+def Mesh "Strip" {
+    int[] faceVertexCounts = [4, 3]
+    int[] faceVertexIndices = [0, 1, 2, 3, 1, 4, 2]
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (2, 0, 0)]
+    texCoord2f[] primvars:st = [(0, 0), (1, 0), (1, 1), (0, 1), (0, 0), (1, 0), (1, 1)] (
+        interpolation = "faceVarying"
+    )
+}
+`),
+    });
+    const list = stagehand.drawList(stage);
+    try {
+      const estimate = list.estimate().items[0]!.geometry;
+      assert.equal(estimate.triangles, 3);
+      assert.equal(estimate.vertices, 7);
+      list.refresh();
+      const measured = list.cost().items[0]!.geometry;
+      assert.equal(measured.triangles, 3);
+      // Splitting merges equal corners: the estimate is a ceiling.
+      assert.ok(measured.vertices <= estimate.vertices);
+      assert.ok(measured.gpuBytes <= estimate.gpuBytes);
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+  });
+});
+
+describe("curve costs", () => {
+  it("estimate swept curves' tubes, and lines without triangles", () => {
+    const stage = layerstack.open({
+      identifier: "curves.usda",
+      bytes: new TextEncoder().encode(`#usda 1.0
+def BasisCurves "Hair" {
+    uniform token type = "cubic"
+    uniform token basis = "bspline"
+    int[] curveVertexCounts = [6]
+    point3f[] points = [(0, 0, 0), (0, 1, 0), (0, 2, 0), (0, 3, 0), (0, 4, 0), (0, 5, 0)]
+    float[] widths = [0.5] (interpolation = "constant")
+}
+`),
+    });
+    try {
+      for (const style of ["lines", "swept"] as const) {
+        const list = stagehand.drawList(stage, { curves: { style, samples: 8, sides: 6 } });
+        try {
+          const estimate = list.estimate().total;
+          list.refresh();
+          const measured = list.cost().total;
+          assert.equal(estimate.triangles > 0, style === "swept", style);
+          // Rough, but of the measurement's order.
+          assert.ok(estimate.gpuBytes < 4 * measured.gpuBytes && measured.gpuBytes < 4 * estimate.gpuBytes, style);
+        } finally {
+          list.dispose();
+        }
+      }
+    } finally {
+      stage.free();
+    }
+  });
+});
+
 describe("draw scopes", () => {
   it("draw only beneath the roots, and ignore changes outside them", () => {
     const { stage, list, first, edit } = fixture({ roots: ["/World/Rocks"] });

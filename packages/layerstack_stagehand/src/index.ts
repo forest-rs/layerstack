@@ -54,6 +54,8 @@ import type { CurveOptions, CurvesInput, DrawRange, MeshInput, MeshOptions, Mesh
 export type * from "./types.js";
 export { DrawList } from "./draw.js";
 export type { DrawBuffers, DrawDiff, DrawItem, DrawOptions, DrawScope, DrawWork, ItemInstance, ItemSource, PointStyle, Purpose } from "./draw.js";
+export { INSTANCE_GPU_BYTES, bufferCost } from "./cost.js";
+export type { BufferCost, CostTotals, DrawCost, ItemCost } from "./cost.js";
 export type { LinkChange, LinkKind, LinkSet, LinkTarget } from "./links.js";
 export { SHAPE_SCHEMAS, readMesh, readPoints, readShape, shapeSchema } from "./read.js";
 export { gatherInfluences } from "./skin.js";

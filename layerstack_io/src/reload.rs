@@ -210,6 +210,7 @@ impl<B: Storage> StageDocument<B> {
         );
         reader.variant_arcs = self.variant_arcs;
         reader.formats = self.formats.clone();
+        reader.log = ReadLog::new(self.clock.clone());
         reader.reachable_only = root_closure;
         reader.muted.clone_from(&self.stage.options().muted_layers);
         for id in roots {

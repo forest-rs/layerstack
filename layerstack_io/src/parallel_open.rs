@@ -33,6 +33,7 @@ use super::{
     source_format, source_identifier, strict_failure, strict_rejects,
 };
 use crate::layer_ids;
+use crate::timing::{LayerRead, LoadClock, ReadTime, TimeSpan};
 use alloc::{collections::BTreeSet, sync::Arc};
 use hashbrown::{HashMap, HashSet};
 use layerstack::{
@@ -68,6 +69,9 @@ enum Call {
 struct Read {
     calls: Vec<Call>,
     outcome: Outcome,
+    /// The read's work and time, for the reader's log, when it decoded
+    /// the source.
+    logged: Option<LayerRead>,
 }
 
 enum Outcome {
@@ -100,6 +104,8 @@ struct Shared<'a, B> {
     /// The ids the catalog and the store held before this open.
     reserved: &'a BTreeSet<LayerId>,
     sources: Mutex<Sources>,
+    /// The clock the reads are timed with ([`super::LoadOptions::clock`]).
+    clock: Option<&'a LoadClock>,
 }
 
 /// The sources found so far.
@@ -169,6 +175,7 @@ impl<B: Storage> Shared<'_, B> {
         let mut read = Read {
             calls: Vec::new(),
             outcome: Outcome::Package,
+            logged: None,
         };
         let format = self.formats.for_identifier(&task.identifier);
         let bytes = if format.is_none_or(FileFormat::reads_source) {
@@ -201,6 +208,7 @@ impl<B: Storage> Shared<'_, B> {
             added,
             package: false,
         };
+        let start = self.clock.map(LoadClock::now);
         let loose = read_loose(
             format,
             &bytes,
@@ -215,6 +223,28 @@ impl<B: Storage> Shared<'_, B> {
             self.threads,
         );
         if !resolver.package {
+            // Reads on threads do not nest: an arc's target is a task of
+            // its own, so the whole span is this layer's.
+            let time = start.zip(self.clock).map(|(start, clock)| {
+                let span = TimeSpan {
+                    start,
+                    end: clock.now(),
+                };
+                ReadTime {
+                    span,
+                    own: span.duration(),
+                }
+            });
+            read.logged = Some(LayerRead {
+                layer: task.id,
+                bytes: bytes.len() as u64,
+                prims: loose
+                    .layer
+                    .as_ref()
+                    .map_or(0, |layer| crate::timing::prim_count(layer, self.paths))
+                    as u64,
+                time,
+            });
             read.calls = resolver.calls;
             read.outcome = Outcome::Read {
                 format,
@@ -388,6 +418,7 @@ impl<B: Storage> Reader<'_, B> {
             known: &self.catalog.ids,
             reserved: &self.catalog.reserved,
             sources: Mutex::default(),
+            clock: self.log.clock(),
         };
         let (identifier, root_id, root) = match shared.source(identifier) {
             Ok(source) => source,
@@ -598,6 +629,10 @@ impl<B: Storage> Replay<'_, '_, B> {
         };
         catalog.source_mut(id).expect("source").format = format;
         catalog.set_state(id, State::Loading);
+        if let Some(mut logged) = read.logged.take() {
+            logged.layer = id;
+            self.reader.log.push(logged);
+        }
         let first_failure = self.reader.failures.len();
         let first_diagnostic = self.reader.diagnostics.len();
         // A source that failed to parse is read again each time an arc asks

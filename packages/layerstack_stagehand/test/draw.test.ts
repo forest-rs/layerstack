@@ -163,6 +163,55 @@ describe("draw lists", () => {
     }
   });
 
+  it("free a static mesh's plan once built, and build it again when an edit changes it", () => {
+    const stage = layerstack.open({
+      identifier: "static.usda",
+      bytes: new TextEncoder().encode(`#usda 1.0
+def Mesh "Tile" {
+    int[] faceVertexCounts = [4]
+    int[] faceVertexIndices = [0, 1, 2, 3]
+    point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0)]
+}
+`),
+    });
+    const heard: Changes[] = [];
+    stage.onChange((changes) => heard.push(changes));
+    const list = stagehand.drawList(stage);
+    try {
+      const first = list.refresh();
+      assert.equal(first.work.triangulations, 1);
+      assert.equal(first.work.plansFreed, 1, "nothing the mesh reads can vary");
+      const tile = list.item(itemOf(list, "/Tile"))!;
+      // The buffers stay, copied out of the module.
+      assert.equal(list.buffers(tile.buffer)!.mesh.positions.length, 12);
+      stage.apply(
+        [{ type: "setValue", path: "/Tile.points", value: { type: "point3f[]", value: [[0, 0, 2], [1, 0, 2], [1, 1, 2], [0, 1, 2]] } }],
+        stage.root,
+      );
+      const diff = list.applyChanges(heard.splice(0)[0]!);
+      // No plan to refill: built again, and freed again.
+      assert.equal(diff.work.refills, 0);
+      assert.equal(diff.work.triangulations, 1);
+      assert.equal(diff.work.plansFreed, 1);
+      assert.deepEqual(diff.rebuilt, [tile.buffer]);
+      assert.equal(list.buffers(tile.buffer)!.mesh.positions[2], 2);
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+  });
+
+  it("keep an animated mesh's plan", () => {
+    const { stage, list, first } = fixture();
+    try {
+      // The rock's points are sampled over time; nothing else is a mesh.
+      assert.equal(first.work.plansFreed, 0);
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+  });
+
   it("refill an animated mesh at a new time without triangulating", () => {
     const { stage, list } = fixture();
     try {

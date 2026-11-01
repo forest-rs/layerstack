@@ -183,6 +183,11 @@ export interface DrawWork {
   readonly refills: number;
   /** Meshes planned: faces triangulated and vertices split. */
   readonly triangulations: number;
+  /**
+   * Plans freed once their buffers were copied out: meshes whose geometry
+   * cannot vary, which a refill never reads, so they hold no module memory.
+   */
+  readonly plansFreed: number;
   /** Implicit shapes tessellated. */
   readonly tessellations: number;
   /** Cameras read: computed again. */
@@ -720,6 +725,7 @@ class Gather {
     buffersReused: 0,
     refills: 0,
     triangulations: 0,
+    plansFreed: 0,
     tessellations: 0,
     camerasRead: 0,
     lightsRead: 0,
@@ -1204,6 +1210,7 @@ export class DrawList implements Disposable {
         subsets: (input.subsets ?? []).map((subset) => subset.path ?? ""),
         revision: retained.buffers.revision + 1,
       };
+      this.#keepPlan(retained.buffers.prim, key, gather);
       planned.add(key);
     }
     // The sets drawn now might vary where the old ones did not.
@@ -1237,6 +1244,22 @@ export class DrawList implements Disposable {
   }
 
   /** Whether the geometry `prim` draws into the buffer `key` might differ at another time: its attributes, its face subsets', or a texture coordinate set the buffer draws. */
+  /**
+   * Frees the module's side of the mesh buffer `key` unless its geometry
+   * might vary: its buffers are copied out already, and only a refill
+   * ({@link StagehandMesh.refill}) reads the plan. A static mesh then holds
+   * no module memory, so a scene's meshes need not fit in the module's
+   * address space together, only one at a time; an edit that changes one
+   * builds it again (one triangulation), and keeps the plan if its
+   * geometry might vary by then.
+   */
+  #keepPlan(prim: string, key: number, gather: Gather): void {
+    if (!this.#geometryMightVary(prim, key)) {
+      this.#buffers.get(key)!.buffers.mesh.dispose();
+      gather.work.plansFreed++;
+    }
+  }
+
   #geometryMightVary(prim: string, key: number): boolean {
     const retained = this.#buffers.get(key);
     const uvSets = retained?.uvSets ?? [];
@@ -1978,7 +2001,9 @@ export class DrawList implements Disposable {
             retained.buffers = { ...retained.buffers, revision: retained.buffers.revision + 1 };
             return known;
           } catch (error) {
-            if ((error as { code?: string }).code !== "plan.mismatch") throw error;
+            // A mesh whose plan was freed ({@link #keepPlan}) is built again.
+            const code = (error as { code?: string }).code;
+            if (code !== "plan.mismatch" && code !== "mesh.disposed") throw error;
           }
         }
         mesh.dispose();
@@ -1991,6 +2016,7 @@ export class DrawList implements Disposable {
           subsets,
           revision: retained.buffers.revision + 1,
         };
+        this.#keepPlan(item.prim, known, gather);
         return known;
       }
       gather.work.triangulations++;
@@ -2002,6 +2028,7 @@ export class DrawList implements Disposable {
         uvSets,
         users: 0,
       });
+      this.#keepPlan(item.prim, key, gather);
       this.#meshBuffers.set(item.prim, key);
       return key;
     }

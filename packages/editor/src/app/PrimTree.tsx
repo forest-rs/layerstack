@@ -5,7 +5,9 @@
 // expanded (a prim's children are asked for only when it is open), drawn
 // by a virtualized React Aria tree so a stage of tens of thousands of
 // prims scrolls as one of ten. Selecting a row selects the prim; a prim
-// picked in the viewport opens its ancestors.
+// picked in the viewport opens its ancestors. A prim with payloads says
+// whether they are loaded, and loads or unloads them in place, as
+// usdview's tree does.
 import { useEffect, useMemo, useState } from "react";
 import { Button as AriaButton, Collection, ListLayout, Tree, TreeItem, TreeItemContent, Virtualizer, type Key } from "react-aria-components";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -99,6 +101,7 @@ export function PrimTree() {
         <Input placeholder="Find a prim by name" value={query} onChange={(event) => setQuery(event.target.value)} className="h-7 text-xs" />
         <PrimActions store={store} path="/" />
       </div>
+      {store.payloadNote !== null && <p className="mx-2 mb-2 rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground">{store.payloadNote}</p>}
       {matches !== null ? (
         <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
           {matches.length === 0 && <p className="px-2 text-xs text-muted-foreground">No prim is named like that.</p>}
@@ -171,13 +174,45 @@ function PrimRow({ store, row, isExpanded, hasChildItems, level }: { store: Edit
         <span className="size-4 shrink-0" />
       )}
       <HugeiconsIcon icon={primIcon(prim.typeName)} className="size-3.5 shrink-0 text-muted-foreground" />
-      <span className={cn("truncate", !prim.active && "text-muted-foreground line-through", prim.specifier !== "def" && "italic")}>{prim.name}</span>
+      <span
+        className={cn(
+          "truncate",
+          !prim.active && "text-muted-foreground line-through",
+          prim.active && !prim.loaded && "text-muted-foreground",
+          prim.specifier !== "def" && "italic",
+        )}
+      >
+        {prim.name}
+      </span>
       <span className="ml-auto flex shrink-0 items-center gap-1 pl-2 text-[10px] text-muted-foreground">
+        {prim.hasAuthoredPayloads && <PayloadToggle store={store} prim={prim} />}
         {prim.instance && <span title="An instance: its descendants come from a shared prototype">instance</span>}
         {prim.specifier !== "def" && <span title={`Its specifier is ${prim.specifier}`}>{prim.specifier}</span>}
         <span>{prim.typeName ?? ""}</span>
       </span>
       <PrimActions store={store} path={prim.path} className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[pressed]:opacity-100" />
     </div>
+  );
+}
+
+/**
+ * A prim's payloads: whether they are loaded, and a press that loads them
+ * with those beneath (or unloads them), as usdview's Load column does.
+ */
+function PayloadToggle({ store, prim }: { store: EditorStore; prim: Prim }) {
+  const busy = store.status.kind !== "ready";
+  const label = prim.loaded ? `Unload the payloads of ${prim.path}` : `Load the payloads of ${prim.path} and beneath it`;
+  return (
+    <AriaButton
+      aria-label={label}
+      isDisabled={busy || !prim.active}
+      onPress={() => void (prim.loaded ? store.unload(prim.path) : store.load(prim.path))}
+      className={cn(
+        "rounded border px-1 leading-4 outline-none hover:bg-background hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring",
+        prim.loaded ? "border-transparent" : "border-dashed",
+      )}
+    >
+      {prim.loaded ? "loaded" : "unloaded"}
+    </AriaButton>
   );
 }

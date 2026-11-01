@@ -9,11 +9,11 @@
 // current. Nothing here knows about the DOM except the viewport it is
 // handed.
 import { useSyncExternalStore } from "react";
-import type { Edit, EditReceipt, EditTarget, Layer, Layerstack, ValueInput } from "@forest-rs/layerstack";
+import type { Edit, EditReceipt, EditTarget, Layer, Layerstack, LoadOutcome, LoadPolicy, ValueInput } from "@forest-rs/layerstack";
 import type { DrawCost, DrawScope, Stagehand } from "@forest-rs/layerstack_stagehand";
 import { type AssetFocus, assetFocus, type DrawScopeChoice, overLimit, scopeFor } from "./model/assetView.ts";
 import { ViewportModel, type ViewportScene, type ViewportUpdate } from "./model/draws.ts";
-import { type OpenPhase, Session } from "./model/session.ts";
+import { type LoadBudget, type OpenPhase, OverBudget, Session } from "./model/session.ts";
 import type { SceneSource } from "./model/sources.ts";
 import type { Viewport } from "./viewport/viewport3d.ts";
 
@@ -21,6 +21,8 @@ import type { Viewport } from "./viewport/viewport3d.ts";
 export type EditorStatus =
   | { readonly kind: "empty" }
   | { readonly kind: "opening"; readonly label: string }
+  /** Loading payloads of the open scene (`label` names them), and fetching what they want. */
+  | { readonly kind: "loading"; readonly label: string }
   | { readonly kind: "ready" }
   | { readonly kind: "failed"; readonly label: string; readonly message: string }
   /**
@@ -47,6 +49,22 @@ export function moduleTrap(error: unknown): { readonly outOfMemory: boolean; rea
   }
   return null;
 }
+
+/**
+ * How a scene opens its payloads: all of them, none (each prim with
+ * payloads then loads from the prim tree), or `auto`: none, then all of
+ * them unless reading them would pass {@link PAYLOAD_BUDGET}.
+ */
+export type PayloadChoice = "auto" | "all" | "none";
+
+/**
+ * The layer bytes an automatic open reads for payloads before it leaves
+ * them unloaded: 1 GiB. Composing takes more memory than the layers' bytes
+ * (a large public scene's 3.1 GB of layers composes to 5.4 GB natively),
+ * and the module has 4 GiB for the stage and its draws, so a scene whose
+ * payloads read more than this would not fit with them loaded.
+ */
+export const PAYLOAD_BUDGET = 1024 ** 3;
 
 /** The stage's frames, as its metadata gives them. */
 export interface TimeRange {
@@ -104,6 +122,10 @@ export class EditorStore {
   through: string | null = null;
   /** The session being opened, while its assets are fetched. */
   opening: Session | null = null;
+  /** How the next scene opens its payloads ({@link PayloadChoice}). */
+  payloads: PayloadChoice = "auto";
+  /** Why the open scene's payloads were left unloaded; `null` when they were not, or were chosen so. */
+  payloadNote: string | null = null;
   /** What the open is doing, and since when (`performance.now()`); `null` when nothing is opening. */
   openingPhase: { readonly phase: OpenPhase; readonly since: number; readonly started: number } | null = null;
   /** The draws, as last synced. */
@@ -136,6 +158,8 @@ export class EditorStore {
   #viewport: Viewport | null = null;
   #notice = 0;
   #opening = 0;
+  /** When the open, or the payload load, the overlay shows began. */
+  #busySince = 0;
   #frame = 0;
   #playFrame = 0;
 
@@ -176,8 +200,10 @@ export class EditorStore {
     this.status = { kind: "opening", label: source.label };
     this.#bump();
     try {
-      const started = performance.now();
+      this.#busySince = performance.now();
+      const choice = this.payloads;
       const session = await Session.open(this.layerstack, source.root, source.fetch, {
+        open: { load: choice === "all" ? "all" : "none" },
         progress: (pending) => {
           if (opening === this.#opening) this.opening = pending;
           this.#bumpSoon();
@@ -186,7 +212,7 @@ export class EditorStore {
         // let the page render and paint it.
         phase: async (phase) => {
           if (opening !== this.#opening) return;
-          this.openingPhase = { phase, since: performance.now(), started };
+          this.openingPhase = { phase, since: performance.now(), started: this.#busySince };
           this.#bump();
           await nextFrame();
           await nextFrame();
@@ -196,6 +222,12 @@ export class EditorStore {
         session.free();
         return;
       }
+      const note = choice === "auto" ? await this.#loadWithin(session, source) : null;
+      if (opening !== this.#opening) {
+        session.free();
+        return;
+      }
+      this.payloadNote = note;
       this.opening = null;
       this.openingPhase = null;
       this.session?.free();
@@ -468,6 +500,70 @@ export class EditorStore {
     await this.#actAsync(muted ? "mute" : "unmute", (session) => session.setMuted(layer, muted));
   }
 
+  /**
+   * Loads the payloads at `path` (and beneath it, with `"withDescendants"`)
+   * and fetches what they want, the prim tree showing them loaded once
+   * they are; the overlay shows the rounds as an open's.
+   */
+  async load(path: string, policy: LoadPolicy = "withDescendants"): Promise<void> {
+    await this.#loading(`load ${path}`, path, (session) => session.loadPayloads([path], [], policy));
+  }
+
+  /** Unloads the payloads at and beneath `path`: their prims leave the stage and the draws. */
+  async unload(path: string): Promise<void> {
+    await this.#loading(`unload ${path}`, path, (session) => session.loadPayloads([], [path]));
+  }
+
+  /** Sets how the next scene opens its payloads. */
+  setPayloads(choice: PayloadChoice): void {
+    this.payloads = choice;
+    this.#bump();
+  }
+
+  /**
+   * Opens with payloads unloaded, then loads them all unless that would
+   * read more than {@link PAYLOAD_BUDGET} of layers (weighed before each
+   * round is fetched, from the source's sizes); then they are unloaded
+   * again, and the note says why. Returns that note, or `null`.
+   */
+  async #loadWithin(session: Session, source: SceneSource): Promise<string | null> {
+    if (session.stage.findLoadable().length === 0) return null;
+    const budget: LoadBudget = { bytes: PAYLOAD_BUDGET, size: (identifier) => source.size(identifier) };
+    try {
+      await session.loadPayloads(["/"], [], "withDescendants", budget);
+      return null;
+    } catch (error) {
+      if (!(error instanceof OverBudget)) throw error;
+      session.stage.setLoadRules("none");
+      return `Payloads are unloaded: loading them all would read ${formatGiB(error.bytes)} of layers, over the ${formatGiB(PAYLOAD_BUDGET)} an automatic open reads. Load prims from the prim tree.`;
+    }
+  }
+
+  /** Runs a payload load or unload with the overlay up, then brings the draws up to it. */
+  async #loading(action: string, label: string, run: (session: Session) => Promise<LoadOutcome>): Promise<void> {
+    const session = this.session;
+    if (session === null || this.status.kind !== "ready") return;
+    this.status = { kind: "loading", label };
+    this.#busySince = performance.now();
+    this.openingPhase = null;
+    this.#bump();
+    try {
+      // A path the stage refuses (an inactive prim) is skipped, as in
+      // OpenUSD; the notice says which and why.
+      for (const { path, code } of (await run(session)).refused) {
+        this.notices.push({ id: ++this.#notice, action, message: `${path} was not ${action.startsWith("load") ? "loaded" : "unloaded"}: ${code.replaceAll("_", " ")}`, code: `load.${code}` });
+      }
+    } catch (error) {
+      if (this.lose(error)) return;
+      this.#report(action, error);
+    }
+    if (this.session !== session) return;
+    this.opening = null;
+    this.openingPhase = null;
+    this.status = { kind: "ready" };
+    this.#sync();
+  }
+
   /** Forgets a notice. */
   dismiss(id: number): void {
     const index = this.notices.findIndex((notice) => notice.id === id);
@@ -593,4 +689,9 @@ function timeRange(session: Session): TimeRange | null {
 /** Re-renders the component after every change to `store`; read the store and its stage directly. */
 export function useEditor(store: EditorStore): number {
   return useSyncExternalStore(store.subscribe, () => store.revision);
+}
+
+/** `bytes` in GiB, to one decimal. */
+function formatGiB(bytes: number): string {
+  return `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
 }

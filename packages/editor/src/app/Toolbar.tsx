@@ -19,6 +19,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip";
 import type { SceneSource } from "../model/sources.ts";
+import { PAYLOAD_BUDGET } from "../store.ts";
 import { useStore } from "./context.ts";
 import { formatBytes } from "./format.ts";
 import { directoryRoots, directoryScene, droppedFiles, droppedScene, localScenes, SAMPLE, type SceneEntry } from "./scenes.ts";
@@ -86,6 +87,21 @@ export function Toolbar() {
               A folder on this computer…
             </DropdownMenuItem>
           </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup
+            selectionMode="single"
+            disallowEmptySelection
+            selectedKeys={[store.payloads]}
+            onSelectionChange={(keys) => {
+              const [key] = keys === "all" ? [] : [...keys];
+              if (key === "auto" || key === "all" || key === "none") store.setPayloads(key);
+            }}
+          >
+            <DropdownMenuLabel>Payloads of the scene opened</DropdownMenuLabel>
+            <DropdownMenuItem id="auto">Load unless over {formatBytes(PAYLOAD_BUDGET)} of layers</DropdownMenuItem>
+            <DropdownMenuItem id="all">Load all</DropdownMenuItem>
+            <DropdownMenuItem id="none">Load none</DropdownMenuItem>
+          </DropdownMenuGroup>
           {local.length > 0 && (
             <>
               <DropdownMenuSeparator />
@@ -103,7 +119,7 @@ export function Toolbar() {
         </DropdownMenu>
       </DropdownMenuTrigger>
       <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-        {status.kind === "opening" && <Spinner className="size-3.5" />}
+        {(status.kind === "opening" || status.kind === "loading") && <Spinner className="size-3.5" />}
         <span className="truncate">
           {status.kind === "opening"
             ? `Opening ${status.label}${store.opening === null ? "" : `: ${store.opening.fetched.assets} assets, ${formatBytes(store.opening.fetched.bytes)}`}`

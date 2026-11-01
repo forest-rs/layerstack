@@ -1,9 +1,9 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-// What the editor is doing while a scene opens: the phase (fetching the
-// root, reading it, each round of the asset loop fetching and reading, then
-// composing what the rounds read),
+// What the editor is doing while a scene opens, or while payloads load in
+// one: the phase (fetching the root, reading it, each round of the asset
+// loop fetching and reading, then composing what the rounds read),
 // what has arrived, how long it has taken, and a way to stop waiting. Each
 // phase is shown before its work holds the page (the session waits for it
 // to paint), so even a root layer that takes seconds to read says so.
@@ -33,17 +33,18 @@ function describe(phase: OpenPhase): string {
 export function LoadingOverlay() {
   const store = useStore();
   const [, tick] = useState(0);
-  const opening = store.status.kind === "opening";
+  const opening = store.status.kind === "opening" || store.status.kind === "loading";
   // The elapsed time moves on its own while the open waits on the network.
   useEffect(() => {
     if (!opening) return;
     const timer = setInterval(() => tick((n) => n + 1), 250);
     return () => clearInterval(timer);
   }, [opening]);
-  if (store.status.kind !== "opening") return null;
-  const label = store.status.label;
+  const status = store.status;
+  if (status.kind !== "opening" && status.kind !== "loading") return null;
+  const label = status.label;
   const at = store.openingPhase;
-  const fetched = store.opening?.fetched ?? null;
+  const fetched = (status.kind === "opening" ? store.opening : store.session)?.fetched ?? null;
   const elapsed = at === null ? null : (performance.now() - at.started) / 1000;
   return (
     <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 backdrop-blur-[2px]">
@@ -51,7 +52,7 @@ export function LoadingOverlay() {
         <div className="flex items-center gap-2">
           <Spinner className="size-4 text-muted-foreground" />
           <span className="min-w-0 truncate text-sm font-medium" title={label}>
-            Opening {label}
+            {status.kind === "opening" ? "Opening" : "Loading the payloads of"} {label}
           </span>
         </div>
         <div className="text-xs">{at === null ? "Starting" : describe(at.phase)}…</div>
@@ -65,9 +66,11 @@ export function LoadingOverlay() {
             </span>
           )}
           {elapsed !== null && <span>{elapsed.toFixed(1)} s</span>}
-          <Button variant="ghost" size="xs" className="ml-auto" onPress={() => store.cancelOpen()}>
-            Cancel
-          </Button>
+          {status.kind === "opening" && (
+            <Button variant="ghost" size="xs" className="ml-auto" onPress={() => store.cancelOpen()}>
+              Cancel
+            </Button>
+          )}
         </div>
       </div>
     </div>

@@ -62,6 +62,9 @@ export function PrimActions({ store, path, className }: { store: EditorStore; pa
   if (stage === undefined) return null;
   const prim = stage.prim(path);
   const readOnly = prim?.instanceProxy === true;
+  // Loading works on any prim (its payloads and those beneath it, as
+  // usdview offers); a prototype's proxies are loaded through their instance.
+  const loadable = prim !== null && !readOnly && (prim.hasAuthoredPayloads || stage.findLoadable(path).length > 0 || stage.loadRules().length > 0);
   return (
     <>
       <DropdownMenuTrigger>
@@ -72,6 +75,18 @@ export function PrimActions({ store, path, className }: { store: EditorStore; pa
           <DropdownMenuItem onAction={() => setOpen({ kind: "add", parent: path })} isDisabled={readOnly}>
             Add a child prim…
           </DropdownMenuItem>
+          {loadable && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onAction={() => void store.load(path)} isDisabled={!prim?.active}>
+                Load payloads
+              </DropdownMenuItem>
+              <DropdownMenuItem onAction={() => void store.load(path, "withoutDescendants")} isDisabled={!prim?.active}>
+                Load payloads, not beneath
+              </DropdownMenuItem>
+              <DropdownMenuItem onAction={() => void store.unload(path)}>Unload payloads</DropdownMenuItem>
+            </>
+          )}
           {path !== "/" && (
             <>
               <DropdownMenuItem onAction={() => setOpen({ kind: "rename", path })} isDisabled={readOnly}>

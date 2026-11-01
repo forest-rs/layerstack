@@ -37,8 +37,10 @@
 //   diffuse texture through `map`, or another lookup through `alphaMap`.
 //
 // Textures: `file`'s identifier is fetched from the stage's asset loop's
-// host and decoded by `TextureLoader` from a blob of the bytes; one image
-// per identifier, and one `Texture` per use (they share the image), with:
+// host and decoded off the main thread (`createImageBitmap`), scaled down
+// to `MAX_TEXTURE_SIZE`; one image per identifier, and one `Texture` per
+// distinct use of it (they share the image, and every material making the
+// same use shares the texture, so an image is uploaded once per use), with:
 //
 // - `sourceColorSpace` `sRGB` → `SRGBColorSpace`, `raw` →
 //   `NoColorSpace`; `auto` → sRGB for a color input (`diffuseColor`,
@@ -82,7 +84,6 @@ import {
   RepeatWrapping,
   SRGBColorSpace,
   Texture,
-  TextureLoader,
   UnsignedByteType,
 } from "three";
 import type { Wrapping } from "three";
@@ -110,6 +111,24 @@ interface Image {
   readonly rows: number;
 }
 
+/**
+ * The longest side, in texels, the viewport draws an image at: a larger one
+ * is scaled down while it is decoded. A scene's 4096² maps are 64 MB each
+ * on the GPU; at 2048 they are 16 MB, and a production set's hundreds of
+ * them fit a browser's memory. {@link TextureStore.stats} says how many
+ * were.
+ */
+export const MAX_TEXTURE_SIZE = 2048;
+
+/** What a {@link TextureStore} has decoded. */
+export interface TextureStats {
+  readonly images: number;
+  /** Images scaled down to fit {@link MAX_TEXTURE_SIZE}. */
+  readonly capped: number;
+  /** {@link MAX_TEXTURE_SIZE}. */
+  readonly limit: number;
+}
+
 /** The textures materials read, one image per identifier, loaded once. */
 export class TextureStore {
   readonly #read: AssetReader;
@@ -117,6 +136,8 @@ export class TextureStore {
   readonly #loaded: () => void;
   readonly #images = new Map<string, Promise<Image | null>>();
   readonly #ready = new Map<string, Image | null>();
+  #decoded = 0;
+  #capped = 0;
 
   /** `loaded` is called when an image arrives, to draw again. */
   constructor(read: AssetReader, exists: AssetExists, loaded: () => void) {
@@ -147,15 +168,40 @@ export class TextureStore {
     return undefined;
   }
 
-  async #decode(identifier: string, anchor: string | null): Promise<Texture | null> {
+  /** What the store has decoded: images, and how many were scaled down to {@link MAX_TEXTURE_SIZE}. */
+  get stats(): TextureStats {
+    return { images: this.#decoded, capped: this.#capped, limit: MAX_TEXTURE_SIZE };
+  }
+
+  /**
+   * The image at `identifier`, decoded off the main thread
+   * (`createImageBitmap`) so neither decoding nor its first upload stalls
+   * the page, and scaled down while decoding to fit
+   * {@link MAX_TEXTURE_SIZE}. Its texels are kept as stored (no color
+   * space conversion, no premultiplied alpha): a normal or roughness map is
+   * data. `flip` turns it so `st`'s v runs up, as a texture of its own
+   * wants; an atlas tile is drawn into a canvas unturned.
+   */
+  async #decode(identifier: string, anchor: string | null, flip = true): Promise<Texture | null> {
     const bytes = await this.#read(identifier, anchor);
     if (bytes === null) return null;
-    const url = URL.createObjectURL(new Blob([bytes.slice()]));
-    try {
-      return await new TextureLoader().loadAsync(url);
-    } finally {
-      URL.revokeObjectURL(url);
+    const blob = new Blob([bytes.slice()]);
+    const options: ImageBitmapOptions = { imageOrientation: flip ? "flipY" : "from-image", premultiplyAlpha: "none", colorSpaceConversion: "none" };
+    let bitmap = await createImageBitmap(blob, options);
+    const scale = Math.min(1, MAX_TEXTURE_SIZE / Math.max(bitmap.width, bitmap.height));
+    if (scale < 1) {
+      const resizeWidth = Math.max(1, Math.round(bitmap.width * scale));
+      const resizeHeight = Math.max(1, Math.round(bitmap.height * scale));
+      bitmap.close();
+      bitmap = await createImageBitmap(blob, { ...options, resizeWidth, resizeHeight, resizeQuality: "high" });
+      this.#capped += 1;
     }
+    this.#decoded += 1;
+    const texture = new Texture(bitmap);
+    // The bitmap is turned already: three.js cannot flip one on upload.
+    texture.flipY = false;
+    texture.needsUpdate = true;
+    return texture;
   }
 
   /** A UDIM set's tiles laid into one canvas, a column per tile's units digit, a row per ten. */
@@ -163,7 +209,7 @@ export class TextureStore {
     const anchor = texture.file.layer;
     const tiles = await udimTiles(texture.file, (identifier) => this.#exists(identifier, anchor));
     if (tiles.length === 0) return null;
-    const images = await Promise.all(tiles.map((tile) => this.#decode(tile.identifier, anchor)));
+    const images = await Promise.all(tiles.map((tile) => this.#decode(tile.identifier, anchor, false)));
     const cell = Math.max(...images.map((image) => (image?.image as { width?: number } | undefined)?.width ?? 1));
     const columns = Math.max(...tiles.map((tile) => ((tile.tile - 1001) % 10) + 1));
     const rows = Math.max(...tiles.map((tile) => Math.floor((tile.tile - 1001) / 10) + 1));
@@ -182,9 +228,14 @@ export class TextureStore {
     return { texture: new CanvasTexture(canvas), columns, rows };
   }
 
-  /** Frees every image. */
+  /** Frees every image and its uses ({@link use}). */
   dispose(): void {
-    for (const image of this.#ready.values()) image?.texture.dispose();
+    for (const image of this.#ready.values()) {
+      if (image === null || image === undefined) continue;
+      for (const kept of USES.get(image.texture)?.values() ?? []) kept.dispose();
+      USES.delete(image.texture);
+      image.texture.dispose();
+    }
     this.#ready.clear();
     this.#images.clear();
   }
@@ -198,22 +249,34 @@ const WRAPS: Record<TextureWrap, Wrapping> = {
   useMetadata: RepeatWrapping,
 };
 
+/** The 1×1 textures of fallback colors, shared by every use waiting on an image or unable to read one. */
+const FALLBACKS = new Map<string, DataTexture>();
+
+/**
+ * Each image's uses, by what a use sets (uv channel, color space, wrap,
+ * transform): one three.js texture, and so one upload, per distinct use,
+ * however many materials share it or how often they are made again (a
+ * restyle when an image arrives, a selection).
+ */
+const USES = new WeakMap<Texture, Map<string, Texture>>();
+
 /** A use of `texture`: its image (or fallback color) with this use's sampling, color space and coordinate transform. */
 export function use(store: TextureStore, channels: UvChannels, texture: MaterialTexture, color: boolean): Texture {
   const image = store.image(texture);
   if (image === null || image === undefined) {
     // While loading, and when it cannot be read: the fallback.
-    const texel = new Uint8Array(texture.fallback.map((value) => Math.round(Math.min(1, Math.max(0, value)) * 255)));
-    const fallback = new DataTexture(texel, 1, 1, RGBAFormat, UnsignedByteType);
-    fallback.needsUpdate = true;
+    const texel = texture.fallback.map((value) => Math.round(Math.min(1, Math.max(0, value)) * 255));
+    const key = texel.join(" ");
+    let fallback = FALLBACKS.get(key);
+    if (fallback === undefined) {
+      fallback = new DataTexture(new Uint8Array(texel), 1, 1, RGBAFormat, UnsignedByteType);
+      fallback.needsUpdate = true;
+      FALLBACKS.set(key, fallback);
+    }
     return fallback;
   }
-  const out = image.texture.clone();
-  out.channel = channelOf(texture, channels);
+  const channel = channelOf(texture, channels);
   const srgb = texture.colorSpace === "sRGB" || (texture.colorSpace === "auto" && color);
-  out.colorSpace = srgb ? SRGBColorSpace : NoColorSpace;
-  out.wrapS = WRAPS[texture.wrapS];
-  out.wrapT = WRAPS[texture.wrapT];
   // `UsdTransform2d`: scale, then rotate counter-clockwise, then translate;
   // a UDIM atlas then scales the tile grid into [0, 1].
   const transform = texture.coordinates.transform;
@@ -222,9 +285,24 @@ export function use(store: TextureStore, channels: UvChannels, texture: Material
   const [tx, ty] = transform?.translation ?? [0, 0];
   const [c, s] = [Math.cos(rotation), Math.sin(rotation)];
   const [ax, ay] = [1 / image.columns, 1 / image.rows];
+  const matrix = [ax * c * sx, -ax * s * sy, ax * tx, ay * s * sx, ay * c * sy, ay * ty, 0, 0, 1] as const;
+  const key = [channel, srgb, texture.wrapS, texture.wrapT, ...matrix].join(" ");
+  let uses = USES.get(image.texture);
+  if (uses === undefined) {
+    uses = new Map();
+    USES.set(image.texture, uses);
+  }
+  const kept = uses.get(key);
+  if (kept !== undefined) return kept;
+  const out = image.texture.clone();
+  out.channel = channel;
+  out.colorSpace = srgb ? SRGBColorSpace : NoColorSpace;
+  out.wrapS = WRAPS[texture.wrapS];
+  out.wrapT = WRAPS[texture.wrapT];
   out.matrixAutoUpdate = false;
-  out.matrix.set(ax * c * sx, -ax * s * sy, ax * tx, ay * s * sx, ay * c * sy, ay * ty, 0, 0, 1);
+  out.matrix.set(...matrix);
   out.needsUpdate = true;
+  uses.set(key, out);
   return out;
 }
 

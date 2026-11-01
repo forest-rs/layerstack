@@ -150,7 +150,7 @@ import { conformCamera, lightSizeFactor } from "@forest-rs/layerstack_stagehand"
 import type { CameraItem, LightItem, MaterialItem, StagehandMesh } from "@forest-rs/layerstack_stagehand";
 import { TextureStore, surfaceMaterial, uvChannels } from "./surfaces.ts";
 import { standinGeometry, standinMaterials, standinTextured } from "./standins.ts";
-import type { AssetExists, AssetReader } from "./surfaces.ts";
+import type { AssetExists, AssetReader, TextureStats } from "./surfaces.ts";
 import type { ViewItem, ViewportScene, ViewportUpdate } from "../model/draws.ts";
 
 /**
@@ -377,6 +377,11 @@ export class Viewport {
       return item.instances[hit.instanceId ?? 0] ?? item.prim;
     }
     return null;
+  }
+
+  /** What the view's textures hold: images decoded, and how many were scaled down to fit. */
+  get textureStats(): TextureStats {
+    return this.#textures.stats;
   }
 
   /** Releases the renderer, geometries, materials and textures. */

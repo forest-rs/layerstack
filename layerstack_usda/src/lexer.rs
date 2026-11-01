@@ -140,19 +140,19 @@ impl<'a> Lexer<'a> {
     }
 
     /// Peeks at the next byte without consuming it.
-    #[inline]
+    #[inline(always)]
     fn peek(&self) -> Option<u8> {
         self.bytes.get(self.pos as usize).copied()
     }
 
     /// Peeks at the byte `n` positions ahead.
-    #[inline]
+    #[inline(always)]
     fn peek_at(&self, n: u32) -> Option<u8> {
         self.bytes.get((self.pos + n) as usize).copied()
     }
 
     /// Advances the position by `n` bytes.
-    #[inline]
+    #[inline(always)]
     fn advance(&mut self, n: u32) {
         self.pos += n;
     }
@@ -166,12 +166,49 @@ impl<'a> Lexer<'a> {
     }
 
     /// Produces a token from `start` to the current position.
-    #[inline]
+    #[inline(always)]
     fn token(&self, kind: TokenKind, start: u32) -> Token {
         Token {
             kind,
             span: Span::new(start, self.pos),
         }
+    }
+
+    /// Skips the spaces, tabs and line breaks ahead, as the whitespace and
+    /// newline tokens they lex to would be skipped; whether a line break
+    /// was among them. A reader that drops trivia calls it before each
+    /// token, so the blanks between array elements cost no tokens.
+    #[inline(always)]
+    pub(crate) fn skip_blanks(&mut self) -> bool {
+        let mut broken = false;
+        while let Some(b) = self.peek() {
+            match b {
+                b' ' | b'\t' => {}
+                b'\n' | b'\r' => broken = true,
+                _ => break,
+            }
+            self.advance(1);
+        }
+        broken
+    }
+
+    /// The next token, as [`Iterator::next`] lexes it, with the tokens
+    /// numeric array elements are made of (numbers, `(`, `)`, `,`, `]` and
+    /// `-`) lexed here, without the dispatch over every token kind.
+    #[inline(always)]
+    pub(crate) fn next_element_token(&mut self) -> Option<Token> {
+        let start = self.pos;
+        let kind = match self.peek()? {
+            b'0'..=b'9' => return Some(self.lex_number(start)),
+            b'(' => TokenKind::LeftParen,
+            b')' => TokenKind::RightParen,
+            b',' => TokenKind::Comma,
+            b']' => TokenKind::RightBracket,
+            b'-' => TokenKind::Minus,
+            _ => return self.next(),
+        };
+        self.advance(1);
+        Some(self.token(kind, start))
     }
 
     /// Lexes a contiguous run of whitespace (spaces and tabs, no newlines).
@@ -286,6 +323,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// Consumes a run of ASCII digits.
+    #[inline(always)]
     fn eat_digits(&mut self) {
         while self.peek().is_some_and(|b| b.is_ascii_digit()) {
             self.advance(1);

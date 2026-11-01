@@ -27,10 +27,11 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use layerstack_stagehand::{
-    Axis, CurveBuffers, CurveForm, CurveOptions, CurveStyle, CurvesInput, CurvesPlan, FaceSubsets,
-    Interpolation, MeshBuffers, MeshInput, MeshOptions, MeshPlan, MeshTopology, Orientation,
-    PointShape, Primvar, Shape, SmoothNormals, SubdivisionScheme, Tessellation, Triangulation,
-    UvSetInput, point_shape, tessellate,
+    Axis, CardGeometry, CurveBuffers, CurveForm, CurveOptions, CurveStyle, CurvesInput, CurvesPlan,
+    DrawMode, FaceSubsets, Interpolation, MeshBuffers, MeshInput, MeshOptions, MeshPlan,
+    MeshTopology, Orientation, PointShape, Primvar, Shape, SmoothNormals, StandinInput,
+    SubdivisionScheme, Tessellation, Triangulation, UvSetInput, draw_mode_standin, point_shape,
+    tessellate,
 };
 use wasm_bindgen::prelude::*;
 
@@ -48,8 +49,8 @@ mod standalone {
     }
 }
 
-/// The version of the exports the TypeScript wrapper speaks: 5.
-pub const ABI: u32 = 5;
+/// The version of the exports the TypeScript wrapper speaks: 6.
+pub const ABI: u32 = 6;
 
 /// [`ABI`], which the wrapper checks before using the module.
 #[wasm_bindgen(js_name = stagehandAbi)]
@@ -558,6 +559,52 @@ pub fn tessellate_shape(
         plan: None,
         buffers: tessellate(&shape, &Tessellation { segments, rings }),
     })
+}
+
+/// A model's draw mode stand-in ([`draw_mode_standin`]), flattened: for
+/// `origin` and `bounds`, the line segments' endpoints, three numbers
+/// each; for `cards`, 22 numbers per card: its face (the index in
+/// [`layerstack_stagehand::CardFace::ALL`]: `XPos`, `YPos`, `ZPos`, `XNeg`, `YNeg`, `ZNeg`), the
+/// face whose texture it shows (`-1` for none), its four corners (twelve
+/// numbers) and their texture coordinates (eight). `extent` is the
+/// model's `[min, max]`, six numbers, or none; `textures` has bit `i` set
+/// when face `i` has a texture; `hidden_axis` is `X`, `Y`, `Z` or empty.
+///
+/// # Errors
+///
+/// An unknown mode, or an extent of other than six numbers.
+#[wasm_bindgen(js_name = drawModeStandin)]
+pub fn draw_mode_standin_flat(
+    mode: &str,
+    extent: Option<Vec<f32>>,
+    card_geometry: &str,
+    textures: u32,
+    hidden_axis: &str,
+) -> Result<Vec<f32>, JsValue> {
+    let mode =
+        DrawMode::from_token(mode).ok_or_else(|| error("drawModeStandin", "unknown mode"))?;
+    let extent = match extent.as_deref() {
+        None => None,
+        Some([a, b, c, d, e, f]) => Some([[*a, *b, *c], [*d, *e, *f]]),
+        Some(_) => return Err(error("drawModeStandin", "an extent is six numbers")),
+    };
+    let standin = draw_mode_standin(&StandinInput {
+        mode,
+        extent,
+        card_geometry: CardGeometry::from_token(card_geometry),
+        textures: core::array::from_fn(|i| textures & (1 << i) != 0),
+        hidden_axis: Axis::from_token(hidden_axis),
+    });
+    let mut flat = standin.lines.as_flattened().to_vec();
+    for card in &standin.cards {
+        #[expect(clippy::cast_precision_loss, reason = "a face index, below 6")]
+        flat.push(card.face.index() as f32);
+        #[expect(clippy::cast_precision_loss, reason = "a face index, below 6")]
+        flat.push(card.texture.map_or(-1.0, |face| face.index() as f32));
+        flat.extend_from_slice(card.corners.as_flattened());
+        flat.extend_from_slice(card.uvs.as_flattened());
+    }
+    Ok(flat)
 }
 
 /// A primvar of one float per element, copied in.

@@ -14,7 +14,7 @@ import type { Session } from "../model/session.ts";
 import { summarize, type LoopRun } from "../model/timeline.ts";
 import type { EditorStore } from "../store.ts";
 import { formatBytes } from "./format.ts";
-import { formatDuration, LoopWaterfall } from "./LoopWaterfall.tsx";
+import { COMPOSE_COLOR, formatDuration, LoopWaterfall, STAGE_COLOR } from "./LoopWaterfall.tsx";
 
 /** The most log rows shown, newest first. */
 const SHOWN = 400;
@@ -101,11 +101,22 @@ function Summary({ run }: { run: LoopRun }) {
       {part("", formatBytes(summary.bytes))}
       {part(summary.rounds === 1 ? "round" : "rounds", String(summary.rounds), "Rounds of want, fetch, supply and read after the root's")}
       {part(run.endedAt === null ? "so far" : "wall", formatDuration(summary.wall), "From the first request to the stage wanting nothing more")}
-      <span className="flex items-baseline gap-1.5" title="Waiting on fetches, in the stage (unavailable, supply, loadSupplied, the root's open), and the rest (the page's own work)">
+      <span
+        className="flex items-baseline gap-1.5"
+        title="Waiting on fetches; in the stage (unavailable, supply, loadSupplied, the root's open), of which loadSupplied reports decoding layers (reading) and recomposing after them (composing); and the rest (the page's own work)"
+      >
         <span className="inline-block size-2 translate-y-px rounded-sm bg-muted-foreground/40" />
         {part("fetching", formatDuration(summary.fetching))}
-        <span className="inline-block size-2 translate-y-px rounded-sm bg-foreground/70" />
+        <span className={cn("inline-block size-2 translate-y-px rounded-sm", STAGE_COLOR)} />
         {part("in the stage", formatDuration(summary.stage))}
+        {summary.reading + summary.composing > 0 && (
+          <>
+            <span>of which</span>
+            {part("reading", formatDuration(summary.reading))}
+            <span className={cn("inline-block size-2 translate-y-px rounded-sm", COMPOSE_COLOR)} />
+            {part("composing", formatDuration(summary.composing))}
+          </>
+        )}
         {other >= 1 && part("other", formatDuration(other))}
       </span>
       {summary.failed > 0 && <span className="text-destructive">{summary.failed} failed</span>}

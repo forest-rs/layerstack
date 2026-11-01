@@ -24,10 +24,26 @@ export interface AssetMention {
 }
 
 /**
+ * The stage decoding one asset's layer, as `loadSupplied` reports it
+ * (`LayerRead`): its span holds the layers it read as it went, already
+ * supplied; `own` leaves them out. Milliseconds on `performance.now()`'s
+ * timeline; the times are `null` when the module has no clock.
+ */
+export interface AssetRead {
+  readonly start: number | null;
+  readonly end: number | null;
+  readonly own: number | null;
+  /** The encoded bytes decoded. */
+  readonly bytes: number;
+  /** The prim specs it made, not counting the pseudo-root's. */
+  readonly prims: number;
+}
+
+/**
  * One asset's way through the loop, in `performance.now()` milliseconds.
- * The stage reads every asset a round supplied in one `loadSupplied`, so
- * an asset's read is its round's: {@link RoundTiming.readStart} to
- * {@link RoundTiming.readEnd}.
+ * The stage reads every asset a round supplied in one `loadSupplied`,
+ * which reports each layer's read ({@link AssetTiming.read}) within the
+ * round's ({@link RoundTiming.readStart} to {@link RoundTiming.readEnd}).
  */
 export interface AssetTiming {
   readonly identifier: string;
@@ -54,6 +70,8 @@ export interface AssetTiming {
   outcome: AssetOutcome;
   /** The read or fetch failure, in words. */
   failure: string | null;
+  /** The stage's read of its layer; `null` before it, and for the root (`Layerstack.open` reports none). */
+  read: AssetRead | null;
 }
 
 /**
@@ -79,6 +97,10 @@ export interface RoundTiming {
   readonly assets: number;
   /** The layers the read loaded (package members included). */
   loaded: number;
+  /** The time `loadSupplied()` spent decoding layers: its reads' own times added up; `null` without them. */
+  reading: number | null;
+  /** The compositions after its batches of reads: the layers entering the stage and the prims using them recomposing. */
+  compositions: { readonly start: number; readonly end: number }[];
 }
 
 /**
@@ -117,6 +139,10 @@ export interface LoopSummary {
   readonly fetching: number;
   /** The stage's calls: `unavailable()`, `supply()`, `loadSupplied()`, the root's `Layerstack.open`. */
   readonly stage: number;
+  /** Of `stage`, the time `loadSupplied()` reports decoding layers. */
+  readonly reading: number;
+  /** Of `stage`, the time `loadSupplied()` reports composing after its reads. */
+  readonly composing: number;
   readonly failed: number;
   readonly absent: number;
 }
@@ -137,10 +163,14 @@ export function summarize(run: LoopRun, now: number = performance.now()): LoopSu
     if (asset.outcome === "absent") absent += 1;
   }
   let fetching = 0;
+  let reading = 0;
+  let composing = 0;
   let stage = span(run.settle?.start ?? null, run.settle?.end ?? null);
   for (const round of run.rounds) {
     stage += span(round.wantStart, round.wantEnd) + span(round.fetchEnd, round.supplyEnd) + span(round.readStart, round.readEnd);
     fetching += span(round.wantEnd, round.fetchEnd);
+    reading += round.reading ?? 0;
+    for (const composition of round.compositions) composing += span(composition.start, composition.end);
   }
   return {
     assets: run.assets.length,
@@ -149,6 +179,8 @@ export function summarize(run: LoopRun, now: number = performance.now()): LoopSu
     wall: (run.endedAt ?? now) - run.startedAt,
     fetching,
     stage,
+    reading,
+    composing,
     failed,
     absent,
   };
@@ -182,7 +214,19 @@ export class LoopRecorder {
   /** The root layer: wanted and fetched as round 0, before the stage exists. */
   root(identifier: string, start: number, fetchEnd: number, bytes: number, source: AssetSourceKind): void {
     const run = this.#active();
-    run.rounds.push({ index: 0, wantStart: start, wantEnd: start, fetchEnd, supplyEnd: fetchEnd, readStart: null, readEnd: null, assets: 1, loaded: 0 });
+    run.rounds.push({
+      index: 0,
+      wantStart: start,
+      wantEnd: start,
+      fetchEnd,
+      supplyEnd: fetchEnd,
+      readStart: null,
+      readEnd: null,
+      assets: 1,
+      loaded: 0,
+      reading: null,
+      compositions: [],
+    });
     const asset = this.#asset(identifier, 0, start);
     asset.roles.push("root");
     asset.fetchStart = start;
@@ -232,6 +276,8 @@ export class LoopRecorder {
       readEnd: null,
       assets: run.assets.length - before,
       loaded: 0,
+      reading: null,
+      compositions: [],
     });
     run.version += 1;
   }
@@ -279,7 +325,8 @@ export class LoopRecorder {
   /**
    * `loadSupplied()` ran from `start` to `end` and returned `result`:
    * each asset of the round is read, failed (matched by its authored path
-   * and anchor) or absent.
+   * and anchor) or absent, with its layer's read (matched by identifier)
+   * and the round's reading and composing times.
    */
   read(result: LoadResult, start: number, end: number): void {
     const run = this.#active();
@@ -287,6 +334,16 @@ export class LoopRecorder {
     round.readStart = start;
     round.readEnd = end;
     round.loaded = result.loaded.length;
+    let reading: number | null = null;
+    for (const read of result.reads) {
+      if (read.time !== null) reading = (reading ?? 0) + read.time.own;
+      const asset = read.identifier === null ? undefined : this.#byIdentifier.get(read.identifier);
+      // A layer read twice (a failed read retried by another arc) keeps its first.
+      if (asset === undefined || asset.read !== null) continue;
+      asset.read = { start: read.time?.start ?? null, end: read.time?.end ?? null, own: read.time?.own ?? null, bytes: read.bytes, prims: read.prims };
+    }
+    round.reading = reading;
+    round.compositions = result.compositions.flatMap((composition) => (composition.time === null ? [] : [composition.time]));
     const failures = new Map<string, AssetFailure>();
     for (const failure of result.failures) failures.set(mentionKey(failure.assetPath, failure.anchor?.identifier ?? null), failure);
     for (const asset of run.assets) {
@@ -347,6 +404,7 @@ export class LoopRecorder {
       suppliedAt: null,
       outcome: "pending",
       failure: null,
+      read: null,
     };
     this.#byIdentifier.set(identifier, asset);
     this.#active().assets.push(asset);

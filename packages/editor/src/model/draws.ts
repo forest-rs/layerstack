@@ -25,6 +25,7 @@ import type {
   DrawDiff,
   DrawItem,
   DrawList,
+  DrawScope,
   DrawWork,
   LightItem,
   LinkKind,
@@ -88,7 +89,11 @@ export interface ViewportScene {
   readonly items: readonly ViewItem[];
   /** The gprims and instancers left out because they are invisible, or of a purpose not drawn. */
   readonly hidden: readonly string[];
-  /** The aligned world bounds of everything drawable, `[minX, minY, minZ, maxX, maxY, maxZ]`; `null` when empty. */
+  /**
+   * The aligned bounds of everything drawable in scope,
+   * `[minX, minY, minZ, maxX, maxY, maxZ]`, in the scope's space (the
+   * world's, or its space prim's); `null` when empty.
+   */
   readonly bounds: readonly number[] | null;
   /** The stage's lights, by path. */
   readonly lights: readonly LightItem[];
@@ -369,11 +374,23 @@ export class ViewportModel {
   }
 
   /**
-   * Brings the list up to `session`'s stage at `time`: a new stage is read
-   * whole; otherwise the change records since the last sync are applied in
-   * order, then the time, if it changed. Returns what changed.
+   * What drawing `scope` of `stage` would cost, estimated from counts
+   * ({@link DrawList.estimate}): by the list when it is the stage's, else
+   * by a list that builds nothing.
    */
-  sync(session: Session, time: number | undefined): ViewportUpdate {
+  estimate(stage: Stage, time: number | undefined, scope: DrawScope): DrawCost {
+    if (this.#list !== null && this.#stage === stage && this.#list.time === time) return this.#list.estimate(scope);
+    using list = this.#stagehand.drawList(stage, { ...(time === undefined ? {} : { time }), purposes: PURPOSES, tessellation: TESSELLATION, curves: CURVES, scope: { roots: [] } });
+    return list.estimate(scope);
+  }
+
+  /**
+   * Brings the list up to `session`'s stage at `time`, drawing `scope`: a
+   * new stage is read whole (what is in scope); otherwise the change
+   * records since the last sync are applied in order, then the scope, if
+   * it changed, then the time, if it changed. Returns what changed.
+   */
+  sync(session: Session, time: number | undefined, scope: DrawScope = { roots: ["/"] }): ViewportUpdate {
     const stage = session.stage;
     const diffs: DrawDiff[] = [];
     let reset = false;
@@ -388,6 +405,7 @@ export class ViewportModel {
         purposes: PURPOSES,
         tessellation: TESSELLATION,
         curves: CURVES,
+        scope,
       });
       this.#stage = stage;
       this.#seen = session.changeLog.length;
@@ -402,6 +420,7 @@ export class ViewportModel {
         records++;
       }
       this.#seen = session.changeLog.length;
+      if (!sameScope(scope, this.#list.scope)) diffs.push(this.#list.setScope(scope));
       if (time !== this.#list.time) {
         diffs.push(this.#list.setTime(time));
         timeChanged = true;
@@ -501,8 +520,8 @@ export class ViewportModel {
         skin: this.#skins.draw(item.id),
       });
     }
-    const bounds = withStandins(stage.worldBounds(["/"], { ...(time === undefined ? {} : { time }), purposes: [...PURPOSES] }).alignedRanges, items);
-    const empty = bounds[0]! > bounds[3]!;
+    const bounds = scopeBounds(stage, list.scope, time, items);
+    const empty = bounds === null || bounds[0]! > bounds[3]!;
     const cameras = list.cameras().sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
     // Light links: only those with a category leave draws out; the rest
     // (the `includeRoot` fallback) link everything.
@@ -532,7 +551,7 @@ export class ViewportModel {
     return {
       items,
       hidden: [...hidden],
-      bounds: empty ? null : Array.from(bounds),
+      bounds: empty ? null : bounds,
       lights,
       cameras,
       materials: new Map(list.materials().map((material) => [material.path, material])),
@@ -548,6 +567,37 @@ export class ViewportModel {
     this.#list?.dispose();
     this.#list = null;
     this.#stage = null;
+  }
+}
+
+/** Whether two scopes draw the same: the same roots, once normalized, and space. */
+function sameScope(a: DrawScope, b: DrawScope): boolean {
+  const roots = (scope: DrawScope) => [...new Set(scope.roots)].sort().join("\n");
+  return roots(a) === roots(b) && (a.space ?? null) === (b.space ?? null);
+}
+
+/**
+ * The bounds to frame for `scope`: the world bounds of its roots (and the
+ * stand-ins drawn), or in its space prim's space its untransformed bounds;
+ * `null` when nothing is in scope or the bounds cannot be computed.
+ */
+function scopeBounds(stage: Stage, scope: DrawScope, time: number | undefined, items: readonly ViewItem[]): readonly number[] | null {
+  const options = { ...(time === undefined ? {} : { time }), purposes: [...PURPOSES] };
+  try {
+    if (scope.space != null) return Array.from(stage.untransformedBounds([scope.space], options).alignedRanges);
+    if (scope.roots.length === 0) return null;
+    const ranges = stage.worldBounds(scope.roots, options).alignedRanges;
+    const union = new Float64Array([Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]);
+    for (let at = 0; at < ranges.length; at += 6) {
+      for (let axis = 0; axis < 3; axis++) {
+        union[axis] = Math.min(union[axis]!, ranges[at + axis]!);
+        union[axis + 3] = Math.max(union[axis + 3]!, ranges[at + axis + 3]!);
+      }
+    }
+    return withStandins(union, items);
+  } catch (error) {
+    if (String((error as { code?: string }).code).startsWith("bounds.")) return null;
+    throw error;
   }
 }
 

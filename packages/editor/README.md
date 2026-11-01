@@ -46,6 +46,23 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
   read is announced, not a frozen page. Below that are what has arrived
   and the time taken, and **Cancel** keeps the scene the editor had. Once
   the scene is drawn, a corner note counts the textures still loading.
+- **Draw scope and asset view.** The viewport's **Scene | Selection |
+  Nothing** switch chooses what is drawn: the whole scene, the selection
+  alone, or nothing (the prims, inspector, layers, shading and asset loop
+  all work without draws). A scene whose draws are estimated before
+  building anything (`DrawList.estimate`) at over 512 MB uploaded or 50
+  million triangles drawn opens drawing the selection, and says why.
+  Drawing the selection is the asset view: the selected prim's subtree in
+  its own space, framed at the origin (a draw list scope), with what it
+  is: a mesh's faces, points, triangles, vertices, primvars, subsets and
+  what stagehand made of it; a subtree's draws, instances and bytes. A
+  face subset draws its mesh with the subset highlighted and the rest
+  ghosted; a point instancer its instances; a prototype inside one that
+  prototype alone; a `UsdUVTexture` (or an asset-valued property chosen
+  in the inspector) its image, with its size, channels, bits, color space
+  and the material reading it; a material its shader ball. A selection
+  over the same limit is not drawn, and the viewport says why. Clicking a
+  part of what is drawn selects and draws that part.
 - **Material view.** With a material selected (or a shader inside one),
   the viewport's **Scene | Material** switch shows the material on a
   shader ball (a ball with a raised band at its equator, on a pedestal and
@@ -129,6 +146,9 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
   attributes, `u32` indices, 64 per instance matrix) and the JavaScript
   bytes it holds; sortable by any column, a row selecting its prim. The
   viewport's stats add the totals, each shared buffer counted once.
+  **Whole scene, estimated** lists what drawing everything would cost, as
+  estimated when the scene opened: the figures for a scene too big to
+  draw, its heaviest items a click from the asset view.
 - **Explain, Changes, History, Asset loop, Notices.** A property's value and
   every opinion consulted for it, strongest first, each with "Edit here";
   each recomposition and the action that caused it; the undo history; the

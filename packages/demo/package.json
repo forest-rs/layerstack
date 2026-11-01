@@ -14,11 +14,11 @@
   "dependencies": {
     "@forest-rs/layerstack": "file:../layerstack",
     "@forest-rs/layerstack_stagehand": "file:../layerstack_stagehand",
-    "three": "0.186.1"
+    "three": "0.187.0"
   },
   "devDependencies": {
     "@types/node": "24.4.0",
-    "@types/three": "0.186.0",
+    "@types/three": "0.187.0",
     "typescript": "5.9.3",
     "vite": "8.3.4"
   }

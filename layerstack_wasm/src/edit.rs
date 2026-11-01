@@ -538,6 +538,33 @@ impl EditBatch {
     pub fn set_sdr_metadata(&mut self, path: String, key: String, value: Option<String>) {
         self.schema(SchemaInput::SetSdrMetadata { path, key, value });
     }
+
+    /// Pushes a common transform edit: every component, or exactly one.
+    #[wasm_bindgen(js_name = setCommonTransform)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one positional argument per field of the edit"
+    )]
+    pub fn set_common_transform(
+        &mut self,
+        path: String,
+        time: Option<f64>,
+        translate: Option<Vec<f64>>,
+        rotate: Option<Vec<f64>>,
+        order: Option<String>,
+        scale: Option<Vec<f64>>,
+        pivot: Option<Vec<f64>>,
+    ) {
+        self.schema(SchemaInput::SetCommonTransform {
+            path,
+            time,
+            translate,
+            rotate,
+            order,
+            scale,
+            pivot,
+        });
+    }
 }
 
 impl EditBatch {

@@ -2907,6 +2907,12 @@ impl Stage {
         Ok(self.xformable(path)?.into())
     }
 
+    /// The record `common_transform` builds, as documented in `geom.rs`.
+    #[wasm_bindgen(js_name = commonTransform)]
+    pub fn js_common_transform(&self, path: &str, time: Option<f64>) -> Result<JsValue, JsValue> {
+        Ok(self.common_transform(path, time)?.into())
+    }
+
     /// The record `visibilities` builds, as documented in `geom.rs`.
     #[wasm_bindgen(js_name = visibilities)]
     pub fn js_visibilities(

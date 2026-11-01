@@ -6,11 +6,14 @@
 // decoders of their records.
 import { ArrayHandle } from "./arrays.js";
 import type { NativeArrayHandle } from "./arrays.js";
+import { LayerstackError } from "./errors.js";
 import { decodeValue } from "./stage.js";
 import type { Stage } from "./stage.js";
 import type {
   ArrayData,
   BoundingBoxes,
+  CommonTransform,
+  RotationOrder,
   LocalTransform,
   PointInstances,
   PurposeInfo,
@@ -55,6 +58,31 @@ export class Xformable {
     this.transformMightBeTimeVarying = varying as boolean;
     this.transformTimeSamples = Object.freeze([...(samples as Float64Array)]);
     Object.freeze(this);
+  }
+
+  /**
+   * Its transform as translation, pivot, Euler rotation and scale at
+   * `time` (the default without one), as OpenUSD's
+   * `UsdGeomXformCommonAPI::GetXformVectorsByAccumulation` reads it; what
+   * the `setTranslate`, `setRotate`, `setScale`, `setPivot` and
+   * `setCommonTransform` edits author when it is `compatible`. Throws
+   * `prim.not_found` when the prim is gone, `xform.not_xformable` when it
+   * is no longer `Xformable`.
+   */
+  commonTransform(time?: number): CommonTransform {
+    const row = this.stage.native("commonTransform", (native) => native.commonTransform(this.path, time ?? null)) as Row | null;
+    if (row === null) throw new LayerstackError("xform.not_xformable", "commonTransform", `${this.path} is no longer Xformable`);
+    const [translation, rotation, scale, pivot, rotationOrder, source, compatible] = row;
+    const three = (values: unknown) => Object.freeze([...(values as Float64Array)]) as unknown as readonly [number, number, number];
+    return Object.freeze({
+      translation: three(translation),
+      rotation: three(rotation),
+      scale: three(scale),
+      pivot: three(pivot),
+      rotationOrder: rotationOrder as RotationOrder,
+      source: source as CommonTransform["source"],
+      compatible: compatible as boolean,
+    });
   }
 }
 

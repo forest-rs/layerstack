@@ -35,7 +35,8 @@ use layerstack::{
     ChangeCursor, InMemoryStore, LiveStage, PathId, StageView, TargetPath, Time, TypedArray, sort,
 };
 use layerstack_schemas::{
-    PrimView, Scene, Visibility, XformCache, XformCacheStats, XformProblemKind,
+    CommonTransformSource, PrimView, Scene, Visibility, XformCache, XformCacheStats,
+    XformProblemKind,
     bounds::{BoundingBox, BoundsCache, BoundsError, BoundsOptions, BoundsStats, Range3d},
     camera::ConformWindowPolicy,
     point_instancer::{InstanceTransformOptions, PointInstancerError},
@@ -600,6 +601,52 @@ impl Stage {
             ),
             Wire::Bool(xformable.transform_might_be_time_varying()),
             Wire::Floats(xformable.transform_time_samples()),
+        ]))
+    }
+
+    /// The prim at `path`'s common transform at `time`, or `null` when it
+    /// is not `Xformable`: `[translation, rotation, scale, pivot,
+    /// rotationOrder, source, compatible]`. With a common stack
+    /// (`compatible`), each component is its op's value (`source` `ops`);
+    /// one that reduces to a common stack by multiplying adjacent ops reads
+    /// its reduced values (`accumulated`); any other is factored from the
+    /// local transform, with no pivot, in `XYZ` (`decomposed`).
+    ///
+    /// OpenUSD: `UsdGeomXformCommonAPI::GetXformVectorsByAccumulation`,
+    /// and the API's validity for `compatible`.
+    ///
+    /// # Errors
+    ///
+    /// `path.invalid`, `prim.not_found`.
+    pub(crate) fn common_transform(&self, path: &str, time: Option<f64>) -> Result<Wire, Error> {
+        let prim = self.existing_prim(path)?.path();
+        let document = self.document();
+        let scene = Scene::new(document.stage().stage(), document.store());
+        let Some(xformable) = Xformable::get(&scene, prim) else {
+            return Ok(Wire::Null);
+        };
+        let reading = xformable.common_transform_by_accumulation(time_of(time));
+        let value = reading.value;
+        let numbers = |values: [f64; 3]| Wire::Floats(values.to_vec());
+        let widened = |values: [f32; 3]| numbers(values.map(f64::from));
+        Ok(Wire::List(vec![
+            numbers(value.translation),
+            widened(value.rotation),
+            widened(value.scale),
+            widened(value.pivot),
+            Wire::text(
+                value
+                    .rotation_order
+                    .op_type()
+                    .as_str()
+                    .trim_start_matches("rotate"),
+            ),
+            Wire::text(match reading.source {
+                CommonTransformSource::Ops => "ops",
+                CommonTransformSource::Accumulated => "accumulated",
+                _ => "decomposed",
+            }),
+            Wire::Bool(xformable.is_common_transform_compatible()),
         ]))
     }
 

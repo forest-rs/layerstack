@@ -976,7 +976,12 @@ export type Edit =
   | BindCoordSysEdit
   | BlockCoordSysEdit
   | ClearCoordSysEdit
-  | SetSdrMetadataEdit;
+  | SetSdrMetadataEdit
+  | SetCommonTransformEdit
+  | SetTranslateEdit
+  | SetRotateEdit
+  | SetScaleEdit
+  | SetPivotEdit;
 
 /**
  * `UsdShadeMaterialBindingAPI::Apply(prim).Bind(material, strength,
@@ -1176,6 +1181,90 @@ export interface SetSdrMetadataEdit {
   readonly path: string;
   readonly key: string;
   readonly value: string | null;
+}
+
+/** The order a common transform applies its Euler rotations: `XYZ` rotates about X first. */
+export type RotationOrder = "XYZ" | "XZY" | "YXZ" | "YZX" | "ZXY" | "ZYX";
+
+/**
+ * `UsdGeomXformCommonAPI::SetXformVectors`: authors the whole common
+ * transform stack (translation, pivot, rotation, scale, inverse pivot) at
+ * `time`, or the default. Missing ops are added (translation `double3`,
+ * the others `float3`) and `xformOpOrder` becomes the common stack,
+ * keeping a reset. Refused with nothing authored, as OpenUSD refuses the
+ * call: `xform.incompatible_ops` when the prim's ops are not a common
+ * stack, `xform.rotation_order` when an existing rotation op has another
+ * order, `xform.op_listed` when an op to add is already listed,
+ * `xform.attribute_type` when an op holds another type, and
+ * `xform.not_xformable` for a prim that is not `Xformable`.
+ */
+export interface SetCommonTransformEdit {
+  readonly type: "setCommonTransform";
+  readonly path: string;
+  readonly translate: readonly [number, number, number];
+  /** Degrees about X, Y and Z. */
+  readonly rotate: readonly [number, number, number];
+  readonly scale: readonly [number, number, number];
+  readonly pivot: readonly [number, number, number];
+  /** `XYZ` by default. */
+  readonly rotationOrder?: RotationOrder;
+  readonly time?: number;
+}
+
+/** `UsdGeomXformCommonAPI::SetTranslate`: one component of the common stack, adding only its op; refused as {@link SetCommonTransformEdit} is. */
+export interface SetTranslateEdit {
+  readonly type: "setTranslate";
+  readonly path: string;
+  readonly value: readonly [number, number, number];
+  readonly time?: number;
+}
+
+/** `UsdGeomXformCommonAPI::SetRotate`: degrees about X, Y and Z in `rotationOrder` (`XYZ` by default), which an existing rotation op must have. */
+export interface SetRotateEdit {
+  readonly type: "setRotate";
+  readonly path: string;
+  readonly value: readonly [number, number, number];
+  readonly rotationOrder?: RotationOrder;
+  readonly time?: number;
+}
+
+/** `UsdGeomXformCommonAPI::SetScale`. */
+export interface SetScaleEdit {
+  readonly type: "setScale";
+  readonly path: string;
+  readonly value: readonly [number, number, number];
+  readonly time?: number;
+}
+
+/** `UsdGeomXformCommonAPI::SetPivot`: the point rotation and scale apply about, adding both pivot ops. */
+export interface SetPivotEdit {
+  readonly type: "setPivot";
+  readonly path: string;
+  readonly value: readonly [number, number, number];
+  readonly time?: number;
+}
+
+/**
+ * A prim's transform as translation, pivot, Euler rotation and scale
+ * ({@link Xformable.commonTransform}), as OpenUSD's
+ * `UsdGeomXformCommonAPI::GetXformVectorsByAccumulation` reads it.
+ */
+export interface CommonTransform {
+  readonly translation: readonly [number, number, number];
+  /** Degrees about X, Y and Z, applied in {@link CommonTransform.rotationOrder}. */
+  readonly rotation: readonly [number, number, number];
+  readonly scale: readonly [number, number, number];
+  readonly pivot: readonly [number, number, number];
+  readonly rotationOrder: RotationOrder;
+  /**
+   * `ops`: the prim's ops are a common stack, and each value is its op's;
+   * `accumulated`: they reduce to one by multiplying adjacent ops of one
+   * type; `decomposed`: factored from the local transform, with no pivot,
+   * in `XYZ`, losing any shear.
+   */
+  readonly source: "ops" | "accumulated" | "decomposed";
+  /** Whether the common transform edits can author the prim's ops as they are (a valid `UsdGeomXformCommonAPI`). */
+  readonly compatible: boolean;
 }
 
 /** A layer file format: USDA text or USDC binary. */

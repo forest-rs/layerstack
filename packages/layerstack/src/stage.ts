@@ -138,6 +138,7 @@ export interface NativeStage extends Disposable {
   hasAPI(path: string, schema: string, instance?: string | null): boolean;
   explain(path: string, time?: number | null): unknown;
   metadata(path: string, key: string): unknown;
+  stageMetadata(key: string): unknown;
   relationship(path: string): unknown;
   apply(target: bigint, batch: NativeEditBatch): NativeReceipt;
   applyTarget(...args: [...NativeTarget, batch: NativeEditBatch]): NativeReceipt;
@@ -1237,6 +1238,22 @@ export class Stage implements Disposable {
     }
     this.#own("isMuted", layer);
     return this.#mutedRows("isMuted").some(([id]) => id === layer.id);
+  }
+
+  /**
+   * The stage's metadata field `key` (`upAxis`, `metersPerUnit`,
+   * `startTimeCode`, `endTimeCode`, `timeCodesPerSecond`), as OpenUSD's
+   * `UsdStage::GetMetadata` reads it: the session layer's opinion over the
+   * root layer's, else the field's fallback (`upAxis` reads `Y`,
+   * `metersPerUnit` `0.01`); `null` for a field with neither. Sublayers'
+   * metadata does not take part; asset paths are as authored.
+   *
+   * ```ts
+   * stage.metadata("upAxis"); // { kind: "scalar", type: "token", value: "Z" }
+   * ```
+   */
+  metadata(key: string): Value | null {
+    return decodeValue(this.layerstack, this.#call("metadata", (native) => native.stageMetadata(key)));
   }
 
   /** The stage's state now: prims, composition errors, unavailable and unresolved assets. */

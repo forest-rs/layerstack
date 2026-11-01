@@ -1268,6 +1268,28 @@ impl Stage {
             .unwrap_or(Wire::Null))
     }
 
+    /// The stage's metadata field `key` (`upAxis`, `metersPerUnit`,
+    /// `startTimeCode`), encoded as [`Self::metadata`] encodes a value: the
+    /// session layer's opinion over the root layer's, else the field's
+    /// fallback (`upAxis` reads `Y`, `metersPerUnit` `0.01`); `null` for a
+    /// field with neither. Sublayers' metadata does not take part. Asset
+    /// paths are as authored.
+    ///
+    /// Spec: AOUSD Core §12.2.7 (layer metadata resolution). OpenUSD:
+    /// `UsdStage::GetMetadata`.
+    ///
+    /// # Errors
+    ///
+    /// `value.decode` for a value this build cannot encode.
+    pub(crate) fn stage_metadata(&self, key: &str) -> Result<Wire, Error> {
+        let store = self.document.store();
+        let key = store.tokens().intern(key);
+        let Some(value) = self.document.stage().stage().layer_metadata(key, store) else {
+            return Ok(Wire::Null);
+        };
+        Ok(value::encode(&value, None, store.tokens())?.unwrap_or(Wire::Null))
+    }
+
     /// The relationship at the property path `path`: `[custom, targets]`,
     /// its composed targets in order as text, or `null` when the prim has
     /// no such relationship.
@@ -2373,6 +2395,12 @@ impl Stage {
     #[wasm_bindgen(js_name = metadata)]
     pub fn js_metadata(&self, path: &str, key: &str) -> Result<JsValue, JsValue> {
         Ok(self.metadata(path, key)?.into())
+    }
+
+    /// The record `stage_metadata` builds, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = stageMetadata)]
+    pub fn js_stage_metadata(&self, key: &str) -> Result<JsValue, JsValue> {
+        Ok(self.stage_metadata(key)?.into())
     }
 
     /// The record `relationship` builds, as documented in `stage.rs`.
@@ -3609,6 +3637,47 @@ def "Ball" {
         assert_eq!(format_of("scene.usdz[root.usdc]"), "usdc");
         assert_eq!(format_of("scene.usdz"), "usdz");
         assert_eq!(format_of("v1.2/plain"), "");
+    }
+
+    #[test]
+    fn stage_metadata_reads_the_root_layer_and_falls_back() {
+        let root = r#"#usda 1.0
+(
+    upAxis = "Z"
+    startTimeCode = 101
+    endTimeCode = 129
+)
+"#;
+        let stage = Stage::open(
+            "scene.usda",
+            root.as_bytes().to_vec(),
+            false,
+            false,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
+        assert_eq!(
+            stage.stage_metadata("upAxis").unwrap(),
+            Wire::List(vec![Wire::text("token"), Wire::text("s"), Wire::text("Z")])
+        );
+        assert_eq!(
+            stage.stage_metadata("startTimeCode").unwrap(),
+            Wire::List(vec![
+                Wire::text("double"),
+                Wire::text("s"),
+                Wire::Number(101.0)
+            ])
+        );
+        // Unauthored: the field's fallback, as `UsdStage::GetMetadata` reads it.
+        assert_eq!(
+            stage.stage_metadata("metersPerUnit").unwrap(),
+            Wire::List(vec![
+                Wire::text("double"),
+                Wire::text("s"),
+                Wire::Number(0.01)
+            ])
+        );
+        assert_eq!(stage.stage_metadata("noSuchField").unwrap(), Wire::Null);
     }
 
     #[test]

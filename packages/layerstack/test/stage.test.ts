@@ -468,3 +468,35 @@ def Mesh "Plain" {
     }
   });
 });
+
+describe("stage metadata", () => {
+  const encoder = new TextEncoder();
+  const root = `#usda 1.0
+(
+    upAxis = "Z"
+    startTimeCode = 101
+    endTimeCode = 129
+    subLayers = [@weak.usda@]
+)
+`;
+
+  it("reads the root layer's opinion, the session's over it, else the field's fallback", () => {
+    using stage = layerstack.open(
+      { identifier: "root.usda", bytes: encoder.encode(root) },
+      { sessionLayer: { identifier: "session.usda", bytes: encoder.encode('#usda 1.0\n(\n    endTimeCode = 140\n)\n') } },
+    );
+    assert.deepEqual(stage.metadata("upAxis"), { kind: "scalar", type: "token", value: "Z" });
+    assert.deepEqual(stage.metadata("startTimeCode"), { kind: "scalar", type: "double", value: 101 });
+    assert.deepEqual(stage.metadata("endTimeCode"), { kind: "scalar", type: "double", value: 140 });
+    // Unauthored: the fallback OpenUSD's `UsdStage::GetMetadata` reads.
+    assert.deepEqual(stage.metadata("metersPerUnit"), { kind: "scalar", type: "double", value: 0.01 });
+    assert.equal(stage.metadata("noSuchField"), null);
+  });
+
+  it("leaves a sublayer's metadata out", async () => {
+    using stage = layerstack.open({ identifier: "root.usda", bytes: encoder.encode(root) });
+    await stage.resolve(mockSource({ "weak.usda": '#usda 1.0\n(\n    metersPerUnit = 1\n    upAxis = "Y"\n)\n' }));
+    assert.deepEqual(stage.metadata("upAxis"), { kind: "scalar", type: "token", value: "Z" });
+    assert.deepEqual(stage.metadata("metersPerUnit"), { kind: "scalar", type: "double", value: 0.01 });
+  });
+});

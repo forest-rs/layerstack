@@ -76,6 +76,14 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
   token the schema gives `allowedTokens` is a picker of them, a `bool` a
   switch, a number or tuple fields that commit on Enter, a color a swatch.
   Nothing has to be typed that the stage already knows.
+- **Shading.** The network of the selected material (or of the material
+  or node graph around a selected shader) as a node graph, left to right:
+  the material's inputs, each shader with its inputs and outputs as rows,
+  and the material's outputs last; each connection a curve from the row it
+  reads to the row that reads it. Columns are by longest path to the
+  outputs, and nodes in a column are placed by where their connections
+  go. Drag to pan, scroll to zoom; clicking a node selects its prim, a
+  port explains its value.
 - **Explain, Changes, History, Asset loop, Notices.** A property's value and
   every opinion consulted for it, strongest first, each with "Edit here";
   each recomposition and the action that caused it; the undo history; the

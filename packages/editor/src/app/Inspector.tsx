@@ -7,8 +7,7 @@
 // define with their fallbacks), its bound material, and the arcs it
 // composes from. Every editor authors through the store; a property's
 // name opens its explanation in the bottom panel.
-import { useState } from "react";
-import type { Attribute, Prim, Stage } from "@forest-rs/layerstack";
+import type { Prim, Stage } from "@forest-rs/layerstack";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { FocusPointIcon } from "@hugeicons/core-free-icons";
 import { Badge } from "@/components/ui/badge";
@@ -16,14 +15,13 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
 import { materialSummary } from "../model/materials.ts";
 import type { EditorStore } from "../store.ts";
 import { useStore } from "./context.ts";
-import { shown, ValueField } from "./fields.tsx";
 import { layerName } from "./format.ts";
 import { primIcon } from "./icons.ts";
 import { PrimActions } from "./PrimActions.tsx";
+import { PropertyList } from "./PropertyList.tsx";
 import { Section } from "./Section.tsx";
 import { TransformSection } from "./TransformSection.tsx";
 
@@ -44,7 +42,7 @@ export function Inspector() {
       <State store={store} prim={prim} />
       <TransformSection store={store} stage={stage} prim={prim} />
       <Variants store={store} prim={prim} />
-      <Properties key={prim.path} store={store} stage={stage} prim={prim} />
+      <PropertyList key={prim.path} store={store} stage={stage} prim={prim} />
       <MaterialSection stage={stage} prim={prim} />
       <Arcs prim={prim} />
     </div>
@@ -148,105 +146,6 @@ function VariantRow({ store, prim, name, selection, variants }: { store: EditorS
           ))}
         </SelectContent>
       </Select>
-    </>
-  );
-}
-
-/**
- * The prim's attributes and relationships: those layers author, then, when
- * shown, those only its schemas define (each at its fallback). Names that
- * share a namespace (`primvars:`, `xformOp:`) stay together.
- */
-function Properties({ store, stage, prim }: { store: EditorStore; stage: Stage; prim: Prim }) {
-  // Shown by default when nothing is authored: a new prim's schema is what there is to edit.
-  const [schemaChoice, setSchema] = useState<boolean | null>(null);
-  const attributes = prim
-    .attributeNames()
-    .map((name) => prim.attribute(name))
-    .filter((attribute) => attribute !== null);
-  const authored = attributes.filter((attribute) => attribute.authored);
-  const defined = attributes.filter((attribute) => !attribute.authored);
-  const schema = schemaChoice ?? authored.length === 0;
-  const relationships = prim.relationshipNames();
-  const varying = new Set(
-    stage
-      .valuesMightBeTimeVarying(authored.map((attribute) => attribute.path))
-      .flatMap((varies, index) => (varies ? [authored[index]!.path] : [])),
-  );
-  return (
-    <Section
-      title="Properties"
-      aside={
-        defined.length > 0 && (
-          <button type="button" onClick={() => setSchema(!schema)} className="text-[11px] text-muted-foreground hover:text-foreground">
-            {schema ? "Hide" : "Show"} {defined.length} schema defaults
-          </button>
-        )
-      }
-    >
-      <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-center gap-x-2 gap-y-1">
-        {authored.map((attribute) => (
-          <AttributeRow key={attribute.path} store={store} attribute={attribute} animated={varying.has(attribute.path)} />
-        ))}
-        {authored.length === 0 && (
-          <span className="col-span-2 text-[11px] text-muted-foreground">No layer authors a value here{defined.length > 0 ? ": its schema's fallbacks follow." : "."}</span>
-        )}
-        {schema && defined.map((attribute) => <AttributeRow key={attribute.path} store={store} attribute={attribute} animated={false} />)}
-        {relationships.map((name) => {
-          const relationship = prim.relationship(name);
-          if (relationship === null) return null;
-          const targets = relationship.targets();
-          return (
-            <RelationshipRow key={name} name={name} targets={targets} onSelect={(path) => store.select(path.split(".")[0]!)} />
-          );
-        })}
-      </div>
-    </Section>
-  );
-}
-
-function AttributeRow({ store, attribute, animated }: { store: EditorStore; attribute: Attribute; animated: boolean }) {
-  const focused = store.property === attribute.path;
-  const value = shown(attribute.get(store.time));
-  const notes = [attribute.typeName ?? "untyped", attribute.variability === "uniform" ? "uniform" : null, attribute.custom ? "custom" : null, attribute.authored ? "authored" : "schema fallback"]
-    .filter((note) => note !== null)
-    .join(" · ");
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => store.explain(attribute.path)}
-        title={`${attribute.name}: ${notes}. Explain its value.`}
-        className={cn("flex min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-left text-xs hover:bg-muted", focused && "bg-accent text-accent-foreground")}
-      >
-        <span className={cn("size-1.5 shrink-0 rounded-full", attribute.authored ? "bg-primary" : "border border-muted-foreground")} />
-        <span className={cn("truncate", !attribute.authored && "text-muted-foreground")}>{attribute.name}</span>
-        {animated && (
-          <span className="size-1.5 shrink-0 rotate-45 bg-amber-500" title="Animated: an edit authors a sample at the current time" />
-        )}
-      </button>
-      <div className="flex min-w-0 items-center">
-        <ValueField store={store} attribute={attribute} shown={value} at={animated ? (store.time ?? null) : null} />
-      </div>
-    </>
-  );
-}
-
-function RelationshipRow({ name, targets, onSelect }: { name: string; targets: readonly string[]; onSelect: (path: string) => void }) {
-  return (
-    <>
-      <span className="flex min-w-0 items-center gap-1.5 px-1 py-0.5 text-xs">
-        <span className="size-1.5 shrink-0 rotate-45 bg-muted-foreground" />
-        <span className="truncate">{name}</span>
-      </span>
-      <div className="flex min-w-0 flex-col">
-        {targets.length === 0 && <span className="text-[11px] text-muted-foreground">no targets</span>}
-        {targets.map((target) => (
-          <button key={target} type="button" onClick={() => onSelect(target)} className="truncate text-left font-mono text-[11px] text-sky-400 hover:underline" title={target}>
-            {target}
-          </button>
-        ))}
-      </div>
     </>
   );
 }

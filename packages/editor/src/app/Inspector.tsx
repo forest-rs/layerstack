@@ -23,6 +23,7 @@ import { primIcon } from "./icons.ts";
 import { PrimActions } from "./PrimActions.tsx";
 import { PropertyList } from "./PropertyList.tsx";
 import { Section } from "./Section.tsx";
+import { ShadingSection } from "./ShadingSection.tsx";
 import { TransformSection } from "./TransformSection.tsx";
 
 export function Inspector() {
@@ -41,6 +42,7 @@ export function Inspector() {
       <Header store={store} prim={prim} />
       <State store={store} prim={prim} />
       <TransformSection store={store} stage={stage} prim={prim} />
+      <ShadingSection store={store} stage={stage} prim={prim} />
       <Variants store={store} prim={prim} />
       <PropertyList key={prim.path} store={store} stage={stage} prim={prim} />
       <MaterialSection stage={stage} prim={prim} />

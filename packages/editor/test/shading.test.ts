@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { loadLayerstack } from "@forest-rs/layerstack";
 import { layoutNetwork, networkRoot, readNetwork } from "../src/model/network.ts";
+import { clampToBounds, groupInputs, sliderRange } from "../src/model/shadingInputs.ts";
 
 const LAYER = `#usda 1.0
 class "base"
@@ -90,4 +91,20 @@ test("the layout runs left to right, ending in the material's outputs", () => {
   );
   for (const edge of layout.edges) assert.ok(edge.x1 < edge.x2, `${edge.edge.from} runs left to right`);
   for (const placed of layout.nodes) assert.ok(placed.y >= 0 && placed.y + placed.height <= layout.height);
+});
+
+test("inputs are grouped, labelled and ordered by their metadata", () => {
+  const groups = groupInputs(stage, "/Stone", stage.material("/Stone")!.inputs());
+  assert.deepEqual(
+    groups.map((group) => [group.name, group.inputs.map((input) => [input.label, input.order, input.own])]),
+    [
+      ["Base", [["color", 0, false], ["Color File", 2, true]]],
+      ["Specular", [["Roughness", 1, true]]],
+    ],
+  );
+  const roughness = groups[1]!.inputs[0]!;
+  assert.deepEqual(roughness.bounds, { min: 0, max: 1, softMin: null, softMax: 0.8 });
+  assert.deepEqual(sliderRange(roughness.bounds), [0, 0.8]);
+  assert.equal(clampToBounds(1.5, roughness.bounds), 1);
+  assert.equal(sliderRange({ min: null, max: 1, softMin: null, softMax: null }), null);
 });

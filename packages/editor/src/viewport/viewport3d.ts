@@ -258,7 +258,7 @@ export class Viewport {
   readonly #lights = new Map<string, Object3D[]>();
   /** The `UsdLux` light each three.js light draws, by object. */
   readonly #lightKeys = new Map<Object3D, string>();
-  /** The sky and sun lighting a stage without lights. */
+  /** The sky and sun lighting a stage without lights, laid out for +Y up and turned with {@link Viewport.setUpAxis}. */
   readonly #fallback = new Group();
   /** One geometry per stagehand buffer, by key: a sphere of one radius is uploaded once. */
   readonly #geometries = new Map<number, BufferGeometry>();
@@ -326,12 +326,15 @@ export class Viewport {
 
   /**
    * Orients the view to the stage's `upAxis`: the free camera orbits
-   * about it, and the grid lies across it. Stage cameras are unaffected:
-   * their matrices are the stage's.
+   * about it, the grid lies across it, and the fallback lights' sky is
+   * above it. Stage cameras are unaffected: their matrices are the stage's.
    */
   setUpAxis(up: "Y" | "Z"): void {
     this.#up = up;
     this.#regrid();
+    // A quarter turn about +X takes +Y to +Z: the hemisphere's sky color
+    // comes from above, not from the side, and the sun keeps its height.
+    this.#fallback.rotation.x = up === "Z" ? Math.PI / 2 : 0;
     this.#camera.up.set(0, up === "Y" ? 1 : 0, up === "Z" ? 1 : 0);
     // The orbit controls take the camera's up when they are made.
     const target = this.#controls.target.clone();

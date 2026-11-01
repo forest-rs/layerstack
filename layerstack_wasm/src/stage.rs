@@ -16,8 +16,8 @@ use layerstack::{
     ArcKind, ChangeCursor, Changes, CompositionLimits, Contribution, EditError, EditTarget,
     FlattenError, FlattenRequirements, IgnoreCause, InMemoryStore, Layer, LayerId, LayerMuteError,
     LayerStore, NamespaceEdit, NamespaceError, OpinionRole, PathField, PathId, PropertyField,
-    ResolvedValue, Specifier, StageOptions, TargetPath, Time, Transaction, UnrepairedPath,
-    ValueSource, Variability,
+    ResolvedValue, SchemaKind, Specifier, StageOptions, TargetPath, Time, Transaction,
+    UnrepairedPath, ValueSource, Variability,
     asset_dependencies::DependencyTarget,
     value_clips::{
         ClipAssetRequest, ClipAssetRole, ClipAssetStatus, ClipAssetUnavailable, ClipDemandReason,
@@ -1290,6 +1290,56 @@ impl Stage {
         Ok(value::encode(&value, None, store.tokens())?.unwrap_or(Wire::Null))
     }
 
+    /// The schemas the stage was composed with, sorted by name:
+    /// `[[name, kind, bases, canOnlyApplyTo, allowedInstanceNames], ...]`.
+    /// `kind` is `concreteTyped`, `abstractTyped`, `singleApplyApi` or
+    /// `multipleApplyApi`; `bases` a typed schema's ancestors, nearest
+    /// first, in OpenUSD's order (empty for an applied schema);
+    /// `canOnlyApplyTo` and `allowedInstanceNames` an applied schema's
+    /// restrictions (empty when it has none).
+    ///
+    /// Spec: AOUSD Core §13.3 (typed and applied schemas). OpenUSD:
+    /// `UsdSchemaRegistry`, `TfType::GetAllAncestorTypes`.
+    #[must_use]
+    pub(crate) fn schemas(&self) -> Wire {
+        let store = self.document.store();
+        let tokens = store.tokens();
+        let Some(registry) = self.document.stage().stage().schemas() else {
+            return Wire::List(Vec::new());
+        };
+        let names = |ids: &[layerstack::TokenId]| {
+            Wire::List(
+                ids.iter()
+                    .map(|&id| Wire::text(tokens.resolve(id)))
+                    .collect(),
+            )
+        };
+        let mut rows: Vec<(String, Wire)> = registry
+            .schemas()
+            .map(|schema| {
+                let name = tokens.resolve(schema.name).to_string();
+                let kind = match schema.kind {
+                    SchemaKind::ConcreteTyped => "concreteTyped",
+                    SchemaKind::AbstractTyped => "abstractTyped",
+                    SchemaKind::SingleApplyApi => "singleApplyApi",
+                    SchemaKind::MultipleApplyApi => "multipleApplyApi",
+                };
+                // `ancestors` starts with the schema itself.
+                let bases = registry.ancestors(schema.name);
+                let row = Wire::List(vec![
+                    Wire::text(&name),
+                    Wire::text(kind),
+                    names(bases.get(1..).unwrap_or(&[])),
+                    names(&schema.can_only_apply_to),
+                    names(&schema.allowed_instance_names),
+                ]);
+                (name, row)
+            })
+            .collect();
+        rows.sort_by(|a, b| a.0.cmp(&b.0));
+        Wire::List(rows.into_iter().map(|(_, row)| row).collect())
+    }
+
     /// The relationship at the property path `path`: `[custom, targets]`,
     /// its composed targets in order as text, or `null` when the prim has
     /// no such relationship.
@@ -2401,6 +2451,12 @@ impl Stage {
     #[wasm_bindgen(js_name = stageMetadata)]
     pub fn js_stage_metadata(&self, key: &str) -> Result<JsValue, JsValue> {
         Ok(self.stage_metadata(key)?.into())
+    }
+
+    /// The record `schemas` builds, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = schemas)]
+    pub fn js_schemas(&self) -> JsValue {
+        self.schemas().into()
     }
 
     /// The record `relationship` builds, as documented in `stage.rs`.
@@ -3637,6 +3693,60 @@ def "Ball" {
         assert_eq!(format_of("scene.usdz[root.usdc]"), "usdc");
         assert_eq!(format_of("scene.usdz"), "usdz");
         assert_eq!(format_of("v1.2/plain"), "");
+    }
+
+    #[test]
+    fn schemas_list_the_registry_sorted_with_kinds_and_bases() {
+        let stage = Stage::open(
+            "scene.usda",
+            b"#usda 1.0\n".to_vec(),
+            false,
+            false,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
+        let Wire::List(rows) = stage.schemas() else {
+            panic!("a list");
+        };
+        let row = |name: &str| {
+            rows.iter()
+                .find(|row| matches!(row, Wire::List(fields) if fields[0] == Wire::text(name)))
+                .cloned()
+                .unwrap_or_else(|| panic!("{name} is registered"))
+        };
+        let texts =
+            |items: &[&str]| Wire::List(items.iter().map(|item| Wire::text(*item)).collect());
+        // As usd-core 26.11's `TfType::GetAllAncestorTypes` names them, less
+        // the schema itself and the non-schema roots.
+        assert_eq!(
+            row("Sphere"),
+            Wire::List(vec![
+                Wire::text("Sphere"),
+                Wire::text("concreteTyped"),
+                texts(&["Gprim", "Boundable", "Xformable", "Imageable", "Typed"]),
+                texts(&[]),
+                texts(&[]),
+            ])
+        );
+        let Wire::List(collection) = row("CollectionAPI") else {
+            panic!("a row");
+        };
+        assert_eq!(collection[1], Wire::text("multipleApplyApi"));
+        assert_eq!(collection[2], texts(&[]));
+        let Wire::List(imageable) = row("Imageable") else {
+            panic!("a row");
+        };
+        assert_eq!(imageable[1], Wire::text("abstractTyped"));
+        let names: Vec<_> = rows
+            .iter()
+            .map(|row| match row {
+                Wire::List(fields) => fields[0].clone(),
+                _ => panic!("a row"),
+            })
+            .collect();
+        let mut sorted = names.clone();
+        sorted.sort_by_key(|name| format!("{name:?}"));
+        assert_eq!(names, sorted, "sorted by name");
     }
 
     #[test]

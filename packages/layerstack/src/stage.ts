@@ -92,6 +92,7 @@ import type {
   ValueSource,
   VariantSet,
   Version,
+  SchemaInfo,
 } from "./types.js";
 
 /** This package's version. */
@@ -139,6 +140,7 @@ export interface NativeStage extends Disposable {
   explain(path: string, time?: number | null): unknown;
   metadata(path: string, key: string): unknown;
   stageMetadata(key: string): unknown;
+  schemas(): unknown;
   relationship(path: string): unknown;
   apply(target: bigint, batch: NativeEditBatch): NativeReceipt;
   applyTarget(...args: [...NativeTarget, batch: NativeEditBatch]): NativeReceipt;
@@ -797,6 +799,7 @@ export class Stage implements Disposable {
   readonly #provenance: boolean;
   readonly #listeners: ChangeListener[] = [];
   #dispatching = false;
+  #schemas: readonly SchemaInfo[] | undefined = undefined;
 
   /** @internal Use {@link Layerstack.open}. */
   constructor(layerstack: Layerstack, native: NativeStage, provenance: boolean) {
@@ -1254,6 +1257,35 @@ export class Stage implements Disposable {
    */
   metadata(key: string): Value | null {
     return decodeValue(this.layerstack, this.#call("metadata", (native) => native.stageMetadata(key)));
+  }
+
+  /**
+   * The schemas the stage was composed with, sorted by name: OpenUSD's
+   * and any passed to `open` ({@link OpenOptions.schemas}). A concrete
+   * typed schema is what a prim's `typeName` may name (a `definePrim`
+   * edit's `typeName`); an applied schema is what its `apiSchemas` may
+   * list. Read once per stage: the registry is fixed when it opens.
+   *
+   * ```ts
+   * stage.schemas().filter((schema) => schema.kind === "concreteTyped" && schema.bases.includes("Gprim"));
+   * ```
+   */
+  schemas(): readonly SchemaInfo[] {
+    if (this.#schemas === undefined) {
+      const rows = this.#call("schemas", (native) => native.schemas()) as [string, SchemaInfo["kind"], string[], string[], string[]][];
+      this.#schemas = Object.freeze(
+        rows.map(([name, kind, bases, canOnlyApplyTo, allowedInstanceNames]) =>
+          Object.freeze({
+            name,
+            kind,
+            bases: Object.freeze(bases),
+            canOnlyApplyTo: Object.freeze(canOnlyApplyTo),
+            allowedInstanceNames: Object.freeze(allowedInstanceNames),
+          }),
+        ),
+      );
+    }
+    return this.#schemas;
   }
 
   /** The stage's state now: prims, composition errors, unavailable and unresolved assets. */

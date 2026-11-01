@@ -137,6 +137,28 @@ describe("the session's timed asset loop", () => {
     assert.equal(summary.bytes, ["scene.usda", "lib.usda", "robot.usda", "parts.usda"].reduce((sum, name) => sum + text.encode(FILES[name]!).byteLength, 0));
     assert.ok(summary.fetching > 0 && summary.stage > 0);
     assert.ok(summary.fetching + summary.stage <= summary.wall + 1e-6);
+    // Each layer read has its own read, inside its round's `loadSupplied`;
+    // the root, read by `Layerstack.open`, and the absent asset have none.
+    for (const name of ["lib.usda", "robot.usda", "parts.usda"]) {
+      const timing = asset(run, name);
+      const round = run.rounds.find((candidate) => candidate.index === timing.round)!;
+      const read = timing.read;
+      assert.ok(read !== null && read.start !== null && read.end !== null && read.own !== null, `${name} has its read`);
+      assert.equal(read.bytes, text.encode(FILES[name]!).byteLength);
+      assert.ok(read.prims > 0, `${name} made prims`);
+      assert.ok(round.readStart! <= read.start && read.start <= read.end && read.end <= round.readEnd!, `${name} is read in its round`);
+      assert.ok(read.own <= read.end - read.start + 1e-6);
+    }
+    assert.equal(asset(run, "scene.usda").read, null);
+    assert.equal(asset(run, "missing.usda").read, null);
+    // Each round's compositions follow its reads, inside the call.
+    for (const round of run.rounds.filter((candidate) => candidate.index > 0)) {
+      assert.ok(round.reading !== null && round.compositions.length > 0, `round ${round.index} reports its reading and composing`);
+      for (const composition of round.compositions) {
+        assert.ok(round.readStart! <= composition.start && composition.start <= composition.end && composition.end <= round.readEnd!);
+      }
+    }
+    assert.ok(summary.reading + summary.composing <= summary.stage + 1e-6);
   });
 
   it("keeps a run for each action that fetched, and none for one that did not", async () => {

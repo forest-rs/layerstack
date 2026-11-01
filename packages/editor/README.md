@@ -117,11 +117,13 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
 - **Asset loop.** Each run of the loop (the open, a variant selected, an
   undo) as a waterfall: a row per asset on one time axis, from the stage
   naming it (`unavailable()`) through the host's fetch and the wait for
-  the rest of its round to the stage reading the round (`loadSupplied()`),
-  colored by what uses it, with its bytes and times on hover. A track
-  above the rows shows each round's phases, and the header where the time
-  went: waiting on fetches, or in the stage. Rows are virtualized, sorted
-  by start, round, size or fetch time and filtered by name; selecting one
+  the rest of its round to the stage reading its layer (within the round's
+  `loadSupplied()`, which reports each read and the composition after),
+  colored by what uses it, with its bytes, prims and times on hover. A
+  track above the rows shows each round's phases, composing among them,
+  and the header where the time went: waiting on fetches, or in the
+  stage, and of that reading and composing. Rows are virtualized, sorted
+  by start, round, size, fetch or read time and filtered by name; selecting one
   shows where the asset is authored and the prims composed without it
   until it loaded. The session runs the loop itself (`unavailable`,
   `supply`, `loadSupplied`) rather than `Stage.resolve` so that every phase

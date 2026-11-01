@@ -3,9 +3,10 @@
 
 // One run of the asset loop as a waterfall: a row per asset on a shared
 // time axis, from the stage naming it (want) through the host's fetch and
-// the wait for the rest of its round to the stage reading the round
-// (`loadSupplied`), colored by what uses it. A track above the rows shows
-// each round's phases: fetching, and the stage's own time. Rows are a
+// the wait for the rest of its round to the stage reading its layer
+// (within the round's `loadSupplied`), colored by what uses it. A track
+// above the rows shows each round's phases: fetching, the stage's own
+// time, and within it the compositions after the reads. Rows are a
 // virtualized React Aria grid list, so the thousands of assets of a
 // production scene scroll as a dozen do; selecting one shows where it is
 // authored and the prims composed without it until it loaded.
@@ -21,10 +22,15 @@ import type { EditorStore } from "../store.ts";
 import { formatBytes } from "./format.ts";
 
 /** The columns, shared by the header, the round track and the rows. */
-const COLUMNS = "grid grid-cols-[minmax(8rem,2fr)_5rem_2.5rem_4rem_3.5rem_minmax(10rem,5fr)] items-center gap-x-2 px-3";
+const COLUMNS = "grid grid-cols-[minmax(8rem,2fr)_5rem_2.5rem_4rem_3.5rem_3.5rem_minmax(10rem,5fr)] items-center gap-x-2 px-3";
 const ROW_HEIGHT = 22;
 /** The most prims the selection's details list. */
 const PRIMS_SHOWN = 200;
+
+/** The stage's own time, and a layer's read, as a bar. */
+export const STAGE_COLOR = "bg-foreground/70";
+/** A composition after a round's reads, as a bar. */
+export const COMPOSE_COLOR = "bg-rose-400";
 
 /** Each use's color, as a bar and as a dot. */
 const ROLE_COLOR: Record<AssetRole, string> = {
@@ -34,7 +40,7 @@ const ROLE_COLOR: Record<AssetRole, string> = {
   payload: "bg-amber-500",
 };
 
-type SortKey = "start" | "name" | "round" | "size" | "time";
+type SortKey = "start" | "name" | "round" | "size" | "time" | "read";
 
 interface Sort {
   readonly key: SortKey;
@@ -111,6 +117,8 @@ function compare(key: SortKey, a: AssetTiming, b: AssetTiming): number {
       return (a.bytes ?? -1) - (b.bytes ?? -1);
     case "time":
       return (fetchTime(a) ?? Infinity) - (fetchTime(b) ?? Infinity);
+    case "read":
+      return (a.read?.own ?? Infinity) - (b.read?.own ?? Infinity);
   }
 }
 
@@ -119,7 +127,9 @@ function rowsOf(run: LoopRun, query: string, sort: Sort): AssetTiming[] {
   const needle = query.trim().toLowerCase();
   const rows = needle === "" ? [...run.assets] : run.assets.filter((asset) => asset.identifier.toLowerCase().includes(needle));
   const sign = sort.ascending ? 1 : -1;
-  return rows.sort((a, b) => sign * compare(sort.key, a, b));
+  // Rows without the measure (the root's read, a fetch under way) stay last either way.
+  const missing = (asset: AssetTiming) => (sort.key === "read" ? asset.read?.own == null : sort.key === "time" && fetchTime(asset) === null);
+  return rows.sort((a, b) => Number(missing(a)) - Number(missing(b)) || sign * compare(sort.key, a, b));
 }
 
 /** What the waterfall draws from: a run of the session's loop, recorded in place (its `version` says when it changed), and the selected prim. */
@@ -167,6 +177,7 @@ export const LoopWaterfall = memo(function LoopWaterfall({ store, session, run, 
           {heading("round", "Round")}
           {heading("size", "Size", "text-right")}
           {heading("time", "Fetch", "text-right")}
+          {heading("read", "Read", "text-right")}
           <div className="relative h-full">
             <button type="button" onClick={() => sortBy("start")} aria-label="Sort by start" className="absolute inset-0 outline-none" />
             {axis.ticks.map((tick) => (
@@ -200,7 +211,7 @@ export const LoopWaterfall = memo(function LoopWaterfall({ store, session, run, 
         </Virtualizer>
         <p className="shrink-0 border-t px-3 py-0.5 text-[10px] text-muted-foreground">
           {rows.length === run.assets.length ? `${rows.length.toLocaleString()} assets` : `${rows.length.toLocaleString()} of ${run.assets.length.toLocaleString()} assets`}
-          {" · "}a bar is the fetch, colored by use; the line after it waits on the round's other fetches; the gray bar is the stage reading the round
+          {" · "}a bar is the fetch, colored by use; the line after it waits on the round's other fetches; the dark bar is the stage reading its layer, and on the round's track, rose is composing
         </p>
       </div>
       {asset !== undefined && (
@@ -238,7 +249,7 @@ function RoundTrack({ run, axis }: { run: LoopRun; axis: Axis }) {
   });
   return (
     <div className={cn(COLUMNS, "h-[22px] shrink-0 border-b bg-muted/30 text-[11px]")}>
-      <span className="col-span-5 truncate text-muted-foreground">
+      <span className="col-span-6 truncate text-muted-foreground">
         {run.cause} · {roundsText(run)}
       </span>
       <div className="relative h-full">
@@ -260,9 +271,15 @@ function RoundBar({ round, axis, labelled }: { round: RoundTiming; axis: Axis; l
     ["Supply", round.fetchEnd, round.supplyEnd],
     [round.index === 0 ? "Read (Layerstack.open)" : "Read (loadSupplied)", round.readStart, round.readEnd],
   ];
+  // What `loadSupplied` reports of its time: decoding layers, then composing.
+  const composing = round.compositions.reduce((sum, composition) => sum + (composition.end - composition.start), 0);
+  const within: string[] = [];
+  if (round.reading !== null) within.push(`reading ${formatDuration(round.reading)}`);
+  if (round.compositions.length > 0) within.push(`composing ${formatDuration(composing)}`);
   const describe = spans
     .filter(([, start, finish]) => start !== null && finish !== null)
     .map(([label, start, finish]) => `${label} ${formatDuration(finish! - start!)}`)
+    .concat(within)
     .join(", ");
   return (
     <>
@@ -272,8 +289,11 @@ function RoundBar({ round, axis, labelled }: { round: RoundTiming; axis: Axis; l
         <span className="absolute top-1/2 h-2 -translate-y-1/2 rounded-[1px] bg-foreground/70" style={bar(axis, round.fetchEnd, round.supplyEnd)} />
       )}
       {round.readStart !== null && round.readEnd !== null && (
-        <span className="absolute top-1/2 h-2 -translate-y-1/2 rounded-[1px] bg-foreground/70" style={bar(axis, round.readStart, round.readEnd)} />
+        <span className={cn("absolute top-1/2 h-2 -translate-y-1/2 rounded-[1px]", STAGE_COLOR)} style={bar(axis, round.readStart, round.readEnd)} />
       )}
+      {round.compositions.map((composition, index) => (
+        <span key={index} className={cn("absolute top-1/2 h-2 -translate-y-1/2 rounded-[1px]", COMPOSE_COLOR)} style={bar(axis, composition.start, composition.end)} />
+      ))}
       {labelled && (
         <span className="pointer-events-none absolute top-0 text-[9px] leading-none text-muted-foreground" style={{ left: `${at(axis, round.wantStart)}%` }}>
           {round.index === 0 ? "root" : round.index}
@@ -293,10 +313,26 @@ function RoundBar({ round, axis, labelled }: { round: RoundTiming; axis: Axis; l
               </span>
             ),
           )}
+          {within.length > 0 && <span className="text-muted-foreground tabular-nums">of which {within.join(", ")}</span>}
         </Tooltip>
       </TooltipTrigger>
     </>
   );
+}
+
+/** The stage's read of an asset's layer, in words: its own time and work, and what it read as it went. */
+function readLines(asset: AssetTiming, round: RoundTiming | undefined): string[] {
+  const read = asset.read;
+  if (read === null) {
+    if (asset.round === 0 && round?.readStart != null && round.readEnd != null) return [`read by the open in ${formatDuration(round.readEnd - round.readStart)}`];
+    return [];
+  }
+  const prims = `${read.prims.toLocaleString()} ${read.prims === 1 ? "prim" : "prims"}`;
+  if (read.own === null || read.start === null || read.end === null) return [`read ${formatBytes(read.bytes)} into ${prims}`];
+  const lines = [`read in ${formatDuration(read.own)}: ${formatBytes(read.bytes)} into ${prims}`];
+  const nested = read.end - read.start - read.own;
+  if (nested >= 0.01) lines.push(`and ${formatDuration(nested)} reading the layers it names`);
+  return lines;
 }
 
 /** What an asset came to, in words. */
@@ -318,9 +354,12 @@ function AssetRow({ asset, round, axis, base, boundaries }: { asset: AssetTiming
   const now = performance.now();
   const fetchStart = asset.fetchStart;
   const fetchEnd = asset.fetchEnd ?? (fetchStart === null ? null : now);
-  const readStart = round?.readStart ?? null;
-  const readEnd = round?.readEnd ?? null;
-  const end = readEnd ?? asset.suppliedAt ?? fetchEnd ?? asset.wantedAt;
+  // Its own read when the stage reported one; the root's is its round's (`Layerstack.open`).
+  const read = asset.read;
+  const ownRead = read !== null && read.start !== null && read.end !== null;
+  const readStart = ownRead ? read.start : asset.round === 0 ? (round?.readStart ?? null) : null;
+  const readEnd = ownRead ? read.end : asset.round === 0 ? (round?.readEnd ?? null) : null;
+  const end = readEnd ?? round?.readEnd ?? asset.suppliedAt ?? fetchEnd ?? asset.wantedAt;
   const fetched = fetchTime(asset);
   const role = asset.roles[0] ?? "reference";
   const fetchColor = asset.outcome === "failed" ? "bg-destructive" : asset.outcome === "absent" ? "bg-muted-foreground/50" : ROLE_COLOR[role];
@@ -330,7 +369,7 @@ function AssetRow({ asset, round, axis, base, boundaries }: { asset: AssetTiming
   ];
   if (fetched !== null && fetchStart !== null) lines.push(`fetch ${formatDuration(fetched)} (from +${formatDuration(fetchStart - axis.start)})`);
   if (asset.fetchEnd !== null && asset.suppliedAt !== null) lines.push(`waited ${formatDuration(asset.suppliedAt - asset.fetchEnd)} for the round, then supplied`);
-  if (readStart !== null && readEnd !== null) lines.push(`read with its round in ${formatDuration(readEnd - readStart)}`);
+  lines.push(...readLines(asset, round));
   lines.push(outcomeText(asset));
   return (
     <>
@@ -346,6 +385,7 @@ function AssetRow({ asset, round, axis, base, boundaries }: { asset: AssetTiming
       <span className="text-muted-foreground tabular-nums">{asset.round}</span>
       <span className="text-right text-muted-foreground tabular-nums">{asset.bytes === null ? "–" : formatBytes(asset.bytes)}</span>
       <span className="text-right text-muted-foreground tabular-nums">{fetched === null ? "–" : formatDuration(fetched)}</span>
+      <span className="text-right text-muted-foreground tabular-nums">{read?.own == null ? "–" : formatDuration(read.own)}</span>
       <div className="relative h-full">
         {boundaries.map((left) => (
           <span key={left} className="absolute inset-y-0 w-px bg-border" style={{ left: `${left}%` }} />
@@ -353,7 +393,7 @@ function AssetRow({ asset, round, axis, base, boundaries }: { asset: AssetTiming
         {fetchStart !== null && fetchStart > asset.wantedAt && <span className="absolute top-1/2 h-px bg-muted-foreground/50" style={bar(axis, asset.wantedAt, fetchStart)} />}
         {fetchStart !== null && fetchEnd !== null && <span className={cn("absolute top-1/2 h-2 -translate-y-1/2 rounded-[1px]", fetchColor)} style={bar(axis, fetchStart, fetchEnd)} />}
         {asset.fetchEnd !== null && asset.suppliedAt !== null && <span className="absolute top-1/2 h-px bg-muted-foreground/50" style={bar(axis, asset.fetchEnd, asset.suppliedAt)} />}
-        {readStart !== null && readEnd !== null && <span className="absolute top-1/2 h-2 -translate-y-1/2 rounded-[1px] bg-foreground/70" style={bar(axis, readStart, readEnd)} />}
+        {readStart !== null && readEnd !== null && <span className={cn("absolute top-1/2 h-2 -translate-y-1/2 rounded-[1px]", STAGE_COLOR)} style={bar(axis, readStart, readEnd)} />}
         <TooltipTrigger delay={200} closeDelay={0}>
           <span role="img" tabIndex={-1} aria-label={`${name}: ${lines.join(", ")}`} className="absolute inset-y-0 min-w-1 outline-none" style={bar(axis, asset.wantedAt, end)} />
           <Tooltip className="max-w-sm flex-col items-start gap-0.5">
@@ -398,9 +438,18 @@ function AssetDetails({
     ["Supplied", offset(asset.suppliedAt)],
     [
       "Read",
+      asset.read?.start != null && asset.read.own !== null
+        ? `${offset(asset.read.start)} for ${formatDuration(asset.read.own)}`
+        : round === undefined || round.readStart === null || round.readEnd === null || asset.round !== 0
+          ? "–"
+          : `${offset(round.readStart)} for ${formatDuration(round.readEnd - round.readStart)}, by the open`,
+    ],
+    ["Made", asset.read === null ? "–" : `${asset.read.prims.toLocaleString()} ${asset.read.prims === 1 ? "prim" : "prims"} from ${formatBytes(asset.read.bytes)}`],
+    [
+      "Its round",
       round === undefined || round.readStart === null || round.readEnd === null
         ? "–"
-        : `${offset(round.readStart)} for ${formatDuration(round.readEnd - round.readStart)}, with ${round.loaded} ${round.loaded === 1 ? "layer" : "layers"}`,
+        : `read ${round.loaded.toLocaleString()} ${round.loaded === 1 ? "layer" : "layers"} in ${formatDuration(round.readEnd - round.readStart)}`,
     ],
     ["Size", asset.bytes === null ? "–" : formatBytes(asset.bytes)],
     ["Became", outcomeText(asset)],

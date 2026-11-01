@@ -39,7 +39,8 @@ use layerstack_usdc::DecodeBudget;
 /// list ops of references with layer offsets, dictionaries, time samples,
 /// compressed integer and float arrays, variants, relocates, splines and
 /// array edits. They include every OpenUSD-written fixture of
-/// `fixtures/usdc_versions` (crate 0.12 to 0.15, splines and array edits)
+/// `fixtures/usdc_versions` (crate 0.4 to 0.15: old array framings, splines
+/// and array edits)
 /// and `fixtures/usdc_budget`, so every decoder runs under both the
 /// truncation and mutation sweep and the allocation bound.
 const FILES: &[&str] = &[
@@ -60,6 +61,10 @@ const FILES: &[&str] = &[
     "layerstack_conformance/fixtures/usdc_versions/spline_time_valued.usdc",
     "layerstack_conformance/fixtures/usdc_versions/sublayers_root.usdc",
     "layerstack_conformance/fixtures/usdc_versions/sublayers_weak.usdc",
+    "layerstack_conformance/fixtures/usdc_versions/version_0_4.usdc",
+    "layerstack_conformance/fixtures/usdc_versions/version_0_5.usdc",
+    "layerstack_conformance/fixtures/usdc_versions/version_0_6.usdc",
+    "layerstack_conformance/fixtures/usdc_versions/version_0_7.usdc",
     "layerstack_conformance/fixtures/usdc_versions/version_0_12.usdc",
     "layerstack_conformance/fixtures/usdc_versions/version_0_13.usdc",
     "layerstack_conformance/fixtures/usdc_versions/version_0_14.usdc",

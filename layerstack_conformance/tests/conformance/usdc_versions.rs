@@ -20,7 +20,7 @@ use layerstack::interner::TokenInterner;
 use layerstack::path::{Path, PathInterner};
 use layerstack::{
     ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, AssetResolveError, AssetResolver,
-    PropertyPath, PropertySpec, ResolvedAsset, Stage, StageOptions,
+    FieldValue, PropertyPath, PropertySpec, ResolvedAsset, ResolvedValue, Stage, StageOptions,
 };
 use layerstack_conformance::usdc::load_entry_usdc;
 use layerstack_conformance::workspace_root;
@@ -133,6 +133,9 @@ fn value_matches(value: &Value, json: &Json, tokens: &TokenInterner) -> bool {
         Value::UInt(v) => json.as_u64() == Some(u64::from(*v)),
         Value::Int64(v) => json.as_i64() == Some(*v),
         Value::UInt64(v) => json.as_u64() == Some(*v),
+        Value::Half(bits) => json
+            .as_f64()
+            .is_some_and(|j| close(j, f64::from(layerstack::half::to_f32(*bits)))),
         Value::Float(v) => json.as_f64().is_some_and(|j| close(j, f64::from(*v))),
         Value::Double(v) | Value::TimeCode(v) => json.as_f64().is_some_and(|j| close(j, *v)),
         Value::String(v) | Value::Asset(v) => json.as_str() == Some(&**v),
@@ -253,6 +256,10 @@ fn assert_matches_openusd(root: &str) {
 #[test]
 fn fixtures_declare_the_expected_versions() {
     for (name, version) in [
+        ("version_0_4.usdc", "0.4.0"),
+        ("version_0_5.usdc", "0.5.0"),
+        ("version_0_6.usdc", "0.6.0"),
+        ("version_0_7.usdc", "0.7.0"),
         ("version_0_12.usdc", "0.12.0"),
         ("version_0_13.usdc", "0.13.0"),
         ("version_0_14.usdc", "0.14.0"),
@@ -268,6 +275,73 @@ fn fixtures_declare_the_expected_versions() {
         let found = format!("{}.{}.{}", data[8], data[9], data[10]);
         assert_eq!(found, version, "{name}");
         assert_eq!(expected(name)["crate_version"], version, "{name}");
+    }
+}
+
+// Before 0.7, arrays have a 32-bit size, and before 0.5 a rank precedes it;
+// integer arrays are compressed from 0.5 and floating-point arrays from 0.6
+// (`_ArrayValueHandlerBase::UnpackArray`, `_ReadUncompressedArray` and
+// `_ReadPossiblyCompressedArray` in `crateFile.cpp`). Each fixture holds
+// the `/Arrays` prim of `generate.py`: every element encoding, short and
+// long, nested in time samples and in a dictionary.
+
+#[test]
+fn version_0_4_matches_openusd() {
+    assert_matches_openusd("version_0_4.usdc");
+    assert_custom_data_matches_openusd("version_0_4.usdc");
+}
+
+#[test]
+fn version_0_5_matches_openusd() {
+    assert_matches_openusd("version_0_5.usdc");
+    assert_custom_data_matches_openusd("version_0_5.usdc");
+}
+
+#[test]
+fn version_0_6_matches_openusd() {
+    assert_matches_openusd("version_0_6.usdc");
+    assert_custom_data_matches_openusd("version_0_6.usdc");
+}
+
+#[test]
+fn version_0_7_matches_openusd() {
+    assert_matches_openusd("version_0_7.usdc");
+    assert_custom_data_matches_openusd("version_0_7.usdc");
+}
+
+/// Compares the `customData` of every prim `expected.json` records it for
+/// in `name`: arrays nested in a dictionary use the array framing too.
+fn assert_custom_data_matches_openusd(name: &str) {
+    let expected = expected(name);
+    let records = expected["custom_data"].as_object().expect("custom data");
+    let mut loaded = load_entry_usdc(&fixtures_dir().join(name));
+    let stage = Stage::compose(
+        &mut loaded.store,
+        loaded.root_layer,
+        StageOptions::default(),
+    );
+    let store = &loaded.store;
+    let view = stage.view(store);
+    for (prim, record) in records {
+        let Some(ResolvedValue::Dictionary(entries)) = view
+            .prim(prim.as_str())
+            .and_then(|prim| prim.metadata("customData"))
+            .map(|resolved| resolved.value)
+        else {
+            panic!("{name}: no customData on {prim}");
+        };
+        let record = record.as_object().expect("entries");
+        assert_eq!(entries.len(), record.len(), "{name} {prim}");
+        for (key, entry) in entries.iter() {
+            let FieldValue::Value(value) = entry else {
+                panic!("{name} {prim}: {key} is not a value");
+            };
+            assert!(
+                value_matches(value, &record[&**key], store.tokens()),
+                "{name} {prim}: customData {key} is {value:?}, OpenUSD reads {}",
+                record[&**key]
+            );
+        }
     }
 }
 
@@ -301,6 +375,24 @@ fn version_newer_than_readable_is_rejected() {
             major: next.major,
             minor: next.minor,
             patch: next.patch,
+        })
+    );
+}
+
+/// Before 0.4 the structural sections are uncompressed, which this reader
+/// does not read.
+#[test]
+fn version_older_than_readable_is_rejected() {
+    let data = with_version(
+        fixture_bytes("version_0_4.usdc"),
+        CrateVersion::new(0, 3, 0),
+    );
+    assert_eq!(
+        read(&data).err(),
+        Some(UsdcError::UnsupportedVersion {
+            major: 0,
+            minor: 3,
+            patch: 0,
         })
     );
 }

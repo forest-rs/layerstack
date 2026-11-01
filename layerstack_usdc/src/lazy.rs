@@ -9,6 +9,7 @@ use crate::{
     section::CrateSections,
     value_rep::{DecodedField, RawValueRep, decode_field_within},
     value_type::ValueType,
+    version::CrateVersion,
 };
 use alloc::{
     format,
@@ -271,11 +272,12 @@ impl LazyPool {
 /// `token[]` or `string[]` array of at least [`MIN_RETAINED_TEXT_ARRAY`]
 /// elements. A payload whose length cannot be read decodes now, so the read
 /// reports it.
-pub(crate) fn retains_text_array(rep: &RawValueRep, data: &[u8]) -> bool {
+pub(crate) fn retains_text_array(rep: &RawValueRep, data: &[u8], version: CrateVersion) -> bool {
     rep.is_array()
         && !rep.is_array_edit()
         && matches!(rep.value_type(), Ok(ValueType::Token | ValueType::String))
-        && crate::value_rep::array_len(rep, data).is_some_and(|len| len >= MIN_RETAINED_TEXT_ARRAY)
+        && crate::value_rep::array_len(rep, data, version)
+            .is_some_and(|len| len >= MIN_RETAINED_TEXT_ARRAY)
 }
 
 /// A retained `token[]` or `string[]` attribute default.

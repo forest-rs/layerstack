@@ -1256,7 +1256,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 if retain_default
                     && field_name == "default"
                     && self.budget.lazy.is_some()
-                    && crate::lazy::retains_text_array(&rep, self.data)
+                    && crate::lazy::retains_text_array(&rep, self.data, self.sections.version)
                 {
                     result.push((field_name, DecodedField::Retained(rep)));
                     idx += 1;

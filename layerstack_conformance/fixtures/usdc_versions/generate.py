@@ -52,7 +52,7 @@ def define(stage, path, type_name=""):
 
 
 def author_ordinary(stage):
-    """Content every crate version from 0.8 on can represent."""
+    """Content every crate version from 0.4 on can represent."""
     prim = define(stage, "/Ordinary")
     prim.CreateAttribute("count", Sdf.ValueTypeNames.Int).Set(7)
     prim.CreateAttribute("weight", Sdf.ValueTypeNames.Double).Set(2.5)
@@ -71,6 +71,49 @@ def author_ordinary(stage):
     animated = prim.CreateAttribute("animated", Sdf.ValueTypeNames.Double)
     animated.Set(1.0, 0.0)
     animated.Set(11.0, 10.0)
+
+
+def author_array_framing(stage):
+    """Arrays of every element encoding, for the crate versions before 0.8.
+
+    Before 0.7 an array's size is a `uint32`; before 0.5 a `uint32` rank
+    precedes it. Integer arrays are compressed from 0.5 and floating-point
+    arrays (integer-coded or lookup table) from 0.6, when they have at
+    least 16 elements (`crateFile.cpp`, `_WritePossiblyCompressedArray`).
+    """
+    prim = define(stage, "/Arrays")
+    t = Sdf.ValueTypeNames
+    long_ints = list(range(-8, 40, 3))  # 16 elements
+    values = [
+        ("shortInts", t.IntArray, Vt.IntArray([4, -5, 6])),
+        ("uints", t.UIntArray, Vt.UIntArray([v + 8 for v in long_ints])),
+        ("int64s", t.Int64Array, Vt.Int64Array([v * (1 << 33) for v in long_ints])),
+        ("uint64s", t.UInt64Array, Vt.UInt64Array([(v + 8) << 34 for v in long_ints])),
+        ("bools", t.BoolArray, Vt.BoolArray([v % 2 == 0 for v in long_ints])),
+        ("uchars", t.UCharArray, Vt.UCharArray([v + 8 for v in long_ints])),
+        # Integral floats: integer-coded ('i') from 0.6.
+        ("integralFloats", t.FloatArray, Vt.FloatArray([float(v) for v in long_ints])),
+        # Few distinct values: a lookup table ('t') from 0.6.
+        ("lutFloats", t.FloatArray, Vt.FloatArray([0.5, 1.25, -2.75, 0.5] * 5)),
+        ("lutDoubles", t.DoubleArray, Vt.DoubleArray([0.1, 0.2, 0.3, 0.4] * 4)),
+        ("lutHalves", t.HalfArray, Vt.HalfArray([0.5, 0.25, 0.75, -1.5] * 4)),
+        ("integralDoubles", t.DoubleArray, Vt.DoubleArray([float(v) for v in long_ints])),
+        # Neither: stored plainly at every version.
+        ("plainDoubles", t.DoubleArray, Vt.DoubleArray([v / 7.0 for v in range(20)])),
+        ("shortDoubles", t.DoubleArray, Vt.DoubleArray([0.1, 0.2])),
+        ("tokens", t.TokenArray, Vt.TokenArray(["t%d" % i for i in range(18)])),
+        ("strings", t.StringArray, Vt.StringArray(["s%d" % i for i in range(3)])),
+        ("points", t.Point3fArray, Vt.Vec3fArray([Gf.Vec3f(i, -i, 0.5 * i) for i in range(17)])),
+        ("vectors", t.Vector3dArray, Vt.Vec3dArray([Gf.Vec3d(0.25, 1.0, i) for i in range(2)])),
+        ("emptyInts", t.IntArray, Vt.IntArray()),
+    ]
+    for name, type_name, value in values:
+        prim.CreateAttribute(name, type_name).Set(value)
+    # Arrays nested in time samples and in a dictionary.
+    animated = prim.CreateAttribute("animatedFloats", t.FloatArray)
+    animated.Set(Vt.FloatArray([float(v) for v in long_ints]), 0.0)
+    animated.Set(Vt.FloatArray([v + 0.5 for v in long_ints]), 10.0)
+    prim.SetCustomDataByKey("ids", Vt.IntArray(long_ints))
 
 
 def knot(time, value, interp, **kwargs):
@@ -178,6 +221,8 @@ def write_version_fixture(name):
     path = os.path.join(HERE, name + ".usdc")
     stage = Usd.Stage.CreateNew(path)
     author_ordinary(stage)
+    if name in ARRAY_FRAMING_FIXTURES:
+        author_array_framing(stage)
     if name == "version_0_12":
         author_spline(stage, "/Animated", "curve", spline_v1())
     elif name == "version_0_13":
@@ -419,6 +464,7 @@ def attribute_record(attr, times):
 def expected_for(path):
     stage = Usd.Stage.Open(path)
     prims = {}
+    custom_data = {}
     for prim in stage.TraverseAll():
         attrs = {}
         for attr in prim.GetAttributes():
@@ -432,10 +478,21 @@ def expected_for(path):
             attrs[attr.GetName()] = attribute_record(attr, times)
         if attrs:
             prims[str(prim.GetPath())] = attrs
-    return {"crate_version": crate_version(path), "prims": prims}
+        if prim.GetCustomData():
+            custom_data[str(prim.GetPath())] = {
+                key: to_json(value) for key, value in prim.GetCustomData().items()
+            }
+    record = {"crate_version": crate_version(path), "prims": prims}
+    if custom_data:
+        record["custom_data"] = custom_data
+    return record
 
 
 VERSION_FIXTURES = {
+    "version_0_4": "0.4.0",
+    "version_0_5": "0.5.0",
+    "version_0_6": "0.6.0",
+    "version_0_7": "0.7.0",
     "version_0_12": "0.12.0",
     "version_0_13": "0.13.0",
     "version_0_14": "0.14.0",
@@ -443,6 +500,9 @@ VERSION_FIXTURES = {
     "spline_loop_boundary": "0.8.0",
     "spline_time_valued": "0.8.0",
 }
+
+# The fixtures that also hold `author_array_framing`'s arrays.
+ARRAY_FRAMING_FIXTURES = ["version_0_4", "version_0_5", "version_0_6", "version_0_7"]
 
 
 LAYER_FIXTURES = [

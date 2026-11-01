@@ -437,7 +437,7 @@ fn text_indices_in(
             });
         }
     };
-    let mut indices = read_integer_array_as(rep, data, 4, budget, |index| {
+    let mut indices = read_integer_array_as(rep, data, sections.version, 4, budget, |index| {
         u32::try_from(index).unwrap_or(u32::MAX)
     })?;
     if strings {
@@ -578,12 +578,12 @@ pub(crate) fn decode_text_index(
 /// The element count an array value's payload declares, read without
 /// decoding the elements; `None` when the payload cannot be read.
 #[cfg(feature = "std")]
-pub(crate) fn array_len(rep: &RawValueRep, data: &[u8]) -> Option<u64> {
+pub(crate) fn array_len(rep: &RawValueRep, data: &[u8], version: CrateVersion) -> Option<u64> {
     let offset = payload_offset_usize(rep, data).ok()?;
     if offset == 0 {
         return Some(0);
     }
-    read_u64_at(data, offset).ok()
+    array_header(data, offset, version).ok().map(|(count, _)| count)
 }
 
 /// Decodes one field with the same validation and budget as the public decoder,
@@ -613,7 +613,8 @@ pub(crate) fn decode_field_within<'a>(
         }
         if rep.is_array() && !rep.is_array_edit() {
             if math_type_info(vtype).0 != 0 {
-                return decode_math_array(rep, data, vtype, budget).map(DecodedField::MathArray);
+                return decode_math_array(rep, data, sections.version, vtype, budget)
+                    .map(DecodedField::MathArray);
             }
             if matches!(
                 vtype,
@@ -623,7 +624,8 @@ pub(crate) fn decode_field_within<'a>(
                     | ValueType::TimeCode
                     | ValueType::Duration
             ) {
-                return decode_float_array(rep, data, vtype, budget).map(DecodedField::FloatArray);
+                return decode_float_array(rep, data, sections.version, vtype, budget)
+                    .map(DecodedField::FloatArray);
             }
             if matches!(
                 vtype,
@@ -634,7 +636,7 @@ pub(crate) fn decode_field_within<'a>(
                     | ValueType::Int64
                     | ValueType::UInt64
             ) {
-                return decode_integer_field(rep, data, vtype, budget)
+                return decode_integer_field(rep, data, sections.version, vtype, budget)
                     .map(CrateValue::TypedArray)
                     .map(DecodedField::Value);
             }
@@ -854,17 +856,17 @@ fn decode_one(
         }),
         ValueType::ValueBlock => Ok(CrateValue::None),
         ValueType::AnimationBlock => Ok(CrateValue::AnimationBlock),
-        ValueType::Bool => decode_bool(rep, data, budget),
-        ValueType::UChar => decode_integer_u8(rep, data, budget),
-        ValueType::Int => decode_integer_i32(rep, data, budget),
-        ValueType::UInt => decode_integer_u32(rep, data, budget),
-        ValueType::Int64 => decode_integer_i64(rep, data, budget),
-        ValueType::UInt64 => decode_integer_u64(rep, data, budget),
+        ValueType::Bool => decode_bool(rep, data, sections.version, budget),
+        ValueType::UChar => decode_integer_u8(rep, data, sections.version, budget),
+        ValueType::Int => decode_integer_i32(rep, data, sections.version, budget),
+        ValueType::UInt => decode_integer_u32(rep, data, sections.version, budget),
+        ValueType::Int64 => decode_integer_i64(rep, data, sections.version, budget),
+        ValueType::UInt64 => decode_integer_u64(rep, data, sections.version, budget),
         ValueType::Half
         | ValueType::Float
         | ValueType::Double
         | ValueType::TimeCode
-        | ValueType::Duration => decode_float(rep, data, vtype, budget),
+        | ValueType::Duration => decode_float(rep, data, sections.version, vtype, budget),
         ValueType::String => decode_string(rep, data, sections, budget, mode),
         ValueType::Token => decode_token(rep, data, sections, budget, mode),
         ValueType::AssetPath => decode_asset_path(rep, data, sections, budget),
@@ -922,7 +924,7 @@ fn decode_one(
         | ValueType::Vec4i
         | ValueType::Matrix2d
         | ValueType::Matrix3d
-        | ValueType::Matrix4d => decode_math_type(rep, data, vtype, budget),
+        | ValueType::Matrix4d => decode_math_type(rep, data, sections.version, vtype, budget),
         ValueType::Value => decode_value_indirection(rep, data, sections, budget, mode),
         ValueType::UnregisteredValue => {
             decode_unregistered_value(rep, data, sections, budget, mode)
@@ -939,13 +941,14 @@ fn decode_one(
 fn decode_bool(
     rep: &RawValueRep,
     data: &[u8],
+    version: CrateVersion,
     budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     if rep.is_inlined() && !rep.is_array() {
         return Ok(CrateValue::Bool(rep.payload()[0] != 0));
     }
     if rep.is_array() {
-        let values = read_integer_array(rep, data, 1, budget)?;
+        let values = read_integer_array(rep, data, version, 1, budget)?;
         let arr = values
             .into_iter()
             .map(|v| CrateValue::Bool(v != 0))
@@ -959,13 +962,14 @@ fn decode_bool(
 fn decode_integer_u8(
     rep: &RawValueRep,
     data: &[u8],
+    version: CrateVersion,
     budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     if rep.is_inlined() && !rep.is_array() {
         return Ok(CrateValue::UChar(rep.payload()[0]));
     }
     if rep.is_array() {
-        let values = read_integer_array(rep, data, 1, budget)?;
+        let values = read_integer_array(rep, data, version, 1, budget)?;
         let arr = values
             .into_iter()
             .map(|v| {
@@ -982,6 +986,7 @@ fn decode_integer_u8(
 fn decode_integer_i32(
     rep: &RawValueRep,
     data: &[u8],
+    version: CrateVersion,
     budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     if rep.is_inlined() && !rep.is_array() {
@@ -990,7 +995,7 @@ fn decode_integer_i32(
         return Ok(CrateValue::Int(v));
     }
     if rep.is_array() {
-        let values = read_integer_array(rep, data, 4, budget)?;
+        let values = read_integer_array(rep, data, version, 4, budget)?;
         #[allow(clippy::cast_possible_truncation, reason = "i32 range")]
         let arr = values
             .into_iter()
@@ -1005,6 +1010,7 @@ fn decode_integer_i32(
 fn decode_integer_u32(
     rep: &RawValueRep,
     data: &[u8],
+    version: CrateVersion,
     budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     if rep.is_inlined() && !rep.is_array() {
@@ -1013,7 +1019,7 @@ fn decode_integer_u32(
         return Ok(CrateValue::UInt(v));
     }
     if rep.is_array() {
-        let values = read_integer_array(rep, data, 4, budget)?;
+        let values = read_integer_array(rep, data, version, 4, budget)?;
         #[allow(clippy::cast_possible_truncation, reason = "u32 range")]
         let arr = values
             .into_iter()
@@ -1028,6 +1034,7 @@ fn decode_integer_u32(
 fn decode_integer_i64(
     rep: &RawValueRep,
     data: &[u8],
+    version: CrateVersion,
     budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     if rep.is_inlined() && !rep.is_array() {
@@ -1040,7 +1047,7 @@ fn decode_integer_i64(
         return Ok(CrateValue::Int64(i64::from(v)));
     }
     if rep.is_array() {
-        let values = read_integer_array(rep, data, 8, budget)?;
+        let values = read_integer_array(rep, data, version, 8, budget)?;
         let arr = values.into_iter().map(CrateValue::Int64).collect();
         return Ok(CrateValue::Array(arr));
     }
@@ -1051,6 +1058,7 @@ fn decode_integer_i64(
 fn decode_integer_u64(
     rep: &RawValueRep,
     data: &[u8],
+    version: CrateVersion,
     budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     if rep.is_inlined() && !rep.is_array() {
@@ -1061,7 +1069,7 @@ fn decode_integer_u64(
         return Ok(CrateValue::UInt64(u64::from(v)));
     }
     if rep.is_array() {
-        let values = read_integer_array(rep, data, 8, budget)?;
+        let values = read_integer_array(rep, data, version, 8, budget)?;
         #[allow(clippy::cast_sign_loss, reason = "unsigned context")]
         let arr = values
             .into_iter()
@@ -1083,6 +1091,7 @@ fn decode_integer_u64(
 fn decode_integer_field(
     rep: &RawValueRep,
     data: &[u8],
+    version: CrateVersion,
     vtype: ValueType,
     budget: &mut DecodeBudget,
 ) -> Result<layerstack::TypedArray, UsdcError> {
@@ -1090,7 +1099,7 @@ fn decode_integer_field(
     use layerstack::TypedArray as A;
     macro_rules! read {
         ($variant:ident, $width:expr, $convert:expr) => {
-            read_integer_array_as(rep, data, $width, budget, $convert)
+            read_integer_array_as(rep, data, version, $width, budget, $convert)
                 .map(|values| A::$variant(Arc::new(values)))
         };
     }
@@ -1101,7 +1110,7 @@ fn decode_integer_field(
         ValueType::UInt => read!(UInt, 4, |v| v as u32),
         ValueType::Int64 => read!(Int64, 8, core::convert::identity),
         // Reuse 64-bit reconstruction: only signedness changes, not width.
-        ValueType::UInt64 => read_integer_array(rep, data, 8, budget).map(|values| {
+        ValueType::UInt64 => read_integer_array(rep, data, version, 8, budget).map(|values| {
             A::UInt64(Arc::new(
                 values.into_iter().map(i64::cast_unsigned).collect(),
             ))
@@ -1114,15 +1123,17 @@ fn decode_integer_field(
 fn read_integer_array(
     rep: &RawValueRep,
     data: &[u8],
+    version: CrateVersion,
     element_size: usize,
     budget: &mut DecodeBudget,
 ) -> Result<Vec<i64>, UsdcError> {
-    read_integer_array_as(rep, data, element_size, budget, core::convert::identity)
+    read_integer_array_as(rep, data, version, element_size, budget, core::convert::identity)
 }
 
 fn read_integer_array_as<T>(
     rep: &RawValueRep,
     data: &[u8],
+    version: CrateVersion,
     element_size: usize,
     budget: &mut DecodeBudget,
     mut convert: impl FnMut(i64) -> T,
@@ -1131,12 +1142,11 @@ fn read_integer_array_as<T>(
     if off == 0 {
         return Ok(vec![]);
     }
-    let count = read_u64_at(data, off)?;
-    let arr_start = off + 8;
+    let (count, arr_start) = array_header(data, off, version)?;
 
     budget.charge(count)?;
     // Like float arrays, short arrays are stored uncompressed.
-    if honours_compression(rep) && count >= MIN_COMPRESSED_ARRAY_SIZE as u64 {
+    if honours_compression(rep, version) && count >= MIN_COMPRESSED_ARRAY_SIZE as u64 {
         // `read_compressed_ints` checks the count against the compressed data
         // before allocating.
         let count = usize::try_from(count).map_err(|_| UsdcError::IntegerArrayDecode {
@@ -1186,31 +1196,60 @@ const MIN_COMPRESSED_ARRAY_SIZE: usize = 16;
 
 /// Whether an array value's compressed bit means its elements are stored
 /// compressed. OpenUSD honours the bit only for arrays of `int`, `uint`,
-/// `int64` and `uint64` (crate 0.5.0 on) and of `half`, `float` and
-/// `double` (0.6.0 on), and reads every other element type uncompressed
-/// whatever the bit says: `bool`, `uchar`, the text types (`string`,
-/// `token`, `asset`, `pathExpression`, stored as indices), `timecode` and
-/// `duration` (`_ReadPossiblyCompressedArray`,
-/// `pxr/usd/sdf/crateFile.cpp:2178-2290`). No OpenUSD writer sets the bit
-/// on those, but another writer may, and OpenUSD opens such a file. Every
-/// crate version layerstack reads is 0.7.0 or later.
-fn honours_compression(rep: &RawValueRep) -> bool {
+/// `int64` and `uint64` from crate 0.5.0 on, and of `half`, `float` and
+/// `double` from 0.6.0 on; it reads every other element type, and these
+/// types in older files, uncompressed whatever the bit says: `bool`,
+/// `uchar`, the text types (`string`, `token`, `asset`, `pathExpression`,
+/// stored as indices), `timecode` and `duration`
+/// (`_ReadPossiblyCompressedArray`, `pxr/usd/sdf/crateFile.cpp:2150-2290`).
+/// No OpenUSD writer sets the bit where it is not honoured, but another
+/// writer may, and OpenUSD opens such a file.
+fn honours_compression(rep: &RawValueRep, version: CrateVersion) -> bool {
     rep.is_compressed()
-        && matches!(
-            rep.value_type(),
-            Ok(ValueType::Int
-                | ValueType::UInt
-                | ValueType::Int64
-                | ValueType::UInt64
-                | ValueType::Half
-                | ValueType::Float
-                | ValueType::Double)
-        )
+        && match rep.value_type() {
+            Ok(ValueType::Int | ValueType::UInt | ValueType::Int64 | ValueType::UInt64) => {
+                version.has(CrateVersion::COMPRESSED_INTEGER_ARRAYS)
+            }
+            Ok(ValueType::Half | ValueType::Float | ValueType::Double) => {
+                version.has(CrateVersion::COMPRESSED_FLOAT_ARRAYS)
+            }
+            _ => false,
+        }
+}
+
+/// The element count an array value declares at `off`, and the offset its
+/// elements (or their compressed encoding) start at.
+///
+/// AOUSD Core §16.3.10 describes the framing of crate 0.7.0 on: a `uint64`
+/// count. Older files frame arrays as OpenUSD's reader expects them
+/// (`pxr/usd/sdf/crateFile.cpp`):
+///
+/// - before 0.5.0 a `uint32` rank, always 1, precedes the count, and is
+///   read and discarded (`_ArrayValueHandlerBase::UnpackArray`);
+/// - before 0.7.0 the count is a `uint32` (`_ReadUncompressedArray` and
+///   both `_ReadPossiblyCompressedArray` overloads).
+fn array_header(
+    data: &[u8],
+    off: usize,
+    version: CrateVersion,
+) -> Result<(u64, usize), UsdcError> {
+    let mut pos = off;
+    // 0.5.0 dropped the rank along with adding compressed integer arrays.
+    if !version.has(CrateVersion::COMPRESSED_INTEGER_ARRAYS) {
+        read_u32_le(data, &mut pos)?;
+    }
+    let count = if version.has(CrateVersion::ARRAY_SIZES_64_BIT) {
+        u64::from_le_bytes(read_bytes::<8>(data, &mut pos)?)
+    } else {
+        u64::from(read_u32_le(data, &mut pos)?)
+    };
+    Ok((count, pos))
 }
 
 fn decode_float(
     rep: &RawValueRep,
     data: &[u8],
+    version: CrateVersion,
     vtype: ValueType,
     budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
@@ -1259,7 +1298,7 @@ fn decode_float(
         clippy::cast_precision_loss,
         reason = "integer-coded floats store int32 values"
     )]
-    read_float_array(rep, data, element_size, budget, element, |v| {
+    read_float_array(rep, data, version, element_size, budget, element, |v| {
         to_value(v as f64)
     })
     .map(CrateValue::Array)
@@ -1283,6 +1322,7 @@ pub(crate) enum FloatArray {
 fn decode_float_array(
     rep: &RawValueRep,
     data: &[u8],
+    version: CrateVersion,
     vtype: ValueType,
     budget: &mut DecodeBudget,
 ) -> Result<FloatArray, UsdcError> {
@@ -1290,6 +1330,7 @@ fn decode_float_array(
         ValueType::Half => read_float_array(
             rep,
             data,
+            version,
             2,
             budget,
             |bytes| Ok(u16::from_le_bytes(bytes.try_into().unwrap())),
@@ -1299,6 +1340,7 @@ fn decode_float_array(
         ValueType::Float => read_float_array(
             rep,
             data,
+            version,
             4,
             budget,
             |bytes| Ok(f32::from_le_bytes(bytes.try_into().unwrap())),
@@ -1309,6 +1351,7 @@ fn decode_float_array(
             let values = read_float_array(
                 rep,
                 data,
+                version,
                 8,
                 budget,
                 |bytes| Ok(f64::from_le_bytes(bytes.try_into().unwrap())),
@@ -1330,6 +1373,7 @@ fn decode_float_array(
 fn read_float_array<T: Clone>(
     rep: &RawValueRep,
     data: &[u8],
+    version: CrateVersion,
     element_size: usize,
     budget: &mut DecodeBudget,
     element: impl Fn(&[u8]) -> Result<T, UsdcError>,
@@ -1340,14 +1384,13 @@ fn read_float_array<T: Clone>(
     if off == 0 {
         return Ok(vec![]);
     }
-    let count = read_u64_at(data, off)?;
-    let arr_start = off + 8;
+    let (count, arr_start) = array_header(data, off, version)?;
     budget.charge(count)?;
 
     // Arrays shorter than `MinCompressedArraySize` are stored uncompressed
     // even when flagged compressed (`_ReadPossiblyCompressedArray`,
     // `pxr/usd/sdf/crateFile.cpp:2259`).
-    if !honours_compression(rep) || count < MIN_COMPRESSED_ARRAY_SIZE as u64 {
+    if !honours_compression(rep, version) || count < MIN_COMPRESSED_ARRAY_SIZE as u64 {
         let count = element_count(data, arr_start, count, element_size)?;
         let arr = (0..count)
             .map(|i| element(bytes_at(data, arr_start + i * element_size, element_size)?))
@@ -1511,7 +1554,7 @@ fn decode_string(
         )));
     }
     if rep.is_array() {
-        let indices = read_u32_array_or_inlined(rep, data, budget)?;
+        let indices = read_u32_array_or_inlined(rep, data, sections.version, budget)?;
         let arr = indices
             .into_iter()
             .map(|i| {
@@ -1546,7 +1589,7 @@ fn decode_token(
                 indices.iter().map(|&index| tokens.id(index)).collect(),
             )));
         }
-        let indices = read_u32_array_or_inlined(rep, data, budget)?;
+        let indices = read_u32_array_or_inlined(rep, data, sections.version, budget)?;
         if indices.is_empty() && matches!(mode, DecodeMode::Compact(_)) {
             // An empty `token[]` keeps its element kind for assembly; other
             // tokens are interned there (AOUSD Core §6.2).
@@ -1593,7 +1636,7 @@ fn decode_asset_path(
     budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     if rep.is_array() {
-        let indices = read_u32_array_or_inlined(rep, data, budget)?;
+        let indices = read_u32_array_or_inlined(rep, data, sections.version, budget)?;
         let arr = indices
             .into_iter()
             .map(|i| {
@@ -1730,6 +1773,7 @@ fn decode_inlined_math(
 fn decode_math_type(
     rep: &RawValueRep,
     data: &[u8],
+    version: CrateVersion,
     vtype: ValueType,
     budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
@@ -1752,7 +1796,7 @@ fn decode_math_type(
         });
     }
 
-    let array = decode_math_array(rep, data, vtype, budget)?;
+    let array = decode_math_array(rep, data, version, vtype, budget)?;
     Ok(CrateValue::Array(
         array
             .elements()
@@ -1781,6 +1825,7 @@ impl MathArray<'_> {
 fn decode_math_array<'a>(
     rep: &RawValueRep,
     data: &'a [u8],
+    version: CrateVersion,
     vtype: ValueType,
     budget: &mut DecodeBudget,
 ) -> Result<MathArray<'a>, UsdcError> {
@@ -1794,8 +1839,8 @@ fn decode_math_array<'a>(
             element_size,
         });
     }
-    let start = off + 8;
-    let count = element_count(data, start, read_u64_at(data, off)?, element_size)?;
+    let (count, start) = array_header(data, off, version)?;
+    let count = element_count(data, start, count, element_size)?;
     budget.charge_elements(count)?;
     Ok(MathArray {
         value_type: vtype,
@@ -2780,9 +2825,10 @@ fn decode_inlined_or_offset_u32(rep: &RawValueRep, data: &[u8]) -> Result<u32, U
 fn read_u32_array_or_inlined(
     rep: &RawValueRep,
     data: &[u8],
+    version: CrateVersion,
     budget: &mut DecodeBudget,
 ) -> Result<Vec<i64>, UsdcError> {
-    read_integer_array(rep, data, 4, budget)
+    read_integer_array(rep, data, version, 4, budget)
 }
 
 // ---------------------------------------------------------------------------
@@ -3628,6 +3674,92 @@ mod tests {
         );
     }
 
+    /// Arrays are framed by crate version: a `uint32` rank before 0.5 and
+    /// a `uint32` size before 0.7 (`_ArrayValueHandlerBase::UnpackArray`,
+    /// `_ReadUncompressedArray`). A compressed bit on integer elements
+    /// before 0.5, or on floating-point elements before 0.6, is ignored,
+    /// as `_ReadPossiblyCompressedArray` ignores it, so the elements are
+    /// read plainly.
+    #[test]
+    fn arrays_are_framed_by_crate_version() {
+        let ints: Vec<i32> = (0..16).map(|i| i * 3 - 7).collect();
+        #[allow(clippy::cast_precision_loss, reason = "small integers")]
+        let floats: Vec<f32> = (0..16).map(|i| i as f32 * 0.5 - 1.0).collect();
+        let framed = |version: CrateVersion, elements: &[u8]| {
+            let mut data = vec![0_u8; 8];
+            if !version.has(CrateVersion::COMPRESSED_INTEGER_ARRAYS) {
+                data.extend_from_slice(&1_u32.to_le_bytes());
+            }
+            if version.has(CrateVersion::ARRAY_SIZES_64_BIT) {
+                data.extend_from_slice(&16_u64.to_le_bytes());
+            } else {
+                data.extend_from_slice(&16_u32.to_le_bytes());
+            }
+            data.extend_from_slice(elements);
+            data
+        };
+        let array_rep = |vtype: ValueType, compressed: bool| {
+            let mut bytes = [0_u8; 8];
+            bytes[0] = 8;
+            bytes[6] = vtype as u8;
+            bytes[7] = 0x80 | if compressed { 0x20 } else { 0 };
+            RawValueRep::new(bytes)
+        };
+        for version in [
+            CrateVersion::OLDEST_READABLE,
+            CrateVersion::COMPRESSED_INTEGER_ARRAYS,
+            CrateVersion::COMPRESSED_FLOAT_ARRAYS,
+            CrateVersion::ARRAY_SIZES_64_BIT,
+            CrateVersion::NEWEST_READABLE,
+        ] {
+            let sections = sections_with(version);
+            let decode = |rep: &RawValueRep, data: &[u8]| {
+                let value = decode_value(rep, data, &sections)
+                    .unwrap_or_else(|e| panic!("{version}: {e}"));
+                let CrateValue::Array(items) = value else {
+                    panic!("{version}: {value:?} is not an array");
+                };
+                items
+            };
+
+            let int_bytes: Vec<u8> = ints.iter().flat_map(|v| v.to_le_bytes()).collect();
+            let data = framed(version, &int_bytes);
+            let rep = array_rep(
+                ValueType::Int,
+                !version.has(CrateVersion::COMPRESSED_INTEGER_ARRAYS),
+            );
+            assert_eq!(array_len(&rep, &data, version), Some(16), "{version}");
+            let read: Vec<i32> = decode(&rep, &data)
+                .into_iter()
+                .map(|item| match item {
+                    CrateValue::Int(v) => v,
+                    other => panic!("{version}: {other:?}"),
+                })
+                .collect();
+            assert_eq!(read, ints, "{version}");
+
+            let float_bytes: Vec<u8> = floats.iter().flat_map(|v| v.to_le_bytes()).collect();
+            let data = framed(version, &float_bytes);
+            let rep = array_rep(
+                ValueType::Float,
+                !version.has(CrateVersion::COMPRESSED_FLOAT_ARRAYS),
+            );
+            let read: Vec<f32> = decode(&rep, &data)
+                .into_iter()
+                .map(|item| match item {
+                    CrateValue::Float(v) => v,
+                    other => panic!("{version}: {other:?}"),
+                })
+                .collect();
+            assert_eq!(read, floats, "{version}");
+
+            // Math types share the framing: 16 `float2`s.
+            let data = framed(version, &[float_bytes.as_slice(), &float_bytes].concat());
+            let pairs = decode(&array_rep(ValueType::Vec2f, false), &data);
+            assert_eq!(pairs.len(), 16, "{version}");
+        }
+    }
+
     #[test]
     fn raw_value_rep_flags() {
         // All flags set: is_array=1, is_inlined=1, is_compressed=1
@@ -3697,7 +3829,7 @@ mod tests {
         for bits in 0..=u16::MAX {
             let [lo, hi] = bits.to_le_bytes();
             let rep = inlined(ValueType::Half, [lo, hi, 0, 0]);
-            match decode_float(&rep, &[], ValueType::Half, &mut DecodeBudget::with_limit(1)) {
+            match decode_float(&rep, &[], CrateVersion::NEWEST_READABLE, ValueType::Half, &mut DecodeBudget::with_limit(1)) {
                 Ok(CrateValue::Half(read)) => assert_eq!(read, bits, "{bits:#06x}"),
                 other => panic!("expected Half, got {other:?}"),
             }

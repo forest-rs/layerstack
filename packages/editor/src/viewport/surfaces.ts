@@ -125,7 +125,7 @@ export class TextureStore {
   }
 
   /** The image of `texture`'s file once loaded; `undefined` while loading, `null` when it cannot be read. */
-  image(texture: MaterialTexture): Image | null | undefined {
+  image(texture: Pick<MaterialTexture, "file">): Image | null | undefined {
     const identifier = texture.file.identifier;
     if (identifier === null) return null;
     if (this.#ready.has(identifier)) return this.#ready.get(identifier);
@@ -158,7 +158,7 @@ export class TextureStore {
   }
 
   /** A UDIM set's tiles laid into one canvas, a column per tile's units digit, a row per ten. */
-  async #atlas(texture: MaterialTexture): Promise<Image | null> {
+  async #atlas(texture: Pick<MaterialTexture, "file">): Promise<Image | null> {
     const anchor = texture.file.layer;
     const tiles = await udimTiles(texture.file, (identifier) => this.#exists(identifier, anchor));
     if (tiles.length === 0) return null;

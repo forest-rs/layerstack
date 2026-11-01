@@ -48,7 +48,7 @@ const EMPTY_SCENE: ViewportScene = {
   lights: [],
   cameras: [],
   materials: new Map(),
-  skinning: { gpu: 0, cpu: 0, reducedBlocks: 0, droppedWeight: 0, failed: [] },
+  skinning: { gpu: 0, cpu: 0, shaped: 0, shapedVarying: 0, reducedBlocks: 0, droppedWeight: 0, failed: [] },
   unlit: new Map(),
   linking: [],
 };
@@ -380,7 +380,7 @@ export class EditorStore {
       work: this.lastUpdate?.work ?? ({} as ViewportUpdate["work"]),
       reskinned: none,
       skinned: none,
-      skinWork: this.lastUpdate?.skinWork ?? { gpuDraws: 0, joints: 0, cpuDraws: 0, cpuPoints: 0, gathered: 0 },
+      skinWork: this.lastUpdate?.skinWork ?? { gpuDraws: 0, joints: 0, cpuDraws: 0, cpuPoints: 0, shapedDraws: 0, shapedPoints: 0, gathered: 0 },
     };
   }
 

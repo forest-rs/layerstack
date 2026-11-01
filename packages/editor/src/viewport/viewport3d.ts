@@ -100,8 +100,10 @@
 // blended and normalized, as `UsdSkelSkinNormals` skins them: three.js's
 // own `skinnormal_vertex` blends the matrices themselves, which bends
 // normals wrong under joints that scale (so the chunks are replaced, below,
-// for every skinned material). A draw deformed on the CPU is a plain mesh
-// whose positions and normals are refilled each time.
+// for every skinned material). A mesh with blend shapes skins its
+// blend-shaped rest pose, uploaded once (again only when the animation's
+// weights vary). A draw deformed on the CPU (dual quaternions) is a plain
+// mesh whose positions and normals are refilled each time.
 import {
   AgXToneMapping,
   Bone,
@@ -522,6 +524,12 @@ export class Viewport {
       const { bones, boneInverses } = object.skeleton;
       bones.forEach((bone, joint) => bone.matrixWorld.fromArray(skin.palette, 16 * joint));
       for (const inverse of boneInverses) inverse.fromArray(skin.bind);
+      // A blend-shaped rest pose, uploaded when it was refilled.
+      if (skin.shaped && skin.positions !== null && skin.normals !== null && object.userData.rest !== skin.positions) {
+        object.userData.rest = skin.positions;
+        object.geometry.setAttribute("position", new BufferAttribute(skin.positions, 3));
+        object.geometry.setAttribute("normal", new BufferAttribute(skin.normals, 3));
+      }
       return;
     }
     if (skin.positions === null || skin.normals === null) return;

@@ -46,6 +46,12 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
   read is announced, not a frozen page. Below that are what has arrived
   and the time taken, and **Cancel** keeps the scene the editor had. Once
   the scene is drawn, a corner note counts the textures still loading.
+- **Material view.** With a material selected (or a shader inside one),
+  the viewport's **Scene | Material** switch shows the material on a
+  shader ball (a ball with a raised band at its equator, on a pedestal and
+  floor, built from three.js primitives), large enough to judge it; drag
+  turns it. It is the default when the scene draws nothing, as a material
+  library's does.
 - **Viewport.** The draw list stagehand keeps from the stage's change
   records, applied to three.js in place; the stage's `upAxis` orients the
   free camera and the grid. Click to pick, drag to orbit, scroll to zoom,

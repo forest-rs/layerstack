@@ -491,6 +491,31 @@ async function unmuteWithTheToggle(session: Session): Promise<void> {
 }
 
 assert.equal(checks.length, steps.length);
+/**
+ * The inspector's Delete, after the script: the pebble leaves every layer
+ * of the edit layer's stack as one undoable action, and undo brings it
+ * back with what it authored.
+ */
+async function deleteWithTheButton(session: Session): Promise<void> {
+  const current = session.current;
+  const before = current.undoStack.length;
+  const receipt = current.delete(sample.pebble);
+  assert.equal(current.stage.prim(sample.pebble), null);
+  assert.deepEqual(receipt.layers.map((layer) => layer.identifier), [sample.root], "the pebble lived in the edit layer alone");
+  assert.equal(current.undoStack.at(-1)?.label, `delete ${sample.pebble}`);
+  assert.equal(current.undoStack.length, before + 1, "one action");
+  const deleted = current.changeLog.at(-1);
+  assert.equal(deleted?.cause, `delete ${sample.pebble}`);
+  assert.deepEqual(deleted?.changes.removed, [sample.pebble]);
+  assert.doesNotMatch(new TextDecoder().decode(current.stage.exportLayer(current.stage.root, "usda")), /Pebble/);
+  await current.undo();
+  assert.equal(current.stage.prim(sample.pebble)?.typeName, "Cube");
+  assert.equal(read(current.stage, `${sample.pebble}.size`).value, "0.8", "what it authored is back");
+  assert.equal(read(current.stage, `${sample.pebble}.radius`).value, "0.5");
+  assert.deepEqual(current.changeLog.at(-1)?.changes.created, [sample.pebble]);
+  assert.equal(current.redoStack.at(-1)?.label, `delete ${sample.pebble}`);
+}
+
 try {
   for (const [index, step] of steps.entries()) {
     const before = host.layerstack.transfer();
@@ -511,6 +536,8 @@ try {
   }
   await unmuteWithTheToggle(session);
   console.log("ok the layers panel's toggle unmutes the robot asset in one change");
+  await deleteWithTheButton(session);
+  console.log("ok the inspector's Delete removes the pebble in one action, and undo brings it back");
   const { bytesIn, bytesOut, memoryBytes } = host.layerstack.transfer();
   console.log(`transfer: in ${bytesIn} B, out ${bytesOut} B, memory ${memoryBytes} B`);
 } finally {

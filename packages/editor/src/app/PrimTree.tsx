@@ -13,8 +13,10 @@ import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import type { Prim, Stage } from "@forest-rs/layerstack";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import type { EditorStore } from "../store.ts";
 import { useStore } from "./context.ts";
 import { primIcon } from "./icons.ts";
+import { PrimActions } from "./PrimActions.tsx";
 
 /** A row: a prim, and its children when it is open. */
 interface Row {
@@ -93,8 +95,9 @@ export function PrimTree() {
   if (stage === null) return <p className="p-3 text-xs text-muted-foreground">Nothing open.</p>;
   return (
     <div className="flex h-full flex-col">
-      <div className="p-2">
+      <div className="flex items-center gap-1 p-2">
         <Input placeholder="Find a prim by name" value={query} onChange={(event) => setQuery(event.target.value)} className="h-7 text-xs" />
+        <PrimActions store={store} path="/" />
       </div>
       {matches !== null ? (
         <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
@@ -134,7 +137,9 @@ export function PrimTree() {
               return (
                 <TreeItem id={row.id} textValue={row.prim.name} hasChildItems={row.hasChildren} className={treeItemClass}>
                   <TreeItemContent>
-                    {({ isExpanded, hasChildItems, level }) => <PrimRow row={row} isExpanded={isExpanded} hasChildItems={hasChildItems} level={level} />}
+                    {({ isExpanded, hasChildItems, level }) => (
+                      <PrimRow store={store} row={row} isExpanded={isExpanded} hasChildItems={hasChildItems} level={level} />
+                    )}
                   </TreeItemContent>
                   <Collection items={row.children}>{render}</Collection>
                 </TreeItem>
@@ -154,7 +159,7 @@ const treeItemClass = ({ isSelected, isFocusVisible }: { isSelected: boolean; is
     isFocusVisible && "ring-1 ring-ring",
   );
 
-function PrimRow({ row, isExpanded, hasChildItems, level }: { row: Row; isExpanded: boolean; hasChildItems: boolean; level: number }) {
+function PrimRow({ store, row, isExpanded, hasChildItems, level }: { store: EditorStore; row: Row; isExpanded: boolean; hasChildItems: boolean; level: number }) {
   const { prim } = row;
   return (
     <div className="flex w-full min-w-0 items-center gap-1 pr-2" style={{ paddingLeft: `${(level - 1) * 12 + 2}px` }}>
@@ -172,6 +177,7 @@ function PrimRow({ row, isExpanded, hasChildItems, level }: { row: Row; isExpand
         {prim.specifier !== "def" && <span title={`Its specifier is ${prim.specifier}`}>{prim.specifier}</span>}
         <span>{prim.typeName ?? ""}</span>
       </span>
+      <PrimActions store={store} path={prim.path} className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[pressed]:opacity-100" />
     </div>
   );
 }

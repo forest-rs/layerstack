@@ -985,3 +985,49 @@ fn the_one_revisions_meet_their_ends_and_reduce_to_the_originals() {
         }
     }
 }
+
+#[test]
+fn vertex_points_gather_per_point_data_into_split_vertices() {
+    // Flat face-varying normals split each cube corner into three vertices,
+    // one per face meeting there: each still names its corner's point.
+    let mut input = mesh(&CUBE_COUNTS, &CUBE_INDICES, &CUBE_POINTS);
+    let flat: Vec<[f32; 3]> = CUBE_INDICES
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .flat_map(|face| {
+            let [a, b, c] = [0, 1, 2].map(|k| wide(CUBE_POINTS[face[k] as usize]));
+            let n = cross(sub(b, a), sub(c, a));
+            let l = length(n);
+            #[allow(clippy::cast_possible_truncation, reason = "unit normals fit f32")]
+            let n = n.map(|v| (v / l) as f32);
+            [n; 4]
+        })
+        .collect();
+    input.normals = Some(Primvar::new(&flat, Interpolation::FaceVarying));
+    let (plan, buffers) = plan(&input, Triangulation::Concave);
+    let vertex_points = plan.vertex_points();
+    assert_eq!(vertex_points.len(), 24);
+    assert_eq!(vertex_points.len(), buffers.positions.len());
+    let mut uses = [0; 8];
+    for (position, &point) in buffers.positions.iter().zip(vertex_points) {
+        assert_eq!(*position, CUBE_POINTS[point as usize]);
+        uses[point as usize] += 1;
+    }
+    assert_eq!(uses, [3; 8]);
+    // A per-point value (here, a weight per point) gathered into vertex
+    // order agrees with each triangle corner's authored point.
+    let weights: Vec<f32> = (0..8_u8).map(|i| f32::from(i) / 8.0).collect();
+    let gathered: Vec<f32> = vertex_points.iter().map(|&p| weights[p as usize]).collect();
+    for (triangle, points) in buffers
+        .indices
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .zip(plan.triangle_points())
+    {
+        for (&vertex, point) in triangle.iter().zip(points) {
+            assert_eq!(gathered[vertex as usize], weights[point as usize]);
+        }
+    }
+}

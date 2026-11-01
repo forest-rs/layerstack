@@ -38,6 +38,12 @@ The default `std` feature provides `Filesystem`. Disable default features for
 write atomicity and scheduling belong to that backend. No third-party dependencies
 are added. Recoverable format errors require explicit `ImportPolicy::AllowRecovery`.
 
+A load reports where its work went: each layer it read (`LoadReport::reads`,
+with the bytes decoded and the prim specs made) and each composition after a
+batch of reads (`LoadReport::compositions`). This crate has no clock; the host
+supplies one (`LoadOptions::clock`, a `Clock`) to time them, and without one
+every time is `None`.
+
 USDA and USDC source layers can be saved in place. USDZ members are read-only;
 use `prepare_package` to inventory and localize a dependency closure, inspect its
 report, then `export_package` to write the candidate. Layer export writes

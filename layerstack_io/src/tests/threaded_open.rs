@@ -154,6 +154,13 @@ fn render_with(
         )
         .unwrap();
     }
+    // A layer that failed to read is read again by each arc naming it on
+    // one thread, once on several; the layers kept are read alike.
+    for read in &report.reads {
+        if report.layers.contains(&read.layer) {
+            writeln!(out, "read {:?} {} {}", read.layer, read.bytes, read.prims).unwrap();
+        }
+    }
     let mut ids: Vec<LayerId> = doc.store.layer_ids().into_iter().collect();
     ids.sort();
     for id in ids {

@@ -74,6 +74,10 @@
 //! stage wants, the host supplies their bytes to its storage, and
 //! [`StageDocument::load_requested_assets`] reads them, until nothing is
 //! wanted. [`StageDocument::asset_status`] reports what the stage lacks now.
+//! Each load's report says where its work went: the layers it read, with
+//! their bytes and prims, and the compositions after them
+//! ([`LoadReport::reads`], [`LoadReport::compositions`]), timed with a clock
+//! the host supplies ([`LoadOptions::clock`]).
 //! A USDZ package is one supplied source; its members resolve inside it.
 #![no_std]
 extern crate alloc;
@@ -96,6 +100,7 @@ use layerstack::{asset::PackagePath, encoded_bytes::EncodedBytes, parallel::Thre
 use layerstack_usdz::snapshot::{PackageLimits, PackageSnapshot, PackageStats};
 use layerstack_usdz::{ImportDiagnostic, MemberDiagnostic};
 pub use layerstack_usdz::{UsdcArrayLoading, UsdcReadOptions};
+use timing::ReadLog;
 
 mod apply;
 pub use apply::ApplyError;
@@ -113,10 +118,12 @@ pub use reload::PreparedReload;
 mod asset_bytes;
 mod clips;
 mod package;
+mod timing;
 mod udim;
 pub use asset_bytes::{AssetByteSource, AssetBytes, AssetReadLimits};
 pub use clips::{ClipLoadFailure, ClipQueryPreparation, UnavailableClipAsset};
 pub use package::{PackageInclusion, PackagePreparationLimits, PreparedPackage};
+pub use timing::{Clock, Composition, LayerRead, LoadClock, ReadTime, TimeSpan};
 pub use udim::{UdimDiscovery, UdimDiscoveryWork, UdimTileAsset, UdimTiles};
 
 #[cfg(feature = "std")]
@@ -569,6 +576,10 @@ pub struct LoadOptions {
     pub variant_arcs: VariantArcLoading,
     /// File formats read beyond USDA, USDC and USDZ, by extension.
     pub formats: FileFormats,
+    /// The clock that times each layer read and composition
+    /// ([`LoadReport::reads`], [`LoadReport::compositions`]); `None`, the
+    /// default, times nothing and still counts the work.
+    pub clock: Option<LoadClock>,
 }
 /// How [`StageDocument::open`] and [`StageDocument::create`] build a
 /// document: the stage's options, how layers are read, and the store to
@@ -649,6 +660,12 @@ pub struct LoadReport {
     /// dependency that is not found ([`AssetFailure::is_missing`]), which
     /// both policies keep here.
     pub asset_failures: Vec<AssetFailure>,
+    /// Each layer read, in the order the reads began: the bytes decoded,
+    /// the prim specs made and, with a clock ([`LoadOptions::clock`]), when.
+    pub reads: Vec<LayerRead>,
+    /// Each composition after a batch of reads, in order: the layers it
+    /// added and, with a clock, when. Reloads list none.
+    pub compositions: Vec<Composition>,
 }
 impl LoadReport {
     /// Appends the evidence of a later load of the same document.
@@ -656,6 +673,8 @@ impl LoadReport {
         self.layers.extend(other.layers);
         self.diagnostics.extend(other.diagnostics);
         self.asset_failures.extend(other.asset_failures);
+        self.reads.extend(other.reads);
+        self.compositions.extend(other.compositions);
     }
     /// Whether imported content was malformed, omitted during recovery, or
     /// named a dependency that was not found.
@@ -1067,6 +1086,8 @@ pub struct StageDocument<B> {
     package_limits: PackageLimits,
     variant_arcs: VariantArcLoading,
     formats: FileFormats,
+    /// [`LoadOptions::clock`].
+    clock: Option<LoadClock>,
     load_report: LoadReport,
     unavailable: Unavailable,
 }
@@ -1166,6 +1187,7 @@ impl<B: Storage> StageDocument<B> {
             );
             reader.variant_arcs = loading.variant_arcs;
             reader.formats = loading.formats.clone();
+            reader.log = ReadLog::new(loading.clock.clone());
             let session = reader.load_session(session, root, &store)?;
             reader.resolve_expressions(
                 &mut store,
@@ -1177,7 +1199,10 @@ impl<B: Storage> StageDocument<B> {
             report = reader.commit(&mut store);
             options.session_layer = Some(session);
         }
+        let start = timing::composition_start(loading.clock.as_ref());
         let stage = LiveStage::compose(&mut store, root, options);
+        let composition = timing::composition(loading.clock.as_ref(), start, report.layers.len());
+        report.compositions.push(composition);
         let mut document = Self {
             store,
             stage,
@@ -1188,6 +1213,7 @@ impl<B: Storage> StageDocument<B> {
             package_limits: loading.package,
             variant_arcs: loading.variant_arcs,
             formats: loading.formats,
+            clock: loading.clock,
             load_report: report,
             unavailable: Unavailable::new(),
         };
@@ -1261,6 +1287,7 @@ impl<B: Storage> StageDocument<B> {
         );
         reader.variant_arcs = loading.variant_arcs;
         reader.formats = loading.formats.clone();
+        reader.log = ReadLog::new(loading.clock.clone());
         reader.threads = options.thread_budget();
         let root = reader.load_root(asset, &store)?;
         if let Some(session) = &session_layer {
@@ -1273,8 +1300,11 @@ impl<B: Storage> StageDocument<B> {
                 session: options.session_layer,
             },
         )?;
-        let report = reader.commit(&mut store);
+        let start = timing::composition_start(loading.clock.as_ref());
+        let mut report = reader.commit(&mut store);
         let stage = LiveStage::compose(&mut store, root, options);
+        let composition = timing::composition(loading.clock.as_ref(), start, report.layers.len());
+        report.compositions.push(composition);
         let mut document = Self {
             store,
             stage,
@@ -1285,6 +1315,7 @@ impl<B: Storage> StageDocument<B> {
             package_limits: loading.package,
             variant_arcs: loading.variant_arcs,
             formats: loading.formats,
+            clock: loading.clock,
             load_report: report,
             unavailable: Unavailable::new(),
         };
@@ -1358,6 +1389,7 @@ impl<B: Storage> StageDocument<B> {
             );
             reader.variant_arcs = self.variant_arcs;
             reader.formats = self.formats.clone();
+            reader.log = ReadLog::new(self.clock.clone());
             reader.muted.clone_from(&self.stage.options().muted_layers);
             for (anchor, asset) in requests {
                 let result = reader.load(
@@ -1408,9 +1440,13 @@ impl<B: Storage> StageDocument<B> {
                     session: self.stage.stage().session_layer(),
                 },
             )?;
-            report.merge(reader.commit(&mut self.store));
+            let start = timing::composition_start(self.clock.as_ref());
+            let loaded = reader.commit(&mut self.store);
             self.catalog = catalog;
             self.synchronize();
+            let composition = timing::composition(self.clock.as_ref(), start, loaded.layers.len());
+            report.merge(loaded);
+            report.compositions.push(composition);
         }
     }
     /// Loads an explicitly requested source, anchored to a resident layer.
@@ -1433,6 +1469,7 @@ impl<B: Storage> StageDocument<B> {
         );
         reader.variant_arcs = self.variant_arcs;
         reader.formats = self.formats.clone();
+        reader.log = ReadLog::new(self.clock.clone());
         reader.muted.clone_from(&self.stage.options().muted_layers);
         let resolved = reader.load(asset, anchor, self.store.tokens(), self.store.paths())?;
         let id = resolved.layer_id;
@@ -1449,9 +1486,12 @@ impl<B: Storage> StageDocument<B> {
                 session: self.stage.stage().session_layer(),
             },
         )?;
-        let report = reader.commit(&mut self.store);
+        let start = timing::composition_start(self.clock.as_ref());
+        let mut report = reader.commit(&mut self.store);
         self.catalog = catalog;
         self.synchronize();
+        let composition = timing::composition(self.clock.as_ref(), start, report.layers.len());
+        report.compositions.push(composition);
         Ok((id, report))
     }
     /// The policy used for future explicit loads and reloads.
@@ -1462,6 +1502,7 @@ impl<B: Storage> StageDocument<B> {
             package: self.package_limits,
             variant_arcs: self.variant_arcs,
             formats: self.formats.clone(),
+            clock: self.clock.clone(),
         }
     }
     /// Cache inspection for a retained USDC layer without decoding arrays.
@@ -1915,6 +1956,8 @@ struct Reader<'a, B> {
     /// read: an asset resolving to one it has not read binds to its id,
     /// so the arc composes muted ([`Reader::unread_muted`]).
     muted: BTreeSet<LayerId>,
+    /// The layers read so far, with their work and, with a clock, time.
+    log: ReadLog,
 }
 impl<'a, B: Storage> Reader<'a, B> {
     fn new(
@@ -1942,6 +1985,7 @@ impl<'a, B: Storage> Reader<'a, B> {
             formats: FileFormats::default(),
             threads: Threads::new(1),
             muted: BTreeSet::new(),
+            log: ReadLog::default(),
         }
     }
     /// Reads the root layer `asset` and every layer it reaches, on the
@@ -2150,7 +2194,27 @@ impl<'a, B: Storage> Reader<'a, B> {
             layers,
             diagnostics: self.diagnostics,
             asset_failures: self.failures,
+            reads: self.log.into_reads(),
+            compositions: Vec::new(),
         }
+    }
+    /// Reads the layer `id` from `data` ([`Self::read_layer`]), logging
+    /// the read ([`LoadReport::reads`]).
+    fn logged_read(
+        &mut self,
+        data: EncodedBytes,
+        identifier: &str,
+        id: LayerId,
+        tokens: &TokenInterner,
+        paths: &PathInterner,
+    ) -> Result<Layer, IoError> {
+        let started = self.log.begin(id, data.len());
+        let read = self.read_layer(data, identifier, id, tokens, paths);
+        let prims = read
+            .as_ref()
+            .map_or(0, |layer| timing::prim_count(layer, paths));
+        self.log.end(started, prims);
+        read
     }
     fn read_layer(
         &mut self,
@@ -2574,7 +2638,7 @@ impl<B: Storage> Reader<'_, B> {
             },
         );
         self.catalog.set_state(id, State::Loading);
-        match self.read_layer(data, &identifier, id, tokens, paths) {
+        match self.logged_read(data, &identifier, id, tokens, paths) {
             Ok(layer) => {
                 self.catalog.set_state(id, State::Loaded);
                 Ok(ResolvedAsset {
@@ -2655,7 +2719,7 @@ impl<B: Storage> Reader<'_, B> {
             EncodedBytes::from(Vec::new())
         };
         self.catalog.set_state(id, State::Loading);
-        match self.read_layer(bytes, &identifier, id, tokens, paths) {
+        match self.logged_read(bytes, &identifier, id, tokens, paths) {
             Ok(layer) => {
                 self.catalog.set_state(id, State::Loaded);
                 Ok(ResolvedAsset {

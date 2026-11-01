@@ -679,6 +679,17 @@ impl<B: Storage> Replay<'_, '_, B> {
             &mut loose.layer,
             Err(IoError::new(IoErrorKind::Rejected, "layer recorded")),
         );
+        // The thread that read the source dropped its view of the bytes;
+        // the layer holds any it keeps.
+        if self
+            .reader
+            .formats
+            .for_identifier(identifier)
+            .is_none_or(FileFormat::reads_source)
+            && let Ok((outer, _)) = super::format::split_args(identifier)
+        {
+            self.reader.storage.release_source(outer);
+        }
         self.reader.catalog.set_state(id, State::Loaded);
         Ok((id, layer.ok()))
     }

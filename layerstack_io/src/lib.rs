@@ -451,6 +451,18 @@ pub trait Storage: layerstack::MaybeSync {
     fn list_siblings(&self, _identifier: &str) -> Result<Option<Vec<String>>, IoError> {
         Ok(None)
     }
+    /// Tells storage that a document read the source `identifier` into a
+    /// layer, which kept what it needs of the bytes: views of them it
+    /// holds (a lazily read USDC layer's, a USDZ package's) keep their
+    /// allocation alive themselves. Storage that holds sources in memory
+    /// may drop its own handle here; a later read of `identifier` (a
+    /// reload, or another layer of the same source) is then its to answer,
+    /// and [`IoErrorKind::Unavailable`] makes the document ask for the
+    /// source again ([`StageDocument::unavailable_assets`]). Called after
+    /// each successful read of a layer from storage, never after a failed
+    /// one, nor for [`StageDocument::read_asset_bytes`]. The default keeps
+    /// everything. AOUSD Core §9 (host asset transport).
+    fn release_source(&mut self, _identifier: &str) {}
     /// Writes a complete source.
     fn write(&mut self, identifier: &str, bytes: &[u8]) -> Result<(), IoError>;
     /// Writes a complete source whose bytes `produce` hands, in order, to the
@@ -2892,11 +2904,11 @@ impl<B: Storage> Reader<'_, B> {
                 layer: None,
             });
         }
-        let bytes = if self
+        let reads_source = self
             .formats
             .for_identifier(&identifier)
-            .is_none_or(FileFormat::reads_source)
-        {
+            .is_none_or(FileFormat::reads_source);
+        let bytes = if reads_source {
             self.storage
                 .read_encoded(&outer)
                 .map_err(|e| e.at(&outer))?
@@ -2907,6 +2919,11 @@ impl<B: Storage> Reader<'_, B> {
         match self.logged_read(bytes, &identifier, id, tokens, paths) {
             Ok(layer) => {
                 self.catalog.set_state(id, State::Loaded);
+                // The read dropped its view of the bytes; the layer (or
+                // its package) holds any it keeps.
+                if reads_source {
+                    self.storage.release_source(&outer);
+                }
                 Ok(ResolvedAsset {
                     layer_id: id,
                     resolved_path: identifier,

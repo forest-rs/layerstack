@@ -102,7 +102,11 @@ await stage.resolve(source);
   members resolve inside it, and what it references outside is unavailable
   like anything else. Identifiers are the authored path anchored to the anchor layer's
   directory (`./a.usda` from `set/scene.usda` is `set/a.usda`); map them to
-  URLs however you like.
+  URLs however you like. The module keeps supplied bytes only until the
+  stage has read a layer from them, unless the layer keeps views of them
+  (a USDZ does), so a text layer's source is freed once parsed; an asset
+  wanted again after that (another layer of the same file, under other
+  format arguments) is unavailable again, and `resolve` fetches it again.
 - **Value clips load per query.** Clips are not arcs: `unavailable()` never
   lists them, and a stage reads only the clips a query needs.
   `prepareClipQuery(path, { time? })` plans what the attribute needs at

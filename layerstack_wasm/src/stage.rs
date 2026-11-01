@@ -204,7 +204,9 @@ impl Stage {
     /// ([`Self::edit_layer`]): the way to edit a root that cannot be saved,
     /// such as a USDZ package's. The stage composes, and recomposes edits,
     /// within `limits` ([`StageOptions::limits`]; [`BROWSER_LIMITS`] by
-    /// default in TypeScript).
+    /// default in TypeScript). Storage releases the root's bytes once the
+    /// stage has read them, as it does every supplied source's
+    /// ([`HostStorage`]).
     ///
     /// Spec: AOUSD Core §10.3.1 (the session layer is the strongest layer
     /// of the root layer stack).
@@ -385,7 +387,9 @@ impl Stage {
     /// `[loaded, failures, reads, compositions]`, the ids of the layers it
     /// read, for each asset that failed `[asset, anchor, code, message]`
     /// (a confirmed-absent asset fails with `io.not_found`), and where its
-    /// work went ([`load_work`]).
+    /// work went ([`load_work`]). Storage releases the bytes of each
+    /// source read once no layer holds them ([`HostStorage`]): a source
+    /// wanted again after that is unavailable until supplied again.
     ///
     /// # Errors
     ///
@@ -1226,6 +1230,21 @@ impl Stage {
     #[must_use]
     pub(crate) fn supplied_bytes(&self) -> u64 {
         self.document.storage().supplied_bytes()
+    }
+
+    /// The supplied bytes storage released so far, once the stage read
+    /// them and no layer held them ([`HostStorage::released`]).
+    #[must_use]
+    pub(crate) fn released_bytes(&self) -> u64 {
+        self.document.storage().released().bytes
+    }
+
+    /// Whether storage released the bytes supplied for `identifier` once
+    /// the stage read them ([`HostStorage::is_released`]): wanted again,
+    /// it must be supplied again.
+    #[must_use]
+    pub(crate) fn is_released(&self, identifier: &str) -> bool {
+        self.document.storage().is_released(identifier)
     }
 
     /// The composed metadata field `key` of the prim or property at
@@ -3087,6 +3106,18 @@ impl Stage {
     pub fn js_supplied_bytes(&self) -> u64 {
         self.supplied_bytes()
     }
+
+    /// The record `released_bytes` builds, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = releasedBytes)]
+    pub fn js_released_bytes(&self) -> u64 {
+        self.released_bytes()
+    }
+
+    /// The record `is_released` builds, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = isReleased)]
+    pub fn js_is_released(&self, identifier: &str) -> bool {
+        self.is_released(identifier)
+    }
 }
 
 /// `[created, removed, resynced, changedInfoOnly, properties,
@@ -4893,6 +4924,152 @@ def "Lone" (
         assert_eq!(
             crate::schemas::tests::show(&stage.prototypes()),
             "[[/North, /South]]"
+        );
+    }
+
+    /// A layer read from supplied text leaves storage nothing to keep:
+    /// the root's, a sublayer's and a reference's bytes are released as
+    /// each is read, and the stage still composes them.
+    #[test]
+    fn supplied_text_is_released_once_read() {
+        let stage = resolved();
+        let storage = stage.document().storage();
+        for identifier in ["scene.usda", "sub.usda", "parts/ball.usda"] {
+            assert!(storage.is_released(identifier), "{identifier}");
+            assert_eq!(storage.bytes(identifier), None);
+        }
+        assert_eq!(
+            storage.released(),
+            crate::Released {
+                sources: 3,
+                bytes: (ROOT.len() + SUB.len() + BALL.len()) as u64,
+            }
+        );
+        assert_eq!(stage.released_bytes(), storage.released().bytes);
+        assert_eq!(
+            stage.get("/Ball.serial", None).unwrap().as_list().unwrap()[2],
+            Wire::Int64(9_007_199_254_740_993)
+        );
+    }
+
+    /// A released source read again is unavailable until the host
+    /// supplies it again: another layer of it waits in `unavailable`, and
+    /// a reload that selects it fails naming it and changes nothing.
+    #[test]
+    fn a_released_source_reread_is_unavailable_until_supplied_again() {
+        use layerstack_io::{IoErrorKind, ReloadPolicy};
+        let mut stage = resolved();
+        let serial =
+            |stage: &Stage| stage.get("/Ball.serial", None).unwrap().as_list().unwrap()[2].clone();
+
+        // Another layer of a released source: the same bytes under format
+        // arguments.
+        let mut batch = EditBatch::new();
+        batch.add_arc(
+            false,
+            "/Ball".into(),
+            Some("./parts/ball.usda:SDF_FORMAT_ARGS:lod=low".into()),
+            Some("/Ball".into()),
+            "backOfPrepend".into(),
+            0.0,
+            1.0,
+        );
+        let root = stage.document().stage().stage().root_layer().unwrap();
+        stage.apply(root.0, &mut batch).unwrap();
+        assert_eq!(identifiers(&stage.unavailable()), ["parts/ball.usda"]);
+        stage
+            .document_mut()
+            .storage_mut()
+            .supply("parts/ball.usda", BALL.as_bytes().to_vec());
+        stage.load_supplied().unwrap();
+        assert!(stage.unavailable().as_list().unwrap().is_empty());
+        assert!(stage.document().storage().is_released("parts/ball.usda"));
+
+        // A reload of a released layer.
+        let sub = stage.document_mut().layer_named("sub.usda").unwrap();
+        let Err(error) = stage
+            .document_mut()
+            .prepare_reload_layers(&[sub], ReloadPolicy::PreserveDirty)
+        else {
+            panic!("the sublayer was released");
+        };
+        assert_eq!(error.kind, IoErrorKind::Unavailable);
+        assert_eq!(error.identifier.as_deref(), Some("sub.usda"));
+        assert_eq!(serial(&stage), Wire::Int64(9_007_199_254_740_993));
+        stage.document_mut().storage_mut().supply(
+            "sub.usda",
+            SUB.replace("9007199254740993", "7").into_bytes(),
+        );
+        stage
+            .document_mut()
+            .prepare_reload_layers(&[sub], ReloadPolicy::PreserveDirty)
+            .unwrap()
+            .commit();
+        assert_eq!(serial(&stage), Wire::Int64(7));
+        assert!(stage.document().storage().is_released("sub.usda"));
+    }
+
+    /// An eagerly read USDC layer decodes its bytes, so they are released;
+    /// a USDZ package's are not, since the stage reads its members from
+    /// them, and an arc that reaches a member later still reads it.
+    #[test]
+    fn package_bytes_stay_for_members_read_later() {
+        let mut source = resolved();
+        let root = source.document().stage().stage().root_layer().unwrap();
+        let binary = source.export_layer(root.0, "usdc").unwrap();
+        let record = source.export_package().unwrap();
+        let package = bytes(&record.as_list().unwrap()[0]).to_vec();
+
+        let scene = "#usda 1.0\ndef \"Packed\" (\n    prepend references = @./pkg.usdz[layers/000000.usda]@</Ball>\n) {\n}\ndef \"Later\" {\n}\ndef \"Binary\" (\n    prepend references = @./bin.usdc@</Base>\n) {\n}\n";
+        let mut stage = Stage::open(
+            "scene.usda",
+            scene.as_bytes().to_vec(),
+            false,
+            false,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
+        let storage = stage.document_mut().storage_mut();
+        storage.supply("pkg.usdz", package);
+        storage.supply("bin.usdc", binary);
+        // The binary copy keeps the root's sublayer.
+        storage.supply("sub.usda", SUB.as_bytes().to_vec());
+        stage.load_supplied().unwrap();
+        assert!(stage.unavailable().as_list().unwrap().is_empty());
+        let storage = stage.document().storage();
+        assert!(storage.is_released("bin.usdc"), "decoded into specs");
+        assert!(!storage.is_released("pkg.usdz"), "the package holds it");
+        assert!(storage.bytes("pkg.usdz").is_some());
+        assert_eq!(
+            stage
+                .get("/Packed.points", None)
+                .unwrap()
+                .as_list()
+                .unwrap()[4],
+            Wire::Number(2.0)
+        );
+        assert_eq!(
+            stage.get("/Binary.size", None).unwrap().as_list().unwrap()[2],
+            Wire::Number(2.0)
+        );
+
+        let mut batch = EditBatch::new();
+        batch.add_arc(
+            false,
+            "/Later".into(),
+            Some("./pkg.usdz[layers/000001.usda]".into()),
+            Some("/Ball".into()),
+            "frontOfPrepend".into(),
+            0.0,
+            1.0,
+        );
+        let root = stage.document().stage().stage().root_layer().unwrap();
+        stage.apply(root.0, &mut batch).unwrap();
+        stage.load_supplied().unwrap();
+        assert!(stage.unavailable().as_list().unwrap().is_empty());
+        assert_eq!(
+            stage.get("/Later.serial", None).unwrap().as_list().unwrap()[2],
+            Wire::Int64(9_007_199_254_740_993)
         );
     }
 }

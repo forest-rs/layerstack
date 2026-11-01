@@ -157,3 +157,83 @@ fn shared_transport_override_and_unsupported_bounded_reads_keep_their_contracts(
         "unsupported bounds never fall back to an unbounded read"
     );
 }
+
+/// A storage that records the sources a document says it read.
+#[derive(Default)]
+struct Releasing {
+    memory: Memory,
+    released: Vec<String>,
+}
+impl Storage for Releasing {
+    fn identify(&self, asset: &str, anchor: Option<&str>) -> Result<String, IoError> {
+        self.memory.identify(asset, anchor)
+    }
+    fn read(&self, identifier: &str) -> Result<Vec<u8>, IoError> {
+        self.memory.read(identifier)
+    }
+    fn release_source(&mut self, identifier: &str) {
+        self.released.push(identifier.into());
+    }
+    fn write(&mut self, identifier: &str, bytes: &[u8]) -> Result<(), IoError> {
+        self.memory.write(identifier, bytes)
+    }
+}
+
+/// The document tells storage each source it read a layer from, once the
+/// read is done, on one thread or several: never one whose read failed,
+/// nor a resource read as bytes. A package is one source.
+#[test]
+fn storage_hears_each_source_read_into_a_layer() {
+    let scene = "#usda 1.0\n(\n    subLayers = [@sub.usda@]\n)\n\
+                 def \"P\" (\n    prepend references = [@a.usda@, @missing.usda@]\n) {\n}\n";
+    for threads in [1, 4] {
+        let memory = Memory::with(&[
+            ("scene.usda", scene),
+            ("sub.usda", "#usda 1.0\n"),
+            ("a.usda", "#usda 1.0\n(\n    subLayers = [@b.usda@]\n)\n"),
+            ("b.usda", "#usda 1.0\n"),
+            ("image.png", "pixels"),
+        ]);
+        let mut document = StageDocument::open(
+            Releasing {
+                memory,
+                ..Default::default()
+            },
+            "scene.usda",
+            StageOptions {
+                threads,
+                ..StageOptions::default()
+            },
+        )
+        .unwrap();
+        document.read_asset_bytes("image.png", None).unwrap();
+        let mut released = document.storage().released.clone();
+        released.sort();
+        assert_eq!(
+            released,
+            ["a.usda", "b.usda", "scene.usda", "sub.usda"],
+            "{threads} threads"
+        );
+    }
+
+    let package = layerstack_usdz::write_usdz(&[
+        layerstack_usdz::PackageFile::new(
+            "root.usda",
+            b"#usda 1.0\n(\n    subLayers = [@sub.usda@]\n)\n",
+        ),
+        layerstack_usdz::PackageFile::new("sub.usda", b"#usda 1.0\n"),
+    ])
+    .unwrap();
+    let mut memory = Memory::default();
+    memory.files.insert("scene.usdz".into(), package);
+    let document = StageDocument::open(
+        Releasing {
+            memory,
+            ..Default::default()
+        },
+        "scene.usdz",
+        StageOptions::default(),
+    )
+    .unwrap();
+    assert_eq!(document.storage().released, ["scene.usdz"]);
+}

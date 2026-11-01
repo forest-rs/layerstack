@@ -33,6 +33,7 @@ import init, {
   skinNormals,
   skinPoints,
   skinTransform,
+  trapCause,
 } from "../wasm/layerstack.js";
 import { LayerstackError } from "./errors.js";
 import { Layerstack } from "./stage.js";
@@ -111,6 +112,7 @@ async function instantiate(source: URL | string | BufferSource | WebAssembly.Mod
     skinNormals,
     skinTransform,
     blackbodyTemperatureRgb,
+    trapCause,
     memory,
   });
 }

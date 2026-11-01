@@ -104,7 +104,7 @@ export const PACKAGE_VERSION = "0.1.0";
  * The ABI this package speaks: the version of the records it exchanges
  * with the native module (`layerstack_wasm::ABI`).
  */
-export const ABI = 9;
+export const ABI = 10;
 
 /** The record `loadSupplied` and `readSupplied` return: `[loaded, failures, reads, compositions]`. */
 type LoadRecord = [
@@ -315,6 +315,12 @@ export interface NativeModule {
     elementSize: number,
   ): Float64Array;
   blackbodyTemperatureRgb(kelvin: number): Float32Array;
+  /**
+   * Why the module trapped (`layerstack_wasm::TrapCause`): 1 a panic, 2
+   * out of memory, 0 when the module cannot tell (one built with `std`).
+   * Read only after a call traps.
+   */
+  trapCause(): number;
   /** The module's memory, for {@link Layerstack.transfer}; optional. */
   readonly memory?: WebAssembly.Memory;
 }
@@ -332,7 +338,8 @@ export class Layerstack {
   /** This package's and the module's versions. */
   readonly version: Version;
   readonly #module: NativeModule;
-  #trapped: unknown = undefined;
+  /** The error of the call that trapped, which every later call throws again as its cause. */
+  #trapped: LayerstackError | undefined = undefined;
   #bytesIn = 0;
   #bytesOut = 0;
   #views = 0;
@@ -518,7 +525,7 @@ export class Layerstack {
    */
   call<T>(operation: string, f: () => T): T {
     if (this.#trapped !== undefined) {
-      throw new LayerstackError("module.trapped", operation, "the module trapped earlier; load a new instance", {
+      throw new LayerstackError(this.#trapped.code as "module.trapped" | "module.out_of_memory", operation, `the module trapped earlier (${this.#trapped.message}); load a new instance`, {
         cause: this.#trapped,
       });
     }
@@ -545,10 +552,13 @@ export class Layerstack {
       });
     }
     if (error instanceof WebAssembly.RuntimeError) {
-      this.#trapped = error;
-      return new LayerstackError("module.trapped", operation, `the module trapped: ${error.message}`, {
-        cause: error,
-      });
+      const memory = this.#module.memory?.buffer.byteLength;
+      const held = memory === undefined ? "" : ` with ${(memory / 2 ** 20).toFixed(0)} MiB of memory`;
+      this.#trapped =
+        this.#module.trapCause() === 2
+          ? new LayerstackError("module.out_of_memory", operation, `the module ran out of memory${held}; load a new instance`, { cause: error })
+          : new LayerstackError("module.trapped", operation, `the module trapped${held}: ${error.message}; load a new instance`, { cause: error });
+      return this.#trapped;
     }
     return error;
   }

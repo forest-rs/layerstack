@@ -21,7 +21,31 @@ export type EditorStatus =
   | { readonly kind: "empty" }
   | { readonly kind: "opening"; readonly label: string }
   | { readonly kind: "ready" }
-  | { readonly kind: "failed"; readonly label: string; readonly message: string };
+  | { readonly kind: "failed"; readonly label: string; readonly message: string }
+  /**
+   * A Wasm module trapped: out of memory (`module.out_of_memory`, or a raw
+   * trap the stagehand module reports) or a panic. Its instance is dead
+   * for the rest of the page, so the editor stops calling into it; only a
+   * reload brings it back. `label` is the scene being opened, if any.
+   */
+  | { readonly kind: "lost"; readonly label: string | null; readonly outOfMemory: boolean; readonly message: string };
+
+/**
+ * Whether `error` (or an error it was caused by) is a Wasm module's trap,
+ * after which the module cannot be used again: a `LayerstackError` with a
+ * `module.trapped` or `module.out_of_memory` code, or a raw
+ * `WebAssembly.RuntimeError`.
+ */
+export function moduleTrap(error: unknown): { readonly outOfMemory: boolean; readonly message: string; readonly raw: boolean } | null {
+  for (let cause = error, depth = 0; cause instanceof Error && depth < 4; cause = cause.cause, depth += 1) {
+    const code = (cause as { code?: unknown }).code;
+    if (code === "module.out_of_memory" || code === "module.trapped") {
+      return { outOfMemory: code === "module.out_of_memory", message: cause.message, raw: false };
+    }
+    if (cause instanceof WebAssembly.RuntimeError) return { outOfMemory: false, message: cause.message, raw: true };
+  }
+  return null;
+}
 
 /** The stage's frames, as its metadata gives them. */
 export interface TimeRange {
@@ -170,9 +194,33 @@ export class EditorStore {
       if (opening !== this.#opening) return;
       this.opening = null;
       this.openingPhase = null;
+      if (this.lose(error, source.label)) return;
       this.status = { kind: "failed", label: source.label, message: error instanceof Error ? error.message : String(error) };
       this.#bump();
     }
+  }
+
+  /**
+   * Stops the editor if `error` is a module's trap ({@link moduleTrap}):
+   * the status becomes `lost`, playback stops, and nothing calls into the
+   * modules again (the frame shows why instead of the panels). Returns
+   * whether it was one.
+   */
+  lose(error: unknown, label: string | null = null): boolean {
+    const trap = moduleTrap(error);
+    if (trap === null) return false;
+    if (this.status.kind === "lost") return true;
+    // The layerstack wrapper translates its module's traps; a raw one is
+    // the stagehand module's, which says why itself.
+    const outOfMemory = trap.raw ? this.stagehand.trapCause() === "outOfMemory" : trap.outOfMemory;
+    const message = trap.raw ? `the draw module trapped: ${trap.message}` : trap.message;
+    // The stack says which module trapped, and where.
+    console.error(error);
+    cancelAnimationFrame(this.#playFrame);
+    this.playing = false;
+    this.status = { kind: "lost", label: label ?? this.source?.label ?? null, outOfMemory, message };
+    this.#bump();
+    return true;
   }
 
   /**

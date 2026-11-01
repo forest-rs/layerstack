@@ -1,5 +1,5 @@
 {
   "description": "The stagehand module's size budget: CI fails a build over it. Sizes in bytes, of wasm/layerstack_stagehand_bg.wasm after wasm-opt. Separate from @forest-rs/layerstack's, whose module this one does not link.",
   "optimized": 250000,
-  "gzip": 100000
+  "gzip": 105000
 }

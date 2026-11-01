@@ -10,6 +10,11 @@
  * - `module.abi`: the module speaks another ABI than this package.
  * - `module.trapped`: the module trapped (a panic); the instance is dead
  *   and every later call fails with this code. Load a new instance.
+ * - `module.out_of_memory`: the module trapped because an allocation
+ *   failed: the work needed more memory than the module could get (a
+ *   32-bit Wasm module addresses at most 4 GiB, and a browser may give
+ *   less). The instance is dead, as for `module.trapped`; a new instance
+ *   starts with its memory empty.
  * - `stage.disposed`: the stage was disposed.
  * - `layer.affinity`: a layer of another stage was passed to this one.
  * - `argument.invalid`: an argument has the wrong type.
@@ -158,6 +163,7 @@ export type ErrorCode =
   | "module.load"
   | "module.abi"
   | "module.trapped"
+  | "module.out_of_memory"
   | "stage.disposed"
   | "layer.affinity"
   | "argument.invalid"

@@ -189,14 +189,20 @@ export class TextureStore {
     if (bytes === null) return null;
     const blob = new Blob([bytes.slice()]);
     const options: ImageBitmapOptions = { imageOrientation: flip ? "flipY" : "from-image", premultiplyAlpha: "none", colorSpaceConversion: "none" };
-    let bitmap = await createImageBitmap(blob, options);
-    const scale = Math.min(1, MAX_TEXTURE_SIZE / Math.max(bitmap.width, bitmap.height));
+    // The size from the file's header, when it gives one, so a large image
+    // is decoded once, already scaled; otherwise from a first decode.
+    const known = imageSize(bytes);
+    let bitmap = known === null ? await createImageBitmap(blob, options) : null;
+    const { width, height } = known ?? bitmap!;
+    const scale = Math.min(1, MAX_TEXTURE_SIZE / Math.max(width, height));
     if (scale < 1) {
-      const resizeWidth = Math.max(1, Math.round(bitmap.width * scale));
-      const resizeHeight = Math.max(1, Math.round(bitmap.height * scale));
-      bitmap.close();
+      const resizeWidth = Math.max(1, Math.round(width * scale));
+      const resizeHeight = Math.max(1, Math.round(height * scale));
+      bitmap?.close();
       bitmap = await createImageBitmap(blob, { ...options, resizeWidth, resizeHeight, resizeQuality: "high" });
       this.#capped += 1;
+    } else {
+      bitmap ??= await createImageBitmap(blob, options);
     }
     this.#decoded += 1;
     const texture = new Texture(bitmap);
@@ -241,6 +247,38 @@ export class TextureStore {
     this.#ready.clear();
     this.#images.clear();
   }
+}
+
+/**
+ * A PNG's or JPEG's size in pixels from its header (PNG's `IHDR`, JPEG's
+ * start-of-frame segment); `null` for any other format, a header it
+ * cannot read, or a JPEG with EXIF data, whose orientation may turn it.
+ */
+export function imageSize(bytes: Uint8Array): { width: number; height: number } | null {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  // PNG: the signature, then `IHDR` with the width and height first.
+  if (bytes.length >= 24 && view.getUint32(0) === 0x89504e47 && view.getUint32(12) === 0x49484452) {
+    return { width: view.getUint32(16), height: view.getUint32(20) };
+  }
+  // JPEG: segments after SOI, up to the first start of frame (SOF0-SOF15,
+  // except DHT, JPG and DAC).
+  if (bytes.length < 4 || view.getUint16(0) !== 0xffd8) return null;
+  let at = 2;
+  while (at + 9 <= bytes.length) {
+    if (bytes[at] !== 0xff) return null;
+    const marker = bytes[at + 1]!;
+    if (marker === 0xff) {
+      at += 1;
+      continue;
+    }
+    const length = view.getUint16(at + 2);
+    if (marker === 0xe1) return null;
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      return { width: view.getUint16(at + 7), height: view.getUint16(at + 5) };
+    }
+    at += 2 + length;
+  }
+  return null;
 }
 
 const WRAPS: Record<TextureWrap, Wrapping> = {

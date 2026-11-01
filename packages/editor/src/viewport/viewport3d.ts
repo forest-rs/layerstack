@@ -124,6 +124,7 @@ import {
   InterleavedBufferAttribute,
   LineBasicMaterial,
   LineSegments,
+  Material,
   Matrix4,
   Mesh,
   MeshStandardMaterial,
@@ -279,6 +280,13 @@ export class Viewport {
   #restyling = false;
   /** The scene last applied, to restyle textured draws when their images arrive. */
   #applied: ViewportScene | null = null;
+  /**
+   * Materials a restyle replaced, disposed after the next render. A
+   * material takes its shader program when it is first drawn, so disposing
+   * the one it replaces before then would release the program while its
+   * replacement still needs it, and three.js would compile it again.
+   */
+  #retired: Material[] = [];
 
   /**
    * `read` and `exists` reach the stage's assets (textures and UDIM tiles)
@@ -393,6 +401,8 @@ export class Viewport {
     this.#resizer.disconnect();
     this.#controls.dispose();
     for (const id of [...this.#objects.keys()]) this.#drop(id);
+    for (const material of this.#retired) material.dispose();
+    this.#retired = [];
     for (const geometry of this.#geometries.values()) geometry.dispose();
     this.#geometries.clear();
     for (const path of [...this.#lights.keys()]) this.#dropLight(path);
@@ -497,7 +507,7 @@ export class Viewport {
       const view = items.get(id);
       const object = this.#objects.get(id);
       if (view === undefined || object === undefined || added.has(id)) continue;
-      for (const material of [object.material].flat()) material.dispose();
+      this.#retired.push(...[object.material].flat());
       object.material = restyled(object, materials(view, selected, scene.materials, this.#textures));
     }
     this.#selected = selected;
@@ -654,7 +664,7 @@ export class Viewport {
       if (!bound.some((path) => path !== null && (scene.materials.get(path)?.textures.length ?? 0) > 0) && !standinTextured(view.buffers.standin)) continue;
       const object = this.#objects.get(view.item.id);
       if (object === undefined) continue;
-      for (const material of [object.material].flat()) material.dispose();
+      this.#retired.push(...[object.material].flat());
       object.material = restyled(object, materials(view, this.#selected, scene.materials, this.#textures));
     }
     this.#link(scene);
@@ -722,6 +732,12 @@ export class Viewport {
   }
 
   #draw(): void {
+    this.#render();
+    for (const material of this.#retired) material.dispose();
+    this.#retired = [];
+  }
+
+  #render(): void {
     const looking = this.#looking()?.camera ?? null;
     if (looking === null) {
       this.#renderer.toneMappingExposure = 1;

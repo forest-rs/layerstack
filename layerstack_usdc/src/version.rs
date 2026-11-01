@@ -16,7 +16,10 @@
 //!
 //! | Version | Adds | Reader support |
 //! |---------|------|----------------|
-//! | 0.7  | 64-bit array sizes | oldest readable version |
+//! | 0.4  | compressed structural sections (tokens, fields, field sets, paths, specs) | oldest readable version |
+//! | 0.5  | compressed `int`, `uint`, `int64` and `uint64` arrays; arrays no longer store a rank | yes |
+//! | 0.6  | compressed `half`, `float` and `double` arrays (integer-coded or lookup table) | yes |
+//! | 0.7  | 64-bit array sizes | yes |
 //! | 0.8  | payload list ops, payload layer offsets | yes |
 //! | 0.9  | `timecode` and `timecode[]` values | yes |
 //! | 0.10 | `pathExpression` values | yes |
@@ -26,6 +29,17 @@
 //! | 0.14 | native array edits (`VtArrayEdit`) | yes, as [`Value::TypedArrayEdit`] |
 //! | 0.15 | spline `loopBoundaryTime` and `GfTimeCode`-valued splines (Ts binary format 3) | yes; boundary times and `TimeCode` values are preserved |
 //! | 0.16 | `duration` and `duration[]` values (value type 61); `GfDuration`-valued splines (Ts binary format 4) | yes |
+//!
+//! Versions before 0.4 store the structural sections uncompressed and are
+//! rejected with [`UsdcError::UnsupportedVersion`], although OpenUSD still
+//! reads them (back to 0.0.1). Before 0.7, the reader frames arrays as OpenUSD's does: a
+//! `uint32` element count, preceded before 0.5 by a `uint32` rank that is
+//! skipped, and the compressed bit of an array value is ignored for element
+//! types whose compression the file's version predates
+//! (`_ArrayValueHandlerBase::UnpackArray`, `_ReadUncompressedArray` and
+//! `_ReadPossiblyCompressedArray` in `crateFile.cpp`). AOUSD Core §16.3
+//! describes the 0.7 and later framing only. Files before 0.8 hold payloads
+//! without layer offsets, which read as the identity offset.
 //!
 //! Value type 60 (`SdfAnimationBlock`) is not tied to a version: OpenUSD
 //! v26.08 writes it without raising the file version. It is read
@@ -55,11 +69,20 @@ pub struct CrateVersion {
 }
 
 impl CrateVersion {
-    /// The oldest version this reader accepts, 0.7.0.
-    pub const OLDEST_READABLE: Self = Self::new(0, 7, 0);
+    /// The oldest version this reader accepts, 0.4.0, the first with
+    /// compressed structural sections.
+    pub const OLDEST_READABLE: Self = Self::new(0, 4, 0);
     /// The newest version this reader accepts, 0.16 (any patch level).
     pub const NEWEST_READABLE: Self = Self::new(0, 16, 0);
 
+    /// Version 0.5.0, which introduced compressed `int`, `uint`, `int64` and
+    /// `uint64` arrays and dropped the rank arrays stored before their size.
+    pub const COMPRESSED_INTEGER_ARRAYS: Self = Self::new(0, 5, 0);
+    /// Version 0.6.0, which introduced compressed `half`, `float` and
+    /// `double` arrays.
+    pub const COMPRESSED_FLOAT_ARRAYS: Self = Self::new(0, 6, 0);
+    /// Version 0.7.0, which widened array sizes from 32 to 64 bits.
+    pub const ARRAY_SIZES_64_BIT: Self = Self::new(0, 7, 0);
     /// Version 0.8.0, OpenUSD's version for newly created files
     /// (`DEFAULT_NEW_VERSION`, `USD_WRITE_NEW_USDC_FILES_AS_VERSION` in
     /// `crateFile.cpp`) and the version the writer starts from.
@@ -103,7 +126,8 @@ impl CrateVersion {
     /// assert!(CrateVersion::new(0, 16, 0).is_readable());
     /// assert!(CrateVersion::new(0, 16, 1).is_readable());
     /// assert!(!CrateVersion::new(0, 17, 0).is_readable());
-    /// assert!(!CrateVersion::new(0, 6, 0).is_readable());
+    /// assert!(CrateVersion::new(0, 4, 0).is_readable());
+    /// assert!(!CrateVersion::new(0, 3, 0).is_readable());
     /// assert!(!CrateVersion::new(1, 0, 0).is_readable());
     /// ```
     #[must_use]

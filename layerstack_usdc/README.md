@@ -61,7 +61,7 @@ resolved layers to insert into the caller's store, and diagnostics for authored
 content that could not be represented. Inspect those diagnostics as well as the
 outer `Result` before assuming a complete import.
 
-The reader accepts crate versions **0.7 through 0.15**, with feature-specific
+The reader accepts crate versions **0.4 through 0.16**, with feature-specific
 limits described in the [version module](https://docs.rs/layerstack_usdc/latest/layerstack_usdc/version/index.html).
 The writer starts at **0.8.0**, upgrades to **0.9.0** for timecode values,
 to **0.10.0** for path expressions, **0.11.0** for relocates,

@@ -127,7 +127,7 @@ pub use error::Error;
 pub use receipt::EditReceipt;
 pub use skel::{skin_normals, skin_points, skin_transform};
 pub use stage::{BROWSER_LIMITS, SessionLayer, Stage, TypedSchema};
-pub use storage::HostStorage;
+pub use storage::{HostStorage, Released};
 
 use alloc::vec;
 use alloc::vec::Vec;

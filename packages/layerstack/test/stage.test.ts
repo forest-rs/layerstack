@@ -117,6 +117,20 @@ describe("the resolve loop", () => {
     assert.deepEqual(stage.attribute("/Ball.radius")?.get(), { kind: "scalar", type: "double", value: 0.5 });
   });
 
+  it("supplies a source again when another layer of it is wanted after its bytes were freed", async () => {
+    const root =
+      '#usda 1.0\ndef "Low" (\n    prepend references = @./part.usda@</Part>\n) {\n}\n' +
+      'def "High" (\n    prepend references = @./part.usda:SDF_FORMAT_ARGS:lod=high@</Part>\n) {\n}\n';
+    using stage = layerstack.open({ identifier: "scene.usda", bytes: new TextEncoder().encode(root) });
+    const source = mockSource({ "part.usda": '#usda 1.0\ndef "Part" {\n    double size = 3\n}\n' });
+    const result = await stage.resolve(source);
+    assert.deepEqual(source.asked, ["part.usda", "part.usda"], "read, freed, then wanted by the second layer");
+    assert.equal(result.fetched, 1);
+    assert.equal(stage.status().complete, true);
+    assert.deepEqual(stage.attribute("/High.size")?.get(), { kind: "scalar", type: "double", value: 3 });
+    assert.deepEqual(stage.attribute("/Low.size")?.get(), { kind: "scalar", type: "double", value: 3 });
+  });
+
   it("can be driven by hand: unavailable, supply, loadSupplied", () => {
     using stage = openScene();
     for (const need of stage.unavailable()) stage.supply(need.identifier, bytes(need.identifier));

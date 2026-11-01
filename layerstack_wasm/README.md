@@ -10,7 +10,11 @@ The module opens a stage from the bytes of its root layer and never fetches.
 The host runs the loop: the stage lists the assets it asks for that the host
 has not supplied (unavailable), the host fetches them, supplies their bytes
 (or confirms one absent), and the stage reads them, until none is
-unavailable. A USDZ package is one supplied source. The stage then
+unavailable. A USDZ package is one supplied source. The module keeps a
+supplied source's bytes only until the stage has read a layer from them,
+unless the layer keeps views of them (a package does), so a text layer's
+source is freed once parsed; an asset wanted again after that is
+unavailable until supplied again. The stage then
 answers prim, child, attribute, relationship, metadata and value queries, and
 explains where a value comes from. Failures carry a stable dotted code
 (`io.unavailable`, `path.invalid`).

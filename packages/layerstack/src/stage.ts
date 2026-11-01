@@ -120,6 +120,8 @@ export interface NativeStage extends Disposable {
   unavailable(): unknown;
   supply(identifier: string, bytes: Uint8Array): void;
   suppliedBytes(): bigint;
+  releasedBytes(): bigint;
+  isReleased(identifier: string): boolean;
   confirmAbsent(identifier: string): void;
   loadSupplied(): unknown;
   readSupplied(): unknown;
@@ -864,6 +866,13 @@ export class Stage implements Disposable {
    * `null` to confirm there is no such asset. An unavailable asset is read at the
    * next {@link Stage.loadSupplied}; a layer already read stays as it was
    * read.
+   *
+   * The module keeps the bytes only until the stage has read a layer from
+   * them, unless the layer keeps views of them (a USDZ package does):
+   * a text layer's bytes are freed once it is parsed. An asset wanted
+   * again after that (another layer of the same file, under other format
+   * arguments) is unavailable again and must be supplied again;
+   * {@link Stage.resolve} does so.
    */
   supply(identifier: string, bytes: Uint8Array | null): void {
     if (typeof identifier !== "string" || !(bytes === null || bytes instanceof Uint8Array)) {
@@ -966,7 +975,11 @@ export class Stage implements Disposable {
           compose();
           continue;
         }
-        const stuck = unavailable.find((identifier) => supplied.has(identifier));
+        // Supplied and still wanted is stuck, unless the stage read it and
+        // its bytes were freed: another layer of it wants them again.
+        const stuck = unavailable.find(
+          (identifier) => supplied.has(identifier) && !this.#call("resolve", (native) => native.isReleased(identifier)),
+        );
         if (stuck !== undefined) {
           throw new LayerstackError("resolve.stuck", "resolve", "an asset was supplied but is still unavailable", {
             identifier: stuck,
@@ -1097,7 +1110,10 @@ export class Stage implements Disposable {
       if (unavailable.length === 0) {
         return Object.freeze({ ...prepared, rounds, fetched: supplied.size, bytes });
       }
-      const stuck = unavailable.find((identifier) => supplied.has(identifier));
+      const stuck = unavailable.find(
+        (identifier) =>
+          supplied.has(identifier) && !this.#call("resolveClipQuery", (native) => native.isReleased(identifier)),
+      );
       if (stuck !== undefined) {
         throw new LayerstackError("resolve.stuck", "resolveClipQuery", "an asset was supplied but is still unavailable", {
           identifier: stuck,

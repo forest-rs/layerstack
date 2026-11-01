@@ -25,7 +25,11 @@ export type TextureColorSpace = "auto" | "raw" | "sRGB";
 export type MaterialValue<T> =
   /** One value for the whole surface: authored, through an interface input, or the definition's fallback. */
   | { readonly kind: "constant"; readonly value: T }
-  /** A lookup of {@link MaterialItem.textures}`[texture]`, its output `channel`. */
+  /**
+   * A lookup of {@link MaterialItem.textures}`[texture]`, the `channel` read:
+   * `rgb` for a color; for a number the one-channel output it connects to,
+   * or `r` when it connects to `rgb` ({@link textureChannel}).
+   */
   | { readonly kind: "texture"; readonly texture: number; readonly channel: TextureChannel }
   /** A primvar of the drawn prim, read by a `UsdPrimvarReader`; `fallback` where the prim has none. */
   | { readonly kind: "primvar"; readonly name: string; readonly fallback: T };
@@ -93,7 +97,13 @@ export interface MaterialTexture {
   readonly colorSpace: TextureColorSpace;
 }
 
-/** What a material's record could not represent, or found wrong; the input takes its fallback. */
+/**
+ * What a material's record could not represent, or found wrong; the input
+ * takes its fallback. `unsupportedOutput`: the input reads an output a
+ * standard shader does not define (`rgba` of a `UsdUVTexture`) or one of
+ * another shape; `channelMismatch`: a color or normal reads a one-channel
+ * texture output (`r`), which Storm does not draw either.
+ */
 export type MaterialNoteKind =
   | "noSurface"
   | "unsupportedSurface"
@@ -104,6 +114,8 @@ export type MaterialNoteKind =
   | "multipleSources"
   | "invalidValue"
   | "missingTexture"
+  | "unsupportedOutput"
+  | "channelMismatch"
   | "unsupported";
 
 /** A note on a material: what, and where. */
@@ -115,6 +127,8 @@ export interface MaterialNote {
   readonly input: string | null;
   /** The `info:id` of an unsupported surface or shader. */
   readonly id: string | null;
+  /** The shader output it concerns (`rgba`), for `unsupportedOutput` and `channelMismatch`. */
+  readonly output: string | null;
 }
 
 type Vec3 = readonly [number, number, number];
@@ -207,6 +221,24 @@ const KNOWN = new Set([
   "UsdPrimvarReader_matrix",
 ]);
 
+/** The outputs `UsdUVTexture` defines (`shaderDefs.usda`). */
+const TEXTURE_OUTPUTS: readonly TextureChannel[] = ["r", "g", "b", "a", "rgb"];
+
+/**
+ * The channels an input of `shape` reads from the texture `output` it
+ * connects to; `null` where OpenUSD's reference renderer cannot read it.
+ * OpenUSD defines no conversion between a connection's ends; Storm, its
+ * reference renderer, types a lookup by the output (`rgb` three channels)
+ * and reads a float input as the lookup's first channel and a color as its
+ * first three: a float on `rgb` reads `r`, a color on `r` does not compile.
+ * `layerstack_schemas::shading::preview_surface::texture_channel` has the
+ * sources.
+ */
+export function textureChannel(output: TextureChannel, shape: "float" | "float3"): TextureChannel | null {
+  if (shape === "float") return output === "rgb" ? "r" : output;
+  return output === "rgb" ? "rgb" : null;
+}
+
 const WRAPS = new Set(["useMetadata", "black", "clamp", "repeat", "mirror"]);
 const SPACES = new Set(["auto", "raw", "sRGB"]);
 
@@ -262,9 +294,9 @@ class Reader {
     this.#time = time;
   }
 
-  note(kind: MaterialNoteKind, prim: string | null, input: string | null, id: string | null = null): void {
-    if (!this.notes.some((n) => n.kind === kind && n.prim === prim && n.input === input && n.id === id)) {
-      this.notes.push(Object.freeze({ kind, prim, input, id }));
+  note(kind: MaterialNoteKind, prim: string | null, input: string | null, id: string | null = null, output: string | null = null): void {
+    if (!this.notes.some((n) => n.kind === kind && n.prim === prim && n.input === input && n.id === id && n.output === output)) {
+      this.notes.push(Object.freeze({ kind, prim, input, id, output }));
     }
   }
 
@@ -348,9 +380,13 @@ class Reader {
     }
     const { shader, id, output } = resolved;
     if (id === "UsdUVTexture") {
-      const channel = output === "rgb" && shape === "float3" ? "rgb" : ["r", "g", "b", "a"].includes(output) && shape === "float" ? (output as TextureChannel) : null;
+      if (!(TEXTURE_OUTPUTS as readonly string[]).includes(output)) {
+        this.note("unsupportedOutput", shader, name, null, output);
+        return { kind: "constant", value: fallback };
+      }
+      const channel = textureChannel(output as TextureChannel, shape);
       if (channel === null) {
-        this.note("unsupported", shader, name);
+        this.note("channelMismatch", shader, name, null, output);
         return { kind: "constant", value: fallback };
       }
       const texture = this.texture(shader, name);
@@ -368,7 +404,7 @@ class Reader {
     }
     // A standard node read through the wrong output or shape is not
     // representable; any other node is unsupported.
-    if (KNOWN.has(id ?? "")) this.note("unsupported", shader, name);
+    if (KNOWN.has(id ?? "")) this.note("unsupportedOutput", shader, name, null, output);
     else this.note("unsupportedShader", shader, name, id);
     return { kind: "constant", value: fallback };
   }

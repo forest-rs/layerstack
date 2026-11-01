@@ -81,6 +81,14 @@ def Xform "World"
         double size = 6
         rel material:binding = </Looks/Bare>
     }
+
+    def Cube "Channels" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        double size = 7
+        rel material:binding = </Looks/Channels>
+    }
 }
 
 def Scope "Looks"
@@ -330,6 +338,67 @@ def Scope "Looks"
 
     def Material "Bare"
     {
+    }
+
+    def Material "Channels"
+    {
+        token outputs:surface.connect = </Looks/Channels/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor.connect = </Looks/Channels/Mask.outputs:r>
+            float inputs:metallic.connect = </Looks/Channels/Metal.outputs:rgb>
+            float inputs:roughness.connect = </Looks/Channels/Rough.outputs:rgb>
+            float inputs:occlusion.connect = </Looks/Channels/Mask.outputs:rgba>
+            float inputs:opacity.connect = </Looks/Channels/Mask.outputs:a>
+            normal3f inputs:normal.connect = </Looks/Channels/Metal.outputs:rgb>
+            token outputs:surface
+        }
+
+        def NodeGraph "Metal" (
+            prepend references = </Looks/MetalGraph>
+        )
+        {
+        }
+
+        def Shader "Rough"
+        {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @./textures/packed.png@
+            float4 inputs:scale = (0.5, 1, 1, 1)
+            float3 outputs:rgb
+        }
+
+        def Shader "Mask"
+        {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @./textures/grid.png@
+            float outputs:r
+            float outputs:a
+            float4 outputs:rgba
+        }
+    }
+
+    def NodeGraph "MetalGraph"
+    {
+        token inputs:frame:st = "st"
+        float3 outputs:rgb.connect = </Looks/MetalGraph/Texture.outputs:rgb>
+
+        def Shader "Texture"
+        {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @./textures/packed.png@
+            float2 inputs:st.connect = </Looks/MetalGraph/Reader.outputs:result>
+            float3 outputs:rgb
+        }
+
+        def Shader "Reader"
+        {
+            uniform token info:id = "UsdPrimvarReader_float2"
+            token inputs:varname.connect = </Looks/MetalGraph.inputs:frame:st>
+            float2 outputs:result
+        }
     }
 }
 

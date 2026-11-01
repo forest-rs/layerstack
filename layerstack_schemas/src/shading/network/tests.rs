@@ -1049,3 +1049,131 @@ fn shared_container_outputs_at_different_depths_survive_both_branch_orderings() 
         assert_eq!(store.paths().display(graph, store.tokens()), "/Library/G");
     }
 }
+#[test]
+fn texture_channels_follow_the_reference_renderer_through_node_graphs() {
+    use crate::shading::preview_surface::{PreviewIssue, TextureChannel};
+    let mut store = InMemoryStore::default();
+    let schemas = Arc::new(crate::openusd(store.tokens()));
+    let mut layer = Layer::new(LayerId(1));
+    for (path, ty, id) in [
+        ("/Mat", "Material", None),
+        ("/Mat/P", "Shader", Some("UsdPreviewSurface")),
+        ("/Mat/G", "NodeGraph", None),
+        ("/Mat/G/T", "Shader", Some("UsdUVTexture")),
+        ("/Mat/T", "Shader", Some("UsdUVTexture")),
+    ] {
+        let p = store.path(path);
+        let t = store.tokens().intern(ty);
+        layer.insert_prim(p, PrimSpec::def().with_type_name(t));
+        if let Some(id) = id {
+            let id = Value::Token(store.tokens().intern(id));
+            port(
+                &mut store,
+                &mut layer,
+                path,
+                "info:id",
+                "token",
+                Some(id),
+                None,
+            );
+        }
+    }
+    let file = || Some(Value::Asset("rock.png".into()));
+    for (path, name, ty, value, source) in [
+        (
+            "/Mat",
+            "outputs:surface",
+            "token",
+            None,
+            Some("/Mat/P.outputs:surface"),
+        ),
+        ("/Mat/P", "outputs:surface", "token", None, None),
+        // A float reads a node graph's `float3` output forwarding `rgb`.
+        (
+            "/Mat/P",
+            "inputs:metallic",
+            "float",
+            None,
+            Some("/Mat/G.outputs:rgb"),
+        ),
+        (
+            "/Mat/P",
+            "inputs:normal",
+            "normal3f",
+            None,
+            Some("/Mat/G.outputs:rgb"),
+        ),
+        // A color reads one channel; a float an output textures lack.
+        (
+            "/Mat/P",
+            "inputs:diffuseColor",
+            "color3f",
+            None,
+            Some("/Mat/T.outputs:r"),
+        ),
+        (
+            "/Mat/P",
+            "inputs:occlusion",
+            "float",
+            None,
+            Some("/Mat/T.outputs:rgba"),
+        ),
+        (
+            "/Mat/G",
+            "outputs:rgb",
+            "float3",
+            None,
+            Some("/Mat/G/T.outputs:rgb"),
+        ),
+        ("/Mat/G/T", "inputs:file", "asset", file(), None),
+        ("/Mat/G/T", "outputs:rgb", "float3", None, None),
+        ("/Mat/T", "inputs:file", "asset", file(), None),
+        ("/Mat/T", "outputs:r", "float", None, None),
+        ("/Mat/T", "outputs:rgba", "float4", None, None),
+    ] {
+        port(&mut store, &mut layer, path, name, ty, value, source);
+    }
+    store.insert_layer(layer);
+    let live = LiveStage::compose(
+        &mut store,
+        LayerId(1),
+        StageOptions {
+            schemas: Some(schemas),
+            ..StageOptions::default()
+        },
+    );
+    let mat = store.path("/Mat");
+    let preview = PreviewSurfaceNetwork::capture(Arc::new(capture(&store, &live, mat)), 32);
+    let texture = |name: &str| match &preview.input(name).unwrap().expression {
+        Some(PreviewExpression::Texture(texture)) => {
+            (texture.node, texture.output, texture.channel)
+        }
+        other => panic!("{name}: {other:?}"),
+    };
+    let inner = store.path("/Mat/G/T");
+    assert_eq!(
+        texture("metallic"),
+        (inner, TextureChannel::Rgb, TextureChannel::R),
+        "a float reads red of rgb"
+    );
+    assert_eq!(
+        texture("normal"),
+        (inner, TextureChannel::Rgb, TextureChannel::Rgb)
+    );
+    let outer = store.path("/Mat/T");
+    for (name, output, kind) in [
+        ("diffuseColor", "r", PreviewIssueKind::ChannelMismatch),
+        ("occlusion", "rgba", PreviewIssueKind::UnsupportedOutput),
+    ] {
+        assert_eq!(preview.input(name).unwrap().expression, None, "{name}");
+        assert!(
+            preview.issues.contains(&PreviewIssue {
+                node: Some(outer),
+                port: Some(output.into()),
+                kind,
+            }),
+            "{name}: {:?}",
+            preview.issues
+        );
+    }
+}

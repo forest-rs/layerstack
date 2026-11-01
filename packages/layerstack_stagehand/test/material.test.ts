@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 import { loadLayerstack } from "@forest-rs/layerstack";
 import type { Changes, Edit, Stage } from "@forest-rs/layerstack";
-import { anchorAssetPath, loadStagehand, udimTiles } from "../dist/index.js";
+import { anchorAssetPath, loadStagehand, textureChannel, udimTiles } from "../dist/index.js";
 import type { DrawDiff, DrawList, MaterialItem, MaterialNoteKind, MaterialValue } from "../dist/index.js";
 
 const layerstack = await loadLayerstack();
@@ -60,8 +60,26 @@ function checkValue(at: string, row: Json, item: MaterialItem, name: string, key
     const one = producing[0];
     const node = row.nodes[one.attribute.split(".")[0]];
     if (one.shader === "UsdUVTexture") {
-      assert.equal(ours.kind, "texture", where);
-      if (ours.kind === "texture") assert.equal(ours.channel, one.output, where);
+      // OpenUSD connects any types (`canConnect`); what is read is Storm's
+      // (`textureChannel`): a float on `rgb` reads `r`, a color on `r` nothing.
+      assert.equal(row.surface.canConnect[name], true, where);
+      const float = row.surface.types[name] === "float";
+      const expected = !["r", "g", "b", "a", "rgb"].includes(one.output)
+        ? "unsupportedOutput"
+        : float
+          ? one.output === "rgb"
+            ? "r"
+            : one.output
+          : one.output === "rgb"
+            ? "rgb"
+            : "channelMismatch";
+      if (expected === "unsupportedOutput" || expected === "channelMismatch") {
+        assert.deepEqual(constant(ours), fallback, where);
+        assert.ok(item.notes.some((note) => note.kind === expected && note.input === name && note.output === one.output), where);
+      } else {
+        assert.equal(ours.kind, "texture", where);
+        if (ours.kind === "texture") assert.equal(ours.channel, expected, where);
+      }
     } else if (String(one.shader).startsWith("UsdPrimvarReader_")) {
       assert.equal(ours.kind, "primvar", where);
       if (ours.kind === "primvar") {
@@ -91,7 +109,7 @@ describe("materials", () => {
       const { stage, list } = open(contexts, time);
       try {
         const rows = oracle.materials.filter((row: Json) => row.contexts.length === contexts.length);
-        assert.equal(rows.length, 9);
+        assert.equal(rows.length, 10);
         for (const row of rows) {
           const at = `${row.path} ${JSON.stringify(contexts)} ${key}`;
           const item = list.material(row.path);
@@ -194,11 +212,36 @@ describe("materials", () => {
     }
   });
 
+  it("read texture channels as Storm reads them", () => {
+    const { stage, list } = open();
+    try {
+      const item = list.material("/Looks/Channels")!;
+      const read = (value: MaterialValue<unknown>) => (value.kind === "texture" ? [item.textures[value.texture]!.shader, value.channel] : value);
+      // Through a referenced node graph's `float3` output, as the public
+      // production scenes connect metalness and roughness maps.
+      assert.deepEqual(read(item.metallic), ["/Looks/Channels/Metal/Texture", "r"]);
+      assert.deepEqual(read(item.roughness), ["/Looks/Channels/Rough", "r"]);
+      assert.deepEqual(read(item.opacity), ["/Looks/Channels/Mask", "a"]);
+      assert.deepEqual(read(item.normal), ["/Looks/Channels/Metal/Texture", "rgb"]);
+      assert.deepEqual(item.diffuseColor, { kind: "constant", value: [0.18, 0.18, 0.18] });
+      assert.deepEqual(item.occlusion, { kind: "constant", value: 1 });
+      assert.deepEqual(item.notes, [
+        { kind: "channelMismatch", prim: "/Looks/Channels/Mask", input: "diffuseColor", id: null, output: "r" },
+        { kind: "unsupportedOutput", prim: "/Looks/Channels/Mask", input: "occlusion", id: null, output: "rgba" },
+      ]);
+      assert.equal(textureChannel("rgb", "float"), "r");
+      assert.equal(textureChannel("g", "float3"), null);
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+  });
+
   it("are read again only when what they read changes", () => {
     const { stage, list, first, edit } = open();
     try {
-      assert.equal(first.materialsAdded.length, 9);
-      assert.equal(first.work.materialsRead, 9);
+      assert.equal(first.materialsAdded.length, 10);
+      assert.equal(first.work.materialsRead, 10);
       // A surface input: that material alone, no item.
       let diff = edit([{ type: "setValue", path: "/Looks/Plain/Surface.inputs:roughness", value: { type: "float", value: 0.9 } }]);
       assert.deepEqual(diff.materialsChanged, ["/Looks/Plain"]);

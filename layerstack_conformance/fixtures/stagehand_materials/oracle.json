@@ -145,6 +145,7 @@
    "shader": "/Looks/Plain/Surface",
    "sourceType": "Output",
    "surface": {
+    "canConnect": {},
     "id": "UsdPreviewSurface",
     "inputs": {
      "clearcoat": [
@@ -240,6 +241,19 @@
        "value10": 0.25
       }
      ]
+    },
+    "types": {
+     "clearcoat": "float",
+     "clearcoatRoughness": "float",
+     "diffuseColor": "color3f",
+     "displacement": "float",
+     "emissiveColor": "color3f",
+     "ior": "float",
+     "metallic": "float",
+     "occlusion": "float",
+     "opacity": "float",
+     "opacityMode": "token",
+     "roughness": "float"
     }
    }
   },
@@ -254,6 +268,7 @@
    "shader": "/Looks/Plain/Surface",
    "sourceType": "Output",
    "surface": {
+    "canConnect": {},
     "id": "UsdPreviewSurface",
     "inputs": {
      "clearcoat": [
@@ -349,6 +364,19 @@
        "value10": 0.25
       }
      ]
+    },
+    "types": {
+     "clearcoat": "float",
+     "clearcoatRoughness": "float",
+     "diffuseColor": "color3f",
+     "displacement": "float",
+     "emissiveColor": "color3f",
+     "ior": "float",
+     "metallic": "float",
+     "occlusion": "float",
+     "opacity": "float",
+     "opacityMode": "token",
+     "roughness": "float"
     }
    }
   },
@@ -357,6 +385,9 @@
    "id": "UsdPreviewSurface",
    "nodes": {
     "/Looks/Textured/Albedo": {
+     "canConnect": {
+      "st": true
+     },
      "file": {
       "anchored": "textures/grid.png",
       "authored": "./textures/grid.png",
@@ -401,7 +432,8 @@
        {
         "attribute": "/Looks/Textured/Place.outputs:result",
         "output": "result",
-        "shader": "UsdTransform2d"
+        "shader": "UsdTransform2d",
+        "type": "float2"
        }
       ],
       "wrapS": [
@@ -418,9 +450,20 @@
         "value10": "mirror"
        }
       ]
+     },
+     "types": {
+      "fallback": "float4",
+      "file": "asset",
+      "sourceColorSpace": "token",
+      "st": "float2",
+      "wrapS": "token",
+      "wrapT": "token"
      }
     },
     "/Looks/Textured/Normal": {
+     "canConnect": {
+      "st": true
+     },
      "file": {
       "anchored": "textures/normal.png",
       "authored": "./textures/../textures/normal.png",
@@ -482,7 +525,8 @@
        {
         "attribute": "/Looks/Textured/Reader.outputs:result",
         "output": "result",
-        "shader": "UsdPrimvarReader_float2"
+        "shader": "UsdPrimvarReader_float2",
+        "type": "float2"
        }
       ],
       "wrapS": [
@@ -492,9 +536,20 @@
         "value10": "black"
        }
       ]
+     },
+     "types": {
+      "bias": "float4",
+      "file": "asset",
+      "scale": "float4",
+      "sourceColorSpace": "token",
+      "st": "float2",
+      "wrapS": "token"
      }
     },
     "/Looks/Textured/Packed": {
+     "canConnect": {
+      "st": true
+     },
      "file": {
       "anchored": "textures/packed.png",
       "authored": "textures/packed.png",
@@ -522,7 +577,8 @@
        {
         "attribute": "/Looks/Textured/Reader.outputs:result",
         "output": "result",
-        "shader": "UsdPrimvarReader_float2"
+        "shader": "UsdPrimvarReader_float2",
+        "type": "float2"
        }
       ],
       "wrapS": [
@@ -532,16 +588,26 @@
         "value10": "clamp"
        }
       ]
+     },
+     "types": {
+      "file": "asset",
+      "sourceColorSpace": "token",
+      "st": "float2",
+      "wrapS": "token"
      }
     },
     "/Looks/Textured/Place": {
+     "canConnect": {
+      "in": true
+     },
      "id": "UsdTransform2d",
      "inputs": {
       "in": [
        {
         "attribute": "/Looks/Textured/Reader.outputs:result",
         "output": "result",
-        "shader": "UsdPrimvarReader_float2"
+        "shader": "UsdPrimvarReader_float2",
+        "type": "float2"
        }
       ],
       "rotation": [
@@ -577,9 +643,16 @@
         ]
        }
       ]
+     },
+     "types": {
+      "in": "float2",
+      "rotation": "float",
+      "scale": "float2",
+      "translation": "float2"
      }
     },
     "/Looks/Textured/Reader": {
+     "canConnect": {},
      "id": "UsdPrimvarReader_float2",
      "inputs": {
       "fallback": [
@@ -602,6 +675,10 @@
         "value10": "uv"
        }
       ]
+     },
+     "types": {
+      "fallback": "float2",
+      "varname": "string"
      }
     }
    },
@@ -610,41 +687,54 @@
    "shader": "/Looks/Textured/Surface",
    "sourceType": "Output",
    "surface": {
+    "canConnect": {
+     "diffuseColor": true,
+     "metallic": true,
+     "normal": true,
+     "occlusion": true,
+     "opacity": true,
+     "roughness": true
+    },
     "id": "UsdPreviewSurface",
     "inputs": {
      "diffuseColor": [
       {
        "attribute": "/Looks/Textured/Albedo.outputs:rgb",
        "output": "rgb",
-       "shader": "UsdUVTexture"
+       "shader": "UsdUVTexture",
+       "type": "float3"
       }
      ],
      "metallic": [
       {
        "attribute": "/Looks/Textured/Packed.outputs:b",
        "output": "b",
-       "shader": "UsdUVTexture"
+       "shader": "UsdUVTexture",
+       "type": "float"
       }
      ],
      "normal": [
       {
        "attribute": "/Looks/Textured/Normal.outputs:rgb",
        "output": "rgb",
-       "shader": "UsdUVTexture"
+       "shader": "UsdUVTexture",
+       "type": "float3"
       }
      ],
      "occlusion": [
       {
        "attribute": "/Looks/Textured/Packed.outputs:r",
        "output": "r",
-       "shader": "UsdUVTexture"
+       "shader": "UsdUVTexture",
+       "type": "float"
       }
      ],
      "opacity": [
       {
        "attribute": "/Looks/Textured/Albedo.outputs:a",
        "output": "a",
-       "shader": "UsdUVTexture"
+       "shader": "UsdUVTexture",
+       "type": "float"
       }
      ],
      "opacityThreshold": [
@@ -658,7 +748,8 @@
       {
        "attribute": "/Looks/Textured/Packed.outputs:g",
        "output": "g",
-       "shader": "UsdUVTexture"
+       "shader": "UsdUVTexture",
+       "type": "float"
       }
      ],
      "specularColor": [
@@ -683,6 +774,17 @@
        "value10": 1
       }
      ]
+    },
+    "types": {
+     "diffuseColor": "color3f",
+     "metallic": "float",
+     "normal": "normal3f",
+     "occlusion": "float",
+     "opacity": "float",
+     "opacityThreshold": "float",
+     "roughness": "float",
+     "specularColor": "color3f",
+     "useSpecularWorkflow": "int"
     }
    }
   },
@@ -693,6 +795,9 @@
    "id": "UsdPreviewSurface",
    "nodes": {
     "/Looks/Textured/Albedo": {
+     "canConnect": {
+      "st": true
+     },
      "file": {
       "anchored": "textures/grid.png",
       "authored": "./textures/grid.png",
@@ -737,7 +842,8 @@
        {
         "attribute": "/Looks/Textured/Place.outputs:result",
         "output": "result",
-        "shader": "UsdTransform2d"
+        "shader": "UsdTransform2d",
+        "type": "float2"
        }
       ],
       "wrapS": [
@@ -754,9 +860,20 @@
         "value10": "mirror"
        }
       ]
+     },
+     "types": {
+      "fallback": "float4",
+      "file": "asset",
+      "sourceColorSpace": "token",
+      "st": "float2",
+      "wrapS": "token",
+      "wrapT": "token"
      }
     },
     "/Looks/Textured/Normal": {
+     "canConnect": {
+      "st": true
+     },
      "file": {
       "anchored": "textures/normal.png",
       "authored": "./textures/../textures/normal.png",
@@ -818,7 +935,8 @@
        {
         "attribute": "/Looks/Textured/Reader.outputs:result",
         "output": "result",
-        "shader": "UsdPrimvarReader_float2"
+        "shader": "UsdPrimvarReader_float2",
+        "type": "float2"
        }
       ],
       "wrapS": [
@@ -828,9 +946,20 @@
         "value10": "black"
        }
       ]
+     },
+     "types": {
+      "bias": "float4",
+      "file": "asset",
+      "scale": "float4",
+      "sourceColorSpace": "token",
+      "st": "float2",
+      "wrapS": "token"
      }
     },
     "/Looks/Textured/Packed": {
+     "canConnect": {
+      "st": true
+     },
      "file": {
       "anchored": "textures/packed.png",
       "authored": "textures/packed.png",
@@ -858,7 +987,8 @@
        {
         "attribute": "/Looks/Textured/Reader.outputs:result",
         "output": "result",
-        "shader": "UsdPrimvarReader_float2"
+        "shader": "UsdPrimvarReader_float2",
+        "type": "float2"
        }
       ],
       "wrapS": [
@@ -868,16 +998,26 @@
         "value10": "clamp"
        }
       ]
+     },
+     "types": {
+      "file": "asset",
+      "sourceColorSpace": "token",
+      "st": "float2",
+      "wrapS": "token"
      }
     },
     "/Looks/Textured/Place": {
+     "canConnect": {
+      "in": true
+     },
      "id": "UsdTransform2d",
      "inputs": {
       "in": [
        {
         "attribute": "/Looks/Textured/Reader.outputs:result",
         "output": "result",
-        "shader": "UsdPrimvarReader_float2"
+        "shader": "UsdPrimvarReader_float2",
+        "type": "float2"
        }
       ],
       "rotation": [
@@ -913,9 +1053,16 @@
         ]
        }
       ]
+     },
+     "types": {
+      "in": "float2",
+      "rotation": "float",
+      "scale": "float2",
+      "translation": "float2"
      }
     },
     "/Looks/Textured/Reader": {
+     "canConnect": {},
      "id": "UsdPrimvarReader_float2",
      "inputs": {
       "fallback": [
@@ -938,6 +1085,10 @@
         "value10": "uv"
        }
       ]
+     },
+     "types": {
+      "fallback": "float2",
+      "varname": "string"
      }
     }
    },
@@ -946,41 +1097,54 @@
    "shader": "/Looks/Textured/Surface",
    "sourceType": "Output",
    "surface": {
+    "canConnect": {
+     "diffuseColor": true,
+     "metallic": true,
+     "normal": true,
+     "occlusion": true,
+     "opacity": true,
+     "roughness": true
+    },
     "id": "UsdPreviewSurface",
     "inputs": {
      "diffuseColor": [
       {
        "attribute": "/Looks/Textured/Albedo.outputs:rgb",
        "output": "rgb",
-       "shader": "UsdUVTexture"
+       "shader": "UsdUVTexture",
+       "type": "float3"
       }
      ],
      "metallic": [
       {
        "attribute": "/Looks/Textured/Packed.outputs:b",
        "output": "b",
-       "shader": "UsdUVTexture"
+       "shader": "UsdUVTexture",
+       "type": "float"
       }
      ],
      "normal": [
       {
        "attribute": "/Looks/Textured/Normal.outputs:rgb",
        "output": "rgb",
-       "shader": "UsdUVTexture"
+       "shader": "UsdUVTexture",
+       "type": "float3"
       }
      ],
      "occlusion": [
       {
        "attribute": "/Looks/Textured/Packed.outputs:r",
        "output": "r",
-       "shader": "UsdUVTexture"
+       "shader": "UsdUVTexture",
+       "type": "float"
       }
      ],
      "opacity": [
       {
        "attribute": "/Looks/Textured/Albedo.outputs:a",
        "output": "a",
-       "shader": "UsdUVTexture"
+       "shader": "UsdUVTexture",
+       "type": "float"
       }
      ],
      "opacityThreshold": [
@@ -994,7 +1158,8 @@
       {
        "attribute": "/Looks/Textured/Packed.outputs:g",
        "output": "g",
-       "shader": "UsdUVTexture"
+       "shader": "UsdUVTexture",
+       "type": "float"
       }
      ],
      "specularColor": [
@@ -1019,6 +1184,17 @@
        "value10": 1
       }
      ]
+    },
+    "types": {
+     "diffuseColor": "color3f",
+     "metallic": "float",
+     "normal": "normal3f",
+     "occlusion": "float",
+     "opacity": "float",
+     "opacityThreshold": "float",
+     "roughness": "float",
+     "specularColor": "color3f",
+     "useSpecularWorkflow": "int"
     }
    }
   },
@@ -1031,6 +1207,7 @@
    "shader": "/Looks/Graph/Group/Surface",
    "sourceType": "Output",
    "surface": {
+    "canConnect": {},
     "id": "UsdPreviewSurface",
     "inputs": {
      "diffuseColor": [
@@ -1070,6 +1247,11 @@
        "value10": 0.30000001192092896
       }
      ]
+    },
+    "types": {
+     "diffuseColor": "color3f",
+     "emissiveColor": "color3f",
+     "roughness": "float"
     }
    }
   },
@@ -1084,6 +1266,7 @@
    "shader": "/Looks/Graph/Group/Surface",
    "sourceType": "Output",
    "surface": {
+    "canConnect": {},
     "id": "UsdPreviewSurface",
     "inputs": {
      "diffuseColor": [
@@ -1123,6 +1306,11 @@
        "value10": 0.30000001192092896
       }
      ]
+    },
+    "types": {
+     "diffuseColor": "color3f",
+     "emissiveColor": "color3f",
+     "roughness": "float"
     }
    }
   },
@@ -1135,6 +1323,7 @@
    "shader": "/Looks/Contexts/Preview",
    "sourceType": "Output",
    "surface": {
+    "canConnect": {},
     "id": "UsdPreviewSurface",
     "inputs": {
      "diffuseColor": [
@@ -1152,6 +1341,9 @@
        ]
       }
      ]
+    },
+    "types": {
+     "diffuseColor": "color3f"
     }
    }
   },
@@ -1170,6 +1362,7 @@
    "id": "UsdPreviewSurface",
    "nodes": {
     "/Looks/Udim/Tiles": {
+     "canConnect": {},
      "file": {
       "anchored": "textures/rock.<UDIM>.png",
       "authored": "./textures/rock.<UDIM>.png",
@@ -1199,6 +1392,9 @@
         "value10": "./textures/rock.<UDIM>.png"
        }
       ]
+     },
+     "types": {
+      "file": "asset"
      }
     }
    },
@@ -1207,15 +1403,22 @@
    "shader": "/Looks/Udim/Surface",
    "sourceType": "Output",
    "surface": {
+    "canConnect": {
+     "diffuseColor": true
+    },
     "id": "UsdPreviewSurface",
     "inputs": {
      "diffuseColor": [
       {
        "attribute": "/Looks/Udim/Tiles.outputs:rgb",
        "output": "rgb",
-       "shader": "UsdUVTexture"
+       "shader": "UsdUVTexture",
+       "type": "float3"
       }
      ]
+    },
+    "types": {
+     "diffuseColor": "color3f"
     }
    }
   },
@@ -1226,6 +1429,7 @@
    "id": "UsdPreviewSurface",
    "nodes": {
     "/Looks/Udim/Tiles": {
+     "canConnect": {},
      "file": {
       "anchored": "textures/rock.<UDIM>.png",
       "authored": "./textures/rock.<UDIM>.png",
@@ -1255,6 +1459,9 @@
         "value10": "./textures/rock.<UDIM>.png"
        }
       ]
+     },
+     "types": {
+      "file": "asset"
      }
     }
    },
@@ -1263,15 +1470,22 @@
    "shader": "/Looks/Udim/Surface",
    "sourceType": "Output",
    "surface": {
+    "canConnect": {
+     "diffuseColor": true
+    },
     "id": "UsdPreviewSurface",
     "inputs": {
      "diffuseColor": [
       {
        "attribute": "/Looks/Udim/Tiles.outputs:rgb",
        "output": "rgb",
-       "shader": "UsdUVTexture"
+       "shader": "UsdUVTexture",
+       "type": "float3"
       }
      ]
+    },
+    "types": {
+     "diffuseColor": "color3f"
     }
    }
   },
@@ -1280,6 +1494,7 @@
    "id": "UsdPreviewSurface",
    "nodes": {
     "/Looks/Broken/A": {
+     "canConnect": {},
      "file": {
       "anchored": "textures/grid.png",
       "authored": "./textures/grid.png",
@@ -1296,9 +1511,13 @@
         "value10": "./textures/grid.png"
        }
       ]
+     },
+     "types": {
+      "file": "asset"
      }
     },
     "/Looks/Broken/B": {
+     "canConnect": {},
      "file": {
       "anchored": "textures/packed.png",
       "authored": "./textures/packed.png",
@@ -1315,15 +1534,22 @@
         "value10": "./textures/packed.png"
        }
       ]
+     },
+     "types": {
+      "file": "asset"
      }
     },
     "/Looks/Broken/Empty": {
+     "canConnect": {},
      "id": "UsdUVTexture",
-     "inputs": {}
+     "inputs": {},
+     "types": {}
     },
     "/Looks/Broken/Noise": {
+     "canConnect": {},
      "id": "MyNoise",
-     "inputs": {}
+     "inputs": {},
+     "types": {}
     }
    },
    "output": "surface",
@@ -1331,18 +1557,25 @@
    "shader": "/Looks/Broken/Surface",
    "sourceType": "Output",
    "surface": {
+    "canConnect": {
+     "clearcoat": true,
+     "emissiveColor": true,
+     "roughness": true
+    },
     "id": "UsdPreviewSurface",
     "inputs": {
      "clearcoat": [
       {
        "attribute": "/Looks/Broken/A.outputs:r",
        "output": "r",
-       "shader": "UsdUVTexture"
+       "shader": "UsdUVTexture",
+       "type": "float"
       },
       {
        "attribute": "/Looks/Broken/B.outputs:r",
        "output": "r",
-       "shader": "UsdUVTexture"
+       "shader": "UsdUVTexture",
+       "type": "float"
       }
      ],
      "diffuseColor": [],
@@ -1350,7 +1583,8 @@
       {
        "attribute": "/Looks/Broken/Empty.outputs:rgb",
        "output": "rgb",
-       "shader": "UsdUVTexture"
+       "shader": "UsdUVTexture",
+       "type": "float3"
       }
      ],
      "metallic": [],
@@ -1358,9 +1592,17 @@
       {
        "attribute": "/Looks/Broken/Noise.outputs:out",
        "output": "out",
-       "shader": "MyNoise"
+       "shader": "MyNoise",
+       "type": "float"
       }
      ]
+    },
+    "types": {
+     "clearcoat": "float",
+     "diffuseColor": "color3f",
+     "emissiveColor": "color3f",
+     "metallic": "float",
+     "roughness": "float"
     }
    }
   },
@@ -1371,6 +1613,7 @@
    "id": "UsdPreviewSurface",
    "nodes": {
     "/Looks/Broken/A": {
+     "canConnect": {},
      "file": {
       "anchored": "textures/grid.png",
       "authored": "./textures/grid.png",
@@ -1387,9 +1630,13 @@
         "value10": "./textures/grid.png"
        }
       ]
+     },
+     "types": {
+      "file": "asset"
      }
     },
     "/Looks/Broken/B": {
+     "canConnect": {},
      "file": {
       "anchored": "textures/packed.png",
       "authored": "./textures/packed.png",
@@ -1406,15 +1653,22 @@
         "value10": "./textures/packed.png"
        }
       ]
+     },
+     "types": {
+      "file": "asset"
      }
     },
     "/Looks/Broken/Empty": {
+     "canConnect": {},
      "id": "UsdUVTexture",
-     "inputs": {}
+     "inputs": {},
+     "types": {}
     },
     "/Looks/Broken/Noise": {
+     "canConnect": {},
      "id": "MyNoise",
-     "inputs": {}
+     "inputs": {},
+     "types": {}
     }
    },
    "output": "surface",
@@ -1422,18 +1676,25 @@
    "shader": "/Looks/Broken/Surface",
    "sourceType": "Output",
    "surface": {
+    "canConnect": {
+     "clearcoat": true,
+     "emissiveColor": true,
+     "roughness": true
+    },
     "id": "UsdPreviewSurface",
     "inputs": {
      "clearcoat": [
       {
        "attribute": "/Looks/Broken/A.outputs:r",
        "output": "r",
-       "shader": "UsdUVTexture"
+       "shader": "UsdUVTexture",
+       "type": "float"
       },
       {
        "attribute": "/Looks/Broken/B.outputs:r",
        "output": "r",
-       "shader": "UsdUVTexture"
+       "shader": "UsdUVTexture",
+       "type": "float"
       }
      ],
      "diffuseColor": [],
@@ -1441,7 +1702,8 @@
       {
        "attribute": "/Looks/Broken/Empty.outputs:rgb",
        "output": "rgb",
-       "shader": "UsdUVTexture"
+       "shader": "UsdUVTexture",
+       "type": "float3"
       }
      ],
      "metallic": [],
@@ -1449,9 +1711,17 @@
       {
        "attribute": "/Looks/Broken/Noise.outputs:out",
        "output": "out",
-       "shader": "MyNoise"
+       "shader": "MyNoise",
+       "type": "float"
       }
      ]
+    },
+    "types": {
+     "clearcoat": "float",
+     "diffuseColor": "color3f",
+     "emissiveColor": "color3f",
+     "metallic": "float",
+     "roughness": "float"
     }
    }
   },
@@ -1464,6 +1734,7 @@
    "shader": "/Looks/Animated/Surface",
    "sourceType": "Output",
    "surface": {
+    "canConnect": {},
     "id": "UsdPreviewSurface",
     "inputs": {
      "roughness": [
@@ -1473,6 +1744,9 @@
        "value10": 0.5
       }
      ]
+    },
+    "types": {
+     "roughness": "float"
     }
    }
   },
@@ -1487,6 +1761,7 @@
    "shader": "/Looks/Animated/Surface",
    "sourceType": "Output",
    "surface": {
+    "canConnect": {},
     "id": "UsdPreviewSurface",
     "inputs": {
      "roughness": [
@@ -1496,6 +1771,9 @@
        "value10": 0.5
       }
      ]
+    },
+    "types": {
+     "roughness": "float"
     }
    }
   },
@@ -1504,6 +1782,7 @@
    "id": "UsdPreviewSurface",
    "nodes": {
     "/Looks/Painted/Color": {
+     "canConnect": {},
      "id": "UsdPrimvarReader_float3",
      "inputs": {
       "fallback": [
@@ -1528,6 +1807,10 @@
         "value10": "displayColor"
        }
       ]
+     },
+     "types": {
+      "fallback": "float3",
+      "varname": "string"
      }
     }
    },
@@ -1536,15 +1819,22 @@
    "shader": "/Looks/Painted/Surface",
    "sourceType": "Output",
    "surface": {
+    "canConnect": {
+     "diffuseColor": true
+    },
     "id": "UsdPreviewSurface",
     "inputs": {
      "diffuseColor": [
       {
        "attribute": "/Looks/Painted/Color.outputs:result",
        "output": "result",
-       "shader": "UsdPrimvarReader_float3"
+       "shader": "UsdPrimvarReader_float3",
+       "type": "float3"
       }
      ]
+    },
+    "types": {
+     "diffuseColor": "color3f"
     }
    }
   },
@@ -1555,6 +1845,7 @@
    "id": "UsdPreviewSurface",
    "nodes": {
     "/Looks/Painted/Color": {
+     "canConnect": {},
      "id": "UsdPrimvarReader_float3",
      "inputs": {
       "fallback": [
@@ -1579,6 +1870,10 @@
         "value10": "displayColor"
        }
       ]
+     },
+     "types": {
+      "fallback": "float3",
+      "varname": "string"
      }
     }
    },
@@ -1587,15 +1882,22 @@
    "shader": "/Looks/Painted/Surface",
    "sourceType": "Output",
    "surface": {
+    "canConnect": {
+     "diffuseColor": true
+    },
     "id": "UsdPreviewSurface",
     "inputs": {
      "diffuseColor": [
       {
        "attribute": "/Looks/Painted/Color.outputs:result",
        "output": "result",
-       "shader": "UsdPrimvarReader_float3"
+       "shader": "UsdPrimvarReader_float3",
+       "type": "float3"
       }
      ]
+    },
+    "types": {
+     "diffuseColor": "color3f"
     }
    }
   },
@@ -1616,6 +1918,394 @@
    "path": "/Looks/Bare",
    "shader": null,
    "sourceType": null
+  },
+  {
+   "contexts": [],
+   "id": "UsdPreviewSurface",
+   "nodes": {
+    "/Looks/Channels/Mask": {
+     "canConnect": {},
+     "file": {
+      "anchored": "textures/grid.png",
+      "authored": "./textures/grid.png",
+      "resolved": "textures/grid.png",
+      "tiles": [],
+      "udim": false
+     },
+     "id": "UsdUVTexture",
+     "inputs": {
+      "file": [
+       {
+        "attribute": "/Looks/Channels/Mask.inputs:file",
+        "value": "./textures/grid.png",
+        "value10": "./textures/grid.png"
+       }
+      ]
+     },
+     "types": {
+      "file": "asset"
+     }
+    },
+    "/Looks/Channels/Metal/Reader": {
+     "canConnect": {},
+     "id": "UsdPrimvarReader_float2",
+     "inputs": {
+      "varname": [
+       {
+        "attribute": "/Looks/Channels/Metal.inputs:frame:st",
+        "value": "st",
+        "value10": "st"
+       }
+      ]
+     },
+     "types": {
+      "varname": "token"
+     }
+    },
+    "/Looks/Channels/Metal/Texture": {
+     "canConnect": {
+      "st": true
+     },
+     "file": {
+      "anchored": "textures/packed.png",
+      "authored": "./textures/packed.png",
+      "resolved": "textures/packed.png",
+      "tiles": [],
+      "udim": false
+     },
+     "id": "UsdUVTexture",
+     "inputs": {
+      "file": [
+       {
+        "attribute": "/Looks/Channels/Metal/Texture.inputs:file",
+        "value": "./textures/packed.png",
+        "value10": "./textures/packed.png"
+       }
+      ],
+      "st": [
+       {
+        "attribute": "/Looks/Channels/Metal/Reader.outputs:result",
+        "output": "result",
+        "shader": "UsdPrimvarReader_float2",
+        "type": "float2"
+       }
+      ]
+     },
+     "types": {
+      "file": "asset",
+      "st": "float2"
+     }
+    },
+    "/Looks/Channels/Rough": {
+     "canConnect": {},
+     "file": {
+      "anchored": "textures/packed.png",
+      "authored": "./textures/packed.png",
+      "resolved": "textures/packed.png",
+      "tiles": [],
+      "udim": false
+     },
+     "id": "UsdUVTexture",
+     "inputs": {
+      "file": [
+       {
+        "attribute": "/Looks/Channels/Rough.inputs:file",
+        "value": "./textures/packed.png",
+        "value10": "./textures/packed.png"
+       }
+      ],
+      "scale": [
+       {
+        "attribute": "/Looks/Channels/Rough.inputs:scale",
+        "value": [
+         0.5,
+         1.0,
+         1.0,
+         1.0
+        ],
+        "value10": [
+         0.5,
+         1.0,
+         1.0,
+         1.0
+        ]
+       }
+      ]
+     },
+     "types": {
+      "file": "asset",
+      "scale": "float4"
+     }
+    }
+   },
+   "output": "surface",
+   "path": "/Looks/Channels",
+   "shader": "/Looks/Channels/Surface",
+   "sourceType": "Output",
+   "surface": {
+    "canConnect": {
+     "diffuseColor": true,
+     "metallic": true,
+     "normal": true,
+     "occlusion": true,
+     "opacity": true,
+     "roughness": true
+    },
+    "id": "UsdPreviewSurface",
+    "inputs": {
+     "diffuseColor": [
+      {
+       "attribute": "/Looks/Channels/Mask.outputs:r",
+       "output": "r",
+       "shader": "UsdUVTexture",
+       "type": "float"
+      }
+     ],
+     "metallic": [
+      {
+       "attribute": "/Looks/Channels/Metal/Texture.outputs:rgb",
+       "output": "rgb",
+       "shader": "UsdUVTexture",
+       "type": "float3"
+      }
+     ],
+     "normal": [
+      {
+       "attribute": "/Looks/Channels/Metal/Texture.outputs:rgb",
+       "output": "rgb",
+       "shader": "UsdUVTexture",
+       "type": "float3"
+      }
+     ],
+     "occlusion": [
+      {
+       "attribute": "/Looks/Channels/Mask.outputs:rgba",
+       "output": "rgba",
+       "shader": "UsdUVTexture",
+       "type": "float4"
+      }
+     ],
+     "opacity": [
+      {
+       "attribute": "/Looks/Channels/Mask.outputs:a",
+       "output": "a",
+       "shader": "UsdUVTexture",
+       "type": "float"
+      }
+     ],
+     "roughness": [
+      {
+       "attribute": "/Looks/Channels/Rough.outputs:rgb",
+       "output": "rgb",
+       "shader": "UsdUVTexture",
+       "type": "float3"
+      }
+     ]
+    },
+    "types": {
+     "diffuseColor": "color3f",
+     "metallic": "float",
+     "normal": "normal3f",
+     "occlusion": "float",
+     "opacity": "float",
+     "roughness": "float"
+    }
+   }
+  },
+  {
+   "contexts": [
+    "mtlx"
+   ],
+   "id": "UsdPreviewSurface",
+   "nodes": {
+    "/Looks/Channels/Mask": {
+     "canConnect": {},
+     "file": {
+      "anchored": "textures/grid.png",
+      "authored": "./textures/grid.png",
+      "resolved": "textures/grid.png",
+      "tiles": [],
+      "udim": false
+     },
+     "id": "UsdUVTexture",
+     "inputs": {
+      "file": [
+       {
+        "attribute": "/Looks/Channels/Mask.inputs:file",
+        "value": "./textures/grid.png",
+        "value10": "./textures/grid.png"
+       }
+      ]
+     },
+     "types": {
+      "file": "asset"
+     }
+    },
+    "/Looks/Channels/Metal/Reader": {
+     "canConnect": {},
+     "id": "UsdPrimvarReader_float2",
+     "inputs": {
+      "varname": [
+       {
+        "attribute": "/Looks/Channels/Metal.inputs:frame:st",
+        "value": "st",
+        "value10": "st"
+       }
+      ]
+     },
+     "types": {
+      "varname": "token"
+     }
+    },
+    "/Looks/Channels/Metal/Texture": {
+     "canConnect": {
+      "st": true
+     },
+     "file": {
+      "anchored": "textures/packed.png",
+      "authored": "./textures/packed.png",
+      "resolved": "textures/packed.png",
+      "tiles": [],
+      "udim": false
+     },
+     "id": "UsdUVTexture",
+     "inputs": {
+      "file": [
+       {
+        "attribute": "/Looks/Channels/Metal/Texture.inputs:file",
+        "value": "./textures/packed.png",
+        "value10": "./textures/packed.png"
+       }
+      ],
+      "st": [
+       {
+        "attribute": "/Looks/Channels/Metal/Reader.outputs:result",
+        "output": "result",
+        "shader": "UsdPrimvarReader_float2",
+        "type": "float2"
+       }
+      ]
+     },
+     "types": {
+      "file": "asset",
+      "st": "float2"
+     }
+    },
+    "/Looks/Channels/Rough": {
+     "canConnect": {},
+     "file": {
+      "anchored": "textures/packed.png",
+      "authored": "./textures/packed.png",
+      "resolved": "textures/packed.png",
+      "tiles": [],
+      "udim": false
+     },
+     "id": "UsdUVTexture",
+     "inputs": {
+      "file": [
+       {
+        "attribute": "/Looks/Channels/Rough.inputs:file",
+        "value": "./textures/packed.png",
+        "value10": "./textures/packed.png"
+       }
+      ],
+      "scale": [
+       {
+        "attribute": "/Looks/Channels/Rough.inputs:scale",
+        "value": [
+         0.5,
+         1.0,
+         1.0,
+         1.0
+        ],
+        "value10": [
+         0.5,
+         1.0,
+         1.0,
+         1.0
+        ]
+       }
+      ]
+     },
+     "types": {
+      "file": "asset",
+      "scale": "float4"
+     }
+    }
+   },
+   "output": "surface",
+   "path": "/Looks/Channels",
+   "shader": "/Looks/Channels/Surface",
+   "sourceType": "Output",
+   "surface": {
+    "canConnect": {
+     "diffuseColor": true,
+     "metallic": true,
+     "normal": true,
+     "occlusion": true,
+     "opacity": true,
+     "roughness": true
+    },
+    "id": "UsdPreviewSurface",
+    "inputs": {
+     "diffuseColor": [
+      {
+       "attribute": "/Looks/Channels/Mask.outputs:r",
+       "output": "r",
+       "shader": "UsdUVTexture",
+       "type": "float"
+      }
+     ],
+     "metallic": [
+      {
+       "attribute": "/Looks/Channels/Metal/Texture.outputs:rgb",
+       "output": "rgb",
+       "shader": "UsdUVTexture",
+       "type": "float3"
+      }
+     ],
+     "normal": [
+      {
+       "attribute": "/Looks/Channels/Metal/Texture.outputs:rgb",
+       "output": "rgb",
+       "shader": "UsdUVTexture",
+       "type": "float3"
+      }
+     ],
+     "occlusion": [
+      {
+       "attribute": "/Looks/Channels/Mask.outputs:rgba",
+       "output": "rgba",
+       "shader": "UsdUVTexture",
+       "type": "float4"
+      }
+     ],
+     "opacity": [
+      {
+       "attribute": "/Looks/Channels/Mask.outputs:a",
+       "output": "a",
+       "shader": "UsdUVTexture",
+       "type": "float"
+      }
+     ],
+     "roughness": [
+      {
+       "attribute": "/Looks/Channels/Rough.outputs:rgb",
+       "output": "rgb",
+       "shader": "UsdUVTexture",
+       "type": "float3"
+      }
+     ]
+    },
+    "types": {
+     "diffuseColor": "color3f",
+     "metallic": "float",
+     "normal": "normal3f",
+     "occlusion": "float",
+     "opacity": "float",
+     "roughness": "float"
+    }
+   }
   }
  ],
  "version": "26.11"

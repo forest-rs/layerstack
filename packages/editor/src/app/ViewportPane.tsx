@@ -9,6 +9,7 @@ import { useStore } from "./context.ts";
 import { updateSummary, viewportSummary } from "../model/draws.ts";
 import { resolveAsset } from "../model/sources.ts";
 import { SKIN_SLOTS } from "../model/skinning.ts";
+import { LoadingOverlay } from "./LoadingOverlay.tsx";
 import { Timeline } from "./Timeline.tsx";
 
 export function ViewportPane() {
@@ -75,7 +76,14 @@ export function ViewportPane() {
             store.select(store.viewport?.pick(event.clientX - rect.left, event.clientY - rect.top) ?? null);
           }}
         />
-        {failed !== null && (
+        <LoadingOverlay />
+      {textures !== undefined && textures.pending > 0 && store.status.kind !== "opening" && (
+        <div role="status" className="pointer-events-none absolute bottom-2 left-2 flex items-center gap-2 rounded-md bg-black/40 px-2 py-1 font-mono text-[11px] text-white/80 backdrop-blur-sm">
+          <span className="size-1.5 animate-pulse rounded-full bg-sky-400" />
+          Loading textures: {textures.images} of {textures.images + textures.pending}
+        </div>
+      )}
+      {failed !== null && (
           <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
             The viewport cannot draw here: {failed}
           </div>

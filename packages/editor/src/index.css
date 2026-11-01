@@ -128,3 +128,8 @@
     @apply font-sans;
     }
 }
+/* The loading bar's sweep: a transform, so the compositor keeps it moving while a long read holds the page. */
+@keyframes loading {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}

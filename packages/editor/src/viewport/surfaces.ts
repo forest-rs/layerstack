@@ -127,6 +127,8 @@ export interface TextureStats {
   readonly capped: number;
   /** {@link MAX_TEXTURE_SIZE}. */
   readonly limit: number;
+  /** Images asked for and not yet decoded (or failed). */
+  readonly pending: number;
 }
 
 /** The textures materials read, one image per identifier, loaded once. */
@@ -170,7 +172,7 @@ export class TextureStore {
 
   /** What the store has decoded: images, and how many were scaled down to {@link MAX_TEXTURE_SIZE}. */
   get stats(): TextureStats {
-    return { images: this.#decoded, capped: this.#capped, limit: MAX_TEXTURE_SIZE };
+    return { images: this.#decoded, capped: this.#capped, limit: MAX_TEXTURE_SIZE, pending: this.#images.size - this.#ready.size };
   }
 
   /**

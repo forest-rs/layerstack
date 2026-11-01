@@ -39,6 +39,13 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
   edit).
 - **Cameras.** The free camera and the stage's own; choosing one looks
   through it, its view and projection as `GfFrustum` computes them.
+- **Opening.** While a scene opens, the viewport says what the open is
+  doing: fetching the root layer, reading it (its size), and each round of
+  the asset loop fetching its assets and composing them. Each phase is
+  painted before work that holds the page begins, so a large root layer's
+  read is announced, not a frozen page. Below that are what has arrived
+  and the time taken, and **Cancel** keeps the scene the editor had. Once
+  the scene is drawn, a corner note counts the textures still loading.
 - **Viewport.** The draw list stagehand keeps from the stage's change
   records, applied to three.js in place; the stage's `upAxis` orients the
   free camera and the grid. Click to pick, drag to orbit, scroll to zoom,

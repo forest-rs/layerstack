@@ -12,7 +12,7 @@ import { useSyncExternalStore } from "react";
 import type { Edit, EditReceipt, EditTarget, Layer, Layerstack, ValueInput } from "@forest-rs/layerstack";
 import type { Stagehand } from "@forest-rs/layerstack_stagehand";
 import { ViewportModel, type ViewportScene, type ViewportUpdate } from "./model/draws.ts";
-import { Session } from "./model/session.ts";
+import { type OpenPhase, Session } from "./model/session.ts";
 import type { SceneSource } from "./model/sources.ts";
 import type { Viewport } from "./viewport/viewport3d.ts";
 
@@ -79,6 +79,8 @@ export class EditorStore {
   through: string | null = null;
   /** The session being opened, while its assets are fetched. */
   opening: Session | null = null;
+  /** What the open is doing, and since when (`performance.now()`); `null` when nothing is opening. */
+  openingPhase: { readonly phase: OpenPhase; readonly since: number; readonly started: number } | null = null;
   /** The draws, as last synced. */
   scene: ViewportScene = EMPTY_SCENE;
   /** The last sync that changed something, for the stats. */
@@ -113,6 +115,7 @@ export class EditorStore {
   attachViewport(viewport: Viewport | null): void {
     this.#viewport = viewport;
     if (viewport === null) return;
+    viewport.onImages = () => this.#bumpSoon();
     viewport.lookThrough(this.through);
     this.#orient();
     const update = this.session === null ? null : this.#draws.sync(this.session, this.time);
@@ -128,10 +131,20 @@ export class EditorStore {
     this.status = { kind: "opening", label: source.label };
     this.#bump();
     try {
+      const started = performance.now();
       const session = await Session.open(this.layerstack, source.root, source.fetch, {
         progress: (pending) => {
           if (opening === this.#opening) this.opening = pending;
           this.#bumpSoon();
+        },
+        // Each phase is shown before its work holds the thread: two frames
+        // let the page render and paint it.
+        phase: async (phase) => {
+          if (opening !== this.#opening) return;
+          this.openingPhase = { phase, since: performance.now(), started };
+          this.#bump();
+          await nextFrame();
+          await nextFrame();
         },
       });
       if (opening !== this.#opening) {
@@ -139,6 +152,7 @@ export class EditorStore {
         return;
       }
       this.opening = null;
+      this.openingPhase = null;
       this.session?.free();
       this.session = session;
       this.source = source;
@@ -155,9 +169,24 @@ export class EditorStore {
     } catch (error) {
       if (opening !== this.#opening) return;
       this.opening = null;
+      this.openingPhase = null;
       this.status = { kind: "failed", label: source.label, message: error instanceof Error ? error.message : String(error) };
       this.#bump();
     }
+  }
+
+  /**
+   * Stops waiting for the scene being opened: the stage keeps the scene it
+   * had. Work already holding the thread finishes, and its result is
+   * dropped.
+   */
+  cancelOpen(): void {
+    if (this.status.kind !== "opening") return;
+    this.#opening += 1;
+    this.opening = null;
+    this.openingPhase = null;
+    this.status = this.session === null ? { kind: "empty" } : { kind: "ready" };
+    this.#bump();
   }
 
   /** Selects the prim at `path` (`null` for none); the explain panel keeps its property while it is the prim's. */
@@ -397,6 +426,11 @@ export class EditorStore {
     this.revision += 1;
     for (const listener of this.#listeners) listener();
   }
+}
+
+/** Resolves after the next frame is rendered. */
+function nextFrame(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
 
 /** The stage's time range from its metadata, `null` when it authors no span (`endTimeCode` not after `startTimeCode`). */

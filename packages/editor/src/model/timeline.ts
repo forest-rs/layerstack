@@ -3,8 +3,9 @@
 
 // When each step of the asset loop happened, for the waterfall: the
 // session records `performance.now()` as it asks the stage what it wants,
-// fetches, supplies and has the stage read, round by round. No DOM and no
-// React; the session owns one of these and the panel reads it.
+// fetches, supplies and has the stage read, round by round, and composes
+// what the rounds read once they want nothing more. No DOM and no React;
+// the session owns one of these and the panel reads it.
 import type { AssetFailure, AssetUse, LoadResult, UnavailableAsset } from "@forest-rs/layerstack";
 
 /** What uses an asset: what the stage says (`UnavailableAsset.usedBy`), or `root` for the layer the session opened. */
@@ -24,7 +25,7 @@ export interface AssetMention {
 }
 
 /**
- * The stage decoding one asset's layer, as `loadSupplied` reports it
+ * The stage decoding one asset's layer, as `readSupplied` reports it
  * (`LayerRead`): its span holds the layers it read as it went, already
  * supplied; `own` leaves them out. Milliseconds on `performance.now()`'s
  * timeline; the times are `null` when the module has no clock.
@@ -41,7 +42,7 @@ export interface AssetRead {
 
 /**
  * One asset's way through the loop, in `performance.now()` milliseconds.
- * The stage reads every asset a round supplied in one `loadSupplied`,
+ * The stage reads every asset a round supplied in one `readSupplied`,
  * which reports each layer's read ({@link AssetTiming.read}) within the
  * round's ({@link RoundTiming.readStart} to {@link RoundTiming.readEnd}).
  */
@@ -76,9 +77,11 @@ export interface AssetTiming {
 
 /**
  * One round of the loop: the stage names what it wants, the host fetches
- * it all at once, supplies what arrived, and the stage reads it. The
- * stage's own time is the want, supply and read; the rest is waiting on
- * fetches. Round 0 is the root: fetched, then read by `Layerstack.open`.
+ * it all at once, supplies what arrived, and the stage reads it without
+ * composing (`readSupplied`); the layers read name the next round's
+ * assets themselves. The stage's own time is the want, supply and read;
+ * the rest is waiting on fetches. Round 0 is the root: fetched, then read
+ * (and composed alone) by `Layerstack.open`.
  */
 export interface RoundTiming {
   readonly index: number;
@@ -90,17 +93,33 @@ export interface RoundTiming {
   fetchEnd: number | null;
   /** When the last `supply` returned (bytes copied into the module); `null` before. */
   supplyEnd: number | null;
-  /** When `loadSupplied()` (or, for the root, `Layerstack.open`) was called and returned. */
+  /** When `readSupplied()` (or, for the root, `Layerstack.open`) was called and returned. */
   readStart: number | null;
   readEnd: number | null;
   /** The distinct identifiers the round wanted. */
   readonly assets: number;
   /** The layers the read loaded (package members included). */
   loaded: number;
-  /** The time `loadSupplied()` spent decoding layers: its reads' own times added up; `null` without them. */
+  /** The time `readSupplied()` spent decoding layers: its reads' own times added up; `null` without them. */
   reading: number | null;
-  /** The compositions after its batches of reads: the layers entering the stage and the prims using them recomposing. */
-  compositions: { readonly start: number; readonly end: number }[];
+}
+
+/**
+ * The stage composing what the rounds before it read, once they want
+ * nothing more (`loadSupplied`): the layers entering the stage and the
+ * prims using them composing. It may want more (an arc in a variant
+ * another layer selects), and further rounds follow it.
+ */
+export interface ComposeTiming {
+  /** The last round it follows. */
+  readonly after: number;
+  /** When `loadSupplied()` was called and returned. */
+  readonly start: number;
+  readonly end: number;
+  /** The layers it brought into the stage, as it reports them. */
+  readonly layers: number;
+  /** The compositions it reports, on `performance.now()`'s timeline; none without the module's clock. */
+  readonly compositions: readonly { readonly start: number; readonly end: number }[];
 }
 
 /**
@@ -113,11 +132,13 @@ export interface LoopRun {
   /** When the loop found nothing more unavailable, or failed; `null` while it runs. */
   endedAt: number | null;
   readonly rounds: RoundTiming[];
+  /** Each time the stage composed what the rounds read, in order. */
+  readonly composes: ComposeTiming[];
   /** Every asset, in the order the stage wanted them. */
   readonly assets: AssetTiming[];
   /**
    * The final `unavailable()` that found nothing left: stage time after
-   * the last round's read. `null` while the loop runs.
+   * the last composition. `null` while the loop runs.
    */
   settle: { readonly start: number; readonly end: number } | null;
   /** Why the loop stopped early; `null` when it finished. */
@@ -137,11 +158,11 @@ export interface LoopSummary {
   readonly wall: number;
   /** Rounds' fetch phases: the loop waiting on the host. */
   readonly fetching: number;
-  /** The stage's calls: `unavailable()`, `supply()`, `loadSupplied()`, the root's `Layerstack.open`. */
+  /** The stage's calls: `unavailable()`, `supply()`, `readSupplied()`, `loadSupplied()`, the root's `Layerstack.open`. */
   readonly stage: number;
-  /** Of `stage`, the time `loadSupplied()` reports decoding layers. */
+  /** Of `stage`, the time `readSupplied()` reports decoding layers. */
   readonly reading: number;
-  /** Of `stage`, the time `loadSupplied()` reports composing after its reads. */
+  /** Of `stage`, the time `loadSupplied()` reports composing what the rounds read. */
   readonly composing: number;
   readonly failed: number;
   readonly absent: number;
@@ -170,7 +191,10 @@ export function summarize(run: LoopRun, now: number = performance.now()): LoopSu
     stage += span(round.wantStart, round.wantEnd) + span(round.fetchEnd, round.supplyEnd) + span(round.readStart, round.readEnd);
     fetching += span(round.wantEnd, round.fetchEnd);
     reading += round.reading ?? 0;
-    for (const composition of round.compositions) composing += span(composition.start, composition.end);
+  }
+  for (const compose of run.composes) {
+    stage += span(compose.start, compose.end);
+    for (const composition of compose.compositions) composing += span(composition.start, composition.end);
   }
   return {
     assets: run.assets.length,
@@ -204,7 +228,7 @@ export class LoopRecorder {
 
   /** Starts a run for `cause` at `at`. */
   begin(cause: string, at: number): LoopRun {
-    const run: LoopRun = { cause, startedAt: at, endedAt: null, rounds: [], assets: [], settle: null, error: null, version: 0 };
+    const run: LoopRun = { cause, startedAt: at, endedAt: null, rounds: [], composes: [], assets: [], settle: null, error: null, version: 0 };
     this.#run = run;
     this.#byIdentifier = new Map();
     this.runs.push(run);
@@ -225,7 +249,6 @@ export class LoopRecorder {
       assets: 1,
       loaded: 0,
       reading: null,
-      compositions: [],
     });
     const asset = this.#asset(identifier, 0, start);
     asset.roles.push("root");
@@ -277,7 +300,6 @@ export class LoopRecorder {
       assets: run.assets.length - before,
       loaded: 0,
       reading: null,
-      compositions: [],
     });
     run.version += 1;
   }
@@ -323,10 +345,10 @@ export class LoopRecorder {
   }
 
   /**
-   * `loadSupplied()` ran from `start` to `end` and returned `result`:
+   * `readSupplied()` ran from `start` to `end` and returned `result`:
    * each asset of the round is read, failed (matched by its authored path
    * and anchor) or absent, with its layer's read (matched by identifier)
-   * and the round's reading and composing times.
+   * and the round's reading time.
    */
   read(result: LoadResult, start: number, end: number): void {
     const run = this.#active();
@@ -343,7 +365,6 @@ export class LoopRecorder {
       asset.read = { start: read.time?.start ?? null, end: read.time?.end ?? null, own: read.time?.own ?? null, bytes: read.bytes, prims: read.prims };
     }
     round.reading = reading;
-    round.compositions = result.compositions.flatMap((composition) => (composition.time === null ? [] : [composition.time]));
     const failures = new Map<string, AssetFailure>();
     for (const failure of result.failures) failures.set(mentionKey(failure.assetPath, failure.anchor?.identifier ?? null), failure);
     for (const asset of run.assets) {
@@ -358,6 +379,22 @@ export class LoopRecorder {
         asset.outcome = "read";
       }
     }
+    run.version += 1;
+  }
+
+  /**
+   * `loadSupplied()` composed what the rounds read, from `start` to `end`,
+   * and returned `result`, which reports its compositions.
+   */
+  composed(result: LoadResult, start: number, end: number): void {
+    const run = this.#active();
+    run.composes.push({
+      after: run.rounds.at(-1)?.index ?? 0,
+      start,
+      end,
+      layers: result.compositions.reduce((sum, composition) => sum + composition.layers, 0),
+      compositions: result.compositions.flatMap((composition) => (composition.time === null ? [] : [composition.time])),
+    });
     run.version += 1;
   }
 

@@ -9,7 +9,9 @@
 //! that the host has not supplied (`unavailable`), the host fetches them
 //! however it likes, supplies their bytes ([`HostStorage::supply`], or
 //! [`HostStorage::confirm_absent`] for one that does not exist), and the
-//! stage reads them (`loadSupplied`), until none is unavailable. A USDZ package is one supplied source. The stage then
+//! stage reads them (`loadSupplied`), until none is unavailable; a host
+//! that only wants the finished stage reads each round without composing
+//! (`readSupplied`) and composes once. A USDZ package is one supplied source. The stage then
 //! answers prim, child, attribute and value queries and explains where a
 //! value comes from (`explain`).
 //!

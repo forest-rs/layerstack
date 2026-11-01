@@ -161,14 +161,65 @@ describe("the resolve loop", () => {
     assert.ok(Math.max(...reads.map((read) => read.time!.end)) <= composed.start && composed.end <= after);
   });
 
-  it("gathers every round's reads and compositions when it resolves", async () => {
+  it("reads round after round without composing, and composes once", () => {
     using stage = openScene();
+    let compositions = 0;
+    stage.onChange(() => {
+      compositions += 1;
+    });
+    for (const need of stage.unavailable()) stage.supply(need.identifier, bytes(need.identifier));
+    const first = stage.readSupplied();
+    assert.deepEqual(
+      first.loaded.map((layer) => layer.identifier),
+      ["parts/ball.usda", "sub.usda"],
+    );
+    assert.equal(first.reads.length, 2);
+    assert.deepEqual(first.compositions, [], "reading composes nothing");
+    // The layer read asks for its own reference before the stage composes it.
+    const [trim, ...rest] = stage.unavailable();
+    assert.deepEqual(rest, []);
+    assert.equal(trim?.identifier, "parts/trim.usda");
+    assert.equal(trim?.usedBy, "reference");
+    assert.deepEqual(trim?.prims, []);
+    assert.equal(stage.attribute("/Ball.radius")?.authored, false, "the stage is as the open composed it");
+    stage.supply("parts/trim.usda", bytes("parts/trim.usda"));
+    assert.deepEqual(
+      stage.readSupplied().loaded.map((layer) => layer.identifier),
+      ["parts/trim.usda"],
+    );
+    assert.deepEqual(stage.unavailable(), []);
+    assert.equal(compositions, 0);
+    const composed = stage.loadSupplied();
+    assert.deepEqual(composed.loaded, []);
+    assert.deepEqual(composed.reads, []);
+    assert.deepEqual(
+      composed.compositions.map((composition) => composition.layers),
+      [3],
+      "one composition, of the three layers read",
+    );
+    assert.equal(compositions, 1);
+    assert.deepEqual(stage.attribute("/Ball.radius")?.get(), { kind: "scalar", type: "double", value: 0.5 });
+    assert.equal(stage.status().complete, true);
+  });
+
+  it("resolves in rounds that compose once", async () => {
+    using stage = openScene();
+    let compositions = 0;
+    stage.onChange(() => {
+      compositions += 1;
+    });
     const result = await stage.resolve(mockSource(scene));
+    assert.equal(result.rounds, 2);
+    assert.equal(compositions, 1);
     assert.deepEqual(
       result.reads.map((read) => read.identifier).sort(),
       result.loaded.map((layer) => layer.identifier).sort(),
     );
-    assert.ok(result.compositions.length >= result.rounds);
+    assert.deepEqual(
+      result.compositions.map((composition) => composition.layers),
+      [result.loaded.length],
+    );
+    assert.equal(stage.status().complete, true);
   });
 
   it("keeps a confirmed-absent asset unresolved, with composition codes", async () => {

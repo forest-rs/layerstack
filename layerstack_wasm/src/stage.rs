@@ -393,11 +393,34 @@ impl Stage {
     /// the layers read before it kept.
     pub(crate) fn load_supplied(&mut self) -> Result<Wire, Error> {
         let report = self.document.load_requested_assets()?;
-        let Wire::List(mut result) = load_result(&report) else {
+        Ok(self.load_wire(&report))
+    }
+
+    /// Reads what the host supplied for the assets the stage and the layers
+    /// read since it last composed want, without composing
+    /// ([`StageDocument::read_requested_assets`]): `[loaded, failures,
+    /// reads, compositions]`, as [`Self::load_supplied`] returns, with no
+    /// compositions. The layers read list what they need themselves in
+    /// [`Self::unavailable`], with no prims, until [`Self::load_supplied`]
+    /// composes them once.
+    ///
+    /// # Errors
+    ///
+    /// A strict open's rejection of a supplied layer (`io.rejected`), with
+    /// the layers read before it kept.
+    pub(crate) fn read_supplied(&mut self) -> Result<Wire, Error> {
+        let report = self.document.read_requested_assets()?;
+        Ok(self.load_wire(&report))
+    }
+
+    /// `[loaded, failures, reads, compositions]` of `report`, as
+    /// [`Self::load_supplied`] and [`Self::read_supplied`] return it.
+    fn load_wire(&self, report: &LoadReport) -> Wire {
+        let Wire::List(mut result) = load_result(report) else {
             unreachable!("a load result is a list")
         };
-        result.extend(load_work(&report, &self.document));
-        Ok(Wire::List(result))
+        result.extend(load_work(report, &self.document));
+        Wire::List(result)
     }
 
     /// Plans what value clips the attribute at `path` needs at `time`
@@ -2493,6 +2516,12 @@ impl Stage {
     #[wasm_bindgen(js_name = loadSupplied)]
     pub fn js_load_supplied(&mut self) -> Result<JsValue, JsValue> {
         Ok(self.load_supplied()?.into())
+    }
+
+    /// The record `read_supplied` builds, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = readSupplied)]
+    pub fn js_read_supplied(&mut self) -> Result<JsValue, JsValue> {
+        Ok(self.read_supplied()?.into())
     }
 
     /// The record `prepare_clip_query` builds, as documented in `stage.rs`.

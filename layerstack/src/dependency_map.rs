@@ -56,6 +56,7 @@ pub struct ArcDependency {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct CompositionDeps {
     /// The invalidation graph: `target` depends on `source` in `OPINION_EDIT`.
+    /// Empty for a composition a live stage merges ([`DependencyMaps::Merged`]).
     pub graph: InvalidationGraph<PathId>,
     /// Arc metadata for diagnostic queries.
     pub arcs: HashSet<ArcDependency>,
@@ -111,6 +112,23 @@ impl PrimDependencies {
 /// ([`DependencyRecords::builds_on_threads`]): about a millisecond of work.
 const THREADED_BUILD_PRIMS: usize = 1024;
 
+/// Which dependency maps a composition builds, for what reads them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum DependencyMaps {
+    /// Every map: a stage composed on its own answers queries from them all.
+    All,
+    /// All but the arc metadata ([`CompositionDeps::arcs`]): a live stage's
+    /// full composition, whose graph the live stage takes as its tracker's
+    /// and whose edits read the arcs of the partial compositions they merge.
+    Live,
+    /// All but the graph ([`CompositionDeps::graph`]): a partial composition
+    /// a live stage merges, which replaces the recomposed prims'
+    /// dependencies in its own graph from the arc metadata. A graph of its
+    /// own would size its tables to the largest path index it holds, however
+    /// few prims it composes, only to be dropped.
+    Merged,
+}
+
 /// What composition recorded of a stage's dependencies, which
 /// [`Self::build`] makes [`CompositionDeps`] of.
 ///
@@ -120,8 +138,8 @@ const THREADED_BUILD_PRIMS: usize = 1024;
 pub(crate) struct DependencyRecords {
     /// What each composed prim the composition keeps depends on.
     prims: HashMap<PathId, PrimDependencies>,
-    /// Whether [`Self::build`] builds [`CompositionDeps::arcs`].
-    arc_metadata: bool,
+    /// Which maps [`Self::build`] builds.
+    maps: DependencyMaps,
     relocation_layers: HashSet<LayerId>,
     expression_variables: VariableReads,
 }
@@ -131,21 +149,16 @@ impl DependencyRecords {
     pub(crate) fn new(prims: HashMap<PathId, PrimDependencies>) -> Self {
         Self {
             prims,
-            arc_metadata: true,
+            maps: DependencyMaps::All,
             relocation_layers: HashSet::new(),
             expression_variables: VariableReads::default(),
         }
     }
 
-    /// These records, building [`CompositionDeps::arcs`] only when
-    /// `arc_metadata`: a live stage keeps no arc metadata of its full
-    /// compositions, and an empty set leaves the rest of the maps as they
-    /// are.
-    pub(crate) fn with_arc_metadata(self, arc_metadata: bool) -> Self {
-        Self {
-            arc_metadata,
-            ..self
-        }
+    /// These records, building only the maps `maps` asks for: the rest are
+    /// left empty, and the maps built are the same either way.
+    pub(crate) fn with_maps(self, maps: DependencyMaps) -> Self {
+        Self { maps, ..self }
     }
 
     /// Whether the records are many enough for [`Self::build`] to build the
@@ -191,9 +204,15 @@ impl DependencyRecords {
             || {
                 join(
                     threads,
-                    || arc_graph(&self.prims),
                     || {
-                        if self.arc_metadata {
+                        if self.maps == DependencyMaps::Merged {
+                            InvalidationGraph::new()
+                        } else {
+                            arc_graph(&self.prims)
+                        }
+                    },
+                    || {
+                        if self.maps != DependencyMaps::Live {
                             arc_set(&self.prims)
                         } else {
                             HashSet::new()

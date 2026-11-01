@@ -2280,7 +2280,7 @@ impl LiveStage {
             dynamic_formats: self.options.dynamic_formats.clone(),
             limits: self.options.limits,
         };
-        Stage::compose_retained(
+        Stage::compose_merged(
             store,
             self.root,
             scoped_opts,
@@ -4252,10 +4252,12 @@ mod tests {
 
     /// The paths [`four_layer_scene`] authors.
     /// A live stage's full composition builds no arc metadata, which the
-    /// live stage would drop; a stage composed on its own with dependencies
-    /// keeps it for its diagnostic queries. Both build the same edges.
+    /// live stage would drop, and a partial composition it merges builds
+    /// no graph, which it would drop; a stage composed on its own with
+    /// dependencies keeps both for its diagnostic queries. All three build
+    /// the same maps otherwise.
     #[test]
-    fn live_compositions_build_no_arc_metadata() {
+    fn live_compositions_build_only_the_maps_they_read() {
         let mut store = InMemoryStore::default();
         let scene = four_layer_scene(&mut store);
         let options = StageOptions {
@@ -4270,8 +4272,20 @@ mod tests {
                 .any(|arc| arc.target == scene.a && arc.source == scene.source)
         );
         let child_index = crate::prim_indexing::ChildIndex::default();
-        let mut live = Stage::compose_live(&mut store, LayerId(1), options, &child_index);
-        let (alone, live) = (alone.take_deps().unwrap(), live.take_deps().unwrap());
+        let mut live = Stage::compose_live(&mut store, LayerId(1), options.clone(), &child_index);
+        let mut merged = Stage::compose_merged(
+            &mut store,
+            LayerId(1),
+            options,
+            false,
+            &Boundaries::default(),
+            &child_index,
+        );
+        let (alone, live, merged) = (
+            alone.take_deps().unwrap(),
+            live.take_deps().unwrap(),
+            merged.take_deps().unwrap(),
+        );
         assert!(live.arcs.is_empty());
         assert!(
             live.graph
@@ -4279,6 +4293,10 @@ mod tests {
                 .any(|source| source == scene.source)
         );
         assert_eq!(live.prim_to_layers, alone.prim_to_layers);
+        assert!(merged.graph.is_empty());
+        assert_eq!(merged.arcs, alone.arcs);
+        assert_eq!(merged.prim_to_layers, alone.prim_to_layers);
+        assert_eq!(merged.layer_to_prims, alone.layer_to_prims);
     }
 
     struct FourLayers {

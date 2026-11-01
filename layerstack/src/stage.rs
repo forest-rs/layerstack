@@ -38,7 +38,9 @@ pub(crate) mod metadata;
 pub use metadata::StageMetadataError;
 mod loading;
 pub(crate) use loading::ControlledStore;
-pub use loading::{LayerMuteError, LoadPolicy, PayloadLoadRules, PayloadRule};
+pub use loading::{
+    LayerMuteError, LoadOutcome, LoadPolicy, LoadRefusal, PayloadLoadRules, PayloadRule,
+};
 pub(crate) mod preparation;
 mod prototypes;
 pub use prototypes::{CompositionStorage, CompositionWork, Prototype, PrototypeId, PrototypePrim};
@@ -3613,6 +3615,20 @@ impl Stage {
     #[doc(alias = "IsActive")]
     pub(crate) fn is_active(&self, prim: PathId) -> bool {
         self.has_prim(prim) && !self.inactive.contains(&prim)
+    }
+
+    /// Whether the prim's own composition authors payloads, included or
+    /// not ([`crate::Prim::has_authored_payloads`]).
+    pub(crate) fn has_payloads(&self, prim: PathId) -> bool {
+        self.loadable.contains(&prim)
+    }
+
+    /// Every prim whose own composition authors payloads, inactive ones
+    /// included, in namespace order.
+    pub(crate) fn payload_prims(&self, store: &dyn LayerStore) -> Vec<PathId> {
+        let mut out: Vec<_> = self.loadable.iter().copied().collect();
+        store.paths().sort_paths(&mut out, store.tokens());
+        out
     }
 
     /// Whether a populated active prim has every ancestor payload included.

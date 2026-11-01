@@ -341,12 +341,12 @@ pub use stage::{
     AuthoringQuery, AuthoringSource, AuthoringSourceKind, AuthoringSpan, AuthoringTimes,
     AuthoringVerdict, AuthoringWrite, Contribution, CurrentSource, DictionaryMerge,
     ExplainedOpinion, FlattenError, FlattenReport, FlattenRequirements, FlattenVerification,
-    Flattened, IgnoreCause, KeyPath, LayerMuteError, LoadPolicy, Object, OpinionRole,
-    PayloadLoadRules, PayloadRule, PopulationMask, Prim, PrimPredicate, PrimRange, PrimSnapshot,
-    PrimStatus, PrimVisit, PrimVisits, Property, PropertyDeclaration, Provenance, Relationship,
-    RelationshipQuery, RelationshipQueryWork, Resolved, ResolvedValue, SampleBracket, SampleUse,
-    SourceComposability, SourceStanding, SpanTimes, Stage, StageMetadataError, StageOptions,
-    Traverse, ValueExplanation, ValueSource,
+    Flattened, IgnoreCause, KeyPath, LayerMuteError, LoadOutcome, LoadPolicy, LoadRefusal, Object,
+    OpinionRole, PayloadLoadRules, PayloadRule, PopulationMask, Prim, PrimPredicate, PrimRange,
+    PrimSnapshot, PrimStatus, PrimVisit, PrimVisits, Property, PropertyDeclaration, Provenance,
+    Relationship, RelationshipQuery, RelationshipQueryWork, Resolved, ResolvedValue, SampleBracket,
+    SampleUse, SourceComposability, SourceStanding, SpanTimes, Stage, StageMetadataError,
+    StageOptions, Traverse, ValueExplanation, ValueSource,
 };
 pub use stage::{
     AuthoredTarget, AuthoredTargets, DanglingByName, DanglingCounts, DanglingKind, DanglingTarget,

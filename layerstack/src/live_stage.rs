@@ -686,53 +686,137 @@ impl LiveStage {
         true
     }
 
-    /// Queue loading a payload prim with or without its descendants.
-    /// Required ancestor payloads are included by the effective-rule fold.
+    /// Queue loading the payloads at `path`, with or without its
+    /// descendants' ([`Self::load_and_unload`] with `path` alone). Required
+    /// ancestor payloads are included by the effective-rule fold.
+    #[doc(alias = "UsdStage::Load")]
     pub fn load(
         &mut self,
         store: &dyn LayerStore,
         path: PathId,
         policy: crate::LoadPolicy,
-    ) -> bool {
-        let mut rules = self.options.load_rules.clone();
-        let path = store.paths().resolve(path).clone();
-        if policy == crate::LoadPolicy::WithDescendants {
-            rules.load_with_descendants(path);
-        } else {
-            rules.load_without_descendants(path);
-        }
-        self.set_load_rules(rules)
+    ) -> crate::LoadOutcome {
+        self.load_and_unload(store, &[path], &[], policy)
     }
 
-    /// Queue unloading payloads at and beneath the composed path.
-    pub fn unload(&mut self, store: &dyn LayerStore, path: PathId) -> bool {
-        let mut rules = self.options.load_rules.clone();
-        rules.unload(store.paths().resolve(path).clone());
-        self.set_load_rules(rules)
+    /// Queue unloading payloads at and beneath the composed path
+    /// ([`Self::load_and_unload`] with `path` alone).
+    #[doc(alias = "UsdStage::Unload")]
+    pub fn unload(&mut self, store: &dyn LayerStore, path: PathId) -> crate::LoadOutcome {
+        self.load_and_unload(store, &[], &[path], crate::LoadPolicy::WithDescendants)
     }
 
-    /// Queue one batch, applying unloads before loads as in OpenUSD.
+    /// Queue one batch, applying unloads before loads as in OpenUSD, and
+    /// returns whether the rules changed and the paths it left out.
     /// Recomposition occurs once when the caller synchronizes the stage.
+    ///
+    /// As `UsdStage::LoadAndUnload` does, a request with nothing to unload
+    /// whose loads already hold
+    /// ([`PayloadLoadRules::is_loaded_with_all_descendants`] or
+    /// [`PayloadLoadRules::is_loaded_with_no_descendants`], by `policy`),
+    /// or with nothing to load whose unloads already hold (the effective
+    /// rule is `None`), changes nothing and refuses nothing. Otherwise it
+    /// leaves out each path OpenUSD refuses ([`crate::LoadRefusal`]): a
+    /// path in an instance prototype, to load or unload, and a path to load
+    /// whose nearest prim on the stage (in the snapshot last synchronized)
+    /// is inactive, or that has no ancestor on the stage below the
+    /// pseudo-root. Then, the paths in path order, each unload replaces the
+    /// rules at and beneath its path with `None`, and each load with `All`
+    /// or `Only`: a path that is not on the stage gets its rule too, for
+    /// the prims loading may bring there.
+    ///
+    /// Spec: AOUSD Core §10.3.2.2 (payloads); OpenUSD
+    /// `UsdStage::LoadAndUnload`, `_IsValidForLoad` and `_IsValidForUnload`
+    /// (`pxr/usd/usd/stage.cpp`), `UsdStageLoadRules::LoadAndUnload`.
+    ///
+    /// [`PayloadLoadRules::is_loaded_with_all_descendants`]: crate::PayloadLoadRules::is_loaded_with_all_descendants
+    /// [`PayloadLoadRules::is_loaded_with_no_descendants`]: crate::PayloadLoadRules::is_loaded_with_no_descendants
+    #[doc(alias = "UsdStage::LoadAndUnload")]
+    #[doc(alias = "LoadAndUnload")]
     pub fn load_and_unload(
         &mut self,
         store: &dyn LayerStore,
         load: &[PathId],
         unload: &[PathId],
         policy: crate::LoadPolicy,
-    ) -> bool {
-        let mut rules = self.options.load_rules.clone();
-        for p in unload {
-            rules.unload(store.paths().resolve(*p).clone());
+    ) -> crate::LoadOutcome {
+        let paths = store.paths();
+        let current = &self.options.load_rules;
+        let holds = if unload.is_empty() {
+            load.iter().all(|&p| {
+                let p = paths.resolve(p);
+                match policy {
+                    crate::LoadPolicy::WithDescendants => current.is_loaded_with_all_descendants(p),
+                    crate::LoadPolicy::WithoutDescendants => {
+                        current.is_loaded_with_no_descendants(p)
+                    }
+                }
+            })
+        } else {
+            load.is_empty()
+                && unload
+                    .iter()
+                    .all(|&p| current.effective_rule(paths.resolve(p)) == crate::PayloadRule::None)
+        };
+        if holds {
+            return crate::LoadOutcome::default();
         }
-        for p in load {
-            let path = store.paths().resolve(*p).clone();
+        let mut refused = Vec::new();
+        // OpenUSD takes each as a path set: ordered, each path once.
+        let mut loads = Vec::with_capacity(load.len());
+        for &path in load {
+            match self.load_refusal(store, path) {
+                Some(reason) => refused.push((path, reason)),
+                None => loads.push(path),
+            }
+        }
+        let mut unloads = Vec::with_capacity(unload.len());
+        for &path in unload {
+            if in_prototype(paths, store.tokens(), path) {
+                refused.push((path, crate::LoadRefusal::Prototype));
+            } else {
+                unloads.push(path);
+            }
+        }
+        paths.sort_paths(&mut loads, store.tokens());
+        paths.sort_paths(&mut unloads, store.tokens());
+        let mut rules = current.clone();
+        for p in unloads {
+            rules.unload(paths.resolve(p).clone());
+        }
+        for p in loads {
+            let path = paths.resolve(p).clone();
             if policy == crate::LoadPolicy::WithDescendants {
                 rules.load_with_descendants(path);
             } else {
                 rules.load_without_descendants(path);
             }
         }
-        self.set_load_rules(rules)
+        crate::LoadOutcome {
+            changed: self.set_load_rules(rules),
+            refused,
+        }
+    }
+
+    /// Why `UsdStage::_IsValidForLoad` refuses `path`, if it does: a path
+    /// in an instance prototype, or one whose nearest prim on the stage is
+    /// inactive, or the pseudo-root reached from below it.
+    fn load_refusal(&self, store: &dyn LayerStore, path: PathId) -> Option<crate::LoadRefusal> {
+        let paths = store.paths();
+        if in_prototype(paths, store.tokens(), path) {
+            return Some(crate::LoadRefusal::Prototype);
+        }
+        let mut at = Some(path);
+        while let Some(id) = at {
+            if self.stage.has_prim(id) {
+                if paths.resolve(id).depth() == 0 && id != path {
+                    return Some(crate::LoadRefusal::NotOnStage);
+                }
+                return (!self.stage.is_active(id)).then_some(crate::LoadRefusal::Inactive);
+            }
+            at = paths.parent(id);
+        }
+        Some(crate::LoadRefusal::NotOnStage)
     }
 
     /// Applies `txn` to the layers of `store` (see [`Transaction::apply`])
@@ -2643,6 +2727,17 @@ fn reindex(
     if !sites.is_empty() {
         prim_to_sites.insert(prim, sites);
     }
+}
+
+/// Whether `path` is in an instance prototype's namespace, as OpenUSD's
+/// `Usd_InstanceCache::IsPathInPrototype` answers: its root prim is named
+/// `__Prototype_...`.
+fn in_prototype(paths: &crate::PathInterner, tokens: &crate::TokenInterner, path: PathId) -> bool {
+    paths
+        .resolve(path)
+        .segments()
+        .first()
+        .is_some_and(|&name| tokens.resolve(name).starts_with("__Prototype_"))
 }
 
 #[cfg(test)]

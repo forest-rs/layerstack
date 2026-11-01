@@ -210,9 +210,11 @@ impl LiveStage {
             return None;
         }
         let previous = self.stage.options();
+        // Inactive prims included: their indexes hold their payloads, and
+        // so the layers the stage uses (OpenUSD recomposes them too).
         let mut roots: Vec<_> = self
             .stage
-            .loadable_paths(store.paths().lookup(&crate::Path::root())?, store)
+            .payload_prims(store)
             .into_iter()
             .filter(|p| {
                 previous.load_rules.is_loaded(store.paths().resolve(*p))

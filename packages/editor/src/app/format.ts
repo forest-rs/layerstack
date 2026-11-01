@@ -13,3 +13,8 @@ export function formatBytes(count: number): string {
 export function layerName(identifier: string | null): string {
   return identifier ?? "(anonymous)";
 }
+
+/** A time code as the editor shows it: whole frames bare, others to two decimals. */
+export function formatTime(time: number): string {
+  return Number.isInteger(time) ? String(time) : time.toFixed(2);
+}

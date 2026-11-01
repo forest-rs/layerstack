@@ -23,6 +23,15 @@ export type EditorStatus =
   | { readonly kind: "ready" }
   | { readonly kind: "failed"; readonly label: string; readonly message: string };
 
+/** The stage's frames, as its metadata gives them. */
+export interface TimeRange {
+  /** `startTimeCode` and `endTimeCode`. */
+  readonly start: number;
+  readonly end: number;
+  /** `timeCodesPerSecond`: how fast time codes pass when playing. */
+  readonly timeCodesPerSecond: number;
+}
+
 /** Something an action reported that the person should see: a refused edit, a failed fetch. */
 export interface Notice {
   readonly id: number;
@@ -56,6 +65,15 @@ export class EditorStore {
   selection: string | null = null;
   /** The property whose value the explain panel shows, by path. */
   property: string | null = null;
+  /**
+   * The time everything is read at: a time code, or `undefined` for the
+   * default time (a stage without a time range).
+   */
+  time: number | undefined = undefined;
+  /** The stage's time range; `null` when it authors none. */
+  range: TimeRange | null = null;
+  /** Whether time is playing. */
+  playing = false;
   /** The stage camera the viewport looks through, by path; `null` for the free camera. */
   through: string | null = null;
   /** The session being opened, while its assets are fetched. */
@@ -72,6 +90,7 @@ export class EditorStore {
   #notice = 0;
   #opening = 0;
   #frame = 0;
+  #playFrame = 0;
 
   constructor(layerstack: Layerstack, stagehand: Stagehand) {
     this.layerstack = layerstack;
@@ -95,9 +114,9 @@ export class EditorStore {
     if (viewport === null) return;
     viewport.lookThrough(this.through);
     this.#orient();
-    const update = this.session === null ? null : this.#draws.sync(this.session, undefined);
+    const update = this.session === null ? null : this.#draws.sync(this.session, this.time);
     if (update !== null) {
-      this.scene = this.#draws.scene(undefined);
+      this.scene = this.#draws.scene(this.time);
       viewport.update(this.scene, { ...update, reset: true }, this.selection);
     }
   }
@@ -127,6 +146,9 @@ export class EditorStore {
       this.through = null;
       this.#viewport?.lookThrough(null);
       this.#orient();
+      this.pause();
+      this.range = timeRange(session);
+      this.time = this.range?.start;
       this.status = { kind: "ready" };
       this.#sync();
     } catch (error) {
@@ -163,10 +185,56 @@ export class EditorStore {
   frameSelection(): void {
     const stage = this.session?.stage;
     if (stage === undefined || this.#viewport === null) return;
-    const bounds = stage.worldBounds([this.selection ?? "/"], { purposes: ["default", "proxy"] }).alignedRanges;
+    const bounds = stage.worldBounds([this.selection ?? "/"], {
+      purposes: ["default", "proxy"],
+      ...(this.time === undefined ? {} : { time: this.time }),
+    }).alignedRanges;
     if (bounds[0]! > bounds[3]!) return;
     this.lookThrough(null);
     this.#viewport.frame(Array.from(bounds));
+  }
+
+  /** Reads everything at `time` (clamped to the range): the draws move to it, the panels read it. */
+  setTime(time: number | undefined): void {
+    const range = this.range;
+    const clamped = time === undefined || range === null ? time : Math.min(range.end, Math.max(range.start, time));
+    if (clamped === this.time) return;
+    this.time = clamped;
+    this.#sync();
+  }
+
+  /** Plays the range from the current time at `timeCodesPerSecond`, looping at its end. */
+  play(): void {
+    const range = this.range;
+    if (range === null || this.playing) return;
+    this.playing = true;
+    let last = performance.now();
+    const tick = (now: number) => {
+      if (!this.playing) return;
+      const advanced = (this.time ?? range.start) + ((now - last) / 1000) * range.timeCodesPerSecond;
+      last = now;
+      this.time = advanced > range.end ? range.start : advanced;
+      this.#sync();
+      this.#playFrame = requestAnimationFrame(tick);
+    };
+    this.#playFrame = requestAnimationFrame(tick);
+    this.#bump();
+  }
+
+  /** Stops playing, on the nearest whole time code: an edit then authors its sample on a frame. */
+  pause(): void {
+    if (!this.playing) return;
+    this.playing = false;
+    cancelAnimationFrame(this.#playFrame);
+    if (this.time !== undefined) this.time = Math.round(this.time);
+    this.#sync();
+  }
+
+  /** Moves time by `frames` whole time codes, pausing. */
+  step(frames: number): void {
+    this.pause();
+    if (this.range === null) return;
+    this.setTime(Math.round(this.time ?? this.range.start) + frames);
   }
 
   /** Where edits go: a layer of the stage's stack or an edit target; `undefined` for the stage's edit layer. */
@@ -183,7 +251,7 @@ export class EditorStore {
 
   /** Authors `value` for the attribute at `path`: its default, or its sample at `time`. */
   setValue(path: string, value: ValueInput, time: number | null = null): void {
-    this.#act(`set ${path}`, (session) => session.setValue(path, value, time));
+    this.#act(time === null ? `set ${path}` : `set ${path} at ${time}`, (session) => session.setValue(path, value, time));
   }
 
   /** Selects `variant` of `set` on `prim`, then fetches what it needs. */
@@ -248,9 +316,9 @@ export class EditorStore {
   /** Brings the draw list up to the stage, applies what changed to the view, and bumps the revision. */
   #sync(): void {
     if (this.session !== null) {
-      const update = this.#draws.sync(this.session, undefined);
-      this.scene = this.#draws.scene(undefined);
-      if (update.reset || update.records > 0) this.lastUpdate = update;
+      const update = this.#draws.sync(this.session, this.time);
+      this.scene = this.#draws.scene(this.time);
+      if (update.reset || update.records > 0 || update.timeChanged) this.lastUpdate = update;
       this.#viewport?.update(this.scene, update, this.selection);
     }
     this.#bump();
@@ -298,6 +366,18 @@ export class EditorStore {
     this.revision += 1;
     for (const listener of this.#listeners) listener();
   }
+}
+
+/** The stage's time range from its metadata, `null` when it authors no span (`endTimeCode` not after `startTimeCode`). */
+function timeRange(session: Session): TimeRange | null {
+  const number = (key: string, fallback: number) => {
+    const value = session.stage.metadata(key);
+    return value?.kind === "scalar" && typeof value.value === "number" ? value.value : fallback;
+  };
+  const start = number("startTimeCode", 0);
+  const end = number("endTimeCode", 0);
+  if (!(end > start)) return null;
+  return { start, end, timeCodesPerSecond: number("timeCodesPerSecond", 24) };
 }
 
 /** Re-renders the component after every change to `store`; read the store and its stage directly. */

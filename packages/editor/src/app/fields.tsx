@@ -106,11 +106,14 @@ export function shown(value: Value | null): Shown {
   return { value: kept, text };
 }
 
-/** The editor of `attribute`'s value now. */
-export function ValueField({ store, attribute, shown: { value, text } }: { store: EditorStore; attribute: Attribute; shown: Shown }) {
+/**
+ * The editor of `attribute`'s value: it authors the default, or with `at`
+ * (an animated attribute, at the current time) a sample there.
+ */
+export function ValueField({ store, attribute, shown: { value, text }, at }: { store: EditorStore; attribute: Attribute; shown: Shown; at: number | null }) {
   const type = attribute.typeName ?? value?.type ?? "";
   const label = attribute.name;
-  const set = (input: Parameters<EditorStore["setValue"]>[1]) => store.setValue(attribute.path, input);
+  const set = (input: Parameters<EditorStore["setValue"]>[1]) => store.setValue(attribute.path, input, at);
   if (type === "token") {
     const allowed = allowedTokens(attribute);
     const current = value?.kind === "scalar" ? String(value.value) : "";

@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { formatValue, releaseValue } from "../model/values.ts";
 import type { EditorStore } from "../store.ts";
 import { useStore } from "./context.ts";
-import { layerName } from "./format.ts";
+import { formatTime, layerName } from "./format.ts";
 import { targetText } from "./TargetPicker.tsx";
 
 /** The most log rows shown, newest first. */
@@ -61,7 +61,7 @@ function ExplainView({ store }: { store: EditorStore }) {
     return <p className="p-3 text-xs text-muted-foreground">Choose a property's name in the inspector to see why it has its value.</p>;
   }
   const attribute = stage.attribute(path);
-  const explanation: Explanation | null = attribute?.explain() ?? null;
+  const explanation: Explanation | null = attribute?.explain(store.time) ?? null;
   if (attribute === null || explanation === null) {
     return <p className="p-3 text-xs text-muted-foreground">{path} has no value to explain.</p>;
   }
@@ -72,6 +72,7 @@ function ExplainView({ store }: { store: EditorStore }) {
     <div className="p-3 text-xs">
       <div className="flex flex-wrap items-baseline gap-x-2">
         <span className="font-mono">{path}</span>
+        {store.time !== undefined && <span className="text-muted-foreground">at {formatTime(store.time)}</span>}
         <span className="text-muted-foreground">=</span>
         <span className="font-mono">{value}</span>
       </div>

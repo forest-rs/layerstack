@@ -5,11 +5,14 @@
 // own chunk, loaded after the editor). A click picks the prim drawn
 // there; a drag orbits.
 import { useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 import { useStore } from "./context.ts";
 import { updateSummary, viewportSummary } from "../model/draws.ts";
 import { resolveAsset } from "../model/sources.ts";
 import { SKIN_SLOTS } from "../model/skinning.ts";
+import { enclosingMaterial } from "../model/network.ts";
 import { LoadingOverlay } from "./LoadingOverlay.tsx";
+import { MaterialPreview } from "./MaterialPreview.tsx";
 import { Timeline } from "./Timeline.tsx";
 
 export function ViewportPane() {
@@ -56,6 +59,13 @@ export function ViewportPane() {
   const summary = viewportSummary(store.scene);
   const update = store.lastUpdate === null ? null : updateSummary(store.lastUpdate);
   const through = store.through;
+  // The material view: the selected material (or the one around a selected
+  // shader) on a shader ball. By default it shows when the scene draws
+  // nothing, as a material library's does; the toggle overrides that.
+  const [materialChoice, setMaterialChoice] = useState<boolean | null>(null);
+  const stage = store.session?.stage ?? null;
+  const material = stage === null || store.selection === null ? null : enclosingMaterial(stage, store.selection);
+  const showMaterial = material !== null && (materialChoice ?? summary.drawn.length === 0);
   const textures = store.viewport?.textureStats;
   const skinning = store.scene.skinning;
   const skinned = skinning.gpu + skinning.cpu + skinning.failed.length > 0;
@@ -76,7 +86,27 @@ export function ViewportPane() {
             store.select(store.viewport?.pick(event.clientX - rect.left, event.clientY - rect.top) ?? null);
           }}
         />
-        <LoadingOverlay />
+        {showMaterial && stage !== null && (
+        <div className="absolute inset-0">
+          <MaterialPreview store={store} stage={stage} material={material} shape="shaderBall" />
+        </div>
+      )}
+      {material !== null && (
+        <div className="absolute top-2 right-2 flex rounded-md bg-black/40 p-0.5 text-[11px] backdrop-blur-sm">
+          {(["Scene", "Material"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              aria-pressed={(mode === "Material") === showMaterial}
+              onClick={() => setMaterialChoice(mode === "Material")}
+              className={cn("rounded px-2 py-0.5 text-white/70 hover:text-white", (mode === "Material") === showMaterial && "bg-white/15 text-white")}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
+      )}
+      <LoadingOverlay />
       {textures !== undefined && textures.pending > 0 && store.status.kind !== "opening" && (
         <div role="status" className="pointer-events-none absolute bottom-2 left-2 flex items-center gap-2 rounded-md bg-black/40 px-2 py-1 font-mono text-[11px] text-white/80 backdrop-blur-sm">
           <span className="size-1.5 animate-pulse rounded-full bg-sky-400" />
@@ -88,9 +118,12 @@ export function ViewportPane() {
             The viewport cannot draw here: {failed}
           </div>
         )}
+        {!showMaterial && (
         <div className="pointer-events-none absolute top-2 left-2 rounded-md bg-black/40 px-2 py-1 font-mono text-[11px] text-white/80 backdrop-blur-sm">
           {through === null ? "Free camera" : `Looking through ${through}`}
         </div>
+      )}
+        {!showMaterial && (
         <div className="pointer-events-none absolute right-2 bottom-2 rounded-md bg-black/40 px-2 py-1 text-right font-mono text-[11px] leading-relaxed text-white/80 tabular-nums backdrop-blur-sm">
           <div>
             {summary.drawn.length} prims drawn · {summary.triangles.toLocaleString()} triangles · {summary.lights.length} lights
@@ -117,6 +150,7 @@ export function ViewportPane() {
             </div>
           )}
         </div>
+      )}
       </div>
       <Timeline />
     </div>

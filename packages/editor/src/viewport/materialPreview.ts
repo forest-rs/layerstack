@@ -1,9 +1,14 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-// A material drawn on a sphere, for the inspector: a small three.js
-// renderer of its own, lit by a room environment (for reflections) and a
-// key light (for relief).
+// A material drawn on a sphere (the inspector's) or a shader ball (the
+// viewport's material view): a small three.js renderer of its own, lit by
+// a room environment (for reflections) and a key light (for relief). The
+// shader ball is a ball with a raised band at its equator, on a neutral
+// pedestal and floor: the band's edges and the ball's curve show how the
+// material catches light at grazing angles, the floor where it meets the
+// ground. It is built here, from three.js primitives, so no third-party
+// model ships with the editor.
 //
 // A `UsdPreviewSurface` material is the viewport's own three.js material
 // (`surfaceMaterial`, mapped as surfaces.ts describes). An OpenPBR surface
@@ -35,8 +40,11 @@
 // metre is drawn about life size on a sphere of a metre's radius.
 import {
   AgXToneMapping,
+  CircleGeometry,
   Color,
   DirectionalLight,
+  Group,
+  LatheGeometry,
   Mesh,
   MeshPhysicalMaterial,
   MeshStandardMaterial,
@@ -45,6 +53,8 @@ import {
   Scene,
   SphereGeometry,
   SRGBColorSpace,
+  TorusGeometry,
+  Vector2,
   WebGLRenderer,
 } from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
@@ -57,12 +67,53 @@ export type PreviewSource = { readonly kind: "previewSurface"; readonly item: Ma
 
 const NO_CHANNELS = new Map<string, number>();
 
-/** A sphere in a canvas, drawing one material at a time. */
+/** What a preview draws the material on. */
+export type PreviewShape = "sphere" | "shaderBall";
+
+/** The neutral grey of the shader ball's pedestal: 18% reflectance, as a grey card. */
+const NEUTRAL = new MeshStandardMaterial({ color: new Color(0.18, 0.18, 0.18), roughness: 0.85 });
+/** The floor: darker, so the ball stands out against it. */
+const FLOOR = new MeshStandardMaterial({ color: new Color(0.035, 0.035, 0.035), roughness: 0.95 });
+
+/**
+ * The shader ball's parts that carry the material (the ball and its band)
+ * and those that do not (the pedestal and the floor), centred on the
+ * ball, which has a radius of 1.
+ */
+function shaderBall(material: MeshStandardMaterial | MeshPhysicalMaterial): { readonly group: Group; readonly surfaces: Mesh[] } {
+  const group = new Group();
+  const ball = new Mesh(sphereGeometry(), material);
+  const band = new Mesh(new TorusGeometry(1.0, 0.07, 32, 160), material);
+  band.rotation.x = Math.PI / 2;
+  const pedestal = new Mesh(
+    new LatheGeometry([new Vector2(0, -1.55), new Vector2(0.62, -1.55), new Vector2(0.66, -1.5), new Vector2(0.5, -1.18), new Vector2(0.34, -0.92), new Vector2(0, -0.92)], 96),
+    NEUTRAL,
+  );
+  const floor = new Mesh(new CircleGeometry(4, 96), FLOOR);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = -1.55;
+  group.add(ball, band, pedestal, floor);
+  return { group, surfaces: [ball, band] };
+}
+
+/** A sphere of radius 1 whose `st` runs four times around and twice from pole to pole (see the header). */
+function sphereGeometry(): SphereGeometry {
+  const geometry = new SphereGeometry(1, 128, 64);
+  const uv = geometry.getAttribute("uv");
+  for (let index = 0; index < uv.count; index++) uv.setXY(index, uv.getX(index) * 4, uv.getY(index) * 2);
+  return geometry;
+}
+
+/** A sphere or a shader ball in a canvas, drawing one material at a time. */
 export class MaterialPreview {
   readonly #renderer: WebGLRenderer;
   readonly #scene = new Scene();
   readonly #camera = new PerspectiveCamera(30, 1, 0.1, 100);
-  readonly #sphere: Mesh<SphereGeometry, MeshStandardMaterial | MeshPhysicalMaterial>;
+  /** What turns when dragged. */
+  readonly #model: Group | Mesh;
+  /** The meshes that carry the material. */
+  readonly #surfaces: Mesh[];
+  #material: MeshStandardMaterial | MeshPhysicalMaterial;
   readonly #textures: TextureStore;
   readonly #resizer: ResizeObserver;
   readonly #canvas: HTMLCanvasElement;
@@ -70,7 +121,7 @@ export class MaterialPreview {
   #frame = 0;
 
   /** `read` and `exists` reach the stage's assets, as the viewport's do. */
-  constructor(canvas: HTMLCanvasElement, read: AssetReader, exists: AssetExists) {
+  constructor(canvas: HTMLCanvasElement, read: AssetReader, exists: AssetExists, shape: PreviewShape = "sphere") {
     this.#canvas = canvas;
     this.#renderer = new WebGLRenderer({ canvas, antialias: true, alpha: true });
     this.#renderer.setPixelRatio(window.devicePixelRatio);
@@ -83,12 +134,20 @@ export class MaterialPreview {
     const key = new DirectionalLight(0xffffff, 2.2);
     key.position.set(-3, 3, 4);
     this.#scene.add(key);
-    const geometry = new SphereGeometry(1, 128, 64);
-    const uv = geometry.getAttribute("uv");
-    for (let index = 0; index < uv.count; index++) uv.setXY(index, uv.getX(index) * 4, uv.getY(index) * 2);
-    this.#sphere = new Mesh(geometry, new MeshStandardMaterial({ color: new Color(0.5, 0.5, 0.5) }));
-    this.#scene.add(this.#sphere);
-    this.#camera.position.set(0, 0, 4.4);
+    this.#material = new MeshStandardMaterial({ color: new Color(0.5, 0.5, 0.5) });
+    if (shape === "shaderBall") {
+      const { group, surfaces } = shaderBall(this.#material);
+      this.#model = group;
+      this.#surfaces = surfaces;
+      this.#camera.position.set(0, 0.9, 6.2);
+      this.#camera.lookAt(0, -0.35, 0);
+    } else {
+      const sphere = new Mesh(sphereGeometry(), this.#material);
+      this.#model = sphere;
+      this.#surfaces = [sphere];
+      this.#camera.position.set(0, 0, 4.4);
+    }
+    this.#scene.add(this.#model);
     this.#textures = new TextureStore(read, exists, () => this.#rebuild());
     this.#resizer = new ResizeObserver(() => this.#draw());
     this.#resizer.observe(canvas);
@@ -100,18 +159,20 @@ export class MaterialPreview {
     this.#rebuild();
   }
 
-  /** Turns the sphere by a drag's pixels. */
+  /** Turns the model by a drag's pixels: a sphere any way, a shader ball about its upright only. */
   turn(dx: number, dy: number): void {
-    this.#sphere.rotation.y += dx * 0.01;
-    this.#sphere.rotation.x = Math.max(-1.4, Math.min(1.4, this.#sphere.rotation.x + dy * 0.01));
+    this.#model.rotation.y += dx * 0.01;
+    if (this.#model instanceof Mesh) this.#model.rotation.x = Math.max(-1.4, Math.min(1.4, this.#model.rotation.x + dy * 0.01));
     this.#draw();
   }
 
   dispose(): void {
     cancelAnimationFrame(this.#frame);
     this.#resizer.disconnect();
-    disposeMaterial(this.#sphere.material);
-    this.#sphere.geometry.dispose();
+    disposeMaterial(this.#material);
+    this.#model.traverse((object) => {
+      if (object instanceof Mesh) object.geometry.dispose();
+    });
     this.#textures.dispose();
     this.#scene.environment?.dispose();
     this.#renderer.dispose();
@@ -120,14 +181,15 @@ export class MaterialPreview {
   }
 
   #rebuild(): void {
-    const old = this.#sphere.material;
+    const old = this.#material;
     const source = this.#source;
-    this.#sphere.material =
+    this.#material =
       source === null
         ? new MeshStandardMaterial({ color: new Color(0.5, 0.5, 0.5), roughness: 0.6 })
         : source.kind === "previewSurface"
           ? surfaceMaterial(source.item, this.#textures, { vertexColors: false, doubleSided: false, highlighted: false, uvChannels: NO_CHANNELS })
           : openPbrMaterial(source.surface, this.#textures);
+    for (const surface of this.#surfaces) surface.material = this.#material;
     disposeMaterial(old);
     this.#draw();
   }

@@ -61,9 +61,8 @@ view patches each draw's material once to multiply each light by a
 per-material 0 or 1 in three.js's own light slots, and rewrites those
 uniforms when links change. A prototype's draw is lit as its first
 instance is (one material per `InstancedMesh`), and shadow links are
-shown, not drawn (the view casts no shadows). The inspector shows a
-selected light's links, and the stats line which light lights how many
-draws.
+shown, not drawn (the view casts no shadows). The stats line says which
+light lights how many draws.
 
 After every action the draw list hears the editor's change records and
 answers with a diff, which the view applies in place: an `InstancedMesh`
@@ -84,7 +83,9 @@ Panels: the prim tree (instances, instance proxies and composition errors
 badged), the
 attribute inspector (the variant dropdowns, the time to read at, the
 relationships and their targets, the bound material with the binding that
-decides it and its surface shader's inputs, an edit field, and rename and
+decides it and its surface shader's inputs, the prim's collections (a
+light's `lightLink` and `shadowLink`) with the prims of the tree each
+includes, by `Stage.collectionMembership`, an edit field, and rename and
 delete), the
 explanation (every opinion with its layer, arc and role, the value's source,
 and an "Edit here" button that points the edit field at where the opinion
@@ -186,12 +187,14 @@ The script runs eighteen steps, one button each:
     ring's points; nothing else is read.
 21. Light the ground with the spot too: one edit adds `/World/Ground` to
     the spot's `collection:lightLink:includes` (the robot's target, the
-    rover since the rename, is kept). The draw list computes that one light
-    link again (light links 1 evaluated, its shadow link and the other
-    lights' untouched), classifies each of the 16 draws once against the
-    new membership, and lists one link change, the ground added; the spot
-    is read again and no draw, camera or material is. The spot's circle is
-    back on the ground; the stats line says the spot lights 1 of 16 draws.
+    rover since the rename, is kept). The inspector asks the collection's
+    membership of every prim of the tree (`Stage.collectionMembership`):
+    the rover, which has no children while its asset is muted, and the
+    ground. Its `shadowLink`, and the lamp's links, include every prim by
+    their `includeRoot = true` fallback. The draw list computes that one
+    light link again (light links 1 evaluated), classifies each of the 16
+    draws once against the new membership, and lists one link change, the
+    ground added; the stats line says the spot lights 1 of 16 draws.
 
 `scripts/acceptance.ts` runs the same steps headless in Node, reading the
 sample from disk, and checks the values and explanations after each one,

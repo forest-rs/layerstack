@@ -120,6 +120,7 @@ mod mesh_topology;
 mod metadata;
 mod metadata_by_key;
 mod missing_assets;
+mod model_draw_mode;
 mod motion;
 mod namespace_brackets;
 mod namespace_coordinated;

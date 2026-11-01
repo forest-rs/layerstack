@@ -1,0 +1,99 @@
+#usda 1.0
+(
+    defaultPrim = "Set"
+)
+
+def Xform "Set" (
+    kind = "assembly"
+    prepend apiSchemas = ["GeomModelAPI"]
+)
+{
+    uniform token model:drawMode = "cards"
+
+    def Xform "Rock" (
+        kind = "component"
+        prepend apiSchemas = ["GeomModelAPI"]
+    )
+    {
+        def Mesh "Body"
+        {
+        }
+    }
+
+    def Xform "Lamp" (
+        kind = "component"
+    )
+    {
+        uniform token model:drawMode = "origin"
+
+        def Xform "Bulb" (
+            kind = "subcomponent"
+        )
+        {
+            uniform token model:drawMode = "bounds"
+        }
+    }
+
+    def Xform "Shelf" (
+        kind = "group"
+    )
+    {
+        def Xform "Robot" (
+            kind = "component"
+            prepend apiSchemas = ["GeomModelAPI"]
+        )
+        {
+            uniform token model:drawMode = "inherited"
+        }
+
+        def Xform "Crate" (
+            kind = "component"
+        )
+        {
+        }
+    }
+
+    def Xform "Loose"
+    {
+        uniform token model:drawMode = "bounds"
+
+        def Xform "Pebble" (
+            kind = "component"
+        )
+        {
+        }
+    }
+
+    def Xform "Plain" (
+        kind = "assembly"
+        prepend apiSchemas = ["GeomModelAPI"]
+    )
+    {
+        uniform token model:drawMode = "default"
+
+        def Xform "Stone" (
+            kind = "component"
+            prepend apiSchemas = ["GeomModelAPI"]
+        )
+        {
+        }
+    }
+}
+
+def Xform "Free" (
+    kind = "component"
+    prepend apiSchemas = ["GeomModelAPI"]
+)
+{
+}
+
+def Scope "Unkinded"
+{
+    uniform token model:drawMode = "cards"
+
+    def Xform "Lamp" (
+        kind = "component"
+    )
+    {
+    }
+}

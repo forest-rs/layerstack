@@ -10,6 +10,7 @@ triangle comes from the stage.
 npm ci
 npm run dev      # http://localhost:5173/
 npm run build    # type-check and bundle into dist/
+npm test         # the model's tests, in Node
 ```
 
 Build the two packages first (`npm run build:wasm && npm run build` in each):
@@ -76,8 +77,19 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
 - **Explain, Changes, History, Asset loop, Notices.** A property's value and
   every opinion consulted for it, strongest first, each with "Edit here";
   each recomposition and the action that caused it; the undo history; the
-  asset loop's requests, fetches, supplies and reads; and what the stage
-  refused, with its error code.
+  asset loop; and what the stage refused, with its error code.
+- **Asset loop.** Each run of the loop (the open, a variant selected, an
+  undo) as a waterfall: a row per asset on one time axis, from the stage
+  naming it (`unavailable()`) through the host's fetch and the wait for
+  the rest of its round to the stage reading the round (`loadSupplied()`),
+  colored by what uses it, with its bytes and times on hover. A track
+  above the rows shows each round's phases, and the header where the time
+  went: waiting on fetches, or in the stage. Rows are virtualized, sorted
+  by start, round, size or fetch time and filtered by name; selecting one
+  shows where the asset is authored and the prims composed without it
+  until it loaded. The session runs the loop itself (`unavailable`,
+  `supply`, `loadSupplied`) rather than `Stage.resolve` so that every phase
+  can be timed. The step-by-step log is a toggle away.
 
 ## Local scenes
 
@@ -92,6 +104,7 @@ built: their licenses are their own.
 
 - `src/model/`: no DOM and no React. `session.ts` (a stage, its undo
   history, where edits go, and logs of the asset loop and recompositions),
+  `timeline.ts` (the asset loop's timings, run by run),
   `draws.ts` (the stagehand draw list kept from the change log), `sources.ts`
   (HTTP, a picked directory, dropped files).
 - `src/store.ts`: the editor's state outside React; every action runs here,

@@ -63,6 +63,26 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
   and the material reading it; a material its shader ball. A selection
   over the same limit is not drawn, and the viewport says why. Clicking a
   part of what is drawn selects and draws that part.
+- **Payloads.** The **Open** menu chooses how the next scene opens its
+  payloads: **Load all**, **Load none**, or (the default) load them unless
+  over 1 GiB of layers. That automatic open composes the scene with no
+  payload loaded, then loads them all with the asset loop weighing each
+  round before fetching it, by the sizes the source reports (`HEAD`, or a
+  file's size); a round that would take the payloads' layers past 1 GiB
+  is not fetched, every payload is unloaded again, and the prim tree says
+  why. The limit is the scene, not the draws: composing takes more memory
+  than its layers' bytes (a large public scene's 3.1 GB of layers
+  composes to 5.4 GB natively) and the module has 4 GiB, so a scene over
+  it would not fit with its payloads loaded; the layers the rounds before
+  it read stay held. In the prim tree a prim with payloads shows
+  **loaded** or **unloaded**; pressing it loads them with those beneath it,
+  or unloads them, as usdview's tree does, and the **⋯** menu of any prim
+  loads its payloads (with or without those beneath) or unloads them. A
+  load runs the asset loop for what it newly wants, with the opening
+  overlay showing its rounds, then draws what it brought within the draw
+  scope: the scope is decided from the estimate of what the open left
+  loaded, so a scene opened with its payloads unloaded draws the scene,
+  and drawing the selection draws a loaded prim's subtree alone.
 - **Material view.** With a material selected (or a shader inside one),
   the viewport's **Scene | Material** switch shows the material on a
   shader ball (a ball with a raised band at its equator, on a pedestal and

@@ -13,6 +13,8 @@ import type {
   HistoryStep,
   Layer,
   Layerstack,
+  LoadOutcome,
+  LoadPolicy,
   LoadResult,
   OpenOptions,
   SaveResult,
@@ -27,6 +29,27 @@ import { LoopRecorder } from "./timeline.ts";
  * failed.
  */
 export type Fetcher = (identifier: string) => Promise<Uint8Array | null>;
+
+/**
+ * How much an asset loop may read: before each round is fetched, the
+ * bytes its assets hold (`size`, unknown ones counting nothing) are added
+ * to what the run fetched, and over `bytes` the run stops with
+ * {@link OverBudget}, the round not fetched.
+ */
+export interface LoadBudget {
+  readonly bytes: number;
+  readonly size: (identifier: string) => Promise<number | null>;
+}
+
+/** An asset loop stopped before a round that would take it over its {@link LoadBudget}. */
+export class OverBudget extends Error {
+  /** The bytes fetched, and the round's sizes. */
+  readonly bytes: number;
+  constructor(bytes: number, budget: number) {
+    super(`reading ${bytes} bytes of layers would pass the ${budget}-byte budget`);
+    this.bytes = bytes;
+  }
+}
 
 /** A layer's bytes under its identifier, as `Stage.save` writes them. */
 export interface LayerFile {
@@ -220,11 +243,11 @@ export class Session implements Disposable {
    * fails the loop after what the round's other fetches returned is read
    * and composed, and an asset supplied but wanted again fails it.
    */
-  async supplyUnavailable(cause: string): Promise<number> {
+  async supplyUnavailable(cause: string, budget?: LoadBudget): Promise<number> {
     this.#cause = cause;
     const run = this.loops.current ?? this.loops.begin(cause, performance.now());
     try {
-      const rounds = await this.#rounds();
+      const rounds = await this.#rounds(budget);
       if (run.assets.length === 0) this.loops.discard();
       else this.loops.end(performance.now());
       return rounds;
@@ -390,9 +413,28 @@ export class Session implements Disposable {
     return { label: step.label, step, receipt };
   }
 
+  /**
+   * Loads the payloads at `load` (and beneath, with `"withDescendants"`)
+   * after unloading those at `unload`, as one request
+   * (`Stage.loadAndUnload`), then fetches what they want within `budget`.
+   * Returns what the request did (`LoadOutcome`: whether the load rules
+   * changed, and the paths the stage refused). Over the budget it throws
+   * {@link OverBudget}, the rules as the request left them and the
+   * layers fetched so far read; the caller decides what to unload.
+   */
+  async loadPayloads(load: readonly string[], unload: readonly string[], policy: LoadPolicy = "withDescendants", budget?: LoadBudget): Promise<LoadOutcome> {
+    const cause = load.length > 0 ? `load ${load.join(", ")}` : `unload ${unload.join(", ")}`;
+    this.#cause = cause;
+    const outcome = this.stage.loadAndUnload(load, unload, policy);
+    await this.supplyUnavailable(cause, budget);
+    return outcome;
+  }
+
   /** The rounds of {@link Session.supplyUnavailable}, recorded into the current run. */
-  async #rounds(): Promise<number> {
+  async #rounds(budget?: LoadBudget): Promise<number> {
     const supplied = new Set<string>();
+    // What the run fetched, against the budget.
+    let fetchedBytes = 0;
     // The layers read since the stage last composed; `null` when none was.
     let read: number | null = null;
     const compose = async () => {
@@ -422,6 +464,16 @@ export class Session implements Disposable {
       const identifiers = [...new Set(wanted.map((asset) => asset.identifier))];
       const stuck = identifiers.find((identifier) => supplied.has(identifier));
       if (stuck !== undefined) throw new Error(`${stuck} was supplied but the stage still wants it`);
+      if (budget !== undefined) {
+        const sizes = await Promise.all(identifiers.map((identifier) => budget.size(identifier)));
+        const planned = fetchedBytes + sizes.reduce<number>((sum, size) => sum + (size ?? 0), 0);
+        if (planned > budget.bytes) {
+          // Nothing more is fetched, and what the rounds read is left for
+          // the stage to compose under the rules the caller sets next
+          // (unloading it, it composes none of it).
+          throw new OverBudget(planned, budget.bytes);
+        }
+      }
       await this.#phase?.({ kind: "fetching", round, assets: identifiers.length });
       const settled = await Promise.allSettled(identifiers.map((identifier) => this.#source(identifier)));
       this.loops.fetched(performance.now());
@@ -440,6 +492,7 @@ export class Session implements Disposable {
       });
       this.loops.suppliesDone(performance.now());
       const suppliedBytes = settled.reduce((sum, outcome) => sum + (outcome.status === "fulfilled" ? (outcome.value?.byteLength ?? 0) : 0), 0);
+      fetchedBytes += suppliedBytes;
       await this.#phase?.({ kind: "reading", round, layers: identifiers.length, bytes: suppliedBytes });
       const readStart = performance.now();
       const result = this.stage.readSupplied();

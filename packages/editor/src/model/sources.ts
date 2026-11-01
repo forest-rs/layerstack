@@ -18,6 +18,12 @@ export interface SceneSource {
   readonly fetch: Fetcher;
   /** Whether an asset exists, without reading it: a UDIM set's tiles are asked one by one. */
   readonly exists: (identifier: string) => Promise<boolean>;
+  /**
+   * An asset's size in bytes, without reading it; `null` when the source
+   * cannot tell (or it does not exist). What loading payloads would read
+   * is weighed with it before fetching ({@link Session.supplyUnavailable}).
+   */
+  readonly size: (identifier: string) => Promise<number | null>;
 }
 
 /** The identifier's path segments, `.` and `..` resolved; `null` when it climbs out of the source. */
@@ -68,6 +74,11 @@ export function httpSource(label: string, base: URL, root: string): SceneSource 
       const response = await fetch(new URL(identifier, base), { method: "HEAD" });
       return response.ok;
     },
+    async size(identifier) {
+      const response = await fetch(new URL(identifier, base), { method: "HEAD" });
+      const length = response.ok ? response.headers.get("content-length") : null;
+      return length === null ? null : Number(length);
+    },
   };
 }
 
@@ -99,6 +110,9 @@ export function directorySource(directory: FileSystemDirectoryHandle, root: stri
     async exists(identifier) {
       return (await file(identifier)) !== null;
     },
+    async size(identifier) {
+      return (await file(identifier))?.size ?? null;
+    },
   };
 }
 
@@ -120,6 +134,9 @@ export function filesSource(label: string, files: ReadonlyMap<string, File>, roo
     },
     async exists(identifier) {
       return file(identifier) !== undefined;
+    },
+    async size(identifier) {
+      return file(identifier)?.size ?? null;
     },
   };
 }

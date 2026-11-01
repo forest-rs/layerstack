@@ -179,6 +179,27 @@ await stage.resolve(source);
   skips it until it is unmuted (`save(layer)` writes it), and `move` and
   `delete` neither read nor edit it, as OpenUSD's `UsdNamespaceEditor`
   does: its specs stay at the old path.
+- **Payloads load by rule.** `open(root, { load: "none" })` composes a
+  scene without its payloads, as OpenUSD's `UsdStage::Open(...,
+  UsdStage::LoadNone)` does, and asks for none of their assets: a large
+  scene opens with only what it shows by default. `findLoadable(root)`
+  lists the prims with payloads (`UsdStage::FindLoadable`), and each
+  `Prim` says whether it is `loaded` and `hasAuthoredPayloads`.
+  `stage.load(path)` loads a prim's payloads and those beneath it
+  (`"withoutDescendants"` for its own only), `unload(path)` unloads them,
+  and `loadAndUnload(load, unload)` does both as one request
+  (`UsdStage::Load`, `Unload`, `LoadAndUnload`); each recomposes at once,
+  heard as one change, and returns `{ changed, refused }`: whether the
+  rules changed, which, as in OpenUSD, a request already holding does
+  not, and the paths it skipped, each with why (`inactive`,
+  `not_on_stage`, `prototype`), applying the rest as OpenUSD does. A load
+  wants the assets its payloads name: `await stage.resolve(source)`
+  fetches them.
+  `loadRules()` and `setLoadRules(rules)` read and replace the literal
+  rules (`UsdStageLoadRules`), and `loadSet()` lists the prims whose
+  payloads are included (`UsdStage::GetLoadSet`). Load rules
+  are not edits: they make no receipt, and undo neither reverts them nor
+  is blocked by them.
 - **Everything native is disposable.** A `Stage` owns native memory: call
   `free()` or declare it with `using`. Afterwards every call fails with
   `stage.disposed`.

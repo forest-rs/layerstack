@@ -62,6 +62,10 @@ import type {
   Issue,
   LayerFormat,
   LoadResult,
+  LoadOutcome,
+  LoadPolicy,
+  LoadRule,
+  LoadRules,
   LayerRead,
   Composition,
   MaterialBinding,
@@ -137,6 +141,11 @@ export interface NativeStage extends Disposable {
   ): boolean;
   isLayerMuted(identifier: string): boolean;
   mutedLayers(): unknown;
+  loadRules(): unknown;
+  setLoadRules(rules: string[]): boolean;
+  loadAndUnload(load: string[], unload: string[], descendants: boolean): unknown;
+  findLoadable(root: string): string[];
+  loadSet(): string[];
   status(): unknown;
   prim(path: string): unknown;
   children(path: string): string[];
@@ -277,6 +286,7 @@ export interface NativeModule {
       sessionIdentifier: string | undefined,
       sessionBytes: Uint8Array | undefined,
       schemas: string[],
+      loadRules: string[],
     ): NativeStage;
   };
   /** The batch of edits `Stage.apply` takes. */
@@ -400,6 +410,7 @@ export class Layerstack {
     ) {
       throw new LayerstackError("argument.invalid", "open", "schemas: expected [{ name: string, base: string }]");
     }
+    const load = flatRules("open", options.load ?? "all");
     const recover = options.importPolicy === "recover";
     const session = editLayer === "session";
     const limits = options.limits;
@@ -419,6 +430,7 @@ export class Layerstack {
         sessionLayer?.identifier,
         sessionLayer?.bytes,
         schemas.flatMap((schema) => [schema.name, schema.base]),
+        load,
       ),
     );
     this.#bytesIn += root.bytes.byteLength + (sessionLayer?.bytes.byteLength ?? 0);
@@ -1348,6 +1360,124 @@ export class Stage implements Disposable {
     }
     this.#own("isMuted", layer);
     return this.#mutedRows("isMuted").some(([id]) => id === layer.id);
+  }
+
+  /**
+   * The payload load rules, in namespace order: the literal rules, as
+   * OpenUSD's `UsdStage::GetLoadRules().GetRules()` lists them, `[]` when
+   * every payload is loaded ({@link LoadRule}). Rules are kept as the
+   * calls leave them, not minimized: unloading `/World` after `/` adds
+   * its own `none` rule.
+   */
+  loadRules(): LoadRule[] {
+    const rows = this.#call("loadRules", (native) => native.loadRules()) as [string, LoadRule["rule"]][];
+    return rows.map(([path, rule]) => ({ path, rule }));
+  }
+
+  /**
+   * Replaces the payload load rules with `rules` (`"all"`, `"none"` or
+   * literal rules, {@link LoadRules}) and recomposes, as OpenUSD's
+   * `UsdStage::SetLoadRules` does: listeners hear the prims it resyncs
+   * before this returns. Returns whether the rules changed.
+   *
+   * The rules are the stage's state, not an edit: they make no receipt,
+   * and undo neither undoes them nor is blocked by them. The stage reads
+   * what the host supplied of the assets the newly included payloads
+   * name; the rest are unavailable until supplied
+   * (`await stage.resolve(source)`). A payload unloaded keeps its layers.
+   *
+   * Throws `path.invalid` for a path that is not an absolute prim path and
+   * `argument.invalid` for a rule that is not `all`, `only` or `none`,
+   * with nothing changed.
+   */
+  setLoadRules(rules: LoadRules): boolean {
+    const flat = flatRules("setLoadRules", rules);
+    try {
+      return this.#call("setLoadRules", (native) => native.setLoadRules(flat));
+    } finally {
+      this.#notify();
+    }
+  }
+
+  /**
+   * Loads the payloads at `path`, and with `"withDescendants"` (the
+   * default) those beneath it ({@link LoadPolicy}), as OpenUSD's
+   * `UsdStage::Load` does, with the payloads of the ancestors it needs:
+   * {@link Stage.loadAndUnload} with `path` alone. `stage.prim(path)` is
+   * the prim OpenUSD's `Load` returns. Load a path not on the stage yet
+   * (inside a payload not loaded) and its rule waits for the prims
+   * loading brings.
+   *
+   * The stage asks for the assets the newly included payloads name
+   * ({@link Stage.unavailable}): `await stage.resolve(source)` reads
+   * them, and their own payloads the rules include.
+   */
+  load(path: string, policy: LoadPolicy = "withDescendants"): LoadOutcome {
+    return this.loadAndUnload([path], [], policy);
+  }
+
+  /**
+   * Unloads the payloads at and beneath `path`, as OpenUSD's
+   * `UsdStage::Unload` does: {@link Stage.loadAndUnload} with `path`
+   * alone.
+   */
+  unload(path: string): LoadOutcome {
+    return this.loadAndUnload([], [path]);
+  }
+
+  /**
+   * Unloads the payloads at and beneath each of `unload`, then loads
+   * those at each of `load` (and beneath it, with `"withDescendants"`),
+   * as one request, as OpenUSD's `UsdStage::LoadAndUnload` does: one
+   * recomposition, which listeners hear before this returns. Each path
+   * gets its rule whether or not a prim is there.
+   *
+   * Returns what it did ({@link LoadOutcome}): whether the rules changed,
+   * and the paths it left out, each with why. As OpenUSD does, it skips a
+   * path to load whose nearest prim is inactive (`inactive`) or that has
+   * no ancestor on the stage (`not_on_stage`), and a path in an instance
+   * prototype (`prototype`), and applies the rest; and a request with
+   * only loads that already hold, or only unloads that already hold,
+   * changes and refuses nothing.
+   *
+   * Throws `path.invalid` for a path that is not an absolute prim path,
+   * and `argument.invalid` for another policy, with nothing changed.
+   */
+  loadAndUnload(load: Iterable<string>, unload: Iterable<string>, policy: LoadPolicy = "withDescendants"): LoadOutcome {
+    if (policy !== "withDescendants" && policy !== "withoutDescendants") {
+      throw new LayerstackError("argument.invalid", "loadAndUnload", 'policy must be "withDescendants" or "withoutDescendants"');
+    }
+    const loads = [...load];
+    const unloads = [...unload];
+    try {
+      const [changed, refused] = this.#call("loadAndUnload", (native) =>
+        native.loadAndUnload(loads, unloads, policy === "withDescendants"),
+      ) as [boolean, [string, LoadOutcome["refused"][number]["code"]][]];
+      return { changed, refused: refused.map(([path, code]) => ({ path, code })) };
+    } finally {
+      this.#notify();
+    }
+  }
+
+  /**
+   * The paths of the prims at or beneath `root` (default `/`) whose own
+   * composition has payloads, loaded or not, in namespace order, as
+   * OpenUSD's `UsdStage::FindLoadable` lists them: active prims only, and
+   * payloads beneath an unloaded one are found once it loads. Each is a
+   * prim whose {@link Prim.hasAuthoredPayloads} holds. Throws
+   * `path.invalid` for a path that is not an absolute prim path.
+   */
+  findLoadable(root = "/"): string[] {
+    return this.#call("findLoadable", (native) => native.findLoadable(root));
+  }
+
+  /**
+   * The paths of the prims whose payloads the stage includes, in
+   * namespace order, as OpenUSD's `UsdStage::GetLoadSet` lists them
+   * (inactive prims included).
+   */
+  loadSet(): string[] {
+    return this.#call("loadSet", (native) => native.loadSet());
   }
 
   /**
@@ -2558,10 +2688,22 @@ export class Prim {
   readonly instance: boolean;
   /** Whether it is a proxy for a prim inside an instance's prototype. */
   readonly instanceProxy: boolean;
+  /**
+   * Whether it is active and the stage includes every payload on it and
+   * its ancestors, as OpenUSD's `UsdPrim::IsLoaded` answers
+   * ({@link Stage.load}).
+   */
+  readonly loaded: boolean;
+  /**
+   * Whether its own composition has payloads, loaded or not, as OpenUSD's
+   * `UsdPrim::HasAuthoredPayloads` answers: a prim a viewer offers to load
+   * or unload ({@link Stage.findLoadable}).
+   */
+  readonly hasAuthoredPayloads: boolean;
 
   /** @internal */
   constructor(stage: Stage, path: string, row: Row) {
-    const [typeName, specifier, active, defined, abstract, instance, instanceProxy] = row;
+    const [typeName, specifier, active, defined, abstract, instance, instanceProxy, loaded, hasAuthoredPayloads] = row;
     this.stage = stage;
     this.path = path;
     this.name = path === "/" ? "" : path.slice(path.lastIndexOf("/") + 1);
@@ -2572,6 +2714,8 @@ export class Prim {
     this.abstract = abstract as boolean;
     this.instance = instance as boolean;
     this.instanceProxy = instanceProxy as boolean;
+    this.loaded = loaded as boolean;
+    this.hasAuthoredPayloads = hasAuthoredPayloads as boolean;
     Object.freeze(this);
   }
 
@@ -3124,6 +3268,21 @@ type MutingRow = [bigint, string | null, boolean];
 
 /** Reports an error that must not interrupt the caller, as the host reports uncaught errors. */
 /** A limit of `OpenOptions.limits` as the module takes it: `undefined` for its default, `Infinity` for none. */
+/** `rules` as the module takes them: `[path, rule, path, rule, ...]`. */
+function flatRules(operation: string, rules: LoadRules): string[] {
+  if (rules === "all") return [];
+  if (rules === "none") return ["/", "none"];
+  if (!Array.isArray(rules)) {
+    throw new LayerstackError("argument.invalid", operation, 'load rules: expected "all", "none" or [{ path, rule }]');
+  }
+  return rules.flatMap((entry: LoadRule) => {
+    if (typeof entry?.path !== "string" || typeof entry?.rule !== "string") {
+      throw new LayerstackError("argument.invalid", operation, "load rules: expected [{ path: string, rule: string }]");
+    }
+    return [entry.path, entry.rule];
+  });
+}
+
 function limit(value: number | null | undefined, name: string): number | undefined {
   if (value === undefined) return undefined;
   if (value === null) return Infinity;

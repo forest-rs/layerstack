@@ -15,9 +15,9 @@ use alloc::{
 use layerstack::{
     ArcKind, ChangeCursor, Changes, CompositionLimits, Contribution, EditError, EditTarget,
     FlattenError, FlattenRequirements, IgnoreCause, InMemoryStore, Layer, LayerId, LayerMuteError,
-    LayerStore, NamespaceEdit, NamespaceError, OpinionRole, PathField, PathId, PropertyField,
-    ResolvedValue, SchemaKind, Specifier, StageOptions, TargetPath, Time, Transaction,
-    UnrepairedPath, ValueSource, Variability,
+    LayerStore, LoadPolicy, NamespaceEdit, NamespaceError, OpinionRole, PathField, PathId,
+    PayloadLoadRules, PayloadRule, PropertyField, ResolvedValue, SchemaKind, Specifier,
+    StageOptions, TargetPath, Time, Transaction, UnrepairedPath, ValueSource, Variability,
     asset_dependencies::DependencyTarget,
     value_clips::{
         ClipAssetRequest, ClipAssetRole, ClipAssetStatus, ClipAssetUnavailable, ClipDemandReason,
@@ -229,7 +229,7 @@ impl Stage {
         } else {
             SessionLayer::None
         };
-        Self::open_with_provenance(identifier, bytes, recover, session, limits, false, &[])
+        Self::open_with_provenance(identifier, bytes, recover, session, limits, false, &[], &[])
     }
 
     /// Opens a stage as in [`Self::open`], with the session layer
@@ -240,11 +240,24 @@ impl Stage {
     /// Same-module extensions use this evidence to check source correspondence.
     /// Query explanations remain available when `provenance` is false.
     ///
+    /// The stage includes the payloads `load_rules` selects, the literal
+    /// rules of OpenUSD's `UsdStageLoadRules` as the module's `loadRules` lists
+    /// them: none for every payload (`UsdStage::LoadAll`), `[("/", None)]`
+    /// for none (`UsdStage::LoadNone`). While the rules exclude any
+    /// payload, no payload's layer is read until the rules include it
+    /// (`layerstack_io` defers them), so the stage asks for
+    /// (`unavailable`) only the assets of the payloads it loads.
+    ///
     /// # Errors
     ///
     /// The root's or the session layer's read or import failure, as in
     /// [`Self::open`]; `io.rejected` for a session layer that is the root;
-    /// `argument.invalid` for a schema [`TypedSchema`] refuses.
+    /// `argument.invalid` for a schema [`TypedSchema`] refuses;
+    /// `path.invalid` for a rule whose path is not an absolute prim path.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each is an open option the wrapper passes positionally"
+    )]
     pub fn open_with_provenance(
         identifier: &str,
         bytes: Vec<u8>,
@@ -253,11 +266,13 @@ impl Stage {
         limits: CompositionLimits,
         provenance: bool,
         schemas: &[TypedSchema],
+        load_rules: &[(String, PayloadRule)],
     ) -> Result<Self, Error> {
         let mut storage = HostStorage::new();
         storage.supply(identifier, bytes);
         let mut store = InMemoryStore::default();
         let schemas = registry(schemas, store.tokens())?;
+        let load_rules = parse_load_rules(load_rules, store.tokens())?;
         let (anonymous, supplied) = match session_layer {
             SessionLayer::None => (None, None),
             SessionLayer::Anonymous => {
@@ -274,6 +289,7 @@ impl Stage {
             session_layer: anonymous,
             limits,
             with_provenance: provenance,
+            load_rules,
             ..StageOptions::default()
         };
         let policy = if recover {
@@ -801,6 +817,170 @@ impl Stage {
         ])
     }
 
+    /// The stage's payload load rules, each `[path, rule]` with `rule`
+    /// `all`, `only` or `none`, in namespace order: the literal rules, as
+    /// OpenUSD's `UsdStageLoadRules::GetRules` lists them, none when every
+    /// payload is loaded. What was composed, not rules queued since.
+    ///
+    /// Spec: AOUSD Core §10.3.2.2 (payloads); OpenUSD `UsdStage::GetLoadRules`.
+    #[must_use]
+    pub(crate) fn load_rules(&self) -> Wire {
+        let store = self.document.store();
+        let rules = self.document.stage().stage().load_rules();
+        let mut ids: Vec<(PathId, PayloadRule)> = rules
+            .rules()
+            .map(|(path, rule)| (store.paths().intern(path.clone()), rule))
+            .collect();
+        ids.sort_by(|a, b| store.paths().cmp_paths(a.0, b.0, store.tokens()));
+        Wire::List(
+            ids.into_iter()
+                .map(|(id, rule)| {
+                    Wire::List(vec![
+                        Wire::text(store.paths().display(id, store.tokens())),
+                        Wire::text(rule_name(rule)),
+                    ])
+                })
+                .collect(),
+        )
+    }
+
+    /// Replaces the payload load rules with `rules`, each `(path, rule)`
+    /// as [`Self::load_rules`] lists them, recomposes, and reads what the
+    /// host supplied of the assets the newly included payloads ask for
+    /// ([`Self::load_supplied`]); the rest are unavailable
+    /// ([`Self::unavailable`]) until supplied. Returns whether the rules
+    /// changed. The rules are the stage's state, not an authored edit:
+    /// they make no receipt, and a payload unloaded keeps its layers.
+    ///
+    /// Spec: AOUSD Core §10.3.2.2 (payloads); OpenUSD `UsdStage::SetLoadRules`.
+    ///
+    /// # Errors
+    ///
+    /// `path.invalid` for a path that is not an absolute prim path, with
+    /// nothing changed; reading what was supplied fails as
+    /// [`Self::load_supplied`] does, after the rules changed.
+    pub(crate) fn set_load_rules(
+        &mut self,
+        rules: &[(String, PayloadRule)],
+    ) -> Result<bool, Error> {
+        let rules = parse_load_rules(rules, self.document.store().tokens())?;
+        let (_, live) = self.document.parts_mut();
+        let changed = live.set_load_rules(rules);
+        self.recompose_loading()?;
+        Ok(changed)
+    }
+
+    /// Unloads the payloads at and beneath each of `unload`, then loads
+    /// those at each of `load`, with their descendants' when
+    /// `descendants` (`UsdLoadWithDescendants`), as one request: one
+    /// recomposition, heard as one change. Reads what the host supplied
+    /// of the assets the request newly asks for, as [`Self::set_load_rules`]
+    /// does. Returns `[changed, refused]`: whether the rules changed and
+    /// each path left out as `[path, code]`, `code` `inactive`,
+    /// `not_on_stage` or `prototype` ([`layerstack::LoadRefusal::code`]).
+    /// As OpenUSD does, it skips each path it refuses and applies the
+    /// rest, and a request whose loads, or whose unloads, already hold
+    /// changes and refuses nothing ([`layerstack::LiveStage::load_and_unload`]).
+    ///
+    /// Spec: AOUSD Core §10.3.2.2 (payloads); OpenUSD
+    /// `UsdStage::LoadAndUnload`, `UsdStage::Load`, `UsdStage::Unload`.
+    ///
+    /// # Errors
+    ///
+    /// `path.invalid` for a path that is not an absolute prim path, with
+    /// nothing changed; reading what was supplied fails as
+    /// [`Self::load_supplied`] does, after the rules changed.
+    pub(crate) fn load_and_unload(
+        &mut self,
+        load: &[String],
+        unload: &[String],
+        descendants: bool,
+    ) -> Result<Wire, Error> {
+        let load = self.prim_path_ids(load)?;
+        let unload = self.prim_path_ids(unload)?;
+        let policy = if descendants {
+            LoadPolicy::WithDescendants
+        } else {
+            LoadPolicy::WithoutDescendants
+        };
+        let (store, live) = self.document.parts_mut();
+        let outcome = live.load_and_unload(store, &load, &unload, policy);
+        let refused = outcome
+            .refused
+            .iter()
+            .map(|(path, reason)| {
+                Wire::List(vec![
+                    Wire::text(store.paths().display(*path, store.tokens())),
+                    Wire::text(reason.code()),
+                ])
+            })
+            .collect();
+        self.recompose_loading()?;
+        Ok(Wire::List(vec![
+            Wire::Bool(outcome.changed),
+            Wire::List(refused),
+        ]))
+    }
+
+    /// The prims at or beneath `root` whose own composition authors
+    /// payloads, loaded or not, active ones only, in namespace order:
+    /// OpenUSD's `UsdStage::FindLoadable`. Payloads beneath an unloaded
+    /// one are found once it loads.
+    ///
+    /// # Errors
+    ///
+    /// `path.invalid` when `root` is not an absolute prim path.
+    pub(crate) fn find_loadable(&self, root: &str) -> Result<Vec<String>, Error> {
+        let [root] = self.prim_path_ids(&[root.into()])?[..] else {
+            unreachable!("one path")
+        };
+        let store = self.document.store();
+        Ok(self
+            .document
+            .stage()
+            .stage()
+            .loadable_paths(root, store)
+            .into_iter()
+            .map(|id| store.paths().display(id, store.tokens()))
+            .collect())
+    }
+
+    /// The prims whose payloads the stage includes, in namespace order:
+    /// OpenUSD's `UsdStage::GetLoadSet` (inactive prims included).
+    #[must_use]
+    pub(crate) fn load_set(&self) -> Vec<String> {
+        let store = self.document.store();
+        self.document
+            .stage()
+            .stage()
+            .loaded_payload_paths(store)
+            .into_iter()
+            .map(|id| store.paths().display(id, store.tokens()))
+            .collect()
+    }
+
+    /// The ids of the prim paths `paths`.
+    fn prim_path_ids(&self, paths: &[String]) -> Result<Vec<PathId>, Error> {
+        let store = self.document.store();
+        paths
+            .iter()
+            .map(|path| {
+                check_prim_path(path)?;
+                let parsed = layerstack::Path::parse_absolute(path, store.tokens())
+                    .map_err(|error| Error::new("path.invalid", error.to_string()))?;
+                Ok(store.paths().intern(parsed))
+            })
+            .collect()
+    }
+
+    /// Composes the load rules queued on the live stage, and reads what
+    /// the host supplied of the assets they newly ask for.
+    fn recompose_loading(&mut self) -> Result<(), Error> {
+        self.document.synchronize();
+        self.document.load_requested_assets()?;
+        Ok(())
+    }
+
     /// The stage's state now: `[prims, compositionErrors, unresolved]`,
     /// the number of prims its default traversal visits, each composition
     /// error as `[code, message, prim]` ([`layerstack::CompositionError`],
@@ -855,8 +1035,10 @@ impl Stage {
     }
 
     /// The composed prim at `path`:
-    /// `[typeName, specifier, active, defined, abstract, instance, instanceProxy]`,
-    /// or `null` when there is none.
+    /// `[typeName, specifier, active, defined, abstract, instance, instanceProxy, loaded, hasAuthoredPayloads]`,
+    /// or `null` when there is none: `loaded` as `UsdPrim::IsLoaded`
+    /// answers ([`layerstack::Prim::is_loaded`]), `hasAuthoredPayloads` as
+    /// `UsdPrim::HasAuthoredPayloads` ([`layerstack::Prim::has_authored_payloads`]).
     ///
     /// # Errors
     ///
@@ -878,6 +1060,8 @@ impl Stage {
             Wire::Bool(prim.is_abstract()),
             Wire::Bool(prim.is_instance()),
             Wire::Bool(prim.is_instance_proxy()),
+            Wire::Bool(prim.is_loaded()),
+            Wire::Bool(prim.has_authored_payloads()),
         ]))
     }
 
@@ -2285,7 +2469,9 @@ impl Stage {
     /// `session_identifier` with `session_bytes` opens that session layer
     /// ([`SessionLayer::Supplied`]) in place of an anonymous one.
     /// `schemas` holds a [`TypedSchema`]'s name and base for each schema
-    /// to register, one after the other.
+    /// to register, one after the other. `load_rules` holds each payload
+    /// load rule's path and `all`, `only` or `none`, one after the other
+    /// (`load_rules`, as documented in `stage.rs`): none loads every payload.
     #[wasm_bindgen(js_name = open)]
     pub fn js_open(
         identifier: &str,
@@ -2299,6 +2485,7 @@ impl Stage {
         session_identifier: Option<String>,
         session_bytes: Option<Vec<u8>>,
         schemas: Vec<String>,
+        load_rules: Vec<String>,
     ) -> Result<Self, JsValue> {
         let limit = |given: Option<f64>, default: Option<usize>| match given {
             None => default,
@@ -2329,8 +2516,16 @@ impl Stage {
                 base: base.clone(),
             })
             .collect();
+        let load_rules = rule_pairs(&load_rules)?;
         Ok(Self::open_with_provenance(
-            identifier, bytes, recover, session, limits, provenance, &schemas,
+            identifier,
+            bytes,
+            recover,
+            session,
+            limits,
+            provenance,
+            &schemas,
+            &load_rules,
         )?)
     }
 
@@ -2601,6 +2796,43 @@ impl Stage {
     #[wasm_bindgen(js_name = mutedLayers)]
     pub fn js_muted_layers(&self) -> JsValue {
         self.muted_layers().into()
+    }
+
+    /// The payload load rules (`load_rules`, as documented in `stage.rs`).
+    #[wasm_bindgen(js_name = loadRules)]
+    pub fn js_load_rules(&self) -> JsValue {
+        self.load_rules().into()
+    }
+
+    /// Replaces the payload load rules, `[path, rule, ...]`
+    /// (`set_load_rules`, as documented in `stage.rs`).
+    #[wasm_bindgen(js_name = setLoadRules)]
+    pub fn js_set_load_rules(&mut self, rules: Vec<String>) -> Result<bool, JsValue> {
+        let rules = rule_pairs(&rules)?;
+        Ok(self.set_load_rules(&rules)?)
+    }
+
+    /// Unloads, then loads, payloads as one request (`load_and_unload`, as documented in `stage.rs`).
+    #[wasm_bindgen(js_name = loadAndUnload)]
+    pub fn js_load_and_unload(
+        &mut self,
+        load: Vec<String>,
+        unload: Vec<String>,
+        descendants: bool,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self.load_and_unload(&load, &unload, descendants)?.into())
+    }
+
+    /// The loadable prims at or beneath `root` (`find_loadable`, as documented in `stage.rs`).
+    #[wasm_bindgen(js_name = findLoadable)]
+    pub fn js_find_loadable(&self, root: &str) -> Result<Vec<String>, JsValue> {
+        Ok(self.find_loadable(root)?)
+    }
+
+    /// The prims whose payloads are included (`load_set`, as documented in `stage.rs`).
+    #[wasm_bindgen(js_name = loadSet)]
+    pub fn js_load_set(&self) -> Vec<String> {
+        self.load_set()
     }
 
     /// The record `status` builds, as documented in `stage.rs`.
@@ -3183,6 +3415,60 @@ fn mute_error(error: LayerMuteError) -> Error {
     }
 }
 
+/// `all`, `only` or `none`: OpenUSD's `UsdStageLoadRules::Rule` names.
+fn rule_name(rule: PayloadRule) -> &'static str {
+    match rule {
+        PayloadRule::All => "all",
+        PayloadRule::Only => "only",
+        PayloadRule::None => "none",
+    }
+}
+
+/// The rule `all`, `only` or `none` names.
+///
+/// # Errors
+///
+/// `argument.invalid` for another name.
+pub(crate) fn parse_rule(name: &str) -> Result<PayloadRule, Error> {
+    match name {
+        "all" => Ok(PayloadRule::All),
+        "only" => Ok(PayloadRule::Only),
+        "none" => Ok(PayloadRule::None),
+        _ => Err(Error::new(
+            "argument.invalid",
+            format!("a load rule is all, only or none, not `{name}`"),
+        )),
+    }
+}
+
+/// The load rules `rules` spells, over `tokens`.
+///
+/// # Errors
+///
+/// `path.invalid` for a path that is not an absolute prim path.
+fn parse_load_rules(
+    rules: &[(String, PayloadRule)],
+    tokens: &layerstack::TokenInterner,
+) -> Result<PayloadLoadRules, Error> {
+    let mut parsed = PayloadLoadRules::default();
+    for (path, rule) in rules {
+        check_prim_path(path)?;
+        let path = layerstack::Path::parse_absolute(path, tokens)
+            .map_err(|error| Error::new("path.invalid", error.to_string()))?;
+        parsed.add_rule(path, *rule);
+    }
+    Ok(parsed)
+}
+
+/// The `(path, rule)` pairs of `flat`, `[path, rule, path, rule, ...]`.
+fn rule_pairs(flat: &[String]) -> Result<Vec<(String, PayloadRule)>, Error> {
+    flat.as_chunks::<2>()
+        .0
+        .iter()
+        .map(|[path, rule]| Ok((path.clone(), parse_rule(rule)?)))
+        .collect()
+}
+
 /// A layer a mute or unmute request names: by id, or by identifier.
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum MuteRequest<'a> {
@@ -3567,6 +3853,7 @@ def "Ball" {
                 BROWSER_LIMITS,
                 false,
                 &schemas,
+                &[],
             )
         };
         let stage = open(&[("RockMesh", "Mesh"), ("Boulder", "RockMesh")]).unwrap();
@@ -3616,6 +3903,7 @@ def "Ball" {
                 SessionLayer::None,
                 BROWSER_LIMITS,
                 provenance,
+                &[],
                 &[],
             )
             .unwrap();
@@ -4454,6 +4742,7 @@ def Mesh "Rock" {
             SessionLayer::None,
             BROWSER_LIMITS,
             provenance,
+            &[],
             &[],
         )
         .unwrap();

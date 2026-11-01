@@ -387,7 +387,64 @@ export interface TypedSchema {
   readonly base: string;
 }
 
+/**
+ * One payload load rule, as OpenUSD's `UsdStageLoadRules` holds it: the
+ * payloads at `path` and beneath it are included (`all`), only those at
+ * `path` (`only`: its descendants' are not, unless a deeper rule includes
+ * them), or none (`none`). The rule of the nearest path at or above a
+ * prim decides, and loading a prim also loads the payloads of the
+ * ancestors it needs ({@link Stage.loadRules}).
+ */
+export interface LoadRule {
+  /** An absolute prim path (`/World/Rock`, `/` for every prim). */
+  readonly path: string;
+  /** `all`, `only` or `none`: OpenUSD's `AllRule`, `OnlyRule`, `NoneRule`. */
+  readonly rule: "all" | "only" | "none";
+}
+
+/**
+ * Which payloads a stage includes: `"all"` (no rule: OpenUSD's
+ * `UsdStage::LoadAll`), `"none"` (`[{ path: "/", rule: "none" }]`:
+ * `UsdStage::LoadNone`), or the literal rules.
+ */
+export type LoadRules = "all" | "none" | readonly LoadRule[];
+
+/**
+ * Whether loading a prim's payloads also loads those of its descendants
+ * (OpenUSD's `UsdLoadWithDescendants`, the default) or not
+ * (`UsdLoadWithoutDescendants`).
+ */
+export type LoadPolicy = "withDescendants" | "withoutDescendants";
+
+/**
+ * What {@link Stage.load}, {@link Stage.unload} or
+ * {@link Stage.loadAndUnload} did: whether the load rules changed, and the
+ * paths it left out, each with why, as OpenUSD's `UsdStage::LoadAndUnload`
+ * skips them with an error and applies the rest:
+ *
+ * - `inactive`: a path to load whose nearest prim on the stage is inactive.
+ * - `not_on_stage`: a path to load with no ancestor on the stage.
+ * - `prototype`: a path in an instance prototype (its root prim named
+ *   `__Prototype_...`), to load or unload; load it through its instance.
+ */
+export interface LoadOutcome {
+  /** Whether the load rules changed. */
+  readonly changed: boolean;
+  /** The paths left out, loads before unloads, each in the order given. */
+  readonly refused: readonly { readonly path: string; readonly code: "inactive" | "not_on_stage" | "prototype" }[];
+}
+
 export interface OpenOptions {
+  /**
+   * Which payloads the stage includes ({@link LoadRules}): `"all"` (the
+   * default), `"none"`, or rules. Opening a large scene with `"none"`
+   * composes everything but its payloads, which a viewer then loads
+   * where it needs them ({@link Stage.load}), as OpenUSD's
+   * `UsdStage::Open(..., UsdStage::LoadNone)` does: while the rules leave
+   * any payload out, the stage asks for no payload's asset
+   * ({@link Stage.unavailable}) until a rule includes it.
+   */
+  readonly load?: LoadRules;
   /**
    * Include the winning source layer, spec path and field in native resolved
    * values for same-module extensions that check source correspondence

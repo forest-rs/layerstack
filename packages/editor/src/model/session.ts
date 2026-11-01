@@ -69,7 +69,24 @@ export interface SessionOptions {
   readonly local?: ReadonlyMap<string, Uint8Array>;
   /** Called with the session after each step of the asset loop, so a page can show it while fetches are pending. */
   readonly progress?: ((session: Session) => void) | undefined;
+  /**
+   * Called as the open enters each phase, and awaited, so a page can show
+   * the phase before work that holds the thread (reading the root layer,
+   * reading a round's supplied layers and composing them) begins.
+   */
+  readonly phase?: ((phase: OpenPhase) => void | Promise<void>) | undefined;
 }
+
+/** What an open, or a later round of the asset loop, is doing. */
+export type OpenPhase =
+  /** Fetching the root layer. */
+  | { readonly kind: "fetchingRoot"; readonly identifier: string }
+  /** Reading the root layer's bytes, before any asset is asked for. */
+  | { readonly kind: "readingRoot"; readonly identifier: string; readonly bytes: number }
+  /** Fetching what round `round` of the asset loop asks for. */
+  | { readonly kind: "fetching"; readonly round: number; readonly assets: number }
+  /** Reading the round's supplied layers into the stage and composing it again. */
+  | { readonly kind: "composing"; readonly round: number; readonly layers: number; readonly bytes: number };
 
 /**
  * The most rounds of the asset loop before the session gives up, as
@@ -115,6 +132,7 @@ export class Session implements Disposable {
   readonly #fetch: Fetcher;
   readonly #local: ReadonlyMap<string, Uint8Array>;
   readonly #progress: ((session: Session) => void) | undefined;
+  readonly #phase: SessionOptions["phase"];
   readonly #open: OpenOptions;
   /** The receipt that made each step, for its report. */
   readonly #reports = new WeakMap<HistoryStep, EditReceipt>();
@@ -136,6 +154,7 @@ export class Session implements Disposable {
     this.#fetch = fetch;
     this.#local = options.local ?? new Map();
     this.#progress = options.progress;
+    this.#phase = options.phase;
     this.#open = options.open ?? {};
     this.stage = layerstack.open({ identifier: root, bytes }, options.open ?? {});
     this.history = new UndoHistory(this.stage);
@@ -156,8 +175,10 @@ export class Session implements Disposable {
     const start = performance.now();
     loops.begin("open", start);
     const local = options.local?.get(root);
+    if (local === undefined) await options.phase?.({ kind: "fetchingRoot", identifier: root });
     const bytes = local ?? (await fetch(root));
     if (bytes === null) throw new Error(`the root layer ${root} does not exist`);
+    await options.phase?.({ kind: "readingRoot", identifier: root, bytes: bytes.byteLength });
     const readStart = performance.now();
     loops.root(root, start, readStart, bytes.byteLength, local === undefined ? "fetched" : "saved");
     const session = new Session(layerstack, root, bytes, fetch, options, loops);
@@ -338,7 +359,7 @@ export class Session implements Disposable {
    */
   reopen(files: readonly LayerFile[]): Promise<Session> {
     const local = new Map(files.map((file) => [file.identifier, file.bytes]));
-    return Session.open(this.layerstack, this.root, this.#fetch, { open: this.#open, local, progress: this.#progress });
+    return Session.open(this.layerstack, this.root, this.#fetch, { open: this.#open, local, progress: this.#progress, phase: this.#phase });
   }
 
   /** Releases the history's receipts and the stage. */
@@ -379,6 +400,7 @@ export class Session implements Disposable {
       const identifiers = [...new Set(wanted.map((asset) => asset.identifier))];
       const stuck = identifiers.find((identifier) => supplied.has(identifier));
       if (stuck !== undefined) throw new Error(`${stuck} was supplied but the stage still wants it`);
+      await this.#phase?.({ kind: "fetching", round: round + 1, assets: identifiers.length });
       const settled = await Promise.allSettled(identifiers.map((identifier) => this.#source(identifier)));
       this.loops.fetched(performance.now());
       let failed: Error | null = null;
@@ -395,6 +417,8 @@ export class Session implements Disposable {
         this.#log("supply", identifier, bytes === null ? "confirmed absent" : `${bytes.byteLength} B`);
       });
       this.loops.suppliesDone(performance.now());
+      const suppliedBytes = settled.reduce((sum, outcome) => sum + (outcome.status === "fulfilled" ? (outcome.value?.byteLength ?? 0) : 0), 0);
+      await this.#phase?.({ kind: "composing", round: round + 1, layers: identifiers.length, bytes: suppliedBytes });
       const readStart = performance.now();
       const result = this.stage.loadSupplied();
       this.loops.read(result, readStart, performance.now());

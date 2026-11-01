@@ -288,6 +288,7 @@ export class Viewport {
   constructor(canvas: HTMLCanvasElement, read: AssetReader = async () => null, exists: AssetExists = async () => false) {
     // Images arrive one by one: the draws are restyled once per batch of them.
     this.#textures = new TextureStore(read, exists, () => {
+      this.onImages?.();
       if (this.#restyling) return;
       this.#restyling = true;
       setTimeout(() => {
@@ -379,7 +380,10 @@ export class Viewport {
     return null;
   }
 
-  /** What the view's textures hold: images decoded, and how many were scaled down to fit. */
+  /** Called as each image arrives (or fails), so a page can show how many are still on their way. */
+  onImages: (() => void) | null = null;
+
+  /** What the view's textures hold: images decoded, still loading, and how many were scaled down to fit. */
   get textureStats(): TextureStats {
     return this.#textures.stats;
   }

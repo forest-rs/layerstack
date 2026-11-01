@@ -52,6 +52,7 @@ describe("loading the module", () => {
       skinNormals: () => assert.fail("never skinned"),
       skinTransform: () => assert.fail("never skinned"),
       blackbodyTemperatureRgb: () => assert.fail("never asked"),
+      trapCause: () => assert.fail("never trapped"),
     };
     const error = await failure(() => loadLayerstack(foreign));
     assert.equal(error.code, "module.abi");

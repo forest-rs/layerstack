@@ -215,8 +215,9 @@ describe("same-module native extensions", () => {
   it("preserves the extension operation when a trap prevents change draining", () => {
     // This separate wrapper shares the real module but isolates the wrapper's
     // poisoned state. The synthetic trap exercises translation without trapping
-    // the native instance used by the rest of this package's tests.
-    const module = new Layerstack(nativeModule);
+    // the native instance used by the rest of this package's tests; the module
+    // says it was a panic, as a real one would.
+    const module = new Layerstack({ ...nativeModule, trapCause: () => 1 });
     using stage = module.open({ identifier: "scene.usda", bytes: bytes("scene.usda") });
     const trap = new WebAssembly.RuntimeError("extension trapped");
     assert.throws(
@@ -226,6 +227,27 @@ describe("same-module native extensions", () => {
     assert.throws(
       () => stage.status(),
       (error) => error instanceof LayerstackError && error.code === "module.trapped",
+    );
+  });
+
+  it("reports a trap the module says an allocation caused as out of memory, then on every call", () => {
+    // The module's own `trapCause` reads 0 until it really traps; this one
+    // says the allocator failed.
+    const module = new Layerstack({ ...nativeModule, trapCause: () => 2 });
+    using stage = module.open({ identifier: "scene.usda", bytes: bytes("scene.usda") });
+    const trap = new WebAssembly.RuntimeError("unreachable");
+    assert.throws(
+      () => stage.withNative("extension.grow", () => { throw trap; }),
+      (error) =>
+        error instanceof LayerstackError &&
+        error.code === "module.out_of_memory" &&
+        error.operation === "extension.grow" &&
+        error.cause === trap &&
+        /ran out of memory/.test(error.message),
+    );
+    assert.throws(
+      () => stage.status(),
+      (error) => error instanceof LayerstackError && error.code === "module.out_of_memory" && error.operation === "status",
     );
   });
 });

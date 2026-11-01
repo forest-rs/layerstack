@@ -40,6 +40,7 @@ import init, {
   pointShape,
   type StagehandMesh as NativeMesh,
   stagehandAbi,
+  trapCause,
   tessellateShape,
 } from "../wasm/layerstack_stagehand.js";
 import type { Stage } from "@forest-rs/layerstack";
@@ -103,7 +104,7 @@ export type {
 } from "./light.js";
 
 /** The exports' version this wrapper speaks (`layerstack_stagehand_wasm::ABI`). */
-const ABI = 6;
+const ABI = 7;
 
 /** A failure, with a stable `code`; its message reads `${operation}: ${message}`. */
 export class StagehandError extends Error {
@@ -314,6 +315,19 @@ function uvSetsOf(native: NativeMesh): { readonly name: string; readonly values:
 export class Stagehand {
   /** @internal */
   constructor() {}
+
+  /**
+   * Why the module trapped, read after one of its calls threw a
+   * `WebAssembly.RuntimeError`: `"outOfMemory"` when an allocation failed
+   * (the module addresses at most 4 GiB, and a browser may give it less),
+   * `"panic"` for a bug, `"unknown"` for a module that cannot tell. A
+   * trapped module cannot be used again; only a new realm (a reload, or a
+   * worker) starts a new one. Read before any trap, it means nothing.
+   */
+  trapCause(): "outOfMemory" | "panic" | "unknown" {
+    const cause = trapCause();
+    return cause === 2 ? "outOfMemory" : cause === 1 ? "panic" : "unknown";
+  }
 
   /**
    * Plans `input` and fills its buffers: Hydra's fan for convex faces,

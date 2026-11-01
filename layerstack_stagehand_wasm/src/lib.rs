@@ -42,15 +42,69 @@ mod standalone {
     #[global_allocator]
     static ALLOCATOR: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
 
-    /// Traps, as `std`'s panic runtime does on this target.
+    use core::sync::atomic::{AtomicU32, Ordering};
+
+    /// The cause the last panic recorded (a [`super::TrapCause`]), for
+    /// [`super::trap_cause`]; 0 before any panic.
+    pub(super) static TRAP: AtomicU32 = AtomicU32::new(0);
+
+    /// Records why, then traps, as `std`'s panic runtime does on this
+    /// target. A failed allocation panics in `alloc`'s `alloc.rs`, and a
+    /// request past `isize::MAX` in its `raw_vec`: out of memory. The
+    /// message is not formatted: only the location's file is read.
     #[panic_handler]
-    fn panic(_: &core::panic::PanicInfo<'_>) -> ! {
+    fn panic(info: &core::panic::PanicInfo<'_>) -> ! {
+        let memory = info.location().is_some_and(|location| {
+            let file = location.file();
+            file.ends_with("alloc/src/alloc.rs") || file.contains("alloc/src/raw_vec")
+        });
+        let cause = if memory {
+            super::TrapCause::OutOfMemory
+        } else {
+            super::TrapCause::Panic
+        };
+        TRAP.store(cause as u32, Ordering::Relaxed);
         core::arch::wasm32::unreachable()
     }
 }
 
-/// The version of the exports the TypeScript wrapper speaks: 6.
-pub const ABI: u32 = 6;
+/// Why the module trapped, as [`trap_cause`] reports it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u32)]
+pub enum TrapCause {
+    /// This build cannot tell (a `std` build, whose panic runtime is `std`'s).
+    Unknown = 0,
+    /// A panic: a bug in the module.
+    Panic = 1,
+    /// An allocation failed, or asked for more than the module can address.
+    OutOfMemory = 2,
+}
+
+/// Why the module trapped (a [`TrapCause`]), read after a call traps: the
+/// instance is dead then, but this reads one static.
+///
+/// In a module built without `std`, a trap that recorded no panic came
+/// from `wasm-bindgen`'s own allocator, which traps without panicking when
+/// it cannot copy an argument in: out of memory too. Read before any trap,
+/// it says nothing.
+#[wasm_bindgen(js_name = trapCause)]
+#[must_use]
+pub fn trap_cause() -> u32 {
+    #[cfg(all(feature = "standalone", not(feature = "std"), target_arch = "wasm32"))]
+    {
+        match standalone::TRAP.load(core::sync::atomic::Ordering::Relaxed) {
+            0 => TrapCause::OutOfMemory as u32,
+            cause => cause,
+        }
+    }
+    #[cfg(not(all(feature = "standalone", not(feature = "std"), target_arch = "wasm32")))]
+    {
+        TrapCause::Unknown as u32
+    }
+}
+
+/// The version of the exports the TypeScript wrapper speaks: 7.
+pub const ABI: u32 = 7;
 
 /// [`ABI`], which the wrapper checks before using the module.
 #[wasm_bindgen(js_name = stagehandAbi)]

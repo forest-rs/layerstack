@@ -11,6 +11,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { BottomPanel } from "./BottomPanel.tsx";
 import { useStore } from "./context.ts";
 import { Inspector } from "./Inspector.tsx";
+import { ModuleLost } from "./ModuleLost.tsx";
 import { ScenePanel } from "./ScenePanel.tsx";
 import { Toolbar } from "./Toolbar.tsx";
 import { ViewportPane } from "./ViewportPane.tsx";
@@ -51,6 +52,8 @@ export function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [store]);
+  // A trapped module is dead: nothing may call into it, so no panel draws.
+  if (store.status.kind === "lost") return <ModuleLost status={store.status} />;
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
       <Toolbar />

@@ -21,6 +21,7 @@ import type { Stage } from "@forest-rs/layerstack";
 import type {
   CameraItem,
   DrawBuffers,
+  DrawCost,
   DrawDiff,
   DrawItem,
   DrawList,
@@ -360,6 +361,11 @@ export class ViewportModel {
   /** The draw list, once synced. */
   get list(): DrawList | null {
     return this.#list;
+  }
+
+  /** What the draws hold, measured ({@link DrawList.cost}); `null` before the first sync. */
+  cost(): DrawCost | null {
+    return this.#list?.cost() ?? null;
   }
 
   /**

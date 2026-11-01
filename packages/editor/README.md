@@ -123,6 +123,12 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
   until shown. Opening the tab grows a short bottom panel. Drag to pan,
   scroll to zoom; clicking a node selects its prim, a port explains its
   value.
+- **Draw cost.** What the draws hold, measured by the draw list
+  (`DrawList.cost`): per item its instances, its buffer's triangles and
+  vertices, the triangles it draws, the bytes it uploads (`f32`
+  attributes, `u32` indices, 64 per instance matrix) and the JavaScript
+  bytes it holds; sortable by any column, a row selecting its prim. The
+  viewport's stats add the totals, each shared buffer counted once.
 - **Explain, Changes, History, Asset loop, Notices.** A property's value and
   every opinion consulted for it, strongest first, each with "Edit here";
   each recomposition and the action that caused it; the undo history; the

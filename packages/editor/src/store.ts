@@ -10,7 +10,7 @@
 // handed.
 import { useSyncExternalStore } from "react";
 import type { Edit, EditReceipt, EditTarget, Layer, Layerstack, ValueInput } from "@forest-rs/layerstack";
-import type { Stagehand } from "@forest-rs/layerstack_stagehand";
+import type { DrawCost, Stagehand } from "@forest-rs/layerstack_stagehand";
 import { ViewportModel, type ViewportScene, type ViewportUpdate } from "./model/draws.ts";
 import { type OpenPhase, Session } from "./model/session.ts";
 import type { SceneSource } from "./model/sources.ts";
@@ -109,6 +109,8 @@ export class EditorStore {
   scene: ViewportScene = EMPTY_SCENE;
   /** The last sync that changed something, for the stats. */
   lastUpdate: ViewportUpdate | null = null;
+  /** What the draws hold, measured after the last sync; `null` with no scene. */
+  cost: DrawCost | null = null;
   /** What actions reported, newest last. */
   readonly notices: Notice[] = [];
   readonly #draws: ViewportModel;
@@ -145,6 +147,7 @@ export class EditorStore {
     const update = this.session === null ? null : this.#draws.sync(this.session, this.time);
     if (update !== null) {
       this.scene = this.#draws.scene(this.time);
+      this.cost = this.#draws.cost();
       viewport.update(this.scene, { ...update, reset: true }, this.selection);
     }
   }
@@ -423,6 +426,7 @@ export class EditorStore {
     if (this.session !== null) {
       const update = this.#draws.sync(this.session, this.time);
       this.scene = this.#draws.scene(this.time);
+      this.cost = this.#draws.cost();
       if (update.reset || update.records > 0 || update.timeChanged) this.lastUpdate = update;
       this.#viewport?.update(this.scene, update, this.selection);
     }

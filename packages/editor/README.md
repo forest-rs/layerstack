@@ -83,7 +83,11 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
   `uiorder`; a number between `uimin` and `uimax` is a slider over its
   soft range (`uisoftmin`, `uisoftmax`) where one is given. A connected
   input is a link to its source. A dot marks the inputs the prim sets
-  itself, as opposed to those it inherits from a base material.
+  itself, as opposed to those it inherits from a base material. Above
+  them, the material (a shader's, its material's) on a sphere, read again
+  after each edit: `UsdPreviewSurface` as the viewport draws it, OpenPBR
+  approximated by three.js's physical material (what is approximated is
+  listed under the sphere).
 - **Shading.** The network of the selected material (or of the material
   or node graph around a selected shader) as a node graph, left to right:
   the material's inputs, each shader with its inputs and outputs as rows,

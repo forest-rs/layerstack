@@ -198,7 +198,7 @@ const WRAPS: Record<TextureWrap, Wrapping> = {
 };
 
 /** A use of `texture`: its image (or fallback color) with this use's sampling, color space and coordinate transform. */
-function use(store: TextureStore, channels: UvChannels, texture: MaterialTexture, color: boolean): Texture {
+export function use(store: TextureStore, channels: UvChannels, texture: MaterialTexture, color: boolean): Texture {
   const image = store.image(texture);
   if (image === null || image === undefined) {
     // While loading, and when it cannot be read: the fallback.

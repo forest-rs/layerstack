@@ -11,6 +11,7 @@ import { updateSummary, viewportSummary } from "../model/draws.ts";
 import { resolveAsset } from "../model/sources.ts";
 import { SKIN_SLOTS } from "../model/skinning.ts";
 import { enclosingMaterial } from "../model/network.ts";
+import { formatBytes } from "./format.ts";
 import { LoadingOverlay } from "./LoadingOverlay.tsx";
 import { MaterialPreview } from "./MaterialPreview.tsx";
 import { Timeline } from "./Timeline.tsx";
@@ -127,6 +128,11 @@ export function ViewportPane() {
         <div className="pointer-events-none absolute right-2 bottom-2 rounded-md bg-black/40 px-2 py-1 text-right font-mono text-[11px] leading-relaxed text-white/80 tabular-nums backdrop-blur-sm">
           <div>
             {summary.drawn.length} prims drawn · {summary.triangles.toLocaleString()} triangles · {summary.lights.length} lights
+            {store.cost !== null && store.cost.total.items > 0 && (
+              <span title="Bytes the draws upload (f32 attributes, u32 indices, 64 per instance), and the JavaScript arrays they hold; the Draw cost tab lists them by item">
+                {" "}· {formatBytes(store.cost.total.gpuBytes)} uploaded · {formatBytes(store.cost.total.cpuBytes)} held
+              </span>
+            )}
           {textures !== undefined && textures.images > 0 && ` · ${textures.images} images${textures.capped > 0 ? ` (${textures.capped} scaled to ${textures.limit})` : ""}`}
           </div>
           {update !== null && (

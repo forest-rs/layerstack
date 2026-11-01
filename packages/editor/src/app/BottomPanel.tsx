@@ -3,8 +3,8 @@
 
 // What happened, and why: the focused property's value and every opinion
 // the stage consulted for it, the recompositions each action caused, the
-// undo history, the asset loop's requests and answers, and what the
-// stage refused.
+// undo history, the asset loop's requests and answers, what drawing
+// costs, and what the stage refused.
 import type { Explanation, Opinion } from "@forest-rs/layerstack";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { formatValue, releaseValue } from "../model/values.ts";
 import type { EditorStore } from "../store.ts";
 import { AssetLoopView } from "./AssetLoop.tsx";
+import { CostView } from "./CostView.tsx";
 import { useStore } from "./context.ts";
 import { formatTime, layerName } from "./format.ts";
 import { ShadingView } from "./ShadingView.tsx";
@@ -33,6 +34,7 @@ export function BottomPanel({ onTab }: { onTab?: (tab: string) => void }) {
         <TabsTrigger className="flex-none px-2.5" id="history">History</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="assets">Asset loop</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="shading">Shading</TabsTrigger>
+        <TabsTrigger className="flex-none px-2.5" id="cost">Draw cost</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="notices">
           Notices
           {notices > 0 && <Badge variant="destructive">{notices}</Badge>}
@@ -52,6 +54,9 @@ export function BottomPanel({ onTab }: { onTab?: (tab: string) => void }) {
       </TabsContent>
       <TabsContent id="shading" className="min-h-0">
         <ShadingView />
+      </TabsContent>
+      <TabsContent id="cost" className="min-h-0 overflow-y-auto">
+        <CostView store={store} />
       </TabsContent>
       <TabsContent id="notices" className="min-h-0 overflow-y-auto">
         <NoticesView store={store} />

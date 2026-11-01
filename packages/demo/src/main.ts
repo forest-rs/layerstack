@@ -5,16 +5,12 @@
 // from the stage after each action; the sample is small, and reading the
 // stage is what the demo shows.
 import { LayerstackError, loadLayerstack } from "@forest-rs/layerstack";
-import { loadStagehand } from "@forest-rs/layerstack_stagehand";
 import type { Attribute, EditTarget, Issue, Layer, Prim, Stage } from "@forest-rs/layerstack";
 import type { Editor, LayerFile } from "./editor.ts";
 import { Session, steps } from "./script.ts";
 import type { Host } from "./script.ts";
 import { collectionRows } from "./collections.ts";
 import { materialSummary } from "./materials.ts";
-import { ViewportModel, updateSummary, viewportSummary } from "./viewport.ts";
-import type { ViewportUpdate } from "./viewport.ts";
-import type { Viewport } from "./viewport3d.ts";
 import { formatNumber, formatValue, parseValue, releaseValue } from "./values.ts";
 import "./style.css";
 
@@ -62,12 +58,6 @@ function layerName(layer: Layer): string {
 }
 
 const sceneBase = new URL("scene/", document.baseURI);
-/** Builds the viewport's triangles: its own module, fed typed arrays read through layerstack. */
-const stagehand = await loadStagehand();
-/** The viewport's draw list, kept up to date from the editor's change log. */
-const model = new ViewportModel(stagehand);
-/** The last update that changed something, for the stats line: panels render again without edits. */
-let shown: ViewportUpdate | null = null;
 /** The download links of the last save, revoked at the next. */
 let links: { identifier: string; url: string; size: number }[] = [];
 
@@ -154,7 +144,6 @@ function render(): void {
   for (const issue of stage.status().compositionErrors) {
     if (issue.prim !== null) issues.set(issue.prim, [...(issues.get(issue.prim) ?? []), issue]);
   }
-  renderViewport(editor);
   renderTree(stage, waiting, issues);
   renderInspector(editor);
   renderExplanation(stage, waiting, issues);
@@ -164,107 +153,6 @@ function render(): void {
   renderChanges(editor);
   // Last, so the counters include what rendering the panels read.
   renderCounters(editor);
-}
-
-/** Each texture directory's `listing.json`, fetched once: a static host cannot list a directory. */
-const listings = new Map<string, Promise<readonly string[]>>();
-
-/**
- * Whether the scene's storage has the texture `identifier`, for a UDIM
- * set's tiles (`udimTiles`): its directory's listing names it. OpenUSD
- * asks its resolver tile by tile; this host answers from the listing
- * rather than fetching a hundred names that are mostly missing.
- */
-async function textureExists(identifier: string): Promise<boolean> {
-  const slash = identifier.lastIndexOf("/");
-  const directory = identifier.slice(0, slash + 1);
-  let listing = listings.get(directory);
-  if (listing === undefined) {
-    listing = host.fetch(`${directory}listing.json`).then((bytes) =>
-      bytes === null ? [] : (JSON.parse(new TextDecoder().decode(bytes)) as string[]),
-    );
-    listings.set(directory, listing);
-  }
-  return (await listing).includes(identifier.slice(slash + 1));
-}
-
-/**
- * The three.js view: `undefined` while three.js loads (in its own chunk, so
- * the editor works before it arrives), `null` where WebGL is unavailable.
- */
-let viewport: Viewport | null | undefined;
-import("./viewport3d.ts").then(
-  ({ Viewport }) => {
-    try {
-      viewport = new Viewport(
-        panel("viewport-canvas") as HTMLCanvasElement,
-        panel("free-camera") as HTMLInputElement,
-        (identifier) => host.fetch(identifier),
-        textureExists,
-      );
-    } catch (error) {
-      console.error(error);
-      viewport = null;
-    }
-    render();
-  },
-  (error: unknown) => {
-    console.error(error);
-    viewport = null;
-    render();
-  },
-);
-
-/**
- * Draws the stage at the inspector's time: the draw list hears the change
- * records since the last render (or reads a new stage whole), and the
- * three.js view applies its diffs. The stats line says what the last
- * update did.
- */
-function renderViewport(editor: Editor): void {
-  const body = panel("viewport-body");
-  let update: ViewportUpdate;
-  let scene: ReturnType<ViewportModel["scene"]>;
-  try {
-    update = model.sync(editor, session.time ?? undefined);
-    scene = model.scene(session.time ?? undefined);
-  } catch (error) {
-    // A read the viewport cannot make (an invalid instancer, say) must not take the panels down.
-    fill(body, `The viewport could not read the stage: ${error instanceof Error ? error.message : String(error)}`);
-    return;
-  }
-  const summary = viewportSummary(scene);
-  viewport?.update(scene, update, session.prim);
-  if (update.reset || update.records > 0 || update.timeChanged || shown === null) shown = update;
-  const last = shown;
-  const work = updateSummary(last);
-  const bounds = summary.bounds === null ? "empty" : `[${summary.bounds.slice(0, 3).map(formatNumber).join(", ")}] to [${summary.bounds.slice(3).map(formatNumber).join(", ")}]`;
-  const changed =
-    last.reset
-      ? `read whole: ${work.added} draws, ${work.triangulations} triangulated, ${work.tessellations} tessellated`
-      : `last update (${last.records} change${last.records === 1 ? "" : "s"}${last.timeChanged ? ", new time" : ""}): ` +
-        `+${work.added} −${work.removed} draws, ${work.moved} moved, ${work.shown} shown or hidden, ` +
-        `${work.refilled} refilled, ${work.rebuilt} rebuilt, ${work.triangulations} triangulated, ${work.tessellations} tessellated; ` +
-        `${work.itemsRead} draws read, ${work.itemsUntouched} untouched` +
-        (last.timeChanged ? ` (${work.itemsTimeInvariant} not animated)` : "") +
-        `, ${work.localTransforms} local transforms; ${work.lightsRead} lights read, ${work.lights} changed; ${work.camerasRead} cameras read; ` +
-        `${work.materialsRead} materials read, ${work.materials} changed; ` +
-        `curves ${work.curvesRefilled} refilled, ${work.curvesLaidOut} laid out; points ${work.pointsRefilled} refilled, ${work.pointsRebuilt} read anew; ` +
-        `light links ${work.linksEvaluated} evaluated, ${work.linksClassified} draws classified, ${work.links} changed`;
-  // Each light link that does not link everything: what three.js lights
-  // with its per-material masks (shadow links are shown, not drawn).
-  const linking = scene.linking.map(
-    (line) => `${line.light.slice(line.light.lastIndexOf("/") + 1)} ${line.kind === "light" ? "lights" : "shadows"} ${line.linked.length} of ${line.of} draws`,
-  );
-  fill(
-    body,
-    `${scene.items.length} draws: ${summary.drawn.length} drawn (${summary.instances} instances), ${summary.triangles} triangles, framed on ${bounds}; ` +
-      `${summary.lights.length} lights, ${summary.materials.length} materials, ${summary.camera === null ? "no stage camera" : `stage camera ${summary.camera}`}`,
-    linking.length > 0 ? `; ${linking.join(", ")}` : "",
-    summary.hidden.length > 0 ? `; hidden: ${summary.hidden.join(", ")}` : "",
-    viewport === null ? " (WebGL is unavailable: the summary is all there is)" : "",
-    h("div", { class: "viewport-diff" }, changed),
-  );
 }
 
 function renderCounters(editor: Editor | null): void {

@@ -11,12 +11,10 @@ export default defineConfig({
   build: {
     // The page awaits the module at the top level.
     target: "es2022",
-    // three.js loads in a chunk of its own, after the editor, at 560 kB.
-    chunkSizeWarningLimit: 600,
   },
-  // The packages load their modules with `new URL(..., import.meta.url)`;
-  // pre-bundling them would move them away from their module files.
-  optimizeDeps: { exclude: ["@forest-rs/layerstack", "@forest-rs/layerstack_stagehand"] },
-  // The packages are linked from ../layerstack and ../layerstack_stagehand.
+  // The package loads its module with `new URL(..., import.meta.url)`;
+  // pre-bundling it would move it away from its module file.
+  optimizeDeps: { exclude: ["@forest-rs/layerstack"] },
+  // The package is linked from ../layerstack.
   server: { fs: { allow: [".."] } },
 });

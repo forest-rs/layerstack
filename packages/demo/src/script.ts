@@ -45,48 +45,12 @@ export const sample = {
   instance: "/World/Beacons/North",
   proxy: "/World/Beacons/North/Bulb",
   proxyRadius: "/World/Beacons/North/Bulb.radius",
-  /** Five stones a point instancer places, and the id the script hides. */
-  stones: "/World/Stones",
-  hiddenStone: 3n,
-  /** Where the script moves the north beacon. */
-  beaconMoved: [-5, 0, -1],
-  /** The lamp's intensity, a `UsdLux` input, and what the script brightens it to. */
-  lampIntensity: "/World/Lamp.inputs:intensity",
-  brighter: 1500,
-  /** A cube spun by time samples on its `xformOp:rotateY`: the sample's one animated draw. */
-  top: "/World/Top",
-  /** The camera the viewport looks through, until "Free camera" is checked. */
-  camera: "/World/Camera",
-  /** A sign drawn with a checker texture, its material, and the material's tint: an interface input that scales the texture. */
-  sign: "/World/Sign",
-  checker: "/World/Looks/Checker",
-  tint: "/World/Looks/Checker.inputs:tint",
-  /** The tint the script sets. */
-  warmer: [1, 0.85, 0.6, 1],
-  /** A strip drawn with UDIM tiles (`tile.<UDIM>.png`: 1001 and 1002), and its material. */
-  strip: "/World/Strip",
-  tiles: "/World/Looks/Tiles",
-  /** The checker's coordinates input, and the sign's second texture coordinate set it is pointed at. */
-  coordinates: "/World/Looks/Checker.inputs:coordinates",
-  card: "card",
-  /** Curves the draw list samples and sweeps: a Catmull-Rom trail, a periodic B-spline ring and a Bezier wire between the beacons; and sparks, a `Points`. */
-  trail: "/World/Curves/Trail",
-  ring: "/World/Curves/Ring",
-  wire: "/World/Curves/Wire",
-  sparks: "/World/Curves/Sparks",
-  /** The wire re-hung from the moved north beacon's bulb to the south's, and the sparks moved along it. */
-  wireMoved: [-5, 2, -1, -2.75, 1, -2.25, -0.25, 1, -3.75, 2, 2, -5],
-  sparksMoved: [
-    -4.125, 2.25, -1.5, -3.25, 2, -2, -2.375, 2.5, -2.5, -1.5, 2.25, -3, -0.625, 2.5, -3.5, 0.25, 2, -4, 1.125, 2.25, -4.5,
-  ],
-  /** The basis the ring is switched to. */
-  ringBasis: "catmullRom",
   /** The spot light, linked to the robot alone by its `lightLink` collection, and the ground the script adds to it. */
   spot: "/World/Spot",
   spotIncludes: "/World/Spot.collection:lightLink:includes",
   ground: "/World/Ground",
   /** The stage's `documentation`, which a step sets. */
-  documentation: "A rock, a robot, two beacons and their lights",
+  documentation: "A rock, a robot, two beacons, a ground and two lights",
 } as const;
 
 /** What the script needs of its host: the instance, the fetch, and a way to hand saved layers to the user. */
@@ -179,7 +143,7 @@ export const steps: readonly Step[] = [
   },
   {
     title: "Switch the robot to chrome",
-    look: "The asset loop: the variant references assets/chrome.usda, which is wanted, fetched, supplied and read; the color now comes from it.",
+    look: "The asset loop: the variant references assets/chrome.usda, which is wanted, fetched, supplied and read; the color now comes from it. The inspector: the robot's asset binds it /World/Robot/Looks/Paint, whose surface shader's diffuseColor connects to a reader of the displayColor primvar, which the chrome finish authors.",
     async run(session) {
       session.select(sample.robot, sample.color);
       await session.current.selectVariant(sample.robot, sample.set, sample.variant);
@@ -273,67 +237,12 @@ export const steps: readonly Step[] = [
     },
   },
   {
-    title: "Move a beacon, hide the rock and a stone",
-    look: "The viewport: one edit moves the north beacon (its xformOp:translate), makes the rock invisible and hides stone 3 (the instancer's invisibleIds). The transform cache recomputes one local transform, the beacon's, and reuses the rest: the rock's first visibility opinion resyncs only that property, which no transform reads; the framed bounds shrink without the rock. The viewport's stats line: the draw list moves four draws (the beacon's post and bulb, the rock, the stones) and hides one, triangulating, tessellating and refilling nothing; it reads one light, the north beacon's glow, a light inside the instance listed once per instance, and not the south's. Undo brings them back.",
-    async run(session) {
-      session.current.apply("move the north beacon, hide the rock and stone 3", [
-        { type: "setValue", path: `${sample.instance}.xformOp:translate`, value: { type: "double3", value: [...sample.beaconMoved] } },
-        { type: "setValue", path: `${sample.rock}.visibility`, value: { type: "token", value: "invisible" } },
-        { type: "setValue", path: `${sample.stones}.invisibleIds`, value: { type: "int64[]", value: [sample.hiddenStone] } },
-      ]);
-      session.select(sample.instance);
-    },
-  },
-  {
-    title: "Brighten the lamp",
-    look: "The viewport: the lamp, a UsdLux sphere light drawn as a three.js point light, brightens. The stats line: the edit reads that light alone, and no draw, camera or other light; its three.js light alone is replaced. The edit layer holds the new intensity over the sublayer's.",
-    async run(session) {
-      session.current.setValue(sample.lampIntensity, { type: "float", value: sample.brighter });
-      session.select(sample.lamp, sample.lampIntensity);
-    },
-  },
-  {
-    title: "Warm the sign's checker",
-    look: "The viewport: the sign's checker texture warms. Its material's tint, a material interface input, connects to the texture's scale, which three.js applies as the map's color. The stats line: the edit reads that material alone, and no draw, light or camera; the sign's three.js material alone is made again, and the checker image is not loaded again.",
-    async run(session) {
-      session.current.setValue(sample.tint, { type: "float4", value: [...sample.warmer] });
-      session.select(sample.checker, sample.tint);
-    },
-  },
-  {
     title: "Document the stage",
-    look: "The change log: the root layer's documentation, stage metadata that composes nothing, changes / info-only. The stats line: the draw list reads nothing, no draw, light, camera or material.",
+    look: "The change log: the root layer's documentation, stage metadata that composes nothing, changes / info-only, and nothing is resynced. The layers: scene.usda is dirty again.",
     async run(session) {
       session.current.apply("document the stage", [
         { type: "setLayerMetadata", key: "documentation", value: { type: "string", value: sample.documentation } },
       ]);
-    },
-  },
-  {
-    title: "Read the checker through the sign's card set",
-    look: "The viewport: the sign's checks turn square. The checker's coordinates input now names primvars:card, the sign's second texture coordinate set, instead of st. The stats line: the draw list reads that material again and plans the sign's mesh again with the card set as a buffer channel of its own (rebuilt), which three.js samples as uv1; no other draw, light or camera is read.",
-    async run(session) {
-      session.current.setValue(sample.coordinates, { type: "string", value: sample.card });
-      session.select(sample.checker, sample.coordinates);
-    },
-  },
-  {
-    title: "Re-hang the wire from the moved beacon",
-    look: "The viewport: the wire, a Bezier BasisCurves drawn as line segments (it is thinner than 0.05), now runs from the moved north beacon to the south one, and the sparks, a Points, move along it. One edit sets both prims' points. The stats line: the draw list refills both buffers by their kept plans (curves refilled 1, points refilled 1): the wire's segments and samples are not laid out again, and nothing else is read.",
-    async run(session) {
-      session.current.apply("re-hang the wire and move the sparks", [
-        { type: "setValue", path: `${sample.wire}.points`, value: { type: "point3f[]", value: new Float32Array(sample.wireMoved) } },
-        { type: "setValue", path: `${sample.sparks}.points`, value: { type: "point3f[]", value: new Float32Array(sample.sparksMoved) } },
-      ]);
-      session.select(sample.wire, `${sample.wire}.points`);
-    },
-  },
-  {
-    title: "Switch the ring to Catmull-Rom",
-    look: "The viewport: the ring around the top, a periodic B-spline drawn as a tube, now passes through its eight points: a Catmull-Rom curve. Its basis changes which points weigh each segment, so the draw list lays that curve out again (rebuilt 1, curves laid out 1) and sweeps a new tube; no other draw, light, camera or material is read.",
-    async run(session) {
-      session.current.setValue(`${sample.ring}.basis`, { type: "token", value: sample.ringBasis });
-      session.select(sample.ring, `${sample.ring}.basis`);
     },
   },
   {

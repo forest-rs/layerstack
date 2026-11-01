@@ -6,32 +6,9 @@
 
 def Xform "Beacon"
 {
-    def Cube "Post"
-    {
-        double size = 1
-        double3 xformOp:translate = (0, 0.9, 0)
-        float3 xformOp:scale = (0.12, 1.8, 0.12)
-        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
-        color3f[] primvars:displayColor = [(0.3, 0.3, 0.32)]
-    }
-
     def Sphere "Bulb"
     {
         double radius = 0.25
         color3f color = (1, 0.8, 0.2)
-        double3 xformOp:translate = (0, 2, 0)
-        uniform token[] xformOpOrder = ["xformOp:translate"]
-        color3f[] primvars:displayColor = [(1, 0.8, 0.2)]
-    }
-
-    def SphereLight "Glow" (
-        doc = "Listed once per instance: the draw list reads each beacon's own."
-    )
-    {
-        color3f inputs:color = (1, 0.8, 0.2)
-        float inputs:intensity = 40
-        float inputs:radius = 0.1
-        double3 xformOp:translate = (0, 2, 0)
-        uniform token[] xformOpOrder = ["xformOp:translate"]
     }
 }

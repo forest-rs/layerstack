@@ -380,8 +380,14 @@ export class ViewportModel {
    */
   estimate(stage: Stage, time: number | undefined, scope: DrawScope): DrawCost {
     if (this.#list !== null && this.#stage === stage && this.#list.time === time) return this.#list.estimate(scope);
-    using list = this.#stagehand.drawList(stage, { ...(time === undefined ? {} : { time }), purposes: PURPOSES, tessellation: TESSELLATION, curves: CURVES, scope: { roots: [] } });
-    return list.estimate(scope);
+    // Not `using`: the dev server serves this module untransformed, and
+    // Safari does not parse explicit resource management yet.
+    const list = this.#stagehand.drawList(stage, { ...(time === undefined ? {} : { time }), purposes: PURPOSES, tessellation: TESSELLATION, curves: CURVES, scope: { roots: [] } });
+    try {
+      return list.estimate(scope);
+    } finally {
+      list.dispose();
+    }
   }
 
   /**

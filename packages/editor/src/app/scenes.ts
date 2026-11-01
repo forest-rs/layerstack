@@ -48,13 +48,11 @@ export async function localScenes(): Promise<SceneEntry[]> {
   }));
 }
 
-/** The scene `?scene=` names (the sample by default, or a local scene's path). */
+/** The scene `?scene=` names: the sample by default, or in development a layer's path under the local scene directory. */
 export async function initialSource(): Promise<SceneSource> {
   const wanted = new URLSearchParams(location.search).get("scene");
-  if (wanted !== null && wanted !== SAMPLE.label) {
-    const found = (await localScenes()).find((entry) => entry.label === wanted);
-    if (found !== undefined) return found.source();
-  }
+  // In development, any layer under the local scene directory, listed or not.
+  if (wanted !== null && wanted !== SAMPLE.label && import.meta.env.DEV && isLayer(wanted)) return localScene(wanted);
   return SAMPLE.source();
 }
 

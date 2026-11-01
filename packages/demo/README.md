@@ -100,7 +100,8 @@ sample from disk, and checks the values and explanations, the receipts,
 the change records and the saved layers' bytes after each one, and that
 the transfer counters grow by exactly the layers' bytes: the sources the
 host supplied in, the saved layers out. Then it unmutes the robot asset as
-the layers panel's toggle does; CI runs it.
+the layers panel's toggle does, deletes the pebble as the inspector's
+Delete does, and undoes the delete; CI runs it.
 
 ```sh
 # Build the package first (see ../layerstack/README.md):

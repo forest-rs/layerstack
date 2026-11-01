@@ -184,6 +184,15 @@ def Mesh "Tile" {
       const tile = list.item(itemOf(list, "/Tile"))!;
       // The buffers stay, copied out of the module.
       assert.equal(list.buffers(tile.buffer)!.mesh.positions.length, 12);
+      // The same points again: the input's fingerprint matches, nothing is built.
+      stage.apply(
+        [{ type: "setValue", path: "/Tile.points", value: { type: "point3f[]", value: [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]] } }],
+        stage.root,
+      );
+      const same = list.applyChanges(heard.splice(0)[0]!);
+      assert.equal(same.work.buffersReused, 1);
+      assert.equal(same.work.triangulations, 0);
+      assert.deepEqual(same.rebuilt, []);
       stage.apply(
         [{ type: "setValue", path: "/Tile.points", value: { type: "point3f[]", value: [[0, 0, 2], [1, 0, 2], [1, 1, 2], [0, 1, 2]] } }],
         stage.root,

@@ -309,17 +309,23 @@ impl Literal {
 }
 
 impl<'a> LexicalCursor<'a> {
+    #[inline(always)]
     fn peek(&mut self) -> Option<Token> {
         if self.lookahead.is_none() {
-            let mut broken = false;
-            self.lookahead = self.lexer.find(|token| {
-                broken |= token.kind == TokenKind::Newline;
-                !trivia(token.kind)
-            });
+            let mut broken = self.lexer.skip_blanks();
+            self.lookahead = loop {
+                match self.lexer.next_element_token() {
+                    Some(token) if trivia(token.kind) => {
+                        broken |= token.kind == TokenKind::Newline;
+                    }
+                    token => break token,
+                }
+            };
             self.broken = broken;
         }
         self.lookahead
     }
+    #[inline(always)]
     fn eat(&mut self, kind: TokenKind) -> Option<Token> {
         self.peek().filter(|token| token.kind == kind)?;
         self.lookahead.take()
@@ -331,8 +337,7 @@ impl<'a> LexicalCursor<'a> {
         let text = token.text(self.source);
         let literal = match token.kind {
             TokenKind::Number => {
-                let value = Number::of(&crate::lower::parse_number_value(text))
-                    .expect("a number literal parses to a number");
+                let value = Number::parse(text);
                 Literal::Number(if !negative {
                     value
                 } else {

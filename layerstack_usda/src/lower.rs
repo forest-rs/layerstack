@@ -2434,7 +2434,7 @@ fn strip_quotes(s: &str) -> &str {
     s
 }
 
-fn parse_f64(s: &str) -> f64 {
+pub(crate) fn parse_f64(s: &str) -> f64 {
     s.parse().unwrap_or(0.0)
 }
 

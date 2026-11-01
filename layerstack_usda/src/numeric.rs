@@ -151,7 +151,7 @@ pub(crate) fn element_type_hint(hint: &str) -> &str {
 // ── Numeric conversion with type hints ──────────────────────────────────
 
 /// A number literal's value, as OpenUSD's text parser holds it.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum Number {
     Int(i64),
     UInt(u64),
@@ -167,6 +167,43 @@ impl Number {
             ast::Value::Number(n) => Some(Self::Float(*n)),
             _ => None,
         }
+    }
+
+    /// The number a `Number` token's `text` holds, typed as
+    /// [`crate::lower::parse_number_value`] types it, without its search for
+    /// `.`, `e` or `E` or its intermediate value: a run of digits is read
+    /// in one pass, and the first of those three makes it a double.
+    #[inline(always)]
+    pub(crate) fn parse(text: &str) -> Self {
+        let mut value: u64 = 0;
+        for &byte in text.as_bytes() {
+            let digit = byte.wrapping_sub(b'0');
+            if digit > 9 {
+                return match byte {
+                    b'.' | b'e' | b'E' => Self::Float(crate::lower::parse_f64(text)),
+                    _ => Self::parse_other(text),
+                };
+            }
+            let Some(next) = value
+                .checked_mul(10)
+                .and_then(|value| value.checked_add(u64::from(digit)))
+            else {
+                return Self::parse_other(text);
+            };
+            value = next;
+        }
+        match i64::try_from(value) {
+            Ok(n) if !text.is_empty() => Self::Int(n),
+            Err(_) => Self::UInt(value),
+            Ok(_) => Self::parse_other(text),
+        }
+    }
+
+    /// [`Number::parse`] off its digits-only path.
+    #[inline(never)]
+    fn parse_other(text: &str) -> Self {
+        Self::of(&crate::lower::parse_number_value(text))
+            .expect("a number literal parses to a number")
     }
 
     fn as_f64(self) -> f64 {
@@ -569,5 +606,31 @@ pub(crate) fn element(
     } else {
         dimensioned_value(items, type_hint, element_type_hint(type_hint))?
             .ok_or_else(|| alloc::format!("unsupported numeric type `{type_hint}`"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Number;
+
+    #[test]
+    fn digit_runs_parse_as_number_values_do() {
+        for text in [
+            "0",
+            "007",
+            "42",
+            "9223372036854775807",
+            "9223372036854775808",
+            "18446744073709551615",
+            "18446744073709551616",
+            "1.5",
+            "42.",
+            ".5",
+            "1e3",
+            "2E-2",
+        ] {
+            let expected = Number::of(&crate::lower::parse_number_value(text)).unwrap();
+            assert_eq!(Number::parse(text), expected, "{text}");
+        }
     }
 }

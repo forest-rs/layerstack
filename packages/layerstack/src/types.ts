@@ -124,12 +124,70 @@ export type UnrepairedField =
   | "timeSamples"
   | "metadata";
 
-/** What {@link Stage.loadSupplied} read. */
+/** What {@link Stage.loadSupplied} read, and where its work went. */
 export interface LoadResult {
   /** The layers read, package members included. */
   readonly loaded: readonly Layer[];
   /** The assets that failed to read, kept unresolved. */
   readonly failures: readonly AssetFailure[];
+  /** Each layer read, in the order the reads began. */
+  readonly reads: readonly LayerRead[];
+  /** Each composition after a batch of reads, in order. */
+  readonly compositions: readonly Composition[];
+}
+
+/**
+ * One layer {@link Stage.loadSupplied} read: decoding the bytes supplied
+ * for it into specs. Supplying them is not part of it.
+ *
+ * A read resolves the layer's arcs as it goes, and reads a dependency
+ * already supplied before it returns, so reads nest: `time.start` to
+ * `time.end` covers the nested reads, `time.own` does not. The `own`
+ * times of a load's reads add up to the time it spent reading.
+ *
+ * A USDZ package's first read covers the members it reads with its root
+ * layer: its bytes are the archive's, its prims the root layer's. A member
+ * read later, through an arc into the package, is a read of its own.
+ */
+export interface LayerRead {
+  /** The layer read; `null` for a read that failed (its asset is among the failures). */
+  readonly layer: Layer | null;
+  /** The identifier read, as {@link Layer.identifier} gives it. */
+  readonly identifier: string | null;
+  /** The encoded bytes decoded. */
+  readonly bytes: number;
+  /** The layer's prim specs outside variant branches, not counting the pseudo-root's; 0 for a read that failed. */
+  readonly prims: number;
+  /** When it ran; `null` when the module has no clock. */
+  readonly time: ReadTime | null;
+}
+
+/**
+ * When a {@link LayerRead} ran, in milliseconds on `performance.now()`'s
+ * timeline, so it lines up with the host's own marks. A browser may coarsen
+ * that clock (to 100 µs without cross-origin isolation), so a small layer's
+ * read can measure 0: its bytes and prims count its work regardless.
+ */
+export interface ReadTime {
+  /** When the read began. */
+  readonly start: number;
+  /** When it ended, the reads nested in it included. */
+  readonly end: number;
+  /** `end - start` less the reads nested in it: this layer's own decoding, in milliseconds. */
+  readonly own: number;
+}
+
+/**
+ * One composition {@link Stage.loadSupplied} ran after a batch of reads:
+ * the layers read entering the stage, and the stage recomposing the prims
+ * that use them. A batch whose assets were all still unavailable composes
+ * too, adding none.
+ */
+export interface Composition {
+  /** The layers the batch added. */
+  readonly layers: number;
+  /** When it ran, in `performance.now()` milliseconds; `null` when the module has no clock. */
+  readonly time: { readonly start: number; readonly end: number } | null;
 }
 
 /** What {@link Stage.resolve} did, over every round. */

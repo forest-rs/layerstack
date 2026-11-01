@@ -89,7 +89,10 @@ await stage.resolve(source);
   and the `prims` composed without it meanwhile, so you can tell which
   prims are incomplete).
   `supply(identifier, bytes | null)` answers one; `loadSupplied()` reads the
-  answers and may make more unavailable. `resolve(source)` runs the loop for
+  answers and may make more unavailable. It reports where its work went:
+  each layer read (`reads`: bytes, prims, and its time on
+  `performance.now()`'s timeline, its own apart from the reads nested in
+  it) and each composition after them (`compositions`). `resolve(source)` runs the loop for
   you, fetching each round's identifiers at once. A USDZ is one buffer: its
   members resolve inside it, and what it references outside is unavailable
   like anything else. Identifiers are the authored path anchored to the anchor layer's

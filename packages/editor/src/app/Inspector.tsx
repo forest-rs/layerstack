@@ -24,6 +24,7 @@ import { PrimActions } from "./PrimActions.tsx";
 import { PropertyList } from "./PropertyList.tsx";
 import { Section } from "./Section.tsx";
 import { ShadingSection } from "./ShadingSection.tsx";
+import { DrawModeSection } from "./DrawModeSection.tsx";
 import { TransformSection } from "./TransformSection.tsx";
 
 export function Inspector() {
@@ -43,6 +44,7 @@ export function Inspector() {
       <State store={store} prim={prim} />
       <TransformSection store={store} stage={stage} prim={prim} />
       <ShadingSection store={store} stage={stage} prim={prim} />
+      <DrawModeSection store={store} stage={stage} prim={prim} />
       <Variants store={store} prim={prim} />
       <PropertyList key={prim.path} store={store} stage={stage} prim={prim} />
       <MaterialSection stage={stage} prim={prim} />

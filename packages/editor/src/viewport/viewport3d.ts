@@ -149,6 +149,7 @@ import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUnifo
 import { conformCamera, lightSizeFactor } from "@forest-rs/layerstack_stagehand";
 import type { CameraItem, LightItem, MaterialItem, StagehandMesh } from "@forest-rs/layerstack_stagehand";
 import { TextureStore, surfaceMaterial, uvChannels } from "./surfaces.ts";
+import { standinGeometry, standinMaterials, standinTextured } from "./standins.ts";
 import type { AssetExists, AssetReader } from "./surfaces.ts";
 import type { ViewItem, ViewportScene, ViewportUpdate } from "../model/draws.ts";
 
@@ -274,6 +275,8 @@ export class Viewport {
   #framed = "";
   /** The textures the materials read. */
   readonly #textures: TextureStore;
+  /** Whether a restyle for arrived images is scheduled. */
+  #restyling = false;
   /** The scene last applied, to restyle textured draws when their images arrive. */
   #applied: ViewportScene | null = null;
 
@@ -283,7 +286,15 @@ export class Viewport {
    * fallbacks.
    */
   constructor(canvas: HTMLCanvasElement, read: AssetReader = async () => null, exists: AssetExists = async () => false) {
-    this.#textures = new TextureStore(read, exists, () => this.#restyleTextured());
+    // Images arrive one by one: the draws are restyled once per batch of them.
+    this.#textures = new TextureStore(read, exists, () => {
+      if (this.#restyling) return;
+      this.#restyling = true;
+      setTimeout(() => {
+        this.#restyling = false;
+        this.#restyleTextured();
+      }, 100);
+    });
     this.#canvas = canvas;
     this.#renderer = new WebGLRenderer({ canvas, antialias: true });
     this.#renderer.setPixelRatio(window.devicePixelRatio);
@@ -416,6 +427,16 @@ export class Viewport {
       const geometry = this.#geometries.get(key);
       const view = scene.items.find((candidate) => candidate.item.buffer === key);
       if (geometry === undefined || view === undefined || update.rebuilt.has(key)) continue;
+      if (view.buffers.standin !== null) {
+        // A stand-in's cards may come and go: its geometry and object made again.
+        geometry.dispose();
+        this.#geometries.set(key, makeGeometry(view));
+        if (!update.added.has(view.item.id)) {
+          this.#drop(view.item.id);
+          this.#add(view, selected);
+        }
+        continue;
+      }
       const object = [...this.#objects.entries()].find(([id]) => items.get(id)?.item.buffer === key)?.[1];
       if (object !== undefined && !fits(object, view.kind)) {
         // A curve's widths crossed the line width: the same buffers, drawn the other way.
@@ -506,11 +527,11 @@ export class Viewport {
     const object: Drawn =
       view.skin?.mode === "gpu"
         ? skinnedMesh(geometry, styled as MeshStandardMaterial | MeshStandardMaterial[], view)
-        : view.kind === "lines"
+        : view.kind === "lines" || view.kind === "standinLines"
         ? new LineSegments(geometry, styled as LineBasicMaterial)
         : view.kind === "points"
           ? new Points(geometry, styled as PointsMaterial)
-          : view.item.source.kind === "gprim"
+          : view.item.source.kind === "gprim" || view.item.source.kind === "drawMode"
             ? new Mesh(geometry, styled as MeshStandardMaterial | MeshStandardMaterial[])
             : new InstancedMesh(geometry, styled as MeshStandardMaterial | MeshStandardMaterial[], Math.max(1, placements));
     object.matrixAutoUpdate = false;
@@ -621,7 +642,7 @@ export class Viewport {
     if (scene === null) return;
     for (const view of scene.items) {
       const bound = [view.item.material, ...view.item.subsetMaterials];
-      if (!bound.some((path) => path !== null && (scene.materials.get(path)?.textures.length ?? 0) > 0)) continue;
+      if (!bound.some((path) => path !== null && (scene.materials.get(path)?.textures.length ?? 0) > 0) && !standinTextured(view.buffers.standin)) continue;
       const object = this.#objects.get(view.item.id);
       if (object === undefined) continue;
       for (const material of [object.material].flat()) material.dispose();
@@ -738,6 +759,7 @@ function materials(
   // Lines and points: unlit, in their per-sample (or prim) display color.
   const tint = (vertexColors: boolean) =>
     highlighted ? new Color(0x6f9fff) : vertexColors ? new Color(1, 1, 1) : new Color().setRGB(...(view.color as [number, number, number]));
+  if (view.buffers.standin !== null) return standinMaterials(view.buffers.standin, highlighted, textures);
   if (view.kind === "lines") {
     const vertexColors = view.buffers.curves?.colors != null;
     return new LineBasicMaterial({ color: tint(vertexColors), vertexColors });
@@ -809,7 +831,7 @@ type Drawn = Mesh | InstancedMesh | LineSegments | Points;
 
 /** Whether `object` draws a view of `kind`: lines, points, or triangles. */
 function fits(object: Drawn, kind: string): boolean {
-  if (kind === "lines") return object instanceof LineSegments;
+  if (kind === "lines" || kind === "standinLines") return object instanceof LineSegments;
   if (kind === "points") return object instanceof Points;
   return object instanceof Mesh;
 }
@@ -868,6 +890,7 @@ function skinnedMesh(geometry: BufferGeometry, material: MeshStandardMaterial | 
 
 /** A geometry over the item's stagehand buffer: indexed, with normals, colors and a group per range. */
 function makeGeometry(view: ViewItem): BufferGeometry {
+  if (view.buffers.standin !== null) return standinGeometry(view.buffers.standin);
   if (view.kind === "lines" || view.kind === "points") {
     // Curves drawn as lines: two sample indices per segment; points: one vertex each.
     const { positions, colors, lines } = samplesOf(view);

@@ -35,6 +35,7 @@ import type { Session } from "./session.ts";
 import { SkinningModel } from "./skinning.ts";
 import type { SkinDraw, SkinSummary, SkinWork } from "./skinning.ts";
 import { releaseValue } from "./values.ts";
+import { standinKind, withStandins } from "./drawModes.ts";
 
 /** The purposes the viewport draws and frames, as usdview shows them by default. */
 export const PURPOSES = ["default", "proxy"] as const;
@@ -67,7 +68,8 @@ export interface ViewItem {
   readonly buffers: DrawBuffers;
   /**
    * `mesh` for a `Mesh`; `lines` or `tubes` for curves ({@link curveDrawnAs});
-   * `points` for a `Points`; else the implicit shape's type (`Sphere`, `Cube`, ...).
+   * `points` for a `Points`; `standinLines` or `cards` for a model drawn by
+   * its draw mode; else the implicit shape's type (`Sphere`, `Cube`, ...).
    */
   readonly kind: string;
   /** Linear RGB. */
@@ -225,6 +227,10 @@ export interface UpdateSummary {
   readonly linksEvaluated: number;
   /** Draws classified against a light-link category, summed. */
   readonly linksClassified: number;
+  /** Draw mode stand-ins read, summed. */
+  readonly standinsRead: number;
+  /** Prims whose draw mode inputs changed, their subtrees discovered again, summed. */
+  readonly drawModeRoots: number;
   /** Light links whose linked draws changed. */
   readonly links: number;
 }
@@ -250,6 +256,8 @@ const EMPTY_WORK: DrawWork = {
   pointsRebuilt: 0,
   linksEvaluated: 0,
   linksClassified: 0,
+  standinsRead: 0,
+  drawModeRoots: 0,
 };
 
 /** The `diffuseColor` of the surface shader of the material at `material`, if it has one. */
@@ -319,6 +327,8 @@ function addWork(into: DrawWork, work: DrawWork): DrawWork {
     pointsRebuilt: into.pointsRebuilt + work.pointsRebuilt,
     linksEvaluated: into.linksEvaluated + work.linksEvaluated,
     linksClassified: into.linksClassified + work.linksClassified,
+    standinsRead: into.standinsRead + work.standinsRead,
+    drawModeRoots: into.drawModeRoots + work.drawModeRoots,
   };
 }
 
@@ -478,12 +488,12 @@ export class ViewportModel {
       items.push({
         item,
         buffers,
-        kind: buffers.curves !== null ? curveDrawnAs(buffers) : buffers.points !== null ? "points" : (buffers.shape?.kind ?? "mesh"),
+        kind: buffers.standin !== null ? standinKind(buffers.standin) : buffers.curves !== null ? curveDrawnAs(buffers) : buffers.points !== null ? "points" : (buffers.shape?.kind ?? "mesh"),
         ...this.#colors.get(item.id)!,
         skin: this.#skins.draw(item.id),
       });
     }
-    const bounds = stage.worldBounds(["/"], { ...(time === undefined ? {} : { time }), purposes: [...PURPOSES] }).alignedRanges;
+    const bounds = withStandins(stage.worldBounds(["/"], { ...(time === undefined ? {} : { time }), purposes: [...PURPOSES] }).alignedRanges, items);
     const empty = bounds[0]! > bounds[3]!;
     const cameras = list.cameras().sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
     // Light links: only those with a category leave draws out; the rest
@@ -559,6 +569,8 @@ export function updateSummary(update: ViewportUpdate): UpdateSummary {
     pointsRebuilt: update.work.pointsRebuilt,
     linksEvaluated: update.work.linksEvaluated,
     linksClassified: update.work.linksClassified,
+    standinsRead: update.work.standinsRead,
+    drawModeRoots: update.work.drawModeRoots,
     links: update.links,
   };
 }

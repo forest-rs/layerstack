@@ -60,6 +60,15 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
   of each, and any point weighting more than eight joints. Normals a mesh
   does not author are its (blend-shaped) rest pose's, skinned, not computed
   again from the skinned points.
+- **Draw modes.** A model whose `model:drawMode` applies is drawn by its
+  stand-in, as Hydra draws it: axes for `origin`, its box's edges for
+  `bounds`, its card textures on quads for `cards` (cut out at their alpha,
+  in `model:drawModeColor` until or unless they load). The inspector's
+  **Draw mode** section, on prims with `GeomModelAPI`, picks a prim's mode
+  (inherited, itself, origin, bounds or cards) and whether it applies it;
+  a mode on an assembly reaches the components beneath. An asset-structure
+  scene with card textures and no geometry (ALab's) shows as its lab once
+  `/root/alab_set01` draws as cards.
 - **Inspector.** The selected prim as the stage composes it: its type,
   specifier and kind; active and instanceable; its transform as
   translation, rotation, scale and pivot, each field authoring its one op as

@@ -15,6 +15,7 @@ import type { EditorStore } from "../store.ts";
 import { AssetLoopView } from "./AssetLoop.tsx";
 import { useStore } from "./context.ts";
 import { formatTime, layerName } from "./format.ts";
+import { ShadingView } from "./ShadingView.tsx";
 import { targetText } from "./TargetPicker.tsx";
 
 /** The most log rows shown, newest first. */
@@ -30,6 +31,7 @@ export function BottomPanel() {
         <TabsTrigger className="flex-none px-2.5" id="changes">Changes</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="history">History</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="assets">Asset loop</TabsTrigger>
+        <TabsTrigger className="flex-none px-2.5" id="shading">Shading</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="notices">
           Notices
           {notices > 0 && <Badge variant="destructive">{notices}</Badge>}
@@ -46,6 +48,9 @@ export function BottomPanel() {
       </TabsContent>
       <TabsContent id="assets" className="min-h-0">
         <AssetLoopView store={store} />
+      </TabsContent>
+      <TabsContent id="shading" className="min-h-0">
+        <ShadingView />
       </TabsContent>
       <TabsContent id="notices" className="min-h-0 overflow-y-auto">
         <NoticesView store={store} />

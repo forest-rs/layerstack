@@ -96,7 +96,7 @@ function asset(run: LoopRun, identifier: string): AssetTiming {
 }
 
 describe("the session's timed asset loop", () => {
-  it("times the open round by round, from want to read", async () => {
+  it("times the open round by round, from want to read, then the one composition", async () => {
     using session = await Session.open(layerstack, "scene.usda", fetcher());
     assert.equal(session.loops.runs.length, 1);
     const run = session.loops.runs[0]!;
@@ -151,13 +151,19 @@ describe("the session's timed asset loop", () => {
     }
     assert.equal(asset(run, "scene.usda").read, null);
     assert.equal(asset(run, "missing.usda").read, null);
-    // Each round's compositions follow its reads, inside the call.
+    // Each round reads without composing; the stage composes what they
+    // read once, after the last round and before the loop settles.
     for (const round of run.rounds.filter((candidate) => candidate.index > 0)) {
-      assert.ok(round.reading !== null && round.compositions.length > 0, `round ${round.index} reports its reading and composing`);
-      for (const composition of round.compositions) {
-        assert.ok(round.readStart! <= composition.start && composition.start <= composition.end && composition.end <= round.readEnd!);
-      }
+      assert.ok(round.reading !== null, `round ${round.index} reports its reading`);
     }
+    const [compose, ...more] = run.composes;
+    assert.ok(compose !== undefined && more.length === 0, "the stage composes once");
+    assert.equal(compose.after, 2);
+    assert.equal(compose.layers, 3, "the layers the rounds read");
+    assert.ok(run.rounds.at(-1)!.readEnd! <= compose.start && compose.end <= run.settle!.start);
+    const [composition] = compose.compositions;
+    assert.ok(composition !== undefined && compose.start <= composition.start && composition.end <= compose.end);
+    assert.ok(summary.composing > 0);
     assert.ok(summary.reading + summary.composing <= summary.stage + 1e-6);
   });
 

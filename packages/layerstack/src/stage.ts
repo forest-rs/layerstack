@@ -106,6 +106,14 @@ export const PACKAGE_VERSION = "0.1.0";
  */
 export const ABI = 9;
 
+/** The record `loadSupplied` and `readSupplied` return: `[loaded, failures, reads, compositions]`. */
+type LoadRecord = [
+  bigint[],
+  Row[],
+  [bigint, string | null, number, number, number | null, number | null, number | null][],
+  [number, number | null, number | null][],
+];
+
 /** The native stage the generated glue exports (`layerstack_wasm::Stage`). Borrowed only by same-module extensions. */
 export interface NativeStage extends Disposable {
   free(): void;
@@ -114,6 +122,7 @@ export interface NativeStage extends Disposable {
   suppliedBytes(): bigint;
   confirmAbsent(identifier: string): void;
   loadSupplied(): unknown;
+  readSupplied(): unknown;
   prepareClipQuery(path: string, time: number | null | undefined, maxLoads: number, maxDemands: number): unknown;
   layers(): unknown;
   layerDirty(id: bigint): boolean;
@@ -877,13 +886,29 @@ export class Stage implements Disposable {
    * strict import policy; the layers read before it stay.
    */
   loadSupplied(): LoadResult {
-    const [loaded, failures, reads, compositions] = this.#call("loadSupplied", (native) => native.loadSupplied()) as [
-      bigint[],
-      Row[],
-      [bigint, string | null, number, number, number | null, number | null, number | null][],
-      [number, number | null, number | null][],
-    ];
+    const record = this.#call("loadSupplied", (native) => native.loadSupplied()) as LoadRecord;
     this.#notify();
+    return this.#loadResult(record);
+  }
+
+  /**
+   * Reads what was supplied for the unavailable assets, as
+   * {@link Stage.loadSupplied} does, without composing: the stage stays as
+   * it last composed. The layers read list what they need themselves in
+   * {@link Stage.unavailable}, with no `prims` yet, so a host can fetch the
+   * next round at once; {@link Stage.loadSupplied} then composes every
+   * round read, once. Composing after every round instead recomposes each
+   * prim as often as a round reaches further into its arcs.
+   *
+   * Throws `io.rejected` when a supplied layer does not parse under the
+   * strict import policy; the layers read before it stay.
+   */
+  readSupplied(): LoadResult {
+    return this.#loadResult(this.#call("readSupplied", (native) => native.readSupplied()) as LoadRecord);
+  }
+
+  /** The {@link LoadResult} of a `loadSupplied` or `readSupplied` record. */
+  #loadResult([loaded, failures, reads, compositions]: LoadRecord): LoadResult {
     const kept = new Set(loaded);
     return {
       loaded: loaded.map((id) => this.#layer(id)),
@@ -905,11 +930,14 @@ export class Stage implements Disposable {
   /**
    * Runs the loop until no asset is unavailable: {@link Stage.unavailable},
    * fetch every unavailable identifier from `source` at once, {@link Stage.supply}
-   * what arrived, {@link Stage.loadSupplied}.
+   * what arrived, {@link Stage.readSupplied}; once nothing is unavailable,
+   * {@link Stage.loadSupplied} composes what the rounds read, which may
+   * ask for more (an arc in a variant another layer selects).
    *
    * A fetch that throws fails the loop with `resolve.fetch` (naming the
    * identifier) after what the other fetches of its round returned is
-   * loaded. `signal` aborts it with `resolve.aborted`.
+   * loaded. `signal` aborts it with `resolve.aborted`. Either way the
+   * stage composes what was read first.
    */
   async resolve(source: AssetSource, options: ResolveOptions = {}): Promise<ResolveResult> {
     const { signal, maxRounds = 100 } = options;
@@ -920,46 +948,73 @@ export class Stage implements Disposable {
     const supplied = new Set<string>();
     let rounds = 0;
     let bytes = 0;
-    for (;;) {
-      const unavailable = [...new Set(this.unavailable().map((asset) => asset.identifier))];
-      if (unavailable.length === 0) break;
-      const stuck = unavailable.find((identifier) => supplied.has(identifier));
-      if (stuck !== undefined) {
-        throw new LayerstackError("resolve.stuck", "resolve", "an asset was supplied but is still unavailable", {
-          identifier: stuck,
-        });
-      }
-      if (rounds === maxRounds) {
-        throw new LayerstackError("resolve.limit", "resolve", `assets still unavailable after ${maxRounds} rounds`);
-      }
-      rounds += 1;
-      if (signal?.aborted) {
-        throw new LayerstackError("resolve.aborted", "resolve", "the signal aborted", { cause: signal.reason });
-      }
-      const settled = await Promise.allSettled(unavailable.map((identifier) => source.fetch(identifier, signal)));
-      if (signal?.aborted) {
-        throw new LayerstackError("resolve.aborted", "resolve", "the signal aborted", { cause: signal.reason });
-      }
-      let failed: LayerstackError | null = null;
-      settled.forEach((outcome, index) => {
-        const identifier = unavailable[index] as string;
-        if (outcome.status === "rejected") {
-          failed ??= new LayerstackError("resolve.fetch", "resolve", "the asset source failed to fetch", {
-            identifier,
-            cause: outcome.reason,
-          });
-          return;
-        }
-        this.supply(identifier, outcome.value);
-        supplied.add(identifier);
-        bytes += outcome.value?.byteLength ?? 0;
-      });
+    // Whether layers were read since the stage last composed.
+    let read = false;
+    const compose = (): void => {
+      read = false;
       const result = this.loadSupplied();
       loaded.push(...result.loaded);
       failures.push(...result.failures);
       reads.push(...result.reads);
       compositions.push(...result.compositions);
-      if (failed !== null) throw failed;
+    };
+    try {
+      for (;;) {
+        const unavailable = [...new Set(this.unavailable().map((asset) => asset.identifier))];
+        if (unavailable.length === 0) {
+          if (!read) break;
+          compose();
+          continue;
+        }
+        const stuck = unavailable.find((identifier) => supplied.has(identifier));
+        if (stuck !== undefined) {
+          throw new LayerstackError("resolve.stuck", "resolve", "an asset was supplied but is still unavailable", {
+            identifier: stuck,
+          });
+        }
+        if (rounds === maxRounds) {
+          throw new LayerstackError("resolve.limit", "resolve", `assets still unavailable after ${maxRounds} rounds`);
+        }
+        rounds += 1;
+        if (signal?.aborted) {
+          throw new LayerstackError("resolve.aborted", "resolve", "the signal aborted", { cause: signal.reason });
+        }
+        const settled = await Promise.allSettled(unavailable.map((identifier) => source.fetch(identifier, signal)));
+        if (signal?.aborted) {
+          throw new LayerstackError("resolve.aborted", "resolve", "the signal aborted", { cause: signal.reason });
+        }
+        let failed: LayerstackError | null = null;
+        settled.forEach((outcome, index) => {
+          const identifier = unavailable[index] as string;
+          if (outcome.status === "rejected") {
+            failed ??= new LayerstackError("resolve.fetch", "resolve", "the asset source failed to fetch", {
+              identifier,
+              cause: outcome.reason,
+            });
+            return;
+          }
+          this.supply(identifier, outcome.value);
+          supplied.add(identifier);
+          bytes += outcome.value?.byteLength ?? 0;
+        });
+        read = true;
+        const result = this.readSupplied();
+        loaded.push(...result.loaded);
+        failures.push(...result.failures);
+        reads.push(...result.reads);
+        if (failed !== null) throw failed;
+      }
+    } catch (error) {
+      // The stage composes what the rounds read before the loop fails; a
+      // failure composing is the same failure again, reported once.
+      if (read) {
+        try {
+          compose();
+        } catch {
+          // Reported as `error`.
+        }
+      }
+      throw error;
     }
     return { loaded, failures, reads, compositions, rounds, fetched: supplied.size, bytes };
   }

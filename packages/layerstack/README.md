@@ -89,11 +89,16 @@ await stage.resolve(source);
   and the `prims` composed without it meanwhile, so you can tell which
   prims are incomplete).
   `supply(identifier, bytes | null)` answers one; `loadSupplied()` reads the
-  answers and may make more unavailable. It reports where its work went:
-  each layer read (`reads`: bytes, prims, and its time on
+  answers, composes, and may make more unavailable. It reports where its
+  work went: each layer read (`reads`: bytes, prims, and its time on
   `performance.now()`'s timeline, its own apart from the reads nested in
-  it) and each composition after them (`compositions`). `resolve(source)` runs the loop for
-  you, fetching each round's identifiers at once. A USDZ is one buffer: its
+  it) and each composition after them (`compositions`). `readSupplied()`
+  reads them without composing (its result has `reads` and no
+  `compositions`): the layers read list what they need themselves, so a
+  host fetches round after round and calls `loadSupplied()` once at the
+  end, rather than recomposing every prim each round reaches further into.
+  `resolve(source)` runs that loop for you, fetching each round's
+  identifiers at once. A USDZ is one buffer: its
   members resolve inside it, and what it references outside is unavailable
   like anything else. Identifiers are the authored path anchored to the anchor layer's
   directory (`./a.usda` from `set/scene.usda` is `set/a.usda`); map them to
@@ -280,7 +285,7 @@ await stage.resolve(source);
   `resyncedProperties` (property paths a spec was added to or removed from,
   as OpenUSD resyncs them) for every
   recomposition, in order, before the call that caused it (`apply`, `undo`,
-  `muteLayer`, `loadSupplied`, each round of `resolve`) returns, with the
+  `muteLayer`, `loadSupplied`, `resolve` once its rounds are read) returns, with the
   `mutedLayers` and `unmutedLayers` whose muting changed, and their
   `mutedIdentifiers` and `unmutedIdentifiers` (as OpenUSD's
   `UsdNotice::LayerMutingChanged`), natively muted ones included. A prim

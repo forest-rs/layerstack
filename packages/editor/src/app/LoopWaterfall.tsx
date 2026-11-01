@@ -4,9 +4,10 @@
 // One run of the asset loop as a waterfall: a row per asset on a shared
 // time axis, from the stage naming it (want) through the host's fetch and
 // the wait for the rest of its round to the stage reading its layer
-// (within the round's `loadSupplied`), colored by what uses it. A track
-// above the rows shows each round's phases: fetching, the stage's own
-// time, and within it the compositions after the reads. Rows are a
+// (within the round's `readSupplied`), colored by what uses it. A track
+// above the rows shows each round's phases (fetching, the stage's own
+// time) and, once the rounds want nothing more, the stage composing what
+// they read (`loadSupplied`). Rows are a
 // virtualized React Aria grid list, so the thousands of assets of a
 // production scene scroll as a dozen do; selecting one shows where it is
 // authored and the prims composed without it until it loaded.
@@ -17,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { Session } from "../model/session.ts";
-import type { AssetRole, AssetTiming, LoopRun, RoundTiming } from "../model/timeline.ts";
+import type { AssetRole, AssetTiming, ComposeTiming, LoopRun, RoundTiming } from "../model/timeline.ts";
 import type { EditorStore } from "../store.ts";
 import { formatBytes } from "./format.ts";
 
@@ -29,7 +30,7 @@ const PRIMS_SHOWN = 200;
 
 /** The stage's own time, and a layer's read, as a bar. */
 export const STAGE_COLOR = "bg-foreground/70";
-/** A composition after a round's reads, as a bar. */
+/** The stage composing what the rounds read, as a bar. */
 export const COMPOSE_COLOR = "bg-rose-400";
 
 /** Each use's color, as a bar and as a dot. */
@@ -211,7 +212,7 @@ export const LoopWaterfall = memo(function LoopWaterfall({ store, session, run, 
         </Virtualizer>
         <p className="shrink-0 border-t px-3 py-0.5 text-[10px] text-muted-foreground">
           {rows.length === run.assets.length ? `${rows.length.toLocaleString()} assets` : `${rows.length.toLocaleString()} of ${run.assets.length.toLocaleString()} assets`}
-          {" · "}a bar is the fetch, colored by use; the line after it waits on the round's other fetches; the dark bar is the stage reading its layer, and on the round's track, rose is composing
+          {" · "}a bar is the fetch, colored by use; the line after it waits on the round's other fetches; the dark bar is the stage reading its layer; on the rounds' track, rose is the stage composing what the rounds read
         </p>
       </div>
       {asset !== undefined && (
@@ -237,7 +238,7 @@ function roundsText(run: LoopRun): string {
   return root ? (rounds === 0 ? "the root" : `the root and ${counted}`) : counted;
 }
 
-/** Each round's phases: fetching, then the stage's want, supply and read. */
+/** Each round's phases (fetching, then the stage's want, supply and read), and each composition after them. */
 function RoundTrack({ run, axis }: { run: LoopRun; axis: Axis }) {
   // Rounds that start close together (the quick early ones) share the first one's label.
   let last = -Infinity;
@@ -256,6 +257,9 @@ function RoundTrack({ run, axis }: { run: LoopRun; axis: Axis }) {
         {run.rounds.map((round, index) => (
           <RoundBar key={round.index} round={round} axis={axis} labelled={labelled[index] ?? false} />
         ))}
+        {run.composes.map((compose, index) => (
+          <ComposeBar key={index} compose={compose} axis={axis} />
+        ))}
         {run.settle !== null && <span className="absolute top-1/2 h-2 -translate-y-1/2 rounded-[1px] bg-foreground/70" style={bar(axis, run.settle.start, run.settle.end)} />}
       </div>
     </div>
@@ -269,13 +273,11 @@ function RoundBar({ round, axis, labelled }: { round: RoundTiming; axis: Axis; l
     ["Want (unavailable)", round.wantStart, round.wantEnd],
     ["Fetching", round.wantEnd, round.fetchEnd ?? fetchEnd],
     ["Supply", round.fetchEnd, round.supplyEnd],
-    [round.index === 0 ? "Read (Layerstack.open)" : "Read (loadSupplied)", round.readStart, round.readEnd],
+    [round.index === 0 ? "Read (Layerstack.open)" : "Read (readSupplied)", round.readStart, round.readEnd],
   ];
-  // What `loadSupplied` reports of its time: decoding layers, then composing.
-  const composing = round.compositions.reduce((sum, composition) => sum + (composition.end - composition.start), 0);
+  // What `readSupplied` reports of its time: decoding layers.
   const within: string[] = [];
   if (round.reading !== null) within.push(`reading ${formatDuration(round.reading)}`);
-  if (round.compositions.length > 0) within.push(`composing ${formatDuration(composing)}`);
   const describe = spans
     .filter(([, start, finish]) => start !== null && finish !== null)
     .map(([label, start, finish]) => `${label} ${formatDuration(finish! - start!)}`)
@@ -291,9 +293,6 @@ function RoundBar({ round, axis, labelled }: { round: RoundTiming; axis: Axis; l
       {round.readStart !== null && round.readEnd !== null && (
         <span className={cn("absolute top-1/2 h-2 -translate-y-1/2 rounded-[1px]", STAGE_COLOR)} style={bar(axis, round.readStart, round.readEnd)} />
       )}
-      {round.compositions.map((composition, index) => (
-        <span key={index} className={cn("absolute top-1/2 h-2 -translate-y-1/2 rounded-[1px]", COMPOSE_COLOR)} style={bar(axis, composition.start, composition.end)} />
-      ))}
       {labelled && (
         <span className="pointer-events-none absolute top-0 text-[9px] leading-none text-muted-foreground" style={{ left: `${at(axis, round.wantStart)}%` }}>
           {round.index === 0 ? "root" : round.index}
@@ -314,6 +313,31 @@ function RoundBar({ round, axis, labelled }: { round: RoundTiming; axis: Axis; l
             ),
           )}
           {within.length > 0 && <span className="text-muted-foreground tabular-nums">of which {within.join(", ")}</span>}
+        </Tooltip>
+      </TooltipTrigger>
+    </>
+  );
+}
+
+/** The stage composing what the rounds read: the `loadSupplied` call, and the composition it reports inside it. */
+function ComposeBar({ compose, axis }: { compose: ComposeTiming; axis: Axis }) {
+  const composing = compose.compositions.reduce((sum, composition) => sum + (composition.end - composition.start), 0);
+  const describe = `Compose (loadSupplied) ${formatDuration(compose.end - compose.start)}${compose.compositions.length > 0 ? `, of which composing ${formatDuration(composing)}` : ""}`;
+  return (
+    <>
+      <span className={cn("absolute top-1/2 h-2 -translate-y-1/2 rounded-[1px]", STAGE_COLOR)} style={bar(axis, compose.start, compose.end)} />
+      {compose.compositions.map((composition, index) => (
+        <span key={index} className={cn("absolute top-1/2 h-2 -translate-y-1/2 rounded-[1px]", COMPOSE_COLOR)} style={bar(axis, composition.start, composition.end)} />
+      ))}
+      <TooltipTrigger delay={200} closeDelay={0}>
+        <span role="img" tabIndex={-1} aria-label={describe} className="absolute inset-y-0 min-w-1 outline-none" style={bar(axis, compose.start, compose.end)} />
+        <Tooltip className="max-w-sm flex-col items-start gap-0.5">
+          <span className="font-medium">Composing after round {compose.after}</span>
+          <span>
+            {compose.layers.toLocaleString()} {compose.layers === 1 ? "layer" : "layers"} the rounds read enter the stage
+          </span>
+          <span className="tabular-nums">Compose (loadSupplied): {formatDuration(compose.end - compose.start)}</span>
+          {compose.compositions.length > 0 && <span className="text-muted-foreground tabular-nums">of which composing {formatDuration(composing)}</span>}
         </Tooltip>
       </TooltipTrigger>
     </>

@@ -13,6 +13,7 @@ import type {
   HistoryStep,
   Layer,
   Layerstack,
+  LoadResult,
   ResolveResult,
   SaveResult,
   Stage,
@@ -174,13 +175,21 @@ export class Editor implements Disposable {
   /**
    * Fetches what the stage wants step by step, the loop `Stage.resolve`
    * runs, so each phase is visible: `unavailable()`, fetch, `supply()`,
-   * `loadSupplied()`, until nothing is unavailable. Returns the rounds run.
+   * `readSupplied()`, until nothing is unavailable, then `loadSupplied()`
+   * composes what the rounds read, once. Returns the rounds run.
    */
   async supplyUnavailable(cause: string): Promise<number> {
     this.#cause = cause;
-    for (let round = 0; round < MAX_ROUNDS; round += 1) {
+    let read = false;
+    for (let round = 0; round < MAX_ROUNDS; ) {
       const wanted = this.stage.unavailable();
-      if (wanted.length === 0) return round;
+      if (wanted.length === 0) {
+        if (!read) return round;
+        read = false;
+        this.#logLoad(this.stage.loadSupplied());
+        continue;
+      }
+      round += 1;
       for (const asset of wanted) {
         this.#log("want", asset.identifier, `${asset.usedBy} of ${asset.prims.join(", ")} (authored @${asset.assetPath}@ in ${asset.anchor.identifier})`);
       }
@@ -191,11 +200,16 @@ export class Editor implements Disposable {
         this.stage.supply(identifier, bytes);
         this.#log("supply", identifier, bytes === null ? "confirmed absent" : `${bytes.byteLength} B`);
       });
-      const result = this.stage.loadSupplied();
-      for (const layer of result.loaded) this.#log("load", layer.identifier ?? "(anonymous)", "read");
-      for (const failure of result.failures) this.#log("fail", failure.assetPath, `${failure.code}: ${failure.message}`);
+      read = true;
+      this.#logLoad(this.stage.readSupplied());
     }
     throw new Error(`assets still unavailable after ${MAX_ROUNDS} rounds`);
+  }
+
+  /** Logs the layers a read loaded and the assets that failed. */
+  #logLoad(result: LoadResult): void {
+    for (const layer of result.loaded) this.#log("load", layer.identifier ?? "(anonymous)", "read");
+    for (const failure of result.failures) this.#log("fail", failure.assetPath, `${failure.code}: ${failure.message}`);
   }
 
   /** Undoable actions, oldest first. */

@@ -13,6 +13,7 @@ import type {
   HistoryStep,
   Layer,
   Layerstack,
+  LoadResult,
   OpenOptions,
   SaveResult,
   Stage,
@@ -72,7 +73,7 @@ export interface SessionOptions {
   /**
    * Called as the open enters each phase, and awaited, so a page can show
    * the phase before work that holds the thread (reading the root layer,
-   * reading a round's supplied layers and composing them) begins.
+   * reading a round's supplied layers, composing them) begins.
    */
   readonly phase?: ((phase: OpenPhase) => void | Promise<void>) | undefined;
 }
@@ -85,8 +86,10 @@ export type OpenPhase =
   | { readonly kind: "readingRoot"; readonly identifier: string; readonly bytes: number }
   /** Fetching what round `round` of the asset loop asks for. */
   | { readonly kind: "fetching"; readonly round: number; readonly assets: number }
-  /** Reading the round's supplied layers into the stage and composing it again. */
-  | { readonly kind: "composing"; readonly round: number; readonly layers: number; readonly bytes: number };
+  /** Reading the round's supplied layers, without composing (`readSupplied`). */
+  | { readonly kind: "reading"; readonly round: number; readonly layers: number; readonly bytes: number }
+  /** Composing, once, the `layers` the rounds read (`loadSupplied`). */
+  | { readonly kind: "composing"; readonly layers: number };
 
 /**
  * The most rounds of the asset loop before the session gives up, as
@@ -205,16 +208,17 @@ export class Session implements Disposable {
   /**
    * Fetches what the stage wants step by step, the loop `Stage.resolve`
    * runs: `unavailable()`, fetch every identifier at once, `supply()` what
-   * arrived, `loadSupplied()`, until nothing is unavailable. Returns the
-   * rounds run.
+   * arrived, `readSupplied()`, until nothing is unavailable; then
+   * `loadSupplied()` composes what the rounds read, once, and the loop
+   * goes on if that composition wants more. Returns the rounds run.
    *
    * The session runs the loop itself rather than calling `Stage.resolve`
    * so that each phase is logged and timed ({@link Session.loops}):
    * `resolve` hands its fetch only an identifier, so what later rounds
    * want (their uses and prims), when they are supplied and how long the
    * stage reads are hidden in it. As `resolve` does, a fetch that throws
-   * fails the loop after what the round's other fetches returned is read,
-   * and an asset supplied but wanted again fails it.
+   * fails the loop after what the round's other fetches returned is read
+   * and composed, and an asset supplied but wanted again fails it.
    */
   async supplyUnavailable(cause: string): Promise<number> {
     this.#cause = cause;
@@ -389,18 +393,36 @@ export class Session implements Disposable {
   /** The rounds of {@link Session.supplyUnavailable}, recorded into the current run. */
   async #rounds(): Promise<number> {
     const supplied = new Set<string>();
-    for (let round = 0; round < MAX_ROUNDS; round += 1) {
+    // The layers read since the stage last composed; `null` when none was.
+    let read: number | null = null;
+    const compose = async () => {
+      const layers = read ?? 0;
+      read = null;
+      await this.#phase?.({ kind: "composing", layers });
+      const start = performance.now();
+      const result = this.stage.loadSupplied();
+      this.loops.composed(result, start, performance.now());
+      this.#logLoad(result);
+    };
+    for (let round = 0; round < MAX_ROUNDS; ) {
       const wantStart = performance.now();
       const wanted = this.stage.unavailable();
-      this.loops.want(wanted, wantStart, performance.now());
+      const wantEnd = performance.now();
+      if (wanted.length === 0 && read !== null) {
+        await compose();
+        continue;
+      }
+      this.loops.want(wanted, wantStart, wantEnd);
       if (wanted.length === 0) return round;
+      round += 1;
       for (const asset of wanted) {
-        this.#log("want", asset.identifier, `${asset.usedBy} of ${asset.prims.join(", ")} (authored @${asset.assetPath}@ in ${asset.anchor.identifier})`);
+        const by = asset.prims.length > 0 ? ` of ${asset.prims.join(", ")}` : "";
+        this.#log("want", asset.identifier, `${asset.usedBy}${by} (authored @${asset.assetPath}@ in ${asset.anchor.identifier})`);
       }
       const identifiers = [...new Set(wanted.map((asset) => asset.identifier))];
       const stuck = identifiers.find((identifier) => supplied.has(identifier));
       if (stuck !== undefined) throw new Error(`${stuck} was supplied but the stage still wants it`);
-      await this.#phase?.({ kind: "fetching", round: round + 1, assets: identifiers.length });
+      await this.#phase?.({ kind: "fetching", round, assets: identifiers.length });
       const settled = await Promise.allSettled(identifiers.map((identifier) => this.#source(identifier)));
       this.loops.fetched(performance.now());
       let failed: Error | null = null;
@@ -418,15 +440,25 @@ export class Session implements Disposable {
       });
       this.loops.suppliesDone(performance.now());
       const suppliedBytes = settled.reduce((sum, outcome) => sum + (outcome.status === "fulfilled" ? (outcome.value?.byteLength ?? 0) : 0), 0);
-      await this.#phase?.({ kind: "composing", round: round + 1, layers: identifiers.length, bytes: suppliedBytes });
+      await this.#phase?.({ kind: "reading", round, layers: identifiers.length, bytes: suppliedBytes });
       const readStart = performance.now();
-      const result = this.stage.loadSupplied();
+      const result = this.stage.readSupplied();
       this.loops.read(result, readStart, performance.now());
-      for (const layer of result.loaded) this.#log("load", layer.identifier ?? "(anonymous)", "read");
-      for (const failure of result.failures) this.#log("fail", failure.assetPath, `${failure.code}: ${failure.message}`);
-      if (failed !== null) throw failed;
+      read = (read ?? 0) + result.loaded.length;
+      this.#logLoad(result);
+      if (failed !== null) {
+        // The stage composes what the rounds read before the loop fails.
+        await compose();
+        throw failed;
+      }
     }
     throw new Error(`assets still unavailable after ${MAX_ROUNDS} rounds`);
+  }
+
+  /** Logs the layers a read loaded and the assets that failed. */
+  #logLoad(result: LoadResult): void {
+    for (const layer of result.loaded) this.#log("load", layer.identifier ?? "(anonymous)", "read");
+    for (const failure of result.failures) this.#log("fail", failure.assetPath, `${failure.code}: ${failure.message}`);
   }
 
   /** The host's bytes for `identifier`: the saved layers first, then the fetch; logged and timed. */

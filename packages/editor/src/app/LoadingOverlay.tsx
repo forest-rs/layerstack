@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 // What the editor is doing while a scene opens: the phase (fetching the
-// root, reading it, each round of the asset loop fetching and composing),
+// root, reading it, each round of the asset loop fetching and reading, then
+// composing what the rounds read),
 // what has arrived, how long it has taken, and a way to stop waiting. Each
 // phase is shown before its work holds the page (the session waits for it
 // to paint), so even a root layer that takes seconds to read says so.
@@ -22,8 +23,10 @@ function describe(phase: OpenPhase): string {
       return `Reading the root layer (${formatBytes(phase.bytes)})`;
     case "fetching":
       return `Round ${phase.round}: fetching ${phase.assets} asset${phase.assets === 1 ? "" : "s"}`;
+    case "reading":
+      return `Round ${phase.round}: reading ${phase.layers} layer${phase.layers === 1 ? "" : "s"} (${formatBytes(phase.bytes)})`;
     case "composing":
-      return `Round ${phase.round}: reading ${phase.layers} layer${phase.layers === 1 ? "" : "s"} (${formatBytes(phase.bytes)}) and composing`;
+      return `Composing the ${phase.layers} layer${phase.layers === 1 ? "" : "s"} the rounds read`;
   }
 }
 

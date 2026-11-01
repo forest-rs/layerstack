@@ -28,10 +28,12 @@ export type EditTargetKind = "layer" | "variant" | "arc";
 export type AssetUse = "sublayer" | "reference" | "payload";
 
 /**
- * An asset the stage asks for that the host has not supplied yet: it is
- * unavailable, and may still arrive. Supply its bytes under `identifier`
- * ({@link Stage.supply}), or `null` if it does not exist, then call
- * {@link Stage.loadSupplied}; or let {@link Stage.resolve} run the loop.
+ * An asset the stage, or a layer read since it last composed, asks for
+ * that the host has not supplied yet: it is unavailable, and may still
+ * arrive. Supply its bytes under `identifier` ({@link Stage.supply}), or
+ * `null` if it does not exist, then call {@link Stage.loadSupplied} (or
+ * {@link Stage.readSupplied}, composing once at the end); or let
+ * {@link Stage.resolve} run the loop.
  */
 export interface UnavailableAsset {
   /** The key to supply bytes under: the authored asset path anchored to the anchor layer's directory, `.` and `..` removed. */
@@ -46,7 +48,8 @@ export interface UnavailableAsset {
    * The paths of the prims composed without it: those whose reference or
    * payload names it, or for a sublayer the first prim to read its layer
    * stack (`/` for the stage's own). They are on the stage, without the
-   * asset's opinions, until it loads.
+   * asset's opinions, until it loads. None for one only a layer read since
+   * the stage last composed asks for ({@link Stage.readSupplied}).
    */
   readonly prims: readonly string[];
 }
@@ -124,7 +127,7 @@ export type UnrepairedField =
   | "timeSamples"
   | "metadata";
 
-/** What {@link Stage.loadSupplied} read, and where its work went. */
+/** What {@link Stage.loadSupplied} or {@link Stage.readSupplied} read, and where its work went. */
 export interface LoadResult {
   /** The layers read, package members included. */
   readonly loaded: readonly Layer[];

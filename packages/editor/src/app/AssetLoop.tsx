@@ -103,7 +103,7 @@ function Summary({ run }: { run: LoopRun }) {
       {part(run.endedAt === null ? "so far" : "wall", formatDuration(summary.wall), "From the first request to the stage wanting nothing more")}
       <span
         className="flex items-baseline gap-1.5"
-        title="Waiting on fetches; in the stage (unavailable, supply, loadSupplied, the root's open), of which loadSupplied reports decoding layers (reading) and recomposing after them (composing); and the rest (the page's own work)"
+        title="Waiting on fetches; in the stage (unavailable, supply, readSupplied, loadSupplied, the root's open), of which readSupplied reports decoding layers (reading) and loadSupplied composing what the rounds read (composing); and the rest (the page's own work)"
       >
         <span className="inline-block size-2 translate-y-px rounded-sm bg-muted-foreground/40" />
         {part("fetching", formatDuration(summary.fetching))}

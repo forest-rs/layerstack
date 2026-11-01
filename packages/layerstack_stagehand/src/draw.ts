@@ -16,6 +16,8 @@ import type { LinkChange, LinkKind, LinkSet, LinkTarget } from "./links.js";
 import { readMaterial } from "./material.js";
 import type { MaterialItem } from "./material.js";
 import { readMesh, readShape, shapeSchema } from "./read.js";
+import { flattenedDrawMode, inheritedDrawMode, readStandinInput, sameStandin, standinMode } from "./standin.js";
+import type { StandinBuffers } from "./standin.js";
 import type {
   CurveOptions,
   CurvesInput,
@@ -72,7 +74,14 @@ export type ItemSource =
    */
   | { readonly kind: "prototype"; readonly prim: string; readonly material: string | null }
   /** A gprim a `PointInstancer` places: its prototype `index`, or a gprim inside it. */
-  | { readonly kind: "pointInstancer"; readonly instancer: string; readonly index: number; readonly prim: string };
+  | { readonly kind: "pointInstancer"; readonly instancer: string; readonly index: number; readonly prim: string }
+  /**
+   * A model drawn by its draw mode instead of by what is beneath it: a prim
+   * with `GeomModelAPI` whose `model:drawMode` (its own or inherited) is
+   * `origin`, `bounds` or `cards` and which applies it
+   * ({@link DrawBuffers.standin}). Nothing beneath it is drawn.
+   */
+  | { readonly kind: "drawMode"; readonly path: string };
 
 /**
  * One instance of a point instancer's item: the item, and the instance's
@@ -143,6 +152,8 @@ export interface DrawBuffers {
   readonly revision: number;
   /** The shape tessellated, for a shape. */
   readonly shape: Shape | null;
+  /** A model's draw mode stand-in, for a `drawMode` item: its lines or cards, color and card textures; its {@link mesh} is empty. */
+  readonly standin: StandinBuffers | null;
 }
 
 /** The work one diff did: what was read, reused, recomputed or rebuilt. */
@@ -192,6 +203,10 @@ export interface DrawWork {
   readonly linksEvaluated: number;
   /** Targets classified against a link category (`IsPathIncluded`): a new category's every target, and each new target (or one of an item read again entirely) against each category. */
   readonly linksClassified: number;
+  /** Draw mode stand-ins read: built anew or read again for a change of their inputs. */
+  readonly standinsRead: number;
+  /** Prims whose draw mode inputs changed (`model:drawMode`, `model:applyDrawMode`, `kind`, `apiSchemas`): their subtrees discovered again. */
+  readonly drawModeRoots: number;
 }
 
 /**
@@ -258,12 +273,15 @@ interface Dirty {
   visibility: boolean;
   geometry: boolean;
   material: boolean;
+  /** A draw mode stand-in's inputs: its extent and card settings. */
+  standin: boolean;
 }
 
-const none = (): Dirty => ({ instances: false, transform: false, visibility: false, geometry: false, material: false });
-const all = (): Dirty => ({ instances: true, transform: true, visibility: true, geometry: true, material: true });
-const any = (d: Dirty) => d.instances || d.transform || d.visibility || d.geometry || d.material;
+const none = (): Dirty => ({ instances: false, transform: false, visibility: false, geometry: false, material: false, standin: false });
+const all = (): Dirty => ({ instances: true, transform: true, visibility: true, geometry: true, material: true, standin: true });
+const any = (d: Dirty) => d.instances || d.transform || d.visibility || d.geometry || d.material || d.standin;
 function merge(into: Dirty, from: Dirty): void {
+  into.standin ||= from.standin;
   into.instances ||= from.instances;
   into.transform ||= from.transform;
   into.visibility ||= from.visibility;
@@ -355,11 +373,30 @@ function reads(inputs: readonly string[], name: string): boolean {
 function propertyDirt(name: string): Dirty {
   const dirty = none();
   if (name === "xformOpOrder" || name.startsWith("xformOp:")) dirty.transform = true;
-  else if (name === "visibility" || name === "purpose" || name.endsWith("Visibility")) dirty.visibility = true;
+  else if (name === "visibility" || name === "purpose" || (name.endsWith("Visibility") && !name.startsWith("model:"))) dirty.visibility = true;
   else if (name.startsWith("material:binding")) dirty.material = true;
   else if (GEOMETRY.has(name)) dirty.geometry = true;
+  if (STANDIN_INPUTS.has(name)) dirty.standin = true;
   return dirty;
 }
+
+/** The attributes a draw mode stand-in is built from besides its draw mode, as `layerstack_stagehand` lists them. */
+const STANDIN_INPUTS = new Set([
+  "extent",
+  "extentsHint",
+  "model:cardGeometry",
+  "model:cardVisibility",
+  "model:drawModeColor",
+  "model:cardTextureXPos",
+  "model:cardTextureYPos",
+  "model:cardTextureZPos",
+  "model:cardTextureXNeg",
+  "model:cardTextureYNeg",
+  "model:cardTextureZNeg",
+]);
+
+/** The fields whose change may change which prims beneath their prim are drawn by a stand-in. */
+const DRAW_MODE_FIELDS = new Set(["model:drawMode", "model:applyDrawMode", "kind", "apiSchemas"]);
 
 /** What of an item might differ at another time, as last read: what {@link DrawList.setTime} reads again. */
 interface Varies {
@@ -390,11 +427,13 @@ function sourceKey(source: ItemSource): string {
       return `p ${source.prim} ${source.material ?? ""}`;
     case "pointInstancer":
       return `i ${source.instancer} ${source.index} ${source.prim}`;
+    case "drawMode":
+      return `d ${source.path}`;
   }
 }
 
 function sourcePath(source: ItemSource): string {
-  return source.kind === "gprim" ? source.path : source.prim;
+  return source.kind === "gprim" || source.kind === "drawMode" ? source.path : source.prim;
 }
 
 /** `a * b`, row-vector 4x4 matrices of 16 numbers row by row: `a` applies first. */
@@ -691,6 +730,8 @@ class Gather {
     pointsRebuilt: 0,
     linksEvaluated: 0,
     linksClassified: 0,
+    standinsRead: 0,
+    drawModeRoots: 0,
   };
 }
 
@@ -760,6 +801,8 @@ export class DrawList implements Disposable {
   readonly #buffers = new Map<number, Retained>();
   readonly #meshBuffers = new Map<string, number>();
   readonly #shapeBuffers = new Map<string, number>();
+  /** Each draw mode stand-in's buffer, by model. */
+  readonly #standinBuffers = new Map<string, number>();
   readonly #cameras = new Map<string, Held<CameraItem>>();
   readonly #lights = new Map<string, Held<LightItem>>();
   readonly #materials = new Map<string, Held<MaterialItem>>();
@@ -904,7 +947,7 @@ export class DrawList implements Disposable {
     const read = new Set<number>();
     for (const [id, entry] of [...this.#entries]) {
       const { matrices, visibility, geometry } = entry.varies;
-      const what: Dirty = { instances: matrices, transform: matrices, visibility, geometry, material: false };
+      const what: Dirty = { instances: matrices, transform: matrices, visibility, geometry, material: false, standin: geometry };
       if (!any(what)) {
         gather.work.itemsTimeInvariant++;
         continue;
@@ -981,7 +1024,19 @@ export class DrawList implements Disposable {
     for (const prototype of stage.prototypes()) {
       for (const instance of prototype.instances) firsts.set(instance, prototype.instances[0]!);
     }
-    for (const root of changes.resynced) {
+    // A draw mode input changed: which prims beneath it are drawn, or drawn
+    // by a stand-in, is discovered again, as for a resync.
+    const drawModeRoots = new Set<string>();
+    for (const changed of changes.properties) {
+      if (changed.fields.some((field) => DRAW_MODE_FIELDS.has(field.property))) drawModeRoots.add(changed.prim);
+    }
+    for (const property of changes.resyncedProperties) {
+      const dot = property.lastIndexOf(".");
+      if (DRAW_MODE_FIELDS.has(property.slice(dot + 1))) drawModeRoots.add(property.slice(0, dot));
+    }
+    const extra = [...drawModeRoots].filter((prim) => !changes.resynced.some((root) => under(prim, root))).sort();
+    gather.work.drawModeRoots = extra.length;
+    for (const root of [...changes.resynced, ...extra]) {
       this.#discover(root, firsts, found);
       for (const [id, entry] of this.#entries) {
         if (entry.depends.some((path) => under(path, root))) mark(id, all());
@@ -1016,6 +1071,8 @@ export class DrawList implements Disposable {
           reach.instances = true;
           hit = true;
         }
+        // Only a stand-in reads its card settings and extent.
+        if (source.kind !== "drawMode") reach.standin = false;
         if (!hit || !any(reach)) continue;
         if (reach.material && source.kind === "prototype") {
           const first = this.#instanceRoot(source.prim);
@@ -1297,21 +1354,30 @@ export class DrawList implements Disposable {
 
   #discover(root: string, firsts: Map<string, string>, found: Found): void {
     const stage = this.#stage;
-    // The root may be inside an instance or a point instancer: discover from the outermost one.
+    // The root may be inside an instance, a point instancer or a model drawn
+    // by a stand-in: discover from the outermost one.
     let start = root;
     for (let at = parent(root); at !== null; at = parent(at)) {
       const prim = stage.prim(at);
-      if (prim !== null && (prim.instance || this.#kind(prim).instancer)) start = at;
+      if (prim === null) continue;
+      if (prim.instance || this.#kind(prim).instancer || standinMode(prim, flattenedDrawMode(prim, inheritedDrawMode(stage, at))) !== null) start = at;
     }
     found.scopes.push({ kind: "resync", root: start });
     const prototypes = new Set<string>();
-    const stack = [start];
+    // Each prim with the draw mode its parent resolves to.
+    const stack: [string, string | null][] = [[start, inheritedDrawMode(stage, start)]];
     while (stack.length > 0) {
-      const path = stack.pop()!;
+      const [path, inherited] = stack.pop()!;
       const prim = stage.prim(path);
       if (prim === null) continue;
       found.prims++;
       if (!prim.active || !prim.defined || prim.abstract) continue;
+      const mode = flattenedDrawMode(prim, inherited);
+      if (standinMode(prim, mode) !== null) {
+        // Its stand-in replaces everything beneath it.
+        found.sources.push({ kind: "drawMode", path });
+        continue;
+      }
       if (this.#kind(prim).instancer) {
         found.scopes.push({ kind: "instancer", path });
         this.#discoverInstancer(path, found);
@@ -1327,7 +1393,7 @@ export class DrawList implements Disposable {
       // A mesh light is a gprim drawn and a light listed.
       if (kind.camera) found.cameras.push(path);
       else if (kind.light !== null) found.lights.set(path, { path, instance: null, kind: kind.light });
-      stack.push(...prim.children().reverse());
+      stack.push(...prim.children().reverse().map((child): [string, string | null] => [child, mode]));
     }
     for (const first of prototypes) {
       found.scopes.push({ kind: "prototype", first });
@@ -1747,7 +1813,7 @@ export class DrawList implements Disposable {
       let ids: BigInt64Array | null = null;
       let linkPaths: readonly string[];
       varies.matrices = false;
-      if (source.kind === "gprim") {
+      if (source.kind === "gprim" || source.kind === "drawMode") {
         if (stage.prim(source.path) === null) return false;
         depends = [source.path];
         linkPaths = [source.path];
@@ -1843,8 +1909,9 @@ export class DrawList implements Disposable {
       }
       item = { ...item, matrices, instances, ids, hidden: matrices.length === 0, linkPaths };
     }
-    if (what.geometry || isNew) {
-      const key = this.#geometry(item, gather);
+    const standin = source.kind === "drawMode";
+    if (what.geometry || isNew || (standin && what.standin)) {
+      const key = standin ? this.#standin(item.prim, gather) : this.#geometry(item, gather);
       if (key === null) {
         if (!isNew) this.#release(item.buffer, gather);
         return false;
@@ -1857,10 +1924,11 @@ export class DrawList implements Disposable {
         this.#buffers.get(key)!.users++;
         item = { ...item, buffer: key };
       }
-      varies.geometry = this.#geometryMightVary(item.prim, key);
+      varies.geometry = standin ? this.#inputsMightVary([item.prim], [...STANDIN_INPUTS]) : this.#geometryMightVary(item.prim, key);
     }
     if (what.material || what.geometry || isNew) {
-      const material = source.kind === "prototype" ? source.material : this.#material(item.prim);
+      // A stand-in draws its own material, whatever the model binds.
+      const material = source.kind === "prototype" ? source.material : standin ? null : this.#material(item.prim);
       const subsets = (this.#buffers.get(item.buffer)?.buffers.subsets ?? []).map((subset) => this.#material(subset));
       if (!isNew && (material !== item.material || subsets.join("\n") !== item.subsetMaterials.join("\n"))) {
         gather.materials.add(id);
@@ -1929,7 +1997,7 @@ export class DrawList implements Disposable {
       const key = this.#nextBuffer++;
       gather.buffersAdded.add(key);
       this.#buffers.set(key, {
-        buffers: { key, prim: item.prim, mesh: this.#stagehand.buildMesh(input, this.#meshOptions), subsets, revision: 0, shape: null, curves: null, points: null },
+        buffers: { key, prim: item.prim, mesh: this.#stagehand.buildMesh(input, this.#meshOptions), subsets, revision: 0, shape: null, curves: null, points: null, standin: null },
         input,
         uvSets,
         users: 0,
@@ -1952,7 +2020,7 @@ export class DrawList implements Disposable {
     const key = this.#nextBuffer++;
     gather.buffersAdded.add(key);
     this.#buffers.set(key, {
-      buffers: { key, prim: item.prim, mesh: this.#stagehand.tessellate(shape, this.#tessellation), subsets: [], revision: 0, shape, curves: null, points: null },
+      buffers: { key, prim: item.prim, mesh: this.#stagehand.tessellate(shape, this.#tessellation), subsets: [], revision: 0, shape, curves: null, points: null, standin: null },
       input: null,
       uvSets: [],
       users: 0,
@@ -1996,7 +2064,7 @@ export class DrawList implements Disposable {
     const key = this.#nextBuffer++;
     gather.buffersAdded.add(key);
     this.#buffers.set(key, {
-      buffers: { key, prim, mesh: curves.swept, subsets: [], revision: 0, shape: null, curves, points: null },
+      buffers: { key, prim, mesh: curves.swept, subsets: [], revision: 0, shape: null, curves, points: null, standin: null },
       input: null,
       curvesInput: input,
       uvSets: [],
@@ -2048,13 +2116,46 @@ export class DrawList implements Disposable {
     const key = this.#nextBuffer++;
     gather.buffersAdded.add(key);
     this.#buffers.set(key, {
-      buffers: { key, prim, mesh: shape(), subsets: [], revision: 0, shape: null, curves: null, points: filled },
+      buffers: { key, prim, mesh: shape(), subsets: [], revision: 0, shape: null, curves: null, points: filled, standin: null },
       input: null,
       pointsInput: input,
       uvSets: [],
       users: 0,
     });
     this.#meshBuffers.set(prim, key);
+    return key;
+  }
+
+  /** The stand-in of the model at `prim`, read again: kept when what it is built from is unchanged, refilled when not; `null` when it is drawn so no more. */
+  #standin(prim: string, gather: Gather): number | null {
+    const stage = this.#stage;
+    const at = stage.prim(prim);
+    const mode = at === null ? null : standinMode(at, flattenedDrawMode(at, inheritedDrawMode(stage, prim)));
+    if (at === null || mode === null) return null;
+    const { input, color, textures } = readStandinInput(stage, at, mode, this.#time);
+    gather.work.standinsRead++;
+    const known = this.#standinBuffers.get(prim);
+    const retained = known === undefined ? undefined : this.#buffers.get(known);
+    if (retained !== undefined && retained.buffers.standin !== null && sameStandin(retained.buffers.standin, input, color, textures)) {
+      gather.work.buffersReused++;
+      return known!;
+    }
+    const standin: StandinBuffers = Object.freeze({ ...this.#stagehand.drawModeStandin(input), input, color, textures });
+    if (retained !== undefined) {
+      retained.buffers = { ...retained.buffers, standin, revision: retained.buffers.revision + 1 };
+      gather.refilled.add(known!);
+      return known!;
+    }
+    const key = this.#nextBuffer++;
+    gather.buffersAdded.add(key);
+    const mesh = this.#stagehand.buildMesh({ faceVertexCounts: new Int32Array(), faceVertexIndices: new Int32Array(), points: new Float32Array() });
+    this.#buffers.set(key, {
+      buffers: { key, prim, mesh, subsets: [], revision: 0, shape: null, curves: null, points: null, standin },
+      input: null,
+      uvSets: [],
+      users: 0,
+    });
+    this.#standinBuffers.set(prim, key);
     return key;
   }
 
@@ -2067,6 +2168,7 @@ export class DrawList implements Disposable {
     retained.buffers.mesh.dispose();
     retained.buffers.curves?.dispose();
     if (retained.buffers.shape !== null) this.#shapeBuffers.delete(JSON.stringify(retained.buffers.shape));
+    else if (retained.buffers.standin !== null) this.#standinBuffers.delete(retained.buffers.prim);
     else this.#meshBuffers.delete(retained.buffers.prim);
     gather.freed.add(key);
     gather.buffersAdded.delete(key);

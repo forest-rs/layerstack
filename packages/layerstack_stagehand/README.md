@@ -133,6 +133,32 @@ only when a shading property of it or of a prim its network reads
 changes, or an item comes to bind it, and `setTime` reads only those with
 an input that might vary.
 
+## Draw modes
+
+A model drawn by its draw mode (`UsdGeomModelAPI`'s `model:drawMode`) is
+one item in place of everything beneath it, as OpenUSD 26.11's Hydra
+draws it: `source.kind === "drawMode"`, its buffer's `standin` holding the
+`lines` of `origin` (unit axes) or `bounds` (the box's twelve edges, two
+endpoints each), or the `cards` of `cards` (four `corners` and `uvs` each,
+counter-clockwise from the side it faces, drawn one-sided, and the face
+whose `texture` it shows), with `color` (`model:drawModeColor`) and the
+six `textures` anchored like a material's. A prim is drawn so when it has
+`GeomModelAPI` applied, its draw mode (its own, or the nearest one above
+from a prim with the API) is one of those, and it applies it:
+`model:applyDrawMode = true`, or none authored and kind `component`. The
+box is its `extent`, else the union of its `extentsHint` for `default`,
+`render` and `proxy`. A draw mode, `model:applyDrawMode`, `kind` or
+`apiSchemas` edit discovers only that prim's subtree again
+(`work.drawModeRoots`); a card setting, texture, color or extent edit
+reads only the stand-ins it reaches (`work.standinsRead`).
+`stagehand.drawModeStandin(input)` builds the geometry alone. `fromTexture`
+cards, placed by image metadata, are not drawn.
+
+```ts
+const standin = list.buffers(item.buffer)?.standin;
+if (standin?.mode === "cards") for (const card of standin.cards) draw(card.corners, card.uvs, card.texture);
+```
+
 ## Per-point data and skinning
 
 `mesh.vertexPoints` says which of the input's points each vertex came

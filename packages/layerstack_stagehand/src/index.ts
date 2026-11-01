@@ -36,6 +36,7 @@
 import init, {
   CurvesBuilder,
   MeshBuilder,
+  drawModeStandin,
   pointShape,
   type StagehandMesh as NativeMesh,
   stagehandAbi,
@@ -44,6 +45,8 @@ import init, {
 import type { Stage } from "@forest-rs/layerstack";
 import { StagehandCurves, gatherCurves } from "./curves.js";
 import { DrawList } from "./draw.js";
+import { decodeStandin } from "./standin.js";
+import type { Standin, StandinInput } from "./standin.js";
 import type { DrawOptions } from "./draw.js";
 import type { CurveOptions, CurvesInput, DrawRange, MeshInput, MeshOptions, MeshReport, PrimvarInput, Shape, Tessellation } from "./types.js";
 
@@ -53,6 +56,8 @@ export type { DrawBuffers, DrawDiff, DrawItem, DrawOptions, DrawWork, ItemInstan
 export type { LinkChange, LinkKind, LinkSet, LinkTarget } from "./links.js";
 export { SHAPE_SCHEMAS, readMesh, readPoints, readShape, shapeSchema } from "./read.js";
 export { gatherInfluences } from "./skin.js";
+export { CARD_FACES } from "./standin.js";
+export type { Card, CardFace, CardGeometry, DrawMode, Standin, StandinBuffers, StandinInput } from "./standin.js";
 export type { VertexInfluences } from "./skin.js";
 export {
   CURVE_SCHEMAS,
@@ -98,7 +103,7 @@ export type {
 } from "./light.js";
 
 /** The exports' version this wrapper speaks (`layerstack_stagehand_wasm::ABI`). */
-const ABI = 5;
+const ABI = 6;
 
 /** A failure, with a stable `code`; its message reads `${operation}: ${message}`. */
 export class StagehandError extends Error {
@@ -376,6 +381,24 @@ export class Stagehand {
     const mesh = new StagehandMesh(pointShape(shape, tessellation.segments ?? 32, tessellation.rings ?? 16));
     mesh.dispose();
     return mesh;
+  }
+
+  /**
+   * The stand-in Hydra draws for a model in its draw mode, as
+   * `layerstack_stagehand::draw_mode_standin` builds it (OpenUSD 26.11's
+   * `UsdImaging_DrawModeStandin`): the unit axes of `origin`, the box edges
+   * of `bounds`, or the cards of `cards`, on the box (`box`) or through its
+   * center (`cross`), a face drawn when it or the opposite face has a
+   * texture, all six when none has one, and the up-axis pair hidden by
+   * {@link StandinInput.hiddenAxis}. `fromTexture` draws no card: its
+   * placement is in image metadata this package does not read.
+   */
+  drawModeStandin(input: StandinInput): Standin {
+    const mask = input.textures.reduce((bits, textured, i) => (textured ? bits | (1 << i) : bits), 0);
+    const flat = call("argument.invalid", "drawModeStandin", () =>
+      drawModeStandin(input.mode, input.extent ?? undefined, input.cardGeometry, mask, input.hiddenAxis ?? ""),
+    );
+    return decodeStandin(input.mode, flat);
   }
 
   /**

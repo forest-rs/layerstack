@@ -1,0 +1,140 @@
+{
+ "openusd_version": "26.11",
+ "prims": {
+  "/Free": {
+   "model": true,
+   "modes": {
+    "": "default",
+    "bounds": "bounds",
+    "default": "default",
+    "inherited": "inherited"
+   }
+  },
+  "/Set": {
+   "model": true,
+   "modes": {
+    "": "cards",
+    "bounds": "cards",
+    "default": "cards",
+    "inherited": "cards"
+   }
+  },
+  "/Set/Lamp": {
+   "model": true,
+   "modes": {
+    "": "origin",
+    "bounds": "origin",
+    "default": "origin",
+    "inherited": "origin"
+   }
+  },
+  "/Set/Lamp/Bulb": {
+   "model": false,
+   "modes": {
+    "": "origin",
+    "bounds": "bounds",
+    "default": "default",
+    "inherited": "inherited"
+   }
+  },
+  "/Set/Loose": {
+   "model": false,
+   "modes": {
+    "": "cards",
+    "bounds": "bounds",
+    "default": "default",
+    "inherited": "inherited"
+   }
+  },
+  "/Set/Loose/Pebble": {
+   "model": false,
+   "modes": {
+    "": "cards",
+    "bounds": "bounds",
+    "default": "default",
+    "inherited": "inherited"
+   }
+  },
+  "/Set/Plain": {
+   "model": true,
+   "modes": {
+    "": "default",
+    "bounds": "default",
+    "default": "default",
+    "inherited": "default"
+   }
+  },
+  "/Set/Plain/Stone": {
+   "model": true,
+   "modes": {
+    "": "default",
+    "bounds": "bounds",
+    "default": "default",
+    "inherited": "inherited"
+   }
+  },
+  "/Set/Rock": {
+   "model": true,
+   "modes": {
+    "": "cards",
+    "bounds": "bounds",
+    "default": "default",
+    "inherited": "inherited"
+   }
+  },
+  "/Set/Rock/Body": {
+   "model": false,
+   "modes": {
+    "": "cards",
+    "bounds": "bounds",
+    "default": "default",
+    "inherited": "inherited"
+   }
+  },
+  "/Set/Shelf": {
+   "model": true,
+   "modes": {
+    "": "cards",
+    "bounds": "bounds",
+    "default": "default",
+    "inherited": "inherited"
+   }
+  },
+  "/Set/Shelf/Crate": {
+   "model": true,
+   "modes": {
+    "": "cards",
+    "bounds": "bounds",
+    "default": "default",
+    "inherited": "inherited"
+   }
+  },
+  "/Set/Shelf/Robot": {
+   "model": true,
+   "modes": {
+    "": "cards",
+    "bounds": "bounds",
+    "default": "default",
+    "inherited": "inherited"
+   }
+  },
+  "/Unkinded": {
+   "model": false,
+   "modes": {
+    "": "default",
+    "bounds": "bounds",
+    "default": "default",
+    "inherited": "inherited"
+   }
+  },
+  "/Unkinded/Lamp": {
+   "model": false,
+   "modes": {
+    "": "default",
+    "bounds": "bounds",
+    "default": "default",
+    "inherited": "inherited"
+   }
+  }
+ }
+}

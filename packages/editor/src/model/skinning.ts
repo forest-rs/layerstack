@@ -11,16 +11,21 @@
 // (`gatherInfluences`) and the GPU blends them with the joint palette
 // (`skinningTransforms`) each frame, as UsdSkelImaging skins for Hydra: a
 // time change costs each skinned draw its joint matrices, not its
-// vertices. Two kinds of binding the palette cannot express are deformed
-// on the CPU instead (`deformedPoints`, `deformedNormals`) and refilled
-// each time, and reported: blend shapes, which offset points before
-// skinning, and dual-quaternion skinning.
+// vertices. Blend shapes offset the points before skinning, so a mesh
+// with them is drawn from its own plan refilled with its blend-shaped
+// points and normals (`blendShapedPoints`, `blendShapedNormals`; normals
+// computed from points are computed again): the rest pose the GPU skins,
+// refilled only when the animation's weights vary
+// (`blendShapeWeightsMightBeTimeVarying`), once otherwise. Dual-quaternion
+// skinning, which the palette cannot express, is deformed on the CPU
+// instead (`deformedPoints`, `deformedNormals`), refilled each time, and
+// reported.
 //
 // Either way the skinned points are in the skeleton's space
 // (`UsdSkelSkinningQuery::ComputeSkinnedPoints`), so the draw is placed by
 // the skeleton's world transform, not by the mesh's own: UsdSkel ignores a
 // skinned gprim's transform, as UsdSkelImaging draws it.
-import type { SkinningQuery, Stage } from "@forest-rs/layerstack";
+import type { ArrayData, SkinningQuery, Stage } from "@forest-rs/layerstack";
 import type { DrawBuffers, DrawItem, DrawList, PrimvarInput, Stagehand, StagehandMesh, VertexInfluences } from "@forest-rs/layerstack_stagehand";
 import { gatherInfluences, readMesh } from "@forest-rs/layerstack_stagehand";
 
@@ -38,12 +43,16 @@ export interface SkinDraw {
   readonly skeleton: string;
   /**
    * `gpu`: {@link influences} and the {@link palette}, blended by the
-   * vertex shader; `cpu`: {@link positions} and {@link normals} deformed
-   * on the CPU, for the {@link reason} the GPU cannot.
+   * vertex shader, from the buffer's rest pose or, with {@link shaped},
+   * from blend-shaped {@link positions} and {@link normals}; `cpu`:
+   * {@link positions} and {@link normals} deformed on the CPU, for the
+   * {@link reason} the GPU cannot.
    */
   readonly mode: "gpu" | "cpu";
-  /** Why a `cpu` draw is: `blend shapes` or `dual quaternion`; `null` on the GPU. */
+  /** Why a `cpu` draw is: `dual quaternion`; `null` on the GPU. */
   readonly reason: string | null;
+  /** Whether a `gpu` draw's rest pose is blend-shaped: {@link positions} and {@link normals}, replaced when the weights change. */
+  readonly shaped: boolean;
   /** The joint palette's size: joints in the binding's order. */
   readonly joints: number;
   /** Each vertex's joints and weights ({@link SKIN_SLOTS} each), for `gpu`. */
@@ -54,7 +63,12 @@ export interface SkinDraw {
   palette: Float64Array;
   /** The skeleton's local-to-world transform at the time: where the skinned points are placed. */
   world: Float64Array;
-  /** The deformed positions and normals in vertex order, in the skeleton's space, for `cpu`. */
+  /**
+   * The deformed positions and normals in vertex order, in the skeleton's
+   * space, for `cpu`; for a {@link shaped} `gpu` draw, the blend-shaped
+   * rest pose in vertex order, in the mesh's own space: new arrays when
+   * the weights changed, the same ones otherwise.
+   */
   positions: Float32Array | null;
   normals: Float32Array | null;
 }
@@ -69,6 +83,9 @@ export interface SkinWork {
   readonly cpuDraws: number;
   /** Points deformed on the CPU. */
   readonly cpuPoints: number;
+  /** GPU draws whose blend-shaped rest pose was refilled, and its points. */
+  readonly shapedDraws: number;
+  readonly shapedPoints: number;
   /** Vertices whose influences were gathered: draws bound anew. */
   readonly gathered: number;
 }
@@ -78,6 +95,9 @@ export interface SkinSummary {
   /** Skinned draws on the GPU, and on the CPU. */
   readonly gpu: number;
   readonly cpu: number;
+  /** GPU draws skinning a blend-shaped rest pose, and how many of those refill it as time changes. */
+  readonly shaped: number;
+  readonly shapedVarying: number;
   /** Points (or rigid prims) weighting more joints than {@link SKIN_SLOTS}: skinned with their largest weights only. */
   readonly reducedBlocks: number;
   /** The largest weight such a point dropped. */
@@ -86,21 +106,26 @@ export interface SkinSummary {
   readonly failed: readonly string[];
 }
 
-/** One skinned item's binding: the query, and for the CPU its own plan of the mesh. */
+/**
+ * One skinned item's binding: the query, and for the CPU or a
+ * blend-shaped rest pose its own plan of the mesh.
+ */
 interface Bound {
   readonly query: SkinningQuery;
   readonly draw: SkinDraw;
-  /** The mesh planned as the draw list's buffer is, refilled with deformed points, for `cpu`. */
+  /** The mesh planned as the draw list's buffer is, refilled with deformed (`cpu`) or blend-shaped ({@link SkinDraw.shaped}) points. */
   readonly mesh: StagehandMesh | null;
   /**
-   * The normals a CPU refill passes: `deformed`, the `normals` attribute
-   * as UsdSkel deforms it (in {@link layout}'s layout); `primvar`,
-   * `primvars:normals` as authored ({@link layout}), which UsdSkel does
-   * not deform; `computed`, none (the plan computes them from the
-   * deformed points).
+   * The normals a refill passes: `deformed`, the `normals` attribute as
+   * UsdSkel deforms (or blend-shapes) it (in {@link layout}'s layout);
+   * `primvar`, `primvars:normals` as authored ({@link layout}), which
+   * UsdSkel does not deform; `computed`, none (the plan computes them from
+   * the refilled points).
    */
   readonly normals: "deformed" | "computed" | "primvar";
   readonly layout: PrimvarInput | null;
+  /** Whether a blend-shaped rest pose is refilled as time changes: the weights might vary. */
+  readonly reshape: boolean;
 }
 
 /** Whether `path` is `root` or beneath it. */
@@ -144,15 +169,19 @@ export class SkinningModel {
   /** The skinned draws in brief. */
   summary(): SkinSummary {
     let gpu = 0;
+    let shaped = 0;
+    let shapedVarying = 0;
     let reducedBlocks = 0;
     let droppedWeight = 0;
-    for (const { draw } of this.#bound.values()) {
+    for (const { draw, reshape } of this.#bound.values()) {
       if (draw.mode !== "gpu") continue;
       gpu++;
+      if (draw.shaped) shaped++;
+      if (draw.shaped && reshape) shapedVarying++;
       reducedBlocks += draw.influences!.reducedBlocks;
       droppedWeight = Math.max(droppedWeight, draw.influences!.droppedWeight);
     }
-    return { gpu, cpu: this.#bound.size - gpu, reducedBlocks, droppedWeight, failed: [...this.#failed.values()].sort() };
+    return { gpu, cpu: this.#bound.size - gpu, shaped, shapedVarying, reducedBlocks, droppedWeight, failed: [...this.#failed.values()].sort() };
   }
 
   /**
@@ -204,6 +233,8 @@ export class SkinningModel {
     let joints = 0;
     let cpuDraws = 0;
     let cpuPoints = 0;
+    let shapedDraws = 0;
+    let shapedPoints = 0;
     for (const [id, bound] of this.#bound) {
       if (!change.timeChanged && !rebound.has(id)) continue;
       try {
@@ -212,6 +243,8 @@ export class SkinningModel {
         if (bound.draw.mode === "gpu") {
           gpuDraws++;
           joints += bound.draw.joints;
+          if (points > 0) shapedDraws++;
+          shapedPoints += points;
         } else {
           cpuDraws++;
           cpuPoints += points;
@@ -223,7 +256,7 @@ export class SkinningModel {
         rebound.add(id);
       }
     }
-    return { rebound, posed, work: { gpuDraws, joints, cpuDraws, cpuPoints, gathered } };
+    return { rebound, posed, work: { gpuDraws, joints, cpuDraws, cpuPoints, shapedDraws, shapedPoints, gathered } };
   }
 
   /** Frees the CPU draws' plans. */
@@ -253,11 +286,13 @@ export class SkinningModel {
       if (query === null) return null;
       // One draw for many instances shares one pose: not skinned yet.
       if (item.source.kind !== "gprim") throw new Error("a skinned mesh drawn instanced is drawn at rest");
-      const reason = query.method === "dualQuaternion" ? "dual quaternion" : query.blendShapes ? "blend shapes" : null;
+      const reason = query.method === "dualQuaternion" ? "dual quaternion" : null;
+      const shaped = reason === null && query.blendShapes;
       const draw: SkinDraw = {
         skeleton: query.skeleton,
         mode: reason === null ? "gpu" : "cpu",
         reason,
+        shaped,
         joints: query.jointMapping?.length ?? query.joints.length,
         influences: reason === null ? gatherInfluences(query, vertexPoints, { slots: SKIN_SLOTS, ...(time === undefined ? {} : { time }) }) : null,
         bind: new Float64Array(16),
@@ -266,8 +301,8 @@ export class SkinningModel {
         positions: null,
         normals: null,
       };
-      if (reason === null) return { query, draw, mesh: null, normals: "computed", layout: null };
-      // The CPU draw's own plan: the same mesh, primvars and texture
+      if (reason === null && !shaped) return { query, draw, mesh: null, normals: "computed", layout: null, reshape: false };
+      // The draw's own plan: the same mesh, primvars and texture
       // coordinate sets as the list's buffer, so the same vertices.
       const input = readMesh(stage, item.prim, { ...(time === undefined ? {} : { time }), uvSets: buffers.mesh.uvSets.map((set) => set.name) });
       if (input === null) return null;
@@ -280,14 +315,25 @@ export class SkinningModel {
       const value = layout === null ? null : (stage.primvar(item.prim, "normals")?.get(time) ?? null);
       const primvar = value?.kind === "array";
       if (value?.kind === "array") value.array.release();
-      return { query, draw, mesh, normals: layout === null ? "computed" : primvar ? "primvar" : "deformed", layout };
+      return {
+        query,
+        draw,
+        mesh,
+        normals: layout === null ? "computed" : primvar ? "primvar" : "deformed",
+        layout,
+        reshape: shaped && query.blendShapeWeightsMightBeTimeVarying,
+      };
     } catch (error) {
       this.#failed.set(item.id, `${item.prim}: ${error instanceof Error ? error.message : String(error)}`);
       return null;
     }
   }
 
-  /** Reads `bound`'s pose at `time` into its draw; the points deformed on the CPU (0 on the GPU). */
+  /**
+   * Reads `bound`'s pose at `time` into its draw, its blend-shaped rest
+   * pose too the first time and when its weights vary; the points
+   * refilled (deformed on the CPU, or blend-shaped), 0 for none.
+   */
   #pose(stage: Stage, bound: Bound, time: number | undefined): number {
     const { query, draw } = bound;
     const at = time === undefined ? {} : { time };
@@ -296,21 +342,30 @@ export class SkinningModel {
     draw.bind.set(transforms.geomBindTransform);
     if (draw.mode === "gpu") {
       draw.palette = copied(transforms.transforms, (values) => Float64Array.from(values));
-      return 0;
+      if (!draw.shaped || (draw.positions !== null && !bound.reshape)) return 0;
+      return this.#refill(bound, query.blendShapedPoints(time), () => query.blendShapedNormals(time));
     }
     transforms.transforms.release();
+    return this.#refill(bound, query.deformedPoints(time), () => query.deformedNormals(time));
+  }
+
+  /**
+   * Refills `bound`'s plan with `points` and, for `deformed` normals,
+   * those `normals` reads, into its draw; the points refilled. `normals`
+   * UsdSkel deforms; `primvars:normals` it does not, so the plan's own are
+   * kept; computed normals are computed again from the points.
+   */
+  #refill(bound: Bound, points: ArrayData, normals: () => ArrayData): number {
+    const { draw } = bound;
     const mesh = bound.mesh!;
-    const points = copied(query.deformedPoints(time), (values) => Float32Array.from(values));
-    // `normals` UsdSkel deforms; `primvars:normals` it does not, so the
-    // plan's own are kept; computed normals are computed again from the
-    // deformed points.
-    const normals =
+    const values = copied(points, (values) => Float32Array.from(values));
+    const layout =
       bound.normals === "deformed" && bound.layout !== null
-        ? { ...bound.layout, values: copied(query.deformedNormals(time), (values) => Float32Array.from(values)) }
+        ? { ...bound.layout, values: copied(normals(), (values) => Float32Array.from(values)) }
         : bound.layout;
-    mesh.refill(points, normals);
+    mesh.refill(values, layout);
     draw.positions = mesh.positions;
     draw.normals = mesh.normals;
-    return points.length / 3;
+    return values.length / 3;
   }
 }

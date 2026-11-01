@@ -95,9 +95,13 @@ export function ViewportPane() {
           )}
           {skinned && store.lastUpdate !== null && (
             <div className="text-white/60" title={skinning.failed.join("\n")}>
-              skinned: posed {store.lastUpdate.skinWork.gpuDraws} on the GPU ({store.lastUpdate.skinWork.joints.toLocaleString()} joints), deformed{" "}
-              {store.lastUpdate.skinWork.cpuDraws} on the CPU ({store.lastUpdate.skinWork.cpuPoints.toLocaleString()} points)
-              {skinning.cpu > 0 && ` · ${skinning.cpu} with blend shapes or dual quaternions`}
+              skinned: posed {store.lastUpdate.skinWork.gpuDraws} on the GPU ({store.lastUpdate.skinWork.joints.toLocaleString()} joints)
+              {store.lastUpdate.skinWork.shapedDraws > 0 &&
+                `, blend-shaped ${store.lastUpdate.skinWork.shapedDraws} (${store.lastUpdate.skinWork.shapedPoints.toLocaleString()} points)`}
+              , deformed {store.lastUpdate.skinWork.cpuDraws} on the CPU ({store.lastUpdate.skinWork.cpuPoints.toLocaleString()} points)
+              {skinning.shaped > 0 &&
+                ` · ${skinning.shaped} with blend shapes${skinning.shapedVarying > 0 ? ` (${skinning.shapedVarying} reshaped as time plays)` : ""}`}
+              {skinning.cpu > 0 && ` · ${skinning.cpu} with dual quaternions`}
               {skinning.reducedBlocks > 0 && ` · ${skinning.reducedBlocks.toLocaleString()} points kept ${SKIN_SLOTS} joints (dropped ≤ ${skinning.droppedWeight.toFixed(3)})`}
               {skinning.failed.length > 0 && ` · ${skinning.failed.length} drawn at rest`}
             </div>

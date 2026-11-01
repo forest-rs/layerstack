@@ -84,7 +84,8 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
 In development the server serves a local scene directory under `/@scenes/`
 (`vite.config.ts`): `LAYERSTACK_SCENES`, else `.local/scenes` beside the
 repository's main checkout. **Open** lists its layers two levels deep, and
-`?scene=<path>` opens one at load. Scenes there are never committed or
+**Browse local scenes…** walks it folder by folder to open any layer (a
+material library three folders down); `?scene=<path>` opens one at load. Scenes there are never committed or
 built: their licenses are their own.
 
 ## Layout

@@ -42,7 +42,11 @@ function sceneRoots(root: string): { path: string }[] {
   return found.sort((a, b) => (a.path < b.path ? -1 : 1));
 }
 
-/** Serves the local scene directory under `/@scenes/` in development, with `index.json` listing its roots. */
+/**
+ * Serves the local scene directory under `/@scenes/` in development, with
+ * `index.json` listing its likely roots and `list.json?dir=` one folder's
+ * folders and layers.
+ */
 function localScenes(): Plugin {
   return {
     name: "layerstack-local-scenes",
@@ -60,6 +64,24 @@ function localScenes(): Plugin {
         if (relative === "index.json") {
           response.setHeader("content-type", "application/json");
           response.end(JSON.stringify(sceneRoots(root)));
+          return;
+        }
+        if (relative === "list.json") {
+          // One directory: its folders and its layers, for browsing.
+          const directory = path.resolve(root, url.searchParams.get("dir") ?? "");
+          if ((directory !== root && !directory.startsWith(root + path.sep)) || !existsSync(directory) || !statSync(directory).isDirectory()) {
+            response.statusCode = 404;
+            response.end();
+            return;
+          }
+          const entries = readdirSync(directory, { withFileTypes: true }).filter((entry) => !entry.name.startsWith("."));
+          response.setHeader("content-type", "application/json");
+          response.end(
+            JSON.stringify({
+              folders: entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort(),
+              layers: entries.filter((entry) => entry.isFile() && LAYER.test(entry.name)).map((entry) => entry.name).sort(),
+            }),
+          );
           return;
         }
         const file = path.resolve(root, relative);

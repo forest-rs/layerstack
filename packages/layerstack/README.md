@@ -373,6 +373,7 @@ JS-owned typed array.
 | `stage.valuesMightBeTimeVarying(paths)`, `attribute.mightBeTimeVarying()` | `boolean[]` (one `boolean`): whether each attribute's value might vary with time: several samples, a spline, or clips that may supply several (`UsdAttribute::ValueMightBeTimeVarying`); `true` until `resolveClipQuery(path, source)` loads the clips that settle it |
 | `stage.valueSourcesMightBeTimeVarying(paths)`, `attribute.valueSourceMightBeTimeVarying()` | `boolean[]` (one `boolean`): whether each attribute's value source might vary with time, the default time included (`UsdAttributeQuery::ValueSourceMightBeTimeVarying`) |
 | `stage.xformable(path)`, `prim.xformable()` | `Xformable \| null`: `resetsXformStack`, `ops`, `transformMightBeTimeVarying`, `transformTimeSamples` |
+| `xformable.commonTransform(time?)` | `CommonTransform`: `translation`, `rotation` (degrees, in `rotationOrder`), `scale`, `pivot`, `source` (`ops`, `accumulated`, `decomposed`) and `compatible`, as `UsdGeomXformCommonAPI::GetXformVectorsByAccumulation` reads them |
 | `stage.camera(path, { time?, conform? })` | `Camera \| null`: a `UsdGeomCamera` as a renderer reads it: `view` and `projectionMatrix` as `GfFrustum` computes them, `cameraToWorld`, `window`, `clippingRange`, lens (`aperture`, `apertureOffset`, `focalLength`, `fStop`, `focusDistance`), `clippingPlanes`, `shutter`, `exposure` and `linearExposureScale`; with `conform: { policy, aspect }` fitted to a viewport as `CameraUtilConformWindow` fits it |
 | `stage.visibilities(paths, { time?, purpose? })`, `prim.visibility(...)` | `inherited` or `invisible` (`ComputeVisibility`), or with a purpose `visible` among them (`ComputeEffectiveVisibility`); `null` for a prim that is not `Imageable` |
 | `stage.purposeInfos(paths)`, `prim.purposeInfo()` | `PurposeInfo \| null`: `purpose`, `inheritable`, `authoredOn` |
@@ -398,6 +399,15 @@ before each read and invalidate only what they touch: a frame after an
 edit recomputes the edited prim's transform and its descendants' world
 transforms, and nothing else. `stage.transformCache()` and
 `stage.boundsCache()` report what each frame computed and reused.
+
+Transforms are authored as `UsdGeomXformCommonAPI` authors them:
+`setTranslate`, `setRotate` (with a `rotationOrder`), `setScale` and
+`setPivot` each author one component of the common stack (translation,
+pivot, rotation, scale, inverse pivot), adding only its op;
+`setCommonTransform` authors all four (`SetXformVectors`). Each takes a
+`time`, or authors the default. A prim whose ops are not a common stack,
+or whose rotation op has another order, is refused with nothing authored
+(`xform.*`), where OpenUSD returns `false`.
 
 ## Materials, subsets, coordinate systems and skinning
 
@@ -542,6 +552,7 @@ exist, `subset.indices` for a face past the mesh, `coord_sys.no_binding`,
 | `schema.cannot_edit` | A schema edit (or `definePrim`) of a prim beneath an instance or in a prototype, which OpenUSD refuses. `schema.cannot_apply`: an API schema the prim may not have. |
 | `prim.not_class` | `definePrim` with specifier `class` of a defined prim that is not a class, which OpenUSD's `CreateClassPrim` refuses. |
 | `coord_sys.no_binding` | `clearCoordSys` of a binding that does not exist. |
+| `xform.*` | A refused common transform edit, as `UsdGeomXformCommonAPI` refuses it: `xform.incompatible_ops` (the ops are not a common stack), `xform.rotation_order` (an existing rotation op has another order), `xform.op_listed`, `xform.attribute_type`, `xform.not_xformable`. |
 | `metadata.*` | `metadata.key_path` (an `sdrMetadata` key with an empty part), `metadata.field`. |
 | `skel.*` | A skinning read or computation that cannot be made: `skel.unbound` (nothing skins the prim), `skel.influences` (not as many weights as joint indices, or not whole blocks), `skel.deformation` (influences that do not fit the points or name a joint past the palette), `skel.input`, `skel.array_length`, `skel.target`, `skel.topology`, `skel.primvar`, `skel.method`, `skel.singular`. |
 | `primvar.*` | `primvar.not_found` (the prim declares no such primvar), `primvar.indices` (an indexed primvar without readable indices), `primvar.index` (an index past the values). |

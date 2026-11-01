@@ -114,6 +114,13 @@
  *   schema the prim may not have.
  * - `coord_sys.no_binding`: {@link ClearCoordSysEdit} of a binding that
  *   does not exist.
+ * - `xform.*`: a refused common transform edit
+ *   ({@link SetCommonTransformEdit}), as OpenUSD's
+ *   `UsdGeomXformCommonAPI` refuses it: `xform.incompatible_ops` (the
+ *   ops are not a common stack), `xform.rotation_order` (an existing
+ *   rotation op has another order), `xform.op_listed` (an op to add is
+ *   already listed), `xform.attribute_type` (an op holds another type),
+ *   `xform.not_xformable`.
  * - `metadata.key_path`, `metadata.field`: an `sdrMetadata` key with an
  *   empty part, or a field the spec cannot hold.
  * - `skel.*`: a skinning read or computation that cannot be made:
@@ -197,6 +204,7 @@ export type ErrorCode =
   | `shading.${string}`
   | `schema.${string}`
   | `coord_sys.${string}`
+  | `xform.${string}`
   | `metadata.${string}`
   | `skel.${string}`
   | `primvar.${string}`

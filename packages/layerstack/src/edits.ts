@@ -7,7 +7,7 @@ import { nativeOf } from "./arrays.js";
 import type { ArrayHost, NativeArrayHandle } from "./arrays.js";
 import { LayerstackError } from "./errors.js";
 import type { ErrorCode } from "./errors.js";
-import type { Edit, ValueInput } from "./types.js";
+import type { Edit, RotationOrder, ValueInput } from "./types.js";
 
 /** The native batch the generated glue exports (`layerstack_wasm::EditBatch`). Not for app use. */
 export interface NativeEditBatch extends Disposable {
@@ -74,6 +74,15 @@ export interface NativeEditBatch extends Disposable {
   blockCoordSys(path: string, name: string): void;
   clearCoordSys(path: string, name: string, removeSpec: boolean): void;
   setSdrMetadata(path: string, key: string, value: string | null): void;
+  setCommonTransform(
+    path: string,
+    time: number | null,
+    translate: Float64Array | null,
+    rotate: Float64Array | null,
+    order: string | null,
+    scale: Float64Array | null,
+    pivot: Float64Array | null,
+  ): void;
 }
 
 const I64_MIN = -(2n ** 63n);
@@ -289,6 +298,29 @@ function lowerEdit(batch: NativeEditBatch, edit: Edit, host: ArrayHost): void {
       if (edit.value !== null && typeof edit.value !== "string") fail("`value` must be a string, or null to clear the key");
       batch.setSdrMetadata(path, text(edit.key, "key"), edit.value);
       return;
+    case "setCommonTransform":
+      batch.setCommonTransform(
+        path,
+        time(edit.time),
+        vector3(edit.translate, "translate"),
+        vector3(edit.rotate, "rotate"),
+        rotationOrder(edit.rotationOrder),
+        vector3(edit.scale, "scale"),
+        vector3(edit.pivot, "pivot"),
+      );
+      return;
+    case "setTranslate":
+      batch.setCommonTransform(path, time(edit.time), vector3(edit.value, "value"), null, null, null, null);
+      return;
+    case "setRotate":
+      batch.setCommonTransform(path, time(edit.time), null, vector3(edit.value, "value"), rotationOrder(edit.rotationOrder), null, null);
+      return;
+    case "setScale":
+      batch.setCommonTransform(path, time(edit.time), null, null, null, vector3(edit.value, "value"), null);
+      return;
+    case "setPivot":
+      batch.setCommonTransform(path, time(edit.time), null, null, null, null, vector3(edit.value, "value"));
+      return;
     default:
       fail(`unknown edit type \`${String((edit as { type?: unknown }).type)}\``);
   }
@@ -421,6 +453,19 @@ function time(value: unknown): number | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== "number" || !Number.isFinite(value)) fail("`time` must be a finite time code");
   return value;
+}
+
+/** Three finite numbers, as a common transform's vectors are. */
+function vector3(value: unknown, field: string): Float64Array {
+  const items = value as ArrayLike<unknown>;
+  if (value === null || typeof value !== "object" || items.length !== 3 || !Array.from(items).every((x) => typeof x === "number" && Number.isFinite(x))) {
+    fail(`\`${field}\` must be three finite numbers`);
+  }
+  return Float64Array.from(items as ArrayLike<number>);
+}
+
+function rotationOrder(value: unknown): RotationOrder | null {
+  return value === undefined || value === null ? null : oneOf(value, "rotationOrder", ["XYZ", "XZY", "YXZ", "YZX", "ZXY", "ZYX"]);
 }
 
 function oneOf<const T extends string>(value: unknown, field: string, allowed: readonly T[]): T {

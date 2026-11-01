@@ -141,6 +141,7 @@ export interface NativeStage extends Disposable {
   metadata(path: string, key: string): unknown;
   stageMetadata(key: string): unknown;
   schemas(): unknown;
+  commonTransform(path: string, time: number | null): unknown;
   relationship(path: string): unknown;
   apply(target: bigint, batch: NativeEditBatch): NativeReceipt;
   applyTarget(...args: [...NativeTarget, batch: NativeEditBatch]): NativeReceipt;

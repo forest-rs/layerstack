@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! Schema-shaped edits: material bindings, shader inputs and connections,
-//! base materials, geometry subsets, coordinate systems and
-//! `sdrMetadata`, lowered through `layerstack_schemas`' edit handles into
+//! base materials, geometry subsets, coordinate systems, `sdrMetadata` and
+//! common transforms, lowered through `layerstack_schemas`' edit handles into
 //! the batch's one [`layerstack::Transaction`].
 //!
 //! Lowering is in two steps, as [`crate::edit::lower`] runs them: each
@@ -18,7 +18,7 @@
 //! connections and targets), §13.2 (applied schemas). OpenUSD:
 //! `UsdShadeMaterialBindingAPI`, `UsdShadeConnectableAPI`,
 //! `UsdShadeMaterial`, `UsdShadeShader`, `UsdGeomSubset`,
-//! `UsdShadeCoordSysAPI`.
+//! `UsdShadeCoordSysAPI`, `UsdGeomXformCommonAPI`.
 
 use alloc::{
     format,
@@ -30,11 +30,12 @@ use layerstack::{
     InMemoryStore, PathId, PropertyPath, PropertyType, TargetPath, Value, schema::CannotApply,
 };
 use layerstack_schemas::{
-    ApplySchemaError, BindingStrength, CannotEdit, ClassPrimError, CoordSysError,
-    MaterialBindingError, MaterialPurpose, MetadataError, PrimEdit, SchemaEdit,
+    ApplySchemaError, BindingStrength, CannotEdit, ClassPrimError, CommonComponent,
+    CommonTransform, CommonTransformError, CoordSysError, MaterialBindingError, MaterialPurpose,
+    MetadataError, PrimEdit, RotationOrder, SchemaEdit,
     shading::{ConnectionModification, ConnectionSource, PortEdit, PortError},
     subset::{SubsetAuthoringError, SubsetError, SubsetFamilyType},
-    usd_geom::{GeomSubsetEdit, GeomSubsetElementType, ImageableEdit},
+    usd_geom::{GeomSubsetEdit, GeomSubsetElementType, ImageableEdit, XformableEdit},
     usd_shade::{CoordSysApi, CoordSysApiEdit, MaterialBindingApi, MaterialBindingApiEdit},
     usd_shade::{MaterialEdit, ShaderEdit},
 };
@@ -121,6 +122,18 @@ pub(crate) enum SchemaInput {
         key: String,
         value: Option<String>,
     },
+    /// `UsdGeomXformCommonAPI::SetXformVectors` with every component, or
+    /// `SetTranslate`, `SetRotate`, `SetScale` or `SetPivot` with one; at
+    /// `time`, or the default with `None`.
+    SetCommonTransform {
+        path: String,
+        time: Option<f64>,
+        translate: Option<Vec<f64>>,
+        rotate: Option<Vec<f64>>,
+        order: Option<String>,
+        scale: Option<Vec<f64>>,
+        pivot: Option<Vec<f64>>,
+    },
 }
 
 impl SchemaInput {
@@ -138,7 +151,8 @@ impl SchemaInput {
             | Self::BindCoordSys { path, .. }
             | Self::BlockCoordSys { path, .. }
             | Self::ClearCoordSys { path, .. }
-            | Self::SetSdrMetadata { path, .. } => path,
+            | Self::SetSdrMetadata { path, .. }
+            | Self::SetCommonTransform { path, .. } => path,
         }
     }
 }
@@ -213,6 +227,96 @@ pub(crate) enum Prepared {
         key: String,
         value: Option<String>,
     },
+    SetCommonTransform {
+        prim: PathId,
+        time: Option<f64>,
+        write: CommonWrite,
+    },
+}
+
+/// What a common-transform edit writes: the whole stack, or one component.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum CommonWrite {
+    All(CommonTransform),
+    One(CommonComponent),
+}
+
+fn rotation_order(name: Option<&str>) -> Result<RotationOrder, Error> {
+    Ok(match name {
+        None | Some("XYZ") => RotationOrder::Xyz,
+        Some("XZY") => RotationOrder::Xzy,
+        Some("YXZ") => RotationOrder::Yxz,
+        Some("YZX") => RotationOrder::Yzx,
+        Some("ZXY") => RotationOrder::Zxy,
+        Some("ZYX") => RotationOrder::Zyx,
+        Some(other) => {
+            return Err(Error::new(
+                "argument.invalid",
+                format!("`{other}` is not a rotation order: XYZ, XZY, YXZ, YZX, ZXY or ZYX"),
+            ));
+        }
+    })
+}
+
+/// Three finite components, as a common transform's vectors are.
+fn vector3(name: &str, values: &[f64]) -> Result<[f64; 3], Error> {
+    match values {
+        [x, y, z] if values.iter().all(|value| value.is_finite()) => Ok([*x, *y, *z]),
+        _ => Err(Error::new(
+            "argument.invalid",
+            format!("`{name}` takes three finite numbers"),
+        )),
+    }
+}
+
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "rotation, scale and pivot are float3 ops"
+)]
+fn float3(vector: [f64; 3]) -> [f32; 3] {
+    vector.map(|component| component as f32)
+}
+
+/// The write a common-transform edit asks for: every component
+/// (`SetXformVectors`), or exactly one.
+fn common_write(
+    translate: Option<&[f64]>,
+    rotate: Option<&[f64]>,
+    order: Option<&str>,
+    scale: Option<&[f64]>,
+    pivot: Option<&[f64]>,
+) -> Result<CommonWrite, Error> {
+    let translate = translate.map(|v| vector3("translate", v)).transpose()?;
+    let rotate = rotate.map(|v| vector3("rotate", v)).transpose()?;
+    let scale = scale.map(|v| vector3("scale", v)).transpose()?;
+    let pivot = pivot.map(|v| vector3("pivot", v)).transpose()?;
+    let order = rotation_order(order)?;
+    Ok(match (translate, rotate, scale, pivot) {
+        (Some(translation), Some(rotation), Some(scale), Some(pivot)) => {
+            CommonWrite::All(CommonTransform {
+                translation,
+                rotation: float3(rotation),
+                scale: float3(scale),
+                pivot: float3(pivot),
+                rotation_order: order,
+            })
+        }
+        (Some(translation), None, None, None) => {
+            CommonWrite::One(CommonComponent::Translate(translation))
+        }
+        (None, Some(rotation), None, None) => CommonWrite::One(CommonComponent::Rotate {
+            degrees: float3(rotation),
+            order,
+        }),
+        (None, None, Some(scale), None) => CommonWrite::One(CommonComponent::Scale(float3(scale))),
+        (None, None, None, Some(pivot)) => CommonWrite::One(CommonComponent::Pivot(float3(pivot))),
+        _ => {
+            return Err(Error::new(
+                "argument.invalid",
+                "a common transform edit sets one of translate, rotate, scale and pivot, or all four",
+            ));
+        }
+    })
 }
 
 /// What the store and the batch's values give a schema edit to prepare it.
@@ -463,6 +567,25 @@ pub(crate) fn prepare(input: &SchemaInput, inputs: &Inputs<'_>) -> Result<Prepar
             name: name.clone(),
             remove_spec: *remove_spec,
         },
+        SchemaInput::SetCommonTransform {
+            path,
+            time,
+            translate,
+            rotate,
+            order,
+            scale,
+            pivot,
+        } => Prepared::SetCommonTransform {
+            prim: inputs.prim(path)?,
+            time: *time,
+            write: common_write(
+                translate.as_deref(),
+                rotate.as_deref(),
+                order.as_deref(),
+                scale.as_deref(),
+                pivot.as_deref(),
+            )?,
+        },
         SchemaInput::SetSdrMetadata { path, key, value } => Prepared::SetSdrMetadata {
             target: if path.contains('.') {
                 TargetPath::Property(inputs.port(path)?)
@@ -490,6 +613,8 @@ pub(crate) enum Refusal {
     Subset(SubsetAuthoringError),
     CoordSys(CoordSysError),
     Metadata(MetadataError),
+    NotXformable(PathId),
+    CommonTransform(CommonTransformError),
 }
 
 impl From<CannotEdit> for Refusal {
@@ -538,6 +663,19 @@ impl Refusal {
                     "no prim is at {}, on the stage or defined earlier in these edits",
                     path(prim)
                 ),
+            ),
+            Self::NotXformable(prim) => Error::new(
+                "xform.not_xformable",
+                format!("{} is not Xformable", path(prim)),
+            ),
+            Self::CommonTransform(error) => Error::new(
+                match error {
+                    CommonTransformError::IncompatibleOps => "xform.incompatible_ops",
+                    CommonTransformError::RotationOrderMismatch { .. } => "xform.rotation_order",
+                    CommonTransformError::OpAlreadyInOrder { .. } => "xform.op_listed",
+                    _ => "xform.attribute_type",
+                },
+                error.to_string(),
             ),
             Self::NotMaterial(prim) => Error::new(
                 "material.not_material",
@@ -788,6 +926,26 @@ pub(crate) fn author(edit: &mut SchemaEdit<'_>, prepared: Prepared) -> Result<()
                 .map(|_| ())
                 .map_err(Refusal::CoordSys)
         }
+        Prepared::SetCommonTransform { prim, time, write } => {
+            let Some(xform) = XformableEdit::new(edit, prim)? else {
+                return Err(if PrimEdit::new(edit, prim)?.is_some() {
+                    Refusal::NotXformable(prim)
+                } else {
+                    Refusal::NoPrim(prim)
+                });
+            };
+            let written = match (write, time) {
+                (CommonWrite::All(value), None) => xform.set_common_transform(edit, &value),
+                (CommonWrite::All(value), Some(t)) => {
+                    xform.set_common_transform_at(edit, t, &value)
+                }
+                (CommonWrite::One(component), None) => xform.set_common_component(edit, component),
+                (CommonWrite::One(component), Some(t)) => {
+                    xform.set_common_component_at(edit, t, component)
+                }
+            };
+            written.map(|_| ()).map_err(Refusal::CommonTransform)
+        }
         Prepared::SetSdrMetadata { target, key, value } => match target {
             TargetPath::Prim(prim) => {
                 let Some(shader) = ShaderEdit::new(edit, prim)? else {
@@ -837,6 +995,32 @@ mod tests {
 
     fn paths(items: &[&str]) -> Vec<String> {
         items.iter().map(|item| String::from(*item)).collect()
+    }
+
+    #[test]
+    fn a_common_transform_edit_sets_one_component_or_all_four() {
+        let one = [1.0, 2.0, 3.0];
+        assert!(matches!(
+            super::common_write(Some(&one), None, None, None, None),
+            Ok(super::CommonWrite::One(_))
+        ));
+        assert!(matches!(
+            super::common_write(Some(&one), Some(&one), Some("ZYX"), Some(&one), Some(&one)),
+            Ok(super::CommonWrite::All(_))
+        ));
+        let code = |result: Result<super::CommonWrite, crate::error::Error>| {
+            result.err().map(|error| error.code)
+        };
+        // Two components, none, a short vector, a bad number, a bad order.
+        for refused in [
+            super::common_write(Some(&one), Some(&one), None, None, None),
+            super::common_write(None, None, None, None, None),
+            super::common_write(Some(&[1.0, 2.0]), None, None, None, None),
+            super::common_write(Some(&[1.0, f64::NAN, 2.0]), None, None, None, None),
+            super::common_write(None, Some(&one), Some("XY"), None, None),
+        ] {
+            assert_eq!(code(refused), Some("argument.invalid"));
+        }
     }
 
     /// An editor's "new material" in one undoable batch: the material and

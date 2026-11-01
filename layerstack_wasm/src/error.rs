@@ -74,6 +74,11 @@ use crate::wire::Wire;
 /// - `schema.cannot_edit`: a schema edit of a prim beneath an instance or
 ///   in a prototype (`layerstack_schemas::CannotEdit`);
 ///   `schema.cannot_apply`: an API schema the prim may not have.
+/// - `xform.incompatible_ops`, `xform.rotation_order`, `xform.op_listed`,
+///   `xform.attribute_type`, `xform.not_xformable`: a common transform
+///   edit `UsdGeomXformCommonAPI` refuses (ops that are not a common
+///   stack, an existing rotation op of another order, an op to add already
+///   listed, an op of another type), or of a prim that is not `Xformable`.
 /// - `coord_sys.no_binding`: clearing a coordinate-system binding that
 ///   does not exist (`layerstack_schemas::CoordSysError`).
 /// - `metadata.key_path`, `metadata.field`: an `sdrMetadata` edit

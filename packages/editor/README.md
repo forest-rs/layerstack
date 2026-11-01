@@ -37,14 +37,20 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
   records, applied to three.js in place; the stage's `upAxis` orients the
   free camera and the grid. Click to pick, drag to orbit, scroll to zoom,
   **F** to frame the selection, **Esc** to clear it.
+- **Timeline.** The stage's `startTimeCode` to `endTimeCode`: scrub, step
+  a frame (← →), play at `timeCodesPerSecond` (Space). The draw list moves
+  to the time, rereading only what varies; the inspector and the explain
+  panel read values there. A stage without a range is read at the default
+  time.
 - **Inspector.** The selected prim as the stage composes it: its type,
   specifier and kind; active and instanceable; its variant sets; its
   properties (those layers author, then those only its schemas define, at
   their fallbacks); its bound material; the arcs it composes from. Each
-  editor is chosen by what the stage knows of the property: a token the
-  schema gives `allowedTokens` is a picker of them, a `bool` a switch, a
-  number or tuple fields that commit on Enter, a color a swatch. Nothing has
-  to be typed that the stage already knows.
+  editor is chosen by what the stage knows of the property (an animated
+  one, marked with a key, is edited by a sample at the current time): a
+  token the schema gives `allowedTokens` is a picker of them, a `bool` a
+  switch, a number or tuple fields that commit on Enter, a color a swatch.
+  Nothing has to be typed that the stage already knows.
 - **Explain, Changes, History, Asset loop, Notices.** A property's value and
   every opinion consulted for it, strongest first, each with "Edit here";
   each recomposition and the action that caused it; the undo history; the

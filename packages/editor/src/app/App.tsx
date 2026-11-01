@@ -28,6 +28,14 @@ export function App() {
         store.frameSelection();
       } else if (event.key === "Escape") {
         store.select(null);
+      } else if (event.key === " " && store.range !== null) {
+        event.preventDefault();
+        if (store.playing) store.pause();
+        else store.play();
+      } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        if (target?.closest('[role="tree"], [role="slider"]')) return;
+        event.preventDefault();
+        store.step(event.key === "ArrowLeft" ? -1 : 1);
       }
     };
     window.addEventListener("keydown", onKey);

@@ -209,7 +209,7 @@ function Properties({ store, stage, prim }: { store: EditorStore; stage: Stage; 
 
 function AttributeRow({ store, attribute, animated }: { store: EditorStore; attribute: Attribute; animated: boolean }) {
   const focused = store.property === attribute.path;
-  const value = shown(attribute.get());
+  const value = shown(attribute.get(store.time));
   const notes = [attribute.typeName ?? "untyped", attribute.variability === "uniform" ? "uniform" : null, attribute.custom ? "custom" : null, attribute.authored ? "authored" : "schema fallback"]
     .filter((note) => note !== null)
     .join(" · ");
@@ -223,10 +223,12 @@ function AttributeRow({ store, attribute, animated }: { store: EditorStore; attr
       >
         <span className={cn("size-1.5 shrink-0 rounded-full", attribute.authored ? "bg-primary" : "border border-muted-foreground")} />
         <span className={cn("truncate", !attribute.authored && "text-muted-foreground")}>{attribute.name}</span>
-        {animated && <span className="shrink-0 text-[10px] text-amber-500">animated</span>}
+        {animated && (
+          <span className="size-1.5 shrink-0 rotate-45 bg-amber-500" title="Animated: an edit authors a sample at the current time" />
+        )}
       </button>
       <div className="flex min-w-0 items-center">
-        <ValueField store={store} attribute={attribute} shown={value} />
+        <ValueField store={store} attribute={attribute} shown={value} at={animated ? (store.time ?? null) : null} />
       </div>
     </>
   );

@@ -107,3 +107,25 @@ fn batch_budget_shrink_invalidates_only_observers_that_lost_evidence() {
     ));
     assert_eq!(fast.revision(), before);
 }
+
+/// The revision advances with each batch published, and not for an empty
+/// one, so equal readings mean nothing composed changed in between.
+#[test]
+fn the_revision_advances_only_with_published_changes() {
+    let mut store = InMemoryStore::default();
+    let root = LayerId(1);
+    store.insert_layer(Layer::new(root));
+    let stage = Stage::compose(&mut store, root, StageOptions::default());
+    let path = store.path("/Changed");
+    let mut journal = Journal::default();
+    assert_eq!(journal.current_revision(), 0);
+    journal.publish(&mut Changes::default(), &stage, &store);
+    assert_eq!(journal.current_revision(), 0);
+    let mut changes = Changes {
+        resynced: vec![path],
+        ..Default::default()
+    };
+    journal.publish(&mut changes, &stage, &store);
+    assert_eq!(journal.current_revision(), 1);
+    assert_eq!(journal.cursor().revision(), 1);
+}

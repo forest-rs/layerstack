@@ -73,7 +73,12 @@
 //! load: [`StageDocument::unavailable_assets`] lists the identifiers the
 //! stage wants, the host supplies their bytes to its storage, and
 //! [`StageDocument::load_requested_assets`] reads them, until nothing is
-//! wanted. [`StageDocument::asset_status`] reports what the stage lacks now.
+//! wanted. Each round reaches one arc deeper, and composing after each
+//! recomposes the prims it reaches as often as there are rounds, so a host
+//! that only wants the finished stage reads each round without composing
+//! ([`StageDocument::read_requested_assets`], after which the layers read
+//! list what they need themselves) and loads once nothing is wanted.
+//! [`StageDocument::asset_status`] reports what the stage lacks now.
 //! Each load's report says where its work went: the layers it read, with
 //! their bytes and prims, and the compositions after them
 //! ([`LoadReport::reads`], [`LoadReport::compositions`]), timed with a clock
@@ -756,7 +761,8 @@ pub struct UnavailableAsset {
     /// prims whose reference or payload names it, or for a sublayer the
     /// first prim to read its layer stack, the pseudo-root for the stage's
     /// own. They are on the stage, without the asset's opinions, until it
-    /// loads.
+    /// loads. Empty for an asset only a layer read since the stage last
+    /// composed names ([`StageDocument::read_requested_assets`]).
     pub prims: Vec<PathId>,
 }
 /// An asset the stage uses that is unresolved: composition reports it
@@ -1090,6 +1096,18 @@ pub struct StageDocument<B> {
     clock: Option<LoadClock>,
     load_report: LoadReport,
     unavailable: Unavailable,
+    /// The assets the layers read since the stage last composed name that
+    /// storage could not supply yet ([`StageDocument::read_requested_assets`]),
+    /// by anchor layer and authored asset path, with how the anchor uses
+    /// each; their identifiers are in `unavailable`.
+    waiting: BTreeMap<(LayerId, String), AssetUse>,
+    /// The stage's revision ([`LiveStage::revision`]) when `waiting` was
+    /// last added to: a composition since, through any path, asks for
+    /// what the layers read need itself, and `waiting` no longer counts.
+    waiting_revision: u64,
+    /// The layers [`StageDocument::read_requested_assets`] read since the
+    /// document last synchronized its stage, if it read or failed any.
+    uncomposed_reads: Option<usize>,
 }
 /// The assets the stage asked for that storage could not supply yet
 /// ([`IoErrorKind::Unavailable`]), by anchor layer and authored asset path,
@@ -1216,6 +1234,9 @@ impl<B: Storage> StageDocument<B> {
             clock: loading.clock,
             load_report: report,
             unavailable: Unavailable::new(),
+            waiting: BTreeMap::new(),
+            waiting_revision: 0,
+            uncomposed_reads: None,
         };
         // The session layer's sublayers by asset path a host-owned one
         // authors load with the new stage, as `UsdStage::CreateNew` opens
@@ -1318,6 +1339,9 @@ impl<B: Storage> StageDocument<B> {
             clock: loading.clock,
             load_report: report,
             unavailable: Unavailable::new(),
+            waiting: BTreeMap::new(),
+            waiting_revision: 0,
+            uncomposed_reads: None,
         };
         let requested = document.load_requested_assets()?;
         document.load_report.merge(requested);
@@ -1354,7 +1378,10 @@ impl<B: Storage> StageDocument<B> {
     /// a resident layer, so this works whatever layers are dirty, where
     /// [`Self::reload`] would refuse ([`IoErrorKind::DirtyReload`]).
     ///
-    /// Returns the layers loaded, with their diagnostics and failures.
+    /// Returns the layers loaded, with their diagnostics and failures, each
+    /// read, and each composition: first the one composing what
+    /// [`Self::read_requested_assets`] read since the stage last composed,
+    /// if it read anything, then one after each round this reads.
     ///
     /// Spec: AOUSD Core §10.3.1 (sublayers), §10.3.2.1 (references),
     /// §10.3.2.2 (payloads), §10.3.2.5 (only the selected variant
@@ -1365,88 +1392,204 @@ impl<B: Storage> StageDocument<B> {
         let mut report = LoadReport::default();
         // Only asked whether a request was met before, never listed.
         let mut attempted = HashSet::new();
-        loop {
-            let requests: Vec<(LayerId, String)> = self
-                .stage
-                .stage()
-                .asset_requests()
-                .iter()
-                .map(|request| (request.anchor, request.asset_path.clone()))
-                .filter(|key| attempted.insert(key.clone()))
-                .collect();
-            if requests.is_empty() {
-                return Ok(report);
-            }
-            let mut catalog = self.catalog.clone();
-            catalog.reserved.extend(self.store.layer_ids());
-            let mut reader = Reader::new(
-                &mut self.storage,
-                &mut catalog,
-                self.import_policy,
-                self.usdc_options,
-                self.package_limits,
-                self.stage.options().schemas.clone(),
+        // What `read_requested_assets` read composes now, if nothing else
+        // is read.
+        if let Some(layers) = self.uncomposed_reads {
+            let start = timing::composition_start(self.clock.as_ref());
+            self.synchronize();
+            let composition = timing::composition(self.clock.as_ref(), start, layers);
+            report.compositions.push(composition);
+        }
+        while let Some(read) = self.read_round(&mut attempted)? {
+            let start = timing::composition_start(self.clock.as_ref());
+            self.synchronize();
+            let composition = timing::composition(self.clock.as_ref(), start, read.layers.len());
+            report.merge(read);
+            report.compositions.push(composition);
+        }
+        Ok(report)
+    }
+    /// Reads what storage now supplies of the assets
+    /// [`Self::unavailable_assets`] lists, and the layers they reach that
+    /// storage holds, without composing: the stage stays as it last
+    /// composed until [`Self::load_requested_assets`] (or
+    /// [`Self::synchronize`]) composes the layers read, once.
+    ///
+    /// A host that fetches sources asynchronously finds a stage's assets
+    /// round by round, each round's layers naming the next round's. Where
+    /// [`Self::load_requested_assets`] composes after every round, so that
+    /// the stage asks for the next one, this lists what the layers read
+    /// ask for themselves: [`Self::unavailable_assets`] lists, after the
+    /// stage's own requests, every asset a layer read since the stage last
+    /// composed names that storage cannot supply yet, the assets an open
+    /// with storage holding every source reads before it composes. A host
+    /// calls this after each batch it supplies, and
+    /// [`Self::load_requested_assets`] once nothing is unavailable: that
+    /// composes the stage once, whose own requests (an arc in a variant
+    /// another layer selects) may start more rounds. The stage's
+    /// composition is the one composing after every round builds, without
+    /// recomposing a prim each time a round reaches further into its arcs.
+    ///
+    /// Reads and records failures as [`Self::load_requested_assets`] does,
+    /// and returns the layers read, with their diagnostics, failures and
+    /// reads ([`LoadReport::reads`]), and no composition
+    /// ([`LoadReport::compositions`] is empty): the next
+    /// [`Self::load_requested_assets`] reports the one composing them.
+    ///
+    /// # Errors
+    ///
+    /// A strict import's rejection of a layer read
+    /// ([`ImportPolicy::Strict`]), keeping the layers read before it.
+    ///
+    /// Spec: AOUSD Core §10.3.1 (sublayers), §10.3.2.1 (references),
+    /// §10.3.2.2 (payloads). OpenUSD has no equivalent: its resolver
+    /// reads synchronously as the stage composes.
+    pub fn read_requested_assets(&mut self) -> Result<LoadReport, IoError> {
+        let Some(read) = self.read_round(&mut HashSet::new())? else {
+            return Ok(LoadReport::default());
+        };
+        *self.uncomposed_reads.get_or_insert(0) += read.layers.len();
+        Ok(read)
+    }
+    /// Reads, without composing, the assets the stage asks for and those
+    /// the layers read since it last composed name
+    /// ([`Self::unavailable_assets`]) that are not in `attempted`, adding
+    /// them to it; `None` when there was none to read. An asset a layer
+    /// read names that storage cannot supply yet is recorded and added to
+    /// `attempted`, as the stage will ask for it once it composes.
+    fn read_round(
+        &mut self,
+        attempted: &mut HashSet<(LayerId, String)>,
+    ) -> Result<Option<LoadReport>, IoError> {
+        // A request the store answers was read (or failed) since the stage
+        // composed: it composes once the stage does, not read again.
+        let store = &self.store;
+        let mut requests: Vec<(LayerId, String)> = self
+            .stage
+            .stage()
+            .asset_requests()
+            .iter()
+            .filter(|request| {
+                matches!(
+                    store.asset_availability(request.anchor, &request.asset_path),
+                    layerstack::AssetAvailability::Unavailable
+                )
+            })
+            .map(|request| (request.anchor, request.asset_path.clone()))
+            .filter(|key| attempted.insert(key.clone()))
+            .collect();
+        self.drop_stale_waiting();
+        requests.extend(
+            self.waiting
+                .keys()
+                .filter(|key| attempted.insert((*key).clone()))
+                .cloned(),
+        );
+        if requests.is_empty() {
+            return Ok(None);
+        }
+        let mut catalog = self.catalog.clone();
+        catalog.reserved.extend(self.store.layer_ids());
+        let mut reader = Reader::new(
+            &mut self.storage,
+            &mut catalog,
+            self.import_policy,
+            self.usdc_options,
+            self.package_limits,
+            self.stage.options().schemas.clone(),
+        );
+        reader.variant_arcs = self.variant_arcs;
+        reader.formats = self.formats.clone();
+        reader.log = ReadLog::new(self.clock.clone());
+        reader.muted.clone_from(&self.stage.options().muted_layers);
+        // Read or failed, and no longer unavailable once the round commits:
+        // a strict rejection later in the round drops what it read, which
+        // must then stay unavailable.
+        let mut settled = Vec::new();
+        for (anchor, asset) in requests {
+            let result = reader.load(
+                &asset,
+                Some(anchor),
+                self.store.tokens(),
+                self.store.paths(),
             );
-            reader.variant_arcs = self.variant_arcs;
-            reader.formats = self.formats.clone();
-            reader.log = ReadLog::new(self.clock.clone());
-            reader.muted.clone_from(&self.stage.options().muted_layers);
-            for (anchor, asset) in requests {
-                let result = reader.load(
-                    &asset,
-                    Some(anchor),
-                    self.store.tokens(),
-                    self.store.paths(),
-                );
-                match result {
-                    Ok(resolved) => {
-                        self.unavailable.remove(&(anchor, asset.clone()));
-                        reader.bind(anchor, asset.as_str(), resolved.layer_id);
-                        if let Some(layer) = resolved.layer {
-                            reader.pending.push(layer);
-                        }
+            let key = (anchor, asset);
+            match result {
+                Ok(resolved) => {
+                    reader.bind(anchor, key.1.as_str(), resolved.layer_id);
+                    if let Some(layer) = resolved.layer {
+                        reader.pending.push(layer);
                     }
-                    // Not supplied yet: left unbound, so the stage keeps
-                    // asking for it and a later call reads it again.
-                    Err(error) if error.kind == IoErrorKind::Unavailable => {
-                        let identifier = error.identifier.unwrap_or_else(|| asset.clone());
-                        let failure = ReadFailure {
-                            identifier: Some(identifier),
-                            kind: IoErrorKind::Unavailable,
-                        };
-                        self.unavailable.insert((anchor, asset), failure);
+                    settled.push(key);
+                }
+                // Not supplied yet: left unbound, so the stage keeps
+                // asking for it and a later call reads it again.
+                Err(error) if error.kind == IoErrorKind::Unavailable => {
+                    let identifier = error.identifier.unwrap_or_else(|| key.1.clone());
+                    let failure = ReadFailure {
+                        identifier: Some(identifier),
+                        kind: IoErrorKind::Unavailable,
+                    };
+                    self.unavailable.insert(key, failure);
+                }
+                Err(error) => {
+                    settled.push(key.clone());
+                    let (anchor, asset) = key;
+                    let failure = AssetFailure {
+                        asset_path: asset,
+                        anchor: Some(anchor),
+                        error,
+                    };
+                    // A missing dependency is a composition error, not
+                    // a rejected read (AOUSD Core §10.3.2.1, §10.6).
+                    if self.import_policy == ImportPolicy::Strict && !failure.is_missing() {
+                        return Err(failure.error);
                     }
-                    Err(error) => {
-                        self.unavailable.remove(&(anchor, asset.clone()));
-                        let failure = AssetFailure {
-                            asset_path: asset.clone(),
-                            anchor: Some(anchor),
-                            error,
-                        };
-                        // A missing dependency is a composition error, not
-                        // a rejected read (AOUSD Core §10.3.2.1, §10.6).
-                        if self.import_policy == ImportPolicy::Strict && !failure.is_missing() {
-                            return Err(failure.error);
-                        }
-                        reader.bind(anchor, failure.asset_path.as_str(), LayerId::UNRESOLVED);
-                        reader.failures.push(failure);
-                    }
+                    reader.bind(anchor, failure.asset_path.as_str(), LayerId::UNRESOLVED);
+                    reader.failures.push(failure);
                 }
             }
-            reader.resolve_expressions(
-                &mut self.store,
-                layerstack::LayerStackIdentifier {
-                    root: self.stage.stage().root_layer().expect("document root"),
-                    session: self.stage.stage().session_layer(),
+        }
+        reader.resolve_expressions(
+            &mut self.store,
+            layerstack::LayerStackIdentifier {
+                root: self.stage.stage().root_layer().expect("document root"),
+                session: self.stage.stage().session_layer(),
+            },
+        )?;
+        let waiting = core::mem::take(&mut reader.waiting);
+        let report = reader.commit(&mut self.store);
+        self.catalog = catalog;
+        for key in &settled {
+            self.unavailable.remove(key);
+            self.waiting.remove(key);
+        }
+        self.waiting_revision = self.stage.revision();
+        for (anchor, asset, identifier) in waiting {
+            let used_by = self
+                .store
+                .layer(anchor)
+                .map_or(AssetUse::Reference, |layer| asset_use(layer, &asset));
+            let key = (anchor, asset);
+            attempted.insert(key.clone());
+            self.unavailable.insert(
+                key.clone(),
+                ReadFailure {
+                    identifier: Some(identifier),
+                    kind: IoErrorKind::Unavailable,
                 },
-            )?;
-            let start = timing::composition_start(self.clock.as_ref());
-            let loaded = reader.commit(&mut self.store);
-            self.catalog = catalog;
-            self.synchronize();
-            let composition = timing::composition(self.clock.as_ref(), start, loaded.layers.len());
-            report.merge(loaded);
-            report.compositions.push(composition);
+            );
+            self.waiting.insert(key, used_by);
+        }
+        Ok(Some(report))
+    }
+    /// Forgets the assets the layers read named once the stage composed
+    /// since (`waiting_revision`): it asks for those it
+    /// reaches itself, and an edit may have dropped the arcs that read
+    /// them.
+    fn drop_stale_waiting(&mut self) {
+        if self.stage.revision() != self.waiting_revision {
+            self.waiting.clear();
         }
     }
     /// Loads an explicitly requested source, anchored to a resident layer.
@@ -1582,7 +1725,10 @@ impl<B: Storage> StageDocument<B> {
     /// ([`IoErrorKind::Unavailable`]): the list a host fetches, each once
     /// per anchor layer and authored path, in the order the stage lists
     /// its requests ([`layerstack::Stage::asset_requests`]: by anchor
-    /// layer, then asset path).
+    /// layer, then asset path), then, by anchor layer and asset path, those
+    /// the layers read since the stage last composed name
+    /// ([`Self::read_requested_assets`]), which no composed prim waits for
+    /// yet ([`UnavailableAsset::prims`] is empty).
     ///
     /// A host supplies their bytes to its [`Storage`]
     /// ([`Self::storage_mut`]) under [`UnavailableAsset::identifier`], or
@@ -1629,6 +1775,34 @@ impl<B: Storage> StageDocument<B> {
                 asset_path: request.asset_path.clone(),
                 used_by: request.used_by,
                 prims: alloc::vec![request.prim],
+            });
+        }
+        let waiting = if self.stage.revision() == self.waiting_revision {
+            &self.waiting
+        } else {
+            &BTreeMap::new()
+        };
+        for ((anchor, asset_path), &used_by) in waiting {
+            let key = (*anchor, asset_path.clone());
+            let Some(identifier) = self
+                .unavailable
+                .get(&key)
+                .and_then(|failure| failure.identifier.as_ref())
+            else {
+                continue;
+            };
+            if assets
+                .iter()
+                .any(|asset| asset.anchor == *anchor && asset.asset_path == *asset_path)
+            {
+                continue;
+            }
+            assets.push(UnavailableAsset {
+                identifier: identifier.clone(),
+                anchor: *anchor,
+                asset_path: asset_path.clone(),
+                used_by,
+                prims: Vec::new(),
             });
         }
         assets
@@ -1704,8 +1878,14 @@ impl<B: Storage> StageDocument<B> {
         Ok(id)
     }
     /// Synchronizes direct authored changes into the primary retained stage.
+    ///
+    /// Once the stage composes, it asks for what the layers read since it
+    /// last composed need ([`layerstack::Stage::asset_requests`]), so
+    /// [`Self::unavailable_assets`] lists only its requests again.
     pub fn synchronize(&mut self) {
         self.stage.synchronize(&mut self.store);
+        self.waiting.clear();
+        self.uncomposed_reads = None;
     }
     /// Saves dirty used layers, excluding the primary session and its sublayers.
     /// Only resident sources participate; anonymous layers are reported separately.
@@ -1958,6 +2138,10 @@ struct Reader<'a, B> {
     muted: BTreeSet<LayerId>,
     /// The layers read so far, with their work and, with a clock, time.
     log: ReadLog,
+    /// The assets the layers read name that storage could not supply yet
+    /// ([`IoErrorKind::Unavailable`]), as `(anchor, asset path,
+    /// identifier)`, in the order they were asked for.
+    waiting: Vec<(LayerId, String, String)>,
 }
 impl<'a, B: Storage> Reader<'a, B> {
     fn new(
@@ -1986,6 +2170,7 @@ impl<'a, B: Storage> Reader<'a, B> {
             threads: Threads::new(1),
             muted: BTreeSet::new(),
             log: ReadLog::default(),
+            waiting: Vec::new(),
         }
     }
     /// Reads the root layer `asset` and every layer it reaches, on the
@@ -2762,6 +2947,10 @@ impl<B: Storage> AssetResolver for Reader<'_, B> {
         if let Err(error) = &result
             && error.kind == IoErrorKind::Unavailable
         {
+            if let Some(anchor) = anchor {
+                let identifier = error.identifier.clone().unwrap_or_else(|| asset.into());
+                self.waiting.push((anchor, asset.into(), identifier));
+            }
             return Err(AssetResolveError::Unavailable);
         }
         if let Err(error) = &result {
@@ -2857,6 +3046,37 @@ fn caused(cause: IoCause) -> IoError {
     IoError {
         cause: Some(Arc::new(cause)),
         ..IoError::new(kind, message)
+    }
+}
+/// How `layer` uses `asset`, an asset path it authors: as a sublayer, a
+/// payload (on any prim spec or variant branch), or else a reference.
+fn asset_use(layer: &Layer, asset: &str) -> AssetUse {
+    if layer
+        .sublayers()
+        .iter()
+        .any(|entry| entry.asset.as_deref() == Some(asset))
+    {
+        return AssetUse::Sublayer;
+    }
+    let names = |op: &layerstack::ListOp<layerstack::Reference>| {
+        op.explicit
+            .iter()
+            .chain([&op.prepend, &op.append, &op.add, &op.delete, &op.reorder])
+            .flatten()
+            .any(|arc| arc.asset_path() == Some(asset))
+    };
+    let spec_names = |spec: &layerstack::PrimSpec| {
+        names(&spec.payloads)
+            || spec
+                .variant_branches()
+                .any(|branch| names(&branch.spec.payloads))
+    };
+    let payload = layer.prims().iter().any(|(_, spec)| spec_names(spec))
+        || layer.variant_prims().values().flatten().any(spec_names);
+    if payload {
+        AssetUse::Payload
+    } else {
+        AssetUse::Reference
     }
 }
 fn asset_error(error: IoError) -> AssetResolveError {

@@ -68,6 +68,15 @@ which opening loads. After an edit selects another variant,
 `parts_mut`, `StageDocument::load_requested_assets` does;
 `VariantArcLoading::All` resolves every branch's arcs up front instead.
 
+A host that supplies sources as they arrive, such as a browser, loops:
+`StageDocument::unavailable_assets` lists what to fetch, the host supplies
+it to its storage, and `load_requested_assets` reads and composes it. Each
+round reaches one arc deeper, so a host that wants only the finished stage
+calls `read_requested_assets` instead, which reads without composing (the
+layers read then list what they need themselves), and loads once nothing is
+unavailable: the stage composes once, as an open whose storage held every
+source does.
+
 For large USDC scenes, `OpenOptions::loading` takes `LoadOptions` with `UsdcArrayLoading::Retained` and an optional per-file decoder
 budget. The policy also applies to dependencies, package members and reloads.
 `retained_values(layer_id).stats()` exposes decode attempts, failures and work

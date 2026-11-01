@@ -78,6 +78,9 @@ impl<B> PreparedReload<'_, B> {
         self.document
             .stage
             .replace_with(self.stage, &mut self.document.store);
+        // The new composition asks for what the layers read before need.
+        self.document.waiting.clear();
+        self.document.uncomposed_reads = None;
         self.report
     }
 }

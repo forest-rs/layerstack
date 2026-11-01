@@ -97,6 +97,11 @@ impl core::fmt::Debug for Journal {
 }
 
 impl Journal {
+    /// The revision of the latest composed change batch.
+    pub(super) fn current_revision(&self) -> u64 {
+        self.revision
+    }
+
     pub(super) fn budget(&self) -> crate::ChangeHistoryBudget {
         self.reports.budget()
     }

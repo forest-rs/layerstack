@@ -132,3 +132,27 @@ export function isLayer(name: string): boolean {
   const lower = name.toLowerCase();
   return LAYER_EXTENSIONS.some((extension) => lower.endsWith(extension));
 }
+
+/**
+ * Whether `identifier` is a search path: neither absolute, nor relative to
+ * a layer (`./`, `../`), nor in a package, nor a URL. OpenUSD keeps such a
+ * path as authored and leaves it to the resolver.
+ */
+function isSearchPath(identifier: string): boolean {
+  return !/^(\/|\.\.?\/|[A-Za-z][A-Za-z0-9+.-]*:)/.test(identifier) && !identifier.includes("[");
+}
+
+/**
+ * Where to read `identifier`, which the layer `anchor` authored (its
+ * identifier), as OpenUSD's default resolver finds a search path
+ * (`ArDefaultResolver::_CreateIdentifier`, then `_Resolve`): beside the
+ * authoring layer when it exists there, else as written. Any other
+ * identifier is already anchored, and read as it is.
+ */
+export async function resolveAsset(source: SceneSource, identifier: string, anchor: string | null): Promise<string> {
+  if (anchor === null || !isSearchPath(identifier)) return identifier;
+  const slash = anchor.lastIndexOf("/");
+  if (slash < 0) return identifier;
+  const beside = `${anchor.slice(0, slash + 1)}${identifier}`;
+  return (await source.exists(beside)) ? beside : identifier;
+}

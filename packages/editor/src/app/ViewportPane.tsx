@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "./context.ts";
 import { updateSummary, viewportSummary } from "../model/draws.ts";
+import { resolveAsset } from "../model/sources.ts";
 import { SKIN_SLOTS } from "../model/skinning.ts";
 import { Timeline } from "./Timeline.tsx";
 
@@ -24,8 +25,14 @@ export function ViewportPane() {
           const source = () => store.source;
           const viewport = new Viewport(
             canvas.current,
-            (identifier) => source()?.fetch(identifier) ?? Promise.resolve(null),
-            (identifier) => source()?.exists(identifier) ?? Promise.resolve(false),
+            async (identifier, anchor) => {
+              const scene = source();
+              return scene === null ? null : scene.fetch(await resolveAsset(scene, identifier, anchor));
+            },
+            async (identifier, anchor) => {
+              const scene = source();
+              return scene === null ? false : scene.exists(await resolveAsset(scene, identifier, anchor));
+            },
           );
           store.attachViewport(viewport);
           dispose = () => {

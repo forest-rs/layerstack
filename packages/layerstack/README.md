@@ -358,6 +358,7 @@ JS-owned typed array.
 
 | Read | Returns |
 |---|---|
+| `stage.metadata(key)` | `Value \| null`: the stage's metadata as `UsdStage::GetMetadata` reads it, the session layer over the root, else the field's fallback: `upAxis` (`Y`), `metersPerUnit` (`0.01`), `startTimeCode`, `endTimeCode`, `timeCodesPerSecond` |
 | `stage.worldTransforms(paths, { time? })`, `parentToWorldTransforms(...)`, `prim.worldTransform({ time? })` | One `Float64Array`, 16 numbers per prim, row by row (row-vector `GfMatrix4d`: translation in the last row; read as column-major, the matrix WebGL takes) |
 | `stage.localTransform(path, { time? })`, `prim.localTransform(...)` | `LocalTransform`: `matrix`, `resetsXformStack`, `problems` |
 | `stage.worldTransformsMightVary(paths, { time? })` | `boolean[]`: whether each world transform might differ at another time (an op of its chain, up to a reset, has samples, a spline or clips): what a renderer skips when the time changes |

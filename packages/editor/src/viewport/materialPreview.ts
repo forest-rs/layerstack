@@ -147,11 +147,8 @@ export class MaterialPreview {
   }
 }
 
-/** Frees a material and the textures it holds (each use is its own `Texture`; the images are the store's). */
+/** Frees a material; the textures it reads are its texture store's, shared by its uses, and freed with the store. */
 function disposeMaterial(material: MeshStandardMaterial | MeshPhysicalMaterial): void {
-  for (const value of Object.values(material)) {
-    if (value !== null && typeof value === "object" && "isTexture" in value) (value as { dispose(): void }).dispose();
-  }
   material.dispose();
 }
 

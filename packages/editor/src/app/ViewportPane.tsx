@@ -55,6 +55,7 @@ export function ViewportPane() {
   const summary = viewportSummary(store.scene);
   const update = store.lastUpdate === null ? null : updateSummary(store.lastUpdate);
   const through = store.through;
+  const textures = store.viewport?.textureStats;
   const skinning = store.scene.skinning;
   const skinned = skinning.gpu + skinning.cpu + skinning.failed.length > 0;
   return (
@@ -85,6 +86,7 @@ export function ViewportPane() {
         <div className="pointer-events-none absolute right-2 bottom-2 rounded-md bg-black/40 px-2 py-1 text-right font-mono text-[11px] leading-relaxed text-white/80 tabular-nums backdrop-blur-sm">
           <div>
             {summary.drawn.length} prims drawn · {summary.triangles.toLocaleString()} triangles · {summary.lights.length} lights
+          {textures !== undefined && textures.images > 0 && ` · ${textures.images} images${textures.capped > 0 ? ` (${textures.capped} scaled to ${textures.limit})` : ""}`}
           </div>
           {update !== null && (
             <div className="text-white/60">

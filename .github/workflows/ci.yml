@@ -430,6 +430,7 @@ jobs:
             packages/layerstack/package-lock.json
             packages/layerstack_stagehand/package-lock.json
             packages/demo/package-lock.json
+            packages/editor/package-lock.json
 
       - name: install the package's dev dependencies
         run: npm ci
@@ -484,6 +485,15 @@ jobs:
       - name: run the demo's script headless
         working-directory: packages/demo
         run: npm run acceptance
+
+      # The editor links the same packages.
+      - name: install the editor's dependencies
+        working-directory: packages/editor
+        run: npm ci
+
+      - name: type-check and build the editor
+        working-directory: packages/editor
+        run: npm run build
 
   doc:
     name: cargo doc

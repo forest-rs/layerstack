@@ -254,6 +254,29 @@ export class EditorStore {
     this.#act(time === null ? `set ${path}` : `set ${path} at ${time}`, (session) => session.setValue(path, value, time));
   }
 
+  /**
+   * Defines a child of `parent` named `name`, of `typeName` (typeless with
+   * `null`), and selects it.
+   */
+  definePrim(parent: string, name: string, typeName: string | null): void {
+    const path = parent === "/" ? `/${name}` : `${parent}/${name}`;
+    const label = `define ${typeName ?? "typeless"} ${path}`;
+    const edit = typeName === null ? { type: "definePrim" as const, path } : { type: "definePrim" as const, path, typeName };
+    if (this.#act(label, (session) => session.apply(label, [edit]))) this.select(path);
+  }
+
+  /** Renames or reparents the prim at `path` to `to`, repairing the paths that name it, and keeps it selected. */
+  move(path: string, to: string): void {
+    if (this.#act(`move ${path}`, (session) => session.move(path, to)) && this.selection === path) this.select(to);
+  }
+
+  /** Removes the prim at `path` from the edit target's layer stack. */
+  delete(path: string): void {
+    if (this.#act(`delete ${path}`, (session) => session.delete(path)) && this.selection !== null && (this.selection === path || this.selection.startsWith(`${path}/`))) {
+      this.select(null);
+    }
+  }
+
   /** Selects `variant` of `set` on `prim`, then fetches what it needs. */
   async selectVariant(prim: string, set: string, variant: string): Promise<void> {
     await this.#actAsync(`select ${set}=${variant}`, (session) => session.selectVariant(prim, set, variant));
@@ -278,15 +301,19 @@ export class EditorStore {
     this.#bump();
   }
 
-  #act(action: string, run: (session: Session) => EditReceipt | void): void {
+  /** Runs an action; whether it succeeded (a failure is a notice). */
+  #act(action: string, run: (session: Session) => EditReceipt | void): boolean {
     const session = this.session;
-    if (session === null) return;
+    if (session === null) return false;
+    let done = true;
     try {
       run(session);
     } catch (error) {
       this.#report(action, error);
+      done = false;
     }
     this.#sync();
+    return done;
   }
 
   async #actAsync(action: string, run: (session: Session) => Promise<unknown>): Promise<void> {

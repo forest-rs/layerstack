@@ -23,6 +23,7 @@ import { useStore } from "./context.ts";
 import { shown, ValueField } from "./fields.tsx";
 import { layerName } from "./format.ts";
 import { primIcon } from "./icons.ts";
+import { PrimActions } from "./PrimActions.tsx";
 
 export function Inspector() {
   const store = useStore();
@@ -40,7 +41,7 @@ export function Inspector() {
       <Header store={store} prim={prim} />
       <State store={store} prim={prim} />
       <Variants store={store} prim={prim} />
-      <Properties store={store} stage={stage} prim={prim} />
+      <Properties key={prim.path} store={store} stage={stage} prim={prim} />
       <MaterialSection stage={stage} prim={prim} />
       <Arcs prim={prim} />
     </div>
@@ -72,6 +73,7 @@ function Header({ store, prim }: { store: EditorStore; prim: Prim }) {
           </Button>
           <Tooltip>Frame in the viewport (F)</Tooltip>
         </TooltipTrigger>
+        <PrimActions store={store} path={prim.path} />
       </div>
       <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground" title={prim.path}>
         {prim.path}
@@ -164,13 +166,15 @@ function VariantRow({ store, prim, name, selection, variants }: { store: EditorS
  * share a namespace (`primvars:`, `xformOp:`) stay together.
  */
 function Properties({ store, stage, prim }: { store: EditorStore; stage: Stage; prim: Prim }) {
-  const [schema, setSchema] = useState(false);
+  // Shown by default when nothing is authored: a new prim's schema is what there is to edit.
+  const [schemaChoice, setSchema] = useState<boolean | null>(null);
   const attributes = prim
     .attributeNames()
     .map((name) => prim.attribute(name))
     .filter((attribute) => attribute !== null);
   const authored = attributes.filter((attribute) => attribute.authored);
   const defined = attributes.filter((attribute) => !attribute.authored);
+  const schema = schemaChoice ?? authored.length === 0;
   const relationships = prim.relationshipNames();
   const varying = new Set(
     stage
@@ -192,7 +196,9 @@ function Properties({ store, stage, prim }: { store: EditorStore; stage: Stage; 
         {authored.map((attribute) => (
           <AttributeRow key={attribute.path} store={store} attribute={attribute} animated={varying.has(attribute.path)} />
         ))}
-        {authored.length === 0 && <span className="col-span-2 text-[11px] text-muted-foreground">No layer authors a value here.</span>}
+        {authored.length === 0 && (
+          <span className="col-span-2 text-[11px] text-muted-foreground">No layer authors a value here{defined.length > 0 ? ": its schema's fallbacks follow." : "."}</span>
+        )}
         {schema && defined.map((attribute) => <AttributeRow key={attribute.path} store={store} attribute={attribute} animated={false} />)}
         {relationships.map((name) => {
           const relationship = prim.relationship(name);

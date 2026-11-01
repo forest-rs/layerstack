@@ -28,6 +28,11 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
   are asked for only when it is expanded) and drawn by a virtualized React
   Aria tree, so a stage of tens of thousands of prims scrolls as one of ten.
   Find a prim by name. A prim picked in the viewport opens its ancestors.
+  Each row's "⋯" (and the inspector's) adds a child of any concrete type
+  the stage registers (`Stage.schemas()`, grouped by what the types are:
+  transforms, geometry, lights, cameras, shading, physics), renames
+  (`Stage.move`, which repairs the paths that name it) or deletes, each one
+  undoable action where edits go.
 - **Layers.** Every layer the stage holds, edited ones marked, the root
   stack's marked; a switch mutes or unmutes each (the stage's state, not an
   edit).

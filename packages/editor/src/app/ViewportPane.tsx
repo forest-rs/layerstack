@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "./context.ts";
 import { updateSummary, viewportSummary } from "../model/draws.ts";
+import { SKIN_SLOTS } from "../model/skinning.ts";
 import { Timeline } from "./Timeline.tsx";
 
 export function ViewportPane() {
@@ -47,6 +48,8 @@ export function ViewportPane() {
   const summary = viewportSummary(store.scene);
   const update = store.lastUpdate === null ? null : updateSummary(store.lastUpdate);
   const through = store.through;
+  const skinning = store.scene.skinning;
+  const skinned = skinning.gpu + skinning.cpu + skinning.failed.length > 0;
   return (
     <div className="flex h-full w-full flex-col">
       <div className="relative min-h-0 w-full flex-1 overflow-hidden bg-[#20201e]">
@@ -81,6 +84,15 @@ export function ViewportPane() {
               last update: +{update.added} −{update.removed} moved {update.moved} refilled {update.refilled} rebuilt {update.rebuilt} · read{" "}
               {update.itemsRead} draws
               {store.lastUpdate?.timeChanged === true && `, ${update.itemsTimeInvariant} left as they were`}
+            </div>
+          )}
+          {skinned && store.lastUpdate !== null && (
+            <div className="text-white/60" title={skinning.failed.join("\n")}>
+              skinned: posed {store.lastUpdate.skinWork.gpuDraws} on the GPU ({store.lastUpdate.skinWork.joints.toLocaleString()} joints), deformed{" "}
+              {store.lastUpdate.skinWork.cpuDraws} on the CPU ({store.lastUpdate.skinWork.cpuPoints.toLocaleString()} points)
+              {skinning.cpu > 0 && ` · ${skinning.cpu} with blend shapes or dual quaternions`}
+              {skinning.reducedBlocks > 0 && ` · ${skinning.reducedBlocks.toLocaleString()} points kept ${SKIN_SLOTS} joints (dropped ≤ ${skinning.droppedWeight.toFixed(3)})`}
+              {skinning.failed.length > 0 && ` · ${skinning.failed.length} drawn at rest`}
             </div>
           )}
         </div>

@@ -47,6 +47,16 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
   to the time, rereading only what varies; the inspector and the explain
   panel read values there. A stage without a range is read at the default
   time.
+- **Skinning.** A mesh a UsdSkel skeleton binds is skinned on the GPU: its
+  joint influences (up to eight per vertex) are gathered into the draw
+  list's buffer once, through stagehand's `vertexPoints`, and a time change
+  uploads only the joint matrices (`skinningTransforms`), placed by the
+  skeleton's world transform as UsdSkel places skinned points. Meshes with
+  blend shapes or dual-quaternion skinning are deformed on the CPU
+  (`deformedPoints`) and refilled each time instead; the stats say how many
+  of each, and any point weighting more than eight joints. Normals a mesh
+  does not author are its rest pose's, skinned, not computed again from the
+  skinned points.
 - **Inspector.** The selected prim as the stage composes it: its type,
   specifier and kind; active and instanceable; its transform as
   translation, rotation, scale and pivot, each field authoring its one op as

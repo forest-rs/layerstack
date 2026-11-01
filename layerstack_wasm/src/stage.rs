@@ -2825,6 +2825,26 @@ impl Stage {
         Ok(self.skinning_transforms(path, time)?.into())
     }
 
+    /// The record `blend_shaped_points` builds, as documented in `skel.rs`.
+    #[wasm_bindgen(js_name = blendShapedPoints)]
+    pub fn js_blend_shaped_points(
+        &mut self,
+        path: &str,
+        time: Option<f64>,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self.blend_shaped_points(path, time)?.into())
+    }
+
+    /// The record `blend_shaped_normals` builds, as documented in `skel.rs`.
+    #[wasm_bindgen(js_name = blendShapedNormals)]
+    pub fn js_blend_shaped_normals(
+        &mut self,
+        path: &str,
+        time: Option<f64>,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self.blend_shaped_normals(path, time)?.into())
+    }
+
     /// The record `deformed_points` builds, as documented in `skel.rs`.
     #[wasm_bindgen(js_name = deformedPoints)]
     pub fn js_deformed_points(

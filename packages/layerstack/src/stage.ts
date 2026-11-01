@@ -177,6 +177,8 @@ export interface NativeStage extends Disposable {
   skinning(path: string): unknown;
   skinningInfluences(path: string, time: number | null | undefined, interleaved: boolean): unknown;
   skinningTransforms(path: string, time?: number | null): unknown;
+  blendShapedPoints(path: string, time?: number | null): unknown;
+  blendShapedNormals(path: string, time?: number | null): unknown;
   deformedPoints(path: string, time?: number | null): unknown;
   deformedNormals(path: string, time?: number | null): unknown;
   skinningCache(): unknown;
@@ -1332,7 +1334,9 @@ export class Stage implements Disposable {
   /**
    * What the stage's skinning cache has done and holds: the evaluator
    * behind {@link SkinningQuery.deformedPoints},
-   * {@link SkinningQuery.deformedNormals} and
+   * {@link SkinningQuery.deformedNormals},
+   * {@link SkinningQuery.blendShapedPoints},
+   * {@link SkinningQuery.blendShapedNormals} and
    * {@link SkinningQuery.skinningTransforms}, which hears the stage's edits
    * before each read and invalidates only what they touch. Compare two
    * reads to see what a frame cost.
@@ -1353,6 +1357,10 @@ export class Stage implements Disposable {
       bindings,
       usedBytes,
       capacityBytes,
+      blendShapeHits,
+      blendShapeMisses,
+      blendShapedVectors,
+      blendShapeBindings,
     ] = this.#call("skinningCache", (native) => native.skinningCache()) as number[];
     return {
       hits: hits as number,
@@ -1369,6 +1377,10 @@ export class Stage implements Disposable {
       bindings: bindings as number,
       usedBytes: usedBytes as number,
       capacityBytes: capacityBytes as number,
+      blendShapeHits: blendShapeHits as number,
+      blendShapeMisses: blendShapeMisses as number,
+      blendShapedVectors: blendShapedVectors as number,
+      blendShapeBindings: blendShapeBindings as number,
     };
   }
 

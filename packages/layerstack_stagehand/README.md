@@ -150,8 +150,10 @@ the skeleton's world transform, not the mesh's. A rigid binding's one
 block is copied to every vertex. A point weighting more joints than
 `slots` keeps its largest weights, scaled to the block's sum, and is
 counted (`reducedBlocks`, `droppedWeight`): skinning is then approximate
-there, and exact everywhere else. Blend shapes and dual-quaternion
-skinning are not in the palette: draw those with `query.deformedPoints`.
+there, and exact everywhere else. Blend shapes come before the palette:
+build the rest buffer from `query.blendShapedPoints(time)` instead of the
+authored points. Dual-quaternion skinning is not in the palette: draw it
+with `query.deformedPoints`.
 
 The Rust crate gives the same map as `MeshPlan::vertex_points` and
 `DrawBuffers::vertex_points`.

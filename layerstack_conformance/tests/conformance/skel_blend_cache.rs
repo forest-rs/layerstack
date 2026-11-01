@@ -9,7 +9,7 @@ use layerstack::{
 };
 use layerstack_schemas::{
     Scene, Time,
-    skel::{BlendShapeCache, SkelCache},
+    skel::{BlendShapeCache, SkelCache, skin_points_in_place},
 };
 fn source() -> String {
     include_str!("../../fixtures/skel_blend_shapes.usda").replace("rel skel:skeleton = </Rig/Skeleton>","rel skel:skeleton = []").replace("point3f[] points = [(1,0,0), (0,2,0)]","point3f[] points = [(1,0,0), (0,2,0)]\n normal3f[] normals = [(0,0,1),(0,0,1)]\n uniform token purpose = \"default\"")
@@ -132,4 +132,59 @@ fn bufferless_inputs_and_static_weights_survive_time_changes() {
     }
     assert_eq!(cache.stats().weight_evaluations, 1);
     assert!(cache.deformed_points(&scene, path).is_err());
+}
+#[test]
+fn skeleton_bound_shapes_then_the_palette_match_pinned_cpp_skinning() {
+    // A GPU skins blend-shaped points with the joint palette: shapes alone
+    // (`UsdSkelBlendShapeQuery::ComputeDeformedPoints` with the skeleton
+    // animation's mapped weights), then `UsdSkelSkinPoints`, must give what
+    // OpenUSD's `ComputeSkinnedPoints` gives after the shapes.
+    let oracle: serde_json::Value =
+        serde_json::from_str(include_str!("../../fixtures/skel_blend_shapes.json")).unwrap();
+    let source = include_str!("../../fixtures/skel_blend_shapes.usda").replace(
+        "point3f[] points = [(1,0,0), (0,2,0)]",
+        "point3f[] points = [(1,0,0), (0,2,0)]\n normal3f[] normals = [(0,0,1),(0,0,1)]",
+    );
+    let (store, live) = support::scene(&source);
+    let path = store.path("/Rig/Geometry/Mesh");
+    let scene = Scene::new(live.stage(), &store);
+    let mut shapes = BlendShapeCache::new(Time::Default);
+    let mut skel = SkelCache::new(Time::Default);
+    for row in oracle["frames"].as_array().unwrap() {
+        let time = row["time"].as_f64().map_or(Time::Default, Time::at);
+        shapes.set_time(time);
+        skel.set_time(time);
+        let local: Vec<[f32; 3]> = serde_json::from_value(row["local"].clone()).unwrap();
+        let normals: Vec<[f32; 3]> = serde_json::from_value(row["normals"].clone()).unwrap();
+        let skinned: Vec<[f32; 3]> = serde_json::from_value(row["skinned"].clone()).unwrap();
+        let mut points = shapes
+            .deformed_points(&scene, path)
+            .unwrap()
+            .unwrap()
+            .to_vec();
+        assert_eq!(points, local);
+        assert_eq!(
+            shapes.deformed_normals(&scene, path).unwrap().unwrap(),
+            normals
+        );
+        let inputs = skel.deformation_inputs(&scene, path).unwrap().unwrap();
+        let binding = inputs.binding();
+        skin_points_in_place(
+            binding.geom_bind_transform(),
+            inputs.skinning_transforms(),
+            binding.influences(),
+            &mut points,
+        )
+        .unwrap();
+        for (point, expected) in points.iter().zip(&skinned) {
+            for (value, expected) in point.iter().zip(expected) {
+                assert!((value - expected).abs() < 4e-6, "{value} != {expected}");
+            }
+        }
+        assert_eq!(
+            points,
+            skel.deformed_points(&scene, path).unwrap().unwrap(),
+            "the split is the CPU path, bit for bit"
+        );
+    }
 }

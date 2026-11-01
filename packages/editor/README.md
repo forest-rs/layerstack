@@ -76,6 +76,14 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
   token the schema gives `allowedTokens` is a picker of them, a `bool` a
   switch, a number or tuple fields that commit on Enter, a color a swatch.
   Nothing has to be typed that the stage already knows.
+- **Materials and shaders.** The inspector of a material or shader shows
+  what it is (a shader's `info:id` and implementation; a material's
+  outputs and what they read) and its inputs as their authors lay them
+  out: grouped by `displayGroup`, labelled by `displayName`, ordered by
+  `uiorder`; a number between `uimin` and `uimax` is a slider over its
+  soft range (`uisoftmin`, `uisoftmax`) where one is given. A connected
+  input is a link to its source. A dot marks the inputs the prim sets
+  itself, as opposed to those it inherits from a base material.
 - **Shading.** The network of the selected material (or of the material
   or node graph around a selected shader) as a node graph, left to right:
   the material's inputs, each shader with its inputs and outputs as rows,

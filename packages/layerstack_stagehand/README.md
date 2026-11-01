@@ -73,6 +73,19 @@ vary (`work.instancersRederived`): their instances, and the lights they
 place, follow the time. Matrices are 16 numbers per instance, row by
 row, as OpenUSD's.
 
+A list draws a scope (`scope` in its options, `setScope` to change it):
+the subtrees under `roots` (`["/"]`, the default, for the whole stage;
+`[]` for nothing), optionally with matrices in a prim's `space` instead
+of the world's, so that prim sits at the origin, as an asset view shows
+one model alone. Changes outside the roots are ignored without reading
+anything; `setScope` removes what the new scope leaves out and discovers
+what it adds, reusing unchanged buffers.
+
+```ts
+const list = stagehand.drawList(stage, { scope: { roots: [] } }); // opens drawing nothing
+upload(list.setScope({ roots: [selected], space: selected })); // the selection alone, framed at the origin
+```
+
 The list also holds the stage's cameras and lights, by path:
 `list.cameras()` (`CameraItem`: the `Camera` `stage.camera` computes, view
 and projection matrices as `GfFrustum` computes them; conform it to a

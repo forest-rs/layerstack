@@ -9,7 +9,7 @@ import { describe, it } from "node:test";
 import { loadLayerstack } from "@forest-rs/layerstack";
 import type { Changes, Edit, Stage } from "@forest-rs/layerstack";
 import { loadStagehand } from "../dist/index.js";
-import type { DrawDiff, DrawList } from "../dist/index.js";
+import type { DrawDiff, DrawList, DrawScope } from "../dist/index.js";
 
 const layerstack = await loadLayerstack();
 const stagehand = await loadStagehand();
@@ -70,11 +70,11 @@ class Xform "Beacon" {
 `;
 
 /** A stage, its draw list after a refresh, and the diff of each edit. */
-function fixture(): { stage: Stage; list: DrawList; first: DrawDiff; edit(edits: Edit[]): DrawDiff } {
+function fixture(scope?: DrawScope): { stage: Stage; list: DrawList; first: DrawDiff; edit(edits: Edit[]): DrawDiff } {
   const stage = layerstack.open({ identifier: "scene.usda", bytes: new TextEncoder().encode(SCENE) });
   const heard: Changes[] = [];
   stage.onChange((changes) => heard.push(changes));
-  const list = stagehand.drawList(stage, { time: 1 });
+  const list = stagehand.drawList(stage, { time: 1, ...(scope === undefined ? {} : { scope }) });
   const first = list.refresh();
   return {
     stage,
@@ -480,6 +480,86 @@ def PointInstancer "Hopping" {
       assert.equal(on.work.triangulations, 1);
       assert.equal(on.work.tessellations, 1);
       assert.equal(on.work.itemsUntouched, 3);
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+  });
+});
+
+describe("draw scopes", () => {
+  it("draw only beneath the roots, and ignore changes outside them", () => {
+    const { stage, list, first, edit } = fixture({ roots: ["/World/Rocks"] });
+    try {
+      assert.equal(first.added.length, 3);
+      assert.deepEqual(list.items().map((item) => item.prim).sort(), ["/World/Rocks/Pebble", "/World/Rocks/Rock", "/World/Rocks/Stone"]);
+      const outside = edit([{ type: "setValue", path: "/World/Beacons/North.xformOp:translate", value: { type: "double3", value: [3, 0, 0] } }]);
+      assert.deepEqual([outside.added, outside.removed, outside.matrices], [[], [], []]);
+      assert.equal(outside.work.itemsRead, 0);
+      const resynced = edit([{ type: "setActive", path: "/World/Beacons", active: false }]);
+      assert.equal(resynced.work.primsTraversed, 0);
+      const inside = edit([{ type: "setValue", path: "/World/Rocks/Pebble.radius", value: { type: "double", value: 0.75 } }]);
+      assert.deepEqual(inside.rebound, [itemOf(list, "/World/Rocks/Pebble")]);
+      // An ancestor's transform reaches the items beneath the root.
+      const above = edit([
+        { type: "setValue", path: "/World.xformOpOrder", value: { type: "token[]", value: ["xformOp:translate"] } },
+        { type: "createAttribute", path: "/World.xformOp:translate", typeName: "double3", custom: false },
+        { type: "setValue", path: "/World.xformOp:translate", value: { type: "double3", value: [0, 5, 0] } },
+      ]);
+      assert.equal(above.matrices.length, 3);
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+  });
+
+  it("keep a native prototype's instances in scope, and change scope incrementally", () => {
+    const { stage, list } = fixture({ roots: ["/World/Beacons/South"] });
+    try {
+      const post = list.item(itemOf(list, "/World/Beacons/North/Post"))!;
+      assert.deepEqual(post.instances, ["/World/Beacons/South/Post"]);
+      const moved = list.setScope({ roots: ["/World/Stones", "/World/Rocks/Pebble"] });
+      assert.equal(moved.removed.length, 2);
+      assert.equal(moved.added.length, 2);
+      assert.equal(list.item(itemOf(list, "/World/Stones/Prototypes/Stone"))!.ids!.length, 3);
+      assert.deepEqual(list.scope, { roots: ["/World/Rocks/Pebble", "/World/Stones"], space: null });
+      const nothing = list.setScope({ roots: [] });
+      assert.equal(nothing.removed.length, 2);
+      assert.equal(nothing.freed.length, 2);
+      assert.equal(list.items().length, 0);
+      const all = list.setScope({ roots: ["/"] });
+      assert.equal(all.added.length, 6);
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+  });
+
+  it("draw a root inside a point instancer's prototype once, as it is", () => {
+    const { stage, list, first, edit } = fixture({ roots: ["/World/Stones/Prototypes/Stone"], space: "/World/Stones/Prototypes/Stone" });
+    try {
+      assert.equal(first.added.length, 1);
+      const stone = list.item(first.added[0]!)!;
+      assert.deepEqual(stone.source, { kind: "gprim", path: "/World/Stones/Prototypes/Stone" });
+      assert.equal(stone.matrices.length, 16);
+      const resized = edit([{ type: "setValue", path: "/World/Stones/Prototypes/Stone.size", value: { type: "double", value: 0.5 } }]);
+      assert.deepEqual(resized.rebound, [stone.id]);
+      const placed = edit([{ type: "setValue", path: "/World/Stones.protoIndices", value: { type: "int[]", value: [0] } }]);
+      assert.deepEqual([placed.added, placed.removed, placed.matrices], [[], [], []]);
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+  });
+
+  it("give matrices in the space of a prim, which then sits at the origin", () => {
+    const { stage, list, edit } = fixture({ roots: ["/World/Beacons/South"], space: "/World/Beacons/South" });
+    try {
+      const post = list.item(itemOf(list, "/World/Beacons/North/Post"))!;
+      assert.deepEqual([...post.matrices.subarray(12, 15)], [0, 0, 0]);
+      const moved = edit([{ type: "setValue", path: "/World/Beacons/South.xformOp:translate", value: { type: "double3", value: [-4, 0, 0] } }]);
+      assert.deepEqual(moved.matrices, []);
+      assert.equal(list.cameras().length + list.lights().length, 0);
     } finally {
       list.dispose();
       stage.free();

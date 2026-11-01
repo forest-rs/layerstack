@@ -10,9 +10,11 @@ use alloc::vec::Vec;
 
 use hashbrown::{HashMap, HashSet};
 use layerstack::{Changes, PathId, Time};
+use layerstack_schemas::assets::AssetReference;
 use layerstack_schemas::point_instancer::{InstanceTransform, InstanceTransformOptions};
 use layerstack_schemas::usd_geom::{
-    Camera, GeomSubsetElementType, Imageable, ImageablePurpose, PointInstancer,
+    Camera, GeomModelApi, GeomModelApiModelCardGeometry, GeomModelApiModelCardVisibility,
+    GeomModelApiModelDrawMode, GeomSubsetElementType, Imageable, ImageablePurpose, PointInstancer,
 };
 use layerstack_schemas::{
     BindingOptions, MaterialPurpose, PrimView, Scene, Visibility, XformCache, is_transform_property,
@@ -20,12 +22,15 @@ use layerstack_schemas::{
 
 use crate::camera::{CAMERA_INPUTS, CameraItem};
 use crate::curves::{CurveBuffers, CurveOptions, CurvesPlan, CurvesReport};
+use crate::draw_mode::{
+    CardFace, CardGeometry, DrawMode, Standin, StandinInput, draw_mode_standin,
+};
 use crate::input::MeshInput;
 use crate::light::{
     InstanceId, LIGHT_INPUTS, LightId, LightInstance, LightItem, LightKind, read_light,
 };
 use crate::links::{LinkCategory, LinkChange, LinkInputs, LinkKind, LinkSet, LinkTarget, Links};
-use crate::material::{MaterialItem, read_material};
+use crate::material::{MaterialItem, TextureFile, read_material, texture_file};
 use crate::plan::{MeshBuffers, MeshOptions, MeshPlan};
 use crate::points::{PointBuffers, PointsReport, fill_points, point_shape};
 use crate::report::MeshReport;
@@ -182,6 +187,14 @@ pub enum ItemSource {
         /// The gprim: the prototype or a descendant of it.
         prim: PathId,
     },
+    /// A model drawn by its draw mode instead of by what is beneath it: a
+    /// prim with `GeomModelAPI` whose `model:drawMode` (its own, or
+    /// inherited) is `origin`, `bounds` or `cards` and which applies it
+    /// ([`DrawBuffers::standin`]). Nothing beneath it is drawn.
+    DrawMode {
+        /// The model.
+        path: PathId,
+    },
 }
 
 /// One instanced draw: a retained buffer at one or more world matrices.
@@ -246,6 +259,10 @@ pub struct DrawBuffers {
     pub curves: Option<CurveBuffers>,
     /// A `Points`' per-point positions, widths, colors and ids, and report.
     pub points: Option<PointBuffers>,
+    /// A model's draw mode stand-in, for an [`ItemSource::DrawMode`] item:
+    /// its lines or cards, color and card textures; its
+    /// [`Self::buffers`] are empty.
+    pub standin: Option<StandinBuffers>,
     /// The mesh's face subsets, in the order of their draw ranges.
     pub subsets: Vec<PathId>,
     /// Bumped each time the buffers are filled again or rebuilt.
@@ -265,6 +282,27 @@ pub struct DrawBuffers {
     uv_sets: Vec<String>,
     /// Items drawing it.
     users: u32,
+}
+
+/// A model's draw mode stand-in as read off the stage
+/// ([`ItemSource::DrawMode`]).
+#[derive(Clone, Debug, PartialEq)]
+pub struct StandinBuffers {
+    /// Its geometry, in the model's space.
+    pub standin: Standin,
+    /// What it was built from: the extent read (`extent`, else the
+    /// `extentsHint` of the `default`, `render` and `proxy` purposes), the
+    /// card geometry and which faces have textures.
+    pub input: StandinInput,
+    /// `model:drawModeColor`: the lines' color, and the cards' when no
+    /// face has a texture or a texture cannot be read.
+    pub color: [f32; 3],
+    /// Each face's texture (`model:cardTexture*`), in [`CardFace::ALL`]
+    /// order: the asset path anchored to the layer authoring it. Drawn
+    /// with `clamp` wrapping, its color as the diffuse color and its alpha
+    /// as the opacity, cut out below 0.1 (Hydra's card material,
+    /// `_CardsSurfaceNode` and `_CardsTextureNode`).
+    pub textures: [Option<TextureFile>; 6],
 }
 
 impl DrawBuffers {
@@ -357,6 +395,13 @@ pub struct DrawWork {
     /// new category's every target, and each new target (or one of an item
     /// read again entirely) against each category.
     pub links_classified: u32,
+    /// Draw mode stand-ins read ([`ItemSource::DrawMode`]): built anew or
+    /// read again for a change of their inputs.
+    pub standins_read: u32,
+    /// Prims whose draw mode inputs changed (`model:drawMode`,
+    /// `model:applyDrawMode`, `kind`, `apiSchemas`): which prims beneath
+    /// each are drawn, or drawn by a stand-in, is discovered again.
+    pub draw_mode_roots: u32,
 }
 
 /// What changed in a [`DrawList`] since the diff before, for a renderer to
@@ -467,6 +512,8 @@ struct Dirty {
     visibility: bool,
     geometry: bool,
     material: bool,
+    /// A draw mode stand-in's inputs: its extent and card settings.
+    standin: bool,
 }
 
 impl Dirty {
@@ -476,6 +523,7 @@ impl Dirty {
         visibility: true,
         geometry: true,
         material: true,
+        standin: true,
     };
 
     fn merge(&mut self, other: Self) {
@@ -484,10 +532,16 @@ impl Dirty {
         self.visibility |= other.visibility;
         self.geometry |= other.geometry;
         self.material |= other.material;
+        self.standin |= other.standin;
     }
 
     fn any(self) -> bool {
-        self.instances || self.transform || self.visibility || self.geometry || self.material
+        self.instances
+            || self.transform
+            || self.visibility
+            || self.geometry
+            || self.material
+            || self.standin
     }
 }
 
@@ -524,15 +578,51 @@ fn property_dirt(name: &str) -> Dirty {
     let mut dirty = Dirty::default();
     if is_transform_property(name) {
         dirty.transform = true;
-    } else if name == "visibility" || name == "purpose" || name.ends_with("Visibility") {
+    } else if name == "visibility"
+        || name == "purpose"
+        || (name.ends_with("Visibility") && !name.starts_with("model:"))
+    {
         dirty.visibility = true;
     } else if name.starts_with("material:binding") {
         dirty.material = true;
     } else if GEOMETRY_INPUTS.contains(&name) || SUBSET_INPUTS.contains(&name) {
         dirty.geometry = true;
     }
+    if STANDIN_INPUTS.contains(&name) {
+        dirty.standin = true;
+    }
     dirty
 }
+
+/// The attributes a draw mode stand-in is built from besides its draw
+/// mode: its extent and card settings. `model:cardVisibility` is inherited
+/// as `model:drawMode` is, so it reaches the stand-ins beneath its prim.
+/// OpenUSD 26.11: `UsdImaging_DrawModeStandin`'s `ProcessDirtyLocators`.
+const STANDIN_INPUTS: &[&str] = &[
+    "extent",
+    "extentsHint",
+    "model:cardGeometry",
+    "model:cardVisibility",
+    "model:drawModeColor",
+    "model:cardTextureXPos",
+    "model:cardTextureYPos",
+    "model:cardTextureZPos",
+    "model:cardTextureXNeg",
+    "model:cardTextureYNeg",
+    "model:cardTextureZNeg",
+];
+
+/// The fields whose change may change which prims beneath their prim are
+/// drawn by a stand-in: its draw mode, whether it applies it, its kind
+/// (a component applies it unless `model:applyDrawMode` says otherwise)
+/// and its applied schemas (only a prim with `GeomModelAPI` has one).
+/// OpenUSD 26.11: `UsdImagingDrawModeSceneIndex::_PrimsDirtied`.
+const DRAW_MODE_FIELDS: &[&str] = &[
+    "model:drawMode",
+    "model:applyDrawMode",
+    "kind",
+    "apiSchemas",
+];
 
 /// The attributes a mesh's or a shape's buffer is read from: points,
 /// normals, topology, the drawn primvars and their indices, and a shape's
@@ -885,6 +975,8 @@ pub struct DrawList {
     buffers: BTreeMap<BufferKey, DrawBuffers>,
     mesh_buffers: HashMap<PathId, BufferKey>,
     shape_buffers: HashMap<ShapeKey, BufferKey>,
+    /// Each draw mode stand-in's buffer, by model.
+    standin_buffers: HashMap<PathId, BufferKey>,
     cameras: BTreeMap<PathId, Held<CameraItem>>,
     lights: BTreeMap<LightId, Held<LightItem>>,
     materials: BTreeMap<PathId, Held<MaterialItem>>,
@@ -1067,7 +1159,9 @@ enum Scope {
 impl Scope {
     fn covers(self, scene: &Scene<'_>, source: &ItemSource) -> bool {
         match (self, *source) {
-            (Self::Resync(root), ItemSource::Gprim { path }) => under(scene, path, root),
+            (Self::Resync(root), ItemSource::Gprim { path } | ItemSource::DrawMode { path }) => {
+                under(scene, path, root)
+            }
             (Self::Resync(root), ItemSource::PointInstancer { instancer, .. }) => {
                 under(scene, instancer, root)
             }
@@ -1094,6 +1188,7 @@ impl DrawList {
             buffers: BTreeMap::new(),
             mesh_buffers: HashMap::new(),
             shape_buffers: HashMap::new(),
+            standin_buffers: HashMap::new(),
             cameras: BTreeMap::new(),
             lights: BTreeMap::new(),
             materials: BTreeMap::new(),
@@ -1239,9 +1334,33 @@ impl DrawList {
         let mut found = Found::default();
         let firsts = prototype_firsts(scene);
 
+        // A draw mode input changed: which prims beneath it are drawn, or
+        // drawn by a stand-in, is discovered again, as for a resync.
+        let mut resyncs: Vec<PathId> = changes.resynced.clone();
+        let mut draw_mode_roots: Vec<PathId> = Vec::new();
+        for changed in &changes.property_changes {
+            if changed
+                .fields
+                .iter()
+                .any(|field| DRAW_MODE_FIELDS.contains(&tokens.resolve(field.name)))
+            {
+                draw_mode_roots.push(changed.prim);
+            }
+        }
+        for property in &changes.resynced_properties {
+            if DRAW_MODE_FIELDS.contains(&tokens.resolve(property.property())) {
+                draw_mode_roots.push(property.prim_path());
+            }
+        }
+        draw_mode_roots.retain(|&prim| !resyncs.iter().any(|&root| under(scene, prim, root)));
+        draw_mode_roots.sort_unstable();
+        draw_mode_roots.dedup();
+        gather.work.draw_mode_roots = count(draw_mode_roots.len());
+        resyncs.extend(draw_mode_roots);
+
         // Resyncs: discover the items under each root, and read again every
         // item depending on a path under it.
-        for &root in &changes.resynced {
+        for &root in &resyncs {
             self.discover(scene, root, &firsts, &mut found);
             for (id, entry) in &self.entries {
                 if entry.depends.iter().any(|&path| under(scene, path, root)) {
@@ -1298,6 +1417,10 @@ impl DrawList {
                 {
                     what.instances = true;
                     hit = true;
+                }
+                // Only a stand-in reads its card settings and extent.
+                if !matches!(entry.item.source, ItemSource::DrawMode { .. }) {
+                    what.standin = false;
                 }
                 if !hit || !what.any() {
                     continue;
@@ -1470,6 +1593,7 @@ impl DrawList {
                 visibility: varies.visibility,
                 geometry: varies.geometry,
                 material: false,
+                standin: varies.geometry,
             };
             if !what.any() {
                 gather.work.items_time_invariant += 1;
@@ -2133,8 +2257,8 @@ impl DrawList {
     ) {
         let stage = scene.stage();
         let store = scene.store();
-        // The root may be inside an instance or a point instancer: discover
-        // from the outermost one then.
+        // The root may be inside an instance, a point instancer or a model
+        // drawn by a stand-in: discover from the outermost one then.
         let mut start = root;
         let mut at = parent(scene, root);
         while let Some(path) = at {
@@ -2142,6 +2266,12 @@ impl DrawList {
                 .prim(path, store)
                 .is_some_and(layerstack::Prim::is_instance)
                 || PointInstancer::get(scene, path).is_some()
+                || standin_mode(
+                    scene,
+                    path,
+                    flattened_draw_mode(scene, path, inherited_draw_mode(scene, path)),
+                )
+                .is_some()
             {
                 start = path;
             }
@@ -2149,13 +2279,20 @@ impl DrawList {
         }
         found.scopes.push(Scope::Resync(start));
         let mut prototypes: BTreeSet<PathId> = BTreeSet::new();
-        let mut stack = alloc::vec![start];
-        while let Some(path) = stack.pop() {
+        // Each prim with the draw mode its parent resolves to.
+        let mut stack = alloc::vec![(start, inherited_draw_mode(scene, start))];
+        while let Some((path, inherited)) = stack.pop() {
             let Some(prim) = stage.prim(path, store) else {
                 continue;
             };
             found.prims += 1;
             if !prim.is_active() || !prim.is_defined() || prim.is_abstract() {
+                continue;
+            }
+            let mode = flattened_draw_mode(scene, path, inherited);
+            if standin_mode(scene, path, mode.clone()).is_some() {
+                // Its stand-in replaces everything beneath it.
+                found.sources.push(ItemSource::DrawMode { path });
                 continue;
             }
             if PointInstancer::get(scene, path).is_some() {
@@ -2179,7 +2316,12 @@ impl DrawList {
                 found.lights.push((path.into(), kind));
             }
             let children: Vec<PathId> = prim.all_children().map(|child| child.path()).collect();
-            stack.extend(children.into_iter().rev());
+            stack.extend(
+                children
+                    .into_iter()
+                    .rev()
+                    .map(|child| (child, mode.clone())),
+            );
         }
         for first in prototypes {
             found.scopes.push(Scope::Prototype(first));
@@ -2358,7 +2500,7 @@ impl DrawList {
             varies.matrices = false;
             varies.visibility = false;
             match source {
-                ItemSource::Gprim { path } => {
+                ItemSource::Gprim { path } | ItemSource::DrawMode { path } => {
                     if scene.stage().prim(path, scene.store()).is_none() {
                         return false;
                     }
@@ -2489,8 +2631,9 @@ impl DrawList {
             item.link_paths = link_paths;
         }
 
-        // Geometry.
-        if what.geometry || new {
+        // Geometry, or a stand-in.
+        let standin = matches!(source, ItemSource::DrawMode { .. });
+        if what.geometry || new || (standin && what.standin) {
             let Some(key) = self.read_geometry(scene, &item, gather) else {
                 if !new {
                     self.release(item.buffer, gather);
@@ -2507,7 +2650,11 @@ impl DrawList {
                 }
                 item.buffer = key;
             }
-            varies.geometry = geometry_might_vary(scene, item.prim, self.buffers.get(&key));
+            varies.geometry = if standin {
+                inputs_might_vary(scene, item.prim, STANDIN_INPUTS)
+            } else {
+                geometry_might_vary(scene, item.prim, self.buffers.get(&key))
+            };
         }
 
         // Materials.
@@ -2515,6 +2662,8 @@ impl DrawList {
             // A prototype's group binds its material by definition.
             let material = match source {
                 ItemSource::Prototype { material, .. } => material,
+                // A stand-in draws its own material, whatever the model binds.
+                ItemSource::DrawMode { .. } => None,
                 _ => bound_material(scene, item.prim),
             };
             let subsets: Vec<Option<PathId>> = self
@@ -2588,6 +2737,9 @@ impl DrawList {
         gather: &mut Gather,
     ) -> Option<BufferKey> {
         let time = self.options.time;
+        if let ItemSource::DrawMode { path } = item.source {
+            return self.read_standin(scene, path, gather);
+        }
         match gprim(scene, item.prim)? {
             Gprim::Mesh => {
                 let uv_sets = match self.mesh_buffers.get(&item.prim) {
@@ -2664,6 +2816,7 @@ impl DrawList {
                         mesh: None,
                         curves: None,
                         points: None,
+                        standin: None,
                         curve_plan: None,
                         stage_points: None,
                         uv_sets,
@@ -2702,6 +2855,7 @@ impl DrawList {
                         mesh: None,
                         curves: None,
                         points: None,
+                        standin: None,
                         curve_plan: None,
                         stage_points: None,
                         uv_sets: Vec::new(),
@@ -2775,6 +2929,7 @@ impl DrawList {
                 mesh: None,
                 curves: Some(filled),
                 points: None,
+                standin: None,
                 curve_plan: Some((plan, curves)),
                 stage_points: None,
                 uv_sets: Vec::new(),
@@ -2842,6 +2997,7 @@ impl DrawList {
                 mesh: None,
                 curves: None,
                 points: Some(filled),
+                standin: None,
                 curve_plan: None,
                 stage_points: Some(points),
                 uv_sets: Vec::new(),
@@ -2849,6 +3005,58 @@ impl DrawList {
             },
         );
         self.mesh_buffers.insert(prim, key);
+        Some(key)
+    }
+
+    /// Reads the stand-in of the model at `path`: kept when what it is built
+    /// from is unchanged, refilled in place when not.
+    fn read_standin(
+        &mut self,
+        scene: &Scene<'_>,
+        path: PathId,
+        gather: &mut Gather,
+    ) -> Option<BufferKey> {
+        let mode = standin_mode(
+            scene,
+            path,
+            flattened_draw_mode(scene, path, inherited_draw_mode(scene, path)),
+        )?;
+        let read = read_standin(scene, path, mode, self.options.time);
+        gather.work.standins_read += 1;
+        if let Some(&key) = self.standin_buffers.get(&path) {
+            let buffer = self.buffers.get_mut(&key).expect("a kept buffer");
+            if buffer.standin.as_ref() == Some(&read) {
+                gather.work.buffers_reused += 1;
+            } else {
+                buffer.standin = Some(read);
+                buffer.revision += 1;
+                gather.refilled.insert(key);
+            }
+            return Some(key);
+        }
+        let key = self.next_key();
+        gather.buffers_added.insert(key);
+        self.buffers.insert(
+            key,
+            DrawBuffers {
+                key,
+                prim: path,
+                buffers: MeshBuffers::default(),
+                subsets: Vec::new(),
+                revision: 0,
+                shape: None,
+                plan: None,
+                mesh: None,
+                curves: None,
+                points: None,
+                standin: Some(read),
+                curve_plan: None,
+                stage_points: None,
+                uv_sets: Vec::new(),
+                users: 0,
+            },
+        );
+        self.standin_buffers.insert(path, key);
         Some(key)
     }
 
@@ -2871,6 +3079,9 @@ impl DrawList {
         match &buffer.shape {
             Some(shape) => {
                 self.shape_buffers.remove(&shape_key(shape));
+            }
+            None if buffer.standin.is_some() => {
+                self.standin_buffers.remove(&buffer.prim);
             }
             None => {
                 self.mesh_buffers.remove(&buffer.prim);
@@ -2999,8 +3210,172 @@ fn uv_sets_read(material: &MaterialItem) -> impl Iterator<Item = String> + '_ {
 /// The path an item is discovered at.
 fn source_path(source: &ItemSource) -> PathId {
     match *source {
-        ItemSource::Gprim { path } => path,
+        ItemSource::Gprim { path } | ItemSource::DrawMode { path } => path,
         ItemSource::Prototype { prim, .. } | ItemSource::PointInstancer { prim, .. } => prim,
+    }
+}
+
+/// The draw mode the prim at `path` resolves to, given `inherited`, its
+/// parent's: its own `model:drawMode` when it has `GeomModelAPI` applied
+/// and that is not `inherited` (the attribute's fallback), else its
+/// parent's. `None` when no prim above authors one.
+///
+/// OpenUSD 26.11 resolves it this way for Hydra: only a prim with the API
+/// applied has a `geomModel` data source
+/// (`UsdImagingGeomModelAPIAdapter`), and
+/// `UsdImagingFlattenedGeomModelDataSourceProvider` inherits `drawMode`
+/// down every prim, models or not. `UsdGeomModelAPI::ComputeModelDrawMode`
+/// differs: it reads the attribute on models only, applied or not.
+fn flattened_draw_mode(
+    scene: &Scene<'_>,
+    path: PathId,
+    inherited: Option<GeomModelApiModelDrawMode>,
+) -> Option<GeomModelApiModelDrawMode> {
+    let own = GeomModelApi::get(scene, path).and_then(|api| api.model_draw_mode());
+    match own {
+        Some(GeomModelApiModelDrawMode::Inherited) | None => inherited,
+        Some(GeomModelApiModelDrawMode::Other(token)) if token.is_empty() => inherited,
+        Some(mode) => Some(mode),
+    }
+}
+
+/// The draw mode the parent of the prim at `path` resolves to
+/// ([`flattened_draw_mode`]): the nearest ancestor's own.
+fn inherited_draw_mode(scene: &Scene<'_>, path: PathId) -> Option<GeomModelApiModelDrawMode> {
+    let mut at = parent(scene, path);
+    while let Some(current) = at {
+        if let Some(mode) = flattened_draw_mode(scene, current, None) {
+            return Some(mode);
+        }
+        at = parent(scene, current);
+    }
+    None
+}
+
+/// The stand-in the prim at `path` is drawn by, its draw mode resolving to
+/// `mode`: `origin`, `bounds` or `cards` on a prim with `GeomModelAPI`
+/// applied that applies its draw mode. It applies it when it authors
+/// `model:applyDrawMode = true`, or authors none and its kind is a
+/// `component` (`UsdModelAPI::IsKind`).
+///
+/// OpenUSD 26.11: `UsdImagingDrawModeSceneIndex` (`_GetDrawMode`,
+/// `_RecursePrims`) and `UsdImaging_GetDrawModeStandin`, with the
+/// component fallback the schema documents for `model:drawMode` and
+/// `UsdImagingDelegate::_IsDrawModeApplied` implements. (The scene index's
+/// `UsdImagingGeomModelAPIAdapter` overlays `applyDrawMode = true` on a
+/// component even over an authored `false`, against the schema; stagehand
+/// keeps the authored value.)
+fn standin_mode(
+    scene: &Scene<'_>,
+    path: PathId,
+    mode: Option<GeomModelApiModelDrawMode>,
+) -> Option<DrawMode> {
+    let mode = DrawMode::from_token(mode?.as_str())?;
+    GeomModelApi::get(scene, path)?;
+    let authored = scene
+        .stage()
+        .prim(path, scene.store())?
+        .attribute("model:applyDrawMode")
+        .and_then(|attribute| attribute.authored_value(Time::Default))
+        .and_then(|resolved| match resolved.value {
+            layerstack::Value::Bool(apply) => Some(apply),
+            _ => None,
+        });
+    let applies = authored.unwrap_or_else(|| {
+        scene.kind(path).is_some_and(|kind| {
+            scene
+                .kinds()
+                .is_a(kind, layerstack_schemas::kind::COMPONENT)
+        })
+    });
+    applies.then_some(mode)
+}
+
+/// The model's extent as Hydra's stand-in reads it: its authored `extent`
+/// when it is a `Boundable`, else the union of its `extentsHint` for the
+/// `default`, `render` and `proxy` purposes it lists. `None` when it has
+/// neither, or they bound nothing.
+///
+/// OpenUSD 26.11: `UsdImagingExtentResolvingSceneIndex` with the purposes
+/// `_ExtentResolvingSceneIndexCreateArgs` (`sceneIndices.cpp`) gives it,
+/// and `UsdImagingDataSourceExtentsHint` (one extent per purpose, in
+/// `default`, `render`, `proxy`, `guide` order).
+fn standin_extent(scene: &Scene<'_>, path: PathId, time: Time) -> Option<[[f32; 3]; 2]> {
+    if scene.is_a(path, "Boundable")
+        && let Some(extent) = layerstack_schemas::usd_geom::Boundable::get(scene, path)
+            .and_then(|boundable| boundable.extent_at(time))
+        && let [min, max] = extent.as_slice()
+    {
+        return Some([*min, *max]);
+    }
+    let hint = GeomModelApi::from_prim_unchecked(PrimView::new(*scene, path)).extents_hint(time)?;
+    let mut min = [f32::MAX; 3];
+    let mut max = [f32::MIN; 3];
+    for [low, high] in hint.iter().take(3) {
+        for axis in 0..3 {
+            min[axis] = min[axis].min(low[axis]);
+            max[axis] = max[axis].max(high[axis]);
+        }
+    }
+    (0..3)
+        .all(|axis| min[axis] <= max[axis])
+        .then_some([min, max])
+}
+
+/// Reads the stand-in of the model at `path`, drawn in `mode`, at `time`.
+///
+/// OpenUSD 26.11: `UsdImaging_DrawModeStandin` (`drawModeStandin.cpp`);
+/// `model:cardVisibility` is inherited as `model:drawMode` is
+/// (`UsdImagingFlattenedGeomModelDataSourceProvider`), and `simple` hides
+/// the cards facing the stage's `upAxis` (`_CardsDataCache::_SchemaValues`).
+fn read_standin(scene: &Scene<'_>, path: PathId, mode: DrawMode, time: Time) -> StandinBuffers {
+    let api = GeomModelApi::from_prim_unchecked(PrimView::new(*scene, path));
+    let card_geometry = api
+        .model_card_geometry()
+        .map_or(CardGeometry::Cross, |geometry| match geometry {
+            GeomModelApiModelCardGeometry::Box => CardGeometry::Box,
+            GeomModelApiModelCardGeometry::FromTexture => CardGeometry::FromTexture,
+            _ => CardGeometry::Cross,
+        });
+    let mut visibility = None;
+    let mut at = Some(path);
+    while let Some(current) = at {
+        let own = GeomModelApi::get(scene, current).and_then(|api| api.model_card_visibility());
+        match own {
+            Some(GeomModelApiModelCardVisibility::Inherited) | None => {}
+            Some(own) => {
+                visibility = Some(own);
+                break;
+            }
+        }
+        at = parent(scene, current);
+    }
+    let hidden_axis = match visibility {
+        Some(GeomModelApiModelCardVisibility::Simple) => {
+            crate::shapes::Axis::from_token(scene.metadata().up_axis().unwrap_or("Y"))
+        }
+        _ => None,
+    };
+    let textures: [Option<TextureFile>; 6] = CardFace::ALL.map(|face| {
+        let name = scene.store().tokens().lookup(face.texture_attribute())?;
+        AssetReference::read(scene, layerstack::PropertyPath::new(path, name), time)
+            .ok()
+            .flatten()
+            .filter(|asset| !asset.asset_path.is_empty())
+            .map(|asset| texture_file(scene, &asset))
+    });
+    let input = StandinInput {
+        mode,
+        extent: standin_extent(scene, path, time),
+        card_geometry,
+        textures: textures.each_ref().map(Option::is_some),
+        hidden_axis,
+    };
+    StandinBuffers {
+        standin: draw_mode_standin(&input),
+        input,
+        color: api.model_draw_mode_color().unwrap_or([0.18; 3]),
+        textures,
     }
 }
 

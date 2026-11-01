@@ -305,10 +305,10 @@ fn reloading_composes_the_assets_that_appeared() {
 }
 
 #[test]
-fn a_payload_loaded_after_its_asset_appears_needs_a_reload() {
-    // DELIBERATE: OpenUSD opens the payload's asset when the payload is
-    // loaded; layerstack read it, and found it missing, with the layer
-    // authoring the payload.
+fn a_payload_loaded_after_its_asset_appears_reads_it() {
+    // OpenUSD opens the payload's asset when the payload is loaded; a
+    // stage opened with payloads unloaded leaves it for composition to
+    // ask for, so loading it reads the asset that appeared since.
     let oracle = expected("loaded_later");
     for policy in POLICIES {
         let mut doc = open(Fixture::read(), "scene.usda", policy, true).unwrap();
@@ -317,21 +317,8 @@ fn a_payload_loaded_after_its_asset_appears_needs_a_reload() {
         stage.set_load_rules(PayloadLoadRules::default());
         stage.synchronize(store);
         let report = doc.load_requested_assets().unwrap();
-        assert!(report.layers.is_empty());
-        let mut loaded = record(&doc);
-        let seed = &loaded["prims"]["/Seed"];
-        assert_eq!(seed["attributes"], json!({"count": 2}), "{policy:?}");
-        let errors = loaded["errors"].as_array_mut().unwrap();
-        let payload = errors
-            .iter()
-            .position(|error| error["arc"] == "payload")
-            .expect("missing payload");
-        assert_eq!(errors.remove(payload)["prim"], "/Seed");
-        assert_eq!(loaded["errors"], oracle["errors"], "{policy:?}");
-
-        // A reload finds it, with the other assets.
-        doc.reload(ReloadPolicy::PreserveDirty).unwrap();
-        assert_eq!(record(&doc), expected("reloaded"), "{policy:?}");
+        assert!(!report.layers.is_empty(), "{policy:?}");
+        assert_eq!(record(&doc), oracle, "{policy:?}");
     }
 }
 

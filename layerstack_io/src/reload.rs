@@ -212,6 +212,7 @@ impl<B: Storage> StageDocument<B> {
             self.stage.options().schemas.clone(),
         );
         reader.variant_arcs = self.variant_arcs;
+        reader.defers_payloads = excludes_payloads(&self.stage.options().load_rules);
         reader.formats = self.formats.clone();
         reader.log = ReadLog::new(self.clock.clone());
         reader.reachable_only = root_closure;

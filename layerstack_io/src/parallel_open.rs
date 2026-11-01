@@ -94,6 +94,9 @@ struct Shared<'a, B> {
     usdc_options: super::UsdcReadOptions,
     formats: &'a FileFormats,
     defers_variant_arcs: bool,
+    /// Whether every payload is left for composition to ask for
+    /// ([`super::excludes_payloads`]).
+    defers_payloads: bool,
     /// The threads of the open: the pool reading sources runs on them, and
     /// a USDC source is read on those it leaves idle ([`read_loose`]).
     threads: &'a Threads,
@@ -364,7 +367,7 @@ impl<B: Storage> AssetResolver for TaskResolver<'_, '_, '_, B> {
     }
 
     fn defers_payload(&self, asset_path: &str) -> bool {
-        self.shared.formats.is_dynamic(asset_path)
+        self.shared.defers_payloads || self.shared.formats.is_dynamic(asset_path)
     }
 
     fn allocate_layer_id(&mut self) -> Option<LayerId> {
@@ -413,6 +416,7 @@ impl<B: Storage> Reader<'_, B> {
             usdc_options: self.usdc_options,
             formats: &self.formats,
             defers_variant_arcs: self.defers_variant_arcs(),
+            defers_payloads: self.defers_payloads,
             threads: &self.threads,
             identities: Mutex::new(self.identities.clone()),
             known: &self.catalog.ids,

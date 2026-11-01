@@ -1216,6 +1216,7 @@ impl<B: Storage> StageDocument<B> {
                 options.schemas.clone(),
             );
             reader.variant_arcs = loading.variant_arcs;
+            reader.defers_payloads = excludes_payloads(&options.load_rules);
             reader.formats = loading.formats.clone();
             reader.log = ReadLog::new(loading.clock.clone());
             let session = reader.load_session(session, root, &store)?;
@@ -1319,6 +1320,7 @@ impl<B: Storage> StageDocument<B> {
             options.schemas.clone(),
         );
         reader.variant_arcs = loading.variant_arcs;
+        reader.defers_payloads = excludes_payloads(&options.load_rules);
         reader.formats = loading.formats.clone();
         reader.log = ReadLog::new(loading.clock.clone());
         reader.threads = options.thread_budget();
@@ -1511,6 +1513,7 @@ impl<B: Storage> StageDocument<B> {
             self.stage.options().schemas.clone(),
         );
         reader.variant_arcs = self.variant_arcs;
+        reader.defers_payloads = excludes_payloads(&self.stage.options().load_rules);
         reader.formats = self.formats.clone();
         reader.log = ReadLog::new(self.clock.clone());
         reader.muted.clone_from(&self.stage.options().muted_layers);
@@ -1623,6 +1626,7 @@ impl<B: Storage> StageDocument<B> {
             self.stage.options().schemas.clone(),
         );
         reader.variant_arcs = self.variant_arcs;
+        reader.defers_payloads = excludes_payloads(&self.stage.options().load_rules);
         reader.formats = self.formats.clone();
         reader.log = ReadLog::new(self.clock.clone());
         reader.muted.clone_from(&self.stage.options().muted_layers);
@@ -2138,6 +2142,10 @@ struct Reader<'a, B> {
     /// Which arcs inside variant branches the layers read resolve
     /// ([`AssetResolver::defers_variant_arcs`]).
     variant_arcs: VariantArcLoading,
+    /// Whether the layers read leave every payload for composition to ask
+    /// for ([`AssetResolver::defers_payload`]): while the stage's load
+    /// rules exclude any ([`excludes_payloads`]).
+    defers_payloads: bool,
     /// The registered formats ([`LoadOptions::formats`]).
     formats: FileFormats,
     /// The threads the operation reads on, and walks the layers it read
@@ -2178,6 +2186,7 @@ impl<'a, B: Storage> Reader<'a, B> {
             failures: Vec::new(),
             reachable_only: false,
             variant_arcs: VariantArcLoading::All,
+            defers_payloads: false,
             formats: FileFormats::default(),
             threads: Threads::new(1),
             muted: BTreeSet::new(),
@@ -2993,7 +3002,7 @@ impl<B: Storage> AssetResolver for Reader<'_, B> {
         self.variant_arcs == VariantArcLoading::Selected
     }
     fn defers_payload(&self, asset_path: &str) -> bool {
-        self.formats.is_dynamic(asset_path)
+        self.defers_payloads || self.formats.is_dynamic(asset_path)
     }
     fn allocate_layer_id(&mut self) -> Option<LayerId> {
         self.catalog.allocate().ok()
@@ -3205,6 +3214,22 @@ fn package_member_path(identifier: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests;
+
+/// Whether `rules` exclude any payload, so that the layers read leave
+/// their payloads for composition to ask for once the rules include them
+/// ([`layerstack::Stage::asset_requests`]), as OpenUSD opens a payload's
+/// layer only when its prim index includes the payload: a stage opened
+/// with payloads unloaded reads none of their layers. With every payload
+/// included they are read with the layer authoring them, in the same
+/// round.
+///
+/// Spec: AOUSD Core §10.3.2.2 (payloads); OpenUSD `_EvalRefOrPayloadArcs`
+/// (`pxr/usd/pcp/primIndex.cpp`) and `UsdStage::Open(..., LoadNone)`.
+fn excludes_payloads(rules: &layerstack::PayloadLoadRules) -> bool {
+    rules
+        .rules()
+        .any(|(_, rule)| rule != layerstack::PayloadRule::All)
+}
 
 /// Whether `layer` authors a sublayer, reference or payload whose asset path
 /// is a variable expression ([`layerstack::variable_expression`]).

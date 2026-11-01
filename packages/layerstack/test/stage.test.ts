@@ -500,3 +500,25 @@ describe("stage metadata", () => {
     assert.deepEqual(stage.metadata("metersPerUnit"), { kind: "scalar", type: "double", value: 0.01 });
   });
 });
+
+describe("schemas", () => {
+  it("lists the registry sorted by name, with kinds, bases and restrictions", () => {
+    using stage = openScene();
+    const schemas = stage.schemas();
+    assert.deepEqual(
+      schemas.map((schema) => schema.name),
+      [...schemas.map((schema) => schema.name)].sort(),
+    );
+    // As usd-core 26.11's `TfType::GetAllAncestorTypes` names them.
+    assert.deepEqual(stage.schemas().find((schema) => schema.name === "Sphere"), {
+      name: "Sphere",
+      kind: "concreteTyped",
+      bases: ["Gprim", "Boundable", "Xformable", "Imageable", "Typed"],
+      canOnlyApplyTo: [],
+      allowedInstanceNames: [],
+    });
+    assert.equal(schemas.find((schema) => schema.name === "CollectionAPI")?.kind, "multipleApplyApi");
+    assert.equal(schemas.find((schema) => schema.name === "Imageable")?.kind, "abstractTyped");
+    assert.equal(stage.schemas(), schemas, "read once");
+  });
+});

@@ -526,6 +526,28 @@ export interface Explanation {
   readonly opinions: readonly Opinion[];
 }
 
+/**
+ * A schema a stage registers ({@link Stage.schemas}), as OpenUSD's
+ * `UsdSchemaRegistry` knows it.
+ */
+export interface SchemaInfo {
+  /** Its name: `Sphere`, `CollectionAPI`. */
+  readonly name: string;
+  /**
+   * A typed schema a prim's `typeName` may name (`concreteTyped`) or only
+   * other typed schemas inherit (`abstractTyped`); an applied schema
+   * applied once (`singleApplyApi`) or once per instance name, as
+   * `Name:instance` (`multipleApplyApi`).
+   */
+  readonly kind: "concreteTyped" | "abstractTyped" | "singleApplyApi" | "multipleApplyApi";
+  /** A typed schema's ancestors, nearest first (`Gprim`, `Boundable`, ..., `Typed`); empty for an applied schema. */
+  readonly bases: readonly string[];
+  /** The typed or applied schemas a prim must be or have for this applied schema to be applied to it; empty when any. */
+  readonly canOnlyApplyTo: readonly string[];
+  /** A multiple-apply schema's only instance names; empty when any valid name. */
+  readonly allowedInstanceNames: readonly string[];
+}
+
 /** A variant set of a prim. */
 export interface VariantSet {
   /** The set's name. */

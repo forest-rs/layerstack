@@ -54,6 +54,50 @@ export interface DrawOptions {
   readonly curves?: CurveOptions;
   /** How points are drawn ({@link PointStyle}); `sprites` by default. */
   readonly points?: PointStyle;
+  /** What of the stage is drawn ({@link DrawScope}); the whole stage, in world space, by default. */
+  readonly scope?: DrawScope;
+}
+
+/**
+ * What of a stage a {@link DrawList} draws, and in which space.
+ *
+ * An item is in scope when the prim it is anchored at is one of `roots` or
+ * beneath one: a gprim's path, a model's drawn by its draw mode, each
+ * instance proxy of a native instancing prototype's gprim (instances
+ * outside are left out of the item, and an item with none is not listed),
+ * the point instancer of a point instancer's items. Cameras and lights are
+ * listed by the same rule (a light a point instancer places, by its
+ * instancer). Changes outside the roots are ignored; those inside are
+ * applied as for a whole stage.
+ *
+ * A root beneath a point instancer (in one of its prototypes) or beneath a
+ * model drawn by a stand-in is drawn as it is: its gprims once each, at
+ * their own transforms, as an asset view shows one prototype. The
+ * instancer's placement and the stand-in are anchored outside the scope.
+ */
+export interface DrawScope {
+  /**
+   * The prims whose subtrees are drawn: `["/"]` for the whole stage, `[]`
+   * for nothing. A root beneath another adds nothing.
+   */
+  readonly roots: readonly string[];
+  /**
+   * The prim whose space the matrices are given in; `null` (the default)
+   * for world space. Each matrix is then the world matrix times the
+   * inverse of that prim's world matrix: the prim sits at the origin,
+   * untransformed, wherever the stage places it, as an asset view frames
+   * a subtree alone (`Stage.untransformedBounds` of the prim bounds it).
+   * A list with a space lists no cameras or lights, which are placed in
+   * the world.
+   */
+  readonly space?: string | null;
+}
+
+/** A scope with its roots sorted, without duplicates or roots beneath another. */
+function normalizeScope(scope: DrawScope): { roots: string[]; space: string | null } {
+  const sortedRoots = [...new Set(scope.roots)].sort();
+  const roots = sortedRoots.filter((root) => !sortedRoots.some((other) => other !== root && under(root, other)));
+  return { roots, space: scope.space ?? null };
 }
 
 /**
@@ -721,6 +765,8 @@ class Gather {
   /** The materials the native instancing prototype groups this diff adds bind, by gprim: a new mesh buffer is planned once with the sets all of its groups read. */
   groups = new Map<string, string[]>();
   links: LinkChange[] = [];
+  /** The inverse of the scope's space prim's world matrix, once read in this diff. */
+  spaceInverse: Float64Array | null = null;
   work = {
     primsTraversed: 0,
     itemsRead: 0,
@@ -809,6 +855,7 @@ export class DrawList implements Disposable {
   readonly #tessellation: Tessellation;
   readonly #curveOptions: CurveOptions;
   readonly #pointStyle: PointStyle;
+  #scope: { roots: string[]; space: string | null };
   readonly #entries = new Map<number, Entry>();
   readonly #keys = new Map<string, number>();
   readonly #buffers = new Map<number, Retained>();
@@ -840,6 +887,12 @@ export class DrawList implements Disposable {
     this.#curveOptions = options.curves ?? {};
     this.#pointStyle = options.points ?? "sprites";
     this.#contexts = [...(options.renderContexts ?? [])];
+    this.#scope = normalizeScope(options.scope ?? { roots: ["/"] });
+  }
+
+  /** What of the stage it draws, and in which space ({@link DrawScope}): its roots sorted, none beneath another. */
+  get scope(): DrawScope {
+    return { roots: [...this.#scope.roots], space: this.#scope.space };
   }
 
   /** The time it reads; `undefined` for the default time. */
@@ -1004,6 +1057,77 @@ export class DrawList implements Disposable {
     return this.#finish(gather, read, before);
   }
 
+  /**
+   * Draws `scope` from now on ({@link DrawScope}) and reports what that
+   * changed: items, cameras and lights it leaves out are removed (their
+   * buffers freed), those beneath its roots discovered and read again (as a
+   * resync of each root; a buffer whose input is unchanged is reused).
+   */
+  setScope(scope: DrawScope): DrawDiff {
+    const before = this.#stage.transformCache().localComputed;
+    const gather = new Gather();
+    this.#scope = normalizeScope(scope);
+    const spaced = this.#scope.space !== null;
+    for (const [id, entry] of [...this.#entries]) if (!this.#keeps(entry.item.source)) this.#remove(id, gather);
+    for (const path of [...this.#cameras.keys()]) {
+      if (spaced || !this.#inScope(path)) {
+        this.#cameras.delete(path);
+        gather.cameras.removed.add(path);
+      }
+    }
+    for (const [key, held] of [...this.#lights]) {
+      if (spaced || !this.#inScope(held.item.instance?.instancer ?? held.item.path)) {
+        this.#lights.delete(key);
+        gather.lights.removed.add(key);
+      }
+    }
+    for (const path of [...this.#instancers.keys()]) if (!this.#inScope(path)) this.#instancers.delete(path);
+    return this.#apply({ resynced: [...this.#scope.roots], changedInfoOnly: [], properties: [], resyncedProperties: [] }, gather, before);
+  }
+
+  /** Whether `path` is one of the scope's roots or beneath one. */
+  #inScope(path: string): boolean {
+    return this.#scope.roots.some((root) => under(path, root));
+  }
+
+  /**
+   * Whether `source` may be in scope as discovered: its anchor is, or, for
+   * a native prototype's gprim, decided by its instances as it is read.
+   */
+  #reaches(source: ItemSource): boolean {
+    switch (source.kind) {
+      case "gprim":
+      case "drawMode":
+        return this.#inScope(source.path);
+      case "pointInstancer":
+        return this.#inScope(source.instancer);
+      case "prototype":
+        return true;
+    }
+  }
+
+  /** Whether an item of `source` stays in scope: {@link #reaches}, and for a prototype's gprim an instance in scope. */
+  #keeps(source: ItemSource): boolean {
+    if (source.kind !== "prototype") return this.#reaches(source);
+    const first = this.#instanceRoot(source.prim);
+    return first !== null && proxies(first, source.prim, this.#instancesOf(first)).some((proxy) => this.#inScope(proxy));
+  }
+
+  /** The paths a discovery of `root` covers in scope: `root` when in scope, else the scope's roots beneath it. */
+  #clip(root: string): string[] {
+    if (this.#inScope(root)) return [root];
+    return this.#scope.roots.filter((scoped) => under(scoped, root));
+  }
+
+  /** Each native instance's prototype's first instance, by instance. */
+  #firsts(): Map<string, string> {
+    const firsts = new Map<string, string>();
+    for (const prototype of this.#stage.prototypes()) {
+      for (const instance of prototype.instances) firsts.set(instance, prototype.instances[0]!);
+    }
+    return firsts;
+  }
+
   /** Disposes every buffer's mesh. Idempotent. */
   dispose(): void {
     for (const retained of this.#buffers.values()) retained.buffers.mesh.dispose();
@@ -1022,10 +1146,12 @@ export class DrawList implements Disposable {
     this.dispose();
   }
 
-  #apply(changes: Pick<Changes, "resynced" | "changedInfoOnly" | "properties" | "resyncedProperties">): DrawDiff {
+  #apply(
+    changes: Pick<Changes, "resynced" | "changedInfoOnly" | "properties" | "resyncedProperties">,
+    gather = new Gather(),
+    before = this.#stage.transformCache().localComputed,
+  ): DrawDiff {
     const stage = this.#stage;
-    const before = stage.transformCache().localComputed;
-    const gather = new Gather();
     const dirty = new Map<number, Dirty>();
     const mark = (id: number, what: Dirty) => {
       const at = dirty.get(id);
@@ -1033,10 +1159,7 @@ export class DrawList implements Disposable {
       else merge(at, what);
     };
     const found: Found = { sources: [], scopes: [], cameras: [], lights: new Map(), instancers: new Map(), prims: 0 };
-    const firsts = new Map<string, string>();
-    for (const prototype of stage.prototypes()) {
-      for (const instance of prototype.instances) firsts.set(instance, prototype.instances[0]!);
-    }
+    const firsts = this.#firsts();
     // A draw mode input changed: which prims beneath it are drawn, or drawn
     // by a stand-in, is discovered again, as for a resync.
     const drawModeRoots = new Set<string>();
@@ -1050,7 +1173,8 @@ export class DrawList implements Disposable {
     const extra = [...drawModeRoots].filter((prim) => !changes.resynced.some((root) => under(prim, root))).sort();
     gather.work.drawModeRoots = extra.length;
     for (const root of [...changes.resynced, ...extra]) {
-      this.#discover(root, firsts, found);
+      // Only what is in scope is discovered.
+      for (const clipped of this.#clip(root)) this.#discover(clipped, firsts, found);
       for (const [id, entry] of this.#entries) {
         if (entry.depends.some((path) => under(path, root))) mark(id, all());
       }
@@ -1070,7 +1194,7 @@ export class DrawList implements Disposable {
     const prototypes = new Set<string>();
     for (const [prim, what] of reached) {
       const kind = this.#kind(stage.prim(prim));
-      const instancer = kind.instancer;
+      const instancer = kind.instancer && this.#inScope(prim);
       if (instancer) {
         found.scopes.push({ kind: "instancer", path: prim });
         this.#discoverInstancer(prim, found);
@@ -1097,6 +1221,18 @@ export class DrawList implements Disposable {
     for (const first of prototypes) {
       found.scopes.push({ kind: "prototype", first });
       this.#discoverPrototype(first, found, false);
+    }
+    // What discovery found from an instance, a point instancer or a model
+    // above a root is anchored outside: left out.
+    found.sources = found.sources.filter((source) => this.#reaches(source));
+    for (const path of [...found.instancers.keys()]) if (!this.#inScope(path)) found.instancers.delete(path);
+    if (this.#scope.space !== null) {
+      found.cameras = [];
+      found.lights.clear();
+      for (const [path, instancer] of found.instancers) found.instancers.set(path, { ...instancer, lights: [] });
+    } else {
+      found.cameras = found.cameras.filter((path) => this.#inScope(path));
+      for (const [key, light] of [...found.lights]) if (!this.#inScope(light.instance?.instancer ?? light.path)) found.lights.delete(key);
     }
     gather.work.primsTraversed = found.prims;
     gather.work.instancersRederived = found.instancers.size;
@@ -1392,12 +1528,16 @@ export class DrawList implements Disposable {
   #discover(root: string, firsts: Map<string, string>, found: Found): void {
     const stage = this.#stage;
     // The root may be inside an instance, a point instancer or a model drawn
-    // by a stand-in: discover from the outermost one.
+    // by a stand-in: discover from the outermost one. A point instancer or
+    // a stand-in above the scope's root holding it is outside the scope:
+    // what is beneath the root is drawn as it is.
+    const ceiling = this.#scope.roots.find((scoped) => scoped !== "/" && under(root, scoped)) ?? null;
     let start = root;
     for (let at = parent(root); at !== null; at = parent(at)) {
       const prim = stage.prim(at);
       if (prim === null) continue;
-      if (prim.instance || this.#kind(prim).instancer || standinMode(prim, flattenedDrawMode(prim, inheritedDrawMode(stage, at))) !== null) start = at;
+      const outside = ceiling !== null && !under(at, ceiling);
+      if (prim.instance || (!outside && (this.#kind(prim).instancer || standinMode(prim, flattenedDrawMode(prim, inheritedDrawMode(stage, at))) !== null))) start = at;
     }
     found.scopes.push({ kind: "resync", root: start });
     const prototypes = new Set<string>();
@@ -1867,7 +2007,7 @@ export class DrawList implements Disposable {
         const roots = this.#instancesOf(first);
         if (roots[0] !== first) return false;
         const everyProxy = proxies(first, source.prim, roots);
-        const members = everyProxy.filter((proxy) => this.#material(proxy) === source.material);
+        const members = everyProxy.filter((proxy) => this.#inScope(proxy) && this.#material(proxy) === source.material);
         if (members.length === 0) return false;
         linkPaths = members;
         const shown = this.#shown(members);
@@ -1932,6 +2072,7 @@ export class DrawList implements Disposable {
           gather.work.matricesComputed += mine.length;
         }
       }
+      if (this.#scope.space !== null && matrices.length > 0) matrices = this.#rebase(matrices, gather);
       if (!isNew) {
         if (!sameArray(matrices, item.matrices) || !sameArray(ids, item.ids) || instances.join("\n") !== item.instances.join("\n")) {
           gather.matrices.add(id);
@@ -1978,6 +2119,17 @@ export class DrawList implements Disposable {
     if (previous === undefined) this.#keys.set(sourceKey(source), id);
     this.#entries.set(id, { item, depends, varies });
     return true;
+  }
+
+  /** World matrices `world` in the scope's space: each times the inverse of the space prim's world matrix (once per diff). */
+  #rebase(world: Float64Array, gather: Gather): Float64Array {
+    if (gather.spaceInverse === null) {
+      const space = this.#scope.space!;
+      gather.spaceInverse = this.#stage.prim(space) === null ? new Float64Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]) : inverseAffine(this.#world([space]));
+    }
+    const out = new Float64Array(world.length);
+    for (let at = 0; at < world.length; at += 16) multiply(world.subarray(at, at + 16), gather.spaceInverse, out, at);
+    return out;
   }
 
   /** The buffer `item` draws, read again; `null` when its prim draws nothing. */

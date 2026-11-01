@@ -772,7 +772,9 @@ function makeGrid(up: "Y" | "Z", cell: number): GridHelper {
 /**
  * The item's materials, highlighted when selected: one per range when it
  * has subsets (a range's subset material, else the item's), each its bound
- * `UsdPreviewSurface` record's (`surfaces.ts`), else its color.
+ * `UsdPreviewSurface` record's (`surfaces.ts`), else its color. With one
+ * of its face subsets selected, that subset's range is highlighted and
+ * the others ghosted.
  */
 function materials(
   view: ViewItem,
@@ -782,6 +784,8 @@ function materials(
 ): MeshStandardMaterial | MeshStandardMaterial[] | LineBasicMaterial | PointsMaterial {
   const { item } = view;
   const paths = [item.prim, ...item.instances];
+  const subset = selected === null ? -1 : view.buffers.subsets.indexOf(selected);
+  if (subset >= 0) return subsetMaterials(view, subset, records, textures);
   const highlighted =
     selected !== null && paths.some((path) => selected === path || selected.startsWith(`${path}/`) || path.startsWith(`${selected}/`));
   // Lines and points: unlit, in their per-sample (or prim) display color.
@@ -839,6 +843,39 @@ function materials(
   }
   const found = record(item.material);
   return found === null ? material(null) : surface(found);
+}
+
+/** A mesh's materials, one per range, with the range of subset `subset` highlighted and the others ghosted: drawn faintly, see-through. */
+function subsetMaterials(
+  view: ViewItem,
+  subset: number,
+  records: ReadonlyMap<string, MaterialItem>,
+  textures: TextureStore,
+): MeshStandardMaterial | MeshStandardMaterial[] {
+  const base = materials(view, null, records, textures);
+  // One range (the subset is every face): no groups, one material.
+  if (view.buffers.mesh.ranges.length <= 1) {
+    const material = (Array.isArray(base) ? base[0] : base) as MeshStandardMaterial;
+    material.emissive = new Color(0x2f5fd0);
+    material.emissiveIntensity = 0.6;
+    return material;
+  }
+  const each = view.buffers.mesh.ranges.map((_, index) => {
+    const material = (Array.isArray(base) ? base[index] : index === 0 ? base : (base as MeshStandardMaterial).clone()) as MeshStandardMaterial;
+    return material;
+  });
+  view.buffers.mesh.ranges.forEach((range, index) => {
+    const material = each[index]!;
+    if (range.subset === subset) {
+      material.emissive = new Color(0x2f5fd0);
+      material.emissiveIntensity = 0.6;
+    } else {
+      material.transparent = true;
+      material.opacity = 0.15;
+      material.depthWrite = false;
+    }
+  });
+  return each;
 }
 
 /**

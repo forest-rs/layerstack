@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 // What drawing costs, item by item: the draw list's measurement of what
-// it holds (`DrawList.cost`), sortable by any column, each row selecting
+// it holds (`DrawList.cost`), or its estimate of the whole scene from
+// counts (`DrawList.estimate`), sortable by any column, each row selecting
 // the prim it draws. Bytes uploaded are the buffer's (f32 attributes, u32
 // indices) plus 64 per instance; bytes held are the JavaScript arrays the
 // list keeps. A buffer two items share is counted in both rows, once in
@@ -65,11 +66,15 @@ export function CostTable({ store, cost, caption }: { store: EditorStore; cost: 
         {formatBytes(total.gpuBytes)} uploaded ({formatBytes(total.instanceBytes)} of instance matrices), {formatBytes(total.cpuBytes)} held in JavaScript.
         {rows.length > SHOWN && ` The ${SHOWN} first rows are shown.`}
       </p>
-      <table className="w-full border-collapse tabular-nums">
+      <table className="w-full table-fixed border-collapse tabular-nums">
         <thead className="sticky top-0 bg-background text-left text-muted-foreground">
           <tr>
             {COLUMNS.map((candidate) => (
-              <th key={candidate.id} className={cn("px-3 py-1 font-normal", candidate.id !== "prim" && candidate.id !== "kind" && "text-right")} title={candidate.title}>
+              <th
+                key={candidate.id}
+                className={cn("px-3 py-1 font-normal", candidate.id === "prim" ? "w-[40%]" : candidate.id === "kind" ? "w-28" : "text-right")}
+                title={candidate.title}
+              >
                 <button
                   type="button"
                   className="hover:text-foreground"
@@ -109,9 +114,51 @@ export function CostTable({ store, cost, caption }: { store: EditorStore; cost: 
   );
 }
 
-/** The bottom panel's draw cost tab: what the drawn items hold. */
+/**
+ * The bottom panel's draw cost tab: what the drawn items hold, measured,
+ * or what drawing the whole scene would, as estimated when it opened
+ * (from counts, building nothing: the only figures for a scene too big
+ * to draw).
+ */
 export function CostView({ store }: { store: EditorStore }) {
-  const cost = store.cost;
-  if (cost === null || cost.items.length === 0) return <p className="p-3 text-xs text-muted-foreground">Nothing is drawn.</p>;
-  return <CostTable store={store} cost={cost} caption="Drawn, measured" />;
+  const [choice, setChoice] = useState<"drawn" | "estimated" | null>(null);
+  const drawn = store.cost !== null && store.cost.items.length > 0 ? store.cost : null;
+  const estimate = store.sceneEstimate;
+  const showing = choice ?? (drawn !== null ? "drawn" : "estimated");
+  const cost = showing === "drawn" ? drawn : estimate;
+  return (
+    <div>
+      <div role="group" aria-label="Cost of" className="flex gap-1 px-3 pt-1.5 text-[11px]">
+        {(
+          [
+            ["drawn", "Drawn, measured"],
+            ["estimated", "Whole scene, estimated"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={showing === id}
+            onClick={() => setChoice(id)}
+            className={cn("rounded px-2 py-0.5 text-muted-foreground hover:text-foreground", showing === id && "bg-muted text-foreground")}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {cost === null ? (
+        <p className="p-3 text-xs text-muted-foreground">{showing === "drawn" ? "Nothing is drawn." : "No estimate: no scene is open."}</p>
+      ) : (
+        <CostTable
+          store={store}
+          cost={cost}
+          caption={
+            showing === "drawn"
+              ? "Drawn, measured"
+              : "The whole scene, estimated from counts when it opened (a mesh's vertices are its points, raised where a primvar is face-varying)"
+          }
+        />
+      )}
+    </div>
+  );
 }

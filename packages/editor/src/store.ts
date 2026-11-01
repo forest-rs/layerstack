@@ -10,7 +10,8 @@
 // handed.
 import { useSyncExternalStore } from "react";
 import type { Edit, EditReceipt, EditTarget, Layer, Layerstack, ValueInput } from "@forest-rs/layerstack";
-import type { DrawCost, Stagehand } from "@forest-rs/layerstack_stagehand";
+import type { DrawCost, DrawScope, Stagehand } from "@forest-rs/layerstack_stagehand";
+import { type AssetFocus, assetFocus, type DrawScopeChoice, overLimit, scopeFor } from "./model/assetView.ts";
 import { ViewportModel, type ViewportScene, type ViewportUpdate } from "./model/draws.ts";
 import { type OpenPhase, Session } from "./model/session.ts";
 import type { SceneSource } from "./model/sources.ts";
@@ -111,6 +112,23 @@ export class EditorStore {
   lastUpdate: ViewportUpdate | null = null;
   /** What the draws hold, measured after the last sync; `null` with no scene. */
   cost: DrawCost | null = null;
+  /**
+   * What the viewport draws: the whole scene, the selection alone (the
+   * asset view, {@link assetFocus}), or nothing. A scene over
+   * {@link DRAW_LIMIT} opens drawing the selection; {@link scopeNote} says
+   * why.
+   */
+  drawScope: DrawScopeChoice = "scene";
+  /** Why the scene opened without drawing it whole; `null` when it did. */
+  scopeNote: string | null = null;
+  /** What drawing the whole scene would cost, estimated when it opened. */
+  sceneEstimate: DrawCost | null = null;
+  /** What the asset view makes of the selection, as last synced. */
+  focus: AssetFocus = { kind: "none" };
+  /** Why the asset view does not draw the selection (over {@link DRAW_LIMIT}); `null` when it does, or when the selection draws nothing anyway. */
+  focusNote: string | null = null;
+  /** The asset view's last decision, so a sync does not estimate the same selection again: its key, scope and note. */
+  #focusScope: { key: string; scope: DrawScope; note: string | null } | null = null;
   /** What actions reported, newest last. */
   readonly notices: Notice[] = [];
   readonly #draws: ViewportModel;
@@ -144,11 +162,11 @@ export class EditorStore {
     viewport.onImages = () => this.#bumpSoon();
     viewport.lookThrough(this.through);
     this.#orient();
-    const update = this.session === null ? null : this.#draws.sync(this.session, this.time);
+    const update = this.session === null ? null : this.#draws.sync(this.session, this.time, this.#scope(this.session));
     if (update !== null) {
       this.scene = this.#draws.scene(this.time);
       this.cost = this.#draws.cost();
-      viewport.update(this.scene, { ...update, reset: true }, this.selection);
+      viewport.update(this.scene, { ...update, reset: true }, this.#highlighted());
     }
   }
 
@@ -192,6 +210,7 @@ export class EditorStore {
       this.range = timeRange(session);
       this.time = this.range?.start;
       this.status = { kind: "ready" };
+      this.#decideScope(session);
       this.#sync();
     } catch (error) {
       if (opening !== this.#opening) return;
@@ -240,19 +259,87 @@ export class EditorStore {
     this.#bump();
   }
 
-  /** Selects the prim at `path` (`null` for none); the explain panel keeps its property while it is the prim's. */
+  /**
+   * Selects the prim at `path` (`null` for none); the explain panel keeps
+   * its property while it is the prim's. Drawing the selection, the asset
+   * view draws it instead.
+   */
   select(path: string | null): void {
     if (path === this.selection) return;
     this.selection = path;
     if (this.property !== null && (path === null || !this.property.startsWith(`${path}.`))) this.property = null;
-    this.#viewport?.update(this.scene, this.#noUpdate(), path);
+    if (this.drawScope === "selection") {
+      this.#sync();
+      return;
+    }
+    this.#viewport?.update(this.scene, this.#noUpdate(), this.#highlighted());
     this.#bump();
   }
 
-  /** Shows `path`'s value and opinions in the explain panel. */
+  /** Shows `path`'s value and opinions in the explain panel (and, drawing the selection, an image it names). */
   explain(path: string | null): void {
     this.property = path;
-    this.#bump();
+    if (this.drawScope === "selection") this.#sync();
+    else this.#bump();
+  }
+
+  /** Draws the whole scene, the selection alone, or nothing, from now on. */
+  setDrawScope(choice: DrawScopeChoice): void {
+    if (choice === this.drawScope) return;
+    this.drawScope = choice;
+    this.scopeNote = null;
+    this.#sync();
+  }
+
+  /**
+   * Chooses what a newly opened scene draws: the whole scene, unless its
+   * estimated draws are over {@link DRAW_LIMIT}; then the selection, and
+   * {@link scopeNote} says why.
+   */
+  #decideScope(session: Session): void {
+    this.#focusScope = null;
+    try {
+      this.sceneEstimate = this.#draws.estimate(session.stage, this.time, { roots: ["/"] });
+    } catch (error) {
+      if (moduleTrap(error) !== null) throw error;
+      this.sceneEstimate = null;
+    }
+    const over = this.sceneEstimate === null ? null : overLimit(this.sceneEstimate.total);
+    this.drawScope = over === null ? "scene" : "selection";
+    this.scopeNote = over === null ? null : `This scene is not drawn whole: ${over}. Select a prim to draw it alone, or choose Scene.`;
+  }
+
+  /**
+   * The draw list's scope: {@link scopeFor} the choice and the asset
+   * view's focus, except that a selection over {@link DRAW_LIMIT} is not
+   * drawn ({@link focusNote} says why). Decided once per selection,
+   * property and recomposition.
+   */
+  #scope(session: Session): DrawScope {
+    const stage = session.stage;
+    this.focus = assetFocus(stage, this.selection, this.property, this.time);
+    if (this.drawScope !== "selection") {
+      this.focusNote = null;
+      return scopeFor(this.drawScope, this.focus);
+    }
+    const scope = scopeFor("selection", this.focus);
+    const key = `${JSON.stringify(scope)} ${session.changeLog.length}`;
+    if (this.#focusScope?.key !== key) {
+      let note: string | null = null;
+      if (scope.roots.length > 0) {
+        const over = overLimit(this.#draws.estimate(stage, this.time, scope).total);
+        if (over !== null) note = `${scope.roots[0]} is not drawn: ${over}. Select a part of it.`;
+      }
+      this.#focusScope = { key, scope: note === null ? scope : { roots: [] }, note };
+    }
+    this.focusNote = this.#focusScope.note;
+    return this.#focusScope.scope;
+  }
+
+  /** The prim the viewport highlights: the selection, or, drawing it alone, only a face subset of it. */
+  #highlighted(): string | null {
+    if (this.drawScope !== "selection") return this.selection;
+    return this.focus.kind === "geometry" ? this.focus.subset : null;
   }
 
   /** Looks through the stage camera at `path`, or the free camera with `null`. */
@@ -262,10 +349,16 @@ export class EditorStore {
     this.#bump();
   }
 
-  /** Frames the free camera on the selection, or the whole stage. */
+  /** Frames the free camera on the selection, or the whole stage; drawing the selection alone, on what is drawn. */
   frameSelection(): void {
     const stage = this.session?.stage;
     if (stage === undefined || this.#viewport === null) return;
+    if (this.drawScope !== "scene") {
+      if (this.scene.bounds === null) return;
+      this.lookThrough(null);
+      this.#viewport.frame(this.scene.bounds);
+      return;
+    }
     const bounds = stage.worldBounds([this.selection ?? "/"], {
       purposes: ["default", "proxy"],
       ...(this.time === undefined ? {} : { time: this.time }),
@@ -424,11 +517,11 @@ export class EditorStore {
   /** Brings the draw list up to the stage, applies what changed to the view, and bumps the revision. */
   #sync(): void {
     if (this.session !== null) {
-      const update = this.#draws.sync(this.session, this.time);
+      const update = this.#draws.sync(this.session, this.time, this.#scope(this.session));
       this.scene = this.#draws.scene(this.time);
       this.cost = this.#draws.cost();
-      if (update.reset || update.records > 0 || update.timeChanged) this.lastUpdate = update;
-      this.#viewport?.update(this.scene, update, this.selection);
+      if (update.reset || update.records > 0 || update.timeChanged || update.added.size + update.removed.size > 0) this.lastUpdate = update;
+      this.#viewport?.update(this.scene, update, this.#highlighted());
     }
     this.#bump();
   }

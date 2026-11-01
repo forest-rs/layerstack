@@ -11,6 +11,7 @@ import { updateSummary, viewportSummary } from "../model/draws.ts";
 import { resolveAsset } from "../model/sources.ts";
 import { SKIN_SLOTS } from "../model/skinning.ts";
 import { enclosingMaterial } from "../model/network.ts";
+import { AssetCard, DrawScopeSwitch, TextureView } from "./AssetView.tsx";
 import { formatBytes } from "./format.ts";
 import { LoadingOverlay } from "./LoadingOverlay.tsx";
 import { MaterialPreview } from "./MaterialPreview.tsx";
@@ -66,7 +67,9 @@ export function ViewportPane() {
   const [materialChoice, setMaterialChoice] = useState<boolean | null>(null);
   const stage = store.session?.stage ?? null;
   const material = stage === null || store.selection === null ? null : enclosingMaterial(stage, store.selection);
-  const showMaterial = material !== null && (materialChoice ?? summary.drawn.length === 0);
+  // The asset view's texture: the image a selected texture names, in place of the draws.
+  const texture = store.drawScope === "selection" && store.focus.kind === "texture" ? store.focus.attribute : null;
+  const showMaterial = texture === null && material !== null && (materialChoice ?? summary.drawn.length === 0);
   const textures = store.viewport?.textureStats;
   const skinning = store.scene.skinning;
   const skinned = skinning.gpu + skinning.cpu + skinning.failed.length > 0;
@@ -87,12 +90,13 @@ export function ViewportPane() {
             store.select(store.viewport?.pick(event.clientX - rect.left, event.clientY - rect.top) ?? null);
           }}
         />
+        {texture !== null && stage !== null && <TextureView store={store} stage={stage} attribute={texture} />}
         {showMaterial && stage !== null && (
         <div className="absolute inset-0">
           <MaterialPreview store={store} stage={stage} material={material} shape="shaderBall" />
         </div>
       )}
-      {material !== null && (
+      {material !== null && texture === null && (
         <div className="absolute top-2 right-2 flex rounded-md bg-black/40 p-0.5 text-[11px] backdrop-blur-sm">
           {(["Scene", "Material"] as const).map((mode) => (
             <button
@@ -119,12 +123,18 @@ export function ViewportPane() {
             The viewport cannot draw here: {failed}
           </div>
         )}
-        {!showMaterial && (
-        <div className="pointer-events-none absolute top-2 left-2 rounded-md bg-black/40 px-2 py-1 font-mono text-[11px] text-white/80 backdrop-blur-sm">
-          {through === null ? "Free camera" : `Looking through ${through}`}
-        </div>
-      )}
-        {!showMaterial && (
+        {store.session !== null && (
+          <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
+            <DrawScopeSwitch store={store} />
+            {!showMaterial && texture === null && (
+              <div className="pointer-events-none rounded-md bg-black/40 px-2 py-1 font-mono text-[11px] text-white/80 backdrop-blur-sm">
+                {through === null ? "Free camera" : `Looking through ${through}`}
+              </div>
+            )}
+            {store.drawScope === "selection" && !showMaterial && stage !== null && <AssetCard store={store} stage={stage} />}
+          </div>
+        )}
+        {!showMaterial && texture === null && (
         <div className="pointer-events-none absolute right-2 bottom-2 rounded-md bg-black/40 px-2 py-1 text-right font-mono text-[11px] leading-relaxed text-white/80 tabular-nums backdrop-blur-sm">
           <div>
             {summary.drawn.length} prims drawn · {summary.triangles.toLocaleString()} triangles · {summary.lights.length} lights

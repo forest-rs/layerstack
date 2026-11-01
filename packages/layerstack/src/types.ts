@@ -1696,7 +1696,7 @@ export interface SkinningCacheStats {
   readonly pointVertices: number;
   /** Normals skinned. */
   readonly normalVectors: number;
-  /** Retained entries the stage's edits invalidated. */
+  /** Retained entries the stage's edits invalidated (skinning and blend shapes). */
   readonly invalidations: number;
   /** Times the stage's change history expired before a skinning read, so the cache started over. */
   readonly resets: number;
@@ -1704,10 +1704,18 @@ export interface SkinningCacheStats {
   readonly skeletons: number;
   /** Geometry bindings retained. */
   readonly bindings: number;
-  /** Bytes of retained arrays (matrices, influences, outputs) in use. */
+  /** Bytes of retained arrays (matrices, influences, outputs, blend-shaped arrays) in use. */
   readonly usedBytes: number;
   /** Bytes of retained array capacity. */
   readonly capacityBytes: number;
+  /** Blend-shaped point or normal arrays reused without recomputing ({@link SkinningQuery.blendShapedPoints}). */
+  readonly blendShapeHits: number;
+  /** Blend-shaped arrays recomputed, failed ones included. */
+  readonly blendShapeMisses: number;
+  /** Points and normals blend-shaped (not skinned). */
+  readonly blendShapedVectors: number;
+  /** Geometry blend-shape bindings retained. */
+  readonly blendShapeBindings: number;
 }
 
 /**

@@ -73,6 +73,75 @@ def Mesh "Loose" {
 }
 `;
 
+/** A robot whose visor joint moves +2 in x from time 0 to 10 as its `open` shape's weight goes from 0 to 1, lifting the last point and tilting its normal; and an arm without shapes. */
+const visor = `#usda 1.0
+def SkelRoot "Robot" (
+    prepend apiSchemas = ["SkelBindingAPI"]
+) {
+    rel skel:skeleton = </Robot/Skel>
+    def Skeleton "Skel" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    ) {
+        uniform token[] joints = ["Head"]
+        uniform matrix4d[] bindTransforms = [((1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1))]
+        uniform matrix4d[] restTransforms = [((1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1))]
+        rel skel:animationSource = </Robot/Skel/Nod>
+        def SkelAnimation "Nod" {
+            uniform token[] joints = ["Head"]
+            float3[] translations.timeSamples = {
+                0: [(0, 0, 0)],
+                10: [(2, 0, 0)],
+            }
+            quatf[] rotations = [(1, 0, 0, 0)]
+            half3[] scales = [(1, 1, 1)]
+            uniform token[] blendShapes = ["open"]
+            float[] blendShapeWeights.timeSamples = {
+                0: [0],
+                10: [1],
+            }
+        }
+    }
+    def Mesh "Visor" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    ) {
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0)]
+        normal3f[] normals = [(0, 0, 1), (0, 0, 1), (0, 0, 1)] (
+            interpolation = "vertex"
+        )
+        int[] primvars:skel:jointIndices = [0, 0, 0] (
+            elementSize = 1
+            interpolation = "vertex"
+        )
+        float[] primvars:skel:jointWeights = [1, 1, 1] (
+            elementSize = 1
+            interpolation = "vertex"
+        )
+        uniform token[] skel:blendShapes = ["open"]
+        rel skel:blendShapeTargets = </Robot/Visor/Open>
+        def BlendShape "Open" {
+            uniform vector3f[] offsets = [(0, 2, 0)]
+            uniform vector3f[] normalOffsets = [(0, 2, 0)]
+            uniform int[] pointIndices = [2]
+        }
+    }
+    def Mesh "Arm" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    ) {
+        point3f[] points = [(0, 0, 0), (0, 1, 0)]
+        int[] primvars:skel:jointIndices = [0, 0] (
+            elementSize = 1
+            interpolation = "vertex"
+        )
+        float[] primvars:skel:jointWeights = [1, 1] (
+            elementSize = 1
+            interpolation = "vertex"
+        )
+    }
+}
+`;
+
 function openRobot(): Stage {
   return layerstack.open({ identifier: "robot.usda", bytes: new TextEncoder().encode(robot) });
 }
@@ -191,6 +260,40 @@ describe("an engine skinning a mesh", () => {
     assert.ok(stage.skinningCache().invalidations > again.invalidations, "the edit invalidated the arm");
     receipt.undo();
     assert.deepEqual([...(skin.deformedPoints(10).copy() as Float32Array)], [0, 0, 0, 2, 1, 0, 3, 1, 0]);
+  });
+
+  it("skins blend-shaped points with the palette, as the CPU deforms them", () => {
+    using stage = layerstack.open({ identifier: "visor.usda", bytes: new TextEncoder().encode(visor) });
+    const skin = stage.skinning("/Robot/Visor")!;
+    assert.equal(skin.blendShapes, true);
+    assert.equal(skin.blendShapeWeightsMightBeTimeVarying, true);
+    // The animation's weights, whether or not this geometry binds shapes.
+    assert.equal(stage.skinning("/Robot/Arm")!.blendShapes, false);
+    assert.equal(stage.skinning("/Robot/Arm")!.blendShapeWeightsMightBeTimeVarying, true);
+    const { indices, weights } = skin.influences();
+    for (const time of [0, 5, 10]) {
+      using shaped = skin.blendShapedPoints(time);
+      assert.equal(shaped.type, "point3f[]");
+      const palette = skin.skinningTransforms(time);
+      const skinned = layerstack.skinPoints({
+        geomBindTransform: palette.geomBindTransform,
+        jointTransforms: palette.transforms.copy() as Float64Array,
+        influences: { indices: indices.copy() as Int32Array, weights: weights.copy() as Float32Array, elementSize: 1 },
+        points: shaped.view() as Float32Array,
+      });
+      palette.transforms.release();
+      using deformed = skin.deformedPoints(time);
+      assert.deepEqual([...skinned], [...(deformed.view() as Float32Array)], `time ${time}`);
+    }
+    assert.deepEqual([...(skin.blendShapedPoints(5).copy() as Float32Array)], [0, 0, 0, 1, 0, 0, 1, 2, 0]);
+    assert.deepEqual([...(skin.blendShapedNormals(5).copy() as Float32Array)], [0, 0, 1, 0, 0, 1, 0, 1, 1]);
+    // Without blend shapes: the points as authored.
+    assert.deepEqual([...(stage.skinning("/Robot/Arm")!.blendShapedPoints(5).copy() as Float32Array)], [0, 0, 0, 0, 1, 0]);
+    const stats = stage.skinningCache();
+    assert.equal(stats.blendShapeBindings, 1);
+    skin.blendShapedPoints(5).release();
+    assert.equal(stage.skinningCache().blendShapeHits, stats.blendShapeHits + 1, "the same frame is reused");
+    assert.equal(stage.skinningCache().blendShapedVectors, stats.blendShapedVectors, "nothing blend-shaped again");
   });
 
   it("refuses mismatched influences and unbound prims with their codes", () => {

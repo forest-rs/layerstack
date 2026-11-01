@@ -2,15 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! Skinning from TypeScript: a mesh's skinning binding, its joint
-//! influences and joint palette as typed arrays, its deformed points and
-//! normals, and the skinning functions over the caller's own arrays.
+//! influences and joint palette as typed arrays, its blend-shaped points
+//! and normals (what the palette skins), its deformed points and normals,
+//! and the skinning functions over the caller's own arrays.
 //!
-//! A stage keeps one [`SkelCache`] with its own change cursor: before each
-//! skinning read it hears the stage's changes since the last one and
-//! invalidates what they touch ([`SkelCache::apply_changes`]), or clears
-//! the cache when the change history expired. A frame's reads then reuse
-//! the rigs' definitions, inverse binds and influences, and recompute only
-//! what time-varying inputs need at the new time.
+//! A stage keeps one [`SkelCache`] and one [`BlendShapeCache`] with one
+//! change cursor: before each skinning read they hear the stage's changes
+//! since the last one and invalidate what they touch
+//! ([`SkelCache::apply_changes`], [`BlendShapeCache::apply_changes`]), or
+//! are cleared when the change history expired. A frame's reads then reuse
+//! the rigs' definitions, inverse binds, influences and blend shapes, and
+//! recompute only what time-varying inputs need at the new time.
 //!
 //! Arrays leave as [`ArrayHandle`]s, which the wrapper views as typed
 //! arrays (`Float32Array`, `Float64Array`, `Int32Array`) without a copy;
@@ -18,17 +20,20 @@
 //!
 //! Spec: AOUSD Core §6.3 (row-vector matrices), §12.3 (value resolution
 //! at a time). OpenUSD: `UsdSkelSkinningQuery`, `UsdSkelCache`,
-//! `UsdSkelSkinPoints`, `UsdSkelSkinNormals`, `UsdSkelSkinTransform`.
+//! `UsdSkelBlendShapeQuery`, `UsdSkelSkinPoints`, `UsdSkelSkinNormals`,
+//! `UsdSkelSkinTransform`.
 
 use alloc::{format, string::ToString, sync::Arc, vec, vec::Vec};
 
-use layerstack::{ChangeCursor, InMemoryStore, LiveStage, Time, TypedArray};
+use layerstack::{ChangeCursor, InMemoryStore, LiveStage, PathId, Time, TypedArray};
 use layerstack_schemas::{
-    Scene,
+    PrimView, Scene,
     skel::{
-        InfluenceInterpolation, InterleavedInfluences, JointInfluences, SkelCache, SkelError,
-        SkinningMethod, SkinningQuery,
+        BlendShapeCache, InfluenceInterpolation, InterleavedInfluences, JointInfluences, SkelCache,
+        SkelError, SkinningMethod, SkinningQuery,
     },
+    usd_skel::SkelAnimation,
+    value::read_float3_array_shared,
 };
 use wasm_bindgen::prelude::*;
 
@@ -37,44 +42,66 @@ use crate::{array::ArrayHandle, error::Error, schemas::path_text, stage::Stage, 
 /// A row-vector 4x4 matrix, as USD stores them.
 type Matrix = [[f64; 4]; 4];
 
-/// The skinning state a stage keeps: the retained evaluator, and the
-/// cursor of the changes it has heard.
+/// The skinning state a stage keeps: the retained evaluators, and the
+/// cursor of the changes they have heard.
 #[derive(Debug)]
 pub(crate) struct SkelState {
     cache: SkelCache,
+    /// Blend shapes alone, before skinning: what a GPU palette skins.
+    shapes: BlendShapeCache,
     cursor: ChangeCursor,
-    /// Times the change history expired and the cache was cleared.
+    /// Times the change history expired and the caches were cleared.
     resets: u64,
 }
 
 impl SkelState {
-    /// An empty evaluator hearing `live`'s changes from now on.
+    /// Empty evaluators hearing `live`'s changes from now on.
     pub(crate) fn new(live: &mut LiveStage) -> Self {
         Self {
             cache: SkelCache::new(Time::Default),
+            shapes: BlendShapeCache::new(Time::Default),
             cursor: live.change_cursor(),
             resets: 0,
         }
     }
 
-    /// The cache, invalidated by every change the stage made since the
-    /// last call, at `time`.
-    fn at(&mut self, live: &LiveStage, store: &InMemoryStore, time: Time) -> &mut SkelCache {
+    /// Invalidates what every change the stage made since the last call
+    /// touches, in both caches.
+    fn hear(&mut self, live: &LiveStage, store: &InMemoryStore) {
         let scene = Scene::new(live.stage(), store);
         match live.changes_since(&mut self.cursor) {
             Ok(batches) => {
                 for changes in batches {
                     self.cache.apply_changes(&scene, changes);
+                    self.shapes.apply_changes(&scene, changes);
                 }
             }
             // Evidence expired: start over.
             Err(_) => {
                 self.cache.clear();
+                self.shapes.clear();
                 self.resets += 1;
             }
         }
+    }
+
+    /// The skinning cache, up to date with the stage, at `time`.
+    fn at(&mut self, live: &LiveStage, store: &InMemoryStore, time: Time) -> &mut SkelCache {
+        self.hear(live, store);
         self.cache.set_time(time);
         &mut self.cache
+    }
+
+    /// The blend-shape cache, up to date with the stage, at `time`.
+    fn shapes_at(
+        &mut self,
+        live: &LiveStage,
+        store: &InMemoryStore,
+        time: Time,
+    ) -> &mut BlendShapeCache {
+        self.hear(live, store);
+        self.shapes.set_time(time);
+        &mut self.shapes
     }
 }
 
@@ -147,16 +174,22 @@ impl Stage {
     /// What the stage's skinning cache has done and holds:
     /// `[hits, misses, skeletonBuilds, bindingBuilds, poseEvaluations,
     /// influenceResolutions, pointVertices, normalVectors, invalidations,
-    /// resets, skeletons, bindings, usedBytes, capacityBytes]`: deformed
-    /// arrays reused and recomputed, rig and binding snapshots built, poses
-    /// evaluated, influence arrays flattened, points and normals skinned,
-    /// entries edits invalidated, times the change history expired and the
-    /// cache started over (cumulative since the stage opened), then the
-    /// rigs and bindings it retains and the bytes of their arrays.
+    /// resets, skeletons, bindings, usedBytes, capacityBytes,
+    /// blendShapeHits, blendShapeMisses, blendShapedVectors,
+    /// blendShapeBindings]`: deformed arrays reused and recomputed, rig and
+    /// binding snapshots built, poses evaluated, influence arrays
+    /// flattened, points and normals skinned, entries edits invalidated
+    /// (in either cache), times the change history expired and the caches
+    /// started over (cumulative since the stage opened), then the rigs and
+    /// bindings it retains and the bytes of both caches' arrays; then the
+    /// blend-shaped arrays reused and recomputed, the points and normals
+    /// blend-shaped (cumulative), and the blend-shape bindings retained.
     pub(crate) fn skinning_cache(&self) -> Wire {
         let state = self.skel_state();
         let stats = state.cache.stats();
         let memory = state.cache.memory();
+        let shape_stats = state.shapes.stats();
+        let shape_memory = state.shapes.memory();
         #[expect(clippy::cast_precision_loss, reason = "counters stay far below 2^53")]
         let count = |value: u64| Wire::Number(value as f64);
         let size = |value: usize| Wire::Number(value as f64);
@@ -169,12 +202,16 @@ impl Stage {
             count(stats.influence_resolutions),
             count(stats.point_vertices),
             count(stats.normal_vectors),
-            count(stats.invalidations),
+            count(stats.invalidations + shape_stats.invalidations),
             count(state.resets),
             size(memory.skeletons),
             size(memory.bindings),
-            size(memory.used_bytes),
-            size(memory.capacity_bytes),
+            size(memory.used_bytes + shape_memory.used_bytes),
+            size(memory.capacity_bytes + shape_memory.capacity_bytes),
+            count(shape_stats.hits),
+            count(shape_stats.misses),
+            count(shape_stats.point_vertices + shape_stats.normal_vectors),
+            size(shape_memory.bindings),
         ])
     }
 
@@ -190,14 +227,17 @@ impl Stage {
     /// The skinning binding of the geometry at `path`, or `null` when no
     /// skeleton with joint influences binds it:
     /// `[skeleton, joints, jointMapping, elementSize, interpolation,
-    /// method, animation, blendShapes]`, the bound skeleton, its joints in
-    /// skeleton order, for each influence index the skeleton joint it
-    /// names (`-1` for none; `null` when the binding's order is the
-    /// skeleton's), the influences per point (or for the whole prim),
-    /// `constant` (rigid) or `vertex`, the skinning method, the animation
-    /// source (`null` without one), and whether it binds blend shapes.
+    /// method, animation, blendShapes, blendShapeWeightsVary]`, the bound
+    /// skeleton, its joints in skeleton order, for each influence index
+    /// the skeleton joint it names (`-1` for none; `null` when the
+    /// binding's order is the skeleton's), the influences per point (or
+    /// for the whole prim), `constant` (rigid) or `vertex`, the skinning
+    /// method, the animation source (`null` without one), whether it binds
+    /// blend shapes, and whether the animation's blend-shape weights might
+    /// vary with time (two or more samples, a spline or value clips).
     ///
-    /// OpenUSD: `UsdSkelSkinningQuery`.
+    /// OpenUSD: `UsdSkelSkinningQuery`,
+    /// `UsdSkelAnimQuery::BlendShapeWeightsMightBeTimeVarying`.
     ///
     /// # Errors
     ///
@@ -208,7 +248,9 @@ impl Stage {
         let Some(query) = self.skinning_query(path)? else {
             return Ok(Wire::Null);
         };
-        let store = self.document().store();
+        let document = self.document();
+        let store = document.store();
+        let scene = Scene::new(document.stage().stage(), store);
         let skeleton = query.skeleton_query();
         let method = query
             .skinning_method()
@@ -239,6 +281,12 @@ impl Stage {
                 .animation_path()
                 .map_or(Wire::Null, |animation| path_text(store, animation)),
             Wire::Bool(query.blend_shapes_property().is_some()),
+            Wire::Bool(
+                skeleton
+                    .animation_path()
+                    .and_then(|animation| SkelAnimation::get(&scene, animation))
+                    .is_some_and(|animation| animation.blend_shape_weights_might_be_time_varying()),
+            ),
         ]))
     }
 
@@ -332,6 +380,80 @@ impl Stage {
         ]))
     }
 
+    /// The geometry's points at `time` with its blend shapes applied and
+    /// not skinned, in the geometry's space, as a `point3f[]` array handle:
+    /// the points [`Self::skinning_transforms`] skin. Geometry binding no
+    /// blend shapes gives its points as authored.
+    ///
+    /// OpenUSD: `UsdSkelBlendShapeQuery::ComputeDeformedPoints`, with the
+    /// skeleton animation's weights mapped to the geometry's shapes
+    /// (`UsdSkelSkinningQuery::GetBlendShapeMapper`), as
+    /// `UsdSkelBakeSkinning` applies them before skinning.
+    ///
+    /// # Errors
+    ///
+    /// `prim.not_found`; `skel.input` for a prim without points;
+    /// `skel.deformation` for offsets that do not fit the points;
+    /// `skel.array_length` for weights that do not match the animation's
+    /// blend shapes; `value.decode` for points that do not decode.
+    pub(crate) fn blend_shaped_points(
+        &mut self,
+        path: &str,
+        time: Option<f64>,
+    ) -> Result<Wire, Error> {
+        self.blend_shaped(path, time, "points")
+    }
+
+    /// The geometry's `normals` at `time` with its blend shapes' normal
+    /// offsets applied, not normalized and not skinned, as a `normal3f[]`
+    /// array handle: vertex, varying and (on a mesh) face-varying normals,
+    /// each offset spread to the corners of its point. Geometry binding no
+    /// blend shapes gives its normals as authored.
+    ///
+    /// OpenUSD: `UsdSkelBlendShapeQuery::ComputeDeformedNormals`.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::blend_shaped_points`]; `skel.input` for a prim without
+    /// normals, or with uniform ones, or constant ones that shapes offset.
+    pub(crate) fn blend_shaped_normals(
+        &mut self,
+        path: &str,
+        time: Option<f64>,
+    ) -> Result<Wire, Error> {
+        self.blend_shaped(path, time, "normals")
+    }
+
+    /// The `points` or `normals` of the geometry at `path` and `time`,
+    /// blend-shaped, or as authored without blend shapes.
+    fn blend_shaped(&mut self, path: &str, time: Option<f64>, name: &str) -> Result<Wire, Error> {
+        let prim = self.existing_prim(path)?.path();
+        let (document, skel) = self.document_and_skel();
+        let store = document.store();
+        let live = document.stage();
+        let time = crate::stage::time_of(time);
+        let shapes = skel.shapes_at(live, store, time);
+        let scene = Scene::new(live.stage(), store);
+        let shaped = if name == "normals" {
+            shapes.deformed_normals(&scene, prim)
+        } else {
+            shapes.deformed_points(&scene, prim)
+        }
+        .map_err(|error| skel_error(&error, store).at_path(path))?;
+        let values = match shaped {
+            Some(values) => Arc::new(values.to_vec()),
+            None => authored(&scene, prim, name, time).map_err(|error| error.at_path(path))?,
+        };
+        Ok(handle(
+            if name == "normals" {
+                "normal3f[]"
+            } else {
+                "point3f[]"
+            },
+            TypedArray::Vec3f(values),
+        ))
+    }
+
     /// The geometry's points at `time` deformed by its blend shapes and
     /// then its skeleton, in skeleton space, as a `point3f[]` array handle.
     ///
@@ -390,6 +512,20 @@ impl Stage {
             TypedArray::Vec3f(Arc::new(normals.to_vec())),
         ))
     }
+}
+
+/// The `points` or `normals` (`name`) of the prim at `path` and `time`,
+/// as authored, shared without a copy.
+fn authored(
+    scene: &Scene<'_>,
+    path: PathId,
+    name: &str,
+    time: Time,
+) -> Result<Arc<Vec<[f32; 3]>>, Error> {
+    PrimView::new(*scene, path)
+        .try_read_value(name, time, read_float3_array_shared)
+        .map_err(|error| Error::new("value.decode", format!("`{name}`: {error}")))?
+        .ok_or_else(|| Error::new("skel.input", format!("the prim has no `{name}`")))
 }
 
 /// The error of a skinning read of geometry nothing skins.
@@ -803,7 +939,7 @@ def Mesh "Loose" {
         assert_eq!(
             show(&stage.skinning("/Robot/Arm").unwrap()),
             "[/Robot/Skel, [Root, Root/Arm], null, 1, vertex, classicLinear, \
-             /Robot/Skel/Wave, false]"
+             /Robot/Skel/Wave, false, false]"
         );
         assert_eq!(stage.skinning("/Loose").unwrap(), Wire::Null);
         assert_eq!(
@@ -862,6 +998,156 @@ def Mesh "Loose" {
             stats.contains(", 0, 1, 1, "),
             "no reset; one rig, one binding: {stats}"
         );
+    }
+
+    /// A robot whose visor joint moves +2 in x from time 0 to 10, as its
+    /// `open` shape's weight goes from 0 to 1, lifting the visor's last
+    /// point by 1 in y and tilting its normal.
+    const VISOR: &str = r#"#usda 1.0
+def SkelRoot "Robot" (
+    prepend apiSchemas = ["SkelBindingAPI"]
+) {
+    rel skel:skeleton = </Robot/Skel>
+    def Skeleton "Skel" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    ) {
+        uniform token[] joints = ["Head"]
+        uniform matrix4d[] bindTransforms = [((1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1))]
+        uniform matrix4d[] restTransforms = [((1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1))]
+        rel skel:animationSource = </Robot/Skel/Nod>
+        def SkelAnimation "Nod" {
+            uniform token[] joints = ["Head"]
+            float3[] translations.timeSamples = {
+                0: [(0, 0, 0)],
+                10: [(2, 0, 0)],
+            }
+            quatf[] rotations = [(1, 0, 0, 0)]
+            half3[] scales = [(1, 1, 1)]
+            uniform token[] blendShapes = ["open"]
+            float[] blendShapeWeights.timeSamples = {
+                0: [0],
+                10: [1],
+            }
+        }
+    }
+    def Mesh "Visor" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    ) {
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (1, 1, 0)]
+        normal3f[] normals = [(0, 0, 1), (0, 0, 1), (0, 0, 1)] (
+            interpolation = "vertex"
+        )
+        int[] primvars:skel:jointIndices = [0, 0, 0] (
+            elementSize = 1
+            interpolation = "vertex"
+        )
+        float[] primvars:skel:jointWeights = [1, 1, 1] (
+            elementSize = 1
+            interpolation = "vertex"
+        )
+        uniform token[] skel:blendShapes = ["open"]
+        rel skel:blendShapeTargets = </Robot/Visor/Open>
+        def BlendShape "Open" {
+            uniform vector3f[] offsets = [(0, 2, 0)]
+            uniform vector3f[] normalOffsets = [(0, 2, 0)]
+            uniform int[] pointIndices = [2]
+        }
+    }
+    def Mesh "Plate" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    ) {
+        point3f[] points = [(0, 0, 0)]
+        int[] primvars:skel:jointIndices = [0] (
+            elementSize = 1
+            interpolation = "vertex"
+        )
+        float[] primvars:skel:jointWeights = [1] (
+            elementSize = 1
+            interpolation = "vertex"
+        )
+    }
+}
+"#;
+
+    #[test]
+    fn blend_shaped_points_are_what_the_palette_skins() {
+        let mut stage = open(VISOR);
+        assert_eq!(
+            show(&stage.skinning("/Robot/Visor").unwrap()),
+            "[/Robot/Skel, [Head], null, 1, vertex, classicLinear, /Robot/Skel/Nod, true, true]"
+        );
+        assert_eq!(
+            show(
+                &stage
+                    .blend_shaped_points("/Robot/Visor", Some(5.0))
+                    .unwrap()
+            ),
+            "Vec3f([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 2.0, 0.0]])"
+        );
+        // Normal offsets are applied, not normalized.
+        assert_eq!(
+            show(
+                &stage
+                    .blend_shaped_normals("/Robot/Visor", Some(5.0))
+                    .unwrap()
+            ),
+            "Vec3f([[0.0, 0.0, 1.0], [0.0, 0.0, 1.0], [0.0, 1.0, 1.0]])"
+        );
+        // Skinning them with the palette is what the CPU deforms.
+        assert_eq!(
+            show(&stage.deformed_points("/Robot/Visor", Some(5.0)).unwrap()),
+            "Vec3f([[1.0, 0.0, 0.0], [2.0, 0.0, 0.0], [2.0, 2.0, 0.0]])"
+        );
+        assert_eq!(
+            show(
+                &stage
+                    .blend_shaped_points("/Robot/Visor", Some(0.0))
+                    .unwrap()
+            ),
+            "Vec3f([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]])"
+        );
+        // Without blend shapes: the points as authored.
+        assert_eq!(
+            show(
+                &stage
+                    .blend_shaped_points("/Robot/Plate", Some(5.0))
+                    .unwrap()
+            ),
+            "Vec3f([[0.0, 0.0, 0.0]])"
+        );
+        assert_eq!(
+            stage
+                .blend_shaped_normals("/Robot/Plate", None)
+                .unwrap_err()
+                .code,
+            "skel.input"
+        );
+
+        // Weights authored once do not vary, and an edit is heard.
+        let mut batch = EditBatch::new();
+        let weights = batch.value_numbers("float[]".into(), vec![0.25]);
+        batch.set_value("/Robot/Skel/Nod.blendShapeWeights".into(), None, weights);
+        batch.clear_value("/Robot/Skel/Nod.blendShapeWeights".into(), Some(0.0));
+        batch.clear_value("/Robot/Skel/Nod.blendShapeWeights".into(), Some(10.0));
+        stage
+            .apply(stage.document().root_layer().0, &mut batch)
+            .unwrap();
+        assert!(
+            show(&stage.skinning("/Robot/Visor").unwrap()).ends_with("true, false]"),
+            "the weights no longer vary"
+        );
+        assert_eq!(
+            show(
+                &stage
+                    .blend_shaped_points("/Robot/Visor", Some(5.0))
+                    .unwrap()
+            ),
+            "Vec3f([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.5, 0.0]])"
+        );
+        let stats = show(&stage.skinning_cache());
+        assert!(stats.ends_with(", 1]"), "one blend-shape binding: {stats}");
     }
 
     #[test]

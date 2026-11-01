@@ -426,7 +426,7 @@ stage objects and authored as `Edit`s, as OpenUSD's `UsdShade`,
 | `stage.connectionSourceInfo(path)` | `ConnectionSourceInfo`: `prim`, `name`, `kind`, `typeName`, `source`, `valid`: the source a path names, checked against the stage |
 | `prim.geomSubsets({ elementType?, familyName?, time? })`, `subsetFamilyType(family)`, `validateSubsetFamily(family, elementType, { time? })` | `GeomSubset[]`, the family type, `SubsetProblem[]` |
 | `prim.coordSysBindings({ inherited? })` | `CoordSysBinding[]`: `name`, `relationship`, `target` |
-| `stage.skinning(path)`, `prim.skinning()` | `SkinningQuery \| null`: `skeleton`, `joints`, `jointMapping`, `elementSize`, `interpolation`, `rigid`, `method`, `animation`, `blendShapes`; `influences(time?)`, `interleavedInfluences(time?)`, `skinningTransforms(time?)`, `deformedPoints(time?)`, `deformedNormals(time?)` |
+| `stage.skinning(path)`, `prim.skinning()` | `SkinningQuery \| null`: `skeleton`, `joints`, `jointMapping`, `elementSize`, `interpolation`, `rigid`, `method`, `animation`, `blendShapes`, `blendShapeWeightsMightBeTimeVarying`; `influences(time?)`, `interleavedInfluences(time?)`, `skinningTransforms(time?)`, `blendShapedPoints(time?)`, `blendShapedNormals(time?)`, `deformedPoints(time?)`, `deformedNormals(time?)` |
 | `layerstack.blackbodyTemperatureRgb(kelvin)` | `Float32Array`: the color a light's `colorTemperature` multiplies its color by (`UsdLuxBlackbodyTemperatureAsRgb`) |
 | `layerstack.skinPoints`, `skinNormals`, `skinTransform` | The skinning functions over your own typed arrays, with separate or interleaved influences |
 | `stage.skinningCache()` | `SkinningCacheStats`: what the stage's skinning cache reused, recomputed, invalidated and holds |
@@ -462,7 +462,11 @@ interpolation and method. To skin on the GPU, the engine uploads
 `interleavedInfluences()` (one `float2[]` of `[index, weight]` pairs, or
 `influences()` as separate `int[]` and `float[]`) once, and each frame
 `skinningTransforms(time)`, the binding-order joint palette as a
-`Float64Array` view with the geometry bind transform. To skin on the CPU,
+`Float64Array` view with the geometry bind transform. A mesh with blend
+shapes uploads `blendShapedPoints(time)` (and `blendShapedNormals(time)`)
+as its rest points: its points with the shapes applied, not skinned, which
+the palette skins to exactly what the CPU deforms; read them once, and
+again each frame only when `blendShapeWeightsMightBeTimeVarying`. To skin on the CPU,
 `deformedPoints(time)` and `deformedNormals(time)` return the blend-shaped,
 skinned arrays as `Float32Array` views, or `layerstack.skinPoints({...})`
 skins the engine's own arrays with separate or interleaved influences.

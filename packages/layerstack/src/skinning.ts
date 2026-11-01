@@ -23,7 +23,9 @@ type Row = readonly unknown[];
  * changes with time.
  *
  * Two ways to skin: on the GPU, upload {@link SkinningQuery.interleavedInfluences}
- * (or {@link SkinningQuery.influences}) once and
+ * (or {@link SkinningQuery.influences}) and
+ * {@link SkinningQuery.blendShapedPoints} once (again only when
+ * {@link SkinningQuery.blendShapeWeightsMightBeTimeVarying}) and
  * {@link SkinningQuery.skinningTransforms} each frame; on the CPU, read
  * {@link SkinningQuery.deformedPoints} and
  * {@link SkinningQuery.deformedNormals}, or skin your own arrays with
@@ -53,10 +55,18 @@ export class SkinningQuery {
   readonly animation: string | null;
   /** Whether the geometry binds blend shapes, which {@link SkinningQuery.deformedPoints} applies before skinning. */
   readonly blendShapes: boolean;
+  /**
+   * Whether the animation's blend-shape weights might differ from time to
+   * time: two or more samples, a spline or value clips
+   * (`UsdSkelAnimQuery::BlendShapeWeightsMightBeTimeVarying`). When
+   * `false`, {@link SkinningQuery.blendShapedPoints} read once serve every
+   * time, unless the points themselves are animated.
+   */
+  readonly blendShapeWeightsMightBeTimeVarying: boolean;
 
   /** @internal */
   constructor(stage: Stage, path: string, row: Row) {
-    const [skeleton, joints, mapping, elementSize, interpolation, method, animation, blendShapes] = row;
+    const [skeleton, joints, mapping, elementSize, interpolation, method, animation, blendShapes, weightsVary] = row;
     this.stage = stage;
     this.path = path;
     this.skeleton = skeleton as string;
@@ -68,6 +78,7 @@ export class SkinningQuery {
     this.method = method as SkinningMethod;
     this.animation = animation as string | null;
     this.blendShapes = blendShapes as boolean;
+    this.blendShapeWeightsMightBeTimeVarying = weightsVary as boolean;
     Object.freeze(this);
   }
 
@@ -110,6 +121,39 @@ export class SkinningQuery {
       geomBindTransform: Float64Array.from(bind),
       method,
     };
+  }
+
+  /**
+   * Its points at `time` with its blend shapes applied and not skinned, in
+   * its own space: a `point3f[]`, the points
+   * {@link SkinningQuery.skinningTransforms} skin, so a GPU skinning these
+   * with that palette draws {@link SkinningQuery.deformedPoints}. The
+   * shapes are weighted by the skeleton animation's `blendShapeWeights`
+   * (`UsdSkelBlendShapeQuery::ComputeDeformedPoints`, inbetweens
+   * included). Without blend shapes, its points as authored. Release it
+   * when done.
+   *
+   * Throws `skel.input` for a prim without points, `skel.deformation` for
+   * offsets that do not fit them, `skel.array_length` for weights that do
+   * not match the animation's `blendShapes`.
+   */
+  blendShapedPoints(time?: number): ArrayData {
+    const handle = this.stage.native("blendShapedPoints", (native) => native.blendShapedPoints(this.path, time));
+    return new ArrayHandle(this.stage.layerstack, handle as NativeArrayHandle);
+  }
+
+  /**
+   * Its `normals` at `time` with its blend shapes' normal offsets applied,
+   * not normalized and not skinned: a `normal3f[]` in the normals' own
+   * layout (vertex, varying or face-varying, an offset reaching every
+   * corner of its point; `UsdSkelBlendShapeQuery::ComputeDeformedNormals`).
+   * Without blend shapes, its normals as authored. Throws as
+   * {@link SkinningQuery.blendShapedPoints} does, and `skel.input` for a
+   * prim without normals, or with uniform ones.
+   */
+  blendShapedNormals(time?: number): ArrayData {
+    const handle = this.stage.native("blendShapedNormals", (native) => native.blendShapedNormals(this.path, time));
+    return new ArrayHandle(this.stage.layerstack, handle as NativeArrayHandle);
   }
 
   /**

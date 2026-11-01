@@ -48,8 +48,8 @@ mod standalone {
     }
 }
 
-/// The version of the exports the TypeScript wrapper speaks: 4.
-pub const ABI: u32 = 4;
+/// The version of the exports the TypeScript wrapper speaks: 5.
+pub const ABI: u32 = 5;
 
 /// [`ABI`], which the wrapper checks before using the module.
 #[wasm_bindgen(js_name = stagehandAbi)]
@@ -396,6 +396,14 @@ impl StagehandMesh {
     #[must_use]
     pub fn triangle_faces(&self) -> Vec<u32> {
         self.buffers.triangle_faces.clone()
+    }
+
+    /// Each vertex's source point (`MeshPlan::vertex_points`); `undefined`
+    /// for a shape.
+    #[wasm_bindgen(js_name = vertexPoints)]
+    #[must_use]
+    pub fn vertex_points(&self) -> Option<Vec<u32>> {
+        self.plan.as_ref().map(|plan| plan.vertex_points().to_vec())
     }
 
     /// The draw ranges, three numbers each: the subset (`-1` for the faces

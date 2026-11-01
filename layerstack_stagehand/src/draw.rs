@@ -274,6 +274,15 @@ impl DrawBuffers {
         self.plan.as_ref().map(MeshPlan::report)
     }
 
+    /// Each vertex's source point, for a mesh ([`MeshPlan::vertex_points`]):
+    /// how a renderer gathers per-point data, such as joint influences,
+    /// into [`Self::buffers`]' vertex order. `None` for a shape, curves or
+    /// points.
+    #[must_use]
+    pub fn vertex_points(&self) -> Option<&[u32]> {
+        self.plan.as_ref().map(MeshPlan::vertex_points)
+    }
+
     /// What the curves plan made of the curves, for curves: segments per
     /// curve, the evaluation and fallbacks, samples, primvars and notes.
     #[must_use]
@@ -3255,6 +3264,12 @@ class Xform "Beacon" {
         let pebble = list.item(fixture.item("/World/Rocks/Pebble")).unwrap();
         let stone = list.item(fixture.item("/World/Rocks/Stone")).unwrap();
         assert_eq!(pebble.buffer, stone.buffer);
+        // A mesh's buffer says which point each vertex came from; a
+        // tessellated shape's names none.
+        let rock = list.item(fixture.item("/World/Rocks/Rock")).unwrap();
+        let rock = list.buffers(rock.buffer).unwrap();
+        assert_eq!(rock.vertex_points(), Some(&[0, 1, 2, 3][..]));
+        assert_eq!(list.buffers(pebble.buffer).unwrap().vertex_points(), None);
         let post = list
             .item(fixture.item("/World/Beacons/North/Post"))
             .unwrap();

@@ -434,9 +434,17 @@ impl MeshPlan {
             .collect()
     }
 
-    /// Each vertex's point, for tests.
-    #[cfg(test)]
-    pub(crate) fn vertex_points(&self) -> &[u32] {
+    /// Each vertex's source point: the index into the input's points of
+    /// the point its corners name, in [`MeshBuffers`] vertex order (empty
+    /// when the topology is invalid and nothing is drawn).
+    ///
+    /// A vertex split for a face-varying normal, `st` or color still
+    /// names one point, so per-point data the buffers do not carry (a
+    /// skeleton's joint influences, a `vertex` primvar the plan does not
+    /// draw) is gathered into vertex order through it: vertex `v` reads
+    /// point `vertex_points()[v]`. Fixed by the plan, so a refill keeps it.
+    #[must_use]
+    pub fn vertex_points(&self) -> &[u32] {
         &self.vertex_point
     }
 

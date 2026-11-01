@@ -133,6 +133,29 @@ only when a shading property of it or of a prim its network reads
 changes, or an item comes to bind it, and `setTime` reads only those with
 an input that might vary.
 
+## Per-point data and skinning
+
+`mesh.vertexPoints` says which of the input's points each vertex came
+from (a vertex split for a face-varying normal, `st` or color still names
+one point; `null` for a shape), so data per point that the buffers do not
+carry can be gathered into vertex order. `gatherInfluences(query,
+mesh.vertexPoints, { slots: 4, time })` does it for a `SkinningQuery`
+(`stage.skinning(path)`): each vertex's joints and weights, `slots` per
+vertex, for GPU linear-blend skinning with the palette
+`query.skinningTransforms(time)` gives each frame (per joint, the rest
+position through the bind transform, then the joint's skinning transform;
+the normal through each one's inverse transpose, as
+`UsdSkelSkinNormals`). The result is in the skeleton's space: draw it with
+the skeleton's world transform, not the mesh's. A rigid binding's one
+block is copied to every vertex. A point weighting more joints than
+`slots` keeps its largest weights, scaled to the block's sum, and is
+counted (`reducedBlocks`, `droppedWeight`): skinning is then approximate
+there, and exact everywhere else. Blend shapes and dual-quaternion
+skinning are not in the palette: draw those with `query.deformedPoints`.
+
+The Rust crate gives the same map as `MeshPlan::vertex_points` and
+`DrawBuffers::vertex_points`.
+
 ## Curves and points
 
 `readCurves(stage, path, { time })` reads a `BasisCurves`, `NurbsCurves` or

@@ -52,6 +52,8 @@ export { DrawList } from "./draw.js";
 export type { DrawBuffers, DrawDiff, DrawItem, DrawOptions, DrawWork, ItemInstance, ItemSource, PointStyle, Purpose } from "./draw.js";
 export type { LinkChange, LinkKind, LinkSet, LinkTarget } from "./links.js";
 export { SHAPE_SCHEMAS, readMesh, readPoints, readShape, shapeSchema } from "./read.js";
+export { gatherInfluences } from "./skin.js";
+export type { VertexInfluences } from "./skin.js";
 export {
   CURVE_SCHEMAS,
   StagehandCurves,
@@ -96,7 +98,7 @@ export type {
 } from "./light.js";
 
 /** The exports' version this wrapper speaks (`layerstack_stagehand_wasm::ABI`). */
-const ABI = 4;
+const ABI = 5;
 
 /** A failure, with a stable `code`; its message reads `${operation}: ${message}`. */
 export class StagehandError extends Error {
@@ -202,6 +204,15 @@ export class StagehandMesh implements Disposable {
   readonly indices: Uint32Array;
   /** The authored face of each triangle. */
   readonly triangleFaces: Uint32Array;
+  /**
+   * Each vertex's source point, the index into the input's points of the
+   * point its corners name; `null` for a shape. A vertex split for a
+   * face-varying normal, `st` or color still names one point, so per-point
+   * data the buffers do not carry (joint influences, a `vertex` primvar)
+   * is gathered into vertex order through it ({@link gatherInfluences}).
+   * Fixed by the plan: a refill keeps it.
+   */
+  readonly vertexPoints: Uint32Array | null;
   /** One range per subset, then the faces in no subset. */
   readonly ranges: readonly DrawRange[];
   /** What the plan made of the mesh; `null` for a shape. */
@@ -218,6 +229,7 @@ export class StagehandMesh implements Disposable {
     this.uvSets = uvSetsOf(native);
     this.indices = native.indices();
     this.triangleFaces = native.triangleFaces();
+    this.vertexPoints = native.vertexPoints() ?? null;
     const ranges: DrawRange[] = [];
     const flat = native.ranges();
     for (let i = 0; i < flat.length; i += 3) {

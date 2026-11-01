@@ -401,7 +401,7 @@ impl LiveStage {
                     .collect(),
                 retained: retain_boundaries,
             };
-            let partial = Stage::compose_retained(
+            let partial = Stage::compose_merged(
                 store,
                 self.root,
                 options,

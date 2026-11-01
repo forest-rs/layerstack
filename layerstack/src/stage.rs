@@ -71,7 +71,7 @@ use crate::variant_fallbacks::VariantFallbacks;
 use crate::{
     TimeSamples,
     composition_error::{CompositionError, order_errors},
-    dependency_map::{ArcDependency, CompositionDeps},
+    dependency_map::{ArcDependency, CompositionDeps, DependencyMaps},
     doc::{
         FieldValue, InterpolationType, LayerId, LayerStore, PrimSpec, Specifier, Value,
         VariantSpec, combine_dictionary_chain,
@@ -726,7 +726,30 @@ impl Stage {
             exact_mask,
             boundaries,
             child_index,
-            true,
+            DependencyMaps::All,
+        )
+    }
+
+    /// Composes part of a live stage as [`Self::compose_retained`] does, for
+    /// the live stage to merge: its dependency maps hold no graph
+    /// ([`DependencyMaps::Merged`]), since the live stage replaces the
+    /// recomposed prims' dependencies in its own from the arc metadata.
+    pub(crate) fn compose_merged(
+        store: &mut dyn LayerStore,
+        root: LayerId,
+        options: StageOptions,
+        exact_mask: bool,
+        boundaries: &Boundaries,
+        child_index: &crate::prim_indexing::ChildIndex,
+    ) -> Self {
+        Self::compose_retained_with(
+            store,
+            root,
+            options,
+            exact_mask,
+            boundaries,
+            child_index,
+            DependencyMaps::Merged,
         )
     }
 
@@ -747,12 +770,12 @@ impl Stage {
             false,
             &Boundaries::default(),
             child_index,
-            false,
+            DependencyMaps::Live,
         )
     }
 
-    /// [`Self::compose_retained`], building the arc metadata of the
-    /// dependency maps only when `arc_metadata`.
+    /// [`Self::compose_retained`], building the dependency maps `maps` asks
+    /// for.
     fn compose_retained_with(
         store: &mut dyn LayerStore,
         root: LayerId,
@@ -760,7 +783,7 @@ impl Stage {
         exact_mask: bool,
         boundaries: &Boundaries,
         child_index: &crate::prim_indexing::ChildIndex,
-        arc_metadata: bool,
+        maps: DependencyMaps,
     ) -> Self {
         options.muted_layers.remove(&root);
         let captured = options.clone();
@@ -795,7 +818,7 @@ impl Stage {
                 .errors
                 .insert(0, CompositionError::ForeignSchemaRegistry);
         }
-        let dependencies = dependencies.map(|records| records.with_arc_metadata(arc_metadata));
+        let dependencies = dependencies.map(|records| records.with_maps(maps));
         stage.prepare(store, instance_keys, dependencies);
         stage
     }

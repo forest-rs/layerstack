@@ -1787,6 +1787,16 @@ impl LiveStage {
         self.notices.unsubscribe(subscription)
     }
 
+    /// The stage's composed revision: it advances with each composition
+    /// that changes the stage (each batch [`Self::subscribe_changes`]
+    /// callbacks hear), and no other way, so two equal readings mean the
+    /// stage composed nothing new in between. A [`ChangeCursor`] starts at
+    /// it; reading it retains no history.
+    #[must_use]
+    pub fn revision(&self) -> u64 {
+        self.notices.current_revision()
+    }
+
     /// Starts an independent observer at the current composed revision.
     ///
     /// Reports are retained only after the first cursor is created. The default

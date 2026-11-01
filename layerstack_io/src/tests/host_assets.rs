@@ -9,6 +9,7 @@
 //! without reading resident layers again.
 
 use super::*;
+use core::sync::atomic::{AtomicUsize, Ordering};
 use layerstack::{
     AssetUse, LayerOffset, PropertyPath, PropertyType, SublayerEntry, Time, Transaction,
 };
@@ -267,6 +268,273 @@ fn supplied_sources_load_round_by_round() {
     let loaded = doc.load_requested_assets().unwrap();
     assert!(loaded.layers.is_empty());
     assert_eq!(doc.storage().reads.iter().count(), before);
+}
+
+/// The stage flattened to USDA text, for comparing two compositions.
+fn flattened(doc: &mut StageDocument<Host>) -> String {
+    use layerstack::stage::flatten::{AssetPaths, FlattenRequirements, LossPolicy};
+    let requirements = FlattenRequirements {
+        losses: LossPolicy::RefuseRequired,
+        asset_paths: AssetPaths::AsAuthored,
+        ..FlattenRequirements::default()
+    };
+    let flat = doc.flatten(&requirements).unwrap();
+    String::from_utf8(doc.encode_layer(&flat.layer, "flat.usda").unwrap()).unwrap()
+}
+
+/// Counts the stage's compositions: one change notice each.
+fn count_compositions(doc: &mut StageDocument<Host>) -> Arc<AtomicUsize> {
+    let count = Arc::new(AtomicUsize::new(0));
+    let seen = Arc::clone(&count);
+    let (_, stage) = doc.parts_mut();
+    // The subscription lives as long as the stage.
+    let _subscription = stage.subscribe_changes(move |_| {
+        seen.fetch_add(1, Ordering::Relaxed);
+    });
+    count
+}
+
+/// Reading ahead reads each round's sources without composing: the layers
+/// read list what they need themselves, as an open whose storage held
+/// every source reads them, until nothing is unavailable. One composition
+/// then builds the stage that composing after every round builds, and
+/// reads nothing more.
+#[test]
+fn reading_ahead_reads_every_round_and_composes_once() {
+    let mut ahead = open();
+    let compositions = count_compositions(&mut ahead);
+    ahead.storage_mut().supply("sub.usda", SUB.as_bytes());
+    ahead.storage_mut().supply("child.usda", CHILD.as_bytes());
+    let read = ahead.read_requested_assets().unwrap();
+    assert_eq!(read.layers.len(), 2);
+    assert_eq!(read.reads.len(), 2);
+    assert!(read.compositions.is_empty());
+    // The stage is as it composed at the open; the layer read asks for
+    // `grand.usda` itself, with no prim composed without it yet.
+    assert!(ahead.view().prim("/FromSub").is_none());
+    assert_eq!(int(&ahead, "/Child.child"), None);
+    assert_eq!(
+        wanted(&ahead),
+        [
+            want("a.usda", "root.usda", AssetUse::Reference),
+            want("grand.usda", "child.usda", AssetUse::Reference),
+        ]
+    );
+    let grand = ahead
+        .unavailable_assets()
+        .into_iter()
+        .find(|asset| asset.asset_path == "grand.usda")
+        .unwrap();
+    assert!(grand.prims.is_empty());
+
+    ahead.storage_mut().supply("grand.usda", GRAND.as_bytes());
+    ahead.storage_mut().supply("a.usda", look("a").as_bytes());
+    let read = ahead.read_requested_assets().unwrap();
+    assert_eq!(read.layers.len(), 2);
+    assert!(wanted(&ahead).is_empty());
+    assert_eq!(compositions.load(Ordering::Relaxed), 0);
+
+    let before = ahead.storage().reads.iter().count();
+    let loaded = ahead.load_requested_assets().unwrap();
+    assert!(loaded.layers.is_empty() && loaded.reads.is_empty());
+    // One composition, of the four layers read ahead.
+    let [composition] = &loaded.compositions[..] else {
+        panic!("{:?}", loaded.compositions);
+    };
+    assert_eq!(composition.layers, 4);
+    assert_eq!(ahead.storage().reads.iter().count(), before);
+    assert_eq!(compositions.load(Ordering::Relaxed), 1);
+    assert!(wanted(&ahead).is_empty());
+    assert_eq!(int(&ahead, "/Child.grand"), Some(2));
+    assert_eq!(look_name(&ahead).as_deref(), Some("a"));
+    assert_eq!(missing(&ahead), [("gone.usda".into(), AssetUse::Reference)]);
+
+    let mut rounds = open();
+    for sources in [
+        [("sub.usda", SUB), ("child.usda", CHILD)],
+        [("grand.usda", GRAND), ("a.usda", &look("a"))],
+    ] {
+        for (identifier, text) in sources {
+            rounds.storage_mut().supply(identifier, text.as_bytes());
+        }
+        rounds.load_requested_assets().unwrap();
+    }
+    assert_eq!(flattened(&mut ahead), flattened(&mut rounds));
+}
+
+/// A layer read ahead says how it uses each source it needs: as a
+/// sublayer, a payload or a reference.
+#[test]
+fn reading_ahead_lists_how_each_layer_read_uses_its_sources() {
+    let mut doc = open();
+    doc.storage_mut().supply(
+        "child.usda",
+        b"#usda 1.0\n(\n    subLayers = [@deep_sub.usda@]\n)\ndef \"Asset\" (\n    prepend payload = @deep_payload.usda@</P>\n    prepend references = @deep_reference.usda@</R>\n) {}\n",
+    );
+    doc.read_requested_assets().unwrap();
+    assert_eq!(
+        wanted(&doc),
+        [
+            want("a.usda", "root.usda", AssetUse::Reference),
+            want("deep_payload.usda", "child.usda", AssetUse::Payload),
+            want("deep_reference.usda", "child.usda", AssetUse::Reference),
+            want("deep_sub.usda", "child.usda", AssetUse::Sublayer),
+            want("sub.usda", "root.usda", AssetUse::Sublayer),
+        ]
+    );
+    // Composing replaces them with the stage's own requests, which name
+    // the prims composed without them.
+    doc.load_requested_assets().unwrap();
+    let mut prims: Vec<(String, AssetUse, Vec<String>)> = doc
+        .unavailable_assets()
+        .into_iter()
+        .map(|asset| {
+            let store = doc.store();
+            let prims = asset
+                .prims
+                .iter()
+                .map(|&prim| store.paths().display(prim, store.tokens()))
+                .collect();
+            (asset.asset_path, asset.used_by, prims)
+        })
+        .collect();
+    prims.sort();
+    assert_eq!(
+        prims,
+        [
+            ("a.usda".into(), AssetUse::Reference, vec!["/Model".into()]),
+            (
+                "deep_payload.usda".into(),
+                AssetUse::Payload,
+                vec!["/Child".into()]
+            ),
+            (
+                "deep_reference.usda".into(),
+                AssetUse::Reference,
+                vec!["/Child".into()]
+            ),
+            (
+                "deep_sub.usda".into(),
+                AssetUse::Sublayer,
+                vec!["/Child".into()]
+            ),
+            ("sub.usda".into(), AssetUse::Sublayer, vec!["/".into()]),
+        ]
+    );
+}
+
+/// A strict rejection drops the round it ends, and what that round read
+/// stays wanted: supplying the rejected source anew reads both.
+#[test]
+fn a_rejected_read_ahead_keeps_the_round_wanted() {
+    const PAIR: &str = "#usda 1.0\ndef \"Asset\" (\n    prepend references = [@fine.usda@</Look>, @zbad.usda@</Look>]\n) {}\n";
+    let mut doc = open();
+    doc.storage_mut().supply("child.usda", PAIR.as_bytes());
+    doc.read_requested_assets().unwrap();
+    doc.storage_mut()
+        .supply("fine.usda", look("fine").as_bytes());
+    doc.storage_mut().broken.insert("zbad.usda".into());
+    let error = doc.read_requested_assets().unwrap_err();
+    assert_eq!(error.kind, IoErrorKind::Storage);
+    let wanted_now = wanted(&doc);
+    assert!(wanted_now.contains(&want("fine.usda", "child.usda", AssetUse::Reference)));
+    assert!(wanted_now.contains(&want("zbad.usda", "child.usda", AssetUse::Reference)));
+
+    doc.storage_mut().broken.clear();
+    doc.storage_mut()
+        .supply("zbad.usda", look("zbad").as_bytes());
+    let read: Vec<String> = doc
+        .read_requested_assets()
+        .unwrap()
+        .layers
+        .iter()
+        .filter_map(|layer| doc.identifier(*layer).map(String::from))
+        .collect();
+    assert!(read.contains(&"fine.usda".into()) && read.contains(&"zbad.usda".into()));
+}
+
+/// What the layers read name stops being wanted once the stage composes
+/// by any path: an edit that drops the arc that read them drops them too,
+/// and loading reads none of them.
+#[test]
+fn composing_drops_what_the_layers_read_named() {
+    let mut doc = open();
+    doc.storage_mut().supply("child.usda", CHILD.as_bytes());
+    doc.read_requested_assets().unwrap();
+    assert!(wanted(&doc).contains(&want("grand.usda", "child.usda", AssetUse::Reference)));
+
+    let at = EditTarget::for_layer(doc.root_layer());
+    let child = doc.store_mut().path("/Child");
+    let mut edit = Transaction::new();
+    edit.clear_references(at.prim(child));
+    doc.storage_mut().supply("grand.usda", GRAND.as_bytes());
+    let before = doc.storage().reads.iter().count();
+    doc.apply(&edit).unwrap();
+    assert!(
+        !doc.storage()
+            .reads
+            .iter()
+            .skip(before)
+            .any(|read| read == "grand.usda")
+    );
+    assert!(
+        !wanted(&doc)
+            .iter()
+            .any(|(identifier, ..)| identifier == "grand.usda")
+    );
+}
+
+/// An arc only composition reaches, in a variant a stronger layer selects,
+/// is asked for once the stage composes: the read-ahead reads what the
+/// layer read selects itself, as an open whose storage held every source
+/// would, and composing asks for the rest.
+#[test]
+fn composing_after_reading_ahead_asks_for_what_only_composition_reaches() {
+    const HOLDER_ROOT: &str = r#"#usda 1.0
+def "Holder" (
+    variants = { string look = "b" }
+    prepend references = @holder.usda@</H>
+) {}
+"#;
+    const HOLDER: &str = r#"#usda 1.0
+def "H" (
+    variants = { string look = "a" }
+    prepend variantSets = "look"
+) {
+    variantSet "look" = {
+        "a" (prepend references = @a.usda@</Look>) {}
+        "b" (prepend references = @b.usda@</Look>) {}
+    }
+}
+"#;
+    let mut host = Host::default();
+    host.supply("root.usda", HOLDER_ROOT.as_bytes());
+    let mut doc = StageDocument::open(host, "root.usda", StageOptions::default()).unwrap();
+    doc.storage_mut().supply("holder.usda", HOLDER.as_bytes());
+    doc.read_requested_assets().unwrap();
+    assert_eq!(
+        wanted(&doc),
+        [want("a.usda", "holder.usda", AssetUse::Reference)]
+    );
+    doc.storage_mut().supply("a.usda", look("a").as_bytes());
+    doc.read_requested_assets().unwrap();
+    assert!(wanted(&doc).is_empty());
+    doc.load_requested_assets().unwrap();
+    assert_eq!(
+        wanted(&doc),
+        [want("b.usda", "holder.usda", AssetUse::Reference)]
+    );
+    doc.storage_mut().supply("b.usda", look("b").as_bytes());
+    doc.read_requested_assets().unwrap();
+    doc.load_requested_assets().unwrap();
+    assert!(wanted(&doc).is_empty());
+    assert_eq!(
+        doc.view()
+            .attribute("/Holder.name")
+            .and_then(|a| a.value::<String>(Time::Default))
+            .as_deref(),
+        Some("b")
+    );
 }
 
 /// A variant switch after an edit reaches an unfetched source: it is

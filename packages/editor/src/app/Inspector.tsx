@@ -24,6 +24,8 @@ import { shown, ValueField } from "./fields.tsx";
 import { layerName } from "./format.ts";
 import { primIcon } from "./icons.ts";
 import { PrimActions } from "./PrimActions.tsx";
+import { Section } from "./Section.tsx";
+import { TransformSection } from "./TransformSection.tsx";
 
 export function Inspector() {
   const store = useStore();
@@ -40,6 +42,7 @@ export function Inspector() {
     <div className="flex h-full flex-col overflow-y-auto">
       <Header store={store} prim={prim} />
       <State store={store} prim={prim} />
+      <TransformSection store={store} stage={stage} prim={prim} />
       <Variants store={store} prim={prim} />
       <Properties key={prim.path} store={store} stage={stage} prim={prim} />
       <MaterialSection stage={stage} prim={prim} />
@@ -48,17 +51,6 @@ export function Inspector() {
   );
 }
 
-function Section({ title, children, aside }: { title: string; children: React.ReactNode; aside?: React.ReactNode }) {
-  return (
-    <section className="border-b px-3 py-2">
-      <h3 className="mb-1.5 flex items-center text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-        {title}
-        <span className="ml-auto normal-case">{aside}</span>
-      </h3>
-      {children}
-    </section>
-  );
-}
 
 function Header({ store, prim }: { store: EditorStore; prim: Prim }) {
   const kind = prim.metadata("kind");

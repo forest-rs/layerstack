@@ -54,12 +54,14 @@ function CommitField({
   className,
   label,
   numeric = false,
+  disabled = false,
 }: {
   value: string;
   onCommit: (text: string) => void;
   className?: string;
   label: string;
   numeric?: boolean;
+  disabled?: boolean;
 }) {
   const [text, setText] = useState(value);
   useEffect(() => setText(value), [value]);
@@ -67,6 +69,7 @@ function CommitField({
     <input
       aria-label={label}
       value={text}
+      disabled={disabled}
       inputMode={numeric ? "decimal" : undefined}
       onChange={(event) => setText(event.target.value)}
       onKeyDown={(event) => {
@@ -82,8 +85,26 @@ function CommitField({
       className={cn(
         "h-6 min-w-0 rounded-md border border-input bg-input/20 px-1.5 font-mono text-[11px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 dark:bg-input/30",
         numeric && "text-right tabular-nums",
+        disabled && "opacity-60",
         className,
       )}
+    />
+  );
+}
+
+/** A number field of a vector that commits a finite number on Enter or blur. */
+export function CommitNumber({ label, value, onCommit, disabled = false }: { label: string; value: string; onCommit: (value: number) => void; disabled?: boolean }) {
+  return (
+    <CommitField
+      label={label}
+      numeric
+      value={value}
+      disabled={disabled}
+      className="w-0 flex-1"
+      onCommit={(text) => {
+        const number = Number(text);
+        if (text.trim() !== "" && Number.isFinite(number)) onCommit(number);
+      }}
     />
   );
 }

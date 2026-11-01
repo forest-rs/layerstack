@@ -48,7 +48,10 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
   panel read values there. A stage without a range is read at the default
   time.
 - **Inspector.** The selected prim as the stage composes it: its type,
-  specifier and kind; active and instanceable; its variant sets; its
+  specifier and kind; active and instanceable; its transform as
+  translation, rotation, scale and pivot, each field authoring its one op as
+  `UsdGeomXformCommonAPI` does (ops that are not a common stack shown as the
+  stage factors them, read-only); its variant sets; its
   properties (those layers author, then those only its schemas define, at
   their fallbacks); its bound material; the arcs it composes from. Each
   editor is chosen by what the stage knows of the property (an animated

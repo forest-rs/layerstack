@@ -32,6 +32,8 @@ import type {
   Stagehand,
 } from "@forest-rs/layerstack_stagehand";
 import type { Session } from "./session.ts";
+import { SkinningModel } from "./skinning.ts";
+import type { SkinDraw, SkinSummary, SkinWork } from "./skinning.ts";
 import { releaseValue } from "./values.ts";
 
 /** The purposes the viewport draws and frames, as usdview shows them by default. */
@@ -74,6 +76,8 @@ export interface ViewItem {
   readonly colorSource: "displayColor" | "material" | "fallback";
   /** Each range's color: its subset's bound material's `diffuseColor`, else `null` for the item's. */
   readonly rangeColors: readonly (readonly [number, number, number] | null)[];
+  /** How a skeleton deforms it at the time ({@link SkinningModel}); `null` when nothing does. */
+  readonly skin: SkinDraw | null;
 }
 
 /** The viewport's contents at one time. */
@@ -89,6 +93,8 @@ export interface ViewportScene {
   readonly cameras: readonly CameraItem[];
   /** The materials the draws bind, by path. */
   readonly materials: ReadonlyMap<string, MaterialItem>;
+  /** The skinned draws in brief. */
+  readonly skinning: SkinSummary;
   /**
    * The lights each draw is not lit by, by item id: the lights whose
    * `lightLink` has a category that leaves the draw out. A native
@@ -147,6 +153,12 @@ export interface ViewportUpdate {
   readonly links: number;
   /** The work done, summed. */
   readonly work: DrawWork;
+  /** Items whose skinning was bound again, begun or ended: their objects made again. */
+  readonly reskinned: ReadonlySet<number>;
+  /** Skinned items posed at the time: their joint palettes (or CPU-deformed points) to upload. */
+  readonly skinned: ReadonlySet<number>;
+  /** What skinning did. */
+  readonly skinWork: SkinWork;
 }
 
 /** The viewport's contents in brief, independent of pixels. */
@@ -326,9 +338,11 @@ export class ViewportModel {
   /** The session's change log entries already applied. */
   #seen = 0;
   #colors = new Map<number, Pick<ViewItem, "color" | "colorSource" | "rangeColors">>();
+  readonly #skins: SkinningModel;
 
   constructor(stagehand: Stagehand) {
     this.#stagehand = stagehand;
+    this.#skins = new SkinningModel(stagehand);
   }
 
   /** The draw list, once synced. */
@@ -401,6 +415,21 @@ export class ViewportModel {
       links: diffs.reduce((count, diff) => count + diff.linksChanged.length, 0),
       work: diffs.reduce((work, diff) => addWork(work, diff.work), EMPTY_WORK),
     };
+    // Skinning: bound where items, buffers or the prims they skin with
+    // changed; posed when the time did.
+    const skins = this.#skins.sync(
+      stage,
+      this.#list,
+      {
+        reset,
+        added: update.added,
+        removed: update.removed,
+        rebuffered: new Set([...update.buffersAdded, ...update.refilled, ...update.rebuilt]),
+        touched,
+        timeChanged,
+      },
+      time,
+    );
     // Colors: read again for new items, and for items whose materials,
     // buffers or prims a change reached (a `displayColor` edit refills a
     // mesh but leaves a shape's tessellation as it is).
@@ -428,14 +457,16 @@ export class ViewportModel {
       this.#colors.set(id, { ...primColor(stage, at, time), rangeColors: rangeColors(stage, at, buffers, time) });
       if (!update.added.has(id)) update.recolored.add(id);
     }
-    return update;
+    return { ...update, reskinned: skins.rebound, skinned: skins.posed, skinWork: skins.work };
   }
 
   /** The items with their buffers and colors, and the framed bounds. */
   scene(time: number | undefined): ViewportScene {
     const list = this.#list;
     const stage = this.#stage;
-    if (list === null || stage === null) return { items: [], hidden: [], bounds: null, lights: [], cameras: [], materials: new Map(), unlit: new Map(), linking: [] };
+    if (list === null || stage === null) {
+      return { items: [], hidden: [], bounds: null, lights: [], cameras: [], materials: new Map(), skinning: this.#skins.summary(), unlit: new Map(), linking: [] };
+    }
     const items: ViewItem[] = [];
     const hidden = new Set<string>();
     for (const item of list.items()) {
@@ -449,6 +480,7 @@ export class ViewportModel {
         buffers,
         kind: buffers.curves !== null ? curveDrawnAs(buffers) : buffers.points !== null ? "points" : (buffers.shape?.kind ?? "mesh"),
         ...this.#colors.get(item.id)!,
+        skin: this.#skins.draw(item.id),
       });
     }
     const bounds = stage.worldBounds(["/"], { ...(time === undefined ? {} : { time }), purposes: [...PURPOSES] }).alignedRanges;
@@ -486,6 +518,7 @@ export class ViewportModel {
       lights,
       cameras,
       materials: new Map(list.materials().map((material) => [material.path, material])),
+      skinning: this.#skins.summary(),
       unlit,
       linking,
     };
@@ -493,6 +526,7 @@ export class ViewportModel {
 
   /** Frees the list's buffers. */
   dispose(): void {
+    this.#skins.dispose();
     this.#list?.dispose();
     this.#list = null;
     this.#stage = null;

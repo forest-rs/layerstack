@@ -84,18 +84,40 @@
 // instance is; eight lights of a type are linked (more are lit as three.js
 // lights them); lines and points are unlit anyway; and `shadowLink` is
 // shown but not drawn, as the viewport casts no shadows.
+//
+// Skinning (`../model/skinning.ts`): a draw a skeleton deforms on the GPU
+// is a `SkinnedMesh` over its stagehand buffer, whose `skinIndex` and
+// `skinWeight` (eight per vertex, see `patchSkinning`) are the joint
+// influences gathered into vertex order, with a
+// `Skeleton` of its own: one bone per joint of the binding, each bone's
+// world matrix the joint's skinning transform at the time and each bone
+// inverse the geometry's bind transform, bound with an identity bind
+// matrix (detached). three.js then moves a rest point `p` by
+// `Σ w · skinningTransform · bindTransform · p`, the points UsdSkel skins
+// into the skeleton's space, and the object is placed by the skeleton's
+// world transform. A time change rewrites the bones' matrices and nothing
+// else. Normals are skinned through each joint matrix's inverse transpose,
+// blended and normalized, as `UsdSkelSkinNormals` skins them: three.js's
+// own `skinnormal_vertex` blends the matrices themselves, which bends
+// normals wrong under joints that scale (so the chunks are replaced, below,
+// for every skinned material). A draw deformed on the CPU is a plain mesh
+// whose positions and normals are refilled each time.
 import {
   AgXToneMapping,
+  Bone,
   BufferAttribute,
   BufferGeometry,
   Camera,
   Color,
+  DetachedBindMode,
   DirectionalLight,
   DoubleSide,
   GridHelper,
   Group,
   HemisphereLight,
   InstancedMesh,
+  InterleavedBuffer,
+  InterleavedBufferAttribute,
   LineBasicMaterial,
   LineSegments,
   Matrix4,
@@ -111,6 +133,8 @@ import {
   RectAreaLight,
   Scene,
   ShaderChunk,
+  Skeleton,
+  SkinnedMesh,
   SpotLight,
   Vector2,
   Vector3,
@@ -123,6 +147,77 @@ import type { CameraItem, LightItem, MaterialItem, StagehandMesh } from "@forest
 import { TextureStore, surfaceMaterial, uvChannels } from "./surfaces.ts";
 import type { AssetExists, AssetReader } from "./surfaces.ts";
 import type { ViewItem, ViewportScene, ViewportUpdate } from "../model/draws.ts";
+
+/**
+ * The editor's skinning shader, for every `SkinnedMesh` (only skinned
+ * draws are): eight influences per vertex (`skinIndex` and `skinWeight`,
+ * then `skinIndex1` and `skinWeight1`, which every skinned geometry here
+ * has, zero-weighted where unused) where three.js reads four, since
+ * production rigs weight more joints than four and dropping the rest moves
+ * points visibly; and normals as `UsdSkelSkinNormals` computes them
+ * (OpenUSD `pxr/usd/usdSkel/utils.cpp`, `_SkinNormalsLBS`): each joint
+ * matrix's linear part inverse transposed (by its cofactors), weighted and
+ * summed, then normalized by the fragment shader; a singular joint
+ * contributes nothing. three.js's own `skinnormal_vertex` blends the
+ * matrices themselves, which bends normals wrong under scaling joints.
+ */
+function patchSkinning(): void {
+  if (ShaderChunk.skinning_pars_vertex.includes("skinNormalMatrix")) return;
+  ShaderChunk.skinning_pars_vertex += `
+#ifdef USE_SKINNING
+	attribute vec4 skinIndex1;
+	attribute vec4 skinWeight1;
+	mat3 skinNormalMatrix( mat3 m ) {
+		vec3 bc = cross( m[ 1 ], m[ 2 ] );
+		float det = dot( m[ 0 ], bc );
+		return det == 0.0 ? mat3( 0.0 ) : mat3( bc, cross( m[ 2 ], m[ 0 ] ), cross( m[ 0 ], m[ 1 ] ) ) / det;
+	}
+#endif
+`;
+  ShaderChunk.skinbase_vertex += `
+#ifdef USE_SKINNING
+	mat4 boneMat1X = getBoneMatrix( skinIndex1.x );
+	mat4 boneMat1Y = getBoneMatrix( skinIndex1.y );
+	mat4 boneMat1Z = getBoneMatrix( skinIndex1.z );
+	mat4 boneMat1W = getBoneMatrix( skinIndex1.w );
+#endif
+`;
+  const slots: [string, string][] = [
+    ["boneMatX", "skinWeight.x"],
+    ["boneMatY", "skinWeight.y"],
+    ["boneMatZ", "skinWeight.z"],
+    ["boneMatW", "skinWeight.w"],
+    ["boneMat1X", "skinWeight1.x"],
+    ["boneMat1Y", "skinWeight1.y"],
+    ["boneMat1Z", "skinWeight1.z"],
+    ["boneMat1W", "skinWeight1.w"],
+  ];
+  const sum = (term: (matrix: string, weight: string) => string) => slots.map(([matrix, weight]) => `\t${term(matrix, weight)}`).join("\n");
+  ShaderChunk.skinning_vertex = `
+#ifdef USE_SKINNING
+	vec4 skinVertex = bindMatrix * vec4( transformed, 1.0 );
+	vec4 skinned = vec4( 0.0 );
+${sum((matrix, weight) => `skinned += ${matrix} * skinVertex * ${weight};`)}
+	transformed = ( bindMatrixInverse * skinned ).xyz;
+#endif
+`;
+  ShaderChunk.skinnormal_vertex = `
+#ifdef USE_SKINNING
+	mat3 skinBind = mat3( bindMatrix );
+	mat3 skinUnbind = mat3( bindMatrixInverse );
+	vec3 skinnedNormal = vec3( 0.0 );
+${sum((matrix, weight) => `skinnedNormal += ${weight} * ( skinNormalMatrix( skinUnbind * mat3( ${matrix} ) * skinBind ) * objectNormal );`)}
+	#ifdef USE_TANGENT
+		mat4 skinMatrix = mat4( 0.0 );
+${sum((matrix, weight) => `\tskinMatrix += ${weight} * ${matrix};`)}
+		skinMatrix = bindMatrixInverse * skinMatrix * bindMatrix;
+		objectTangent = vec4( skinMatrix * vec4( objectTangent, 0.0 ) ).xyz;
+	#endif
+	objectNormal = skinnedNormal;
+#endif
+`;
+}
+patchSkinning();
 
 /** A three.js view of a {@link ViewportScene}, updated in place from each {@link ViewportUpdate}. */
 export class Viewport {
@@ -246,6 +341,8 @@ export class Viewport {
     raycaster.params.Line.threshold = 0.02;
     raycaster.setFromCamera(new Vector2((x / width) * 2 - 1, -(y / height) * 2 + 1), camera);
     const ids = new Map([...this.#objects].map(([id, object]) => [object as Object3D, id]));
+    // A skinned draw's bounds move with its pose: three.js keeps the first it computed.
+    for (const object of this.#objects.values()) if (object instanceof SkinnedMesh) object.computeBoundingSphere();
     const hits = raycaster.intersectObjects([...this.#objects.values()].filter((object) => object.visible), false);
     for (const hit of hits) {
       const id = ids.get(hit.object);
@@ -337,9 +434,20 @@ export class Viewport {
       const object = this.#objects.get(id);
       if (view !== undefined && object !== undefined) object.geometry = this.#geometries.get(view.item.buffer)!;
     }
+    // Skinning bound again, begun or ended: the object made again over its buffer.
+    for (const id of update.reskinned) {
+      const view = items.get(id);
+      if (added.has(id)) continue;
+      this.#drop(id);
+      if (view !== undefined) this.#add(view, selected);
+    }
     for (const id of new Set([...update.matrices, ...update.visibility])) {
       const view = items.get(id);
-      if (view !== undefined && !added.has(id)) this.#place(view, selected);
+      if (view !== undefined && !added.has(id) && !update.reskinned.has(id)) this.#place(view, selected);
+    }
+    for (const id of update.skinned) {
+      const view = items.get(id);
+      if (view !== undefined && !added.has(id) && !update.reskinned.has(id)) this.#pose(view);
     }
     const restyle = selected !== this.#selected ? new Set(items.keys()) : update.recolored;
     for (const id of restyle) {
@@ -364,8 +472,10 @@ export class Viewport {
     this.#link(scene);
     if (reset || update.cameras.size > 0) this.#cameras = new Map(scene.cameras.map((camera) => [camera.path, camera]));
     this.#controls.enabled = this.#looking() === null;
+    // Framed when the bounds change, but not as time plays: an animated
+    // extent would move the camera every frame.
     const framed = JSON.stringify(scene.bounds);
-    if (scene.bounds !== null && framed !== this.#framed) {
+    if (scene.bounds !== null && framed !== this.#framed && (!update.timeChanged || this.#framed === "")) {
       this.#framed = framed;
       this.#frame(scene.bounds);
     }
@@ -381,7 +491,9 @@ export class Viewport {
     const placements = view.item.matrices.length / 16;
     const styled = materials(view, selected, this.#applied?.materials ?? new Map(), this.#textures);
     const object: Drawn =
-      view.kind === "lines"
+      view.skin?.mode === "gpu"
+        ? skinnedMesh(geometry, styled as MeshStandardMaterial | MeshStandardMaterial[], view)
+        : view.kind === "lines"
         ? new LineSegments(geometry, styled as LineBasicMaterial)
         : view.kind === "points"
           ? new Points(geometry, styled as PointsMaterial)
@@ -392,6 +504,30 @@ export class Viewport {
     this.#objects.set(view.item.id, object);
     this.#scene.add(object);
     this.#place(view, selected);
+    if (view.skin !== null) this.#pose(view);
+  }
+
+  /**
+   * Poses a skinned draw at the time: on the GPU its bones' matrices (the
+   * joint palette) and bone inverses (the bind transform); on the CPU its
+   * deformed positions and normals. Either way it is placed by the
+   * skeleton's world transform.
+   */
+  #pose(view: ViewItem): void {
+    const object = this.#objects.get(view.item.id);
+    const skin = view.skin;
+    if (object === undefined || skin === null) return;
+    object.matrix.fromArray(skin.world);
+    if (object instanceof SkinnedMesh) {
+      const { bones, boneInverses } = object.skeleton;
+      bones.forEach((bone, joint) => bone.matrixWorld.fromArray(skin.palette, 16 * joint));
+      for (const inverse of boneInverses) inverse.fromArray(skin.bind);
+      return;
+    }
+    if (skin.positions === null || skin.normals === null) return;
+    object.geometry.setAttribute("position", new BufferAttribute(skin.positions, 3));
+    object.geometry.setAttribute("normal", new BufferAttribute(skin.normals, 3));
+    object.geometry.computeBoundingSphere();
   }
 
   /** Writes the item's matrices into its object, in place; a group outgrowing its instance buffer is made again. */
@@ -403,7 +539,8 @@ export class Viewport {
     object.visible = placements > 0;
     // Row-by-row row-vector matrices are three.js's column-major column-vector ones.
     if (!(object instanceof InstancedMesh)) {
-      if (placements > 0) object.matrix.fromArray(matrices);
+      // A skinned draw is placed by its skeleton ({@link #pose}).
+      if (placements > 0 && view.skin === null) object.matrix.fromArray(matrices);
       return;
     }
     if (placements > object.instanceMatrix.count) {
@@ -672,6 +809,37 @@ function refillSamples(geometry: BufferGeometry, view: ViewItem): void {
   geometry.setAttribute("position", new BufferAttribute(positions, 3));
   if (colors !== null) geometry.setAttribute("color", new BufferAttribute(colors, 3));
   geometry.computeBoundingSphere();
+}
+
+/**
+ * A `SkinnedMesh` drawing a GPU-skinned item: its geometry gets the
+ * gathered influences as `skinIndex`, `skinWeight`, `skinIndex1` and
+ * `skinWeight1`, and the mesh a skeleton of one bone per joint, outside
+ * the scene graph, posed by {@link Viewport} each time. Never
+ * frustum-culled: three.js would cull it by the bounds of one pose.
+ */
+function skinnedMesh(geometry: BufferGeometry, material: MeshStandardMaterial | MeshStandardMaterial[], view: ViewItem): SkinnedMesh {
+  const skin = view.skin!;
+  const influences = skin.influences!;
+  // Eight per vertex, as two attributes of four ({@link patchSkinning}).
+  const joints = new InterleavedBuffer(influences.joints, influences.slots);
+  const weights = new InterleavedBuffer(influences.weights, influences.slots);
+  geometry.setAttribute("skinIndex", new InterleavedBufferAttribute(joints, 4, 0));
+  geometry.setAttribute("skinWeight", new InterleavedBufferAttribute(weights, 4, 0));
+  geometry.setAttribute("skinIndex1", new InterleavedBufferAttribute(joints, 4, 4));
+  geometry.setAttribute("skinWeight1", new InterleavedBufferAttribute(weights, 4, 4));
+  const bones = Array.from({ length: skin.joints }, () => {
+    const bone = new Bone();
+    bone.matrixAutoUpdate = false;
+    bone.matrixWorldAutoUpdate = false;
+    return bone;
+  });
+  const inverse = new Matrix4().fromArray(skin.bind);
+  const mesh = new SkinnedMesh(geometry, material);
+  mesh.bindMode = DetachedBindMode;
+  mesh.bind(new Skeleton(bones, bones.map(() => inverse.clone())), new Matrix4());
+  mesh.frustumCulled = false;
+  return mesh;
 }
 
 /** A geometry over the item's stagehand buffer: indexed, with normals, colors and a group per range. */

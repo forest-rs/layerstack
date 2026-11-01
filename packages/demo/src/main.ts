@@ -10,6 +10,7 @@ import type { Attribute, EditTarget, Issue, Layer, Prim, Stage } from "@forest-r
 import type { Editor, LayerFile } from "./editor.ts";
 import { Session, steps } from "./script.ts";
 import type { Host } from "./script.ts";
+import { collectionRows } from "./collections.ts";
 import { materialSummary } from "./materials.ts";
 import { ViewportModel, updateSummary, viewportSummary } from "./viewport.ts";
 import type { ViewportUpdate } from "./viewport.ts";
@@ -454,7 +455,7 @@ function renderInspector(editor: Editor): void {
     timeForm(),
     h("table", { class: "attributes" }, h("tbody", {}, ...rows, ...relationships)),
     materialSection(editor.stage, prim.path, time),
-    linkSection(prim.path),
+    collectionSection(editor.stage, prim.path),
     h("p", { class: "hint" }, "Bold attributes have authored opinions. Select one to explain and edit it; rel rows are relationships and their targets."),
     prim.instanceProxy &&
       h("p", { class: "hint" }, "An instance proxy is read through its instance: edit the asset the instance references, or the instance itself."),
@@ -464,23 +465,27 @@ function renderInspector(editor: Editor): void {
 }
 
 /**
- * A light's evaluated links, as the viewport's draw list holds them: the
- * draws it lights and those casting its shadows, each everything unless
- * its collection has a category; nothing for a prim that is not a listed
- * light.
+ * The prim's collections (a light's `lightLink` and `shadowLink`), each
+ * asked of every prim of the tree: everything, or the prims it includes.
  */
-function linkSection(path: string): HTMLElement | false {
-  const list = model.list;
-  const light = list?.light(path) ?? null;
-  if (list === null || light === null) return false;
-  const targets = list.items().flatMap((item) => item.linkPaths.map((at) => ({ item: item.id, path: at })));
-  const line = (kind: "light" | "shadow", label: string) => {
-    const link = kind === "light" ? light.lightLink : light.shadowLink;
-    if (link.category === null) return h("p", { class: "hint" }, `${label} every draw (collection:${kind}Link links everything).`);
-    const linked = targets.filter((target) => list.isLinked(light.key, kind, target)).map((target) => target.path);
-    return h("p", {}, `${label} ${linked.length} of ${targets.length} draws (category ${link.category})${linked.length > 0 ? ": " : ""}`, ...linked.map((at) => h("code", {}, `${at} `)));
-  };
-  return h("div", { class: "links" }, line("light", "Lights"), line("shadow", "Shadows from"));
+function collectionSection(stage: Stage, path: string): HTMLElement | false {
+  const rows = collectionRows(stage, path);
+  if (rows.length === 0) return false;
+  return h(
+    "div",
+    { class: "collections" },
+    ...rows.map((row) =>
+      row.everything
+        ? h("p", { class: "hint" }, h("code", {}, `collection:${row.name}`), " includes every prim.")
+        : h(
+            "p",
+            {},
+            h("code", {}, `collection:${row.name}`),
+            ` includes ${row.included.length} of ${row.of} prims${row.included.length > 0 ? ": " : ""}`,
+            ...row.included.map((at) => h("code", {}, `${at} `)),
+          ),
+    ),
+  );
 }
 
 /** The prim's bound material, and its surface shader's inputs; nothing when no material binds it. */

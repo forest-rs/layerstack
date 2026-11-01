@@ -16,6 +16,7 @@ import type { EditTarget, Explanation, Stage, TransformCacheStats, Value } from 
 import type { LayerFile } from "../src/editor.ts";
 import { Session, sample, steps } from "../src/script.ts";
 import type { Host } from "../src/script.ts";
+import { collectionRows } from "../src/collections.ts";
 import { materialSummary } from "../src/materials.ts";
 import { channelOf, uvChannels } from "../src/surfaces.ts";
 import { formatValue, releaseValue } from "../src/values.ts";
@@ -549,6 +550,19 @@ const checks: ((session: Session) => void)[] = [
     assert.equal(prim, sample.spot);
     assert.equal(current.changeLog.at(-1)?.cause, "light the ground with the spot");
     assert.deepEqual(current.stage.relationship(sample.spotIncludes)?.targets(), [sample.rover, sample.ground]);
+    // The inspector's collections: the spot's light link, asked of every
+    // prim of the tree, holds the rover (its asset muted, it has no
+    // children) and the ground with its subset; its shadow link, and the
+    // lamp's light link, include everything by their fallback.
+    const [light, shadow] = collectionRows(current.stage, sample.spot);
+    assert.deepEqual([light?.name, light?.everything, light?.included], ["lightLink", false, [sample.rover, sample.ground, `${sample.ground}/West`]]);
+    assert.deepEqual([shadow?.name, shadow?.everything], ["shadowLink", true]);
+    assert.equal(shadow?.included.length, shadow?.of, "everything is every prim of the tree");
+    assert.deepEqual(
+      collectionRows(current.stage, sample.lamp).map((row) => `${row.name} ${row.everything}`),
+      ["lightLink true", "shadowLink true"],
+    );
+    assert.deepEqual(collectionRows(current.stage, sample.rock), [], "a prim with no collection has no rows");
   },
 ];
 
@@ -578,6 +592,19 @@ async function unmuteWithTheToggle(session: Session): Promise<void> {
   assert.equal(read(current.stage, `${sample.rover}.height`).value, String(sample.assetHeight), "the saved height is back");
   assert.deepEqual(current.stage.children(sample.rover), [`${sample.rover}/Body`, `${sample.rover}/Head`, `${sample.rover}/Looks`]);
   assert.deepEqual(current.stage.status().compositionErrors, []);
+  assert.deepEqual(
+    collectionRows(current.stage, sample.spot)[0]?.included.filter((path) => path.startsWith(sample.rover)),
+    [
+      sample.rover,
+      `${sample.rover}/Body`,
+      `${sample.rover}/Head`,
+      `${sample.rover}/Looks`,
+      `${sample.rover}/Looks/Paint`,
+      `${sample.rover}/Looks/Paint/Surface`,
+      `${sample.rover}/Looks/Paint/Finish`,
+    ],
+    "the spot's light link includes the asset's prims again, below the rover",
+  );
   assert.equal(await current.setMuted(asset, false), false, "unmuting again changes nothing");
   assert.equal(current.changeLog.length, changes + 1);
   // The page offers no toggle for the root, which cannot be muted.

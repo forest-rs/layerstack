@@ -338,7 +338,7 @@ export const steps: readonly Step[] = [
   },
   {
     title: "Light the ground with the spot too",
-    look: "The viewport: the spot's circle is back on the ground. The spot is light-linked: its collection:lightLink includes the robot (the rover since the rename, which repaired the target) with includeRoot = false, so the viewport lit only the robot's draws with it, through a per-material mask three.js multiplies the spot's light by; while the asset is muted the spot lights nothing. One edit adds the ground to the includes. The stats line: the draw list evaluates that one light link again (light links 1 evaluated), classifies each draw once against its new membership, and lists one link change, the ground added; it reads that light again and no draw, camera or material. The inspector: the spot lights 1 of 16 draws, and its shadow link links everything.",
+    look: "The inspector: the spot's collection:lightLink, the prims it lights, asked of every prim of the tree with Stage.collectionMembership. Its includes named the robot (the rover since the rename, which repaired the target) with includeRoot = false, so it held the rover alone while the robot asset is muted; one edit adds the ground. Its shadowLink includes every prim, by its includeRoot = true fallback, as the lamp's lightLink does.",
     async run(session) {
       const editor = session.current;
       const targets = editor.stage.relationship(sample.spotIncludes)?.targets() ?? [];

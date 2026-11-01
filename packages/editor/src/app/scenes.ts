@@ -27,17 +27,24 @@ interface LocalScene {
   readonly path: string;
 }
 
+/**
+ * The local scene at `path` under the served directory. Its identifier is
+ * that path, so an asset path climbing out of the root's own directory
+ * still resolves.
+ */
+export function localScene(path: string): SceneSource {
+  return httpSource(path, new URL("/@scenes/", document.baseURI), path);
+}
+
 /** The scenes the dev server serves from the local scene directory; none in a build. */
 export async function localScenes(): Promise<SceneEntry[]> {
   if (!import.meta.env.DEV) return [];
   const response = await fetch("/@scenes/index.json");
   if (!response.ok) return [];
   const scenes = (await response.json()) as LocalScene[];
-  // The root's identifier is its path under the directory, so an asset
-  // path climbing out of the root's own directory still resolves.
   return scenes.map(({ path }) => ({
     label: path,
-    source: () => httpSource(path, new URL("/@scenes/", document.baseURI), path),
+    source: () => localScene(path),
   }));
 }
 

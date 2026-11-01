@@ -22,6 +22,7 @@ import type { SceneSource } from "../model/sources.ts";
 import { useStore } from "./context.ts";
 import { formatBytes } from "./format.ts";
 import { directoryRoots, directoryScene, droppedFiles, droppedScene, localScenes, SAMPLE, type SceneEntry } from "./scenes.ts";
+import { SceneBrowser } from "./SceneBrowser.tsx";
 import { TargetPicker } from "./TargetPicker.tsx";
 
 /** Roots to choose between, and how to open the one chosen. */
@@ -35,6 +36,7 @@ export function Toolbar() {
   const store = useStore();
   const [local, setLocal] = useState<SceneEntry[]>([]);
   const [choice, setChoice] = useState<Choice | null>(null);
+  const [browsing, setBrowsing] = useState(false);
   useEffect(() => {
     void localScenes().then(setLocal);
   }, []);
@@ -94,6 +96,7 @@ export function Toolbar() {
                     {entry.label}
                   </DropdownMenuItem>
                 ))}
+                <DropdownMenuItem onAction={() => setBrowsing(true)}>Browse local scenes…</DropdownMenuItem>
               </DropdownMenuGroup>
             </>
           )}
@@ -130,6 +133,7 @@ export function Toolbar() {
           </span>
         )}
       </div>
+      <SceneBrowser isOpen={browsing} onClose={() => setBrowsing(false)} onOpen={(source) => void store.open(source)} />
       <Dialog isOpen={choice !== null} onOpenChange={(open) => open || setChoice(null)} className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{choice?.title}</DialogTitle>

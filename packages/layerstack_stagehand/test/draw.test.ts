@@ -8,7 +8,7 @@ import { describe, it } from "node:test";
 
 import { loadLayerstack } from "@forest-rs/layerstack";
 import type { Changes, Edit, Stage } from "@forest-rs/layerstack";
-import { loadStagehand } from "../dist/index.js";
+import { attributeValues, loadStagehand, vertexPositions } from "../dist/index.js";
 import type { DrawDiff, DrawList, DrawScope } from "../dist/index.js";
 
 const layerstack = await loadLayerstack();
@@ -182,8 +182,8 @@ def Mesh "Tile" {
       assert.equal(first.work.triangulations, 1);
       assert.equal(first.work.plansFreed, 1, "nothing the mesh reads can vary");
       const tile = list.item(itemOf(list, "/Tile"))!;
-      // The buffers stay, copied out of the module.
-      assert.equal(list.buffers(tile.buffer)!.mesh.positions.length, 12);
+      // The buffers stay, copied out of the module and encoded.
+      assert.equal(vertexPositions(list.buffers(tile.buffer)!.vertices).length, 12);
       // The same points again: the input's fingerprint matches, nothing is built.
       stage.apply(
         [{ type: "setValue", path: "/Tile.points", value: { type: "point3f[]", value: [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]] } }],
@@ -203,7 +203,7 @@ def Mesh "Tile" {
       assert.equal(diff.work.triangulations, 1);
       assert.equal(diff.work.plansFreed, 1);
       assert.deepEqual(diff.rebuilt, [tile.buffer]);
-      assert.equal(list.buffers(tile.buffer)!.mesh.positions[2], 2);
+      assert.equal(vertexPositions(list.buffers(tile.buffer)!.vertices)[2], 2);
     } finally {
       list.dispose();
       stage.free();
@@ -237,7 +237,7 @@ def Mesh "Tile" {
       assert.equal(diff.work.buffersReused, 0);
       const buffers = list.buffers(rock.buffer)!;
       assert.equal(buffers.revision, 1);
-      assert.ok([...buffers.mesh.positions].every((p, i) => i % 3 !== 2 || p === 1));
+      assert.ok([...vertexPositions(buffers.vertices)].every((p, i) => i % 3 !== 2 || p === 1));
     } finally {
       list.dispose();
       stage.free();
@@ -328,7 +328,7 @@ def Xform "Lab" {
       const lamp = list.item(itemOf(list, "/Lab/Lamp"))!;
       assert.deepEqual(list.buffers(lamp.buffer)!.shape, { kind: "Sphere", radius: 0.25 });
       const boulder = list.item(itemOf(list, "/Lab/Boulder"))!;
-      assert.equal(list.buffers(boulder.buffer)!.mesh.indices.length, 3);
+      assert.equal(list.buffers(boulder.buffer)!.vertices.indices.length, 3);
     } finally {
       list.dispose();
       stage.free();
@@ -500,10 +500,10 @@ describe("draw costs", () => {
       assert.equal(cost.total.instances, 10);
       assert.equal(cost.total.instanceBytes, 640);
       const rock = cost.items.find((item) => item.prim === "/World/Rocks/Rock")!;
-      // One quad: two triangles over four vertices; f32 positions and
-      // normals and u32 indices uploaded, triangle faces and vertex points
-      // held besides.
-      assert.deepEqual(rock.geometry, { triangles: 2, vertices: 4, cpuBytes: 144, gpuBytes: 120 });
+      // One quad: two triangles over four vertices; in the compact format
+      // snorm16 positions (8 bytes), snorm8 normals (4) and u16 indices
+      // uploaded, vertex points held besides.
+      assert.deepEqual(rock.geometry, { triangles: 2, vertices: 4, cpuBytes: 76, gpuBytes: 60 });
       const stones = cost.items.find((item) => item.prim === "/World/Stones/Prototypes/Stone")!;
       assert.equal(stones.instances, 3);
       assert.equal(stones.trianglesDrawn, 3 * stones.geometry.triangles);
@@ -725,7 +725,7 @@ def Scope "Looks" {
         mesh.uvSets.map((set) => set.name),
         ["st1"],
       );
-      assert.equal(mesh.positions.length / 3, 6, "split where st1 differs");
+      assert.equal(list.buffers(item.buffer)!.vertices.count, 6, "split where st1 differs");
       assert.deepEqual(mesh.report?.uvSets, [{ name: "st1", channel: { state: "used", interpolation: "faceVarying", indexed: false } }]);
       stage.apply([{ type: "setValue", path: "/Looks/Tiled.inputs:coordinates", value: { type: "token", value: "st" } }], stage.root);
       const diff = list.applyChanges(heard.at(-1)!);
@@ -733,7 +733,7 @@ def Scope "Looks" {
       assert.deepEqual(diff.rebuilt, [item.buffer]);
       assert.equal(diff.work.triangulations, 1);
       assert.deepEqual(list.buffers(item.buffer)!.mesh.uvSets, []);
-      assert.equal(list.buffers(item.buffer)!.mesh.positions.length / 3, 4);
+      assert.equal(list.buffers(item.buffer)!.vertices.count, 4);
     } finally {
       list.dispose();
       stage.free();
@@ -852,15 +852,17 @@ def Scope "Looks" {${reading("Shifting", 'token inputs:coordinates.timeSamples =
       assert.deepEqual(diff.materialsChanged, ["/Looks/Shifting"]);
       assert.deepEqual(diff.rebuilt, [key]);
       assert.equal(diff.work.triangulations, 1);
-      let [set] = list.buffers(key)!.mesh.uvSets;
+      let [set] = list.buffers(key)!.vertices.uvSets;
       assert.equal(set!.name, "st1");
-      assert.deepEqual([...set!.values.subarray(4, 6)], [3, 3], "st1 between samples");
+      // Beyond half floats' limit: kept f32.
+      assert.equal(set!.attribute.type, "float32");
+      assert.deepEqual([...attributeValues(set!.attribute).subarray(4, 6)], [3, 3], "st1 between samples");
       // `st1` is drawn now, and its samples make the mesh read again.
       diff = list.setTime(20);
       assert.deepEqual(diff.refilled, [key]);
       assert.equal(diff.work.triangulations, 0);
-      [set] = list.buffers(key)!.mesh.uvSets;
-      assert.deepEqual([...set!.values.subarray(4, 6)], [4, 4]);
+      [set] = list.buffers(key)!.vertices.uvSets;
+      assert.deepEqual([...attributeValues(set!.attribute).subarray(4, 6)], [4, 4]);
       // And back: planned again without it.
       diff = list.setTime(0);
       assert.deepEqual(diff.rebuilt, [key]);

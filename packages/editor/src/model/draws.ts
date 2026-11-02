@@ -675,7 +675,7 @@ export function viewportSummary(scene: ViewportScene): ViewportSummary {
     if (item.hidden) continue;
     const placements = item.matrices.length / 16;
     // Curves drawn as lines draw no triangles; points are sprites.
-    if (kind !== "lines") triangles += (buffers.mesh.indices.length / 3) * placements;
+    if (kind !== "lines") triangles += buffers.vertices.triangles * placements;
     if (buffers.curves !== null) {
       const report = buffers.curves.report;
       const evaluation =

@@ -23,6 +23,8 @@ import type { MaterialItem } from "./material.js";
 import { readMesh, readShape, shapeSchema } from "./read.js";
 import { CARD_FACES, flattenedDrawMode, inheritedDrawMode, readStandinInput, sameStandin, standinExtent, standinMode } from "./standin.js";
 import type { StandinBuffers, StandinInput } from "./standin.js";
+import { encodeVertices } from "./vertices.js";
+import type { MeshVertices, VertexFormat } from "./vertices.js";
 import type {
   CurveOptions,
   CurvesInput,
@@ -67,6 +69,14 @@ export interface DrawOptions {
    * does not fit, as {@link DrawList.budgetReport} reports.
    */
   readonly budget?: DrawBudget;
+  /**
+   * How mesh vertices are stored for upload ({@link VertexFormat}):
+   * `compact` (the default, 16 bytes per vertex with a position, normal
+   * and `st`) or `float32` (32 bytes). Applies to every buffer's
+   * {@link DrawBuffers.vertices}, and to {@link DrawList.cost},
+   * {@link DrawList.estimate} and the budget's byte counts.
+   */
+  readonly vertexFormat?: VertexFormat;
 }
 
 /**
@@ -184,9 +194,10 @@ export interface DrawItem {
 
 /**
  * A retained buffer, owned by the {@link DrawList}: a mesh's planned
- * buffers or a shape's tessellation. Upload it before the next diff, which
- * may refill (new typed arrays on the same {@link mesh}), rebuild (a new
- * {@link mesh}) or free it (the mesh disposed).
+ * buffers or a shape's tessellation. Upload {@link vertices} before the
+ * next diff, which may refill (new typed arrays on the same {@link mesh},
+ * new {@link vertices}), rebuild (a new {@link mesh}) or free it (the mesh
+ * disposed).
  */
 export interface DrawBuffers {
   readonly key: number;
@@ -195,9 +206,17 @@ export interface DrawBuffers {
   /**
    * The triangles drawn, and for a mesh its report: a mesh's, a shape's,
    * curves' swept tubes or ribbons, or the unit shape points are instanced
-   * as; empty for curves drawn as lines and for point sprites.
+   * as; empty for curves drawn as lines and for point sprites. Its
+   * ranges, report and `vertexPoints` are read here; its vertex and index
+   * arrays are {@link vertices}' in the `float32` format, and released
+   * (empty, {@link StagehandMesh.release}) in the `compact` one.
    */
   readonly mesh: StagehandMesh;
+  /**
+   * {@link mesh}'s vertices and indices in the list's vertex format
+   * ({@link DrawOptions.vertexFormat}), to upload as they are.
+   */
+  readonly vertices: MeshVertices;
   /** Curves' samples, line segments and report, for `BasisCurves`, `NurbsCurves` and `HermiteCurves`; their swept triangles are {@link mesh}. */
   readonly curves: StagehandCurves | null;
   /** A `Points`' per-point positions, widths, colors and ids, and report. */
@@ -885,6 +904,7 @@ export class DrawList implements Disposable {
   readonly #tessellation: Tessellation;
   readonly #curveOptions: CurveOptions;
   readonly #pointStyle: PointStyle;
+  readonly #vertexFormat: VertexFormat;
   #scope: { roots: string[]; space: string | null };
   readonly #entries = new Map<number, Entry>();
   readonly #keys = new Map<string, number>();
@@ -932,6 +952,7 @@ export class DrawList implements Disposable {
     this.#tessellation = options.tessellation ?? {};
     this.#curveOptions = options.curves ?? {};
     this.#pointStyle = options.points ?? "sprites";
+    this.#vertexFormat = options.vertexFormat ?? "compact";
     this.#contexts = [...(options.renderContexts ?? [])];
     this.#scope = normalizeScope(options.scope ?? { roots: ["/"] });
     this.#budget = options.budget ?? null;
@@ -1400,15 +1421,15 @@ export class DrawList implements Disposable {
           key = JSON.stringify(shape);
           if (shape !== null && !geometry.has(key)) {
             const mesh = this.#stagehand.tessellate(shape, this.#tessellation);
-            geometry.set(key, bufferCost({ key: -1, prim, mesh, curves: null, points: null, subsets: [], revision: 0, shape, standin: null }));
+            geometry.set(key, bufferCost({ key: -1, prim, ...this.#meshed(mesh), curves: null, points: null, subsets: [], revision: 0, shape, standin: null }));
             mesh.dispose();
           }
         } else if (!geometry.has(key)) {
           const read =
             gprim === "mesh"
-              ? estimateMesh(stage, prim, at, 0)
+              ? estimateMesh(stage, prim, at, 0, this.#vertexFormat)
               : gprim === "curves"
-                ? estimateCurves(stage, prim, at, this.#curveOptions)
+                ? estimateCurves(stage, prim, at, this.#curveOptions, this.#vertexFormat)
                 : gprim === "points"
                   ? estimatePoints(stage, prim, at)
                   : null;
@@ -1901,7 +1922,7 @@ export class DrawList implements Disposable {
       retained.uvSets = names;
       retained.buffers = {
         ...retained.buffers,
-        mesh: this.#stagehand.buildMesh(input, this.#meshOptions),
+        ...this.#meshed(this.#stagehand.buildMesh(input, this.#meshOptions)),
         subsets: (input.subsets ?? []).map((subset) => subset.path ?? ""),
         revision: retained.buffers.revision + 1,
       };
@@ -2755,7 +2776,7 @@ export class DrawList implements Disposable {
             gather.work.refills++;
             gather.refilled.add(known);
             retained.input = input;
-            retained.buffers = { ...retained.buffers, revision: retained.buffers.revision + 1 };
+            retained.buffers = { ...retained.buffers, vertices: this.#encode(mesh, retained.buffers.vertices), revision: retained.buffers.revision + 1 };
             return known;
           } catch (error) {
             // A mesh whose plan was freed ({@link #keepPlan}) is built again.
@@ -2769,7 +2790,7 @@ export class DrawList implements Disposable {
         retained.input = input;
         retained.buffers = {
           ...retained.buffers,
-          mesh: this.#stagehand.buildMesh(input, this.#meshOptions),
+          ...this.#meshed(this.#stagehand.buildMesh(input, this.#meshOptions)),
           subsets,
           revision: retained.buffers.revision + 1,
         };
@@ -2780,7 +2801,7 @@ export class DrawList implements Disposable {
       const key = this.#nextBuffer++;
       gather.buffersAdded.add(key);
       this.#buffers.set(key, {
-        buffers: { key, prim: item.prim, mesh: this.#stagehand.buildMesh(input, this.#meshOptions), subsets, revision: 0, shape: null, curves: null, points: null, standin: null },
+        buffers: { key, prim: item.prim, ...this.#meshed(this.#stagehand.buildMesh(input, this.#meshOptions)), subsets, revision: 0, shape: null, curves: null, points: null, standin: null },
         input,
         uvSets,
         users: 0,
@@ -2804,7 +2825,7 @@ export class DrawList implements Disposable {
     const key = this.#nextBuffer++;
     gather.buffersAdded.add(key);
     this.#buffers.set(key, {
-      buffers: { key, prim: item.prim, mesh: this.#stagehand.tessellate(shape, this.#tessellation), subsets: [], revision: 0, shape, curves: null, points: null, standin: null },
+      buffers: { key, prim: item.prim, ...this.#meshed(this.#stagehand.tessellate(shape, this.#tessellation)), subsets: [], revision: 0, shape, curves: null, points: null, standin: null },
       input: null,
       uvSets: [],
       users: 0,
@@ -2832,7 +2853,7 @@ export class DrawList implements Disposable {
         gather.work.refills++;
         gather.work.curvesRefilled++;
         gather.refilled.add(known);
-        retained.buffers = { ...retained.buffers, mesh: curves.swept, revision: retained.buffers.revision + 1 };
+        retained.buffers = { ...retained.buffers, ...this.#meshed(curves.swept), revision: retained.buffers.revision + 1 };
         return known;
       }
       curves.dispose();
@@ -2840,7 +2861,7 @@ export class DrawList implements Disposable {
       const rebuilt = this.#stagehand.buildCurves(input, this.#curveOptions);
       gather.work.curvesLaidOut++;
       gather.rebuilt.add(known);
-      retained.buffers = { ...retained.buffers, curves: rebuilt, mesh: rebuilt.swept, revision: retained.buffers.revision + 1 };
+      retained.buffers = { ...retained.buffers, curves: rebuilt, ...this.#meshed(rebuilt.swept), revision: retained.buffers.revision + 1 };
       return known;
     }
     const curves = this.#stagehand.buildCurves(input, this.#curveOptions);
@@ -2848,7 +2869,7 @@ export class DrawList implements Disposable {
     const key = this.#nextBuffer++;
     gather.buffersAdded.add(key);
     this.#buffers.set(key, {
-      buffers: { key, prim, mesh: curves.swept, subsets: [], revision: 0, shape: null, curves, points: null, standin: null },
+      buffers: { key, prim, ...this.#meshed(curves.swept), subsets: [], revision: 0, shape: null, curves, points: null, standin: null },
       input: null,
       curvesInput: input,
       uvSets: [],
@@ -2892,7 +2913,7 @@ export class DrawList implements Disposable {
         gather.work.pointsRebuilt++;
         gather.rebuilt.add(known);
         retained.buffers.mesh.dispose();
-        retained.buffers = { ...retained.buffers, points: filled, mesh: shape(), revision: retained.buffers.revision + 1 };
+        retained.buffers = { ...retained.buffers, points: filled, ...this.#meshed(shape()), revision: retained.buffers.revision + 1 };
       }
       return known;
     }
@@ -2900,7 +2921,7 @@ export class DrawList implements Disposable {
     const key = this.#nextBuffer++;
     gather.buffersAdded.add(key);
     this.#buffers.set(key, {
-      buffers: { key, prim, mesh: shape(), subsets: [], revision: 0, shape: null, curves: null, points: filled, standin: null },
+      buffers: { key, prim, ...this.#meshed(shape()), subsets: [], revision: 0, shape: null, curves: null, points: filled, standin: null },
       input: null,
       pointsInput: input,
       uvSets: [],
@@ -2934,7 +2955,7 @@ export class DrawList implements Disposable {
     gather.buffersAdded.add(key);
     const mesh = this.#stagehand.buildMesh({ faceVertexCounts: new Int32Array(), faceVertexIndices: new Int32Array(), points: new Float32Array() });
     this.#buffers.set(key, {
-      buffers: { key, prim, mesh, subsets: [], revision: 0, shape: null, curves: null, points: null, standin },
+      buffers: { key, prim, ...this.#meshed(mesh), subsets: [], revision: 0, shape: null, curves: null, points: null, standin },
       input: null,
       uvSets: [],
       users: 0,
@@ -2987,7 +3008,7 @@ export class DrawList implements Disposable {
     gather.buffersAdded.add(key);
     const mesh = this.#stagehand.buildMesh({ faceVertexCounts: new Int32Array(), faceVertexIndices: new Int32Array(), points: new Float32Array() });
     this.#buffers.set(key, {
-      buffers: { key, prim: item.prim, mesh, subsets: [], revision: 0, shape: null, curves: null, points: null, standin },
+      buffers: { key, prim: item.prim, ...this.#meshed(mesh), subsets: [], revision: 0, shape: null, curves: null, points: null, standin },
       input: null,
       uvSets: [],
       users: 0,
@@ -2995,6 +3016,26 @@ export class DrawList implements Disposable {
     });
     this.#budgetStandins.set(standinKey, key);
     return key;
+  }
+
+  /** `mesh` with its vertices encoded in the list's format ({@link #encode}). */
+  #meshed(mesh: StagehandMesh): { mesh: StagehandMesh; vertices: MeshVertices } {
+    return { mesh, vertices: this.#encode(mesh, null) };
+  }
+
+  /**
+   * `mesh`'s vertices in the list's format; in `compact`, the mesh's own
+   * arrays then released, so each buffer is held once. A refill passes the
+   * `previous` vertices, whose indices it keeps (a refill keeps the
+   * topology).
+   */
+  #encode(mesh: StagehandMesh, previous: MeshVertices | null): MeshVertices {
+    if (this.#vertexFormat === "float32") return encodeVertices(mesh, "float32");
+    const kept = previous !== null ? previous.indices : null;
+    const { positions, normals, st, colors, uvSets } = mesh;
+    const vertices = encodeVertices({ positions, normals, st, colors, uvSets, indices: kept === null ? mesh.indices : new Uint32Array() }, "compact");
+    mesh.release();
+    return kept === null ? vertices : { ...vertices, triangles: previous!.triangles, indices: kept };
   }
 
   #release(key: number, gather: Gather): void {

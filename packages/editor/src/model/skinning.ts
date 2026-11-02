@@ -307,7 +307,7 @@ export class SkinningModel {
       const input = readMesh(stage, item.prim, { ...(time === undefined ? {} : { time }), uvSets: buffers.mesh.uvSets.map((set) => set.name) });
       if (input === null) return null;
       const mesh = this.#stagehand.buildMesh(input);
-      if (mesh.positions.length !== buffers.mesh.positions.length) {
+      if (mesh.positions.length !== 3 * buffers.vertices.count) {
         mesh.dispose();
         throw new Error("its CPU plan does not split vertices as the draw list's buffer");
       }

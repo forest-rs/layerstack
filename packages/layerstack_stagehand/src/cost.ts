@@ -8,6 +8,8 @@
 import type { Stage } from "@forest-rs/layerstack";
 import type { DrawBuffers, ItemSource } from "./draw.js";
 import type { CurveOptions } from "./types.js";
+import { verticesGpuBytes } from "./vertices.js";
+import type { VertexFormat } from "./vertices.js";
 
 /**
  * Bytes a renderer uploads per instance: a 4x4 matrix of `f32`, as
@@ -23,14 +25,20 @@ export const INSTANCE_GPU_BYTES = 64;
  * - `vertices`: its mesh's vertices, plus curves' samples and points'
  *   points.
  * - `cpuBytes`: the bytes of the JavaScript typed arrays it holds, every
- *   one counted once: a mesh's positions, normals, `st`, colors, texture
- *   coordinate sets, indices, triangle faces and vertex points; curves'
- *   samples and segments; points' arrays; a stand-in's lines.
+ *   one counted once: its encoded vertices and indices
+ *   ({@link DrawBuffers.vertices}), and its mesh's own arrays where they
+ *   are not released (in the `float32` format they are the same arrays),
+ *   vertex points; curves' samples and segments;
+ *   points' arrays; a stand-in's lines.
  * - `gpuBytes`: the bytes a renderer uploads to draw it as the editor
- *   does: `f32` positions and normals (3 per vertex), `st` and texture
- *   coordinate sets (2), colors (3), `u32` indices; curves' samples (3
- *   per sample) and segment indices; points' positions, widths and
- *   colors; a stand-in's line points. An estimate of what the GPU holds:
+ *   does: its vertices and indices as {@link DrawBuffers.vertices} lays
+ *   them out (in the `compact` format 8 bytes of position, 4 of normal,
+ *   4 of `st` and of each texture coordinate set as half floats (8 as
+ *   `f32` where a coordinate passes `HALF_ST_LIMIT`), 12 of color, `u16`
+ *   indices below 65535 vertices; in `float32` 12, 12, 8, 8 and 12, `u32`
+ *   indices); curves' samples (3 `f32` per sample) and segment indices;
+ *   points' positions, widths and colors; a stand-in's line points.
+ *   Counted from counts and types. An estimate of what the GPU holds:
  *   drivers pad and copy.
  */
 export interface BufferCost {
@@ -102,7 +110,8 @@ export interface CostTotals {
  *   `displayColor`) is face-varying: to an indexed primvar's value count
  *   (typical, not a bound), or to the face-vertex count for an unindexed
  *   one (a ceiling: a build merges equal corners); its bytes follow from
- *   those as a build's would. A
+ *   those as a build's would in the list's vertex format (`st` as half
+ *   floats in `compact`: a set kept `f32` measures more). A
  *   shape is tessellated (cheap and exact); curves and points are rough,
  *   from their point counts and the list's curve options (swept tubes
  *   counted as such). A point instancer's instances are its
@@ -119,15 +128,8 @@ export interface DrawCost {
 
 /** The cost of `buffers` as they are now (a refill keeps their sizes). */
 export function bufferCost(buffers: DrawBuffers): BufferCost {
-  const mesh = buffers.mesh;
-  let vertices = mesh.positions.length / 3;
-  let gpuBytes =
-    mesh.positions.byteLength +
-    mesh.normals.byteLength +
-    (mesh.st?.byteLength ?? 0) +
-    (mesh.colors?.byteLength ?? 0) +
-    mesh.uvSets.reduce((sum, set) => sum + set.values.byteLength, 0) +
-    mesh.indices.byteLength;
+  let vertices = buffers.vertices.count;
+  let gpuBytes = verticesGpuBytes(buffers.vertices);
   const curves = buffers.curves;
   if (curves !== null) {
     vertices += curves.positions.length / 3;
@@ -139,7 +141,7 @@ export function bufferCost(buffers: DrawBuffers): BufferCost {
     gpuBytes += points.positions.byteLength + points.widths.byteLength + (points.colors?.byteLength ?? 0);
   }
   if (buffers.standin !== null) gpuBytes += buffers.standin.lines.byteLength;
-  return { triangles: mesh.indices.length / 3, vertices, cpuBytes: arrayBytes([mesh, curves, points, buffers.standin]), gpuBytes };
+  return { triangles: buffers.vertices.triangles, vertices, cpuBytes: arrayBytes([buffers.mesh, buffers.vertices, curves, points, buffers.standin]), gpuBytes };
 }
 
 /** The bytes of every typed array reachable from `roots` through plain objects and arrays, each counted once. */
@@ -163,7 +165,7 @@ function arrayBytes(roots: readonly unknown[]): number {
  * A mesh's buffer estimated from its counts, as {@link DrawCost} describes:
  * nothing is triangulated and no point is copied out of the stage.
  */
-export function estimateMesh(stage: Stage, prim: string, time: number | undefined, uvSets: number): BufferCost | null {
+export function estimateMesh(stage: Stage, prim: string, time: number | undefined, uvSets: number, format: VertexFormat): BufferCost | null {
   const length = (name: string) => attributeLength(stage, `${prim}.${name}`, time);
   const faces = length("faceVertexCounts");
   const corners = length("faceVertexIndices");
@@ -192,9 +194,16 @@ export function estimateMesh(stage: Stage, prim: string, time: number | undefine
     split(st),
     split(color),
   );
-  // As a build fills them: f32 positions and normals, `st` and texture
-  // coordinate sets, colors where `displayColor` has a value; u32 indices; and
-  // on the CPU a face per triangle and a point per vertex besides.
+  // As a build encodes them ({@link VertexFormat}): positions and normals,
+  // `st` and texture coordinate sets (as half floats in `compact`), colors
+  // where `displayColor` has a value, and indices; on the CPU a point per
+  // vertex besides, and in `float32` a face per triangle (`compact`
+  // releases the mesh's own arrays, triangle faces with them).
+  if (format === "compact") {
+    const perVertex = 12 + (st === null ? 0 : 4) + 4 * uvSets + (color === null ? 0 : 12);
+    const gpuBytes = vertices * perVertex + triangles * (vertices < 0xffff ? 6 : 12);
+    return { triangles, vertices, cpuBytes: gpuBytes + vertices * 4, gpuBytes };
+  }
   const perVertex = 24 + (st === null ? 0 : 8) + 8 * uvSets + (color === null ? 0 : 12);
   const gpuBytes = vertices * perVertex + triangles * 12;
   return { triangles, vertices, cpuBytes: gpuBytes + triangles * 4 + vertices * 4, gpuBytes };
@@ -223,9 +232,10 @@ export function estimatePoints(stage: Stage, prim: string, time: number | undefi
  * samples per authored point of a cubic curve (a third as many for a
  * Bézier, one per point for a linear one), each a position and a line
  * index uploaded; swept, a ring of `sides` vertices per sample (two for a
- * ribbon, where normals are authored) and two triangles per ring vertex.
+ * ribbon, where normals are authored) and two triangles per ring vertex,
+ * their vertices a position and normal each in `format`.
  */
-export function estimateCurves(stage: Stage, prim: string, time: number | undefined, options: CurveOptions): BufferCost {
+export function estimateCurves(stage: Stage, prim: string, time: number | undefined, options: CurveOptions, format: VertexFormat): BufferCost {
   const points = attributeLength(stage, `${prim}.points`, time) ?? 0;
   const token = (name: string) => {
     const value = stage.attribute(`${prim}.${name}`)?.get(time) ?? null;
@@ -244,8 +254,8 @@ export function estimateCurves(stage: Stage, prim: string, time: number | undefi
     cost = {
       triangles,
       vertices: sampled + vertices,
-      cpuBytes: cost.cpuBytes + vertices * 28 + triangles * 16,
-      gpuBytes: cost.gpuBytes + vertices * 24 + triangles * 12,
+      cpuBytes: cost.cpuBytes + vertices * (format === "compact" ? 16 : 28) + triangles * (format === "compact" ? 12 : 16),
+      gpuBytes: cost.gpuBytes + vertices * (format === "compact" ? 12 : 24) + triangles * 12,
     };
   }
   return cost;

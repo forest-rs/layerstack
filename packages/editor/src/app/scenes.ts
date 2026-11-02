@@ -23,7 +23,7 @@ export const SAMPLE: SceneEntry = {
 
 /** One root the dev server's scene directory has, as `/@scenes/index.json` lists it. */
 interface LocalScene {
-  /** The root's path under the scene directory (`ALab-2.3.0/ALab/entry.usda`). */
+  /** The root's path under the scene directory (`assets/set/root.usda`). */
   readonly path: string;
 }
 

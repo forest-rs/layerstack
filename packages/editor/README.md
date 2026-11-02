@@ -202,6 +202,16 @@ nothing more.
   in the viewport chooses its row. Each row hides its instance
   (`invisibleIds`) or deactivates it (`inactiveIds`), an edit where edits
   go.
+- **Lights, cameras, transforms, skeletons.** A light's view (anything
+  with `LightAPI`) says what it emits, `intensity × 2^exposure` in its
+  colour times its colour temperature's blackbody colour when enabled
+  (`UsdLuxBlackbodyTemperatureAsRgb`), with those inputs' editors beside
+  it. A camera's gives its projection, focal length and apertures in
+  millimetres (tenths of a scene unit), the fields of view they make,
+  clipping, focus and exposure, and looks through it. A transform's op
+  order is listed as `GetOrderedXformOps` reads it. A skeleton's joints,
+  and a skeleton animation's, are listed as their tree, with an
+  animation's blend shapes.
 - **Materials and shaders.** The inspector of a material or shader shows
   what it is (a shader's `info:id` and implementation; a material's
   outputs and what they read) and its inputs as their authors lay them
@@ -388,5 +398,10 @@ materials, 3.7 M triangles) draws 0.6 to 1.1 M.
   (`gpu.ts`) shared by the viewport and the material previews, each canvas
   a target of it; node materials and TSL where the editor shades its own
   way (light links, texture channels, eight-influence skinning, picking).
-- `src/app/`: the panels. `src/components/ui/`: shadcn components on React
-  Aria.
+- `src/presentations/`: the presentation and command registries and the
+  types they dispatch on, with no React or DOM (tested in Node), and the
+  colour conversions swatches paint with.
+- `src/app/`: the panels; `src/app/presentations/` the built-in
+  presentations and commands, `src/app/views/` the views of prim types
+  (mesh, point instancer, light, camera, skeleton). `src/components/ui/`:
+  shadcn components on React Aria.

@@ -189,6 +189,18 @@ describe("swatch colours", () => {
   });
 });
 
+describe("skeleton joints", () => {
+  it("nest by their paths", async () => {
+    const { jointTree } = await import("../src/model/joints.ts");
+    assert.deepEqual(jointTree(["Hips", "Hips/Torso", "Hips/Torso/Chest", "Hips/LLeg"]), [
+      { path: "Hips", name: "Hips", depth: 0 },
+      { path: "Hips/Torso", name: "Torso", depth: 1 },
+      { path: "Hips/Torso/Chest", name: "Chest", depth: 2 },
+      { path: "Hips/LLeg", name: "LLeg", depth: 1 },
+    ]);
+  });
+});
+
 describe("prim revisions", () => {
   it("change only when a recomposition reaches the prim", async () => {
     const { primRevision, reaches } = await import("../src/model/revisions.ts");

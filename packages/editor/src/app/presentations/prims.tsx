@@ -12,6 +12,7 @@ import { Arcs, MaterialSection, State, Variants } from "../PrimSections.tsx";
 import { PropertyList } from "../PropertyList.tsx";
 import { ShadingSection } from "../ShadingSection.tsx";
 import { TransformSection } from "../TransformSection.tsx";
+import { CurvesView, PointsView } from "../views/CurvesView.tsx";
 import { InstancerView } from "../views/InstancerView.tsx";
 import { MeshView } from "../views/MeshView.tsx";
 import { CameraView, LightView, SkeletonView, XformOpsView } from "../views/TypeViews.tsx";
@@ -45,6 +46,8 @@ export function registerPrimPresentations(): void {
     });
   }
   registerPresentation({ id: "builtin.mesh", kind: "prim", type: "Mesh", title: "Mesh", priority: 50, panel: MeshView });
+  registerPresentation({ id: "builtin.curves", kind: "prim", type: "Curves", title: "Curves", priority: 50, panel: CurvesView });
+  registerPresentation({ id: "builtin.points", kind: "prim", type: "Points", title: "Points", priority: 50, panel: PointsView });
   registerPresentation({ id: "builtin.point-instancer", kind: "prim", type: "PointInstancer", title: "Point instancer", priority: 50, panel: InstancerView });
   registerPresentation({ id: "builtin.light", kind: "prim", type: "LightAPI", title: "Light", priority: 50, panel: LightView });
   registerPresentation({ id: "builtin.camera", kind: "prim", type: "Camera", title: "Camera", priority: 50, panel: CameraView });

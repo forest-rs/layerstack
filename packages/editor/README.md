@@ -188,6 +188,13 @@ nothing more.
   (over the budget, out of the draw scope, or with Nothing drawn), and
   the edges and normals (read on the CPU, where the viewport released its
   arrays once uploaded), are built for this mesh alone with stagehand.
+- **Curves and points.** A curves prim's view says what the draw list
+  made of it, from its buffers' report: curves drawn, how they were
+  evaluated (type, basis, wrap), segments and samples, what they were
+  swept as, and each primvar's fate; curves swept as tubes are previewed
+  as a mesh is, on the viewport's own geometry. A points prim's says what
+  its points are drawn as, their widths' range, and the same of its
+  primvars.
 - **Point instancers.** The inspector's view of a `PointInstancer`: its
   prototypes, each with how many instances place it (the `protoIndices`
   histogram, and how many name no prototype), whether `ids` are authored,

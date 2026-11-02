@@ -13,14 +13,16 @@ import { CAMERA_INPUTS, LIGHT_INPUTS, lightKey, lightKind, readLight } from "./l
 import type { CameraItem, LightInstance, LightItem, LightKind } from "./light.js";
 import { Links, linkKey } from "./links.js";
 import type { LinkChange, LinkKind, LinkSet, LinkTarget } from "./links.js";
-import { byBytes, bufferCost, estimateCurves, estimateMesh, estimatePoints, itemCost, totals } from "./cost.js";
+import { admissionOrder, admit, density } from "./budget.js";
+import type { BudgetChange, BudgetGrant, BudgetReport, BudgetRequest, DrawBudget, Grant, Rung } from "./budget.js";
+import { INSTANCE_GPU_BYTES, byBytes, bufferCost, estimateCurves, estimateMesh, estimatePoints, itemCost, totals } from "./cost.js";
 import type { BufferCost, DrawCost, ItemCost } from "./cost.js";
 import { fingerprint } from "./fingerprint.js";
 import { readMaterial } from "./material.js";
 import type { MaterialItem } from "./material.js";
 import { readMesh, readShape, shapeSchema } from "./read.js";
-import { flattenedDrawMode, inheritedDrawMode, readStandinInput, sameStandin, standinMode } from "./standin.js";
-import type { StandinBuffers } from "./standin.js";
+import { CARD_FACES, flattenedDrawMode, inheritedDrawMode, readStandinInput, sameStandin, standinExtent, standinMode } from "./standin.js";
+import type { StandinBuffers, StandinInput } from "./standin.js";
 import type {
   CurveOptions,
   CurvesInput,
@@ -58,6 +60,13 @@ export interface DrawOptions {
   readonly points?: PointStyle;
   /** What of the stage is drawn ({@link DrawScope}); the whole stage, in world space, by default. */
   readonly scope?: DrawScope;
+  /**
+   * The most it draws ({@link DrawBudget}); everything when absent. Under
+   * a budget each item is weighed from counts before it is built, admitted
+   * in a fixed order, and stepped down to a stand-in or skipped when it
+   * does not fit, as {@link DrawList.budgetReport} reports.
+   */
+  readonly budget?: DrawBudget;
 }
 
 /**
@@ -259,6 +268,10 @@ export interface DrawWork {
   readonly standinsRead: number;
   /** Prims whose draw mode inputs changed (`model:drawMode`, `model:applyDrawMode`, `kind`, `apiSchemas`): their subtrees discovered again. */
   readonly drawModeRoots: number;
+  /** Under a budget: items weighed, their cost and importance read from counts and bounds (new, or a change reached their instances, visibility or geometry). */
+  readonly itemsWeighed: number;
+  /** Under a budget: items whose rung changed ({@link BudgetChange.changed}). */
+  readonly itemsRegranted: number;
 }
 
 /**
@@ -306,6 +319,8 @@ export interface DrawDiff {
   readonly materialsChanged: readonly string[];
   /** Light links whose linked targets changed ({@link LinkChange}), by light then kind; a light whose category changed is in {@link lightsChanged} too. */
   readonly linksChanged: readonly LinkChange[];
+  /** Under a budget, what the diff changed of what is admitted ({@link BudgetChange}); `null` without one. */
+  readonly budget: BudgetChange | null;
   readonly work: DrawWork;
 }
 
@@ -719,6 +734,8 @@ function sameRecord(a: unknown, b: unknown): boolean {
 
 interface Entry {
   item: DrawItem;
+  /** How it is drawn: `full` without a budget. */
+  rung: Exclude<Rung, "skipped">;
   /** Every path whose change reaches the item. */
   depends: string[];
   /** What of it might differ at another time. */
@@ -742,6 +759,8 @@ interface Retained {
   /** The texture coordinate sets besides `st` its items' materials read, sorted: those it was read with. */
   uvSets: readonly string[];
   users: number;
+  /** For a budget stand-in, the source key of the item it stands for. */
+  standinKey?: string;
 }
 
 /** The diff being gathered. */
@@ -793,7 +812,11 @@ class Gather {
     linksClassified: 0,
     standinsRead: 0,
     drawModeRoots: 0,
+    itemsWeighed: 0,
+    itemsRegranted: 0,
   };
+  /** Under a budget, the keys of the items whose grant changed. */
+  regranted = new Set<string>();
 }
 
 const sorted = (set: Set<number>) => [...set].sort((a, b) => a - b);
@@ -832,6 +855,11 @@ function sortedInstances(instances: Map<string, ItemInstance>, skip: (item: numb
  *   bind, by path, and diffed the same way: one is read when an item comes
  *   to bind it, and again only when a shading property (`inputs:*`,
  *   `outputs:*`, `info:*`) of it or of a prim its network reads changes.
+ * - Budget ({@link DrawOptions.budget}, {@link setBudget}): each item
+ *   weighed from counts before it is built and drawn in full, as a box of
+ *   its extent, or skipped, admitted in a fixed order, with
+ *   {@link promote}d items first ({@link budgetReport},
+ *   {@link DrawDiff.budget}). Without one every item is drawn in full.
  * - Diffs ({@link DrawDiff}): {@link refresh} reads the whole stage;
  *   {@link applyChanges} reads what a change record reaches (resynced
  *   paths rediscover their subtree; changed properties are classified by
@@ -865,6 +893,22 @@ export class DrawList implements Disposable {
   readonly #shapeBuffers = new Map<string, number>();
   /** Each draw mode stand-in's buffer, by model. */
   readonly #standinBuffers = new Map<string, number>();
+  /** Each budget stand-in's buffer, by the item prim it stands for. */
+  readonly #budgetStandins = new Map<string, number>();
+  /** The budget; `null` draws everything. */
+  #budget: DrawBudget | null;
+  /** Under a budget, every item in scope weighed, listed or not, by source key. */
+  readonly #requests = new Map<string, BudgetRequest>();
+  /** Under a budget, each request's grant, by source key. */
+  #grants = new Map<string, Grant>();
+  /** The requests' keys in admission order, until a request's place or the promoted paths change. */
+  #order: string[] | null = null;
+  /** Each request's promotion, as of {@link #order}. */
+  #promotedKeys = new Set<string>();
+  /** The paths promoted ({@link promote}), sorted. */
+  #promoted: string[] = [];
+  /** The totals of the last admission. */
+  #admitted: { requested: BudgetChange["requested"]; granted: BudgetChange["granted"]; degraded: number } | null = null;
   readonly #cameras = new Map<string, Held<CameraItem>>();
   readonly #lights = new Map<string, Held<LightItem>>();
   readonly #materials = new Map<string, Held<MaterialItem>>();
@@ -890,6 +934,106 @@ export class DrawList implements Disposable {
     this.#pointStyle = options.points ?? "sprites";
     this.#contexts = [...(options.renderContexts ?? [])];
     this.#scope = normalizeScope(options.scope ?? { roots: ["/"] });
+    this.#budget = options.budget ?? null;
+  }
+
+  /** The budget it draws under ({@link DrawBudget}); `null` when it draws everything. */
+  get budget(): DrawBudget | null {
+    return this.#budget;
+  }
+
+  /**
+   * Draws under `budget` from now on (`null` draws everything) and reports
+   * what that changed. Nothing is read again but, when a budget is first
+   * set, each listed item's counts: items newly admitted are built, those
+   * stepped down rebound to a stand-in or removed.
+   */
+  setBudget(budget: DrawBudget | null): DrawDiff {
+    const before = this.#stage.transformCache().localComputed;
+    const gather = new Gather();
+    const read = new Set<number>();
+    const dirty = new Map<number, Dirty>();
+    const was = this.#budget;
+    this.#budget = budget;
+    // Worth per share of the budget ranks the items: a new budget orders them anew.
+    this.#order = null;
+    if (budget === null) {
+      if (was !== null) {
+        // Everything is drawn: withheld items listed, stand-ins drawn full.
+        for (const [key, request] of [...this.#requests].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+          const id = this.#keys.get(key);
+          if (id === undefined) {
+            this.#create(request.source, "full", read, gather);
+          } else if (this.#entries.get(id)!.rung !== "full") {
+            this.#entries.get(id)!.rung = "full";
+            dirty.set(id, all());
+          }
+        }
+        this.#readDirty(dirty, read, gather);
+        this.#requests.clear();
+        this.#grants.clear();
+        this.#order = null;
+        this.#admitted = null;
+      }
+    } else {
+      if (was === null) this.#weighAll([...this.#entries.values()].map((entry) => entry.item.source), gather);
+      this.#regrant(dirty, read, gather);
+      this.#readDirty(dirty, read, gather);
+    }
+    return this.#settle(read, gather, before);
+  }
+
+  /**
+   * Admits the items at or beneath `paths` (an item's prim, a native
+   * instance's proxy, a point instancer, a model drawn by its draw mode)
+   * before every other from now on, replacing the paths promoted before:
+   * a selection drawn in full first. Promoted items are still bounded by
+   * the budget, in their own order. Reads nothing; reports what the new
+   * order changed. Without a budget it only records the paths.
+   */
+  promote(paths: readonly string[]): DrawDiff {
+    const before = this.#stage.transformCache().localComputed;
+    const gather = new Gather();
+    const read = new Set<number>();
+    this.#promoted = [...new Set(paths)].sort();
+    this.#order = null;
+    if (this.#budget !== null) {
+      const dirty = new Map<number, Dirty>();
+      this.#regrant(dirty, read, gather);
+      this.#readDirty(dirty, read, gather);
+    }
+    return this.#settle(read, gather, before);
+  }
+
+  /** The paths promoted ({@link promote}), sorted. */
+  get promoted(): readonly string[] {
+    return [...this.#promoted];
+  }
+
+  /**
+   * Where it stands against its budget ({@link BudgetReport}): what every
+   * item would cost in full, what was granted, and every item stepped
+   * down, in admission order; `null` without a budget.
+   */
+  budgetReport(): BudgetReport | null {
+    if (this.#budget === null) return null;
+    const order = this.#ordered();
+    const degraded: BudgetGrant[] = [];
+    let items = 0;
+    for (const request of order) {
+      const grant = this.#grants.get(request.key);
+      if (grant === undefined || request.instances === 0) continue;
+      items++;
+      if (grant.rung !== "full") degraded.push(this.#grantOf(request, grant));
+    }
+    const nothing = { gpuBytes: 0, triangles: 0, instances: 0 };
+    return {
+      budget: { ...this.#budget },
+      requested: this.#admitted?.requested ?? nothing,
+      granted: this.#admitted?.granted ?? nothing,
+      items,
+      degraded,
+    };
   }
 
   /** What of the stage it draws, and in which space ({@link DrawScope}): its roots sorted, none beneath another. */
@@ -1023,6 +1167,17 @@ export class DrawList implements Disposable {
       read.add(id);
       if (!this.#read(id, entry.item.source, what, false, gather)) this.#remove(id, gather);
     }
+    if (this.#budget !== null) {
+      // Items whose cost might differ at the new time are weighed again.
+      const weigh: ItemSource[] = [];
+      for (const request of this.#requests.values()) if (request.varies) weigh.push(request.source);
+      if (weigh.length > 0) {
+        this.#weighAll(weigh, gather);
+        const dirty = new Map<number, Dirty>();
+        this.#regrant(dirty, read, gather);
+        this.#readDirty(dirty, read, gather);
+      }
+    }
     for (const [path, held] of [...this.#cameras]) if (held.varies) this.#readCamera(path, gather);
     // A point instancer whose instances might differ places its lights
     // again: those of instances gone or masked are removed, those of new or
@@ -1071,6 +1226,13 @@ export class DrawList implements Disposable {
     this.#scope = normalizeScope(scope);
     const spaced = this.#scope.space !== null;
     for (const [id, entry] of [...this.#entries]) if (!this.#keeps(entry.item.source)) this.#remove(id, gather);
+    for (const [key, request] of this.#requests) {
+      if (!this.#keys.has(key) && !this.#keeps(request.source)) {
+        this.#requests.delete(key);
+        this.#grants.delete(key);
+        this.#order = null;
+      }
+    }
     for (const path of [...this.#cameras.keys()]) {
       if (spaced || !this.#inScope(path)) {
         this.#cameras.delete(path);
@@ -1123,7 +1285,6 @@ export class DrawList implements Disposable {
   }
 
   #estimate(): DrawCost {
-    const stage = this.#stage;
     const found: Found = { sources: [], scopes: [], cameras: [], lights: new Map(), instancers: new Map(), prims: 0 };
     const firsts = this.#firsts();
     for (const root of this.#scope.roots) this.#discover(root, firsts, found);
@@ -1134,33 +1295,95 @@ export class DrawList implements Disposable {
       keys.add(key);
       return true;
     });
-    // Each source's instance prims, then which are shown, in one batch.
-    const anchors = sources.map((source): string[] => {
-      if (source.kind === "gprim" || source.kind === "drawMode") return [source.path];
-      if (source.kind === "pointInstancer") return [source.instancer];
-      const first = this.#instanceRoot(source.prim);
-      if (first === null) return [];
-      return proxies(first, source.prim, this.#instancesOf(first)).filter((proxy) => this.#inScope(proxy) && this.#material(proxy) === source.material);
-    });
-    const flat = [...new Set(anchors.flat())];
-    const shown = new Map(this.#shown(flat).map((visible, i) => [flat[i]!, visible]));
-    const at = this.#time;
-    const geometry = new Map<string, BufferCost>();
-    const instancerCounts = new Map<string, Map<number, number>>();
     const items: ItemCost[] = [];
     const bufferKeys = new Map<ItemCost, string>();
+    for (const request of this.#weigh(sources, false)) {
+      const item = itemCost(null, request.source, request.prim, null, request.geometry, request.instances);
+      bufferKeys.set(item, request.buffer);
+      items.push(item);
+    }
+    const instances = items.reduce((sum, item) => sum + item.instances, 0);
+    return { basis: "estimated", time: this.#time, total: totals(items, (item) => bufferKeys.get(item)!, instances * 128), items: items.sort(byBytes) };
+  }
+
+  /**
+   * Weighs `sources` from counts, building nothing: each one's buffer cost
+   * and what shares it, its instances drawn, the paths whose change may
+   * change them; and, for the budget (`budget`), its world bound's
+   * diagonal and purpose rank. As {@link DrawCost} describes the counts.
+   */
+  #weigh(sources: readonly ItemSource[], budget: boolean): BudgetRequest[] {
+    const stage = this.#stage;
+    const at = this.#time;
+    // Each prototype's instances by its first, read once.
+    let byFirst: Map<string, readonly string[]> | null = null;
+    const instancesOf = (first: string) => {
+      byFirst ??= new Map(stage.prototypes().map((prototype) => [prototype.instances[0]!, prototype.instances]));
+      return byFirst.get(first) ?? [];
+    };
+    // Each source's instance prims (then which are shown, in one batch),
+    // and what a change must reach to change its cost.
+    const anchors: string[][] = [];
+    const depends: string[][] = [];
+    for (const source of sources) {
+      if (source.kind === "gprim" || source.kind === "drawMode") {
+        anchors.push([source.path]);
+        depends.push([source.path]);
+      } else if (source.kind === "pointInstancer") {
+        anchors.push([source.instancer]);
+        depends.push([source.instancer, source.prim]);
+      } else {
+        const first = this.#instanceRoot(source.prim);
+        const roots = first === null ? [] : instancesOf(first);
+        const every = first === null ? [] : proxies(first, source.prim, roots);
+        anchors.push(every.filter((proxy) => this.#inScope(proxy) && this.#material(proxy) === source.material));
+        depends.push([source.prim, ...every, ...roots]);
+      }
+    }
+    const flat = [...new Set(anchors.flat())];
+    const shown = new Map(this.#shown(flat).map((visible, i) => [flat[i]!, visible]));
+    const geometry = new Map<string, BufferCost>();
+    const instancerCounts = new Map<string, Map<number, number>>();
     const empty: BufferCost = { triangles: 0, vertices: 0, cpuBytes: 0, gpuBytes: 0 };
-    sources.forEach((source, i) => {
-      const prim = sourcePath(source);
-      let instances = anchors[i]!.filter((path) => shown.get(path)).length;
+    const paths = sources.map(sourcePath);
+    const sizes = budget ? this.#sizes(paths) : null;
+    const purposes = budget ? this.#purposeRanks(paths) : null;
+    // Whether what it costs might differ at another time: its own
+    // visibility or counts, or its instancer's.
+    let varies: boolean[] | null = null;
+    if (budget && sources.length > 0) {
+      const inputs = sources.map((source, i) =>
+        source.kind === "pointInstancer"
+          ? [`${source.instancer}.visibility`, `${source.instancer}.protoIndices`, `${source.prim}.faceVertexCounts`, `${source.prim}.points`]
+          : [`${paths[i]}.visibility`, `${paths[i]}.faceVertexCounts`, `${paths[i]}.points`],
+      );
+      let answers: boolean[];
+      try {
+        answers = this.#stage.valueSourcesMightBeTimeVarying(inputs.flat());
+      } catch {
+        answers = inputs.flat().map(() => false);
+      }
+      let at = 0;
+      varies = inputs.map((names) => {
+        let any = false;
+        for (let k = 0; k < names.length; k++) any ||= answers[at + k]!;
+        at += names.length;
+        return any;
+      });
+    }
+    return sources.map((source, i): BudgetRequest => {
+      const prim = paths[i]!;
+      let instances = 0;
+      for (const anchor of anchors[i]!) if (shown.get(anchor)) instances++;
       if (source.kind === "pointInstancer" && instances > 0) {
         let counts = instancerCounts.get(source.instancer);
         if (counts === undefined) {
           counts = new Map();
           const value = stage.attribute(`${source.instancer}.protoIndices`)?.get(at) ?? null;
           if (value?.kind === "array") {
-            for (const index of Array.from(value.array.copy() as ArrayLike<number>)) counts.set(index, (counts.get(index) ?? 0) + 1);
+            const indices = value.array.copy() as ArrayLike<number>;
             value.array.release();
+            for (let k = 0; k < indices.length; k++) counts.set(indices[k]!, (counts.get(indices[k]!) ?? 0) + 1);
           }
           instancerCounts.set(source.instancer, counts);
         }
@@ -1178,6 +1401,7 @@ export class DrawList implements Disposable {
           if (shape !== null && !geometry.has(key)) {
             const mesh = this.#stagehand.tessellate(shape, this.#tessellation);
             geometry.set(key, bufferCost({ key: -1, prim, mesh, curves: null, points: null, subsets: [], revision: 0, shape, standin: null }));
+            mesh.dispose();
           }
         } else if (!geometry.has(key)) {
           const read =
@@ -1192,12 +1416,213 @@ export class DrawList implements Disposable {
         }
         cost = geometry.get(key) ?? empty;
       }
-      const item = itemCost(null, source, prim, null, cost, instances);
-      bufferKeys.set(item, key);
-      items.push(item);
+      return {
+        key: sourceKey(source),
+        source,
+        prim,
+        geometry: cost,
+        buffer: key,
+        instances,
+        size: sizes?.[i] ?? 0,
+        purpose: purposes?.[i] ?? 0,
+        standinInstances: source.kind === "drawMode" ? 0 : source.kind === "pointInstancer" ? Math.min(instances, 1) : instances,
+        depends: depends[i]!,
+        varies: varies?.[i] ?? false,
+      };
     });
-    const instances = items.reduce((sum, item) => sum + item.instances, 0);
-    return { basis: "estimated", time: at, total: totals(items, (item) => bufferKeys.get(item)!, instances * 128), items: items.sort(byBytes) };
+  }
+
+  /**
+   * The diagonal of each prim's world bound at the list's time, every
+   * purpose counted and invisible geometry too (`UsdGeomBBoxCache`); 0 for
+   * a prim whose bound is empty or cannot be computed.
+   */
+  #sizes(paths: readonly string[]): number[] {
+    if (paths.length === 0) return [];
+    const options = { ...(this.#time === undefined ? {} : { time: this.#time }), purposes: ["default", "render", "proxy", "guide"], ignoreVisibility: true };
+    const diagonals = (ranges: Float64Array, count: number, out: number[]) => {
+      for (let i = 0; i < count; i++) {
+        const [dx, dy, dz] = [ranges[6 * i + 3]! - ranges[6 * i]!, ranges[6 * i + 4]! - ranges[6 * i + 1]!, ranges[6 * i + 5]! - ranges[6 * i + 2]!];
+        out.push(dx >= 0 && dy >= 0 && dz >= 0 ? Math.hypot(dx, dy, dz) : 0);
+      }
+      return out;
+    };
+    try {
+      const boxes = this.#stage.worldBounds(paths, options);
+      return diagonals(boxes.alignedRanges, boxes.count, []);
+    } catch {
+      // One prim's bound cannot be computed: bound each alone.
+      return paths.map((path) => {
+        try {
+          return diagonals(this.#stage.worldBounds([path], options).alignedRanges, 1, [])[0]!;
+        } catch {
+          return 0;
+        }
+      });
+    }
+  }
+
+  /** Each prim's computed purpose as the budget ranks it: `default` and `render` 0, `proxy` 1, `guide` 2. */
+  #purposeRanks(paths: readonly string[]): number[] {
+    const rank = (info: { readonly purpose: string } | null) => (info?.purpose === "proxy" ? 1 : info?.purpose === "guide" ? 2 : 0);
+    try {
+      return this.#stage.purposeInfos(paths).map(rank);
+    } catch {
+      return paths.map((path) => (this.#stage.prim(path) === null ? 0 : rank(this.#stage.purposeInfos([path])[0] ?? null)));
+    }
+  }
+
+  /** Weighs `sources` for the budget, replacing their requests; the order is sorted again only when one's place may have moved. */
+  #weighAll(sources: readonly ItemSource[], gather: Gather): void {
+    // A source whose prim is gone is dropped by the resync that removed it.
+    const unique = new Map(sources.filter((source) => this.#stage.prim(sourcePath(source)) !== null).map((source) => [sourceKey(source), source]));
+    for (const request of this.#weigh([...unique.values()], true)) {
+      const before = this.#requests.get(request.key);
+      const moved =
+        before === undefined ||
+        before.size !== request.size ||
+        before.instances !== request.instances ||
+        before.purpose !== request.purpose ||
+        before.geometry.gpuBytes !== request.geometry.gpuBytes ||
+        before.geometry.triangles !== request.geometry.triangles;
+      if (moved) this.#order = null;
+      this.#requests.set(request.key, request);
+    }
+    gather.work.itemsWeighed += unique.size;
+  }
+
+  /** The requests in admission order ({@link admissionOrder}), sorted again only after a request, the budget or the promoted paths change. */
+  #ordered(): BudgetRequest[] {
+    if (this.#order !== null) return this.#order.map((key) => this.#requests.get(key)!);
+    const promoted = new Set<string>();
+    if (this.#promoted.length > 0) {
+      for (const request of this.#requests.values()) {
+        const reaches = (path: string) => under(request.prim, path) || under(path, request.prim) || request.depends.some((at) => under(at, path));
+        if (this.#promoted.some(reaches)) promoted.add(request.key);
+      }
+    }
+    this.#promotedKeys = promoted;
+    const budget = this.#budget ?? {};
+    const worth = new Map<string, number>();
+    for (const request of this.#requests.values()) worth.set(request.key, density(request, budget));
+    const order = [...this.#requests.values()].sort((a, b) => admissionOrder(a, b, promoted.has(a.key), promoted.has(b.key), worth.get(a.key)!, worth.get(b.key)!));
+    this.#order = order.map((request) => request.key);
+    return order;
+  }
+
+  /**
+   * Admits every request again ({@link admit}) and brings the items to
+   * their rungs: a request newly granted a drawn rung is listed and built,
+   * one whose rung changed is marked in `dirty` to be read again (its
+   * buffer rebound), one now skipped is removed. Only the items whose
+   * rung changed are read or built.
+   */
+  #regrant(dirty: Map<number, Dirty>, read: Set<number>, gather: Gather): void {
+    const order = this.#ordered();
+    const admission = admit(order, (request) => this.#promotedKeys.has(request.key), this.#budget!);
+    const removed: number[] = [];
+    for (const request of order) {
+      const grant = admission.grants.get(request.key)!;
+      const before = this.#grants.get(request.key);
+      if (before === undefined ? grant.rung !== "full" : before.rung !== grant.rung) gather.regranted.add(request.key);
+      const id = this.#keys.get(request.key);
+      if (grant.rung === "skipped") {
+        if (id !== undefined) removed.push(id);
+      } else if (id === undefined) {
+        this.#create(request.source, grant.rung, read, gather);
+      } else {
+        const entry = this.#entries.get(id)!;
+        if (entry.rung !== grant.rung) {
+          entry.rung = grant.rung;
+          dirty.set(id, all());
+        }
+      }
+    }
+    // Removed after, so a buffer a removed item shares with a new one is kept.
+    for (const id of removed) {
+      dirty.delete(id);
+      this.#remove(id, gather);
+    }
+    this.#grants = admission.grants;
+    this.#admitted = { requested: admission.requested, granted: admission.granted, degraded: admission.degraded };
+    gather.work.itemsRegranted = gather.regranted.size;
+  }
+
+  /** Lists and builds a new item of `source`, drawn at `rung`. */
+  #create(source: ItemSource, rung: Exclude<Rung, "skipped">, read: Set<number>, gather: Gather): void {
+    const id = this.#nextItem++;
+    read.add(id);
+    if (this.#read(id, source, all(), true, gather, rung)) gather.added.add(id);
+  }
+
+  /** Reads the items of `dirty` again, in id order, for what each may have changed. */
+  #readDirty(dirty: Map<number, Dirty>, read: Set<number>, gather: Gather): void {
+    for (const [id, what] of [...dirty].sort(([a], [b]) => a - b)) {
+      const entry = this.#entries.get(id);
+      if (entry === undefined) continue;
+      read.add(id);
+      if (!this.#read(id, entry.item.source, what, false, gather)) this.#remove(id, gather);
+    }
+  }
+
+  /**
+   * Under a budget, brings the requests up to a change record and admits
+   * again: every source discovery found, every listed item whose
+   * instances, visibility or geometry a change reached, and every withheld
+   * one a change reached is weighed again; those gone, or covered by the
+   * discovery but not found, are dropped. Then {@link #regrant}, and the
+   * gone items removed.
+   */
+  #admitChanges(found: Found, gone: readonly number[], seen: ReadonlySet<string>, dirty: Map<number, Dirty>, withheld: ReadonlySet<string>, read: Set<number>, gather: Gather): void {
+    const weigh = new Map<string, ItemSource>();
+    for (const source of found.sources) {
+      const key = sourceKey(source);
+      weigh.set(key, source);
+      const known = this.#keys.get(key);
+      if (known !== undefined) dirty.set(known, all());
+    }
+    for (const [id, what] of dirty) {
+      const entry = this.#entries.get(id);
+      if (entry !== undefined && (what.instances || what.visibility || what.geometry)) weigh.set(sourceKey(entry.item.source), entry.item.source);
+    }
+    for (const key of withheld) weigh.set(key, this.#requests.get(key)!.source);
+    const drop = (key: string) => {
+      this.#requests.delete(key);
+      weigh.delete(key);
+      this.#order = null;
+    };
+    for (const id of gone) drop(sourceKey(this.#entries.get(id)!.item.source));
+    for (const [key, request] of this.#requests) {
+      if (!this.#keys.has(key) && !seen.has(key) && found.scopes.some((scope) => covers(scope, request.source))) drop(key);
+    }
+    this.#weighAll([...weigh.values()], gather);
+    this.#regrant(dirty, read, gather);
+    for (const id of gone) {
+      dirty.delete(id);
+      this.#remove(id, gather);
+    }
+  }
+
+  /** Brings materials and links up to the items a diff that read no change record listed, and finishes it. */
+  #settle(read: Set<number>, gather: Gather, before: number): DrawDiff {
+    this.#applyToMaterials({ changedInfoOnly: [], properties: [], resyncedProperties: [] }, [], gather);
+    this.#applyToLinks({ changes: null, roots: [], relink: new Set(), reclassify: new Set() }, read, gather);
+    return this.#finish(gather, read, before);
+  }
+
+  /** The public record of `request`'s grant. */
+  #grantOf(request: BudgetRequest, grant: Grant): BudgetGrant {
+    return {
+      item: grant.rung === "skipped" ? null : (this.#keys.get(request.key) ?? null),
+      source: request.source,
+      prim: request.prim,
+      rung: grant.rung,
+      requested: { gpuBytes: request.geometry.gpuBytes + request.instances * INSTANCE_GPU_BYTES, triangles: request.geometry.triangles * request.instances, instances: request.instances },
+      granted: grant.granted,
+      over: grant.over,
+      promoted: grant.promoted,
+      order: grant.order,
+    };
   }
 
   /** Whether `path` is one of the scope's roots or beneath one. */
@@ -1255,6 +1680,11 @@ export class DrawList implements Disposable {
     this.#lights.clear();
     this.#materials.clear();
     this.#instancers.clear();
+    this.#budgetStandins.clear();
+    this.#requests.clear();
+    this.#grants.clear();
+    this.#order = null;
+    this.#admitted = null;
   }
 
   [Symbol.dispose](): void {
@@ -1287,12 +1717,19 @@ export class DrawList implements Disposable {
     }
     const extra = [...drawModeRoots].filter((prim) => !changes.resynced.some((root) => under(prim, root))).sort();
     gather.work.drawModeRoots = extra.length;
+    // Under a budget, the items not listed (skipped, or drawing nothing)
+    // that a change reaches: weighed again.
+    const withheld = new Set<string>();
+    const reachWithheld = (hit: (depends: readonly string[]) => boolean) => {
+      for (const [key, request] of this.#requests) if (!this.#keys.has(key) && hit(request.depends)) withheld.add(key);
+    };
     for (const root of [...changes.resynced, ...extra]) {
       // Only what is in scope is discovered.
       for (const clipped of this.#clip(root)) this.#discover(clipped, firsts, found);
       for (const [id, entry] of this.#entries) {
         if (entry.depends.some((path) => under(path, root))) mark(id, all());
       }
+      reachWithheld((depends) => depends.some((path) => under(path, root)));
     }
     const reached: [string, Dirty][] = [];
     for (const prim of changes.changedInfoOnly) {
@@ -1315,6 +1752,9 @@ export class DrawList implements Disposable {
         this.#discoverInstancer(prim, found);
       }
       const subsetOf = kind.subset ? parent(prim) : null;
+      if (what.instances || what.visibility || what.geometry || instancer) {
+        reachWithheld((depends) => depends.some((path) => under(path, prim)) || (instancer && depends[0] === prim) || (subsetOf !== null && depends[0] === subsetOf));
+      }
       for (const [id, entry] of this.#entries) {
         const reach = { ...what };
         let hit = entry.depends.some((path) => under(path, prim)) || subsetOf === entry.item.prim;
@@ -1324,7 +1764,7 @@ export class DrawList implements Disposable {
           hit = true;
         }
         // Only a stand-in reads its card settings and extent.
-        if (source.kind !== "drawMode") reach.standin = false;
+        if (source.kind !== "drawMode" && entry.rung !== "standin") reach.standin = false;
         if (!hit || !any(reach)) continue;
         if (reach.material && source.kind === "prototype") {
           const first = this.#instanceRoot(source.prim);
@@ -1370,33 +1810,30 @@ export class DrawList implements Disposable {
       if (!materials.includes(source.material)) gather.groups.set(source.prim, [...materials, source.material]);
     }
     const read = new Set<number>();
-    const added = new Set<string>();
-    for (const source of found.sources) {
-      const key = sourceKey(source);
-      const known = this.#keys.get(key);
-      if (known !== undefined) {
-        mark(known, all());
-      } else if (!added.has(key)) {
-        added.add(key);
-        const id = this.#nextItem++;
-        read.add(id);
-        if (this.#read(id, source, all(), true, gather)) gather.added.add(id);
+    if (this.#budget !== null) {
+      this.#admitChanges(found, gone, seen, dirty, withheld, read, gather);
+    } else {
+      const added = new Set<string>();
+      for (const source of found.sources) {
+        const key = sourceKey(source);
+        const known = this.#keys.get(key);
+        if (known !== undefined) {
+          mark(known, all());
+        } else if (!added.has(key)) {
+          added.add(key);
+          this.#create(source, "full", read, gather);
+        }
       }
-    }
-    for (const id of gone) {
-      dirty.delete(id);
-      this.#remove(id, gather);
+      for (const id of gone) {
+        dirty.delete(id);
+        this.#remove(id, gather);
+      }
     }
     // An item read again entirely may match a link's expression
     // differently: its predicates read the prim's type, schemas, kind and
     // specifier.
     const reclassify = new Set([...dirty].filter(([, what]) => what.instances && what.transform && what.visibility && what.geometry && what.material).map(([id]) => id));
-    for (const [id, what] of [...dirty].sort(([a], [b]) => a - b)) {
-      const entry = this.#entries.get(id);
-      if (entry === undefined) continue;
-      read.add(id);
-      if (!this.#read(id, entry.item.source, what, false, gather)) this.#remove(id, gather);
-    }
+    this.#readDirty(dirty, read, gather);
     const roots = found.scopes.flatMap((scope) => (scope.kind === "resync" ? [scope.root] : []));
     this.#applyToMaterials(changes, roots, gather);
     this.#applyToLinks({ changes, roots, relink, reclassify }, read, gather);
@@ -1596,7 +2033,28 @@ export class DrawList implements Disposable {
       materialsRemoved,
       materialsChanged,
       linksChanged: gather.links,
+      budget: this.#budgetChange(gather),
       work: { ...gather.work },
+    };
+  }
+
+  /** What `gather` changed under the budget: the grants whose rung changed, of items that draw something. */
+  #budgetChange(gather: Gather): BudgetChange | null {
+    if (this.#budget === null) return null;
+    const changed: BudgetGrant[] = [];
+    for (const key of gather.regranted) {
+      const request = this.#requests.get(key);
+      const grant = this.#grants.get(key);
+      if (request === undefined || grant === undefined || (request.instances === 0 && grant.rung === "skipped")) continue;
+      changed.push(this.#grantOf(request, grant));
+    }
+    changed.sort((a, b) => a.order - b.order);
+    const nothing = { gpuBytes: 0, triangles: 0, instances: 0 };
+    return {
+      requested: this.#admitted?.requested ?? nothing,
+      granted: this.#admitted?.granted ?? nothing,
+      degraded: this.#admitted?.degraded ?? 0,
+      changed,
     };
   }
 
@@ -2081,9 +2539,13 @@ export class DrawList implements Disposable {
   }
 
   /** Reads item `id` of `source` again for what `what` says may have changed; `false` when it draws nothing any more. */
-  #read(id: number, source: ItemSource, what: Dirty, isNew: boolean, gather: Gather): boolean {
+  #read(id: number, source: ItemSource, what: Dirty, isNew: boolean, gather: Gather, rung: Exclude<Rung, "skipped"> = "full"): boolean {
     const stage = this.#stage;
     const previous = this.#entries.get(id);
+    const budgetStandin = (previous?.rung ?? rung) === "standin";
+    // A point instancer's stand-in bounds its instances: placed again whenever it is built again.
+    if (budgetStandin && source.kind === "pointInstancer" && (what.geometry || what.standin)) what = { ...what, instances: true };
+    let box: Float32Array | null | undefined;
     let item: DrawItem = previous?.item ?? {
       id,
       source,
@@ -2172,19 +2634,27 @@ export class DrawList implements Disposable {
           placed.prototypeIndices.forEach((index, i) => {
             if (index === source.index) mine.push(i);
           });
-          matrices = new Float64Array(16 * mine.length);
-          const scratch = new Float64Array(16);
-          mine.forEach((i, k) => {
-            const instance = placed.matrices.subarray(16 * i, 16 * i + 16);
-            if (inner === null) {
-              multiply(instance, world, matrices, 16 * k);
-            } else {
-              multiply(inner, instance, scratch, 0);
-              multiply(scratch, world, matrices, 16 * k);
-            }
-          });
-          ids = BigInt64Array.from(mine.map((i) => placed.ids[i]!));
-          gather.work.matricesComputed += mine.length;
+          if (budgetStandin) {
+            // One box over the prototype's instances, at the instancer.
+            box = mine.length === 0 ? null : instancesBox(this.#extentOf(source.prim), inner, placed.matrices, mine);
+            matrices = mine.length === 0 ? new Float64Array() : Float64Array.from(world);
+            ids = null;
+            gather.work.matricesComputed += mine.length === 0 ? 0 : 1;
+          } else {
+            matrices = new Float64Array(16 * mine.length);
+            const scratch = new Float64Array(16);
+            mine.forEach((i, k) => {
+              const instance = placed.matrices.subarray(16 * i, 16 * i + 16);
+              if (inner === null) {
+                multiply(instance, world, matrices, 16 * k);
+              } else {
+                multiply(inner, instance, scratch, 0);
+                multiply(scratch, world, matrices, 16 * k);
+              }
+            });
+            ids = BigInt64Array.from(mine.map((i) => placed.ids[i]!));
+            gather.work.matricesComputed += mine.length;
+          }
         }
       }
       if (this.#scope.space !== null && matrices.length > 0) matrices = this.#rebase(matrices, gather);
@@ -2202,9 +2672,9 @@ export class DrawList implements Disposable {
       }
       item = { ...item, matrices, instances, ids, hidden: matrices.length === 0, linkPaths };
     }
-    const standin = source.kind === "drawMode";
+    const standin = source.kind === "drawMode" || budgetStandin;
     if (what.geometry || isNew || (standin && what.standin)) {
-      const key = standin ? this.#standin(item.prim, gather) : this.#geometry(item, gather);
+      const key = budgetStandin ? this.#budgetStandin(item, box, gather) : standin ? this.#standin(item.prim, gather) : this.#geometry(item, gather);
       if (key === null) {
         if (!isNew) this.#release(item.buffer, gather);
         return false;
@@ -2217,11 +2687,11 @@ export class DrawList implements Disposable {
         this.#buffers.get(key)!.users++;
         item = { ...item, buffer: key };
       }
-      varies.geometry = standin ? this.#inputsMightVary([item.prim], [...STANDIN_INPUTS]) : this.#geometryMightVary(item.prim, key);
+      varies.geometry = standin ? this.#inputsMightVary([item.prim], budgetStandin ? ["extent"] : [...STANDIN_INPUTS]) : this.#geometryMightVary(item.prim, key);
     }
     if (what.material || what.geometry || isNew) {
       // A stand-in draws its own material, whatever the model binds.
-      const material = source.kind === "prototype" ? source.material : standin ? null : this.#material(item.prim);
+      const material = standin ? null : source.kind === "prototype" ? source.material : this.#material(item.prim);
       const subsets = (this.#buffers.get(item.buffer)?.buffers.subsets ?? []).map((subset) => this.#material(subset));
       if (!isNew && (material !== item.material || subsets.join("\n") !== item.subsetMaterials.join("\n"))) {
         gather.materials.add(id);
@@ -2232,7 +2702,7 @@ export class DrawList implements Disposable {
       if (!depends.includes(subset)) depends = [...depends, subset];
     }
     if (previous === undefined) this.#keys.set(sourceKey(source), id);
-    this.#entries.set(id, { item, depends, varies });
+    this.#entries.set(id, { item, depends, varies, rung: previous?.rung ?? rung });
     return true;
   }
 
@@ -2473,6 +2943,60 @@ export class DrawList implements Disposable {
     return key;
   }
 
+  /** The extent of the prim at `path` in its own space: its authored `extent` (or `extentsHint`), else its bound; `null` when it has neither. */
+  #extentOf(path: string): Float32Array | null {
+    const prim = this.#stage.prim(path);
+    if (prim === null) return null;
+    const extent = standinExtent(prim, this.#time);
+    if (extent !== null) return extent;
+    try {
+      const ranges = this.#stage.untransformedBounds([path], this.#time === undefined ? {} : { time: this.#time }).ranges;
+      return ranges[0]! <= ranges[3]! ? Float32Array.from(ranges.subarray(0, 6)) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * The budget's stand-in for `item`: a `bounds` box, in Hydra's default
+   * draw mode color, of its prim's extent ({@link #extentOf}), or of `box`
+   * for a point instancer's item (its instances' bound, kept from the last
+   * build when `undefined`). Kept while the box is unchanged.
+   */
+  #budgetStandin(item: DrawItem, box: Float32Array | null | undefined, gather: Gather): number | null {
+    if (this.#stage.prim(item.prim) === null) return null;
+    const standinKey = sourceKey(item.source);
+    const known = this.#budgetStandins.get(standinKey);
+    const retained = known === undefined ? undefined : this.#buffers.get(known);
+    const extent = item.source.kind !== "pointInstancer" ? this.#extentOf(item.prim) : box !== undefined ? box : (retained?.buffers.standin?.input.extent ?? null);
+    const input: StandinInput = Object.freeze({ mode: "bounds", extent, cardGeometry: "cross", textures: Object.freeze(CARD_FACES.map(() => false)), hiddenAxis: null });
+    const color = [0.18, 0.18, 0.18] as const;
+    const textures = Object.freeze(CARD_FACES.map(() => null));
+    gather.work.standinsRead++;
+    if (retained !== undefined && retained.buffers.standin !== null && sameStandin(retained.buffers.standin, input, color, textures)) {
+      gather.work.buffersReused++;
+      return known!;
+    }
+    const standin: StandinBuffers = Object.freeze({ ...this.#stagehand.drawModeStandin(input), input, color, textures });
+    if (retained !== undefined) {
+      retained.buffers = { ...retained.buffers, standin, revision: retained.buffers.revision + 1 };
+      gather.refilled.add(known!);
+      return known!;
+    }
+    const key = this.#nextBuffer++;
+    gather.buffersAdded.add(key);
+    const mesh = this.#stagehand.buildMesh({ faceVertexCounts: new Int32Array(), faceVertexIndices: new Int32Array(), points: new Float32Array() });
+    this.#buffers.set(key, {
+      buffers: { key, prim: item.prim, mesh, subsets: [], revision: 0, shape: null, curves: null, points: null, standin },
+      input: null,
+      uvSets: [],
+      users: 0,
+      standinKey,
+    });
+    this.#budgetStandins.set(standinKey, key);
+    return key;
+  }
+
   #release(key: number, gather: Gather): void {
     const retained = this.#buffers.get(key);
     if (retained === undefined) return;
@@ -2482,7 +3006,11 @@ export class DrawList implements Disposable {
     retained.buffers.mesh.dispose();
     retained.buffers.curves?.dispose();
     if (retained.buffers.shape !== null) this.#shapeBuffers.delete(JSON.stringify(retained.buffers.shape));
-    else if (retained.buffers.standin !== null) this.#standinBuffers.delete(retained.buffers.prim);
+    else if (retained.buffers.standin !== null) {
+      const prim = retained.buffers.prim;
+      if (retained.standinKey !== undefined) this.#budgetStandins.delete(retained.standinKey);
+      else if (this.#standinBuffers.get(prim) === key) this.#standinBuffers.delete(prim);
+    }
     else this.#meshBuffers.delete(retained.buffers.prim);
     gather.freed.add(key);
     gather.buffersAdded.delete(key);
@@ -2504,6 +3032,36 @@ function uvSetsRead(material: MaterialItem): string[] {
     const name = texture.coordinates.primvar;
     return name === null || name === "st" ? [] : [name];
   });
+}
+
+/**
+ * The bound, in the instancer's space, of `extent` (a prototype gprim's,
+ * placed by `inner` within its prototype) at each of the instances
+ * `which` of `placed` (matrices laid out as {@link Stage.pointInstances}
+ * gives them); `null` without an extent.
+ */
+function instancesBox(extent: Float32Array | null, inner: Float64Array | null, placed: Float64Array, which: readonly number[]): Float32Array | null {
+  if (extent === null) return null;
+  const box = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+  const scratch = new Float64Array(16);
+  for (const i of which) {
+    let m: ArrayLike<number> = placed.subarray(16 * i, 16 * i + 16);
+    if (inner !== null) {
+      multiply(inner, m, scratch, 0);
+      m = scratch;
+    }
+    for (let corner = 0; corner < 8; corner++) {
+      const x = extent[corner & 1 ? 3 : 0]!;
+      const y = extent[corner & 2 ? 4 : 1]!;
+      const z = extent[corner & 4 ? 5 : 2]!;
+      for (let axis = 0; axis < 3; axis++) {
+        const v = x * m[axis]! + y * m[4 + axis]! + z * m[8 + axis]! + m[12 + axis]!;
+        if (v < box[axis]!) box[axis] = v;
+        if (v > box[3 + axis]!) box[3 + axis] = v;
+      }
+    }
+  }
+  return Float32Array.from(box);
 }
 
 /** The prim at `path` (under the instance root `first`) in each instance of `roots`. */

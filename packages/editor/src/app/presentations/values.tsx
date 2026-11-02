@@ -224,7 +224,7 @@ function AssetInline(props: PresentProps<"value">) {
   if (path === "") return <Text text="none" />;
   return (
     <Live object={props.object} context={props.context} title={`${path}: click to show it, right-click for more`}>
-      {path.slice(path.lastIndexOf("/") + 1)}
+      {path.split(/[\\/]/).at(-1)}
     </Live>
   );
 }

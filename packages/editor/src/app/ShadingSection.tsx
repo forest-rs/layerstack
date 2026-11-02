@@ -3,11 +3,15 @@
 
 // The inspector's shading section, for a material or a shader: what it
 // is (a shader's `info:id` and implementation; a material's outputs and
-// what they read), a preview of the material on a sphere, and its inputs
+// what they read), the material on a shader ball, the prims the viewport
+// draws with it bound, and its inputs
 // as their authors lay them out: grouped by `displayGroup`, labelled by
 // `displayName`, ordered by `uiorder`, a number between its `uimin` and
 // `uimax` a slider (over its soft range where given). A connected input
-// is a link to its source.
+// is a link to its source, and a texture it reads (directly or through
+// node graphs) its thumbnail, file,
+// colour space and wrap modes. Each value's editor is its presentation
+// (a colour a swatch and picker).
 import { useMemo, useState } from "react";
 import type { Prim, ShaderPort, Stage } from "@forest-rs/layerstack";
 import { Slider } from "@/components/ui/slider";
@@ -19,6 +23,7 @@ import type { EditorStore } from "../store.ts";
 import { CommitNumber, shown, ValueField } from "./fields.tsx";
 import { MaterialPreview } from "./MaterialPreview.tsx";
 import { Live, presentationContext } from "./presentations/Present.tsx";
+import { BoundBy, TextureSource } from "./views/MaterialParts.tsx";
 import { Section } from "./Section.tsx";
 
 export function ShadingSection({ store, stage, prim }: { store: EditorStore; stage: Stage; prim: Prim }) {
@@ -26,6 +31,7 @@ export function ShadingSection({ store, stage, prim }: { store: EditorStore; sta
   const shader = material === null ? stage.shader(prim.path) : null;
   if (material === null && shader === null) return null;
   const previewed = material !== null ? prim.path : enclosingMaterial(stage, prim.path);
+  const context = presentationContext(store);
   return (
     <Section title={material !== null ? "Material" : "Shader"}>
       {shader !== null && (
@@ -45,7 +51,12 @@ export function ShadingSection({ store, stage, prim }: { store: EditorStore; sta
         </div>
       )}
       {material !== null && <Terminals store={store} outputs={material.outputs()} baseMaterial={material.baseMaterial} />}
-      {previewed !== null && <MaterialPreview store={store} stage={stage} material={previewed} />}
+      {previewed !== null && (
+        <div className="mb-2 h-52 overflow-hidden rounded-md">
+          <MaterialPreview store={store} stage={stage} material={previewed} shape="shaderBall" />
+        </div>
+      )}
+      {material !== null && context !== null && <BoundBy context={context} material={prim.path} />}
       <Inputs key={prim.path} store={store} stage={stage} path={prim.path} />
     </Section>
   );
@@ -184,6 +195,13 @@ function InputGroup({
 function InputRow({ store, input, animated }: { store: EditorStore; input: ShadingInput; animated: boolean }) {
   const { port } = input;
   const focused = store.property === port.path;
+  const context = presentationContext(store);
+  // The shader outputs that produce its value, through node graphs: a texture's among them.
+  const recompositions = store.session?.changeLog.length ?? 0;
+  const producers = useMemo(
+    () => (port.connections.length === 0 ? [] : [...new Set(port.valueSources().sources.flatMap((source) => (source.kind === "shaderOutput" ? [source.attribute] : [])))]),
+    [port.path, recompositions],
+  );
   return (
     <>
       <button
@@ -197,7 +215,14 @@ function InputRow({ store, input, animated }: { store: EditorStore; input: Shadi
         {animated && <span className="size-1.5 shrink-0 rotate-45 bg-amber-500" title="Animated: an edit authors a sample at the current time" />}
       </button>
       <div className="flex min-w-0 items-center">
-        {port.connections.length > 0 ? <Sources store={store} sources={port.connections} /> : <InputValue store={store} input={input} at={animated ? (store.time ?? null) : null} />}
+        {port.connections.length > 0 ? (
+          <div className="flex min-w-0 flex-col">
+            <Sources store={store} sources={port.connections} />
+            {context !== null && producers.map((source) => <TextureSource key={source} context={context} source={source} />)}
+          </div>
+        ) : (
+          <InputValue store={store} input={input} at={animated ? (store.time ?? null) : null} />
+        )}
       </div>
     </>
   );

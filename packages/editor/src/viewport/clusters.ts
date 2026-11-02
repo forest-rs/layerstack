@@ -125,7 +125,8 @@
 // so no bundle or material is touched. A packing leaves {@link HEADROOM}
 // of room in every buffer; a change that does not fit packs everything
 // again, larger, and so does one that leaves a buffer under a quarter full
-// or half holes (compacting it). `residency.updates`
+// or half holes (compacting it). The depth pyramid outgrown by the canvas
+// is made again with only the cull that reads it. `residency.updates`
 // counts packings and changes written in place and the bytes each
 // uploaded. On the element above: moving its largest draw (570 k
 // instances) writes 36 MB in about 5 ms, hiding it 4 bytes, where each
@@ -403,10 +404,12 @@ export interface ClusterUpdates {
   readonly compactions: number;
   /** Changes written in place: a draw moved, hidden, added or removed, a mesh's set added or dropped. */
   readonly partial: number;
+  /** Depth pyramids made again for a larger canvas, with only the cull that reads them. */
+  readonly pyramids: number;
   /** Bytes uploaded by every update so far, in place or packed whole. */
   readonly uploadedBytes: number;
   /** The last update: how, why (for a full one), how long it took on the CPU and the bytes it uploaded. */
-  readonly last: { readonly kind: "full" | "partial"; readonly reason: string; readonly ms: number; readonly bytes: number } | null;
+  readonly last: { readonly kind: "full" | "partial" | "pyramid"; readonly reason: string; readonly ms: number; readonly bytes: number } | null;
 }
 
 /** The GPU state of one packing: replaced whole when a change outgrows its buffers, written in place otherwise. */
@@ -428,6 +431,8 @@ interface Packed {
   /** With occlusion culling: the clear and the first phase, then (after the depth and the pyramid) the second and the clamp. */
   readonly firstPasses: Node[];
   readonly secondPasses: Node[];
+  /** Makes the second phase's cull again, over the pyramid as it is now: for a pyramid made again. */
+  readonly makeSecond: () => Node;
   /** The two depth draws of the first phase's pairs (clusters, proxies), drawn into the pyramid's depth. */
   readonly depthScene: Scene;
   readonly depthMaterial: NodeMaterial;
@@ -486,11 +491,11 @@ export class ClusterScene {
   readonly #freedDraws: DrawPlace[] = [];
   /** Ranges of each buffer written since the last upload: start and length pairs, in its array's elements. */
   readonly #ranges = new Map<BufferName, number[]>();
-  #updates: ClusterUpdates = { full: 0, compactions: 0, partial: 0, uploadedBytes: 0, last: null };
+  #updates: ClusterUpdates = { full: 0, compactions: 0, partial: 0, pyramids: 0, uploadedBytes: 0, last: null };
   #residency: ClusterResidency | null = null;
   /** The storage buffers of the packing before the last, freed at the next frame. */
   readonly #retired: StorageBufferAttribute[] = [];
-  /** The depth draws' geometries and material of the packing before the last, freed with them. */
+  /** The depth draws' geometries and material (and cull passes) replaced, freed with them. */
   readonly #retiredDepth: { dispose(): void }[] = [];
   /** How cuts are chosen. */
   readonly view: ClusterView = { pixelError: 1, minInstancePixels: 1, proxyPixels: 3, frustumCull: true, occlusionCull: true };
@@ -764,10 +769,13 @@ export class ClusterScene {
     if (this.#occlusionPaused > 0) this.#occlusionPaused--;
     const occluding = this.view.frustumCull && this.view.occlusionCull && this.#occlusionPaused === 0;
     // A pyramid outgrown is made again, and the cull that reads it with it.
-    if (occluding && resizeOcclusion(this.#occlusion, width, height) && this.#packed !== null) this.#repackDue ??= "a larger canvas";
+    const grown = occluding && resizeOcclusion(this.#occlusion, width, height);
     const changed = this.#changedMeshes.size + this.#changedDraws.size + this.#freedDraws.length > 0;
+    const packings = this.#updates.full;
     if (this.#packed === null ? changed : this.#repackDue !== null) this.#pack(this.#repackDue ?? "first");
     else if (changed) this.#update();
+    // A packing this frame made its cull over the new pyramid already.
+    if (grown && this.#packed !== null && this.#updates.full === packings) this.#remakeSecond();
     const packed = this.#packed;
     if (packed === null || this.residency.draws === 0) return;
     if (this.#ranges.size > 0) this.#upload(renderer, packed);
@@ -1207,6 +1215,21 @@ export class ClusterScene {
     const packed = this.#packed!;
     const gpuBytes = packed.attributes.reduce((sum, a) => sum + a.array.byteLength, 0);
     return { meshes: this.#meshPlaces.size, draws, instances, clusters, triangles, gpuBytes, packMs: packed.packMs, updates: this.#updates };
+  }
+
+  /** Makes the second phase's cull again over a pyramid made again; the old one is freed at the next frame. */
+  #remakeSecond(): void {
+    const started = performance.now();
+    const packed = this.#packed!;
+    const old = packed.secondPasses[0]!;
+    const cull = packed.makeSecond();
+    cull.count = old.count;
+    packed.secondPasses[0] = cull;
+    packed.culls[2] = cull;
+    this.#retiredDepth.push(old);
+    const u = this.#updates;
+    this.#updates = { ...u, pyramids: u.pyramids + 1, last: { kind: "pyramid", reason: "a larger canvas", ms: performance.now() - started, bytes: 0 } };
+    this.#residency = this.#measure();
   }
 
   /**
@@ -1682,6 +1705,7 @@ export class ClusterScene {
       passes: [clear, cull, clamp],
       firstPasses: [clear, cullFirst],
       secondPasses: [cullSecond, clamp],
+      makeSecond: () => makeCull("second"),
       depthScene,
       depthMaterial,
       packMs,

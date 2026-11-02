@@ -3,7 +3,8 @@
 
 // Values as the editor shows them, and text typed into the inspector as a
 // value to author.
-import type { ScalarInput, Value, ValueInput } from "@forest-rs/layerstack";
+import type { ArrayData, ScalarInput, Value, ValueInput } from "@forest-rs/layerstack";
+import { fromHalf } from "@forest-rs/layerstack_stagehand";
 
 /** The most elements an array's text shows. */
 const SHOWN_ELEMENTS = 4;
@@ -37,7 +38,7 @@ export function formatValue(value: Value | null): string {
       for (let element = 0; element < Math.min(array.length, SHOWN_ELEMENTS); element += 1) {
         const scalars: string[] = [];
         for (let component = 0; component < array.components; component += 1) {
-          const scalar = view[element * array.components + component];
+          const scalar = scalarAt(array, view, element * array.components + component);
           scalars.push(typeof scalar === "string" ? JSON.stringify(scalar) : formatNumber(scalar as number | bigint));
         }
         shown.push(array.components === 1 ? (scalars[0] ?? "") : `(${scalars.join(", ")})`);
@@ -52,6 +53,26 @@ export function formatValue(value: Value | null): string {
     case "opaque":
       return `<${value.type}>`;
   }
+}
+
+/**
+ * The scalar at `at` of `array`'s elements (`view`, its `view()`): a
+ * number, bigint or string, a half float as its value. The bindings hand
+ * out `f16` arrays (`half[]`, `half3[]`, `quath[]`, `color3h[]`) as their
+ * raw bits, as a typed view over the module's memory must be, so a reader
+ * of values decodes them.
+ */
+export function scalarAt(array: ArrayData, view: ArrayLike<unknown>, at: number): number | bigint | string {
+  const scalar = view[at] as number | bigint | string;
+  return array.scalar === "f16" ? fromHalf(scalar as number) : scalar;
+}
+
+/** The first `count` scalars of a numeric `array` as numbers, half floats decoded ({@link scalarAt}). */
+export function leadingNumbers(array: ArrayData, count: number): Float64Array {
+  const view = array.view();
+  const out = new Float64Array(Math.min(count, view.length));
+  for (let at = 0; at < out.length; at++) out[at] = Number(scalarAt(array, view, at));
+  return out;
 }
 
 /** Releases what a value holds in the module: an array's pinned buffer, nested ones included. */

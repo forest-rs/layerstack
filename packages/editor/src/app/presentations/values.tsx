@@ -14,7 +14,7 @@ import type { Attribute, ValueInput } from "@forest-rs/layerstack";
 import { ColorPickerButton, ColorSwatch } from "@/components/ui/color-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { formatNumber, releaseValue } from "../../model/values.ts";
+import { formatNumber, leadingNumbers, releaseValue } from "../../model/values.ts";
 import { hexToLinear, linearToHex, swatchCss, swatches } from "../../presentations/color.ts";
 import { type AcceptProps, type PresentProps, registerCommand, registerPresentation } from "../../presentations/registry.ts";
 import { allowedTokens, CommitField } from "../fields.tsx";
@@ -95,7 +95,7 @@ function opacities(attribute: Attribute, time: number | undefined): Float32Array
   const array = attribute.stage.attribute(`${prim}.primvars:displayOpacity`)?.array(time) ?? null;
   if (array === null) return null;
   try {
-    return Float32Array.from(array.view() as ArrayLike<number>);
+    return Float32Array.from(leadingNumbers(array, STRIP));
   } finally {
     array.release();
   }
@@ -108,7 +108,7 @@ function colorArray(props: PresentProps<"value">): { readonly shown: ReturnType<
   const array = attribute.array(props.context.time);
   if (array === null) return null;
   try {
-    const view = array.view() as ArrayLike<number>;
+    const view = leadingNumbers(array, STRIP * array.components);
     const alpha = opacities(attribute, props.context.time);
     const interpolation = attribute.metadata("interpolation");
     const text = interpolation?.kind === "scalar" ? String(interpolation.value) : null;

@@ -7,7 +7,8 @@
 // instances a prototype has cost CPU time per frame.
 //
 // Resident: one set of storage buffers for every clustered draw (a
-// "scene"), packed whole when the clustered meshes or draws change:
+// "scene"), each mesh's and draw's records at ranges of them (below,
+// "Changes"):
 //
 // - vertices: the editor's own compact vertices, four words each
 //   (`snorm16` x and y, `snorm16` z, `snorm8` normal), four more for
@@ -109,8 +110,29 @@
 // its depth pass and second cull cost about 1.5 ms of GPU time there.
 // `frustumCull: false` turns it off with the rest of the culling.
 //
-// Not yet: packing by delta (a change to a clustered draw packs the scene
-// again), and paging.
+// Changes: each mesh and each draw has ranges of the buffers to itself,
+// handed out by an arena per kind of record (`rangeArena.ts`), and a change
+// writes its own records there and marks them for upload: a draw moved
+// writes its instances' matrices; hidden or shown (fewer or more
+// instances, within the room it was placed with) the word of its first
+// slot's run saying where its live instances end, past which the cull
+// skips a unit; added, its records at new ranges; removed, its work units
+// marked dead and its ranges freed; a mesh's set added or dropped, its
+// vertices, indices, clusters and groups the same way. three.js uploads
+// only the ranges marked (`addUpdateRange`), when a compute pass binding
+// the buffer runs: the cull binds most, and a pass of one thread that does
+// nothing binds the rest (bundled draws are not refreshed, `fixedNodes.ts`),
+// so no bundle or material is touched. A packing leaves {@link HEADROOM}
+// of room in every buffer; a change that does not fit packs everything
+// again, larger, and so does one that leaves a buffer under a quarter full
+// or half holes (compacting it). `residency.updates`
+// counts packings and changes written in place and the bytes each
+// uploaded. On the element above: moving its largest draw (570 k
+// instances) writes 36 MB in about 5 ms, hiding it 4 bytes, where each
+// packed everything again (350 ms of CPU time and 197 MB) before.
+//
+// Not yet: paging, and compacting in the background rather than as a
+// packing.
 
 import {
   BufferAttribute,
@@ -177,6 +199,7 @@ import { NO_GROUP, residentCost } from "./clusterFile.ts";
 import type { ClusterSetData } from "./clusterFile.ts";
 import { PROXY_TRIANGLES, buildProxy } from "./clusterProxies.ts";
 import { setFixedNode } from "./fixedNodes.ts";
+import { RangeArena } from "./rangeArena.ts";
 
 /** Anything TSL takes: the node types are too loose to be worth spelling here. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -249,6 +272,8 @@ export interface ClusterResidency {
   readonly gpuBytes: number;
   /** How long the last packing took on the CPU, in milliseconds (every buffer made again: see the header). */
   readonly packMs: number;
+  /** How the buffers were brought up to date: packed whole or written in place, how often, and the bytes uploaded. */
+  readonly updates: ClusterUpdates;
 }
 
 /** A clustered mesh: its set and the vertices it indexes, copied before the editor's arrays are released. */
@@ -286,21 +311,118 @@ interface ClusterDraw {
   mesh: number;
   matrices: ArrayLike<number>;
   instances: number;
+  /** Where its records are in the packing; `null` while it draws nothing (its mesh not yet placed, or none). */
+  place: DrawPlace | null;
 }
 
-/** The GPU state of one packing, replaced whole when the clustered meshes or draws change. */
+/**
+ * Where a clustered mesh's records are in the packing's buffers: its row
+ * of the mesh table, and its ranges of vertices, indices (its levels', then
+ * its proxies'), clusters (its own, then its proxies) and groups.
+ */
+interface MeshPlace {
+  readonly row: number;
+  readonly vertex: number;
+  readonly vertices: number;
+  readonly index: number;
+  readonly indices: number;
+  readonly cluster: number;
+  readonly clusters: number;
+  readonly group: number;
+  readonly groups: number;
+}
+
+/**
+ * Where a clustered draw's records are: its slots (one per subset), and
+ * `capacity` instances' worth of instances, work units and runs (the
+ * clusters' and the proxies'). Instances past `live` are skipped by the
+ * cull: its first slot's run row holds where the live ones end.
+ */
+interface DrawPlace {
+  /** Its mesh's place when it was placed: a mesh placed again places its draws again. */
+  readonly mesh: MeshPlace;
+  readonly slot: number;
+  readonly slots: number;
+  readonly instance: number;
+  readonly capacity: number;
+  readonly unit: number;
+  readonly units: number;
+  readonly clusterRun: number;
+  readonly clusterRuns: number;
+  readonly proxyRun: number;
+  readonly proxyRuns: number;
+  live: number;
+}
+
+/** The packing's buffers a change writes in place, by name (see {@link Layout}). */
+type BufferName = "vertices" | "extras" | "indices" | "tables" | "matrices" | "info" | "units" | "bits" | "args";
+
+/** What each buffer's ranges are counted in: vertices, indices, mesh rows, clusters, groups, slots, instances, work units, and runs of the visible list. */
+interface Arenas {
+  readonly meshes: RangeArena;
+  readonly vertices: RangeArena;
+  readonly indices: RangeArena;
+  readonly clusters: RangeArena;
+  readonly groups: RangeArena;
+  readonly slots: RangeArena;
+  readonly instances: RangeArena;
+  readonly units: RangeArena;
+  readonly clusterRuns: RangeArena;
+  readonly proxyRuns: RangeArena;
+}
+
+/**
+ * A packing's buffers as the CPU holds them, sized with room to spare
+ * ({@link HEADROOM}), and the arenas their ranges are handed out from.
+ * The tables' rows: meshes (three each), clusters (two), groups (two, as
+ * `f32`), then each slot's run and each slot's proxies' run. The visible
+ * list (and the depth list): every cluster run, then every proxy run.
+ */
+interface Layout {
+  readonly arenas: Arenas;
+  readonly vertices: Uint32Array;
+  readonly extras: Uint32Array;
+  readonly indices: Uint32Array;
+  readonly tables: Uint32Array;
+  readonly tableFloats: Float32Array;
+  readonly matrices: Float32Array;
+  readonly info: Uint32Array;
+  readonly units: Uint32Array;
+  readonly bits: Uint32Array;
+  readonly args: Uint32Array;
+  readonly clusterRows: number;
+  readonly groupRows: number;
+  readonly runRows: number;
+}
+
+/** How the clustered draws' buffers were brought up to date, and how often each way (see the header). */
+export interface ClusterUpdates {
+  /** Packings of everything into new buffers: the first, and each time a change outgrew the buffers or they were compacted. */
+  readonly full: number;
+  /** Of those, packings that compacted buffers rather than grew them: too much of them free, or free in pieces too small. */
+  readonly compactions: number;
+  /** Changes written in place: a draw moved, hidden, added or removed, a mesh's set added or dropped. */
+  readonly partial: number;
+  /** Bytes uploaded by every update so far, in place or packed whole. */
+  readonly uploadedBytes: number;
+  /** The last update: how, why (for a full one), how long it took on the CPU and the bytes it uploaded. */
+  readonly last: { readonly kind: "full" | "partial"; readonly reason: string; readonly ms: number; readonly bytes: number } | null;
+}
+
+/** The GPU state of one packing: replaced whole when a change outgrows its buffers, written in place otherwise. */
 interface Packed {
+  readonly layout: Layout;
+  readonly buffers: Readonly<Record<BufferName, StorageBufferAttribute>>;
   readonly argsAttribute: IndirectStorageBufferAttribute;
   /** Where the statistics start in the arguments' words. */
   readonly statsAt: number;
   readonly visibleAttribute: StorageBufferAttribute;
-  /** Each draw's first slot (one per subset, in order: a slot is an indirect draw and a run of the visible list). */
-  readonly slots: Map<Mesh, number>;
   readonly context: Node;
   readonly pickContext: Node;
-  readonly clear: Node;
-  readonly cull: Node;
-  readonly clamp: Node;
+  /** A pass of one thread that binds every buffer the CPU writes in place, so three.js uploads their changed ranges (see the header). */
+  readonly upload: Node;
+  /** The three culls, whose dispatch covers the work units handed out ({@link RangeArena.end}). */
+  readonly culls: Node[];
   /** The three passes in order, kept: a frame dispatches them without making a list. */
   readonly passes: Node[];
   /** With occlusion culling: the clear and the first phase, then (after the depth and the pyramid) the second and the clamp. */
@@ -309,8 +431,40 @@ interface Packed {
   /** The two depth draws of the first phase's pairs (clusters, proxies), drawn into the pyramid's depth. */
   readonly depthScene: Scene;
   readonly depthMaterial: NodeMaterial;
-  readonly residency: ClusterResidency;
+  /** CPU time of the packing, in milliseconds. */
+  readonly packMs: number;
   readonly attributes: readonly StorageBufferAttribute[];
+}
+
+/** Room a packing leaves in each buffer past what it holds, as a share of it: what changes fit before the next packing. */
+const HEADROOM = 0.25;
+
+/** The least room a packing leaves in each buffer, in its arena's units. */
+const MIN_ROOM = 64;
+
+/** A work unit's instance once its draw is gone: past every draw's live instances, so the cull skips it. */
+const DEAD = 0xffffffff;
+
+/** An arena at least this large is compacted when it is mostly empty or mostly holes. */
+const COMPACT_MIN = 4096;
+
+/** The buffer `count` things need with room for changes ({@link HEADROOM}). */
+function withRoom(count: number): number {
+  return count + Math.max(MIN_ROOM, Math.ceil(count * HEADROOM));
+}
+
+/** Hands out a range of each `[arena, length]`, or none of them (returning `null`) when one does not fit. */
+function allocateAll(requests: readonly (readonly [RangeArena, number])[]): number[] | null {
+  const starts: number[] = [];
+  for (const [arena, length] of requests) {
+    const start = arena.allocate(length);
+    if (start < 0) {
+      starts.forEach((taken, i) => requests[i]![0].free(taken, requests[i]![1]));
+      return null;
+    }
+    starts.push(start);
+  }
+  return starts;
 }
 
 /**
@@ -322,7 +476,18 @@ export class ClusterScene {
   readonly #meshes = new Map<number, ClusterMesh>();
   readonly #draws = new Map<Mesh, ClusterDraw>();
   #packed: Packed | null = null;
-  #dirty = false;
+  /** Where each mesh's records are in the packing. */
+  readonly #meshPlaces = new Map<number, MeshPlace>();
+  /** Meshes registered or dropped since the last update. */
+  readonly #changedMeshes = new Set<number>();
+  /** Draws made or placed since the last update. */
+  readonly #changedDraws = new Set<ClusterDraw>();
+  /** Places of draws removed since the last update, freed at it. */
+  readonly #freedDraws: DrawPlace[] = [];
+  /** Ranges of each buffer written since the last upload: start and length pairs, in its array's elements. */
+  readonly #ranges = new Map<BufferName, number[]>();
+  #updates: ClusterUpdates = { full: 0, compactions: 0, partial: 0, uploadedBytes: 0, last: null };
+  #residency: ClusterResidency | null = null;
   /** The storage buffers of the packing before the last, freed at the next frame. */
   readonly #retired: StorageBufferAttribute[] = [];
   /** The depth draws' geometries and material of the packing before the last, freed with them. */
@@ -407,7 +572,7 @@ export class ClusterScene {
       originalBySubset,
       proxies,
     });
-    this.#dirty = true;
+    this.#changedMeshes.add(key);
   }
 
   /**
@@ -423,9 +588,7 @@ export class ClusterScene {
     const { set } = mesh;
     let triangles = 0;
     for (const level of set.levelTriangles) triangles += level;
-    let proxyIndices = 0;
-    for (const proxy of mesh.proxies) proxyIndices += proxy.length;
-    const counts = { vertices: set.vertexCount, indices: set.indices.length + proxyIndices, clusters: set.clusters.count + mesh.proxies.length, groups: set.groups.count, triangles };
+    const counts = { vertices: set.vertexCount, indices: indexCount(mesh), clusters: set.clusters.count + mesh.proxies.length, groups: set.groups.count, triangles };
     return residentCost(counts, set.byteLength + mesh.vertices.byteLength + (mesh.extras?.byteLength ?? 0));
   }
 
@@ -436,7 +599,7 @@ export class ClusterScene {
 
   /** Forgets buffer `key`'s set (its buffer was freed or rebuilt). */
   dropMesh(key: number): void {
-    if (this.#meshes.delete(key)) this.#dirty = true;
+    if (this.#meshes.delete(key)) this.#changedMeshes.add(key);
   }
 
   /**
@@ -474,9 +637,10 @@ export class ClusterScene {
     } else {
       parts.push(object);
     }
-    this.#draws.set(object, { object, parts, rangeOf, mesh: key, matrices: [], instances: 0 });
+    const draw: ClusterDraw = { object, parts, rangeOf, mesh: key, matrices: [], instances: 0, place: null };
+    this.#draws.set(object, draw);
     this.style(object);
-    this.#dirty = true;
+    this.#changedDraws.add(draw);
     return object;
   }
 
@@ -495,13 +659,17 @@ export class ClusterScene {
     return this.#draws.get(object)?.instances ?? 0;
   }
 
-  /** Places clustered draw `object`'s instances: `matrices` holds sixteen numbers each, column-major, without the decode. */
+  /**
+   * Places clustered draw `object`'s instances: `matrices` holds sixteen
+   * numbers each, column-major, without the decode. Written in place at
+   * the next frame while they fit the instances its place has room for.
+   */
   place(object: Mesh, matrices: ArrayLike<number>): void {
     const draw = this.#draws.get(object);
     if (draw === undefined) return;
     draw.matrices = matrices;
     draw.instances = matrices.length / 16;
-    this.#dirty = true;
+    this.#changedDraws.add(draw);
   }
 
   /** Removes clustered draw `object`; its geometry is disposed, its materials are the viewport's. */
@@ -509,12 +677,19 @@ export class ClusterScene {
     const draw = this.#draws.get(object);
     if (draw === undefined) return;
     this.#draws.delete(object);
+    this.#changedDraws.delete(draw);
+    if (draw.place !== null) this.#freedDraws.push(draw.place);
+    draw.place = null;
     object.geometry.dispose();
     for (const part of draw.parts) if (part !== object) part.geometry.dispose();
-    this.#dirty = true;
   }
 
-  /** Gives `object`'s materials the scene's context, a fixed node (`fixedNodes.ts`): a new material of a clustered draw, after a restyle. */
+  /**
+   * Gives `object`'s materials the scene's context, a fixed node
+   * (`fixedNodes.ts`), and its parts their slots' arguments: a new
+   * material of a clustered draw, after a restyle. Whether each subset's
+   * material hides what is behind it is written in place.
+   */
   style(object: Mesh): void {
     const packed = this.#packed;
     const draw = this.#draws.get(object);
@@ -525,9 +700,25 @@ export class ClusterScene {
     if (draw === undefined) return;
     // Each subset's part takes its range's material.
     if (Array.isArray(object.material)) draw.parts.forEach((part, subset) => (part.material = (object.material as Material[])[draw.rangeOf[subset]!]!));
-    if (packed === null) return;
-    const slot = packed.slots.get(object);
-    if (slot !== undefined) draw.parts.forEach((part, subset) => part.geometry.setIndirect(packed.argsAttribute, 16 * (slot + subset)));
+    const place = draw.place;
+    if (packed === null || place === null) return;
+    this.#bindSlots(draw, packed, place);
+    const { layout } = packed;
+    const slots = layout.arenas.slots.capacity;
+    draw.parts.forEach((part, subset) => {
+      const occluder = occludes(part.material as Material) ? 1 : 0;
+      for (const row of [place.slot + subset, slots + place.slot + subset]) {
+        const at = 4 * (layout.runRows + row) + 2;
+        if (layout.tables[at] === occluder) continue;
+        layout.tables[at] = occluder;
+        this.#touch(layout, "tables", at, 1);
+      }
+    });
+  }
+
+  /** Points `draw`'s parts at their slots' arguments. */
+  #bindSlots(draw: ClusterDraw, packed: Packed, place: DrawPlace): void {
+    draw.parts.forEach((part, subset) => part.geometry.setIndirect(packed.argsAttribute, 16 * (place.slot + subset)));
   }
 
   /** The context a pick material of clustered draws reads its placement and instance from; `null` before the first packing. */
@@ -537,7 +728,7 @@ export class ClusterScene {
 
   /** What the clustered draws hold; zeros before the first packing. */
   get residency(): ClusterResidency {
-    return this.#packed?.residency ?? { meshes: 0, draws: 0, instances: 0, clusters: 0, triangles: 0, gpuBytes: 0, packMs: 0 };
+    return this.#residency ?? { meshes: 0, draws: 0, instances: 0, clusters: 0, triangles: 0, gpuBytes: 0, packMs: 0, updates: this.#updates };
   }
 
   /** What the last frame read back drew (every few frames, asynchronously). */
@@ -546,13 +737,24 @@ export class ClusterScene {
   }
 
   /**
+   * Packs every mesh and draw into new buffers at the next frame, as a
+   * change that outgrows them does: for compacting them, and for checking
+   * that what was written in place matches a packing from nothing.
+   */
+  repack(): void {
+    this.#repackDue = "asked";
+  }
+
+  #repackDue: string | null = null;
+
+  /**
    * Runs the cut for `camera` (its matrices current) at a viewport
-   * `width` by `height` pixels: packs first when something changed, then
-   * the clear, cull and clamp passes, or with occlusion culling the clear
-   * and first cull, the depth draws, the pyramid, the second cull and the
-   * clamp (see the header). Allocates nothing per frame but the
-   * occasional read-back of the statistics (and what three.js allocates
-   * for the depth draws' render).
+   * `width` by `height` pixels: brings the buffers up to date first (in
+   * place, or packing them whole), then the clear, cull and clamp passes,
+   * or with occlusion culling the clear and first cull, the depth draws,
+   * the pyramid, the second cull and the clamp (see the header).
+   * Allocates nothing per frame but the occasional read-back of the
+   * statistics (and what three.js allocates for the depth draws' render).
    */
   prepare(renderer: WebGPURenderer, camera: Camera, width: number, height: number): void {
     for (const attribute of this.#retired) attribute.dispose();
@@ -562,10 +764,13 @@ export class ClusterScene {
     if (this.#occlusionPaused > 0) this.#occlusionPaused--;
     const occluding = this.view.frustumCull && this.view.occlusionCull && this.#occlusionPaused === 0;
     // A pyramid outgrown is made again, and the cull that reads it with it.
-    if (occluding && resizeOcclusion(this.#occlusion, width, height)) this.#dirty = true;
-    if (this.#dirty) this.#pack();
+    if (occluding && resizeOcclusion(this.#occlusion, width, height) && this.#packed !== null) this.#repackDue ??= "a larger canvas";
+    const changed = this.#changedMeshes.size + this.#changedDraws.size + this.#freedDraws.length > 0;
+    if (this.#packed === null ? changed : this.#repackDue !== null) this.#pack(this.#repackDue ?? "first");
+    else if (changed) this.#update();
     const packed = this.#packed;
-    if (packed === null || packed.residency.draws === 0) return;
+    if (packed === null || this.residency.draws === 0) return;
+    if (this.#ranges.size > 0) this.#upload(renderer, packed);
     const view = this.view;
     this.#projectionView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     this.#frustum.setFromProjectionMatrix(this.#projectionView, camera.coordinateSystem);
@@ -633,37 +838,21 @@ export class ClusterScene {
    */
   async visible(renderer: WebGPURenderer, object: Mesh): Promise<{ instance: number; cluster: number }[]> {
     const packed = this.#packed;
-    const slot = packed?.slots.get(object);
-    if (packed === undefined || packed === null || slot === undefined) return [];
+    const draw = this.#draws.get(object);
+    const place = draw?.place ?? null;
+    if (packed === null || draw === undefined || place === null) return [];
     const args = new Uint32Array(await renderer.getArrayBufferAsync(packed.argsAttribute));
     const pairs = new Uint32Array(await renderer.getArrayBufferAsync(packed.visibleAttribute));
-    const { firstInstance, firstCluster } = this.#offsets(object);
     const out: { instance: number; cluster: number }[] = [];
-    for (let s = slot; s < slot + this.#draws.get(object)!.parts.length; s++) {
+    for (let s = place.slot; s < place.slot + draw.parts.length; s++) {
       const base = args[4 * s + 3]!;
       for (let i = 0; i < args[4 * s + 1]!; i++) {
         // Packs of proxies are not of the cut.
         if (pairs[2 * (base + i) + 1]! >= PACKED) continue;
-        out.push({ instance: pairs[2 * (base + i)]! - firstInstance, cluster: pairs[2 * (base + i) + 1]! - firstCluster });
+        out.push({ instance: pairs[2 * (base + i)]! - place.instance, cluster: pairs[2 * (base + i) + 1]! - place.mesh.cluster });
       }
     }
     return out;
-  }
-
-  /** Where `object`'s instances and its mesh's clusters start in the packing. */
-  #offsets(object: Mesh): { firstInstance: number; firstCluster: number } {
-    let firstInstance = 0;
-    for (const draw of this.#draws.values()) {
-      if (draw.object === object) break;
-      if (this.#meshes.has(draw.mesh)) firstInstance += draw.instances;
-    }
-    let firstCluster = 0;
-    const key = this.#draws.get(object)!.mesh;
-    for (const [other, mesh] of this.#meshes) {
-      if (other === key) break;
-      firstCluster += mesh.set.clusters.count;
-    }
-    return { firstInstance, firstCluster };
   }
 
   /** Releases the storage buffers; the draws' geometries are disposed with them. */
@@ -677,7 +866,14 @@ export class ClusterScene {
     for (const draw of this.#draws.values()) for (const part of new Set([draw.object, ...draw.parts])) part.geometry.dispose();
     this.#draws.clear();
     this.#meshes.clear();
+    this.#meshPlaces.clear();
+    this.#changedMeshes.clear();
+    this.#changedDraws.clear();
+    this.#freedDraws.length = 0;
+    this.#ranges.clear();
+    this.#repackDue = null;
     this.#packed = null;
+    this.#residency = null;
   }
 
   /** Hands the last packing's depth draws to be freed at the next frame. */
@@ -688,195 +884,451 @@ export class ClusterScene {
     for (const draw of packed.depthScene.children) this.#retiredDepth.push((draw as Mesh).geometry);
   }
 
-  /** Packs every mesh and draw into new storage buffers, and the nodes reading them (see the header). */
-  #pack(): void {
+  /** Records that `layout`'s buffer `name` changed at `count` elements from `start`, when it is the packing's (a packing being made uploads whole). */
+  #touch(layout: Layout, name: BufferName, start: number, count: number): void {
+    if (count === 0 || layout !== this.#packed?.layout) return;
+    let ranges = this.#ranges.get(name);
+    if (ranges === undefined) this.#ranges.set(name, (ranges = []));
+    const last = ranges.length - 2;
+    // Runs written one after another upload as one.
+    if (last >= 0 && ranges[last]! + ranges[last + 1]! === start) ranges[last + 1]! += count;
+    else ranges.push(start, count);
+  }
+
+  /** Hands three.js the ranges written in place and runs the pass that binds their buffers, so it uploads them. */
+  #upload(renderer: WebGPURenderer, packed: Packed): void {
+    for (const [name, ranges] of this.#ranges) {
+      const attribute = packed.buffers[name];
+      for (let i = 0; i < ranges.length; i += 2) attribute.addUpdateRange(ranges[i]!, ranges[i + 1]!);
+      attribute.needsUpdate = true;
+    }
+    this.#ranges.clear();
+    renderer.compute(packed.upload);
+  }
+
+  /** Hands out `mesh`'s ranges in `layout`, or `null` when one does not fit. */
+  #placeMesh(layout: Layout, mesh: ClusterMesh): MeshPlace | null {
+    const a = layout.arenas;
+    const { set } = mesh;
+    const indices = indexCount(mesh);
+    const clusters = set.clusters.count + mesh.proxies.length;
+    const starts = allocateAll([
+      [a.meshes, 1],
+      [a.vertices, set.vertexCount],
+      [a.indices, indices],
+      [a.clusters, clusters],
+      [a.groups, set.groups.count],
+    ]);
+    if (starts === null) return null;
+    const [row, vertex, index, cluster, group] = starts as [number, number, number, number, number];
+    return { row, vertex, vertices: set.vertexCount, index, indices, cluster, clusters, group, groups: set.groups.count };
+  }
+
+  #freeMesh(layout: Layout, place: MeshPlace): void {
+    const a = layout.arenas;
+    a.meshes.free(place.row, 1);
+    a.vertices.free(place.vertex, place.vertices);
+    a.indices.free(place.index, place.indices);
+    a.clusters.free(place.cluster, place.clusters);
+    a.groups.free(place.group, place.groups);
+  }
+
+  /** Writes `mesh`'s records at its place: vertices, indices, clusters (then proxies), groups and its row. */
+  #writeMesh(layout: Layout, mesh: ClusterMesh, p: MeshPlace): void {
+    const { set } = mesh;
+    layout.vertices.set(mesh.vertices, 4 * p.vertex);
+    if (mesh.extras !== null) layout.extras.set(mesh.extras, 4 * p.vertex);
+    else layout.extras.fill(0, 4 * p.vertex, 4 * (p.vertex + p.vertices));
+    this.#touch(layout, "vertices", 4 * p.vertex, 4 * p.vertices);
+    this.#touch(layout, "extras", 4 * p.vertex, 4 * p.vertices);
+    const indices = layout.indices;
+    for (let i = 0; i < set.indices.length; i++) indices[p.index + i] = set.indices[i]! + p.vertex;
+    const words = layout.tables;
+    const floats = layout.tableFloats;
+    const c = set.clusters;
+    for (let i = 0; i < c.count; i++) {
+      const at = 4 * (layout.clusterRows + 2 * (p.cluster + i));
+      words[at] = c.group[i]! + p.group;
+      words[at + 1] = c.refined[i] === NO_GROUP ? NO_GROUP : c.refined[i]! + p.group;
+      words[at + 2] = c.indexStart[i]! + p.index;
+      // Triangles (at most 256) in the low byte, the subset above.
+      words[at + 3] = c.triangleCount[i]! | (c.subset[i]! << 8);
+      floats.set(c.bounds.subarray(4 * i, 4 * i + 4), at + 4);
+    }
+    // The proxies follow the set's clusters and indices, a cluster each.
+    let proxyIndex = p.index + set.indices.length;
+    mesh.proxies.forEach((proxy, subset) => {
+      for (let i = 0; i < proxy.length; i++) indices[proxyIndex + i] = proxy[i]! + p.vertex;
+      const at = 4 * (layout.clusterRows + 2 * (p.cluster + c.count + subset));
+      // Of no group: never cut, only drawn whole for a small instance.
+      words[at] = 0;
+      words[at + 1] = NO_GROUP;
+      words[at + 2] = proxyIndex;
+      words[at + 3] = (proxy.length / 3) | (subset << 8);
+      floats.set(mesh.bounds, at + 4);
+      proxyIndex += proxy.length;
+    });
+    this.#touch(layout, "indices", p.index, p.indices);
+    this.#touch(layout, "tables", 4 * (layout.clusterRows + 2 * p.cluster), 8 * p.clusters);
+    const g = set.groups;
+    for (let i = 0; i < g.count; i++) {
+      const at = 4 * (layout.groupRows + 2 * (p.group + i));
+      floats.set(g.bounds.subarray(4 * i, 4 * i + 4), at);
+      // Infinite errors (never simplified further) as -1: WGSL leaves arithmetic on infinities undefined.
+      floats[at + 4] = Number.isFinite(g.error[i]!) ? g.error[i]! : -1;
+    }
+    this.#touch(layout, "tables", 4 * (layout.groupRows + 2 * p.group), 8 * p.groups);
+    // Its row: first cluster, clusters, first proxy, proxies; then the bounds' bits; then the decode's.
+    const row = 12 * p.row;
+    words[row] = p.cluster;
+    words[row + 1] = c.count;
+    words[row + 2] = p.cluster + c.count;
+    words[row + 3] = mesh.proxies.length;
+    floats.set(mesh.bounds, row + 4);
+    floats.set(mesh.decode, row + 8);
+    this.#touch(layout, "tables", row, 12);
+  }
+
+  /** Hands out `draw`'s ranges in `layout` for its instances as they are now, or `null` when one does not fit. */
+  #placeDraw(layout: Layout, draw: ClusterDraw, mesh: ClusterMesh, meshPlace: MeshPlace): DrawPlace | null {
+    const a = layout.arenas;
+    const capacity = draw.instances;
+    const units = capacity * Math.ceil(mesh.set.clusters.count / CHUNK);
+    const starts = allocateAll([
+      [a.slots, draw.parts.length],
+      [a.instances, capacity],
+      [a.units, units],
+      [a.clusterRuns, capacity * mesh.originalClusters],
+      [a.proxyRuns, capacity * mesh.proxies.length],
+    ]);
+    if (starts === null) return null;
+    const [slot, instance, unit, clusterRun, proxyRun] = starts as [number, number, number, number, number];
+    return {
+      mesh: meshPlace,
+      slot,
+      slots: draw.parts.length,
+      instance,
+      capacity,
+      unit,
+      units,
+      clusterRun,
+      clusterRuns: capacity * mesh.originalClusters,
+      proxyRun,
+      proxyRuns: capacity * mesh.proxies.length,
+      live: capacity,
+    };
+  }
+
+  /** Frees `p`'s ranges, its work units marked dead first (the cull skips them until they are handed out again). */
+  #unplaceDraw(layout: Layout, p: DrawPlace): void {
+    const units = layout.units;
+    for (let u = p.unit; u < p.unit + p.units; u++) units[4 * u] = DEAD;
+    this.#touch(layout, "units", 4 * p.unit, 4 * p.units);
+    const a = layout.arenas;
+    a.slots.free(p.slot, p.slots);
+    a.instances.free(p.instance, p.capacity);
+    a.units.free(p.unit, p.units);
+    a.clusterRuns.free(p.clusterRun, p.clusterRuns);
+    a.proxyRuns.free(p.proxyRun, p.proxyRuns);
+  }
+
+  /**
+   * Writes `draw`'s records at its place, for every instance it has room
+   * for: each instance's mesh, slot and index, its work units (instance,
+   * first cluster, mesh, slot), its slots' arguments and runs (start,
+   * length, whether its material hides what is behind it, and in the first
+   * slot's where its live instances end), its bits cleared, and its
+   * instances' matrices.
+   */
+  #writeDraw(layout: Layout, draw: ClusterDraw, mesh: ClusterMesh, p: DrawPlace): void {
+    const chunks = Math.ceil(mesh.set.clusters.count / CHUNK);
+    const { info, units } = layout;
+    const row = p.mesh.row;
+    for (let i = 0; i < p.capacity; i++) {
+      const at = 4 * (p.instance + i);
+      info[at] = row;
+      info[at + 1] = p.slot;
+      info[at + 2] = i;
+      info[at + 3] = 0;
+      for (let chunk = 0; chunk < chunks; chunk++) {
+        const unit = 4 * (p.unit + i * chunks + chunk);
+        units[unit] = p.instance + i;
+        units[unit + 1] = chunk * CHUNK;
+        units[unit + 2] = row;
+        units[unit + 3] = p.slot;
+      }
+    }
+    this.#touch(layout, "info", 4 * p.instance, 4 * p.capacity);
+    this.#touch(layout, "units", 4 * p.unit, 4 * p.units);
+    if (layout === this.#packed?.layout) layout.bits.fill(0, p.unit, p.unit + p.units);
+    this.#touch(layout, "bits", p.unit, p.units);
+    const slots = layout.arenas.slots.capacity;
+    const proxyBase = layout.arenas.clusterRuns.capacity;
+    let run = p.clusterRun;
+    let proxyRun = p.proxyRun;
+    mesh.originalBySubset.forEach((original, subset) => {
+      const at = p.slot + subset;
+      const occluder = occludes(draw.parts[subset]!.material as Material) ? 1 : 0;
+      layout.args.set([CLUSTER_VERTICES, 0, 0, run], 4 * at);
+      layout.tables.set([run, p.capacity * original, occluder, subset === 0 ? p.instance + p.live : 0], 4 * (layout.runRows + at));
+      run += p.capacity * original;
+      // Its proxies: a counter (in an unused set of arguments) and a run of one per instance at most.
+      layout.tables.set([proxyBase + proxyRun, p.capacity, occluder, 0], 4 * (layout.runRows + slots + at));
+      proxyRun += p.capacity;
+    });
+    this.#touch(layout, "args", 4 * p.slot, 4 * p.slots);
+    this.#touch(layout, "tables", 4 * (layout.runRows + p.slot), 4 * p.slots);
+    this.#touch(layout, "tables", 4 * (layout.runRows + slots + p.slot), 4 * p.slots);
+    this.#writeMatrices(layout, draw, p);
+  }
+
+  /** Writes where `p`'s live instances end, in its first slot's run. */
+  #writeLive(layout: Layout, p: DrawPlace): void {
+    const at = 4 * (layout.runRows + p.slot) + 3;
+    layout.tables[at] = p.instance + p.live;
+    this.#touch(layout, "tables", at, 1);
+  }
+
+  /** Writes `draw`'s live instances' matrices at its place. */
+  #writeMatrices(layout: Layout, draw: ClusterDraw, p: DrawPlace): void {
+    const count = 16 * p.live;
+    const source = draw.matrices;
+    const target = layout.matrices;
+    const at = 16 * p.instance;
+    if (ArrayBuffer.isView(source) && (source as Float64Array).length >= count) target.set((source as Float64Array).subarray(0, count), at);
+    else for (let i = 0; i < count; i++) target[at + i] = source[i]!;
+    this.#touch(layout, "matrices", at, count);
+  }
+
+  /**
+   * Writes what changed since the last frame in place: draws removed
+   * freed, meshes dropped freed and meshes registered placed (and their
+   * draws placed again), draws placed again where they no longer fit,
+   * moved draws' matrices and live counts. A change that does not fit
+   * packs everything again (growing or compacting the buffers).
+   */
+  #update(): void {
     const started = performance.now();
-    this.#dirty = false;
+    const layout = this.#packed!.layout;
+    for (const place of this.#freedDraws) this.#unplaceDraw(layout, place);
+    this.#freedDraws.length = 0;
+    const failed = this.#updateMeshes(layout) ?? this.#updateDraws(layout);
+    if (failed !== null) {
+      this.#pack(failed);
+      return;
+    }
+    const compact = compactionDue(layout.arenas);
+    if (compact !== null) {
+      this.#pack(compact);
+      return;
+    }
+    this.#afterUpdate();
+    let bytes = 0;
+    for (const ranges of this.#ranges.values()) for (let i = 1; i < ranges.length; i += 2) bytes += 4 * ranges[i]!;
+    const u = this.#updates;
+    this.#updates = { ...u, partial: u.partial + 1, uploadedBytes: u.uploadedBytes + bytes, last: { kind: "partial", reason: "", ms: performance.now() - started, bytes } };
+    this.#residency = this.#measure();
+  }
+
+  /** Places the meshes registered and frees those dropped; the reason a packing is due when one does not fit, else `null`. */
+  #updateMeshes(layout: Layout): string | null {
+    if (this.#changedMeshes.size === 0) return null;
+    // Their draws placed again (or not at all, without them): one pass over the draws.
+    for (const draw of this.#draws.values()) if (this.#changedMeshes.has(draw.mesh)) this.#changedDraws.add(draw);
+    for (const key of this.#changedMeshes) {
+      const old = this.#meshPlaces.get(key);
+      if (old !== undefined) {
+        this.#freeMesh(layout, old);
+        this.#meshPlaces.delete(key);
+      }
+      const mesh = this.#meshes.get(key);
+      if (mesh === undefined) continue;
+      const place = this.#placeMesh(layout, mesh);
+      if (place === null) return "meshes outgrew their buffers";
+      this.#meshPlaces.set(key, place);
+      this.#writeMesh(layout, mesh, place);
+    }
+    this.#changedMeshes.clear();
+    return null;
+  }
+
+  /** Writes the draws changed; the reason a packing is due when one does not fit, else `null`. */
+  #updateDraws(layout: Layout): string | null {
+    for (const draw of this.#changedDraws) {
+      const mesh = this.#meshes.get(draw.mesh);
+      const meshPlace = this.#meshPlaces.get(draw.mesh);
+      const drawable = mesh !== undefined && meshPlace !== undefined && draw.parts.length === mesh.originalBySubset.length;
+      let place = draw.place;
+      if (place !== null && (!drawable || place.mesh !== meshPlace || draw.instances > place.capacity)) {
+        this.#unplaceDraw(layout, place);
+        draw.place = place = null;
+      }
+      if (!drawable) continue;
+      if (place === null) {
+        place = this.#placeDraw(layout, draw, mesh, meshPlace);
+        if (place === null) return "draws outgrew their buffers";
+        draw.place = place;
+        this.#writeDraw(layout, draw, mesh, place);
+        this.#bindSlots(draw, this.#packed!, place);
+        continue;
+      }
+      if (place.live !== draw.instances) {
+        place.live = draw.instances;
+        this.#writeLive(layout, place);
+      }
+      this.#writeMatrices(layout, draw, place);
+    }
+    this.#changedDraws.clear();
+    return null;
+  }
+
+  /** The culls' dispatch, over the work units handed out. */
+  #afterUpdate(): void {
+    const packed = this.#packed!;
+    for (const cull of packed.culls) cull.count = Math.max(1, packed.layout.arenas.units.end);
+  }
+
+  /** What the clustered draws hold now. */
+  #measure(): ClusterResidency {
+    let draws = 0;
+    let instances = 0;
+    for (const draw of this.#draws.values()) {
+      if (draw.place === null) continue;
+      draws++;
+      instances += draw.place.live;
+    }
+    let clusters = 0;
+    let triangles = 0;
+    for (const key of this.#meshPlaces.keys()) {
+      const mesh = this.#meshes.get(key)!;
+      clusters += mesh.set.clusters.count + mesh.proxies.length;
+      for (const level of mesh.set.levelTriangles) triangles += level;
+    }
+    const packed = this.#packed!;
+    const gpuBytes = packed.attributes.reduce((sum, a) => sum + a.array.byteLength, 0);
+    return { meshes: this.#meshPlaces.size, draws, instances, clusters, triangles, gpuBytes, packMs: packed.packMs, updates: this.#updates };
+  }
+
+  /**
+   * Packs every mesh and draw into new storage buffers with room to spare
+   * ({@link HEADROOM}), and the nodes reading them (see the header):
+   * the first packing, and each change that did not fit (`reason`).
+   */
+  #pack(reason: string): void {
+    const started = performance.now();
+    this.#repackDue = null;
     // Freed at the next packing's frame: until then a pick or bundle may still bind them.
     this.#retired.push(...(this.#packed?.attributes ?? []));
     this.#retireDepth();
-    // Meshes in insertion order, with their offsets.
-    const meshIndex = new Map<number, number>();
+    this.#ranges.clear();
+    this.#changedMeshes.clear();
+    this.#changedDraws.clear();
+    this.#freedDraws.length = 0;
+    this.#meshPlaces.clear();
+    // What every mesh and draw needs, and buffers of that with room.
+    let meshCount = 0;
     let vertexCount = 0;
-    let indexCount = 0;
+    let indexTotal = 0;
     let clusterCount = 0;
     let groupCount = 0;
-    let triangles = 0;
-    let proxyIndexCount = 0;
-    let proxyCount = 0;
-    for (const [key, mesh] of this.#meshes) {
-      meshIndex.set(key, meshIndex.size);
+    for (const mesh of this.#meshes.values()) {
+      meshCount++;
       vertexCount += mesh.set.vertexCount;
-      indexCount += mesh.set.indices.length;
-      clusterCount += mesh.set.clusters.count;
+      indexTotal += indexCount(mesh);
+      clusterCount += mesh.set.clusters.count + mesh.proxies.length;
       groupCount += mesh.set.groups.count;
-      for (const level of mesh.set.levelTriangles) triangles += level;
-      proxyCount += mesh.proxies.length;
-      for (const proxy of mesh.proxies) proxyIndexCount += proxy.length;
     }
-    // The proxies follow every set's clusters and indices, a cluster each.
-    const proxyClusterBase = clusterCount;
-    const proxyIndexBase = indexCount;
-    clusterCount += proxyCount;
-    indexCount += proxyIndexCount;
-    const vertices = new Uint32Array(4 * Math.max(1, vertexCount));
-    const extras = new Uint32Array(4 * Math.max(1, vertexCount));
-    const indices = new Uint32Array(Math.max(1, indexCount));
-    // Clusters: group, source group, first index, triangles; then the bounds' bits.
-    const clusters = new Uint32Array(8 * Math.max(1, clusterCount));
-    const clusterFloats = new Float32Array(clusters.buffer);
-    // Groups: bounds, then error.
-    const groups = new Float32Array(8 * Math.max(1, groupCount));
-    // Meshes: first cluster, clusters, first proxy, proxies; then the bounds' bits; then the decode's.
-    const meshes = new Uint32Array(12 * Math.max(1, meshIndex.size));
-    const meshFloats = new Float32Array(meshes.buffer);
-    let vertexBase = 0;
-    let indexBase = 0;
-    let clusterBase = 0;
-    let groupBase = 0;
-    let proxyCluster = proxyClusterBase;
-    let proxyIndex = proxyIndexBase;
-    for (const [key, mesh] of this.#meshes) {
-      const m = meshIndex.get(key)!;
-      const { set } = mesh;
-      vertices.set(mesh.vertices, 4 * vertexBase);
-      if (mesh.extras !== null) extras.set(mesh.extras, 4 * vertexBase);
-      for (let i = 0; i < set.indices.length; i++) indices[indexBase + i] = set.indices[i]! + vertexBase;
-      const c = set.clusters;
-      for (let i = 0; i < c.count; i++) {
-        const at = 8 * (clusterBase + i);
-        clusters[at] = c.group[i]! + groupBase;
-        clusters[at + 1] = c.refined[i] === NO_GROUP ? NO_GROUP : c.refined[i]! + groupBase;
-        clusters[at + 2] = c.indexStart[i]! + indexBase;
-        // Triangles (at most 256) in the low byte, the subset above.
-        clusters[at + 3] = c.triangleCount[i]! | (c.subset[i]! << 8);
-        clusterFloats.set(c.bounds.subarray(4 * i, 4 * i + 4), at + 4);
-      }
-      const g = set.groups;
-      for (let i = 0; i < g.count; i++) {
-        const at = 8 * (groupBase + i);
-        groups.set(g.bounds.subarray(4 * i, 4 * i + 4), at);
-        // Infinite errors (never simplified further) as -1: WGSL leaves arithmetic on infinities undefined.
-        groups[at + 4] = Number.isFinite(g.error[i]!) ? g.error[i]! : -1;
-      }
-      meshes[12 * m] = clusterBase;
-      meshes[12 * m + 1] = c.count;
-      meshes[12 * m + 2] = proxyCluster;
-      meshes[12 * m + 3] = mesh.proxies.length;
-      mesh.proxies.forEach((proxy, subset) => {
-        for (let i = 0; i < proxy.length; i++) indices[proxyIndex + i] = proxy[i]! + vertexBase;
-        const at = 8 * proxyCluster;
-        // Of no group: never cut, only drawn whole for a small instance.
-        clusters[at] = 0;
-        clusters[at + 1] = NO_GROUP;
-        clusters[at + 2] = proxyIndex;
-        clusters[at + 3] = proxy.length / 3 | (subset << 8);
-        clusterFloats.set(mesh.bounds, at + 4);
-        proxyIndex += proxy.length;
-        proxyCluster++;
-      });
-      meshFloats.set(mesh.bounds, 12 * m + 4);
-      meshFloats.set(mesh.decode, 12 * m + 8);
-      vertexBase += set.vertexCount;
-      indexBase += set.indices.length;
-      clusterBase += c.count;
-      groupBase += set.groups.count;
-    }
-    // Draws: their instances, work units and runs of the visible list.
-    const draws = [...this.#draws.values()].filter((draw) => this.#meshes.has(draw.mesh) && draw.parts.length === this.#meshes.get(draw.mesh)!.originalBySubset.length);
+    const draws: ClusterDraw[] = [];
     let slotCount = 0;
-    for (const draw of draws) slotCount += draw.parts.length;
     let instanceCount = 0;
     let unitCount = 0;
-    let visibleCount = 0;
-    let clusterCapacity = 0;
-    for (const draw of draws) {
-      const mesh = this.#meshes.get(draw.mesh)!;
+    let clusterRunCount = 0;
+    let proxyRunCount = 0;
+    for (const draw of this.#draws.values()) {
+      draw.place = null;
+      const mesh = this.#meshes.get(draw.mesh);
+      if (mesh === undefined || draw.parts.length !== mesh.originalBySubset.length) continue;
+      draws.push(draw);
+      slotCount += draw.parts.length;
       instanceCount += draw.instances;
       unitCount += draw.instances * Math.ceil(mesh.set.clusters.count / CHUNK);
-      visibleCount += draw.instances * (mesh.originalClusters + mesh.proxies.length);
-      clusterCapacity += draw.instances * mesh.originalClusters;
+      clusterRunCount += draw.instances * mesh.originalClusters;
+      proxyRunCount += draw.instances * mesh.proxies.length;
     }
-    // The depth list: as many clusters and proxies as the runs hold, clusters first.
-    const proxyCapacity = visibleCount - clusterCapacity;
-    const instanceMatrices = new Float32Array(16 * Math.max(1, instanceCount));
-    const instanceInfo = new Uint32Array(4 * Math.max(1, instanceCount));
-    // Units: instance, first cluster, mesh, draw.
-    const units = new Uint32Array(4 * Math.max(1, unitCount));
-    // A slot's clusters' arguments and run at its index, its proxies' `slotCount` further.
-    const slotArgs = new Uint32Array(8 * Math.max(1, slotCount));
-    // Slots' runs: start, length, whether its material hides what is behind it (its pairs drawn into the depth pyramid's depth), 0.
-    const runs = new Uint32Array(8 * Math.max(1, slotCount));
-    let firstSlot = 0;
-    const slots = new Map<Mesh, number>();
-    let instance = 0;
-    let unit = 0;
-    let visible = 0;
-    for (const draw of draws) {
-      const mesh = this.#meshes.get(draw.mesh)!;
-      const m = meshIndex.get(draw.mesh)!;
-      const slot = firstSlot;
-      slots.set(draw.object, slot);
-      instanceMatrices.set(Array.prototype.slice.call(draw.matrices, 0, 16 * draw.instances) as number[], 16 * instance);
-      const chunks = Math.ceil(mesh.set.clusters.count / CHUNK);
-      for (let i = 0; i < draw.instances; i++) {
-        const at = 4 * (instance + i);
-        instanceInfo[at] = m;
-        instanceInfo[at + 1] = slot;
-        instanceInfo[at + 2] = i;
-        for (let chunk = 0; chunk < chunks; chunk++) {
-          units[4 * unit] = instance + i;
-          units[4 * unit + 1] = chunk * CHUNK;
-          units[4 * unit + 2] = m;
-          units[4 * unit + 3] = slot;
-          unit++;
-        }
-      }
-      mesh.originalBySubset.forEach((original, subset) => {
-        const at = slot + subset;
-        const occluder = occludes(draw.parts[subset]!.material as Material) ? 1 : 0;
-        slotArgs.set([CLUSTER_VERTICES, 0, 0, visible], 4 * at);
-        runs.set([visible, draw.instances * original, occluder], 4 * at);
-        visible += draw.instances * original;
-        // Its proxies: a counter (in an unused set of arguments) and a run of one per instance at most.
-        runs.set([visible, draw.instances, occluder], 4 * (slotCount + at));
-        visible += draw.instances;
-      });
-      instance += draw.instances;
-      firstSlot += draw.parts.length;
-    }
-    // The static tables in one buffer of `uvec4` rows (a stage binds ten
-    // storage buffers at most): meshes (three rows each), clusters (two),
-    // groups (two, as `f32`) and runs (one).
-    const clusterRows = 3 * meshIndex.size;
-    const groupRows = clusterRows + 2 * clusterCount;
-    const runRows = groupRows + 2 * groupCount;
-    const tables = new Uint32Array(4 * (runRows + 2 * Math.max(1, slotCount)));
-    tables.set(meshes.subarray(0, 12 * meshIndex.size), 0);
-    tables.set(clusters.subarray(0, 8 * clusterCount), 4 * clusterRows);
-    tables.set(new Uint32Array(groups.buffer, 0, 8 * groupCount), 4 * groupRows);
-    tables.set(runs, 4 * runRows);
+    const arenas: Arenas = {
+      meshes: new RangeArena(withRoom(meshCount)),
+      vertices: new RangeArena(withRoom(vertexCount)),
+      indices: new RangeArena(withRoom(indexTotal)),
+      clusters: new RangeArena(withRoom(clusterCount)),
+      groups: new RangeArena(withRoom(groupCount)),
+      slots: new RangeArena(withRoom(slotCount)),
+      instances: new RangeArena(withRoom(instanceCount)),
+      units: new RangeArena(withRoom(unitCount)),
+      clusterRuns: new RangeArena(withRoom(clusterRunCount)),
+      proxyRuns: new RangeArena(withRoom(proxyRunCount)),
+    };
+    const slotCapacity = arenas.slots.capacity;
+    const instanceCapacity = arenas.instances.capacity;
+    const unitCapacity = arenas.units.capacity;
+    const vertexCapacity = arenas.vertices.capacity;
+    const indexCapacity = arenas.indices.capacity;
+    // The visible list: every cluster run, then every proxy run; the depth list the same.
+    const clusterCapacity = arenas.clusterRuns.capacity;
+    const proxyCapacity = arenas.proxyRuns.capacity;
+    const visibleCapacity = clusterCapacity + proxyCapacity;
+    const clusterRows = 3 * arenas.meshes.capacity;
+    const groupRows = clusterRows + 2 * arenas.clusters.capacity;
+    const runRows = groupRows + 2 * arenas.groups.capacity;
+    const tables = new Uint32Array(4 * (runRows + 2 * slotCapacity));
     // The arguments: each slot's, its proxies' counters, the two depth
     // draws' (clusters, then proxies past the clusters' list), and the
     // statistics' partial sums.
-    const depthArgs = 8 * Math.max(1, slotCount);
+    const depthArgs = 8 * slotCapacity;
     const statsAt = depthArgs + 8;
-    const args = new Uint32Array(statsAt + STAT_WORDS);
-    args.set(slotArgs, 0);
+    const layout: Layout = {
+      arenas,
+      vertices: new Uint32Array(4 * vertexCapacity),
+      extras: new Uint32Array(4 * vertexCapacity),
+      indices: new Uint32Array(indexCapacity),
+      tables,
+      tableFloats: new Float32Array(tables.buffer),
+      matrices: new Float32Array(16 * instanceCapacity),
+      info: new Uint32Array(4 * instanceCapacity),
+      units: new Uint32Array(4 * unitCapacity),
+      bits: new Uint32Array(unitCapacity),
+      args: new Uint32Array(statsAt + STAT_WORDS),
+      clusterRows,
+      groupRows,
+      runRows,
+    };
+    // Work units past every draw's are dead until handed out (their slot 0, a real one).
+    for (let u = 0; u < unitCapacity; u++) layout.units[4 * u] = DEAD;
+    for (const [key, mesh] of this.#meshes) {
+      const place = this.#placeMesh(layout, mesh)!;
+      this.#meshPlaces.set(key, place);
+      this.#writeMesh(layout, mesh, place);
+    }
+    for (const draw of draws) {
+      const mesh = this.#meshes.get(draw.mesh)!;
+      const place = this.#placeDraw(layout, draw, mesh, this.#meshPlaces.get(draw.mesh)!)!;
+      draw.place = place;
+      this.#writeDraw(layout, draw, mesh, place);
+    }
+    const args = layout.args;
     args.set([CLUSTER_VERTICES, 0, 0, 0, PROXY_VERTICES, 0, 0, clusterCapacity], depthArgs);
     const attribute = (array: Uint32Array | Float32Array, itemSize: number) => new StorageBufferAttribute(array, itemSize);
-    const vertexAttribute = attribute(vertices, 4);
-    const extraAttribute = attribute(extras, 4);
-    const indexAttribute = attribute(indices, 1);
+    const vertexAttribute = attribute(layout.vertices, 4);
+    const extraAttribute = attribute(layout.extras, 4);
+    const indexAttribute = attribute(layout.indices, 1);
     const tableAttribute = attribute(tables, 4);
-    const matrixAttribute = attribute(instanceMatrices, 4);
-    const instanceInfoAttribute = attribute(instanceInfo, 4);
-    const unitAttribute = attribute(units, 4);
-    const visibleAttribute = attribute(new Uint32Array(2 * Math.max(1, visibleCount)), 2);
+    const matrixAttribute = attribute(layout.matrices, 4);
+    const instanceInfoAttribute = attribute(layout.info, 4);
+    const unitAttribute = attribute(layout.units, 4);
+    const visibleAttribute = attribute(new Uint32Array(2 * visibleCapacity), 2);
     // Each work unit's clusters drawn and not hidden in the last frame, a bit each (an instance's proxies: bit 0 of its first unit).
-    const bitsAttribute = attribute(new Uint32Array(Math.max(1, unitCount)), 1);
+    const bitsAttribute = attribute(layout.bits, 1);
     // The pairs drawn into the depth pyramid's depth: clusters, then proxies.
-    const depthAttribute = attribute(new Uint32Array(2 * Math.max(1, visibleCount)), 2);
+    const depthAttribute = attribute(new Uint32Array(2 * visibleCapacity), 2);
     const argsAttribute = new IndirectStorageBufferAttribute(args, 4);
     const attributes = [
       vertexAttribute,
@@ -891,12 +1343,23 @@ export class ClusterScene {
       depthAttribute,
       argsAttribute,
     ];
+    const buffers: Record<BufferName, StorageBufferAttribute> = {
+      vertices: vertexAttribute,
+      extras: extraAttribute,
+      indices: indexAttribute,
+      tables: tableAttribute,
+      matrices: matrixAttribute,
+      info: instanceInfoAttribute,
+      units: unitAttribute,
+      bits: bitsAttribute,
+      args: argsAttribute,
+    };
     const gpuBytes = attributes.reduce((sum, a) => sum + a.array.byteLength, 0);
 
     // The cull: one thread per work unit, eight storage buffers.
     const read = (a: StorageBufferAttribute, type: string, count: number): Node => (storage(a, type as never, count) as Node).toReadOnly();
-    const unitsNode = read(unitAttribute, "uvec4", Math.max(1, unitCount));
-    const matrixNode = read(matrixAttribute, "vec4", 4 * Math.max(1, instanceCount));
+    const unitsNode = read(unitAttribute, "uvec4", unitCapacity);
+    const matrixNode = read(matrixAttribute, "vec4", 4 * instanceCapacity);
     const tableNode = read(tableAttribute, "uvec4", tables.length / 4);
     const meshRow = (m: Node, row: number): Node => tableNode.element(m.mul(3).add(row));
     const clusterRow = (c: Node, row: number): Node => tableNode.element(c.mul(2).add(clusterRows + row));
@@ -904,11 +1367,10 @@ export class ClusterScene {
     const runRow = (slot: Node): Node => tableNode.element(slot.add(runRows));
     const argsNode: Node = (storage(argsAttribute, "uint", args.length) as Node).toAtomic();
     const argsPlain: Node = storage(argsAttribute, "uint", args.length);
-    const visibleNode: Node = storage(visibleAttribute, "uvec2", Math.max(1, visibleCount));
-    const bitsNode: Node = storage(bitsAttribute, "uint", Math.max(1, unitCount));
-    const depthNode: Node = storage(depthAttribute, "uvec2", Math.max(1, visibleCount));
+    const visibleNode: Node = storage(visibleAttribute, "uvec2", visibleCapacity);
+    const bitsNode: Node = storage(bitsAttribute, "uint", unitCapacity);
+    const depthNode: Node = storage(depthAttribute, "uvec2", visibleCapacity);
     const occlusion = this.#occlusion;
-    const hzbNode: Node = read(occlusion.pyramid, "float", occlusion.pyramid.array.length);
     const planes = this.#planes;
     const cameraPosition = this.#cameraPosition;
     const projectionScale = this.#projectionScale;
@@ -917,7 +1379,6 @@ export class ClusterScene {
     const minPixels = this.#minPixels;
     const proxyPixels = this.#proxyPixels;
     const cullEnabled = this.#cullEnabled;
-    const hidden = occlusionTest(hzbNode, occlusion);
 
     const inFrustum = (center: Node, radius: Node): Node => {
       let inside: Node = cullEnabled.equal(uint(0));
@@ -932,7 +1393,7 @@ export class ClusterScene {
 
     const clear = Fn(() => {
       const i = instanceIndex;
-      If(i.lessThan(uint(2 * slotCount)), () => {
+      If(i.lessThan(uint(2 * slotCapacity)), () => {
         argsPlain.element(i.mul(4).add(1)).assign(uint(0));
       });
       If(i.lessThan(uint(2)), () => {
@@ -941,7 +1402,7 @@ export class ClusterScene {
       If(i.lessThan(uint(STAT_WORDS)), () => {
         argsPlain.element(i.add(statsAt)).assign(uint(0));
       });
-    })().compute(Math.max(2 * slotCount, STAT_WORDS), [64]);
+    })().compute(Math.max(2 * slotCapacity, STAT_WORDS), [64]);
 
     /** Appends `pair` to slot `target`'s run (cluster or proxy), and to the depth list when the run's material hides what is behind it and `depth` holds; returns where in the run. */
     const append = (target: Node, pair: Node, depth: boolean): Node => {
@@ -953,7 +1414,7 @@ export class ClusterScene {
       if (depth) {
         If(run.z.notEqual(uint(0)), () => {
           // Proxies' runs follow the slots' own: their pairs go to the second depth draw.
-          const proxy = target.greaterThanEqual(uint(slotCount));
+          const proxy = target.greaterThanEqual(uint(slotCapacity));
           const slotOf = select(proxy, uint(depthArgs + 4 + 1), uint(depthArgs + 1));
           const place = (atomicAdd(argsNode.element(slotOf), uint(1)) as Node).toVar();
           If(place.lessThan(select(proxy, uint(proxyCapacity), uint(clusterCapacity))), () => {
@@ -971,16 +1432,22 @@ export class ClusterScene {
     /**
      * The cull of one phase: `all` without occlusion; `first` only what
      * was drawn and not hidden last frame (its depth then drawn into the
-     * pyramid); `second` the rest, against the pyramid, writing what is
-     * drawn and not hidden for the next frame.
+     * pyramid); `second` the rest, against the pyramid (as it is when the
+     * cull is made), writing what is drawn and not hidden for the next
+     * frame.
      */
-    const makeCull = (phase: "all" | "first" | "second"): Node =>
-      Fn(() => {
+    const makeCull = (phase: "all" | "first" | "second"): Node => {
+      const hidden = phase === "second" ? occlusionTest(read(occlusion.pyramid, "float", occlusion.pyramid.array.length), occlusion) : null;
+      return Fn(() => {
         const unit = instanceIndex;
         const work = unitsNode.element(unit).toVar();
         const inst = work.x;
         const first = work.y;
         const slot = work.w;
+        // A unit of a draw's instances past its live ones, or of no draw.
+        If(inst.greaterThanEqual(runRow(slot).w), () => {
+          Return();
+        });
         const last = (phase === "first" ? bitsNode.element(unit) : uint(0)).toVar();
         if (phase === "first") {
           If(last.equal(uint(0)), () => {
@@ -1002,7 +1469,7 @@ export class ClusterScene {
           if (phase === "second") bitsNode.element(unit).assign(uint(0));
           Return();
         });
-        if (phase === "second") {
+        if (hidden !== null) {
           // Hidden as a whole: its clusters untested, the instance counted once among the hidden.
           If(hidden(center, radius), () => {
             If(first.equal(uint(0)), () => {
@@ -1022,7 +1489,7 @@ export class ClusterScene {
             Loop({ start: uint(0), end: meshData.w, type: "uint", condition: "<" }, ({ i }: { i: Node }) => {
               const proxy = meshData.z.add(i);
               const target = slot.add(i);
-              const at = append(target.add(uint(slotCount)), uvec2(inst, proxy), phase === "first");
+              const at = append(target.add(uint(slotCapacity)), uvec2(inst, proxy), phase === "first");
               // The first of each {@link PROXY_PACK} takes a draw instance for them all.
               If(at.mod(uint(PROXY_PACK)).equal(uint(0)), () => {
                 append(target, uvec2(at, target.bitOr(uint(PACKED))), false);
@@ -1066,7 +1533,7 @@ export class ClusterScene {
           If(inFrustum(sphereCenter, sphere.w.mul(scale)).not(), () => {
             Continue();
           });
-          if (phase === "second") {
+          if (hidden !== null) {
             // Hidden: not drawn, and tested again next frame; drawn last frame: drawn already by the first phase.
             If(hidden(sphereCenter, sphere.w.mul(scale)), () => {
               occluded.addAssign(1);
@@ -1092,7 +1559,8 @@ export class ClusterScene {
           stat(0, drawn);
           stat(1, count);
         });
-      })().compute(Math.max(1, unitCount), [64]);
+      })().compute(Math.max(1, arenas.units.end), [64]);
+    };
 
     const cull = makeCull("all");
     const cullFirst = makeCull("first");
@@ -1101,7 +1569,7 @@ export class ClusterScene {
     // A draw's count past its run (more clusters than its original ones) is cut back to the run.
     const clamp = Fn(() => {
       const i = instanceIndex;
-      If(i.lessThan(uint(2 * slotCount)), () => {
+      If(i.lessThan(uint(2 * slotCapacity)), () => {
         const count = argsPlain.element(i.mul(4).add(1));
         count.assign(min(count, runRow(i).y));
       });
@@ -1109,15 +1577,15 @@ export class ClusterScene {
         const count = argsPlain.element(i.mul(4).add(depthArgs + 1));
         count.assign(min(count, select(i.equal(uint(0)), uint(clusterCapacity), uint(proxyCapacity)) as Node));
       });
-    })().compute(Math.max(1, 2 * slotCount), [64]);
+    })().compute(2 * slotCapacity, [64]);
 
     // The vertex stage: the pair of the draw instance, the corner of the vertex index.
     // A pack of proxies: each run of {@link PROXY_VERTICES} vertices the
     // pair of one proxy of the slot's, past the slot's count a degenerate one.
-    const pairs = read(visibleAttribute, "uvec2", Math.max(1, visibleCount));
+    const pairs = read(visibleAttribute, "uvec2", visibleCapacity);
     const drawn: Node = pairs.element(new IndexNode(IndexNode.INSTANCE));
     const packedPair = drawn.y.greaterThanEqual(uint(PACKED));
-    const proxySlot = drawn.y.bitAnd(uint(PACKED - 1)).add(uint(slotCount));
+    const proxySlot = drawn.y.bitAnd(uint(PACKED - 1)).add(uint(slotCapacity));
     const proxyAt = drawn.x.add(vertexIndex.div(PROXY_VERTICES));
     const tablesRead = read(tableAttribute, "uvec4", tables.length / 4);
     const proxyRun = tablesRead.element(proxySlot.add(runRows));
@@ -1128,12 +1596,12 @@ export class ClusterScene {
     source.setInterpolation("flat");
     const cluster = tablesRead.element(pair.y.mul(2).add(clusterRows));
     const corner = select(local.div(3).lessThan(cluster.w.bitAnd(uint(255))).and(packedPair.not().or(proxyAt.lessThan(proxies))), local, uint(0));
-    const vertex = read(indexAttribute, "uint", Math.max(1, indexCount)).element(cluster.z.add(corner));
-    const raw = read(vertexAttribute, "uvec4", Math.max(1, vertexCount)).element(vertex);
-    const extra = read(extraAttribute, "uvec4", Math.max(1, vertexCount)).element(vertex);
-    const placement = read(instanceInfoAttribute, "uvec4", Math.max(1, instanceCount)).element(source);
+    const vertex = read(indexAttribute, "uint", indexCapacity).element(cluster.z.add(corner));
+    const raw = read(vertexAttribute, "uvec4", vertexCapacity).element(vertex);
+    const extra = read(extraAttribute, "uvec4", vertexCapacity).element(vertex);
+    const placement = read(instanceInfoAttribute, "uvec4", instanceCapacity).element(source);
     const decode: Node = bitcast(tablesRead.element(placement.x.mul(3).add(2)), "vec4");
-    const matrices = read(matrixAttribute, "vec4", 4 * Math.max(1, instanceCount));
+    const matrices = read(matrixAttribute, "vec4", 4 * instanceCapacity);
     const world: Node = mat4(matrices.element(source.mul(4)), matrices.element(source.mul(4).add(1)), matrices.element(source.mul(4).add(2)), matrices.element(source.mul(4).add(3)));
     const pulled: Record<string, Node> = {
       position: vec3(unpackSnorm2x16(raw.x) as Node, (unpackSnorm2x16(raw.y) as Node).x).mul(decode.x).add(decode.yzw),
@@ -1156,11 +1624,11 @@ export class ClusterScene {
     const pickContext = overrideNodes(overrides(placement.z), context({ getAttribute }));
 
     // The depth draws: the first phase's pairs, positions only.
-    const depthPair: Node = read(depthAttribute, "uvec2", Math.max(1, visibleCount)).element(new IndexNode(IndexNode.INSTANCE));
+    const depthPair: Node = read(depthAttribute, "uvec2", visibleCapacity).element(new IndexNode(IndexNode.INSTANCE));
     const depthCluster = tablesRead.element(depthPair.y.mul(2).add(clusterRows));
     const depthCorner = select(vertexIndex.div(3).lessThan(depthCluster.w.bitAnd(uint(255))), vertexIndex, uint(0));
-    const depthRaw = read(vertexAttribute, "uvec4", Math.max(1, vertexCount)).element(read(indexAttribute, "uint", Math.max(1, indexCount)).element(depthCluster.z.add(depthCorner)));
-    const depthPlacement = read(instanceInfoAttribute, "uvec4", Math.max(1, instanceCount)).element(depthPair.x);
+    const depthRaw = read(vertexAttribute, "uvec4", vertexCapacity).element(read(indexAttribute, "uint", indexCapacity).element(depthCluster.z.add(depthCorner)));
+    const depthPlacement = read(instanceInfoAttribute, "uvec4", instanceCapacity).element(depthPair.x);
     const depthDecode: Node = bitcast(tablesRead.element(depthPlacement.x.mul(3).add(2)), "vec4");
     const depthWorld: Node = mat4(matrices.element(depthPair.x.mul(4)), matrices.element(depthPair.x.mul(4).add(1)), matrices.element(depthPair.x.mul(4).add(2)), matrices.element(depthPair.x.mul(4).add(3)));
     const depthPosition = vec3(unpackSnorm2x16(depthRaw.x) as Node, (unpackSnorm2x16(depthRaw.y) as Node).x).mul(depthDecode.x).add(depthDecode.yzw);
@@ -1180,28 +1648,69 @@ export class ClusterScene {
       depthScene.add(draw);
     }
 
+    // Uploads: one thread that never gets past its test, binding every
+    // buffer the CPU writes in place. three.js uploads a storage buffer's
+    // changed ranges when a pass binding it is dispatched or an object
+    // binding it is refreshed, and the vertex stage's buffers are bound by
+    // bundled draws, which are not (`fixedNodes.ts`).
+    const upload = Fn(() => {
+      If(instanceIndex.equal(uint(DEAD)), () => {
+        const sum = read(vertexAttribute, "uvec4", vertexCapacity)
+          .element(0)
+          .x.add(read(extraAttribute, "uvec4", vertexCapacity).element(0).x)
+          .add(read(indexAttribute, "uint", indexCapacity).element(0))
+          .add(tableNode.element(0).x)
+          .add(bitcast(matrixNode.element(0).x, "uint"))
+          .add(read(instanceInfoAttribute, "uvec4", instanceCapacity).element(0).x)
+          .add(unitsNode.element(0).x)
+          .add(bitsNode.element(0));
+        argsPlain.element(statsAt).assign(sum);
+      });
+    })().compute(1, [1]);
+
+    const packMs = performance.now() - started;
     this.#packed = {
+      layout,
+      buffers,
       argsAttribute,
       statsAt,
       visibleAttribute,
-      slots,
       context: contextNode,
       pickContext,
-      clear,
-      cull,
-      clamp,
+      upload,
+      culls: [cull, cullFirst, cullSecond],
       passes: [clear, cull, clamp],
       firstPasses: [clear, cullFirst],
       secondPasses: [cullSecond, clamp],
       depthScene,
       depthMaterial,
-      residency: { meshes: meshIndex.size, draws: draws.length, instances: instanceCount, clusters: clusterCount, triangles, gpuBytes, packMs: 0 },
+      packMs,
       attributes,
     };
-    this.#packed = { ...this.#packed, residency: { ...this.#packed.residency, packMs: performance.now() - started } };
+    const u = this.#updates;
+    const compacted = reason.startsWith("compact");
+    this.#updates = { ...u, full: u.full + 1, compactions: u.compactions + (compacted ? 1 : 0), uploadedBytes: u.uploadedBytes + gpuBytes, last: { kind: "full", reason, ms: packMs, bytes: gpuBytes } };
+    this.#residency = this.#measure();
     for (const draw of this.#draws.values()) this.style(draw.object);
     this.onRepacked?.();
   }
+}
+
+/** The indices buffer `mesh` takes: its levels', then its proxies'. */
+function indexCount(mesh: ClusterMesh): number {
+  let count = mesh.set.indices.length;
+  for (const proxy of mesh.proxies) count += proxy.length;
+  return count;
+}
+
+/** Why the buffers should be compacted (packed again from nothing), or `null`: an arena of some size mostly empty, or mostly holes. */
+function compactionDue(arenas: Arenas): string | null {
+  for (const [name, arena] of Object.entries(arenas) as [string, RangeArena][]) {
+    if (arena.capacity < COMPACT_MIN) continue;
+    if (4 * arena.used < arena.capacity) return `compacted: ${name} under a quarter full`;
+    if (2 * (arena.end - arena.used) > arena.capacity) return `compacted: ${name} half holes`;
+  }
+  return null;
 }
 
 /**

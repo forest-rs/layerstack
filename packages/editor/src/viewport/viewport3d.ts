@@ -453,6 +453,16 @@ export class Viewport {
   }
 
   /**
+   * Packs the clustered draws' buffers again from nothing and draws: for
+   * compacting them, and for checking that changes written in place draw
+   * what a packing from nothing does.
+   */
+  repackClusters(): void {
+    this.#clusters.repack();
+    this.#draw();
+  }
+
+  /**
    * The clusters the GPU's last cut drew for the item `id`, as (instance,
    * cluster) pairs within the item and its mesh's set, read back: for
    * checking the cut against the library's, with the set's key and the

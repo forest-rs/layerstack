@@ -216,15 +216,17 @@ function ClusterLine({ viewport }: { viewport: Viewport }) {
   const residency = viewport.clusterResidency;
   if (residency.draws === 0) return null;
   const stats = viewport.clusterStats;
+  const { updates } = residency;
+  const last = updates.last;
   return (
     <div
       className="text-white/60"
-      title="Meshes with a prebuilt cluster set are culled and cut on the GPU each frame: the triangles drawn are the cut's, at the pixel error shown; hidden are the clusters (and whole instances) occlusion culling left out; held are every level's, once per mesh"
+      title="Meshes with a prebuilt cluster set are culled and cut on the GPU each frame: the triangles drawn are the cut's, at the pixel error shown; hidden are the clusters (and whole instances) occlusion culling left out; held are every level's, once per mesh. Their buffers are packed whole when a change outgrows them, and otherwise each change writes its own records in place"
     >
       clustered: {residency.meshes} meshes, {residency.draws} draws, {residency.instances.toLocaleString()} instances · {stats === null ? "…" : stats.triangles.toLocaleString()} triangles
       drawn at {viewport.clusterView.pixelError} px{stats !== null && stats.occluded > 0 ? `, ${stats.occluded.toLocaleString()} hidden` : ""} ({residency.triangles.toLocaleString()} held,{" "}
-      {formatBytes(residency.gpuBytes)}, packed in{" "}
-      {residency.packMs.toFixed(0)} ms)
+      {formatBytes(residency.gpuBytes)}; packed {updates.full}× (the last in {residency.packMs.toFixed(0)} ms{updates.compactions > 0 ? `, ${updates.compactions} to compact` : ""}),{" "}
+      {updates.partial} {updates.partial === 1 ? "change" : "changes"} written in place{last?.kind === "partial" ? ` (the last ${formatBytes(last.bytes)} in ${last.ms.toFixed(1)} ms)` : ""})
     </div>
   );
 }

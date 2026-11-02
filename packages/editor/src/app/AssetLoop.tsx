@@ -135,6 +135,7 @@ function LogPane({ session, toggle }: { session: Session; toggle: React.ReactNod
     supply: "text-foreground",
     load: "text-emerald-400",
     fail: "text-destructive",
+    release: "text-amber-400",
   };
   return (
     <div className="flex h-full min-h-0 flex-col">

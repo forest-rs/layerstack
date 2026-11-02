@@ -4,12 +4,11 @@
 // The editor's model, with no DOM: a stage, the host's fetch, the
 // stage's undo history, where edits go, and logs of what crossed the
 // boundary. The React app (`../app`) drives it through `../store.ts`.
-import { UndoHistory } from "@forest-rs/layerstack";
+import { EditTarget, UndoHistory } from "@forest-rs/layerstack";
 import type {
   Changes,
   Edit,
   EditReceipt,
-  EditTarget,
   HistoryStep,
   Layer,
   Layerstack,
@@ -17,6 +16,7 @@ import type {
   LoadPolicy,
   LoadResult,
   OpenOptions,
+  ReleasedLayers,
   SaveResult,
   Stage,
   ValueInput,
@@ -61,7 +61,7 @@ export interface LayerFile {
 export interface LoopEntry {
   /** The action that ran the loop (`open`, `finish=chrome`). */
   readonly cause: string;
-  readonly phase: "want" | "fetch" | "supply" | "load" | "fail";
+  readonly phase: "want" | "fetch" | "supply" | "load" | "fail" | "release";
   readonly identifier: string;
   /** The rest, in words. */
   readonly detail: string;
@@ -165,6 +165,8 @@ export class Session implements Disposable {
   #cause = "open";
   #fetched = 0;
   #fetchedBytes = 0;
+  #releasedLayers = 0;
+  #releasedBytes = 0;
 
   private constructor(
     layerstack: Layerstack,
@@ -226,6 +228,29 @@ export class Session implements Disposable {
   /** The assets fetched so far, and their bytes. */
   get fetched(): { readonly assets: number; readonly bytes: number } {
     return { assets: this.#fetched, bytes: this.#fetchedBytes };
+  }
+
+  /** The layers {@link Session.releaseUnusedLayers} released so far, and the bytes they were read from. */
+  get released(): { readonly layers: number; readonly bytes: number } {
+    return { layers: this.#releasedLayers, bytes: this.#releasedBytes };
+  }
+
+  /**
+   * Releases the layers the stage no longer uses (`Stage.releaseUnusedLayers`),
+   * keeping the edit target's layer, so the memory of an unloaded payload
+   * or a muted layer comes back; the stage composes nothing differently.
+   * A layer with unsaved edits is kept. What the stage asks for again
+   * later (the payload loaded, the layer unmuted) is fetched again.
+   */
+  releaseUnusedLayers(): ReleasedLayers {
+    const target = this.target instanceof EditTarget ? this.target.layer : this.target;
+    const released = this.stage.releaseUnusedLayers(target === undefined ? [] : [target]);
+    this.#releasedLayers += released.released.length;
+    this.#releasedBytes += released.sourceBytes;
+    for (const layer of released.released) {
+      this.#log("release", layer.identifier, layer.sourceBytes === null ? "released" : `${layer.sourceBytes} B released`);
+    }
+    return released;
   }
 
   /**
@@ -349,14 +374,17 @@ export class Session implements Disposable {
    * Mutes or unmutes `layer`: the stage recomposes without or with its
    * opinions, heard as one change. Muting is the stage's state, not an
    * edit, so it is not on the undo stack. What an unmuted layer asks for
-   * that the stage has not read is supplied. Returns whether the muting
-   * changed.
+   * that the stage has not read is supplied. Muting releases the layers
+   * the stage no longer uses ({@link Session.releaseUnusedLayers}), the
+   * muted one among them unless it has unsaved edits; it is then unmuted
+   * by identifier, and fetched again. Returns whether the muting changed.
    */
-  async setMuted(layer: Layer, muted: boolean): Promise<boolean> {
-    const name = layer.identifier ?? "(anonymous)";
+  async setMuted(layer: Layer | string, muted: boolean): Promise<boolean> {
+    const name = typeof layer === "string" ? layer : (layer.identifier ?? "(anonymous)");
     this.#cause = `${muted ? "mute" : "unmute"} ${name}`;
     const changed = muted ? this.stage.muteLayer(layer) : this.stage.unmuteLayer(layer);
-    if (!muted) await this.supplyUnavailable(this.#cause);
+    if (muted) this.releaseUnusedLayers();
+    else await this.supplyUnavailable(this.#cause);
     return changed;
   }
 

@@ -146,6 +146,7 @@ export function Toolbar() {
           <span className="ml-2 font-mono text-[11px] text-muted-foreground tabular-nums">
             {session.stage.layers().length} layers · {draws} draws · {formatBytes(session.fetched.bytes)} fetched ·{" "}
             {formatBytes(store.layerstack.transfer().memoryBytes)} memory
+            {session.released.layers > 0 && ` · ${formatBytes(session.released.bytes)} released`}
           </span>
         )}
       </div>

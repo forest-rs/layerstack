@@ -40,8 +40,20 @@ export function onRendererLost(listener: () => void): () => void {
 }
 
 async function start(): Promise<WebGPURenderer> {
+  // The adapter's largest storage buffers, and as many as it binds: the
+  // clustered draws (`clusters.ts`) keep every instance's matrix and every
+  // visible cluster of a large element in one buffer each, past WebGPU's
+  // default 128 MiB binding, and their cull reads 14 buffers, past the
+  // default 8 a stage.
+  const gpu = (navigator as { gpu?: { requestAdapter(): Promise<{ limits: Record<string, number> } | null> } }).gpu;
+  const limits = (await gpu?.requestAdapter())?.limits;
+  const requiredLimits: Record<string, number> = {};
+  for (const name of ["maxStorageBufferBindingSize", "maxBufferSize", "maxStorageBuffersPerShaderStage", "maxStorageBuffersInVertexStage", "maxStorageBuffersInFragmentStage"]) {
+    const value = limits?.[name];
+    if (typeof value === "number") requiredLimits[name] = value;
+  }
   // Multisampled (4×) as the WebGL renderer's default framebuffer was.
-  const renderer = new WebGPURenderer({ antialias: true });
+  const renderer = new WebGPURenderer({ antialias: true, requiredLimits });
   await renderer.init();
   if ((renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend !== true) {
     renderer.dispose();

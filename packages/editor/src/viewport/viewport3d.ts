@@ -218,8 +218,23 @@ import { onRendererLost, sharedRenderer } from "./gpu.ts";
 import { SkinnedDraw, withSkinning } from "./skinning.ts";
 import { TextureStore, surfaceMaterial, uvChannels } from "./surfaces.ts";
 import { standinGeometry, standinMaterials, standinTextured } from "./standins.ts";
+import { ClusterScene, MAX_CLUSTER_TRIANGLES, clusterable, packVertices } from "./clusters.ts";
+import type { PackedVertices } from "./clusters.ts";
+import type { ClusterResidency, ClusterStats, ClusterView } from "./clusters.ts";
+import { clusterKey, readClusterFile } from "./clusterFile.ts";
 import type { AssetExists, AssetReader, TextureStats } from "./surfaces.ts";
 import type { ViewItem, ViewportScene, ViewportUpdate } from "../model/draws.ts";
+
+/** A clustered draw's last cut, read back ({@link Viewport.clusterCut}). */
+export interface ClusterCut {
+  /** The key of the set's file. */
+  readonly key: string;
+  /** The visible clusters: each an instance of the item and a cluster of its set. */
+  readonly pairs: readonly { readonly instance: number; readonly cluster: number }[];
+  /** The world-space view the cut was chosen for. */
+  readonly camera: { readonly position: readonly number[]; readonly projectionY: number; readonly viewportHeight: number; readonly zNear: number };
+  readonly view: ClusterView;
+}
 
 /** The lit materials the viewport makes: a surface's, a stand-in card's, or a plain color's. */
 type LitMaterial = MeshStandardNodeMaterial;
@@ -302,6 +317,18 @@ export class Viewport {
   #deviceLost = false;
   /** Stops listening for a lost device. */
   readonly #unlisten: () => void;
+  /** The draws of meshes with a prebuilt cluster set, culled and cut on the GPU (`clusters.ts`). */
+  readonly #clusters = new ClusterScene();
+  /** The keys of the prebuilt sets the dev server has; `null` until listed (or without a server). */
+  #clusterKeys: Set<string> | null = null;
+  /** Buffers whose set is being fetched, by buffer key: the geometry it is for, so a rebuilt buffer drops the answer. */
+  readonly #clusterLoads = new Map<number, BufferGeometry>();
+  /** Each clustered buffer's set key, for checking a cut against the set's file. */
+  readonly #clusterKeyOf = new Map<number, string>();
+  /** Buffers looked up before the server listed its sets, fetched once it has (when it has theirs). */
+  #clusterWaiting: { buffer: number; geometry: BufferGeometry; key: string; vertices: PackedVertices; decode: readonly [number, number, number, number] }[] = [];
+  /** Buffers whose set arrived, their draws not yet made again ({@link #convertArrived}). */
+  readonly #clusterArrived = new Set<number>();
 
   /**
    * A view drawing into `canvas` with `renderer`, the shared one
@@ -347,6 +374,67 @@ export class Viewport {
     this.#resizer = new ResizeObserver(() => this.#resize());
     this.#resizer.observe(canvas);
     this.#unlisten = onRendererLost(() => this.#lost());
+    this.#clusters.onRepacked = () => {
+      // New arguments and contexts: every bundle recorded again, the new
+      // pipelines compiled once this render is done (a packing happens
+      // within one, and three.js compiles one scene at a time).
+      this.#draws.touchAll();
+      setTimeout(() => this.#compile(), 0);
+    };
+    // The prebuilt cluster sets the dev server holds (`vite.config.ts`); none elsewhere.
+    fetch(new URL("/@clusters/index.json", window.location.href)).then(
+      async (response) => {
+        this.#listed(response.ok && (response.headers.get("content-type") ?? "").includes("json") ? new Set((await response.json()) as string[]) : new Set());
+      },
+      () => this.#listed(new Set()),
+    );
+  }
+
+  /** The server's sets listed: the buffers looked up meanwhile fetched when it has theirs. */
+  #listed(keys: Set<string>): void {
+    this.#clusterKeys = keys;
+    const waiting = this.#clusterWaiting;
+    this.#clusterWaiting = [];
+    for (const { buffer, geometry, key, vertices, decode } of waiting) {
+      if (keys.has(key) && this.#geometries.get(buffer) === geometry) this.#fetchClusters(buffer, geometry, key, vertices, decode);
+    }
+  }
+
+  /** How the clustered draws choose their cuts: the pixel error, the smallest instance drawn, culling. */
+  get clusterView(): ClusterView {
+    return this.#clusters.view;
+  }
+
+  /** Sets how the clustered draws choose their cuts, and draws again. */
+  setClusterView(view: Partial<ClusterView>): void {
+    Object.assign(this.#clusters.view, view);
+    this.#draw();
+  }
+
+  /** What the clustered draws drew in a recent frame (read back every few frames); `null` before one. */
+  get clusterStats(): ClusterStats | null {
+    return this.#clusters.stats;
+  }
+
+  /** What the clustered draws hold: meshes, draws, instances, clusters, every level's triangles and the bytes uploaded. */
+  get clusterResidency(): ClusterResidency {
+    return this.#clusters.residency;
+  }
+
+  /**
+   * The clusters the GPU's last cut drew for the item `id`, as (instance,
+   * cluster) pairs within the item and its mesh's set, read back: for
+   * checking the cut against the library's, with the set's key and the
+   * world-space view the cut was chosen for. `null` for an item not drawn
+   * through its cluster set.
+   */
+  async clusterCut(id: number): Promise<ClusterCut | null> {
+    const object = this.#objects.get(id);
+    if (object === undefined || !this.#clusters.isDraw(object)) return null;
+    const pairs = await this.#clusters.visible(this.#renderer, object);
+    const key = this.#clusterKeyOf.get(object.userData.clusterKey as number) ?? "";
+    const camera = this.#clusters.cutCamera;
+    return { key, pairs, camera: { ...camera, position: [...camera.position] }, view: { ...this.#clusters.view } };
   }
 
   /**
@@ -358,6 +446,12 @@ export class Viewport {
   #lost(): void {
     this.#deviceLost = true;
     for (const id of [...this.#objects.keys()]) this.#drop(id);
+    // The clustered draws' buffers went with the device: their sets are fetched again as the restored buffers are made.
+    this.#clusters.dispose();
+    this.#clusterLoads.clear();
+    this.#clusterArrived.clear();
+    this.#clusterWaiting = [];
+    this.#clusterKeyOf.clear();
     for (const geometry of this.#geometries.values()) geometry.dispose();
     this.#geometries.clear();
     for (const material of this.#retired) material.dispose();
@@ -447,9 +541,18 @@ export class Viewport {
     // A run of ids per object, one per instance it draws, and its pick material in place of its own.
     pick.ids.clear();
     for (const [id, object] of this.#objects) {
-      object.userData.pickBase = pick.ids.add(id, object instanceof InstancedMesh ? object.count : 1) ?? 0;
+      const clustered = this.#clusters.isDraw(object);
+      object.userData.pickBase = pick.ids.add(id, object instanceof InstancedMesh ? object.count : clustered ? this.#clusters.instances(object) : 1) ?? 0;
       pick.swapped.set(object, object.material);
-      object.material = isPoints(object) ? pick.points : pick.surfaces;
+      object.material = isPoints(object) ? pick.points : clustered ? pick.clustered(this.#clusters.pickContext) : pick.surfaces;
+      // A clustered draw of several subsets draws through its parts.
+      if (clustered) {
+        for (const part of this.#clusters.parts(object)) {
+          if (part === object) continue;
+          pick.swapped.set(part, part.material);
+          part.material = object.material;
+        }
+      }
     }
     const camera = this.#prepareCamera();
     pick.projection.copy(camera.projectionMatrix);
@@ -526,6 +629,7 @@ export class Viewport {
     for (const geometry of this.#geometries.values()) geometry.dispose();
     this.#geometries.clear();
     for (const path of [...this.#lights.keys()]) this.#dropLight(path);
+    this.#clusters.dispose();
     this.#target.dispose();
   }
 
@@ -547,12 +651,14 @@ export class Viewport {
     if (reset) {
       for (const id of [...this.#objects.keys()]) this.#drop(id);
       for (const geometry of this.#geometries.values()) geometry.dispose();
+      for (const key of this.#geometries.keys()) this.#clusters.dropMesh(key);
       this.#geometries.clear();
     }
     for (const id of update.removed) this.#drop(id);
     for (const key of update.freed) {
       this.#geometries.get(key)?.dispose();
       this.#geometries.delete(key);
+      this.#clusters.dropMesh(key);
     }
     // Each buffer's first view, and the objects drawing each buffer, once:
     // the loops below look them up by key.
@@ -575,10 +681,19 @@ export class Viewport {
       const view = views.get(key);
       if (view === undefined) continue;
       this.#geometries.get(key)?.dispose();
+      // A rebuilt buffer's set is another's: its draws drawn as before until its own arrives.
+      const wasClustered = this.#clusters.hasMesh(key);
+      this.#clusters.dropMesh(key);
       const geometry = this.#makeGeometry(view);
       this.#geometries.set(key, geometry);
       for (const id of drawing.get(key) ?? []) {
-        this.#objects.get(id)!.geometry = geometry;
+        const object = this.#objects.get(id)!;
+        if (wasClustered && this.#clusters.isDraw(object)) {
+          this.#drop(id);
+          if (!update.added.has(id)) this.#add(items.get(id) ?? view, selected);
+          continue;
+        }
+        object.geometry = geometry;
         replace.add(id);
       }
     }
@@ -653,6 +768,7 @@ export class Viewport {
       if (view === undefined || object === undefined || added.has(id)) continue;
       this.#retired.push(...[object.material].flat());
       object.material = restyled(object, materials(view, selected, scene.materials, this.#textures));
+      if (this.#clusters.isDraw(object)) this.#clusters.style(object);
       this.#draws.drawDirectly(object);
     }
     this.#selected = selected;
@@ -698,8 +814,13 @@ export class Viewport {
     }
     const placements = view.item.matrices.length / 16;
     const styled = materials(view, selected, this.#applied?.materials ?? new Map(), this.#textures);
-    const object: Drawn =
-      view.skin?.mode === "gpu"
+    // Clustered: one part per subset (non-empty range), as the set was built.
+    const ranges = view.buffers.mesh.ranges.flatMap((range, index) => (range.count > 0 ? [index] : []));
+    const clustered =
+      this.#clusters.hasMesh(view.item.buffer) && clusterDrawable(view) && (Array.isArray(styled) ? ranges.length : 1) === this.#clusters.subsets(view.item.buffer);
+    const object: Drawn = clustered
+      ? this.#clusters.makeDraw(view.item.buffer, styled as LitMaterial | LitMaterial[], Array.isArray(styled) ? ranges : [0])
+      : view.skin?.mode === "gpu"
         ? skinnedMesh(geometry, styled as LitMaterial | LitMaterial[], view)
         : view.kind === "lines" || view.kind === "standinLines"
         ? new LineSegments(geometry, styled as LineBasicNodeMaterial)
@@ -759,6 +880,11 @@ export class Viewport {
     object.visible = placements > 0;
     // Row-by-row row-vector matrices are three.js's column-major column-vector
     // ones; each is followed by the geometry's position decode, if it has one.
+    if (this.#clusters.isDraw(object)) {
+      // The GPU culls and places each instance: its matrix without the decode, which the scene applies per mesh.
+      this.#clusters.place(object, matrices);
+      return;
+    }
     const decode = (object.geometry.userData.decode as Matrix4 | undefined) ?? null;
     if (!(object instanceof InstancedMesh)) {
       // A skinned draw is placed by its skeleton ({@link #pose}).
@@ -792,6 +918,7 @@ export class Viewport {
    */
   #makeGeometry(view: ViewItem): BufferGeometry {
     const geometry = makeGeometry(view);
+    this.#findClusters(view, geometry);
     const position = geometry.getAttribute("position");
     if (geometry.userData.decode === undefined || geometry.userData.skinned === true || geometry.index === null || position === undefined) return geometry;
     geometry.userData.key = view.item.buffer;
@@ -799,6 +926,73 @@ export class Viewport {
     this.#pending.add(geometry);
     geometry.addEventListener("dispose", () => this.#pending.delete(geometry));
     return geometry;
+  }
+
+  /**
+   * Looks for a prebuilt cluster set of the item's buffer (by the key of
+   * its content, `clusterFile.ts`) while its arrays are still held, and
+   * fetches it; once it arrives, the draws of the buffer are made again
+   * as clustered draws. Until then, and when there is none, they draw as
+   * any other.
+   */
+  #findClusters(view: ViewItem, geometry: BufferGeometry): void {
+    const keys = this.#clusterKeys;
+    if ((keys !== null && keys.size === 0) || !clusterDrawable(view) || !clusterable(view.buffers.vertices)) return;
+    const key = clusterKey(view.buffers.vertices);
+    if (key === null || (keys !== null && !keys.has(key))) return;
+    const buffer = view.item.buffer;
+    const vertices = packVertices(view.buffers.vertices);
+    const { scale, offset } = view.buffers.vertices.decode;
+    const decode = [scale, offset[0], offset[1], offset[2]] as const;
+    // Before the server has listed its sets: kept (the arrays may be released meanwhile) until it has.
+    if (keys === null) {
+      this.#clusterWaiting.push({ buffer, geometry, key, vertices, decode });
+      return;
+    }
+    this.#fetchClusters(buffer, geometry, key, vertices, decode);
+  }
+
+  /** Fetches the set `key` of buffer `buffer` (drawn by `geometry`, its vertices packed) and, once every fetch is done, draws it clustered. */
+  #fetchClusters(buffer: number, geometry: BufferGeometry, key: string, vertices: PackedVertices, decode: readonly [number, number, number, number]): void {
+    this.#clusterLoads.set(buffer, geometry);
+    fetch(new URL(`/@clusters/${key}.lsclust`, window.location.href))
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`cluster set ${key}: ${response.status}`);
+        const set = readClusterFile(await response.arrayBuffer());
+        // A draw instance runs the vertices of the largest cluster the scene draws: a larger one would be cut short.
+        if (set.clusters.triangleCount.some((triangles) => triangles > MAX_CLUSTER_TRIANGLES)) throw new Error(`cluster set ${key}: clusters over ${MAX_CLUSTER_TRIANGLES} triangles`);
+        // The buffer was rebuilt or freed meanwhile: the set is not its.
+        if (this.#clusterLoads.get(buffer) !== geometry || this.#geometries.get(buffer) !== geometry) return;
+        this.#clusterLoads.delete(buffer);
+        this.#clusters.addMesh(buffer, set, vertices, decode);
+        this.#clusterKeyOf.set(buffer, key);
+        this.#clusterArrived.add(buffer);
+        this.#convertArrived();
+      })
+      .catch((error: unknown) => {
+        this.#clusterLoads.delete(buffer);
+        console.warn(error);
+        this.#convertArrived();
+      });
+  }
+
+  /**
+   * Once every set asked for has arrived (or failed), makes the draws of
+   * their buffers again as clustered draws, together: the scene is packed
+   * once and the new pipelines compiled once, not per set.
+   */
+  #convertArrived(): void {
+    if (this.#clusterLoads.size > 0 || this.#clusterArrived.size === 0 || this.#applied === null) return;
+    const arrived = this.#clusterArrived;
+    for (const view of this.#applied.items) {
+      if (!arrived.has(view.item.buffer) || !this.#objects.has(view.item.id)) continue;
+      this.#drop(view.item.id);
+      this.#add(view, this.#selected);
+    }
+    arrived.clear();
+    this.#link(this.#applied);
+    this.#compile();
+    this.#draw();
   }
 
   #addLight(light: LightItem): void {
@@ -881,6 +1075,7 @@ export class Viewport {
       if (object === undefined) continue;
       this.#retired.push(...[object.material].flat());
       object.material = restyled(object, materials(view, this.#selected, scene.materials, this.#textures));
+      if (this.#clusters.isDraw(object)) this.#clusters.style(object);
       this.#draws.drawDirectly(object);
     }
     this.#link(scene);
@@ -898,6 +1093,7 @@ export class Viewport {
     const object = this.#objects.get(id);
     if (object === undefined) return;
     this.#draws.remove(object);
+    this.#clusters.removeDraw(object as Mesh);
     for (const material of [object.material].flat()) material.dispose();
     if (object instanceof InstancedMesh) object.dispose();
     // A point set's geometry is its own (a quad per point over its samples).
@@ -962,6 +1158,8 @@ export class Viewport {
     const camera = this.#prepareCamera();
     this.#cameraLight.position.setFromMatrixPosition(camera.matrixWorld);
     this.#setState();
+    // The clustered draws' cut for this camera, on the GPU, before the draws read it.
+    this.#clusters.prepare(this.#renderer, camera, this.#canvas.height);
     this.#renderer.render(this.#scene, camera);
     this.#releaseUploaded();
   }
@@ -1027,6 +1225,7 @@ export class Viewport {
       // copies of its materials, and with them render objects of its own.
       this.#retired.push(...[object.material].flat());
       object.material = Array.isArray(object.material) ? object.material.map((material) => material.clone()) : object.material.clone();
+      if (this.#clusters.isDraw(object)) this.#clusters.style(object);
     }
     this.#draws.keepDirect(object);
   }
@@ -1440,6 +1639,11 @@ function makeGeometry(view: ViewItem): BufferGeometry {
   return geometry;
 }
 
+/** Whether a view may draw through a cluster set: a static, unskinned mesh, not a stand-in. */
+function clusterDrawable(view: ViewItem): boolean {
+  return view.kind === "mesh" && view.skin === null && view.buffers.standin === null;
+}
+
 /** The pick target's side, in device pixels: odd, about the clicked point ({@link pickOrder}). */
 const PICK_SIZE = 7;
 
@@ -1481,6 +1685,10 @@ class Picker {
   readonly surfaces = withSkinning(new NodeMaterial());
   /** Points: the object's id alone (its quads are instances), placed as the point material places them. */
   readonly points = new PointsNodeMaterial({ sizeAttenuation: false, transparent: false });
+  /** The fragment of surfaces: the object's first id plus the instance's index. */
+  readonly #id: Node;
+  /** Clustered draws: the surfaces' fragment, in the clustered draws' context (made again when it changes). */
+  #clustered: NodeMaterial | null = null;
 
   constructor() {
     for (const material of [this.surfaces, this.points]) {
@@ -1490,16 +1698,32 @@ class Picker {
     }
     const id = varying(pickBytes(this.#base.add(instanceIndex))) as Node;
     id.setInterpolation("flat");
+    this.#id = id;
     this.surfaces.fragmentNode = id;
     this.points.positionNode = POINT.position;
     this.points.sizeNode = POINT.size;
     this.points.fragmentNode = pickBytes(this.#base);
   }
 
+  /** The pick material of clustered draws in `context` (the cluster scene's), made when the context changes. */
+  clustered(context: Node): NodeMaterial {
+    if (this.#clustered !== null && (this.#clustered as unknown as { contextNode: Node }).contextNode === context) return this.#clustered;
+    this.#clustered?.dispose();
+    const material = new NodeMaterial();
+    material.side = DoubleSide;
+    material.blending = NoBlending;
+    material.lights = false;
+    material.fragmentNode = this.#id;
+    (material as unknown as { contextNode: Node }).contextNode = context;
+    this.#clustered = material;
+    return material;
+  }
+
   dispose(): void {
     this.target.dispose();
     this.surfaces.dispose();
     this.points.dispose();
+    this.#clustered?.dispose();
   }
 }
 

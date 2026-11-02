@@ -16,6 +16,7 @@ import { formatBytes } from "./format.ts";
 import { LoadingOverlay } from "./LoadingOverlay.tsx";
 import { MaterialPreview } from "./MaterialPreview.tsx";
 import { Timeline } from "./Timeline.tsx";
+import type { Viewport } from "../viewport/viewport3d.ts";
 
 export function ViewportPane() {
   const store = useStore();
@@ -171,6 +172,7 @@ export function ViewportPane() {
             )}
           {textures !== undefined && textures.images > 0 && ` · ${textures.images} images${textures.capped > 0 ? ` (${textures.capped} scaled to ${textures.limit})` : ""}`}
           </div>
+          {store.viewport !== null && <ClusterLine viewport={store.viewport} />}
           {update !== null && (
             <div className="text-white/60">
               last update: +{update.added} −{update.removed} moved {update.moved} refilled {update.refilled} rebuilt {update.rebuilt} · read{" "}
@@ -195,6 +197,33 @@ export function ViewportPane() {
       )}
       </div>
       <Timeline />
+    </div>
+  );
+}
+
+/**
+ * The clustered draws, when there are any: what they hold (every level of
+ * their sets, once per mesh) and what the GPU's cut drew in a recent frame,
+ * read back every few frames, so it is polled rather than rendered with
+ * the store.
+ */
+function ClusterLine({ viewport }: { viewport: Viewport }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick((tick) => tick + 1), 500);
+    return () => clearInterval(timer);
+  }, []);
+  const residency = viewport.clusterResidency;
+  if (residency.draws === 0) return null;
+  const stats = viewport.clusterStats;
+  return (
+    <div
+      className="text-white/60"
+      title="Meshes with a prebuilt cluster set are culled and cut on the GPU each frame: the triangles drawn are the cut's, at the pixel error shown; held are every level's, once per mesh"
+    >
+      clustered: {residency.meshes} meshes, {residency.draws} draws, {residency.instances.toLocaleString()} instances · {stats === null ? "…" : stats.triangles.toLocaleString()} triangles
+      drawn at {viewport.clusterView.pixelError} px ({residency.triangles.toLocaleString()} held, {formatBytes(residency.gpuBytes)}, packed in{" "}
+      {residency.packMs.toFixed(0)} ms)
     </div>
   );
 }

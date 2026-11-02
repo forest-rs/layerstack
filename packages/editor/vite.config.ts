@@ -28,6 +28,63 @@ function scenesDirectory(): string | null {
 }
 
 /**
+ * The prebuilt cluster sets: `LAYERSTACK_CLUSTER_CACHE`, else the main
+ * checkout's `.local/cluster-cache`, which `cluster_lod --cache` fills.
+ * Never committed or built; the dev server serves them.
+ */
+function clusterCacheDirectory(): string | null {
+  const configured = process.env.LAYERSTACK_CLUSTER_CACHE;
+  if (configured !== undefined) return path.resolve(configured);
+  try {
+    const common = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { encoding: "utf8" }).trim();
+    const directory = path.join(path.dirname(common), ".local", "cluster-cache");
+    return existsSync(directory) ? directory : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Serves the cluster cache under `/@clusters/` in development: `index.json`
+ * lists the keys it holds (so the viewport asks only for sets that exist),
+ * and `<key>.lsclust` is a set's file.
+ */
+function clusterCache(): Plugin {
+  return {
+    name: "layerstack-cluster-cache",
+    apply: "serve",
+    configureServer(server) {
+      const root = clusterCacheDirectory();
+      server.middlewares.use("/@clusters/", (request, response) => {
+        const name = decodeURIComponent(new URL(request.url ?? "/", "http://localhost").pathname).replace(/^\/+/, "");
+        if (root === null) {
+          response.statusCode = 404;
+          response.end();
+          return;
+        }
+        if (name === "index.json") {
+          const keys = readdirSync(root)
+            .filter((file) => file.endsWith(".lsclust"))
+            .map((file) => file.slice(0, -".lsclust".length));
+          response.setHeader("content-type", "application/json");
+          response.end(JSON.stringify(keys));
+          return;
+        }
+        const file = path.join(root, name);
+        if (!/^[0-9a-f]{16}\.lsclust$/.test(name) || !existsSync(file)) {
+          response.statusCode = 404;
+          response.end();
+          return;
+        }
+        response.setHeader("content-length", statSync(file).size);
+        response.setHeader("content-type", "application/octet-stream");
+        createReadStream(file).pipe(response);
+      });
+    },
+  };
+}
+
+/**
  * What `entry` of `directory` is, following a symbolic link (a scene kept on
  * another volume and linked in): `null` for a broken link or anything else.
  */
@@ -120,7 +177,7 @@ function localScenes(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), localScenes()],
+  plugins: [react(), tailwindcss(), localScenes(), clusterCache()],
   resolve: { alias: { "@": path.resolve(import.meta.dirname, "src") } },
   // Relative asset URLs: the built page works from any directory.
   base: "./",

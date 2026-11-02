@@ -14,6 +14,7 @@ import { ShadingSection } from "../ShadingSection.tsx";
 import { TransformSection } from "../TransformSection.tsx";
 import { InstancerView } from "../views/InstancerView.tsx";
 import { MeshView } from "../views/MeshView.tsx";
+import { CameraView, LightView, SkeletonView, XformOpsView } from "../views/TypeViews.tsx";
 
 /** Registers the built-in prim panels. */
 export function registerPrimPresentations(): void {
@@ -45,6 +46,11 @@ export function registerPrimPresentations(): void {
   }
   registerPresentation({ id: "builtin.mesh", kind: "prim", type: "Mesh", title: "Mesh", priority: 50, panel: MeshView });
   registerPresentation({ id: "builtin.point-instancer", kind: "prim", type: "PointInstancer", title: "Point instancer", priority: 50, panel: InstancerView });
+  registerPresentation({ id: "builtin.light", kind: "prim", type: "LightAPI", title: "Light", priority: 50, panel: LightView });
+  registerPresentation({ id: "builtin.camera", kind: "prim", type: "Camera", title: "Camera", priority: 50, panel: CameraView });
+  registerPresentation({ id: "builtin.skeleton", kind: "prim", type: "Skeleton", title: "Skeleton", priority: 50, panel: SkeletonView });
+  registerPresentation({ id: "builtin.skel-animation", kind: "prim", type: "SkelAnimation", title: "Skeleton animation", priority: 50, panel: SkeletonView });
+  registerPresentation({ id: "builtin.xform-ops", kind: "prim", type: "Xformable", title: "Transform ops", priority: -5, panel: XformOpsView });
   registerPresentation({
     id: "builtin.draw-mode",
     kind: "prim",

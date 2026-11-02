@@ -804,7 +804,13 @@ export class Viewport {
       const view = items.get(id);
       if (view !== undefined && !added.has(id) && !update.reskinned.has(id)) this.#pose(view);
     }
-    const restyle = selected !== this.#selected ? new Set(items.keys()) : update.recolored;
+    // A new selection restyles the items it highlights or stops highlighting, no others.
+    let restyle: ReadonlySet<number> = update.recolored;
+    if (selected !== this.#selected) {
+      const changed = new Set(update.recolored);
+      for (const [id, view] of items) if (highlight(view, selected) !== highlight(view, this.#selected)) changed.add(id);
+      restyle = changed;
+    }
     for (const id of restyle) {
       const view = items.get(id);
       const object = this.#objects.get(id);
@@ -1408,6 +1414,28 @@ function makeGrid(up: "Y" | "Z", cell: number): GridHelper {
   return grid;
 }
 
+/** {@link highlight}'s answer for an item highlighted whole... */
+const WHOLE = -1;
+
+/** ...and for one not highlighted. */
+const UNLIT = -2;
+
+/**
+ * How `selected` highlights the item: one of its face subsets (its index),
+ * the whole item ({@link WHOLE}: it, an ancestor or a descendant of one of
+ * its prims is selected) or not at all ({@link UNLIT}). Its materials are
+ * made from this alone, so a new selection restyles only the items for
+ * which it changes.
+ */
+function highlight(view: ViewItem, selected: string | null): number {
+  if (selected === null) return UNLIT;
+  const subset = view.buffers.subsets.indexOf(selected);
+  if (subset >= 0) return subset;
+  const { item } = view;
+  const lit = (path: string) => selected === path || selected.startsWith(`${path}/`) || path.startsWith(`${selected}/`);
+  return lit(item.prim) || item.instances.some(lit) ? WHOLE : UNLIT;
+}
+
 /**
  * The item's materials, highlighted when selected: one per range when it
  * has subsets (a range's subset material, else the item's), each its bound
@@ -1422,11 +1450,9 @@ function materials(
   textures: TextureStore,
 ): Styled {
   const { item } = view;
-  const paths = [item.prim, ...item.instances];
-  const subset = selected === null ? -1 : view.buffers.subsets.indexOf(selected);
-  if (subset >= 0) return subsetMaterials(view, subset, records, textures);
-  const highlighted =
-    selected !== null && paths.some((path) => selected === path || selected.startsWith(`${path}/`) || path.startsWith(`${selected}/`));
+  const lit = highlight(view, selected);
+  if (lit >= 0) return subsetMaterials(view, lit, records, textures);
+  const highlighted = lit === WHOLE;
   // Lines and points: unlit, in their per-sample (or prim) display color.
   const tint = (vertexColors: boolean) =>
     highlighted ? new Color(0x6f9fff) : vertexColors ? new Color(1, 1, 1) : new Color().setRGB(...(view.color as [number, number, number]));

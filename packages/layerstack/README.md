@@ -211,6 +211,20 @@ await stage.resolve(source);
   host holds, such as the layer an edit target writes. A layer with
   unsaved edits is never released: OpenUSD frees it and loses them,
   this keeps it and lists it in `keptDirty`.
+- **Reloading reads only what changed.** When the host's files change,
+  it supplies the new bytes (`stage.supply(identifier, bytes, version?)`,
+  the version a file's modification time or an entity tag; without one
+  the bytes themselves are compared) and calls `stage.reload()`, or
+  `stage.reloadLayers(layers, { force? })` for chosen layers, as
+  OpenUSD's `UsdStage::Reload` and `SdfLayer::Reload`. A layer whose
+  source is unchanged is not read, and one that changed publishes only
+  what it changed: listeners hear a changed value info-only on its
+  property, a prim added or removed resynced, and `/` info-only for a
+  root layer stack layer read again. A missing asset supplied since
+  resolves. Nothing changed, nothing is heard. Dirty layers refuse the
+  reload (`io.dirty_reload`) unless `{ discardDirty: true }`, OpenUSD's
+  only behaviour. A layer that does not parse keeps its content and is
+  among the result's `failures` while the others reload, as in OpenUSD.
 - **Everything native is disposable.** A `Stage` owns native memory: call
   `free()` or declare it with `using`. Afterwards every call fails with
   `stage.disposed`.

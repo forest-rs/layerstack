@@ -11,7 +11,7 @@ use alloc::{
 };
 
 use layerstack::encoded_bytes::EncodedBytes;
-use layerstack_io::{IoError, IoErrorKind, Storage};
+use layerstack_io::{IoError, IoErrorKind, SourceVersion, Storage};
 
 /// What the host said about one identifier.
 #[derive(Clone, Debug)]
@@ -66,12 +66,22 @@ pub struct Released {
 /// ([`IoErrorKind::Unavailable`]): an arc that asks for it again (another
 /// layer of the same source, under other format arguments) waits in
 /// [`layerstack_io::StageDocument::unavailable_assets`] until the host
-/// supplies it again; a reload that selects it reports it failed with
+/// supplies it again; a reload that must read it (forced, or for a
+/// version the host gave anew) reports it failed with
 /// [`IoErrorKind::Unavailable`] and keeps its layer as it was, and a
 /// dependency a reload of the root reaches but cannot read again keeps
 /// the layer read before. [`Self::released`] counts what was released.
 ///
 /// [`StageDocument::read_asset_bytes`]: layerstack_io::StageDocument::read_asset_bytes
+///
+/// # Versions
+///
+/// Each source has a version ([`Storage::version`]): the one the host gave
+/// with its bytes ([`Self::supply_versioned`]), or else one naming the
+/// bytes themselves ([`SourceVersion::of_bytes`]), kept when the bytes are
+/// released. A reload reads only the sources whose version changed: a
+/// source the host did not supply again, or supplied again unchanged, is
+/// not read, released or not.
 ///
 /// A save writes into the same map ([`Storage::write`]): the saved bytes
 /// become the source a later read sees, as a file would, are never
@@ -93,6 +103,9 @@ pub struct HostStorage {
     /// not another map's code.
     written: Vec<(String, EncodedBytes)>,
     written_bytes: u64,
+    /// The version of each source supplied or written, kept when its
+    /// bytes are released.
+    versions: BTreeMap<String, SourceVersion>,
 }
 
 impl HostStorage {
@@ -107,6 +120,15 @@ impl HostStorage {
     /// its next load ([`layerstack_io::StageDocument::load_requested_assets`]);
     /// a layer already read from it stays as it was read.
     pub fn supply(&mut self, identifier: &str, bytes: Vec<u8>) {
+        let version = SourceVersion::of_bytes(&bytes);
+        self.supply_versioned(identifier, bytes, version);
+    }
+
+    /// [`Self::supply`], with the version the host knows the bytes by (a
+    /// file's modification time, an entity tag), which a reload compares
+    /// ([`Storage::version`]) instead of one naming the bytes.
+    pub fn supply_versioned(&mut self, identifier: &str, bytes: Vec<u8>, version: SourceVersion) {
+        self.versions.insert(identifier.to_string(), version);
         self.supplied_bytes += bytes.len() as u64;
         self.sources
             .insert(identifier.to_string(), Source::Supplied(Arc::new(bytes)));
@@ -115,6 +137,7 @@ impl HostStorage {
     /// Records that `identifier` names no source: reads of it fail with
     /// [`IoErrorKind::NotFound`] from now on.
     pub fn confirm_absent(&mut self, identifier: &str) {
+        self.versions.remove(identifier);
         self.sources.insert(identifier.to_string(), Source::Absent);
     }
 
@@ -260,7 +283,15 @@ impl Storage for HostStorage {
         }
     }
 
+    /// The version the host gave the source, or the one naming its bytes;
+    /// `None` for a source never supplied, or confirmed absent.
+    fn version(&self, identifier: &str) -> Result<Option<SourceVersion>, IoError> {
+        Ok(self.versions.get(identifier).cloned())
+    }
+
     fn write(&mut self, identifier: &str, bytes: &[u8]) -> Result<(), IoError> {
+        self.versions
+            .insert(identifier.to_string(), SourceVersion::of_bytes(bytes));
         let bytes = Arc::new(bytes.to_vec());
         self.written_bytes += bytes.len() as u64;
         let encoded = EncodedBytes::from(Arc::clone(&bytes));

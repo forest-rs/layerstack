@@ -93,7 +93,10 @@ describe("the presentation registry", () => {
     const remove = registry.register({ id: "later", kind: "prim", type: "Gprim", inline: View });
     assert.equal(registry.find(prim("/World/Ground"), "inline", context)?.id, "high");
     remove();
-    assert.equal(registry.all().some((entry) => entry.id === "later"), false);
+    assert.equal(
+      registry.all().some((entry) => entry.id === "later"),
+      false,
+    );
   });
 
   it("lists every panel that applies, by priority, then specificity", () => {
@@ -141,10 +144,16 @@ describe("the command registry", () => {
     registry.register({ id: "frame", kind: "primPath", type: "primPath", title: "Frame", applies: (object, { stage }) => stage.prim(object.path) !== null, run: () => ran.push("frame") });
     registry.register({ id: "explain", kind: "propertyPath", type: "propertyPath", title: "Explain", run: () => ran.push("explain") });
     const offered = registry.forObject({ kind: "primPath", path: "/World/Box" }, context);
-    assert.deepEqual(offered.map((command) => command.id), ["select", "frame", "copy"]);
+    assert.deepEqual(
+      offered.map((command) => command.id),
+      ["select", "frame", "copy"],
+    );
     offered[0]!.run({ kind: "primPath", path: "/World/Box" }, context);
     assert.deepEqual(ran, ["select /World/Box"]);
-    assert.deepEqual(registry.forObject({ kind: "primPath", path: "/Nowhere" }, context).map((command) => command.id), ["select", "copy"]);
+    assert.deepEqual(
+      registry.forObject({ kind: "primPath", path: "/Nowhere" }, context).map((command) => command.id),
+      ["select", "copy"],
+    );
   });
 });
 
@@ -172,7 +181,32 @@ describe("swatch colours", () => {
       swatches(values, 3, 2, [0.5, 0.25]).map((swatch) => swatch.alpha),
       [0.5, 0.25],
     );
-    assert.deepEqual(swatches(values, 3, 8, [0.5]).map((swatch) => swatch.alpha), [0.5, 0.5, 0.5]);
+    assert.deepEqual(
+      swatches(values, 3, 8, [0.5]).map((swatch) => swatch.alpha),
+      [0.5, 0.5, 0.5],
+    );
     assert.deepEqual(swatches([0.1, 0.2, 0.3, 0.4], 4, 8)[0], { rgb: [0.1, 0.2, 0.3], alpha: 0.4 });
+  });
+});
+
+describe("prim revisions", () => {
+  it("change only when a recomposition reaches the prim", async () => {
+    const { primRevision, reaches } = await import("../src/model/revisions.ts");
+    const none = { created: [], removed: [], resynced: [], changedInfoOnly: [], properties: [], resyncedProperties: [], mutedLayers: [], unmutedLayers: [], mutedIdentifiers: [], unmutedIdentifiers: [] } as { readonly [key: string]: readonly string[] };
+    const changeLog: { cause: string; changes: typeof none }[] = [];
+    const session = { changeLog } as unknown as Parameters<typeof primRevision>[0];
+    assert.equal(primRevision(session, "/World/Rock"), 0);
+    assert.equal(primRevision(session, "/World/Tree"), 0);
+    changeLog.push({ cause: "set", changes: { ...none, changedInfoOnly: ["/World/Rock"] } });
+    assert.equal(primRevision(session, "/World/Rock"), 1);
+    assert.equal(primRevision(session, "/World/Tree"), 0, "an edit elsewhere");
+    changeLog.push({ cause: "subset", changes: { ...none, resyncedProperties: ["/World/Rock/Part.indices"] } });
+    assert.equal(primRevision(session, "/World/Rock"), 2, "a change beneath it");
+    changeLog.push({ cause: "resync", changes: { ...none, resynced: ["/World"] } });
+    assert.equal(primRevision(session, "/World/Tree"), 1, "a resync above it");
+    assert.equal(primRevision(session, "/World/Rock"), 3);
+    assert.ok(!reaches("/World/Rock", ["/World/Rocks"], true), "a sibling with a longer name");
+    assert.ok(reaches("/World/Rock", ["/World/Rock.points"], true));
+    assert.ok(!reaches("/World/Rock", ["/World/Rock/Part"], false));
   });
 });

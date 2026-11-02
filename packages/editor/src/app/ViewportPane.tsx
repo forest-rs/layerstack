@@ -122,7 +122,12 @@ export function ViewportPane() {
             if (viewport === null) return store.select(null);
             // Read from the GPU: the selection follows a frame or so later.
             viewport.pick(event.clientX - rect.left, event.clientY - rect.top).then(
-              (path) => store.select(path),
+              (path) => {
+                store.select(path);
+                // An instance of a point instancer: its view's row too.
+                const hit = viewport.lastPickedInstance;
+                if (hit !== null && hit.instancer === path) store.selectInstanceById(path, hit.id);
+              },
               (error: unknown) => console.warn("pick failed", error),
             );
           }}

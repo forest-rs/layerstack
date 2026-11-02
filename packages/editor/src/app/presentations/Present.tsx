@@ -12,7 +12,7 @@ import { useRef, useState } from "react";
 import { Menu, MenuItem, Popover } from "react-aria-components";
 import type { ValueInput } from "@forest-rs/layerstack";
 import { cn } from "@/lib/utils";
-import type { Session } from "../../model/session.ts";
+import { primRevision } from "../../model/revisions.ts";
 import { commands, type PresentationContext, type Presented, type PresentedKind, presentations, type PresentationView } from "../../presentations/registry.ts";
 import type { EditorStore } from "../../store.ts";
 
@@ -134,53 +134,11 @@ export function Live<K extends PresentedKind>({
   );
 }
 
-/** Whether `changes`' paths reach `path`: it, a prim above it resynced, or a prim or property beneath it changed. */
-function reaches(path: string, paths: readonly string[], below: boolean): boolean {
-  for (const changed of paths) {
-    if (changed === path || changed === "/") return true;
-    if (below && (changed.startsWith(`${path}/`) || changed.startsWith(`${path}.`))) return true;
-    if (path.startsWith(changed) && (path[changed.length] === "/" || path[changed.length] === ".")) return true;
-  }
-  return false;
-}
-
-/** What a session's change log has been read to, and the revision of each prim asked about. */
-interface Revisions {
-  read: number;
-  readonly prims: Map<string, number>;
-}
-
-const revisionsBySession = new WeakMap<Session, Revisions>();
-
 /**
  * A number that changes when, and only when, a recomposition reaches the
- * prim at `path` (it or its subtree resynced, created or removed; it or
- * a prim or property beneath it changed): what a panel keys its reads of
- * the prim by (`useMemo`), so an edit elsewhere reads nothing again. The
- * change log is read once per session for all prims asked about.
+ * prim at `path` ({@link primRevision}): what a panel keys its reads of
+ * the prim by (`useMemo`), so an edit elsewhere reads nothing of it again.
  */
 export function usePrimRevision(store: EditorStore, path: string): number {
-  const session = store.session;
-  if (session === null) return 0;
-  let revisions = revisionsBySession.get(session);
-  if (revisions === undefined) {
-    revisions = { read: session.changeLog.length, prims: new Map() };
-    revisionsBySession.set(session, revisions);
-  }
-  const log = session.changeLog;
-  for (let at = revisions.read; at < log.length; at++) {
-    const { changes } = log[at]!;
-    for (const [prim, revision] of revisions.prims) {
-      const touched =
-        reaches(prim, changes.resynced, true) ||
-        reaches(prim, changes.created, true) ||
-        reaches(prim, changes.removed, true) ||
-        reaches(prim, changes.changedInfoOnly, true) ||
-        reaches(prim, changes.resyncedProperties, true);
-      if (touched) revisions.prims.set(prim, revision + 1);
-    }
-  }
-  revisions.read = log.length;
-  if (!revisions.prims.has(path)) revisions.prims.set(path, 0);
-  return revisions.prims.get(path)!;
+  return store.session === null ? 0 : primRevision(store.session, path);
 }

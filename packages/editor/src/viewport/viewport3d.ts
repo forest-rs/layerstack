@@ -385,6 +385,7 @@ export class Viewport {
     this.#camera.updateProjectionMatrix();
     this.#grid = makeGrid("Y", 1);
     this.#scene.add(this.#grid);
+    this.#overlay.add(this.#marker);
     this.#controls = this.#makeControls();
     this.#resizer = new ResizeObserver(() => this.#resize());
     this.#resizer.observe(canvas);
@@ -561,6 +562,42 @@ export class Viewport {
   }
 
   /**
+   * What {@link setMarker} draws, in a pass of its own after the scene's
+   * (render bundles replay in the scene's pass, so an outline drawn there
+   * would be drawn over by them), and whether it is shown.
+   */
+  readonly #overlay = new Scene();
+  readonly #marker: LineSegments = makeMarker();
+  #markerShown = false;
+
+  /**
+   * Outlines a box over the scene (a point instancer's instance, chosen in
+   * its inspector view or picked): `corners` are its eight corners in
+   * world space, 24 numbers, corner `c` at x = max when `c & 1`, y when
+   * `c & 2`, z when `c & 4`. `null` removes it.
+   */
+  setMarker(corners: ArrayLike<number> | null): void {
+    if (corners === null) {
+      if (!this.#markerShown) return;
+      this.#markerShown = false;
+      this.#draw();
+      return;
+    }
+    const position = this.#marker.geometry.getAttribute("position") as BufferAttribute;
+    MARKER_EDGES.forEach((corner, at) => position.setXYZ(at, corners[corner * 3]!, corners[corner * 3 + 1]!, corners[corner * 3 + 2]!));
+    position.needsUpdate = true;
+    this.#markerShown = true;
+    this.#draw();
+  }
+
+  /**
+   * The point instancer instance the last {@link pick} hit, by its
+   * instancer and id (its `ids` entry, or its index); `null` when it hit
+   * anything else, or nothing.
+   */
+  lastPickedInstance: { readonly instancer: string; readonly id: bigint } | null = null;
+
+  /**
    * The prim drawn under the canvas point (`x`, `y` in CSS pixels from its
    * top left), nearest first: a gprim, the instance proxy an instanced draw
    * places there, or a point instancer; `null` over nothing. Read from the
@@ -579,6 +616,7 @@ export class Viewport {
     const { clientWidth: width, clientHeight: height } = canvas;
     if (width === 0 || height === 0 || this.#deviceLost) return null;
     const started = performance.now();
+    this.lastPickedInstance = null;
     const pick = (this.#picker ??= new Picker());
     // A run of ids per object, one per instance it draws, and its pick material in place of its own.
     pick.ids.clear();
@@ -625,7 +663,11 @@ export class Viewport {
       const view = this.#applied?.items.find((candidate) => candidate.item.id === hit.owner);
       if (view === undefined) continue;
       const { item } = view;
-      if (item.source.kind === "pointInstancer") return item.source.instancer;
+      if (item.source.kind === "pointInstancer") {
+        const id = item.ids?.[hit.instance];
+        this.lastPickedInstance = id === undefined ? null : { instancer: item.source.instancer, id };
+        return item.source.instancer;
+      }
       return item.instances[hit.instance] ?? item.prim;
     }
     return null;
@@ -674,6 +716,8 @@ export class Viewport {
     this.#geometries.clear();
     for (const path of [...this.#lights.keys()]) this.#dropLight(path);
     this.#clusters.dispose();
+    this.#marker.geometry.dispose();
+    (this.#marker.material as LineBasicNodeMaterial).dispose();
     this.#target.dispose();
   }
 
@@ -1366,6 +1410,13 @@ export class Viewport {
     // The clustered draws' cut for this camera, on the GPU, before the draws read it.
     this.#clusters.prepare(this.#renderer, camera, this.#canvas.width, this.#canvas.height);
     this.#renderer.render(this.#scene, camera);
+    // The outline over everything drawn, bundled draws included: a pass of its own.
+    if (this.#markerShown) {
+      const clear = this.#renderer.autoClear;
+      this.#renderer.autoClear = false;
+      this.#renderer.render(this.#overlay, camera);
+      this.#renderer.autoClear = clear;
+    }
     this.#releaseUploaded();
   }
 
@@ -1617,6 +1668,19 @@ function subsetMaterials(
  * `userData.decode`, for {@link Viewport} to fold into the object's
  * matrices (identity for `f32` vertices).
  */
+/** The corners of a box's twelve edges, two per edge, in {@link Viewport.setMarker}'s corner order. */
+const MARKER_EDGES = [0, 1, 2, 3, 4, 5, 6, 7, 0, 2, 1, 3, 4, 6, 5, 7, 0, 4, 1, 5, 2, 6, 3, 7];
+
+/** {@link Viewport.setMarker}'s outline: twelve edges, drawn without a depth test. */
+function makeMarker(): LineSegments {
+  const geometry = new BufferGeometry();
+  geometry.setAttribute("position", new BufferAttribute(new Float32Array(MARKER_EDGES.length * 3), 3));
+  const marker = new LineSegments(geometry, new LineBasicNodeMaterial({ color: new Color(0xff9a1f), depthTest: false, depthWrite: false, toneMapped: false }));
+  marker.renderOrder = 10;
+  marker.frustumCulled = false;
+  return marker;
+}
+
 function setVertices(geometry: BufferGeometry, view: ViewItem): void {
   const vertices = view.buffers.vertices;
   const skinned = view.skin !== null;

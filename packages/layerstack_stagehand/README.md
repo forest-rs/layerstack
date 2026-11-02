@@ -86,10 +86,49 @@ const list = stagehand.drawList(stage, { scope: { roots: [] } }); // opens drawi
 upload(list.setScope({ roots: [selected], space: selected })); // the selection alone, framed at the origin
 ```
 
+Each buffer's `vertices` are its mesh's vertices and indices ready to
+upload, in the list's `vertexFormat`, described attribute by attribute
+(`MeshVertices`: each `VertexAttribute`'s array, component `type`,
+`size`, `stride` and whether it reads `normalized`). `compact`, the
+default, is 16 bytes per vertex with a position, a normal and `st`,
+where `float32` is 32:
+
+| Attribute | `compact` | `float32` |
+| --- | --- | --- |
+| positions | `snorm16` ×4 (one padding), relative to the mesh's bounds | `f32` ×3 |
+| normals | `snorm8` ×4 (one padding) | `f32` ×3 |
+| `st`, texture coordinate sets | `float16` ×2, or `f32` ×2 where a coordinate reaches `HALF_ST_LIMIT` (2) | `f32` ×2 |
+| colors | `f32` ×3 | `f32` ×3 |
+| indices | `u16` below 65535 vertices, else `u32` | `u32` |
+
+A position decodes to its point by `decode` (`point = value * scale +
+offset`): one uniform scale, half the bounds' largest extent, so the
+decode folds into the model matrix and normals transform as before (a
+uniform scale only changes their length). Each point is within half a
+step, the largest extent / 65534 / 2, on every axis; a cluster split
+later of the same mesh decodes alike, so neighbors cannot crack. Normals
+are within 0.5 / 127 per component; `st` below 1 within 2^-12 (below
+2, 2^-11): under a texel of a 2048 texture. Stock materials read
+normalized and half-float attributes as they are. A refilled mesh
+(animated points) is encoded again against its new bounds, with a new
+`decode`; a renderer places it again. The module plans and fills in
+`f32`; the encoding is done here as the buffers are copied out (about
+40 ms per million vertices), so the module carries none of it, and in
+`compact` the list then releases the mesh's own `f32` arrays
+(`StagehandMesh.release`): a buffer is held once. `vertexPositions`
+decodes positions back for a consumer that needs points (skinning on
+the CPU, say).
+
+```ts
+const { vertices } = list.buffers(item.buffer)!;
+upload(vertices.position.array, vertices.position.type, vertices.position.stride); // Int16Array, "snorm16", 4
+model = multiply(item.matrices, decodeMatrix(vertices.decode)); // translate(offset) * scale(scale)
+```
+
 `cost()` measures what the items hold and draw: per item its buffer's
 triangles, vertices, JavaScript bytes and the bytes a renderer uploads
-(`f32` vertex attributes, `u32` indices), and its instances (64 bytes
-each on the GPU); totals count each shared buffer once. `estimate(scope)`
+(its `vertices` as encoded), and its instances (64 bytes each on the
+GPU); totals count each shared buffer once. `estimate(scope)`
 answers in the same units before anything is built: it discovers the
 items as a refresh would and reads only array lengths (a mesh's
 triangles are `faceVertexIndices` less twice its faces), so a viewer can
@@ -126,11 +165,15 @@ rung changed. A change re-weighs only the items it reaches (their
 instances, visibility or geometry) and re-admits in one pass over the
 cached order; only items whose rung changed are built, rebound or
 removed (`work.itemsWeighed`, `work.itemsRegranted`). On a large public
-scene of 862 items asking for 13 GiB and 1.1 trillion instanced
-triangles, under 1 GiB and 50 million triangles, the first refresh
-weighs and admits every item in 0.35 s and draws 170 in full and 692 as
-boxes (571 MiB uploaded, measured); admitting again with nothing to move
-takes 2 ms.
+scene of 862 items asking for 7.7 GiB in the `compact` vertex format
+(13 GiB in `float32`) and 1.1 trillion instanced triangles, under 1 GiB
+and 50 million triangles, the first refresh weighs and admits every
+item in 0.35 s and draws 175 in full and 687 as boxes (608 MiB
+uploaded, measured), holding 12.5 million distinct triangles where
+`float32` held 7.6 million in 170; admitting again with nothing to move
+takes 2 ms. The triangle limit binds there; under 1 GiB alone the
+compact list holds 17.9 million triangles to `float32`'s 9.5 million,
+and under 256 MiB 3.5 million to 1.3 million.
 
 ```ts
 const list = stagehand.drawList(stage, { budget: { gpuBytes: 2 ** 30, triangles: 50e6 } });

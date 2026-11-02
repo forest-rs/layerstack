@@ -4,10 +4,11 @@
 // What drawing costs, item by item: the draw list's measurement of what
 // it holds (`DrawList.cost`), its estimate of the whole scene from counts
 // (`DrawList.estimate`), or the items the budget simplified
-// (`DrawList.budgetReport`), each row selecting the prim it draws. Bytes uploaded are the buffer's (f32 attributes, u32
-// indices) plus 64 per instance; bytes held are the JavaScript arrays the
-// list keeps. A buffer two items share is counted in both rows, once in
-// the totals.
+// (`DrawList.budgetReport`), each row selecting the prim it draws. Bytes
+// uploaded are the buffer's (its vertices in stagehand's compact format,
+// u16 or u32 indices) plus 64 per instance; bytes held are the JavaScript
+// arrays the list keeps. A buffer two items share is counted in both rows,
+// once in the totals.
 import { useState } from "react";
 import type { BudgetGrant, BudgetReport, DrawCost, ItemCost } from "@forest-rs/layerstack_stagehand";
 import { cn } from "@/lib/utils";

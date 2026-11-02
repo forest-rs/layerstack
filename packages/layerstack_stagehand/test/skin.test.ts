@@ -225,7 +225,7 @@ const TIMES = [1, 3.5, 7, 10];
 describe("GPU skinning over a draw list's buffers", () => {
   it("names each vertex's source point, through face-varying splits", () => {
     using stage = openRobot();
-    const list = stagehand.drawList(stage, { time: 1 });
+    const list = stagehand.drawList(stage, { time: 1, vertexFormat: "float32" });
     try {
       list.refresh();
       const arm = buffersOf(list, "/Robot/Arm");
@@ -248,7 +248,7 @@ describe("GPU skinning over a draw list's buffers", () => {
 
   it("reproduces the CPU's deformed points and normals in buffer order at every time", () => {
     using stage = openRobot();
-    const list = stagehand.drawList(stage, { time: 1 });
+    const list = stagehand.drawList(stage, { time: 1, vertexFormat: "float32" });
     try {
       list.refresh();
       const errors: Record<string, { points: number; normals: number }> = {};
@@ -287,7 +287,7 @@ describe("GPU skinning over a draw list's buffers", () => {
 
   it("reduces six influences to four explicitly, exact where four suffice", () => {
     using stage = openRobot();
-    const list = stagehand.drawList(stage, { time: 1 });
+    const list = stagehand.drawList(stage, { time: 1, vertexFormat: "float32" });
     try {
       list.refresh();
       const query = stage.skinning("/Robot/Tail")!;

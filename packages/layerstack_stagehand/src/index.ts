@@ -57,6 +57,8 @@ export type { DrawBuffers, DrawDiff, DrawItem, DrawOptions, DrawScope, DrawWork,
 export type { BudgetChange, BudgetCost, BudgetGrant, BudgetLimit, BudgetReport, DrawBudget, Rung } from "./budget.js";
 export { INSTANCE_GPU_BYTES, bufferCost } from "./cost.js";
 export type { BufferCost, CostTotals, DrawCost, ItemCost } from "./cost.js";
+export { HALF_ST_LIMIT, attributeValues, componentBytes, encodeVertices, fromHalf, quantizeNormals, quantizePositions, toHalf, vertexPositions, verticesGpuBytes } from "./vertices.js";
+export type { ComponentType, MeshVertices, PositionDecode, VertexAttribute, VertexFormat, VertexSource, VertexUvSet } from "./vertices.js";
 export type { LinkChange, LinkKind, LinkSet, LinkTarget } from "./links.js";
 export { SHAPE_SCHEMAS, readMesh, readPoints, readShape, shapeSchema } from "./read.js";
 export { gatherInfluences } from "./skin.js";
@@ -210,9 +212,9 @@ export class StagehandMesh implements Disposable {
   /** The texture coordinate sets drawn besides `st` ({@link MeshInput.uvSets}), two numbers per vertex each, in order. */
   uvSets: readonly { readonly name: string; readonly values: Float32Array }[];
   /** Three vertex indices per triangle, counter-clockwise seen from the front. */
-  readonly indices: Uint32Array;
+  indices: Uint32Array;
   /** The authored face of each triangle. */
-  readonly triangleFaces: Uint32Array;
+  triangleFaces: Uint32Array;
   /**
    * Each vertex's source point, the index into the input's points of the
    * point its corners name; `null` for a shape. A vertex split for a
@@ -227,6 +229,7 @@ export class StagehandMesh implements Disposable {
   /** What the plan made of the mesh; `null` for a shape. */
   readonly report: MeshReport | null;
   #native: NativeMesh | null;
+  #released = false;
 
   /** @internal */
   constructor(native: NativeMesh) {
@@ -266,6 +269,7 @@ export class StagehandMesh implements Disposable {
     call("plan.mismatch", "refill", () =>
       native.refill(points, normals?.values, normals?.indices ?? undefined, normals?.interpolation),
     );
+    this.#refilled(native);
     this.positions = native.positions();
     this.normals = native.normals();
   }
@@ -285,11 +289,41 @@ export class StagehandMesh implements Disposable {
     const native = this.#live("refillFrom");
     const builder = gather("refillFrom", input);
     call("plan.mismatch", "refillFrom", () => native.refillFrom(builder));
+    this.#refilled(native);
     this.positions = native.positions();
     this.normals = native.normals();
     this.st = native.st() ?? null;
     this.colors = native.colors() ?? null;
     this.uvSets = uvSetsOf(native);
+  }
+
+  /**
+   * Whether {@link release} dropped the buffers' JavaScript copies; a
+   * refill fills them again.
+   */
+  get released(): boolean {
+    return this.#released;
+  }
+
+  /**
+   * Drops the JavaScript copies of the vertex and index buffers:
+   * {@link positions}, {@link normals}, {@link st} and {@link colors}
+   * (when drawn), each {@link uvSets} entry's values (its name kept),
+   * {@link indices} and {@link triangleFaces} become empty arrays.
+   * {@link ranges}, {@link report} and {@link vertexPoints} stay, and so
+   * does the plan: {@link refill} and {@link refillFrom} fill the buffers
+   * again. A {@link DrawList} in the `compact` vertex format releases each
+   * mesh once it has encoded its vertices ({@link DrawBuffers.vertices}).
+   */
+  release(): void {
+    this.positions = new Float32Array();
+    this.normals = new Float32Array();
+    if (this.st !== null) this.st = new Float32Array();
+    if (this.colors !== null) this.colors = new Float32Array();
+    this.uvSets = this.uvSets.map((set) => Object.freeze({ name: set.name, values: new Float32Array() }));
+    this.indices = new Uint32Array();
+    this.triangleFaces = new Uint32Array();
+    this.#released = true;
   }
 
   /** Frees the plan in the module. Idempotent; the buffers stay. */
@@ -301,6 +335,17 @@ export class StagehandMesh implements Disposable {
   /** Frees the plan, for `using`. */
   [Symbol.dispose](): void {
     this.dispose();
+  }
+
+  /** After a refill of a released mesh: every buffer copied out again, the new positions and normals by the caller. */
+  #refilled(native: NativeMesh): void {
+    if (!this.#released) return;
+    this.#released = false;
+    this.st = native.st() ?? null;
+    this.colors = native.colors() ?? null;
+    this.uvSets = uvSetsOf(native);
+    this.indices = native.indices();
+    this.triangleFaces = native.triangleFaces();
   }
 
   #live(operation: string): NativeMesh {

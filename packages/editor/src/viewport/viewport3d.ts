@@ -114,6 +114,16 @@
 // when the animation's weights vary). A draw deformed on the CPU (dual
 // quaternions) is a plain mesh whose positions and normals are refilled
 // each time.
+//
+// Vertices (stagehand's `DrawBuffers.vertices`): uploaded in stagehand's
+// compact format as they are, `snorm16` positions, `snorm8` normals and
+// half-float `st`, read normalized by three.js's stock materials. A
+// position decodes to its point by one uniform scale and an offset per
+// buffer, folded into the object's matrix (each instance's, for an
+// `InstancedMesh`: three.js applies the instance matrix first): normals,
+// not quantized relative to the bounds, are transformed as before, since
+// a uniform scale only changes their length. A skinned draw's positions
+// are decoded to `f32` instead (skinning runs before the model matrix).
 import {
   AgXToneMapping,
   AmbientLight,
@@ -125,6 +135,7 @@ import {
   DetachedBindMode,
   DirectionalLight,
   DoubleSide,
+  Float16BufferAttribute,
   GridHelper,
   HemisphereLight,
   InstancedMesh,
@@ -155,8 +166,8 @@ import {
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
-import { conformCamera, lightSizeFactor } from "@forest-rs/layerstack_stagehand";
-import type { CameraItem, LightItem, MaterialItem, StagehandMesh } from "@forest-rs/layerstack_stagehand";
+import { conformCamera, lightSizeFactor, vertexPositions } from "@forest-rs/layerstack_stagehand";
+import type { CameraItem, LightItem, MaterialItem, MeshVertices, VertexAttribute } from "@forest-rs/layerstack_stagehand";
 import { DEFAULT_LIGHT_SETTINGS, defaultLights, type LightSettings } from "./defaultLights.ts";
 import { TextureStore, surfaceMaterial, uvChannels } from "./surfaces.ts";
 import { standinGeometry, standinMaterials, standinTextured } from "./standins.ts";
@@ -449,20 +460,38 @@ export class Viewport {
       this.#geometries.get(key)?.dispose();
       this.#geometries.delete(key);
     }
-    // New and rebuilt buffers: a new geometry, handed to the objects drawing it.
+    // Each buffer's first view, and the objects drawing each buffer, once:
+    // the loops below look them up by key.
+    const views = new Map<number, ViewItem>();
+    const drawing = new Map<number, number[]>();
+    if (update.buffersAdded.size + update.rebuilt.size + update.refilled.size > 0) {
+      for (const view of scene.items) if (!views.has(view.item.buffer)) views.set(view.item.buffer, view);
+      for (const id of this.#objects.keys()) {
+        const key = items.get(id)?.item.buffer;
+        if (key === undefined) continue;
+        const ids = drawing.get(key);
+        if (ids === undefined) drawing.set(key, [id]);
+        else ids.push(id);
+      }
+    }
+    // New and rebuilt buffers: a new geometry, handed to the objects drawing
+    // it, which are placed again (its positions' decode is in their matrices).
+    const replace = new Set<number>();
     for (const key of new Set([...update.buffersAdded, ...update.rebuilt])) {
-      const view = scene.items.find((candidate) => candidate.item.buffer === key);
+      const view = views.get(key);
       if (view === undefined) continue;
       this.#geometries.get(key)?.dispose();
-      this.#geometries.set(key, makeGeometry(view));
-      for (const [id, object] of this.#objects) {
-        if (items.get(id)?.item.buffer === key) object.geometry = this.#geometries.get(key)!;
+      const geometry = makeGeometry(view);
+      this.#geometries.set(key, geometry);
+      for (const id of drawing.get(key) ?? []) {
+        this.#objects.get(id)!.geometry = geometry;
+        replace.add(id);
       }
     }
     // Refilled buffers: the same indices, new vertex data in place.
     for (const key of update.refilled) {
       const geometry = this.#geometries.get(key);
-      const view = scene.items.find((candidate) => candidate.item.buffer === key);
+      const view = views.get(key);
       if (geometry === undefined || view === undefined || update.rebuilt.has(key)) continue;
       if (view.buffers.standin !== null) {
         // A stand-in's cards may come and go: its geometry and object made again.
@@ -474,7 +503,8 @@ export class Viewport {
         }
         continue;
       }
-      const object = [...this.#objects.entries()].find(([id]) => items.get(id)?.item.buffer === key)?.[1];
+      const first = drawing.get(key)?.[0];
+      const object = first === undefined ? undefined : this.#objects.get(first);
       if (object !== undefined && !fits(object, view.kind)) {
         // A curve's widths crossed the line width: the same buffers, drawn the other way.
         this.#geometries.get(key)?.dispose();
@@ -487,13 +517,10 @@ export class Viewport {
         refillSamples(geometry, view);
         continue;
       }
-      const mesh = view.buffers.mesh;
-      geometry.setAttribute("position", new BufferAttribute(mesh.positions, 3));
-      geometry.setAttribute("normal", new BufferAttribute(mesh.normals, 3));
-      if (mesh.colors !== null) geometry.setAttribute("color", new BufferAttribute(mesh.colors, 3));
-      if (mesh.st !== null) geometry.setAttribute("uv", new BufferAttribute(mesh.st, 2));
-      setUvSets(geometry, mesh);
+      // New vertices (and their decode) over the same indices, and the objects placed again.
+      setVertices(geometry, view);
       geometry.computeBoundingSphere();
+      for (const id of drawing.get(key) ?? []) replace.add(id);
     }
     const added = reset ? new Set(items.keys()) : update.added;
     for (const id of added) {
@@ -512,7 +539,7 @@ export class Viewport {
       this.#drop(id);
       if (view !== undefined) this.#add(view, selected);
     }
-    for (const id of new Set([...update.matrices, ...update.visibility])) {
+    for (const id of new Set([...update.matrices, ...update.visibility, ...replace])) {
       const view = items.get(id);
       if (view !== undefined && !added.has(id) && !update.reskinned.has(id)) this.#place(view, selected);
     }
@@ -554,6 +581,11 @@ export class Viewport {
 
   #add(view: ViewItem, selected: string | null): void {
     let geometry = this.#geometries.get(view.item.buffer);
+    // A geometry made for skinning (positions decoded) or not, as the draw is now.
+    if (geometry !== undefined && geometry.userData.skinned !== undefined && geometry.userData.skinned !== (view.skin !== null)) {
+      geometry.dispose();
+      geometry = undefined;
+    }
     if (geometry === undefined) {
       geometry = makeGeometry(view);
       this.#geometries.set(view.item.buffer, geometry);
@@ -613,10 +645,15 @@ export class Viewport {
     const matrices = view.item.matrices;
     const placements = matrices.length / 16;
     object.visible = placements > 0;
-    // Row-by-row row-vector matrices are three.js's column-major column-vector ones.
+    // Row-by-row row-vector matrices are three.js's column-major column-vector
+    // ones; each is followed by the geometry's position decode, if it has one.
+    const decode = (object.geometry.userData.decode as Matrix4 | undefined) ?? null;
     if (!(object instanceof InstancedMesh)) {
       // A skinned draw is placed by its skeleton ({@link #pose}).
-      if (placements > 0 && view.skin === null) object.matrix.fromArray(matrices);
+      if (placements > 0 && view.skin === null) {
+        object.matrix.fromArray(matrices);
+        if (decode !== null) object.matrix.multiply(decode);
+      }
       return;
     }
     if (placements > object.instanceMatrix.count) {
@@ -625,7 +662,11 @@ export class Viewport {
       return;
     }
     const matrix = new Matrix4();
-    for (let i = 0; i < placements; i++) object.setMatrixAt(i, matrix.fromArray(matrices, 16 * i));
+    for (let i = 0; i < placements; i++) {
+      matrix.fromArray(matrices, 16 * i);
+      if (decode !== null) matrix.multiply(decode);
+      object.setMatrixAt(i, matrix);
+    }
     object.count = placements;
     object.instanceMatrix.needsUpdate = true;
     object.computeBoundingSphere();
@@ -820,9 +861,9 @@ function materials(
     const size = points.widths.reduce((widest, width) => Math.max(widest, width), 0);
     return new PointsMaterial({ color: tint(vertexColors), vertexColors, size, sizeAttenuation: true });
   }
-  const colors = view.buffers.mesh.colors;
+  const colors = view.buffers.vertices.color;
   // One map for every range's material: a subset's reads its sets' channels.
-  const channels = uvChannels(view.buffers.mesh);
+  const channels = uvChannels(view.buffers.vertices);
   const doubleSided = view.kind === "mesh" || view.kind === "Plane";
   const record = (path: string | null) => {
     const found = path === null ? undefined : records.get(path);
@@ -895,16 +936,53 @@ function subsetMaterials(
 }
 
 /**
- * The texture coordinate sets besides `st` stagehand drew for the mesh's
- * materials, as three.js's `uv1` to `uv3` (`st` is `uv`) by the mesh's
- * {@link uvChannels}, which `surfaces.ts` points each texture at.
+ * Sets a mesh view's vertex attributes on `geometry` from its buffer's
+ * {@link MeshVertices}, as stagehand encoded them: `position`, `normal`,
+ * `color`, `uv` (`st`), and the texture coordinate sets besides `st` as
+ * three.js's `uv1` to `uv3` by the mesh's {@link uvChannels}, which
+ * `surfaces.ts` points each texture at. A skinned draw's positions are
+ * decoded to `f32` (`userData.skinned`); any other's decode is kept as
+ * `userData.decode`, for {@link Viewport} to fold into the object's
+ * matrices (identity for `f32` vertices).
  */
-function setUvSets(geometry: BufferGeometry, mesh: StagehandMesh): void {
-  const channels = uvChannels(mesh);
-  for (const set of mesh.uvSets) {
+function setVertices(geometry: BufferGeometry, view: ViewItem): void {
+  const vertices = view.buffers.vertices;
+  const skinned = view.skin !== null;
+  geometry.setAttribute("position", skinned ? new BufferAttribute(vertexPositions(vertices), 3) : threeAttribute(vertices.position));
+  geometry.setAttribute("normal", threeAttribute(vertices.normal));
+  if (vertices.color !== null) geometry.setAttribute("color", threeAttribute(vertices.color));
+  if (vertices.st !== null) geometry.setAttribute("uv", threeAttribute(vertices.st));
+  const channels = uvChannels(vertices);
+  for (const set of vertices.uvSets) {
     const channel = channels.get(set.name);
-    if (channel !== undefined) geometry.setAttribute(`uv${channel}`, new BufferAttribute(set.values, 2));
+    if (channel !== undefined) geometry.setAttribute(`uv${channel}`, threeAttribute(set.attribute));
   }
+  if (geometry.index?.array !== vertices.indices) geometry.setIndex(new BufferAttribute(vertices.indices, 1));
+  geometry.userData.skinned = skinned;
+  geometry.userData.decode = skinned ? null : decodeMatrix(vertices);
+}
+
+/** The matrix taking a buffer's position values to its points, `translate(offset) * scale(scale)`; `null` for an identity decode. */
+function decodeMatrix(vertices: MeshVertices): Matrix4 | null {
+  const { scale, offset } = vertices.decode;
+  if (scale === 1 && offset[0] === 0 && offset[1] === 0 && offset[2] === 0) return null;
+  return new Matrix4().makeScale(scale, scale, scale).setPosition(offset[0], offset[1], offset[2]);
+}
+
+/**
+ * A three.js attribute over a stagehand {@link VertexAttribute}'s array,
+ * not copied: interleaved where a vertex is padded (`snorm16` ×4 for three
+ * components), half floats read as `HALF_FLOAT`, integers normalized.
+ */
+function threeAttribute(attribute: VertexAttribute): BufferAttribute | InterleavedBufferAttribute {
+  if (attribute.stride !== attribute.size) {
+    return new InterleavedBufferAttribute(new InterleavedBuffer(attribute.array, attribute.stride), attribute.size, 0, attribute.normalized);
+  }
+  if (attribute.type === "float16") {
+    // Over the array as it is: the constructor would copy it.
+    return Object.assign(new Float16BufferAttribute(new Uint16Array(0), attribute.size), { array: attribute.array, count: attribute.array.length / attribute.size });
+  }
+  return new BufferAttribute(attribute.array, attribute.size, attribute.normalized);
 }
 
 /** The three.js objects a draw item becomes. */
@@ -969,7 +1047,7 @@ function skinnedMesh(geometry: BufferGeometry, material: MeshStandardMaterial | 
   return mesh;
 }
 
-/** A geometry over the item's stagehand buffer: indexed, with normals, colors and a group per range. */
+/** A geometry over the item's stagehand buffer: indexed, with normals, colors and a group per range ({@link setVertices}). */
 function makeGeometry(view: ViewItem): BufferGeometry {
   if (view.buffers.standin !== null) return standinGeometry(view.buffers.standin);
   if (view.kind === "lines" || view.kind === "points") {
@@ -984,12 +1062,7 @@ function makeGeometry(view: ViewItem): BufferGeometry {
   }
   const mesh = view.buffers.mesh;
   const geometry = new BufferGeometry();
-  geometry.setIndex(new BufferAttribute(mesh.indices, 1));
-  geometry.setAttribute("position", new BufferAttribute(mesh.positions, 3));
-  geometry.setAttribute("normal", new BufferAttribute(mesh.normals, 3));
-  if (mesh.colors !== null) geometry.setAttribute("color", new BufferAttribute(mesh.colors, 3));
-  if (mesh.st !== null) geometry.setAttribute("uv", new BufferAttribute(mesh.st, 2));
-  setUvSets(geometry, mesh);
+  setVertices(geometry, view);
   // A group per range when there are subsets, each drawn with its range's material.
   if (mesh.ranges.length > 1) mesh.ranges.forEach((range, index) => geometry.addGroup(range.first, range.count, index));
   geometry.computeBoundingSphere();

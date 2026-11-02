@@ -103,6 +103,7 @@ import { attributeValues, toHalf } from "@forest-rs/layerstack_stagehand";
 import type { BufferCost, MeshVertices } from "@forest-rs/layerstack_stagehand";
 import { NO_GROUP, residentCost } from "./clusterFile.ts";
 import type { ClusterSetData } from "./clusterFile.ts";
+import { setFixedNode } from "./fixedNodes.ts";
 
 /** Anything TSL takes: the node types are too loose to be worth spelling here. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -385,12 +386,12 @@ export class ClusterScene {
     this.#dirty = true;
   }
 
-  /** Gives `object`'s materials the scene's context (a new material of a clustered draw, after a restyle). */
+  /** Gives `object`'s materials the scene's context, a fixed node (`fixedNodes.ts`): a new material of a clustered draw, after a restyle. */
   style(object: Mesh): void {
     const packed = this.#packed;
     const draw = this.#draws.get(object);
     for (const material of [object.material].flat()) {
-      (material as unknown as { contextNode: Node }).contextNode = packed?.context ?? null;
+      setFixedNode(material, "contextNode", packed?.context ?? null);
       material.needsUpdate = true;
     }
     if (draw === undefined) return;

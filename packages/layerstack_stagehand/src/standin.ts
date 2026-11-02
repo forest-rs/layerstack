@@ -153,7 +153,7 @@ function vec3s(value: Value | null): Float32Array | null {
  * when it is a `Boundable`, else the union of its `extentsHint` for the
  * `default`, `render` and `proxy` purposes.
  */
-function extentOf(prim: Prim, time: number | undefined): Float32Array | null {
+export function standinExtent(prim: Prim, time: number | undefined): Float32Array | null {
   if (prim.isA("Boundable")) {
     const extent = prim.attribute("extent");
     const values = extent?.authored ? vec3s(extent.get(time)) : null;
@@ -206,7 +206,7 @@ export function readStandinInput(
   return {
     input: Object.freeze({
       mode,
-      extent: extentOf(prim, time),
+      extent: standinExtent(prim, time),
       cardGeometry: geometry === "box" || geometry === "fromTexture" ? geometry : "cross",
       textures: Object.freeze(textures.map((texture) => texture !== null)),
       hiddenAxis: visibility === "simple" && (upAxis === "X" || upAxis === "Y" || upAxis === "Z") ? upAxis : null,

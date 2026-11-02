@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 // What drawing costs, item by item: the draw list's measurement of what
-// it holds (`DrawList.cost`), or its estimate of the whole scene from
-// counts (`DrawList.estimate`), sortable by any column, each row selecting
-// the prim it draws. Bytes uploaded are the buffer's (f32 attributes, u32
+// it holds (`DrawList.cost`), its estimate of the whole scene from counts
+// (`DrawList.estimate`), or the items the budget simplified
+// (`DrawList.budgetReport`), each row selecting the prim it draws. Bytes uploaded are the buffer's (f32 attributes, u32
 // indices) plus 64 per instance; bytes held are the JavaScript arrays the
 // list keeps. A buffer two items share is counted in both rows, once in
 // the totals.
 import { useState } from "react";
-import type { DrawCost, ItemCost } from "@forest-rs/layerstack_stagehand";
+import type { BudgetGrant, BudgetReport, DrawCost, ItemCost } from "@forest-rs/layerstack_stagehand";
 import { cn } from "@/lib/utils";
 import type { EditorStore } from "../store.ts";
 import { formatBytes } from "./format.ts";
@@ -114,18 +114,81 @@ export function CostTable({ store, cost, caption }: { store: EditorStore; cost: 
   );
 }
 
+/** What a degraded item is drawn as, in words. */
+function rungLabel(grant: BudgetGrant): string {
+  return grant.rung === "standin" ? "box" : grant.rung;
+}
+
+/** The items the budget simplified, in admission order: what each asked for, what it was granted, and why. */
+export function BudgetTable({ store, report }: { store: EditorStore; report: BudgetReport }) {
+  const megatriangles = (count: number) => (count >= 1e6 ? `${(count / 1e6).toFixed(1)} M` : count.toLocaleString());
+  return (
+    <div className="text-[11px]">
+      <p className="px-3 py-1.5 text-muted-foreground">
+        {report.degraded.length.toLocaleString()} of {report.items.toLocaleString()} items simplified to fit{" "}
+        {report.budget.gpuBytes === undefined ? "any bytes" : formatBytes(report.budget.gpuBytes)} and{" "}
+        {report.budget.triangles === undefined ? "any number of" : megatriangles(report.budget.triangles)} triangles: granted {formatBytes(report.granted.gpuBytes)} and {megatriangles(report.granted.triangles)} triangles
+        of the {formatBytes(report.requested.gpuBytes)} and {megatriangles(report.requested.triangles)} asked for (estimated from counts). Every item is a
+        box first; then the selection, and after it the items worth most per share of the budget (bound size times instances, over their share of bytes
+        or triangles), are drawn in full while it holds.
+        {report.degraded.length > SHOWN && ` The ${SHOWN} first rows are shown.`}
+      </p>
+      <table className="w-full table-fixed border-collapse tabular-nums">
+        <thead className="sticky top-0 bg-background text-left text-muted-foreground">
+          <tr>
+            <th className="w-[40%] px-3 py-1 font-normal">Prim</th>
+            <th className="w-20 px-3 py-1 font-normal" title="A box of its extent at each instance (one box over a point instancer's), or skipped">
+              Drawn as
+            </th>
+            <th className="w-28 px-3 py-1 font-normal" title="The limits its full geometry would have passed">
+              Over
+            </th>
+            <th className="px-3 py-1 text-right font-normal">Instances</th>
+            <th className="px-3 py-1 text-right font-normal" title="Triangles its full geometry would draw">
+              Triangles asked
+            </th>
+            <th className="px-3 py-1 text-right font-normal" title="Bytes its full geometry would upload">
+              Uploaded asked
+            </th>
+            <th className="px-3 py-1 text-right font-normal" title="Bytes its rung uploads">
+              Granted
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {report.degraded.slice(0, SHOWN).map((grant) => (
+            <tr
+              key={`${grant.order} ${grant.prim}`}
+              className={cn("cursor-pointer border-t hover:bg-muted/50", store.selection === grant.prim && "bg-muted")}
+              onClick={() => store.select(grant.prim)}
+            >
+              <td className="max-w-0 truncate px-3 py-0.5 font-mono" title={grant.prim}>
+                {grant.prim}
+              </td>
+              <td className="px-3 py-0.5">{rungLabel(grant)}</td>
+              <td className="px-3 py-0.5">{grant.over.join(", ")}</td>
+              <td className="px-3 py-0.5 text-right">{grant.requested.instances.toLocaleString()}</td>
+              <td className="px-3 py-0.5 text-right">{grant.requested.triangles.toLocaleString()}</td>
+              <td className="px-3 py-0.5 text-right">{formatBytes(grant.requested.gpuBytes)}</td>
+              <td className="px-3 py-0.5 text-right">{formatBytes(grant.granted.gpuBytes)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 /**
- * The bottom panel's draw cost tab: what the drawn items hold, measured,
- * or what drawing the whole scene would, as estimated when it opened
- * (from counts, building nothing: the only figures for a scene too big
- * to draw).
+ * The bottom panel's draw cost tab: what the drawn items hold, measured;
+ * what drawing the whole scene in full would, estimated (from counts,
+ * building nothing); or the items the draw budget simplified.
  */
 export function CostView({ store }: { store: EditorStore }) {
-  const [choice, setChoice] = useState<"drawn" | "estimated" | null>(null);
+  const [choice, setChoice] = useState<"drawn" | "estimated" | "simplified" | null>(null);
   const drawn = store.cost !== null && store.cost.items.length > 0 ? store.cost : null;
-  const estimate = store.sceneEstimate;
   const showing = choice ?? (drawn !== null ? "drawn" : "estimated");
-  const cost = showing === "drawn" ? drawn : estimate;
+  const cost = showing === "drawn" ? drawn : showing === "estimated" ? store.sceneEstimate() : null;
   return (
     <div>
       <div role="group" aria-label="Cost of" className="flex gap-1 px-3 pt-1.5 text-[11px]">
@@ -133,6 +196,7 @@ export function CostView({ store }: { store: EditorStore }) {
           [
             ["drawn", "Drawn, measured"],
             ["estimated", "Whole scene, estimated"],
+            ["simplified", `Simplified${store.budget !== null && store.budget.degraded.length > 0 ? ` (${store.budget.degraded.length.toLocaleString()})` : ""}`],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -146,7 +210,15 @@ export function CostView({ store }: { store: EditorStore }) {
           </button>
         ))}
       </div>
-      {cost === null ? (
+      {showing === "simplified" ? (
+        store.budget === null ? (
+          <p className="p-3 text-xs text-muted-foreground">No budget: everything is drawn in full.</p>
+        ) : store.budget.degraded.length === 0 ? (
+          <p className="p-3 text-xs text-muted-foreground">Everything fits the budget: nothing is simplified.</p>
+        ) : (
+          <BudgetTable store={store} report={store.budget} />
+        )
+      ) : cost === null ? (
         <p className="p-3 text-xs text-muted-foreground">{showing === "drawn" ? "Nothing is drawn." : "No estimate: no scene is open."}</p>
       ) : (
         <CostTable
@@ -155,7 +227,7 @@ export function CostView({ store }: { store: EditorStore }) {
           caption={
             showing === "drawn"
               ? "Drawn, measured"
-              : "The whole scene, estimated from counts when it opened (a mesh's vertices are its points, raised where a primvar is face-varying)"
+              : "The whole scene in full, estimated from counts (a mesh's vertices are its points, raised where a primvar is face-varying)"
           }
         />
       )}

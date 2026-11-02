@@ -37,8 +37,8 @@
 //   diffuse texture through `map`, or another lookup through `alphaMap`.
 //
 // Textures: `file`'s identifier is fetched from the stage's asset loop's
-// host and decoded off the main thread (`createImageBitmap`), scaled down
-// to `MAX_TEXTURE_SIZE`; one image per identifier, and one `Texture` per
+// host and decoded off the main thread (`createImageBitmap` in a worker,
+// `imageDecoders.ts`), scaled down to `MAX_TEXTURE_SIZE`; one image per identifier, and one `Texture` per
 // distinct use of it (they share the image, and every material making the
 // same use shares the texture, so an image is uploaded once per use), with:
 //
@@ -90,6 +90,7 @@ import type { Wrapping } from "three/webgpu";
 import { udimTiles } from "@forest-rs/layerstack_stagehand";
 import type { MaterialItem, MaterialTexture, MaterialValue, TextureWrap } from "@forest-rs/layerstack_stagehand";
 import { readChannels } from "./channels.ts";
+import { imageDecoders } from "./imageDecoders.ts";
 import type { ChannelMap, MapChannels } from "./channels.ts";
 
 /**
@@ -129,6 +130,9 @@ export interface TextureStats {
   readonly limit: number;
   /** Images asked for and not yet decoded (or failed). */
   readonly pending: number;
+  /** Decodes in the workers now, and how many workers there are ({@link imageDecoders}). */
+  readonly decoding: number;
+  readonly decoders: number;
 }
 
 /** The textures materials read, one image per identifier, loaded once. */
@@ -185,13 +189,22 @@ export class TextureStore {
 
   /** What the store has decoded: images, and how many were scaled down to {@link MAX_TEXTURE_SIZE}. */
   get stats(): TextureStats {
-    return { images: this.#decoded, capped: this.#capped, limit: MAX_TEXTURE_SIZE, pending: this.#images.size - this.#ready.size };
+    const decoders = imageDecoders.stats;
+    return {
+      images: this.#decoded,
+      capped: this.#capped,
+      limit: MAX_TEXTURE_SIZE,
+      pending: this.#images.size - this.#ready.size,
+      decoding: decoders.inFlight,
+      decoders: decoders.workers,
+    };
   }
 
   /**
    * The image at `identifier`, decoded off the main thread
-   * (`createImageBitmap`) so neither decoding nor its first upload stalls
-   * the page, and scaled down while decoding to fit
+   * (`createImageBitmap` in a worker, {@link imageDecoders}) so neither
+   * decoding, scaling nor its first upload stalls the page, and scaled
+   * down while decoding to fit
    * {@link MAX_TEXTURE_SIZE}. Its texels are kept as stored (no color
    * space conversion, no premultiplied alpha): a normal or roughness map is
    * data. `flip` turns it so `st`'s v runs up, as a texture of its own
@@ -200,22 +213,21 @@ export class TextureStore {
   async #decode(identifier: string, anchor: string | null, flip = true): Promise<Texture | null> {
     const bytes = await this.#read(identifier, anchor);
     if (bytes === null) return null;
-    const blob = new Blob([bytes.slice()]);
     const options: ImageBitmapOptions = { imageOrientation: flip ? "flipY" : "from-image", premultiplyAlpha: "none", colorSpaceConversion: "none" };
     // The size from the file's header, when it gives one, so a large image
     // is decoded once, already scaled; otherwise from a first decode.
     const known = imageSize(bytes);
-    let bitmap = known === null ? await createImageBitmap(blob, options) : null;
+    let bitmap = known === null ? await imageDecoders.decode(bytes, options) : null;
     const { width, height } = known ?? bitmap!;
     const scale = Math.min(1, MAX_TEXTURE_SIZE / Math.max(width, height));
     if (scale < 1) {
       const resizeWidth = Math.max(1, Math.round(width * scale));
       const resizeHeight = Math.max(1, Math.round(height * scale));
       bitmap?.close();
-      bitmap = await createImageBitmap(blob, { ...options, resizeWidth, resizeHeight, resizeQuality: "high" });
+      bitmap = await imageDecoders.decode(bytes, { ...options, resizeWidth, resizeHeight, resizeQuality: "high" });
       this.#capped += 1;
     } else {
-      bitmap ??= await createImageBitmap(blob, options);
+      bitmap ??= await imageDecoders.decode(bytes, options);
     }
     this.#decoded += 1;
     const texture = new Texture(bitmap);

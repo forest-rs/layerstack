@@ -125,10 +125,28 @@ upload(vertices.position.array, vertices.position.type, vertices.position.stride
 model = multiply(item.matrices, decodeMatrix(vertices.decode)); // translate(offset) * scale(scale)
 ```
 
+Once a renderer has uploaded a static buffer it can drop the list's
+copies: `release(key, revision)` empties its arrays in place
+(`vertices.released`; counts, types and decode stay) and refuses curves,
+points, stand-ins and meshes whose geometry might vary (they refill).
+A renderer that loses its uploads (a lost WebGL context) calls
+`restore()`, which fills every released buffer again (a mesh read and
+planned anew, a shape tessellated) and lists them as `rebuilt`;
+`restore(keys)` fills only those, for a renderer that needs one
+buffer's vertices on the CPU again (the editor, when a skeleton comes to
+deform a mesh it released).
+
+```ts
+geometry.index.onUpload(() => list.release(key, buffers.revision)); // and drop three.js's arrays
+canvas.addEventListener("webglcontextrestored", () => upload(list.restore()));
+```
+
 `cost()` measures what the items hold and draw: per item its buffer's
-triangles, vertices, JavaScript bytes and the bytes a renderer uploads
-(its `vertices` as encoded), and its instances (64 bytes each on the
-GPU); totals count each shared buffer once. `estimate(scope)`
+triangles, vertices, JavaScript bytes (released arrays count nothing)
+and the bytes a renderer uploads (its `vertices` as encoded, counted
+from counts and types, so released buffers still count), and its
+instances (64 bytes each on the GPU); totals count each shared buffer
+once. `estimate(scope)`
 answers in the same units before anything is built: it discovers the
 items as a refresh would and reads only array lengths (a mesh's
 triangles are `faceVertexIndices` less twice its faces), so a viewer can

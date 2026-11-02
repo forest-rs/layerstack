@@ -7,8 +7,9 @@
 // (`DrawList.budgetReport`), each row selecting the prim it draws. Bytes
 // uploaded are the buffer's (its vertices in stagehand's compact format,
 // u16 or u32 indices) plus 64 per instance; bytes held are the JavaScript
-// arrays the list keeps. A buffer two items share is counted in both rows,
-// once in the totals.
+// arrays the list keeps, which for a static buffer the viewport has
+// uploaded are only its vertex points. A buffer two items share is counted
+// in both rows, once in the totals.
 import { useState } from "react";
 import type { BudgetGrant, BudgetReport, DrawCost, ItemCost } from "@forest-rs/layerstack_stagehand";
 import { cn } from "@/lib/utils";

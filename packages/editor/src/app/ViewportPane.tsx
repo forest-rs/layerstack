@@ -162,7 +162,7 @@ export function ViewportPane() {
           <div>
             {summary.drawn.length} prims drawn · {summary.triangles.toLocaleString()} triangles · {summary.lights.length} lights
             {store.cost !== null && store.cost.total.items > 0 && (
-              <span title="Bytes the draws upload (compact vertices: 16 per vertex with a position, normal and st; u16 or u32 indices; 64 per instance), and the JavaScript arrays they hold; the Draw cost tab lists them by item">
+              <span title="Bytes the draws upload (compact vertices: 16 per vertex with a position, normal and st; u16 or u32 indices; 64 per instance), and the JavaScript arrays they still hold (a static buffer's are dropped once uploaded); the Draw cost tab lists them by item">
                 {" "}· {formatBytes(store.cost.total.gpuBytes)} uploaded · {formatBytes(store.cost.total.cpuBytes)} held
               </span>
             )}

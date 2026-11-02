@@ -124,6 +124,13 @@
 // not quantized relative to the bounds, are transformed as before, since
 // a uniform scale only changes their length. A skinned draw's positions
 // are decoded to `f32` instead (skinning runs before the model matrix).
+// Once three.js has uploaded a static buffer (`BufferAttribute.onUpload`),
+// the arrays are dropped, three.js's and stagehand's (`DrawList.release`):
+// the GPU holds them, and nothing reads them on the CPU after upload
+// (bounds are computed before, framing reads the stage's bounds, picking
+// is on the GPU). A lost WebGL context loses them: on its restoring, the
+// draw list fills every released buffer again (`DrawList.restore`) and
+// the view is made again from it.
 //
 // Picking (`picking.ts`): a click renders the scene once more into a
 // 7×7-pixel RGBA8 target about the point, every draw in one shader that
@@ -317,10 +324,30 @@ export class Viewport {
    * replacement still needs it, and three.js would compile it again.
    */
   #retired: Material[] = [];
+  /** Geometries a render uploaded, released after it ({@link onUploaded}). */
+  readonly #uploaded: BufferGeometry[] = [];
   /** GPU picking's target, shader and ids, made at the first pick. */
   #picker: Picker | null = null;
   /** The pick in flight, which the next follows. */
   #picking: Promise<unknown> = Promise.resolve();
+  /**
+   * A lost context: every object and geometry let go now, while three.js's
+   * calls on the lost context do nothing (disposed after the restore, they
+   * would delete the old context's buffers in the new one); the next
+   * update starts from nothing ({@link onContextRestored}).
+   */
+  readonly #lost = () => {
+    for (const id of [...this.#objects.keys()]) this.#drop(id);
+    for (const geometry of this.#geometries.values()) geometry.dispose();
+    this.#geometries.clear();
+    for (const material of this.#retired) material.dispose();
+    this.#retired = [];
+    this.#uploaded.length = 0;
+    this.#picker?.dispose();
+    this.#picker = null;
+    this.#synced = false;
+  };
+  readonly #restored = () => this.onContextRestored?.();
 
   /**
    * `read` and `exists` reach the stage's assets (textures and UDIM tiles)
@@ -352,6 +379,9 @@ export class Viewport {
     this.#controls = this.#makeControls();
     this.#resizer = new ResizeObserver(() => this.#resize());
     this.#resizer.observe(canvas);
+    // After the renderer's own listeners, which mark the context lost and make its state again.
+    canvas.addEventListener("webglcontextlost", this.#lost);
+    canvas.addEventListener("webglcontextrestored", this.#restored);
   }
 
   /**
@@ -468,6 +498,23 @@ export class Viewport {
   /** How long the last pick took, from its render to its pixels read back, in milliseconds. */
   lastPickMs = 0;
 
+  /**
+   * Called after a render uploaded a static buffer's geometry: releases
+   * the buffer's arrays in the draw list (`DrawList.release`) and answers
+   * whether it did, and the view then drops three.js's.
+   */
+  onUploaded: ((key: number, revision: number) => boolean) | null = null;
+
+  /** Called after a render in which buffers were released, so a page can show what is held now. */
+  onReleased: (() => void) | null = null;
+
+  /**
+   * Called when a lost WebGL context is restored: the uploaded buffers are
+   * gone, and the released ones must be filled again (`DrawList.restore`)
+   * and the view updated with a reset.
+   */
+  onContextRestored: (() => void) | null = null;
+
   /** Called as each image arrives (or fails), so a page can show how many are still on their way. */
   onImages: (() => void) | null = null;
 
@@ -478,6 +525,8 @@ export class Viewport {
 
   /** Releases the renderer, geometries, materials and textures. */
   dispose(): void {
+    this.#canvas.removeEventListener("webglcontextlost", this.#lost);
+    this.#canvas.removeEventListener("webglcontextrestored", this.#restored);
     this.#picker?.dispose();
     this.#resizer.disconnect();
     this.#controls.dispose();
@@ -533,7 +582,7 @@ export class Viewport {
       const view = views.get(key);
       if (view === undefined) continue;
       this.#geometries.get(key)?.dispose();
-      const geometry = makeGeometry(view);
+      const geometry = this.#makeGeometry(view);
       this.#geometries.set(key, geometry);
       for (const id of drawing.get(key) ?? []) {
         this.#objects.get(id)!.geometry = geometry;
@@ -548,7 +597,7 @@ export class Viewport {
       if (view.buffers.standin !== null) {
         // A stand-in's cards may come and go: its geometry and object made again.
         geometry.dispose();
-        this.#geometries.set(key, makeGeometry(view));
+        this.#geometries.set(key, this.#makeGeometry(view));
         if (!update.added.has(view.item.id)) {
           this.#drop(view.item.id);
           this.#add(view, selected);
@@ -560,7 +609,7 @@ export class Viewport {
       if (object !== undefined && !fits(object, view.kind)) {
         // A curve's widths crossed the line width: the same buffers, drawn the other way.
         this.#geometries.get(key)?.dispose();
-        this.#geometries.set(key, makeGeometry(view));
+        this.#geometries.set(key, this.#makeGeometry(view));
         this.#drop(view.item.id);
         this.#add(view, selected);
         continue;
@@ -639,7 +688,7 @@ export class Viewport {
       geometry = undefined;
     }
     if (geometry === undefined) {
-      geometry = makeGeometry(view);
+      geometry = this.#makeGeometry(view);
       this.#geometries.set(view.item.buffer, geometry);
     }
     const placements = view.item.matrices.length / 16;
@@ -722,6 +771,28 @@ export class Viewport {
     object.count = placements;
     object.instanceMatrix.needsUpdate = true;
     object.computeBoundingSphere();
+  }
+
+  /**
+   * The geometry of the item's buffer ({@link makeGeometry}), watched for
+   * its upload when it is a mesh's own vertices: once three.js has
+   * uploaded its index and positions (one render uploads them all), it is
+   * listed for {@link #releaseUploaded}.
+   */
+  #makeGeometry(view: ViewItem): BufferGeometry {
+    const geometry = makeGeometry(view);
+    const position = geometry.getAttribute("position");
+    if (geometry.userData.decode === undefined || geometry.userData.skinned === true || geometry.index === null || position === undefined) return geometry;
+    geometry.userData.key = view.item.buffer;
+    geometry.userData.revision = view.buffers.revision;
+    let pending = 2;
+    const uploaded = () => {
+      pending -= 1;
+      if (pending === 0) this.#uploaded.push(geometry);
+    };
+    geometry.index.onUpload(uploaded);
+    (position instanceof InterleavedBufferAttribute ? position.data : (position as BufferAttribute)).onUpload(uploaded);
+    return geometry;
   }
 
   #addLight(light: LightItem): void {
@@ -852,6 +923,7 @@ export class Viewport {
     this.#cameraLight.position.setFromMatrixPosition(camera.matrixWorld);
     this.#renderer.toneMappingExposure = this.#looking()?.camera?.linearExposureScale ?? 1;
     this.#renderer.render(this.#scene, camera);
+    this.#releaseUploaded();
   }
 
   /** The camera drawn through: the free one, or the stage camera with its matrices set for the canvas. */
@@ -873,6 +945,23 @@ export class Viewport {
     return camera;
   }
 
+  /**
+   * Releases the buffers whose geometries the last render uploaded
+   * ({@link onUploaded}), and drops three.js's arrays of those it
+   * released: the GPU holds them now.
+   */
+  #releaseUploaded(): void {
+    if (this.#uploaded.length === 0) return;
+    let released = false;
+    for (const geometry of this.#uploaded) {
+      const { key, revision } = geometry.userData as { key: number; revision: number };
+      if (this.#geometries.get(key) !== geometry || this.onUploaded?.(key, revision) !== true) continue;
+      dropArrays(geometry);
+      released = true;
+    }
+    this.#uploaded.length = 0;
+    if (released) this.onReleased?.();
+  }
 }
 
 /** A ground grid of 40 cells of `cell` stage units, through the origin, across the `up` axis. */
@@ -1040,6 +1129,20 @@ function threeAttribute(attribute: VertexAttribute): BufferAttribute | Interleav
     return Object.assign(new Float16BufferAttribute(new Uint16Array(0), attribute.size), { array: attribute.array, count: attribute.array.length / attribute.size });
   }
   return new BufferAttribute(attribute.array, attribute.size, attribute.normalized);
+}
+
+/**
+ * Drops the arrays of a geometry three.js has uploaded: each attribute's
+ * (an interleaved one's buffer's) and the index's become empty arrays of
+ * their type. Counts stay, so it draws as before; only a lost context,
+ * which needs the arrays again, makes it again ({@link Viewport.onContextRestored}).
+ */
+function dropArrays(geometry: BufferGeometry): void {
+  const empty = (holder: { array: ArrayLike<number> }) => {
+    holder.array = new (holder.array.constructor as new (length: number) => ArrayLike<number>)(0);
+  };
+  for (const attribute of Object.values(geometry.attributes)) empty(attribute instanceof InterleavedBufferAttribute ? attribute.data : (attribute as BufferAttribute));
+  if (geometry.index !== null) empty(geometry.index);
 }
 
 /** The three.js objects a draw item becomes. */

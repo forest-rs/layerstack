@@ -41,7 +41,7 @@ export type ComponentType = "float32" | "float16" | "snorm16" | "snorm8";
 
 /** One vertex attribute: its numbers, their type, and how many a vertex has. */
 export interface VertexAttribute {
-  /** The numbers, {@link stride} per vertex. */
+  /** The numbers, {@link stride} per vertex; empty once released ({@link MeshVertices.released}). */
   readonly array: Float32Array | Uint16Array | Int16Array | Int8Array;
   readonly type: ComponentType;
   /** The components a shader reads per vertex: 3 for a position, normal or color, 2 for texture coordinates. */
@@ -74,7 +74,9 @@ export interface VertexUvSet {
 
 /**
  * A mesh's vertices and indices in a {@link VertexFormat}, ready to upload
- * as they are: what a draw list's {@link DrawBuffers.vertices} holds.
+ * as they are: what a draw list's {@link DrawBuffers.vertices} holds. The
+ * counts and types survive {@link DrawList.release}, which empties the
+ * arrays once a renderer has uploaded them.
  */
 export interface MeshVertices {
   readonly format: VertexFormat;
@@ -93,8 +95,13 @@ export interface MeshVertices {
   readonly color: VertexAttribute | null;
   /** The texture coordinate sets besides `st`, in the mesh's order. */
   readonly uvSets: readonly VertexUvSet[];
-  /** Three vertex indices per triangle, counter-clockwise seen from the front. */
+  /** Three vertex indices per triangle, counter-clockwise seen from the front; empty once released. */
   readonly indices: Uint16Array | Uint32Array;
+  /**
+   * Whether the arrays were dropped after upload ({@link DrawList.release}):
+   * every array is then empty and only the counts, types and decode remain.
+   */
+  readonly released: boolean;
 }
 
 /**
@@ -143,6 +150,7 @@ export function encodeVertices(mesh: VertexSource, format: VertexFormat): MeshVe
       color: mesh.colors === null ? null : float(mesh.colors, 3),
       uvSets: mesh.uvSets.map((set) => ({ name: set.name, attribute: float(set.values, 2) })),
       indices: mesh.indices,
+      released: false,
     };
   }
   const { array: position, decode } = quantizePositions(mesh.positions);
@@ -157,6 +165,7 @@ export function encodeVertices(mesh: VertexSource, format: VertexFormat): MeshVe
     color: mesh.colors === null ? null : { array: mesh.colors, type: "float32", size: 3, stride: 3, normalized: false },
     uvSets: mesh.uvSets.map((set) => ({ name: set.name, attribute: coordinates(set.values) })),
     indices: count < 0xffff ? new Uint16Array(mesh.indices) : mesh.indices,
+    released: false,
   };
 }
 
@@ -287,6 +296,7 @@ function component(attribute: VertexAttribute, at: number): number {
 /**
  * An attribute's values as `f32`, {@link VertexAttribute.size} per vertex,
  * as a GPU reads them (positions not decoded: see {@link vertexPositions}).
+ * Empty once released.
  */
 export function attributeValues(attribute: VertexAttribute): Float32Array {
   const count = attribute.array.length / attribute.stride;
@@ -297,7 +307,7 @@ export function attributeValues(attribute: VertexAttribute): Float32Array {
   return out;
 }
 
-/** The mesh's points, three per vertex, decoded from {@link MeshVertices.position}. */
+/** The mesh's points, three per vertex, decoded from {@link MeshVertices.position}; empty once released. */
 export function vertexPositions(vertices: MeshVertices): Float32Array {
   const out = attributeValues(vertices.position);
   const { scale, offset } = vertices.decode;
@@ -310,10 +320,22 @@ export function componentBytes(type: ComponentType): number {
   return type === "float32" ? 4 : type === "snorm8" ? 1 : 2;
 }
 
-/** The bytes a renderer uploads for `vertices`, from their counts and types. */
+/** The bytes a renderer uploads for `vertices`, from their counts and types: whether or not they were released. */
 export function verticesGpuBytes(vertices: MeshVertices): number {
   const attributes = [vertices.position, vertices.normal, vertices.st, vertices.color, ...vertices.uvSets.map((set) => set.attribute)];
   let bytes = vertices.triangles * 3 * vertices.indices.BYTES_PER_ELEMENT;
   for (const attribute of attributes) if (attribute !== null) bytes += vertices.count * attribute.stride * componentBytes(attribute.type);
   return bytes;
+}
+
+/** `vertices` with every array emptied in place, counts, types and decode kept: {@link MeshVertices.released}. */
+export function releaseVertices(vertices: MeshVertices): void {
+  type Writable<T> = { -readonly [K in keyof T]: T[K] };
+  const empty = (attribute: VertexAttribute | null) => {
+    if (attribute !== null) (attribute as Writable<VertexAttribute>).array = new (attribute.array.constructor as new (length: number) => VertexAttribute["array"])(0);
+  };
+  for (const attribute of [vertices.position, vertices.normal, vertices.st, vertices.color, ...vertices.uvSets.map((set) => set.attribute)]) empty(attribute);
+  const writable = vertices as Writable<MeshVertices>;
+  writable.indices = vertices.indices instanceof Uint16Array ? new Uint16Array(0) : new Uint32Array(0);
+  writable.released = true;
 }

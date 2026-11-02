@@ -26,9 +26,9 @@ export const INSTANCE_GPU_BYTES = 64;
  *   points.
  * - `cpuBytes`: the bytes of the JavaScript typed arrays it holds, every
  *   one counted once: its encoded vertices and indices
- *   ({@link DrawBuffers.vertices}), and its mesh's own arrays where they
- *   are not released (in the `float32` format they are the same arrays),
- *   vertex points; curves' samples and segments;
+ *   ({@link DrawBuffers.vertices}) until released, and its mesh's own
+ *   arrays where they are not released (in the `float32` format they are
+ *   the same arrays), vertex points; curves' samples and segments;
  *   points' arrays; a stand-in's lines.
  * - `gpuBytes`: the bytes a renderer uploads to draw it as the editor
  *   does: its vertices and indices as {@link DrawBuffers.vertices} lays
@@ -38,8 +38,9 @@ export const INSTANCE_GPU_BYTES = 64;
  *   indices below 65535 vertices; in `float32` 12, 12, 8, 8 and 12, `u32`
  *   indices); curves' samples (3 `f32` per sample) and segment indices;
  *   points' positions, widths and colors; a stand-in's line points.
- *   Counted from counts and types. An estimate of what the GPU holds:
- *   drivers pad and copy.
+ *   Counted from counts and types, so a buffer's arrays released after
+ *   upload ({@link DrawList.release}) still count. An estimate of what
+ *   the GPU holds: drivers pad and copy.
  */
 export interface BufferCost {
   readonly triangles: number;

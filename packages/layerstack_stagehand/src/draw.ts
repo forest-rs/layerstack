@@ -23,7 +23,7 @@ import type { MaterialItem } from "./material.js";
 import { readMesh, readShape, shapeSchema } from "./read.js";
 import { CARD_FACES, flattenedDrawMode, inheritedDrawMode, readStandinInput, sameStandin, standinExtent, standinMode } from "./standin.js";
 import type { StandinBuffers, StandinInput } from "./standin.js";
-import { encodeVertices } from "./vertices.js";
+import { encodeVertices, releaseVertices } from "./vertices.js";
 import type { MeshVertices, VertexFormat } from "./vertices.js";
 import type {
   CurveOptions,
@@ -214,7 +214,8 @@ export interface DrawBuffers {
   readonly mesh: StagehandMesh;
   /**
    * {@link mesh}'s vertices and indices in the list's vertex format
-   * ({@link DrawOptions.vertexFormat}), to upload as they are.
+   * ({@link DrawOptions.vertexFormat}), to upload as they are. Their
+   * arrays are emptied by {@link DrawList.release} once uploaded.
    */
   readonly vertices: MeshVertices;
   /** Curves' samples, line segments and report, for `BasisCurves`, `NurbsCurves` and `HermiteCurves`; their swept triangles are {@link mesh}. */
@@ -1284,6 +1285,70 @@ export class DrawList implements Disposable {
       matrixBytes += item.matrices.byteLength;
     }
     return { basis: "measured", time: this.#time, total: totals(items, (cost) => String(cost.buffer), matrixBytes), items: items.sort(byBytes) };
+  }
+
+  /**
+   * Drops the list's JavaScript copies of buffer `key`'s vertices and
+   * indices once a renderer has uploaded them, as three.js's
+   * `BufferAttribute.onUpload` drops its own: its {@link DrawBuffers.vertices}
+   * arrays (and its mesh's, {@link StagehandMesh.release}) are emptied in
+   * place, {@link MeshVertices.released} is set, and {@link cost} counts
+   * them no more. Only a static mesh's or a shape's buffer is released, and
+   * only at `revision` ({@link DrawBuffers.revision}): curves, points,
+   * stand-ins and meshes whose geometry might vary refill, and a buffer
+   * refilled or rebuilt since keeps its new arrays. Returns whether it
+   * released them.
+   *
+   * A renderer that loses what it uploaded (a lost WebGL context) gets the
+   * arrays back from {@link restore}.
+   */
+  release(key: number, revision: number): boolean {
+    const retained = this.#buffers.get(key);
+    if (retained === undefined || retained.buffers.revision !== revision) return false;
+    const buffers = retained.buffers;
+    if (buffers.vertices.released || buffers.curves !== null || buffers.points !== null || buffers.standin !== null) return false;
+    if (buffers.shape === null && retained.input !== null) return false;
+    releaseVertices(buffers.vertices);
+    buffers.mesh.release();
+    return true;
+  }
+
+  /**
+   * Fills the released buffers ({@link release}) named by `keys`, or
+   * every one, again, for a renderer to upload anew (after a lost WebGL
+   * context, or to read a buffer's vertices on the CPU once more): a shape
+   * is tessellated again, a mesh read at the list's time and planned again
+   * (its plan was freed with its geometry static). Each is listed in the
+   * diff's `rebuilt`, with new {@link DrawBuffers.mesh} and
+   * {@link DrawBuffers.vertices}; nothing else is read. A key that is not
+   * a released buffer is passed over, and a mesh whose prim no longer
+   * reads as one stays released until the change that did it is applied.
+   */
+  restore(keys?: Iterable<number>): DrawDiff {
+    const before = this.#stage.transformCache().localComputed;
+    const gather = new Gather();
+    const at = this.#time === undefined ? {} : { time: this.#time };
+    const wanted = keys === undefined ? null : new Set(keys);
+    for (const [key, retained] of this.#buffers) {
+      const buffers = retained.buffers;
+      if (!buffers.vertices.released || (wanted !== null && !wanted.has(key))) continue;
+      let mesh: StagehandMesh;
+      if (buffers.shape !== null) {
+        mesh = this.#stagehand.tessellate(buffers.shape, this.#tessellation);
+        gather.work.tessellations++;
+      } else {
+        const input = readMesh(this.#stage, buffers.prim, { ...at, uvSets: retained.uvSets });
+        if (input === null) continue;
+        mesh = this.#stagehand.buildMesh(input, this.#meshOptions);
+        gather.work.triangulations++;
+        retained.input = input;
+      }
+      buffers.mesh.dispose();
+      retained.buffers = { ...buffers, ...this.#meshed(mesh), revision: buffers.revision + 1 };
+      if (buffers.shape === null) this.#keepPlan(buffers.prim, key, gather);
+      gather.rebuilt.add(key);
+    }
+    return this.#finish(gather, new Set(), before);
   }
 
   /**
@@ -3026,12 +3091,12 @@ export class DrawList implements Disposable {
   /**
    * `mesh`'s vertices in the list's format; in `compact`, the mesh's own
    * arrays then released, so each buffer is held once. A refill passes the
-   * `previous` vertices, whose indices it keeps (a refill keeps the
-   * topology).
+   * `previous` vertices, whose indices it keeps when they are not released
+   * (a refill keeps the topology).
    */
   #encode(mesh: StagehandMesh, previous: MeshVertices | null): MeshVertices {
     if (this.#vertexFormat === "float32") return encodeVertices(mesh, "float32");
-    const kept = previous !== null ? previous.indices : null;
+    const kept = previous !== null && !previous.released ? previous.indices : null;
     const { positions, normals, st, colors, uvSets } = mesh;
     const vertices = encodeVertices({ positions, normals, st, colors, uvSets, indices: kept === null ? mesh.indices : new Uint32Array() }, "compact");
     mesh.release();

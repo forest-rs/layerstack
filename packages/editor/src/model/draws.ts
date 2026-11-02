@@ -402,6 +402,23 @@ export class ViewportModel {
     }
   }
 
+  /**
+   * Drops the list's copies of buffer `key`'s arrays once the viewport has
+   * uploaded them ({@link DrawList.release}); whether it did.
+   */
+  release(key: number, revision: number): boolean {
+    return this.#list?.release(key, revision) ?? false;
+  }
+
+  /**
+   * Fills every released buffer again ({@link DrawList.restore}), for a
+   * viewport whose WebGL context was lost and restored; the scene is then
+   * to be read again and drawn with a reset.
+   */
+  restore(): void {
+    this.#list?.restore();
+  }
+
   /** Where the draws stand against their budget ({@link DrawList.budgetReport}); `null` without one or before the first sync. */
   budgetReport(): BudgetReport | null {
     return this.#list?.budgetReport() ?? null;
@@ -524,6 +541,15 @@ export class ViewportModel {
       this.#colors.set(id, { ...primColor(stage, at, time), rangeColors: rangeColors(stage, at, buffers, time) });
       if (!update.added.has(id)) update.recolored.add(id);
     }
+    // A skeleton newly bound to a mesh whose arrays were released after
+    // upload: they are filled again, for the viewport to decode its
+    // positions for skinning.
+    const released = new Set<number>();
+    for (const id of skins.rebound) {
+      const key = list.item(id)?.buffer;
+      if (key !== undefined && list.buffers(key)?.vertices.released === true) released.add(key);
+    }
+    if (released.size > 0) for (const key of list.restore(released).rebuilt) update.rebuilt.add(key);
     return { ...update, reskinned: skins.rebound, skinned: skins.posed, skinWork: skins.work };
   }
 

@@ -597,6 +597,41 @@ export type Value =
       readonly type: string;
     };
 
+/**
+ * The samples bracketing a stage time ({@link Attribute.bracketingSamples}),
+ * the three answers of OpenUSD's `UsdAttribute::GetBracketingTimeSamples`:
+ *
+ * - `samples`: the nearest composed sample at or below the time and the
+ *   nearest at or above it; both the time itself on a sample, and both the
+ *   first (last) sample before the first (after the last);
+ * - `noSamples`: a value without time samples (a default, a schema
+ *   fallback, or nothing authored), OpenUSD's success without
+ *   `hasTimeSamples`;
+ * - `noValue`: no sample or default supplies one (a block, an animation
+ *   block or a spline ends resolution first, as OpenUSD's call fails for
+ *   splines too), a NaN time, or no attribute at the path.
+ */
+export type BracketingSamples =
+  | { readonly kind: "samples"; readonly lower: number; readonly upper: number }
+  | { readonly kind: "noSamples" }
+  | { readonly kind: "noValue" };
+
+/**
+ * An interval of stage time, as OpenUSD's `GfInterval`: an absent end is
+ * infinite, and each end is closed unless `minClosed` or `maxClosed` is
+ * `false`. A NaN end or a reversed interval holds no time.
+ */
+export interface TimeInterval {
+  /** The lower end; `-Infinity` when absent. */
+  readonly min?: number;
+  /** The upper end; `Infinity` when absent. */
+  readonly max?: number;
+  /** Whether `min` itself is inside; `true` when absent. */
+  readonly minClosed?: boolean;
+  /** Whether `max` itself is inside; `true` when absent. */
+  readonly maxClosed?: boolean;
+}
+
 /** Where a resolved value comes from. */
 export type ValueSource = "none" | "default" | "timeSamples" | "spline" | "valueClips" | "fallback";
 

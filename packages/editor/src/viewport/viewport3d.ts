@@ -124,6 +124,13 @@
 // not quantized relative to the bounds, are transformed as before, since
 // a uniform scale only changes their length. A skinned draw's positions
 // are decoded to `f32` instead (skinning runs before the model matrix).
+//
+// Picking (`picking.ts`): a click renders the scene once more into a
+// 7×7-pixel RGBA8 target about the point, every draw in one shader that
+// writes its object's pick id plus the instance index, and reads it back
+// with `readRenderTargetPixelsAsync` a frame or so later. The center pixel
+// decides; a line or point within three pixels of it is picked when the
+// center shows nothing, as the ray's threshold let a thin line be.
 import {
   AgXToneMapping,
   AmbientLight,
@@ -153,21 +160,22 @@ import {
   Points,
   PointsMaterial,
   Quaternion,
-  Raycaster,
   RectAreaLight,
   Scene,
   ShaderChunk,
+  ShaderMaterial,
   Skeleton,
   SkinnedMesh,
   SpotLight,
-  Vector2,
   Vector3,
+  WebGLRenderTarget,
   WebGLRenderer,
 } from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
 import { conformCamera, lightSizeFactor, vertexPositions } from "@forest-rs/layerstack_stagehand";
 import type { CameraItem, LightItem, MaterialItem, MeshVertices, VertexAttribute } from "@forest-rs/layerstack_stagehand";
+import { PickIds, pickOrder, pickWindow, unpackPickId } from "./picking.ts";
 import { DEFAULT_LIGHT_SETTINGS, defaultLights, type LightSettings } from "./defaultLights.ts";
 import { TextureStore, surfaceMaterial, uvChannels } from "./surfaces.ts";
 import { standinGeometry, standinMaterials, standinTextured } from "./standins.ts";
@@ -309,6 +317,10 @@ export class Viewport {
    * replacement still needs it, and three.js would compile it again.
    */
   #retired: Material[] = [];
+  /** GPU picking's target, shader and ids, made at the first pick. */
+  #picker: Picker | null = null;
+  /** The pick in flight, which the next follows. */
+  #picking: Promise<unknown> = Promise.resolve();
 
   /**
    * `read` and `exists` reach the stage's assets (textures and UDIM tiles)
@@ -392,30 +404,69 @@ export class Viewport {
   /**
    * The prim drawn under the canvas point (`x`, `y` in CSS pixels from its
    * top left), nearest first: a gprim, the instance proxy an instanced draw
-   * places there, or a point instancer; `null` over nothing.
+   * places there, or a point instancer; `null` over nothing. Read from the
+   * GPU (see the header), so it answers a frame or so later; picks made
+   * together answer in order.
    */
-  pick(x: number, y: number): string | null {
-    const { clientWidth: width, clientHeight: height } = this.#canvas;
-    if (width === 0 || height === 0) return null;
-    const looking = this.#looking();
-    const camera = looking === null ? this.#camera : this.#stageCamera;
-    const raycaster = new Raycaster();
-    raycaster.params.Line.threshold = 0.02;
-    raycaster.setFromCamera(new Vector2((x / width) * 2 - 1, -(y / height) * 2 + 1), camera);
-    const ids = new Map([...this.#objects].map(([id, object]) => [object as Object3D, id]));
-    // A skinned draw's bounds move with its pose: three.js keeps the first it computed.
-    for (const object of this.#objects.values()) if (object instanceof SkinnedMesh) object.computeBoundingSphere();
-    const hits = raycaster.intersectObjects([...this.#objects.values()].filter((object) => object.visible), false);
-    for (const hit of hits) {
-      const id = ids.get(hit.object);
-      const view = id === undefined ? undefined : this.#applied?.items.find((candidate) => candidate.item.id === id);
+  pick(x: number, y: number): Promise<string | null> {
+    const picked = this.#picking.then(() => this.#pick(x, y));
+    this.#picking = picked.catch(() => null);
+    return picked;
+  }
+
+  async #pick(x: number, y: number): Promise<string | null> {
+    const canvas = this.#canvas;
+    const renderer = this.#renderer;
+    const { clientWidth: width, clientHeight: height } = canvas;
+    if (width === 0 || height === 0 || renderer.getContext().isContextLost()) return null;
+    const started = performance.now();
+    const pick = (this.#picker ??= new Picker());
+    // A run of ids per object, one per instance it draws.
+    pick.ids.clear();
+    for (const [id, object] of this.#objects) object.userData.pickBase = pick.ids.add(id, object instanceof InstancedMesh ? object.count : 1) ?? 0;
+    const camera = this.#prepareCamera();
+    pick.projection.copy(camera.projectionMatrix);
+    const ratio = canvas.width / width;
+    camera.projectionMatrix.premultiply(pick.window.set(...(pickWindow(x * ratio, y * ratio, PICK_SIZE, PICK_SIZE, canvas.width, canvas.height) as Matrix16)));
+    pick.material.uniforms.pickPointScale!.value = height / 2;
+    const background = this.#scene.background;
+    const target = renderer.getRenderTarget();
+    const alpha = renderer.getClearAlpha();
+    renderer.getClearColor(pick.clearColor);
+    this.#scene.background = null;
+    this.#scene.overrideMaterial = pick.material;
+    this.#grid.visible = false;
+    try {
+      renderer.setRenderTarget(pick.target);
+      renderer.setClearColor(0x000000, 0);
+      renderer.render(this.#scene, camera);
+    } finally {
+      renderer.setRenderTarget(target);
+      renderer.setClearColor(pick.clearColor, alpha);
+      this.#scene.background = background;
+      this.#scene.overrideMaterial = null;
+      this.#grid.visible = true;
+      camera.projectionMatrix.copy(pick.projection);
+    }
+    await renderer.readRenderTargetPixelsAsync(pick.target, 0, 0, PICK_SIZE, PICK_SIZE, pick.pixels);
+    this.lastPickMs = performance.now() - started;
+    // The center pixel decides; off it, only a line or point is picked.
+    for (const pixel of pick.order) {
+      const hit = pick.ids.find(unpackPickId(pick.pixels, 4 * pixel));
+      const object = hit === null ? undefined : this.#objects.get(hit.owner);
+      if (hit === null || object === undefined) continue;
+      if (pixel !== pick.order[0] && !(object instanceof LineSegments || object instanceof Points)) continue;
+      const view = this.#applied?.items.find((candidate) => candidate.item.id === hit.owner);
       if (view === undefined) continue;
       const { item } = view;
       if (item.source.kind === "pointInstancer") return item.source.instancer;
-      return item.instances[hit.instanceId ?? 0] ?? item.prim;
+      return item.instances[hit.instance] ?? item.prim;
     }
     return null;
   }
+
+  /** How long the last pick took, from its render to its pixels read back, in milliseconds. */
+  lastPickMs = 0;
 
   /** Called as each image arrives (or fails), so a page can show how many are still on their way. */
   onImages: (() => void) | null = null;
@@ -427,6 +478,7 @@ export class Viewport {
 
   /** Releases the renderer, geometries, materials and textures. */
   dispose(): void {
+    this.#picker?.dispose();
     this.#resizer.disconnect();
     this.#controls.dispose();
     for (const id of [...this.#objects.keys()]) this.#drop(id);
@@ -796,12 +848,18 @@ export class Viewport {
   }
 
   #render(): void {
+    const camera = this.#prepareCamera();
+    this.#cameraLight.position.setFromMatrixPosition(camera.matrixWorld);
+    this.#renderer.toneMappingExposure = this.#looking()?.camera?.linearExposureScale ?? 1;
+    this.#renderer.render(this.#scene, camera);
+  }
+
+  /** The camera drawn through: the free one, or the stage camera with its matrices set for the canvas. */
+  #prepareCamera(): Camera {
     const looking = this.#looking()?.camera ?? null;
     if (looking === null) {
-      this.#renderer.toneMappingExposure = 1;
-      this.#cameraLight.position.copy(this.#camera.position);
-      this.#renderer.render(this.#scene, this.#camera);
-      return;
+      this.#camera.updateMatrixWorld();
+      return this.#camera;
     }
     // Row-by-row row-vector matrices are three.js's column-major
     // column-vector ones: `fromArray` reads them as they are.
@@ -812,10 +870,9 @@ export class Viewport {
     camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
     camera.matrixWorldInverse.fromArray(fitted.view);
     camera.matrixWorld.copy(camera.matrixWorldInverse).invert();
-    this.#cameraLight.position.setFromMatrixPosition(camera.matrixWorld);
-    this.#renderer.toneMappingExposure = looking.linearExposureScale;
-    this.#renderer.render(this.#scene, camera);
+    return camera;
   }
+
 }
 
 /** A ground grid of 40 cells of `cell` stage units, through the origin, across the `up` axis. */
@@ -1067,6 +1124,81 @@ function makeGeometry(view: ViewItem): BufferGeometry {
   if (mesh.ranges.length > 1) mesh.ranges.forEach((range, index) => geometry.addGroup(range.first, range.count, index));
   geometry.computeBoundingSphere();
   return geometry;
+}
+
+/** The pick target's side, in device pixels: odd, about the clicked point ({@link pickOrder}). */
+const PICK_SIZE = 7;
+
+/** Sixteen numbers, as `Matrix4.set` takes them. */
+type Matrix16 = [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number];
+
+/**
+ * The pick shader: every draw's fragments write its pick id, the object's
+ * first (`pickBase`) plus `gl_InstanceID`, as four bytes, low first. It
+ * places vertices as three.js's own shaders do (instancing, and skinning
+ * with the editor's eight influences, {@link SKINNING}); points are sized
+ * as `PointsMaterial` attenuates them (`pickPointSize`, 0 for anything
+ * else).
+ */
+const PICK_VERTEX = SKINNING.reduce(
+  (shader, [include, chunk]) => shader.replace(include, chunk),
+  `#include <common>
+#include <skinning_pars_vertex>
+uniform highp uint pickBase;
+uniform float pickPointSize;
+uniform float pickPointScale;
+flat out highp uint vPick;
+void main() {
+	#include <skinbase_vertex>
+	#include <begin_vertex>
+	#include <skinning_vertex>
+	#include <project_vertex>
+	gl_PointSize = pickPointSize > 0.0 ? max( 1.0, pickPointSize * pickPointScale / - mvPosition.z ) : 1.0;
+	vPick = pickBase + uint( gl_InstanceID );
+}`,
+);
+
+const PICK_FRAGMENT = `flat in highp uint vPick;
+void main() {
+	gl_FragColor = vec4( float( vPick & 255u ), float( ( vPick >> 8 ) & 255u ), float( ( vPick >> 16 ) & 255u ), float( vPick >> 24 ) ) / 255.0;
+}`;
+
+/**
+ * What a pick reuses, made at the first: the target and its pixels, the
+ * shader (one program for every draw, its uniforms written per object in
+ * `onBeforeRender`), the ids and the matrices it swaps. A pick allocates
+ * nothing per object or per frame.
+ */
+class Picker {
+  readonly target = new WebGLRenderTarget(PICK_SIZE, PICK_SIZE);
+  readonly pixels = new Uint8Array(4 * PICK_SIZE * PICK_SIZE);
+  readonly order = pickOrder(PICK_SIZE);
+  readonly ids = new PickIds();
+  readonly projection = new Matrix4();
+  readonly window = new Matrix4();
+  readonly clearColor = new Color();
+  readonly material = new ShaderMaterial({
+    vertexShader: PICK_VERTEX,
+    fragmentShader: PICK_FRAGMENT,
+    uniforms: { pickBase: { value: 0 }, pickPointSize: { value: 0 }, pickPointScale: { value: 1 } },
+    side: DoubleSide,
+    blending: 0,
+    toneMapped: false,
+  });
+
+  constructor() {
+    const uniforms = this.material.uniforms;
+    this.material.onBeforeRender = (_renderer, _scene, _camera, _geometry, object) => {
+      uniforms.pickBase!.value = (object.userData.pickBase as number | undefined) ?? 0;
+      uniforms.pickPointSize!.value = object instanceof Points ? (object.material as PointsMaterial).size : 0;
+      this.material.uniformsNeedUpdate = true;
+    };
+  }
+
+  dispose(): void {
+    this.target.dispose();
+    this.material.dispose();
+  }
 }
 
 /** The lights of one three.js type a material is linked against; more are lit as three.js lights them. */

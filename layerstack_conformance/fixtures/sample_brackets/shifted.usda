@@ -1,0 +1,10 @@
+#usda 1.0
+
+def "Shifted"
+{
+    double s.timeSamples = {
+        0: 0,
+        4: 4,
+        8: 8,
+    }
+}

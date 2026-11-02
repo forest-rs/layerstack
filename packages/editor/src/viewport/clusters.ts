@@ -36,7 +36,9 @@
 // scaled by its largest axis scale), and its bounds touch the frustum.
 // Each visible cluster takes a place in its subset's run with an atomic
 // add and is written there as an (instance, cluster) pair. A third, tiny
-// pass clamps each count to its run.
+// pass clamps each count to its run. Each slot also has a run of proxies
+// (one per instance at most), its count in a set of arguments past the
+// slots' own, never drawn itself (see below).
 //
 // Instances under a pixel: the element above has 594 k instances of small
 // meshes, whose DAGs bottom out at one cluster of about a hundred
@@ -46,6 +48,22 @@
 // from 63 M to 1 M with 0.6% of the pixels differing from the full render
 // by 16 levels or more (0.3% without dropping). At 2 px, close views lose
 // visibly more (1.6%); hence the default of 1.
+//
+// Instances a few pixels across: the same DAGs make a close view draw
+// 52 M triangles, nearly all of them root clusters of instances one to
+// four pixels across. Below {@link ClusterView.proxyPixels} (3 by
+// default), an instance draws its mesh's proxies instead, a few of its own
+// triangles per subset (`clusterProxies.ts`): its first work unit appends
+// it to each subset's proxy run, and every {@link PROXY_PACK}th proxy of a
+// run takes a place in the slot's run as a pack (its pair is the first
+// proxy and the slot, with {@link PACKED} set), which a draw instance runs
+// as that many proxies of {@link PROXY_VERTICES} vertices each. Packs keep
+// the draws one per slot, and a proxy's vertex work an eighth of a
+// cluster's. At 3 px the close view draws 7 M triangles in 29 ms rather
+// than 52 M in 48 ms, and 1.1% of its pixels differ from the full render by
+// 16 levels or more (0.4% with clusters alone; mean grey difference 0.76 of
+// 255 rather than 0.27); at 2 px, 20 M triangles and 0.7%. Views of the
+// whole element, where few instances are that small, are unchanged.
 //
 // Drawing: each clustered draw is one `Mesh` (or, for a mesh of several
 // subsets, a `Mesh` drawing nothing with a child per subset) whose
@@ -103,6 +121,7 @@ import { attributeValues, toHalf } from "@forest-rs/layerstack_stagehand";
 import type { BufferCost, MeshVertices } from "@forest-rs/layerstack_stagehand";
 import { NO_GROUP, residentCost } from "./clusterFile.ts";
 import type { ClusterSetData } from "./clusterFile.ts";
+import { PROXY_TRIANGLES, buildProxy } from "./clusterProxies.ts";
 import { setFixedNode } from "./fixedNodes.ts";
 
 /** Anything TSL takes: the node types are too loose to be worth spelling here. */
@@ -114,6 +133,15 @@ export const MAX_CLUSTER_TRIANGLES = 128;
 
 /** Vertices each drawn cluster runs: three per triangle of the largest cluster. */
 export const CLUSTER_VERTICES = 3 * MAX_CLUSTER_TRIANGLES;
+
+/** Vertices each drawn instance proxy runs (`clusterProxies.ts`). */
+export const PROXY_VERTICES = 3 * PROXY_TRIANGLES;
+
+/** Instance proxies one draw instance runs: as many as fill a cluster's vertices. */
+export const PROXY_PACK = CLUSTER_VERTICES / PROXY_VERTICES;
+
+/** The bit of a visible pair's second word that makes it a pack of proxies: the first proxy, then the slot. */
+const PACKED = 0x80000000;
 
 /** The most clusters one compute thread tests: a word of visibility bits. */
 export const CHUNK = 32;
@@ -127,6 +155,8 @@ export interface ClusterView {
   pixelError: number;
   /** Instances whose bounding sphere is fewer pixels across than this are not drawn (1 by default; see the header). */
   minInstancePixels: number;
+  /** Instances whose bounding sphere is fewer pixels across than this draw their proxy rather than clusters (`clusterProxies.ts`; 0 never does). */
+  proxyPixels: number;
   /** Whether clusters and instances outside the view are culled (off for comparing a cut with the library's). */
   frustumCull: boolean;
 }
@@ -167,6 +197,8 @@ interface ClusterMesh {
   readonly originalClusters: number;
   /** The original clusters of each subset (material range): the most a cut of the subset holds. */
   readonly originalBySubset: readonly number[];
+  /** Each subset's instance proxy, three vertex indices per triangle (`clusterProxies.ts`). */
+  readonly proxies: readonly Uint32Array[];
 }
 
 /**
@@ -217,7 +249,7 @@ export class ClusterScene {
   /** The storage buffers of the packing before the last, freed at the next frame. */
   readonly #retired: StorageBufferAttribute[] = [];
   /** How cuts are chosen. */
-  readonly view: ClusterView = { pixelError: 1, minInstancePixels: 1, frustumCull: true };
+  readonly view: ClusterView = { pixelError: 1, minInstancePixels: 1, proxyPixels: 3, frustumCull: true };
   #stats: ClusterStats | null = null;
   #frames = 0;
   #reading = false;
@@ -230,6 +262,7 @@ export class ClusterScene {
   readonly #near = uniform(0.1);
   readonly #pixelError = uniform(1);
   readonly #minPixels = uniform(0);
+  readonly #proxyPixels = uniform(0);
   readonly #cullEnabled = uniform(1, "uint");
   /** The world-space view of the last cut, as `layerstack_clusters`'s `CutCamera` takes it (reused). */
   readonly #cutCamera = { position: [0, 0, 0] as [number, number, number], projectionY: 1, viewportHeight: 1, zNear: 0.01 };
@@ -271,6 +304,14 @@ export class ClusterScene {
     const g = set.groups;
     let root = 0;
     for (let i = 0; i < g.count; i++) if (g.depth[i]! >= g.depth[root]!) root = i;
+    // The proxies are made from the positions as packed: `snorm16`, in the mesh's own frame (the decode is uniform).
+    const positions = new Float32Array(3 * set.vertexCount);
+    for (let v = 0; v < set.vertexCount; v++) {
+      positions[3 * v] = (vertices[4 * v]! << 16) >> 16;
+      positions[3 * v + 1] = vertices[4 * v]! >> 16;
+      positions[3 * v + 2] = (vertices[4 * v + 1]! << 16) >> 16;
+    }
+    const proxies = originalBySubset.map((_, subset) => buildProxy(set, positions, subset));
     this.#meshes.set(key, {
       set,
       vertices,
@@ -280,6 +321,7 @@ export class ClusterScene {
       bounds: [g.bounds[4 * root]!, g.bounds[4 * root + 1]!, g.bounds[4 * root + 2]!, g.bounds[4 * root + 3]!],
       originalClusters,
       originalBySubset,
+      proxies,
     });
     this.#dirty = true;
   }
@@ -297,7 +339,9 @@ export class ClusterScene {
     const { set } = mesh;
     let triangles = 0;
     for (const level of set.levelTriangles) triangles += level;
-    const counts = { vertices: set.vertexCount, indices: set.indices.length, clusters: set.clusters.count, groups: set.groups.count, triangles };
+    let proxyIndices = 0;
+    for (const proxy of mesh.proxies) proxyIndices += proxy.length;
+    const counts = { vertices: set.vertexCount, indices: set.indices.length + proxyIndices, clusters: set.clusters.count + mesh.proxies.length, groups: set.groups.count, triangles };
     return residentCost(counts, set.byteLength + mesh.vertices.byteLength + (mesh.extras?.byteLength ?? 0));
   }
 
@@ -449,6 +493,7 @@ export class ClusterScene {
     this.#near.value = cut.zNear;
     this.#pixelError.value = view.pixelError;
     this.#minPixels.value = view.minInstancePixels;
+    this.#proxyPixels.value = view.proxyPixels;
     this.#cullEnabled.value = view.frustumCull ? 1 : 0;
     renderer.compute(packed.passes);
     if (++this.#frames % 8 === 0 && !this.#reading) void this.#readStats(renderer, packed);
@@ -486,7 +531,11 @@ export class ClusterScene {
     const out: { instance: number; cluster: number }[] = [];
     for (let s = slot; s < slot + this.#draws.get(object)!.parts.length; s++) {
       const base = args[4 * s + 3]!;
-      for (let i = 0; i < args[4 * s + 1]!; i++) out.push({ instance: pairs[2 * (base + i)]! - firstInstance, cluster: pairs[2 * (base + i) + 1]! - firstCluster });
+      for (let i = 0; i < args[4 * s + 1]!; i++) {
+        // Packs of proxies are not of the cut.
+        if (pairs[2 * (base + i) + 1]! >= PACKED) continue;
+        out.push({ instance: pairs[2 * (base + i)]! - firstInstance, cluster: pairs[2 * (base + i) + 1]! - firstCluster });
+      }
     }
     return out;
   }
@@ -530,6 +579,8 @@ export class ClusterScene {
     let clusterCount = 0;
     let groupCount = 0;
     let triangles = 0;
+    let proxyIndexCount = 0;
+    let proxyCount = 0;
     for (const [key, mesh] of this.#meshes) {
       meshIndex.set(key, meshIndex.size);
       vertexCount += mesh.set.vertexCount;
@@ -537,7 +588,14 @@ export class ClusterScene {
       clusterCount += mesh.set.clusters.count;
       groupCount += mesh.set.groups.count;
       for (const level of mesh.set.levelTriangles) triangles += level;
+      proxyCount += mesh.proxies.length;
+      for (const proxy of mesh.proxies) proxyIndexCount += proxy.length;
     }
+    // The proxies follow every set's clusters and indices, a cluster each.
+    const proxyClusterBase = clusterCount;
+    const proxyIndexBase = indexCount;
+    clusterCount += proxyCount;
+    indexCount += proxyIndexCount;
     const vertices = new Uint32Array(4 * Math.max(1, vertexCount));
     const extras = new Uint32Array(4 * Math.max(1, vertexCount));
     const indices = new Uint32Array(Math.max(1, indexCount));
@@ -546,13 +604,15 @@ export class ClusterScene {
     const clusterFloats = new Float32Array(clusters.buffer);
     // Groups: bounds, then error.
     const groups = new Float32Array(8 * Math.max(1, groupCount));
-    // Meshes: first cluster, clusters, original clusters; then the bounds' bits; then the decode's.
+    // Meshes: first cluster, clusters, first proxy, proxies; then the bounds' bits; then the decode's.
     const meshes = new Uint32Array(12 * Math.max(1, meshIndex.size));
     const meshFloats = new Float32Array(meshes.buffer);
     let vertexBase = 0;
     let indexBase = 0;
     let clusterBase = 0;
     let groupBase = 0;
+    let proxyCluster = proxyClusterBase;
+    let proxyIndex = proxyIndexBase;
     for (const [key, mesh] of this.#meshes) {
       const m = meshIndex.get(key)!;
       const { set } = mesh;
@@ -578,7 +638,20 @@ export class ClusterScene {
       }
       meshes[12 * m] = clusterBase;
       meshes[12 * m + 1] = c.count;
-      meshes[12 * m + 2] = mesh.originalClusters;
+      meshes[12 * m + 2] = proxyCluster;
+      meshes[12 * m + 3] = mesh.proxies.length;
+      mesh.proxies.forEach((proxy, subset) => {
+        for (let i = 0; i < proxy.length; i++) indices[proxyIndex + i] = proxy[i]! + vertexBase;
+        const at = 8 * proxyCluster;
+        // Of no group: never cut, only drawn whole for a small instance.
+        clusters[at] = 0;
+        clusters[at + 1] = NO_GROUP;
+        clusters[at + 2] = proxyIndex;
+        clusters[at + 3] = proxy.length / 3 | (subset << 8);
+        clusterFloats.set(mesh.bounds, at + 4);
+        proxyIndex += proxy.length;
+        proxyCluster++;
+      });
       meshFloats.set(mesh.bounds, 12 * m + 4);
       meshFloats.set(mesh.decode, 12 * m + 8);
       vertexBase += set.vertexCount;
@@ -597,15 +670,16 @@ export class ClusterScene {
       const mesh = this.#meshes.get(draw.mesh)!;
       instanceCount += draw.instances;
       unitCount += draw.instances * Math.ceil(mesh.set.clusters.count / CHUNK);
-      visibleCount += draw.instances * mesh.originalClusters;
+      visibleCount += draw.instances * (mesh.originalClusters + mesh.proxies.length);
     }
     const instanceMatrices = new Float32Array(16 * Math.max(1, instanceCount));
     const instanceInfo = new Uint32Array(4 * Math.max(1, instanceCount));
     // Units: instance, first cluster, mesh, draw.
     const units = new Uint32Array(4 * Math.max(1, unitCount));
-    const args = new Uint32Array(4 * Math.max(1, slotCount));
+    // A slot's clusters' arguments and run at its index, its proxies' `slotCount` further.
+    const args = new Uint32Array(8 * Math.max(1, slotCount));
     // Slots: their run's start and length.
-    const runs = new Uint32Array(2 * Math.max(1, slotCount));
+    const runs = new Uint32Array(4 * Math.max(1, slotCount));
     let firstSlot = 0;
     const slots = new Map<Mesh, number>();
     let instance = 0;
@@ -637,6 +711,10 @@ export class ClusterScene {
         runs[2 * at] = visible;
         runs[2 * at + 1] = draw.instances * original;
         visible += draw.instances * original;
+        // Its proxies: a counter (in an unused set of arguments) and a run of one per instance at most.
+        runs[2 * (slotCount + at)] = visible;
+        runs[2 * (slotCount + at) + 1] = draw.instances;
+        visible += draw.instances;
       });
       instance += draw.instances;
       firstSlot += draw.parts.length;
@@ -680,9 +758,9 @@ export class ClusterScene {
     const meshNode = read(meshAttribute, "uvec4", 3 * Math.max(1, meshIndex.size));
     const clusterNode = read(clusterAttribute, "uvec4", 2 * Math.max(1, clusterCount));
     const groupNode = read(groupAttribute, "vec4", 2 * Math.max(1, groupCount));
-    const runNode = read(runAttribute, "uvec2", Math.max(1, slotCount));
-    const argsNode: Node = (storage(argsAttribute, "uint", 4 * Math.max(1, slotCount)) as Node).toAtomic();
-    const argsPlain: Node = storage(argsAttribute, "uint", 4 * Math.max(1, slotCount));
+    const runNode = read(runAttribute, "uvec2", 2 * Math.max(1, slotCount));
+    const argsNode: Node = (storage(argsAttribute, "uint", 8 * Math.max(1, slotCount)) as Node).toAtomic();
+    const argsPlain: Node = storage(argsAttribute, "uint", 8 * Math.max(1, slotCount));
     const visibleNode: Node = storage(visibleAttribute, "uvec2", Math.max(1, visibleCount));
     const statsNode: Node = (storage(statsAttribute, "uint", 2 * STAT_LANES) as Node).toAtomic();
     const statsPlain: Node = storage(statsAttribute, "uint", 2 * STAT_LANES);
@@ -692,6 +770,7 @@ export class ClusterScene {
     const near = this.#near;
     const pixelError = this.#pixelError;
     const minPixels = this.#minPixels;
+    const proxyPixels = this.#proxyPixels;
     const cullEnabled = this.#cullEnabled;
 
     const inFrustum = (center: Node, radius: Node): Node => {
@@ -707,13 +786,13 @@ export class ClusterScene {
 
     const clear = Fn(() => {
       const i = instanceIndex;
-      If(i.lessThan(uint(slotCount)), () => {
+      If(i.lessThan(uint(2 * slotCount)), () => {
         argsPlain.element(i.mul(4).add(1)).assign(uint(0));
       });
       If(i.lessThan(uint(2 * STAT_LANES)), () => {
         statsPlain.element(i).assign(uint(0));
       });
-    })().compute(Math.max(slotCount, 2 * STAT_LANES), [64]);
+    })().compute(Math.max(2 * slotCount, 2 * STAT_LANES), [64]);
 
     const cull = Fn(() => {
       const work = unitsNode.element(instanceIndex).toVar();
@@ -728,8 +807,37 @@ export class ClusterScene {
       const center = m.mul(vec4(bounds.xyz, 1)).xyz.toVar();
       const radius = bounds.w.mul(scale).toVar();
       const distance = max(center.sub(cameraPosition).length(), near);
+      const pixels = radius.mul(2).div(distance).mul(projectionScale).toVar();
       // The instance: in view, and at least `minInstancePixels` across.
-      If(inFrustum(center, radius).not().or(radius.mul(2).div(distance).mul(projectionScale).lessThan(minPixels)), () => {
+      If(inFrustum(center, radius).not().or(pixels.lessThan(minPixels)), () => {
+        Return();
+      });
+      // Under `proxyPixels`, its proxies instead of clusters (written by its first unit).
+      If(pixels.lessThan(proxyPixels).and(meshData.w.greaterThan(uint(0))), () => {
+        If(first.equal(uint(0)), () => {
+          const drawn = uint(0).toVar();
+          Loop({ start: uint(0), end: meshData.w, type: "uint", condition: "<" }, ({ i }: { i: Node }) => {
+            const proxy = meshData.z.add(i);
+            const target = slot.add(i);
+            const at = (atomicAdd(argsNode.element(target.add(uint(slotCount)).mul(4).add(1)), uint(1)) as Node).toVar();
+            const run = runNode.element(target.add(uint(slotCount)));
+            If(at.lessThan(run.y), () => {
+              visibleNode.element(run.x.add(at)).assign(uvec2(inst, proxy));
+            });
+            // The first of each {@link PROXY_PACK} takes a draw instance for them all.
+            If(at.mod(uint(PROXY_PACK)).equal(uint(0)), () => {
+              const pack = (atomicAdd(argsNode.element(target.mul(4).add(1)), uint(1)) as Node).toVar();
+              const clusterRun = runNode.element(target);
+              If(pack.lessThan(clusterRun.y), () => {
+                visibleNode.element(clusterRun.x.add(pack)).assign(uvec2(at, target.bitOr(uint(PACKED))));
+              });
+            });
+            drawn.addAssign(clusterNode.element(proxy.mul(2)).w.bitAnd(uint(255)));
+          });
+          const lane = instanceIndex.bitAnd(uint(STAT_LANES - 1));
+          atomicAdd(statsNode.element(lane), drawn);
+          atomicAdd(statsNode.element(lane.add(STAT_LANES)), meshData.w);
+        });
         Return();
       });
       const above = (group: Node): Node => {
@@ -774,19 +882,28 @@ export class ClusterScene {
     // A draw's count past its run (more clusters than its original ones) is cut back to the run.
     const clamp = Fn(() => {
       const i = instanceIndex;
-      If(i.lessThan(uint(slotCount)), () => {
+      If(i.lessThan(uint(2 * slotCount)), () => {
         const count = argsPlain.element(i.mul(4).add(1));
         count.assign(min(count, runNode.element(i).y));
       });
-    })().compute(Math.max(1, slotCount), [64]);
+    })().compute(Math.max(1, 2 * slotCount), [64]);
 
     // The vertex stage: the pair of the draw instance, the corner of the vertex index.
+    // A pack of proxies: each run of {@link PROXY_VERTICES} vertices the
+    // pair of one proxy of the slot's, past the slot's count a degenerate one.
     const pairs = read(visibleAttribute, "uvec2", Math.max(1, visibleCount));
-    const pair: Node = pairs.element(new IndexNode(IndexNode.INSTANCE));
+    const drawn: Node = pairs.element(new IndexNode(IndexNode.INSTANCE));
+    const packedPair = drawn.y.greaterThanEqual(uint(PACKED));
+    const proxySlot = drawn.y.bitAnd(uint(PACKED - 1)).add(uint(slotCount));
+    const proxyAt = drawn.x.add(vertexIndex.div(PROXY_VERTICES));
+    const proxyRun = read(runAttribute, "uvec2", 2 * Math.max(1, slotCount)).element(proxySlot);
+    const proxies = read(argsAttribute, "uint", 8 * Math.max(1, slotCount)).element(proxySlot.mul(4).add(1));
+    const pair: Node = select(packedPair, pairs.element(proxyRun.x.add(min(proxyAt, proxyRun.y.sub(1)))), drawn);
+    const local = select(packedPair, vertexIndex.mod(PROXY_VERTICES), vertexIndex);
     const source: Node = varying(pair.x, "vClusterInstance");
     source.setInterpolation("flat");
     const cluster = read(clusterAttribute, "uvec4", 2 * Math.max(1, clusterCount)).element(pair.y.mul(2));
-    const corner = select(vertexIndex.div(3).lessThan(cluster.w.bitAnd(uint(255))), vertexIndex, uint(0));
+    const corner = select(local.div(3).lessThan(cluster.w.bitAnd(uint(255))).and(packedPair.not().or(proxyAt.lessThan(proxies))), local, uint(0));
     const vertex = read(indexAttribute, "uint", Math.max(1, indexCount)).element(cluster.z.add(corner));
     const raw = read(vertexAttribute, "uvec4", Math.max(1, vertexCount)).element(vertex);
     const extra = read(extraAttribute, "uvec4", Math.max(1, vertexCount)).element(vertex);

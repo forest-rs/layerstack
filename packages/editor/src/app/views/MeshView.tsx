@@ -205,7 +205,7 @@ export function MeshView({ object, context }: PresentProps<"prim">) {
   );
 }
 
-function Fact({ label, value, title }: { label: string; value: string; title?: string }) {
+export function Fact({ label, value, title }: { label: string; value: string; title?: string }) {
   return (
     <>
       <dt className="text-muted-foreground" title={title}>
@@ -219,7 +219,7 @@ function Fact({ label, value, title }: { label: string; value: string; title?: s
 }
 
 /** The preview canvas: a {@link MeshPreview} on the shared renderer, loaded with three.js after the editor. */
-function Preview({ source, style }: { source: Parameters<MeshPreview["show"]>[0]; style: MeshPreviewStyle }) {
+export function Preview({ source, style }: { source: Parameters<MeshPreview["show"]>[0]; style: MeshPreviewStyle }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [preview, setPreview] = useState<MeshPreview | null>(null);
   const [failed, setFailed] = useState<string | null>(null);

@@ -45,11 +45,52 @@ function LayerInline({ object, context }: PresentProps<"layer">) {
 
 const copy = (text: string) => void navigator.clipboard?.writeText(text);
 
+/** A prim path's tooltip: what is there (its type, specifier, whether it is an instance or inactive, its children), and what a click does. */
+function PrimPathTooltip({ object, context }: PresentProps<"primPath">) {
+  let prim = null;
+  try {
+    prim = context.stage.prim(object.path);
+  } catch {
+    // Not a prim path: said below.
+  }
+  const facts =
+    prim === null
+      ? ["no prim is here"]
+      : [
+          prim.typeName ?? "typeless",
+          prim.specifier,
+          prim.instance ? "instance" : null,
+          prim.instanceProxy ? "instance proxy" : null,
+          prim.active ? null : "inactive",
+          `${prim.children().length} children`,
+        ].filter((fact) => fact !== null);
+  return (
+    <div className="flex flex-col gap-0.5 text-left">
+      <div className="font-mono break-all">{object.path}</div>
+      <div className="opacity-70">{facts.join(" · ")}</div>
+      <div className="opacity-70">Click to select it; right-click for more.</div>
+    </div>
+  );
+}
+
+/** A layer's tooltip: its identifier, whether it is muted, edited or read-only, and what a right-click offers. */
+function LayerTooltip({ object, context }: PresentProps<"layer">) {
+  const { layer } = object;
+  const facts = [layer.format, layer.readOnly ? "read-only" : null, context.stage.isMuted(layer) ? "muted" : null, context.stage.isDirty(layer) ? "edited" : null].filter((fact) => fact !== null);
+  return (
+    <div className="flex flex-col gap-0.5 text-left">
+      <div className="font-mono break-all">{layer.identifier ?? "anonymous layer"}</div>
+      <div className="opacity-70">{facts.join(" · ")}</div>
+      <div className="opacity-70">Right-click to edit in it, mute it or copy its identifier.</div>
+    </div>
+  );
+}
+
 /** Registers the built-in presentations of paths and layers, and their commands. */
 export function registerObjectPresentations(): void {
-  registerPresentation({ id: "builtin.prim-path", kind: "primPath", type: "primPath", inline: PrimPathInline });
+  registerPresentation({ id: "builtin.prim-path", kind: "primPath", type: "primPath", inline: PrimPathInline, tooltip: PrimPathTooltip });
   registerPresentation({ id: "builtin.property-path", kind: "propertyPath", type: "propertyPath", inline: PropertyPathInline });
-  registerPresentation({ id: "builtin.layer", kind: "layer", type: "layer", inline: LayerInline });
+  registerPresentation({ id: "builtin.layer", kind: "layer", type: "layer", inline: LayerInline, tooltip: LayerTooltip });
 
   const exists = (path: string, stage: { prim(path: string): unknown }) => {
     try {

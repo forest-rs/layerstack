@@ -5,12 +5,14 @@
 // the view): `Present` shows an object in a one-of view (`inline`,
 // `tooltip`, or `accept` when given a callback that authors), `Live`
 // makes what it wraps a live presentation of an object (a click runs its
-// first command, a context menu offers them all), and `usePrimRevision`
+// first command, a context menu offers them all, a hover shows its
+// `tooltip` presentation when it has one), and `usePrimRevision`
 // is what a panel keys its reads by, so it reads its prim again only when
 // a change reaches it.
 import { useRef, useState } from "react";
 import { Menu, MenuItem, Popover } from "react-aria-components";
 import type { ValueInput } from "@forest-rs/layerstack";
+import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { primRevision } from "../../model/revisions.ts";
 import { commands, type PresentationContext, type Presented, type PresentedKind, presentations, type PresentationView } from "../../presentations/registry.ts";
@@ -86,27 +88,41 @@ export function Live<K extends PresentedKind>({
 }) {
   const ref = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button
-        ref={ref}
-        type="button"
-        title={title}
-        className={cn("min-w-0 truncate text-left font-mono text-[11px] text-sky-600 hover:underline dark:text-sky-400", className)}
-        onClick={() => commands.forObject(object, context)[0]?.run(object, context)}
-        onContextMenu={(event) => {
+  // A tooltip presentation, when its type has one, in place of the title: read only while shown.
+  const Tip = presentations.find(object, "tooltip", context)?.tooltip;
+  const button = (
+    <button
+      ref={ref}
+      type="button"
+      title={Tip === undefined ? title : undefined}
+      className={cn("min-w-0 truncate text-left font-mono text-[11px] text-sky-600 hover:underline dark:text-sky-400", className)}
+      onClick={() => commands.forObject(object, context)[0]?.run(object, context)}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        setOpen(true);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "F10" && event.shiftKey) {
           event.preventDefault();
           setOpen(true);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "F10" && event.shiftKey) {
-            event.preventDefault();
-            setOpen(true);
-          }
-        }}
-      >
-        {children}
-      </button>
+        }
+      }}
+    >
+      {children}
+    </button>
+  );
+  return (
+    <>
+      {Tip === undefined ? (
+        button
+      ) : (
+        <TooltipTrigger delay={500}>
+          {button}
+          <Tooltip placement="left" className="max-w-xs">
+            <Tip object={object} context={context} />
+          </Tooltip>
+        </TooltipTrigger>
+      )}
       {open && <CommandMenu object={object} context={context} triggerRef={ref} onClose={() => setOpen(false)} />}
     </>
   );

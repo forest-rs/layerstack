@@ -1,0 +1,85 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+// The built-in panel presentations of prims: the inspector's sections,
+// each registered for the presentation type it is about, as a plugin's
+// view would be. Priorities place them: 100 the prim's state, 90 its
+// transform, 50 a view of what it is, 40 its draw mode, 30 its variants,
+// 0 its properties, below 0 what follows them.
+import { registerPresentation } from "../../presentations/registry.ts";
+import { DrawModeSection } from "../DrawModeSection.tsx";
+import { Arcs, MaterialSection, State, Variants } from "../PrimSections.tsx";
+import { PropertyList } from "../PropertyList.tsx";
+import { ShadingSection } from "../ShadingSection.tsx";
+import { TransformSection } from "../TransformSection.tsx";
+
+/** Registers the built-in prim panels. */
+export function registerPrimPresentations(): void {
+  registerPresentation({
+    id: "builtin.state",
+    kind: "prim",
+    type: "Prim",
+    title: "State",
+    priority: 100,
+    panel: ({ object, context }) => <State store={context.store} prim={object.prim} />,
+  });
+  registerPresentation({
+    id: "builtin.transform",
+    kind: "prim",
+    type: "Xformable",
+    title: "Transform",
+    priority: 90,
+    panel: ({ object, context }) => <TransformSection store={context.store} stage={context.stage} prim={object.prim} />,
+  });
+  for (const type of ["Material", "Shader"]) {
+    registerPresentation({
+      id: `builtin.shading.${type.toLowerCase()}`,
+      kind: "prim",
+      type,
+      title: type,
+      priority: 50,
+      panel: ({ object, context }) => <ShadingSection store={context.store} stage={context.stage} prim={object.prim} />,
+    });
+  }
+  registerPresentation({
+    id: "builtin.draw-mode",
+    kind: "prim",
+    type: "GeomModelAPI",
+    title: "Draw mode",
+    priority: 40,
+    panel: ({ object, context }) => <DrawModeSection store={context.store} stage={context.stage} prim={object.prim} />,
+  });
+  registerPresentation({
+    id: "builtin.variants",
+    kind: "prim",
+    type: "Prim",
+    title: "Variants",
+    priority: 30,
+    applies: ({ prim }) => prim.variantSets().length > 0,
+    panel: ({ object, context }) => <Variants store={context.store} prim={object.prim} />,
+  });
+  registerPresentation({
+    id: "builtin.properties",
+    kind: "prim",
+    type: "Prim",
+    title: "Properties",
+    priority: 0,
+    panel: ({ object, context }) => <PropertyList store={context.store} stage={context.stage} prim={object.prim} />,
+  });
+  registerPresentation({
+    id: "builtin.bound-material",
+    kind: "prim",
+    type: "Prim",
+    title: "Bound material",
+    priority: -10,
+    panel: ({ object, context }) => <MaterialSection stage={context.stage} prim={object.prim} />,
+  });
+  registerPresentation({
+    id: "builtin.composition",
+    kind: "prim",
+    type: "Prim",
+    title: "Composition",
+    priority: -20,
+    panel: ({ object }) => <Arcs prim={object.prim} />,
+  });
+}

@@ -5,17 +5,19 @@
 // the stage consulted for it, the recompositions each action caused, the
 // undo history, the asset loop's requests and answers, what drawing
 // costs, and what the stage refused.
-import type { Explanation, Opinion } from "@forest-rs/layerstack";
+import type { Explanation, Layer, Opinion } from "@forest-rs/layerstack";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { formatValue, releaseValue } from "../model/values.ts";
+
 import type { EditorStore } from "../store.ts";
 import { AssetLoopView } from "./AssetLoop.tsx";
 import { CostView } from "./CostView.tsx";
 import { useStore } from "./context.ts";
+import { shown } from "./fields.tsx";
 import { formatTime, layerName } from "./format.ts";
+import { Present, presentationContext } from "./presentations/Present.tsx";
 import { ShadingView } from "./ShadingView.tsx";
 import { targetText } from "./TargetPicker.tsx";
 
@@ -77,8 +79,9 @@ function ExplainView({ store }: { store: EditorStore }) {
   if (attribute === null || explanation === null) {
     return <p className="p-3 text-xs text-muted-foreground">{path} has no value to explain.</p>;
   }
-  const value = formatValue(explanation.value);
-  releaseValue(explanation.value);
+  const typeName = attribute.typeName ?? explanation.value?.type ?? "";
+  const value = shown(explanation.value);
+  const context = presentationContext(store);
   const samples = attribute.timeSamples();
   return (
     <div className="p-3 text-xs">
@@ -86,7 +89,7 @@ function ExplainView({ store }: { store: EditorStore }) {
         <span className="font-mono">{path}</span>
         {store.time !== undefined && <span className="text-muted-foreground">at {formatTime(store.time)}</span>}
         <span className="text-muted-foreground">=</span>
-        <span className="font-mono">{value}</span>
+        {context !== null ? <Present object={{ kind: "value", attribute, typeName, shown: value, at: null }} context={context} /> : <span className="font-mono">{value.text}</span>}
       </div>
       <div className="mt-1 text-muted-foreground">
         from <span className="text-foreground">{explanation.source}</span>
@@ -119,10 +122,11 @@ function OpinionRow({ store, opinion }: { store: EditorStore; opinion: Opinion }
   const target = opinion.editTarget;
   const current = store.session?.target;
   const editing = target !== null && current !== undefined && "kind" in current && targetText(current) === targetText(target);
+  const context = presentationContext(store);
   return (
     <tr className={cn("border-t", opinion.role === "ignored" && "text-muted-foreground")}>
       <td className="py-1 pr-3">{role}</td>
-      <td className="py-1 pr-3 font-mono">{layerName(opinion.layer.identifier)}</td>
+      <td className="py-1 pr-3 font-mono">{context === null ? layerName(opinion.layer.identifier) : <Present object={{ kind: "layer", layer: opinion.layer }} context={context} />}</td>
       <td className="py-1 pr-3 font-mono">{opinion.specPath}</td>
       <td className="py-1 pr-3">{opinion.arc ?? "the root layer stack"}</td>
       <td className="py-1 text-right">
@@ -139,6 +143,7 @@ function OpinionRow({ store, opinion }: { store: EditorStore; opinion: Opinion }
 /** Each recomposition, newest first, with the action that caused it. */
 function ChangesView({ store }: { store: EditorStore }) {
   const log = store.session?.changeLog ?? [];
+  const context = presentationContext(store);
   if (log.length === 0) return <p className="p-3 text-xs text-muted-foreground">No recompositions yet.</p>;
   return (
     <ol className="flex flex-col text-[11px]">
@@ -162,7 +167,17 @@ function ChangesView({ store }: { store: EditorStore }) {
                 .filter(([, paths]) => paths.length > 0)
                 .map(([label, paths]) => (
                   <span key={label} className="ml-3 text-muted-foreground">
-                    {label} <span className="font-mono text-foreground">{paths.slice(0, 4).join(", ")}</span>
+                    {label}{" "}
+                    {context === null || label === "muted" || label === "unmuted" ? (
+                      <span className="font-mono text-foreground">{paths.slice(0, 4).join(", ")}</span>
+                    ) : (
+                      paths.slice(0, 4).map((path, at) => (
+                        <span key={path}>
+                          {at > 0 && ", "}
+                          <Present object={path.includes(".") ? { kind: "propertyPath", path } : { kind: "primPath", path }} context={context} />
+                        </span>
+                      ))
+                    )}
                     {paths.length > 4 && ` and ${paths.length - 4} more`}
                   </span>
                 ))}
@@ -179,11 +194,14 @@ function HistoryView({ store }: { store: EditorStore }) {
   if (session === null) return null;
   const undo = [...session.history.undoSteps].reverse();
   const redo = [...session.history.redoSteps].reverse();
+  const context = presentationContext(store);
   if (undo.length === 0 && redo.length === 0) return <p className="p-3 text-xs text-muted-foreground">No edits yet.</p>;
-  const row = (label: string, layers: readonly { identifier: string | null }[], state: "done" | "undone", key: string) => (
+  const row = (label: string, layers: readonly Layer[], state: "done" | "undone", key: string) => (
     <li key={key} className={cn("flex items-center gap-2 border-b px-3 py-1.5 text-[11px]", state === "undone" && "text-muted-foreground")}>
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      <span className="font-mono text-muted-foreground">{layers.map((layer) => layerName(layer.identifier)).join(", ")}</span>
+      <span className="flex gap-2 font-mono text-muted-foreground">
+        {layers.map((layer, at) => (context === null ? <span key={at}>{layerName(layer.identifier)}</span> : <Present key={at} object={{ kind: "layer", layer }} context={context} />))}
+      </span>
     </li>
   );
   return (

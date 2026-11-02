@@ -8,6 +8,7 @@ import { loadStagehand } from "@forest-rs/layerstack_stagehand";
 import { App } from "./app/App.tsx";
 import { EditorContext } from "./app/context.ts";
 import { NoWebGPU } from "./app/NoWebGPU.tsx";
+import { registerBuiltInPresentations } from "./app/presentations/builtins.ts";
 import { initialSource } from "./app/scenes.ts";
 import { EditorStore } from "./store.ts";
 import { webGpuMissing } from "./viewport/support.ts";
@@ -16,6 +17,7 @@ import "./index.css";
 async function start(): Promise<void> {
   const [layerstack, stagehand] = await Promise.all([loadLayerstack(), loadStagehand()]);
   const store = new EditorStore(layerstack, stagehand);
+  registerBuiltInPresentations();
   // A module that traps outside an open (an edit, a frame, a draw) stops the
   // editor the same way: its instance is dead.
   window.addEventListener("error", (event) => store.lose(event.error));

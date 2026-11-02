@@ -92,3 +92,21 @@ function scalar(text: string): ScalarInput {
 function unquote(text: string): string {
   return text.length >= 2 && text.startsWith('"') && text.endsWith('"') ? text.slice(1, -1) : text;
 }
+
+/**
+ * A value as the inspector holds it across a render: a scalar or tuple
+ * as it is, anything else (an array on the module's memory, a
+ * dictionary) only as its text, read and released before rendering.
+ */
+export interface Shown {
+  readonly value: (Value & { readonly kind: "scalar" | "tuple" }) | null;
+  readonly text: string;
+}
+
+/** `value` read for the inspector, and released. */
+export function shown(value: Value | null): Shown {
+  const text = formatValue(value);
+  const kept = value?.kind === "scalar" || value?.kind === "tuple" ? value : null;
+  releaseValue(value);
+  return { value: kept, text };
+}

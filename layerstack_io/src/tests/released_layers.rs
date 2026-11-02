@@ -271,4 +271,8 @@ fn a_host_supplies_a_released_muted_layer_on_unmute() {
         Some(sub),
         "the same id"
     );
+    assert!(
+        !doc.is_dirty(doc.root_layer()),
+        "bindings are not authored content"
+    );
 }

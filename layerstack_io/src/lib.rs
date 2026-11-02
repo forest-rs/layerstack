@@ -57,9 +57,12 @@
 //! (`terrain.grid:SDF_FORMAT_ARGS:rows=4`) are part of the layer's identity
 //! and reach the format; see the [`format`] module.
 //!
-//! [`StageDocument::prepare_reload`] separates import/validation from publication.
-//! Dropping its candidate rejects it; [`PreparedReload::commit`] reuses the
-//! candidate composition and preserves stage observers. Both document and
+//! [`StageDocument::reload`] reads only the sources whose version
+//! ([`Storage::version`]) changed and publishes only what they changed, as
+//! `UsdStage::Reload` does. [`StageDocument::prepare_reload`] separates
+//! reading from publication. Dropping its candidate rejects it;
+//! [`PreparedReload::commit`] publishes what was read without reading again
+//! and preserves stage observers. Both document and
 //! candidate provide `read_asset_bytes` for package-aware arbitrary resources;
 //! pass the asset's winning authoring layer, not its composed prim's root layer.
 //! [`StageDocument::resolve_udim_tiles`] lists the existing tiles of a UDIM
@@ -118,6 +121,9 @@ pub use format::{
     FORMAT_ARGS_DELIMITER, FileFormat, FileFormats, FormatArgs, FormatRegistrationError,
     FormatSource,
 };
+mod freshness;
+use freshness::Freshness;
+pub use freshness::SourceVersion;
 mod reload;
 pub use reload::PreparedReload;
 mod release;
@@ -369,6 +375,11 @@ impl core::error::Error for IoError {
 /// through [`Self::write`].
 pub trait Storage: layerstack::MaybeSync {
     /// Resolves an authored asset identifier relative to a source identifier.
+    /// A reload asks again for the asset paths of the layers it may read,
+    /// and reads a layer from the identifier returned now when every path
+    /// bound to it agrees on one the document does not hold yet: a search
+    /// path that finds another file first, as `SdfLayer::Reload`
+    /// re-resolves a layer's identifier.
     fn identify(&self, asset: &str, anchor: Option<&str>) -> Result<String, IoError>;
     /// Reads a complete source.
     fn read(&self, identifier: &str) -> Result<Vec<u8>, IoError>;
@@ -451,6 +462,24 @@ pub trait Storage: layerstack::MaybeSync {
     /// the directory's other sets, keyed by the identifier's text before its
     /// last `/` or `\`, which the identifiers of one directory must share.
     fn list_siblings(&self, _identifier: &str) -> Result<Option<Vec<String>>, IoError> {
+        Ok(None)
+    }
+    /// The current version of the source `identifier`, read before the
+    /// source is: a value that changes whenever its content does
+    /// ([`SourceVersion`]), such as a file's modification time and length.
+    /// A document records it as it reads a layer, and a reload skips a
+    /// clean layer whose source still reports it, reading nothing.
+    /// `Ok(None)`, the default, reports no version: the document then
+    /// keeps a digest of the bytes it read, and a reload reads the source
+    /// to compare, publishing nothing when the bytes are unchanged. An
+    /// error makes the reload read the source, which reports its failure.
+    ///
+    /// OpenUSD: `ArResolver::GetModificationTimestamp`, which
+    /// `SdfLayer::Reload` compares to skip an unchanged layer
+    /// (`pxr/usd/sdf/layer.cpp`). Spec: AOUSD Core §9 (host asset
+    /// transport).
+    #[doc(alias = "GetModificationTimestamp")]
+    fn version(&self, _identifier: &str) -> Result<Option<SourceVersion>, IoError> {
         Ok(None)
     }
     /// Tells storage that a document read the source `identifier` into a
@@ -963,6 +992,9 @@ struct LayerRecord {
     /// Whether [`StageDocument::release_unused_layers`] released the layer
     /// and nothing has read it since.
     released: bool,
+    /// How a reload tells whether the layer's source changed since it was
+    /// read: the version storage reported, or the bytes' digest.
+    freshness: Option<Freshness>,
 }
 impl Catalog {
     /// The record of `layer`, if the catalog knows it.
@@ -1978,6 +2010,14 @@ impl<B: Storage> StageDocument<B> {
                 Ok(()) => {
                     self.catalog
                         .set_saved(id, self.store.layer(id).unwrap().generation());
+                    // The source now holds the layer: a reload compares
+                    // against the version written, as OpenUSD records the
+                    // modification time `SdfLayer::Save` leaves. Without a
+                    // version, nothing is recorded, and a reload reads the
+                    // source to find the layer unchanged.
+                    self.catalog.record_mut(id).freshness =
+                        freshness::version_of(&self.storage, &source.identifier)
+                            .map(Freshness::Version);
                     report.saved.push(id);
                 }
                 Err(error) => report.failures.push(LayerFailure { layer: id, error }),
@@ -2033,8 +2073,16 @@ impl<B: Storage> StageDocument<B> {
             .write(&identifier, &bytes)
             .map_err(|e| e.at(&identifier))
     }
-    /// Reloads resident used sources, excluding anonymous/session layers.
-    /// Equivalent to preparing and immediately committing [`Self::prepare_reload`].
+    /// Reloads resident used sources, excluding anonymous/session layers:
+    /// reads those whose source changed since they were read (and, under
+    /// [`ReloadPolicy::DiscardDirty`], the dirty ones), and publishes only
+    /// what they changed. With nothing changed it reads nothing and sends
+    /// no notice. A layer that cannot be read or parsed again keeps its
+    /// content, and the failure is in the report's
+    /// [`LoadReport::asset_failures`], while the others reload, as
+    /// `UsdStage::Reload` reloads them (and then raises the error).
+    /// Equivalent to preparing and immediately committing
+    /// [`Self::prepare_reload`].
     #[doc(alias = "UsdStage::Reload")]
     #[doc(alias = "Reload")]
     pub fn reload(&mut self, policy: ReloadPolicy) -> Result<LoadReport, IoError> {
@@ -2043,12 +2091,25 @@ impl<B: Storage> StageDocument<B> {
     }
     /// Reloads an explicit source selection with no validation pause.
     /// Equivalent to preparing and immediately committing [`Self::prepare_reload_layers`].
+    #[doc(alias = "SdfLayer::ReloadLayers")]
     pub fn reload_layers(
         &mut self,
         layers: &[LayerId],
         policy: ReloadPolicy,
     ) -> Result<LoadReport, IoError> {
         Ok(self.prepare_reload_layers(layers, policy)?.commit())
+    }
+    /// Reloads an explicit source selection, reading each source even when
+    /// it is unchanged. Equivalent to preparing and immediately committing
+    /// [`Self::prepare_force_reload_layers`].
+    ///
+    /// OpenUSD: `SdfLayer::Reload(force = true)`.
+    pub fn force_reload_layers(
+        &mut self,
+        layers: &[LayerId],
+        policy: ReloadPolicy,
+    ) -> Result<LoadReport, IoError> {
+        Ok(self.prepare_force_reload_layers(layers, policy)?.commit())
     }
     /// Writes layer `id` to `identifier` in `format`, refusing a layer the
     /// format cannot hold before the storage is asked to write. USDA text
@@ -2172,6 +2233,10 @@ struct Reader<'a, B> {
     /// ([`IoErrorKind::Unavailable`]), as `(anchor, asset path,
     /// identifier)`, in the order they were asked for.
     waiting: Vec<(LayerId, String, String)>,
+    /// The layers a reload reads only if their bytes changed, with the
+    /// length and digest they were read with: bytes the same are not
+    /// decoded, and the layer is left as it is.
+    unchanged: HashMap<LayerId, Freshness>,
 }
 impl<'a, B: Storage> Reader<'a, B> {
     fn new(
@@ -2202,6 +2267,7 @@ impl<'a, B: Storage> Reader<'a, B> {
             muted: BTreeSet::new(),
             log: ReadLog::default(),
             waiting: Vec::new(),
+            unchanged: HashMap::new(),
         }
     }
     /// Reads the root layer `asset` and every layer it reaches, on the
@@ -2346,11 +2412,63 @@ impl<'a, B: Storage> Reader<'a, B> {
             .or_default()
             .insert(asset.into(), layer);
     }
-    fn commit(mut self, store: &mut InMemoryStore) -> LoadReport {
+    fn commit(self, store: &mut InMemoryStore) -> LoadReport {
+        let (batch, catalog) = self.finish();
+        batch.commit(store, catalog)
+    }
+    /// What the operation read, apart from the storage and catalog it read
+    /// them with, to publish later ([`ReadBatch::commit`]).
+    fn finish(self) -> (ReadBatch, &'a mut Catalog) {
+        let Self {
+            catalog,
+            pending,
+            bindings,
+            failures,
+            diagnostics,
+            log,
+            ..
+        } = self;
+        let batch = ReadBatch {
+            pending,
+            bindings,
+            failures,
+            diagnostics,
+            reads: log.into_reads(),
+        };
+        (batch, catalog)
+    }
+}
+/// The layers one operation read, with their bindings and evidence, not
+/// yet published to a store ([`Reader::finish`]).
+#[derive(Clone, Debug, Default)]
+struct ReadBatch {
+    pending: Vec<Layer>,
+    bindings: Bindings,
+    failures: Vec<AssetFailure>,
+    diagnostics: Vec<MemberDiagnostic>,
+    reads: Vec<LayerRead>,
+}
+impl ReadBatch {
+    /// The report [`Self::commit`] returns, without publishing anything.
+    fn report(&self) -> LoadReport {
+        let mut layers: Vec<LayerId> = self.pending.iter().map(Layer::id).collect();
+        sort::sort_unstable(&mut layers);
+        layers.dedup();
+        LoadReport {
+            layers,
+            diagnostics: self.diagnostics.clone(),
+            asset_failures: self.failures.clone(),
+            reads: self.reads.clone(),
+            compositions: Vec::new(),
+        }
+    }
+    /// Publishes the layers read to `store`, with their bindings, and
+    /// records them in `catalog` as read.
+    fn commit(mut self, store: &mut InMemoryStore, catalog: &mut Catalog) -> LoadReport {
         let clean_anchors = sort::collect_set(self.bindings.keys().copied().filter(|id| {
             store
                 .layer(*id)
-                .is_some_and(|l| self.catalog.saved(*id) == Some(l.generation()))
+                .is_some_and(|l| catalog.saved(*id) == Some(l.generation()))
         }));
         // The first layer read for each id is committed; the report lists
         // them in id order.
@@ -2373,7 +2491,7 @@ impl<'a, B: Storage> Reader<'a, B> {
                 // A reader records a change for each spec it inserts; no
                 // stage has seen the layer before them.
                 layer.forget_change_history();
-                if let Some(source) = self.catalog.source(id) {
+                if let Some(source) = catalog.source(id) {
                     store.set_layer_identifier(id, Arc::clone(&source.identifier));
                     store.set_layer_read_only(id, source.read_only());
                 }
@@ -2388,16 +2506,14 @@ impl<'a, B: Storage> Reader<'a, B> {
         }
         sort::sort_unstable(&mut layers);
         for id in clean_anchors {
-            self.catalog
-                .set_saved(id, store.layer(id).unwrap().generation());
+            catalog.set_saved(id, store.layer(id).unwrap().generation());
         }
         for &id in &layers {
-            self.catalog
-                .set_saved(id, store.layer(id).unwrap().generation());
+            catalog.set_saved(id, store.layer(id).unwrap().generation());
         }
         for failure in &self.failures {
             if let Some(anchor) = failure.anchor {
-                self.catalog.failures.insert(
+                catalog.failures.insert(
                     (anchor, failure.asset_path.clone()),
                     ReadFailure {
                         identifier: failure.error.identifier.clone(),
@@ -2410,10 +2526,12 @@ impl<'a, B: Storage> Reader<'a, B> {
             layers,
             diagnostics: self.diagnostics,
             asset_failures: self.failures,
-            reads: self.log.into_reads(),
+            reads: self.reads,
             compositions: Vec::new(),
         }
     }
+}
+impl<B: Storage> Reader<'_, B> {
     /// Reads the layer `id` from `data` ([`Self::read_layer`]), logging
     /// the read ([`LoadReport::reads`]).
     fn logged_read(
@@ -2930,6 +3048,11 @@ impl<B: Storage> Reader<'_, B> {
             .formats
             .for_identifier(&identifier)
             .is_none_or(FileFormat::reads_source);
+        // The version before the bytes: a change between the two reads
+        // again at the next reload rather than going unseen.
+        let version = reads_source
+            .then(|| freshness::version_of(&*self.storage, &outer))
+            .flatten();
         let bytes = if reads_source {
             self.storage
                 .read_encoded(&outer)
@@ -2937,6 +3060,17 @@ impl<B: Storage> Reader<'_, B> {
         } else {
             EncodedBytes::from(Vec::new())
         };
+        let fresh = reads_source.then(|| Freshness::of(version, &bytes));
+        if fresh.is_some() && fresh.as_ref() == self.unchanged.get(&id) {
+            self.catalog.set_state(id, State::Loaded);
+            self.storage.release_source(&outer);
+            return Ok(ResolvedAsset {
+                layer_id: id,
+                resolved_path: identifier,
+                layer: None,
+            });
+        }
+        self.catalog.record_mut(id).freshness = fresh;
         self.catalog.set_state(id, State::Loading);
         match self.logged_read(bytes, &identifier, id, tokens, paths) {
             Ok(layer) => {

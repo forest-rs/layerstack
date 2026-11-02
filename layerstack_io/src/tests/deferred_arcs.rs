@@ -300,13 +300,12 @@ fn a_missing_deferred_asset_that_appears_loads_after_a_reload() {
     assert!(!read(&doc, "b.usda"));
 
     // A reload retries it, as `UsdStage::Reload` retries every invalid
-    // asset: composition asks for it again, and loading it composes it.
-    doc.reload(ReloadPolicy::PreserveDirty).unwrap();
-    assert!(doc.stage.stage().composition_errors().is_empty());
-    assert_eq!(doc.stage.stage().asset_requests().len(), 1);
-    let report = doc.load_requested_assets().unwrap();
+    // asset (`PcpChanges::DidMaybeFixAsset`): found now, it is read and
+    // composed.
+    let report = doc.reload(ReloadPolicy::PreserveDirty).unwrap();
     assert_eq!(report.layers.len(), 1);
     assert!(report.asset_failures.is_empty());
+    assert!(doc.stage.stage().asset_requests().is_empty());
     assert_eq!(name(&doc, "/Model"), Some(Value::string("b")));
     assert!(doc.stage.stage().composition_errors().is_empty());
 }

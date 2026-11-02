@@ -1013,7 +1013,7 @@ fn rejecting_a_prepared_reload_preserves_sources_bindings_and_freshness() {
         b"#usda 1.0\ndef \"Root\" (references=@new.usda@</Asset>) {}".to_vec(),
     );
     {
-        let candidate = doc.prepare_reload(ReloadPolicy::PreserveDirty).unwrap();
+        let mut candidate = doc.prepare_reload(ReloadPolicy::PreserveDirty).unwrap();
         let new = candidate
             .load_report()
             .layers
@@ -1021,25 +1021,18 @@ fn rejecting_a_prepared_reload_preserves_sources_bindings_and_freshness() {
             .copied()
             .find(|id| candidate.identifier(*id) == Some("new.usda"))
             .unwrap();
-        assert!(candidate.store().contains_layer(new));
+        let (store, stage) = candidate.candidate();
+        assert!(store.contains_layer(new));
         let property = layerstack::PropertyPath::new(
-            candidate
-                .store()
+            store
                 .paths()
-                .lookup(
-                    &layerstack::Path::root().join(&[candidate
-                        .store()
-                        .tokens()
-                        .lookup("Root")
-                        .unwrap()]),
-                )
+                .lookup(&layerstack::Path::root().join(&[store.tokens().lookup("Root").unwrap()]))
                 .unwrap(),
-            candidate.store().tokens().lookup("value").unwrap(),
+            store.tokens().lookup("value").unwrap(),
         );
         assert_eq!(
-            candidate
-                .stage()
-                .view(candidate.store())
+            stage
+                .view(store)
                 .attribute(property)
                 .and_then(|a| a.authored_value(layerstack::Time::Default))
                 .unwrap()
@@ -1336,14 +1329,29 @@ fn retained_open_decodes_on_demand_and_reload_preserves_old_snapshots() {
         .try_get(document.stage().stage(), layerstack::Time::Default)
         .unwrap();
     assert_eq!(old.stats().decode_attempts, 1);
+    // An unchanged source is not read again: its values stay decoded.
     document.reload(ReloadPolicy::PreserveDirty).unwrap();
+    assert!(
+        document
+            .retained_values(root)
+            .unwrap()
+            .stats()
+            .decode_attempts
+            > 0
+    );
+    let reloaded = document.root_layer();
+    document
+        .force_reload_layers(&[reloaded], ReloadPolicy::PreserveDirty)
+        .unwrap();
+    // Read again: new values, which comparing them with the layer's
+    // decoded once.
     assert_eq!(
         document
             .retained_values(root)
             .unwrap()
             .stats()
             .decode_attempts,
-        0
+        1
     );
     assert_eq!(old.stats().decode_attempts, 1);
     assert_eq!(value.array_ref().unwrap().len(), 2048);
@@ -1351,14 +1359,16 @@ fn retained_open_decodes_on_demand_and_reload_preserves_old_snapshots() {
         .storage_mut()
         .files
         .insert("mesh.usdc".into(), b"PXR-USDC corrupt".to_vec());
-    assert!(document.reload(ReloadPolicy::PreserveDirty).is_err());
+    let report = document.reload(ReloadPolicy::PreserveDirty).unwrap();
+    assert_eq!(report.asset_failures.len(), 1);
+    // The failed reload left the values the forced one read.
     assert_eq!(
         document
             .retained_values(root)
             .unwrap()
             .stats()
             .decode_attempts,
-        0
+        1
     );
     assert!(
         layerstack::AttributeQuery::new(path)
@@ -1529,14 +1539,29 @@ fn retained_policy_reaches_package_members_and_explicit_dependency_loads() {
             .decode_attempts,
         0
     );
+    // An unchanged source is not read again: its values stay decoded.
     document.reload(ReloadPolicy::PreserveDirty).unwrap();
+    assert!(
+        document
+            .retained_values(child)
+            .unwrap()
+            .stats()
+            .decode_attempts
+            > 0
+    );
+    let reloaded = document.root_layer();
+    document
+        .force_reload_layers(&[reloaded], ReloadPolicy::PreserveDirty)
+        .unwrap();
+    // Read again: new values, which comparing them with the layer's
+    // decoded once.
     assert_eq!(
         document
             .retained_values(child)
             .unwrap()
             .stats()
             .decode_attempts,
-        0
+        1
     );
 }
 #[cfg(feature = "std")]
@@ -1575,14 +1600,29 @@ fn retained_binary_package_root_preserves_budget_and_reload_policy() {
         2048
     );
     assert_eq!(old.stats().decode_attempts, 1);
+    // An unchanged source is not read again: its values stay decoded.
     document.reload(ReloadPolicy::PreserveDirty).unwrap();
+    assert!(
+        document
+            .retained_values(root)
+            .unwrap()
+            .stats()
+            .decode_attempts
+            > 0
+    );
+    let reloaded = document.root_layer();
+    document
+        .force_reload_layers(&[reloaded], ReloadPolicy::PreserveDirty)
+        .unwrap();
+    // Read again: new values, which comparing them with the layer's
+    // decoded once.
     assert_eq!(
         document
             .retained_values(root)
             .unwrap()
             .stats()
             .decode_attempts,
-        0
+        1
     );
     assert_eq!(old.stats().decode_attempts, 1);
     assert_eq!(document.load_options(), retained_options());
@@ -1761,11 +1801,12 @@ fn staged_reload_protects_edits_and_preserves_layer_identities() {
     doc.storage_mut()
         .files
         .insert("base.usda".into(), b"bad USD".to_vec());
-    assert!(doc.reload(ReloadPolicy::DiscardDirty).is_err());
+    let report = doc.reload(ReloadPolicy::DiscardDirty).unwrap();
+    assert_eq!(report.asset_failures.len(), 1, "the failure is reported");
     assert_eq!(
         doc.store.layers().cloned().collect::<Vec<_>>(),
         before,
-        "failed staged reload publishes no layers"
+        "a layer that fails to read again keeps its content"
     );
     assert!(doc.is_dirty(base));
     doc.storage_mut().files.insert(
@@ -1792,7 +1833,14 @@ fn binary_export_reopens_and_package_reload_keeps_member_ids() {
     let mut doc = StageDocument::open(backend, "scene.usdz", StageOptions::default()).unwrap();
     let member = doc.catalog.ids["scene.usdz[base.usda]"];
     assert_eq!(value(&doc), Value::Int(7));
+    // Unchanged, the package is not read again; forced, it is, and its
+    // members keep their ids.
     let report = doc.reload(ReloadPolicy::PreserveDirty).unwrap();
+    assert!(report.layers.is_empty());
+    let root = doc.root_layer();
+    let report = doc
+        .force_reload_layers(&[root], ReloadPolicy::PreserveDirty)
+        .unwrap();
     assert!(report.layers.contains(&member));
     assert_eq!(doc.catalog.ids["scene.usdz[base.usda]"], member);
     assert_eq!(doc.store.layer_count(), 2);
@@ -2625,17 +2673,16 @@ fn forgetting_a_candidate_leaves_the_published_document_usable() {
         "root.usda".into(),
         b"#usda 1.0\ndef \"CandidateOnly\" {}".to_vec(),
     );
-    let candidate = doc.prepare_reload(ReloadPolicy::PreserveDirty).unwrap();
+    let mut candidate = doc.prepare_reload(ReloadPolicy::PreserveDirty).unwrap();
     assert_ne!(
-        candidate.store().identity(),
+        candidate.candidate().0.identity(),
         identity,
-        "candidate names cannot alias a published domain"
+        "a composed candidate is an independent store"
     );
     core::mem::forget(candidate);
     assert_eq!(doc.store.identity(), identity);
     assert_eq!(doc.store.paths().display(path, doc.store.tokens()), "/Root");
     assert_eq!(value(&doc), Value::Int(1));
-    assert!(doc.store.tokens().lookup("CandidateOnly").is_none());
     set_value(&mut doc, root, 2);
     assert_eq!(value(&doc), Value::Int(2));
     assert_eq!(doc.save().saved, [root]);
@@ -2775,13 +2822,13 @@ fn root_reload_refreshes_resident_dependencies_and_protects_required_dirty_layer
         b"#usda 1.0\ndef \"Asset\" { int value=2; }".to_vec(),
     );
     doc.storage.reads.clear();
-    let candidate = doc
+    let mut candidate = doc
         .prepare_reload_root(ReloadPolicy::PreserveDirty)
         .unwrap();
+    let (store, stage) = candidate.candidate();
     assert_eq!(
-        candidate
-            .stage()
-            .view(candidate.store())
+        stage
+            .view(store)
             .attribute(property)
             .and_then(|a| a.get(layerstack::Time::Default))
             .unwrap()
@@ -2891,13 +2938,13 @@ fn root_reload_refreshes_expression_dependencies_and_rejects_dirty_sources() {
     );
     doc.storage.reads.clear();
     {
-        let candidate = doc
+        let mut candidate = doc
             .prepare_reload_root(ReloadPolicy::PreserveDirty)
             .unwrap();
+        let (store, stage) = candidate.candidate();
         assert_eq!(
-            candidate
-                .stage()
-                .view(candidate.store())
+            stage
+                .view(store)
                 .attribute(property)
                 .and_then(|a| a.get(layerstack::Time::Default))
                 .unwrap()

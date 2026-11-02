@@ -156,13 +156,11 @@ fn stage_registry_types_initial_recursive_explicit_reload_and_package_reads() {
         "base.usda".into(),
         b"#usda 1.0\nover \"P\" (hostScale = \"bad\") {}\n".to_vec(),
     );
-    assert_eq!(
-        document
-            .reload(ReloadPolicy::DiscardDirty)
-            .unwrap_err()
-            .kind,
-        IoErrorKind::Rejected
-    );
+    // The layer that does not read keeps its content, and the failure is
+    // reported, as `SdfLayer::Reload` fails for that layer alone.
+    let report = document.reload(ReloadPolicy::DiscardDirty).unwrap();
+    assert_eq!(report.asset_failures.len(), 1);
+    assert_eq!(report.asset_failures[0].error.kind, IoErrorKind::Rejected);
     assert_eq!(
         document.store.layers().cloned().collect::<Vec<_>>(),
         before,

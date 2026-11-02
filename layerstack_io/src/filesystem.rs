@@ -131,6 +131,25 @@ impl Storage for Filesystem {
             )
         })
     }
+    /// The file's length and modification time, to the nanosecond the
+    /// platform records: a reload skips a clean layer whose file reports
+    /// both as they were when it was read. OpenUSD's `ArDefaultResolver`
+    /// compares the modification time alone.
+    fn version(&self, identifier: &str) -> Result<Option<SourceVersion>, IoError> {
+        let metadata = fs::metadata(identifier).map_err(storage_error)?;
+        let modified = metadata
+            .modified()
+            .ok()
+            .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok());
+        Ok(modified.map(|time| {
+            SourceVersion::new(alloc::format!(
+                "{}:{}.{:09}",
+                metadata.len(),
+                time.as_secs(),
+                time.subsec_nanos()
+            ))
+        }))
+    }
     fn read(&self, identifier: &str) -> Result<Vec<u8>, IoError> {
         use std::io::Read;
         let mut file = retry_transient(self.lock_retry, || fs::File::open(identifier))

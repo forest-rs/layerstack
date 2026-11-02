@@ -5470,7 +5470,7 @@ def "Lone" (
 
     /// A released source read again is unavailable until the host
     /// supplies it again: another layer of it waits in `unavailable`, and
-    /// a reload that selects it fails naming it and changes nothing.
+    /// a reload that selects it reports it failed and keeps its layer.
     #[test]
     fn a_released_source_reread_is_unavailable_until_supplied_again() {
         use layerstack_io::{IoErrorKind, ReloadPolicy};
@@ -5501,16 +5501,18 @@ def "Lone" (
         assert!(stage.unavailable().as_list().unwrap().is_empty());
         assert!(stage.document().storage().is_released("parts/ball.usda"));
 
-        // A reload of a released layer.
+        // A reload of a released layer reads it to compare, and keeps the
+        // layer as it was until the host supplies it again.
         let sub = stage.document_mut().layer_named("sub.usda").unwrap();
-        let Err(error) = stage
+        let reload = stage
             .document_mut()
             .prepare_reload_layers(&[sub], ReloadPolicy::PreserveDirty)
-        else {
-            panic!("the sublayer was released");
-        };
+            .unwrap();
+        assert!(reload.reloaded_layers().is_empty());
+        let error = &reload.load_report().asset_failures[0].error;
         assert_eq!(error.kind, IoErrorKind::Unavailable);
         assert_eq!(error.identifier.as_deref(), Some("sub.usda"));
+        reload.commit();
         assert_eq!(serial(&stage), Wire::Int64(9_007_199_254_740_993));
         stage.document_mut().storage_mut().supply(
             "sub.usda",

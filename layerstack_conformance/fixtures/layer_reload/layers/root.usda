@@ -1,0 +1,29 @@
+#usda 1.0
+(
+    subLayers = [
+        @sub.usda@
+    ]
+)
+
+def "A"
+{
+    double x = 1
+}
+
+def "R" (
+    prepend references = @ref.usda@</R>
+)
+{
+}
+
+def "M" (
+    prepend references = @missing.usda@</M>
+)
+{
+}
+
+def "Q" (
+    prepend references = @asset.usda@</Q>
+)
+{
+}

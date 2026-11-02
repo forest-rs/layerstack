@@ -72,6 +72,8 @@ struct Read {
     /// The read's work and time, for the reader's log, when it decoded
     /// the source.
     logged: Option<LayerRead>,
+    /// The source's version or digest, when it was read.
+    freshness: Option<super::Freshness>,
 }
 
 enum Outcome {
@@ -179,6 +181,7 @@ impl<B: Storage> Shared<'_, B> {
             calls: Vec::new(),
             outcome: Outcome::Package,
             logged: None,
+            freshness: None,
         };
         let format = self.formats.for_identifier(&task.identifier);
         let bytes = if format.is_none_or(FileFormat::reads_source) {
@@ -189,8 +192,12 @@ impl<B: Storage> Shared<'_, B> {
                     return (task.id, read);
                 }
             };
+            let version = super::freshness::version_of(self.storage, outer);
             match self.storage.read_encoded(outer) {
-                Ok(bytes) => bytes,
+                Ok(bytes) => {
+                    read.freshness = Some(super::Freshness::of(version, &bytes));
+                    bytes
+                }
                 Err(error) => {
                     read.outcome = Outcome::Unread(error.at(outer));
                     return (task.id, read);
@@ -632,6 +639,7 @@ impl<B: Storage> Replay<'_, '_, B> {
             Outcome::Package => unreachable!("packages are read on one thread"),
         };
         catalog.source_mut(id).expect("source").format = format;
+        catalog.record_mut(id).freshness = read.freshness.take();
         catalog.set_state(id, State::Loading);
         if let Some(mut logged) = read.logged.take() {
             logged.layer = id;

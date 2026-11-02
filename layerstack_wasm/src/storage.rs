@@ -66,8 +66,8 @@ pub struct Released {
 /// ([`IoErrorKind::Unavailable`]): an arc that asks for it again (another
 /// layer of the same source, under other format arguments) waits in
 /// [`layerstack_io::StageDocument::unavailable_assets`] until the host
-/// supplies it again; a reload that selects it fails with
-/// [`IoErrorKind::Unavailable`] naming it and changes nothing, and a
+/// supplies it again; a reload that selects it reports it failed with
+/// [`IoErrorKind::Unavailable`] and keeps its layer as it was, and a
 /// dependency a reload of the root reaches but cannot read again keeps
 /// the layer read before. [`Self::released`] counts what was released.
 ///

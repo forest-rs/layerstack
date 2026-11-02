@@ -1,11 +1,12 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-// Image sizes read from file headers, so a large image is decoded once.
+// Image sizes read from file headers, so a large image is decoded once; and
+// which images arrived since the draws reading them were last restyled.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { imageSize } from "../src/viewport/surfaces.ts";
+import { TextureStore, imageSize } from "../src/viewport/surfaces.ts";
 
 /** A PNG's signature and `IHDR` chunk, which hold its size. */
 function png(width: number, height: number): Uint8Array {
@@ -45,5 +46,22 @@ describe("imageSize", () => {
     assert.equal(imageSize(new TextEncoder().encode("GIF89a")), null);
     assert.equal(imageSize(png(16, 16).subarray(0, 20)), null);
     assert.equal(imageSize(jpeg(16, 16).subarray(0, 8)), null);
+  });
+});
+
+describe("TextureStore.takeArrived", () => {
+  it("names each image once, after it arrives or fails, for the draws reading it to be restyled", async () => {
+    let arrivals = 0;
+    const store = new TextureStore(async () => null, async () => false, () => (arrivals += 1));
+    const file = (identifier: string) => ({ file: { assetPath: identifier, layer: null, identifier, udim: false } });
+    assert.equal(store.image(file("a.png")), undefined, "loading");
+    assert.equal(store.image(file("b.png")), undefined);
+    assert.equal(store.takeArrived().size, 0, "nothing has arrived yet");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(arrivals, 2);
+    assert.deepEqual([...store.takeArrived()].sort(), ["a.png", "b.png"]);
+    assert.equal(store.takeArrived().size, 0, "each once");
+    assert.equal(store.image(file("a.png")), null, "unreadable once arrived");
+    assert.equal(store.takeArrived().size, 0, "asking again does not load again");
   });
 });

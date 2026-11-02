@@ -225,7 +225,7 @@ import { fixNodes, setFixedNode } from "./fixedNodes.ts";
 import { onRendererLost, sharedRenderer } from "./gpu.ts";
 import { SkinnedDraw, withSkinning } from "./skinning.ts";
 import { TextureStore, surfaceMaterial, uvChannels } from "./surfaces.ts";
-import { standinGeometry, standinMaterials, standinTextured } from "./standins.ts";
+import { standinGeometry, standinMaterials } from "./standins.ts";
 import { ClusterScene, MAX_CLUSTER_TRIANGLES, clusterable, packVertices } from "./clusters.ts";
 import type { PackedVertices } from "./clusters.ts";
 import type { ClusterResidency, ClusterStats, ClusterView } from "./clusters.ts";
@@ -1197,23 +1197,42 @@ export class Viewport {
     this.#lights.delete(path);
   }
 
-  /** Makes again the materials of the draws binding a material with textures: an image arrived. */
+  /**
+   * Makes again the materials of the draws reading an image that arrived
+   * since the last restyle; the others' materials already have theirs, or
+   * still wait on another.
+   */
   #restyleTextured(): void {
     const scene = this.#applied;
-    if (scene === null) return;
+    const arrived = this.#textures.takeArrived();
+    if (scene === null || arrived.size === 0) return;
+    const reads = (path: string | null) => path !== null && (scene.materials.get(path)?.textures.some(({ file }) => file.identifier !== null && arrived.has(file.identifier)) ?? false);
+    let count = 0;
     for (const view of scene.items) {
-      const bound = [view.item.material, ...view.item.subsetMaterials];
-      if (!bound.some((path) => path !== null && (scene.materials.get(path)?.textures.length ?? 0) > 0) && !standinTextured(view.buffers.standin)) continue;
+      const standin = view.buffers.standin;
+      const waited = standin !== null ? standin.textures.some((file) => file?.identifier != null && arrived.has(file.identifier)) : reads(view.item.material) || view.item.subsetMaterials.some(reads);
+      if (!waited) continue;
       const object = this.#objects.get(view.item.id);
       if (object === undefined) continue;
       this.#retired.push(...[object.material].flat());
       object.material = restyled(object, materials(view, this.#selected, scene.materials, this.#textures));
       if (this.#clusters.isDraw(object)) this.#clusters.style(object);
       this.#draws.drawDirectly(object);
+      count += 1;
     }
+    this.#restyles.restyles += 1;
+    this.#restyles.draws += count;
+    if (count === 0) return;
     this.#link(scene);
     this.#draw();
     this.#compile();
+  }
+
+  readonly #restyles = { restyles: 0, draws: 0 };
+
+  /** How often arrived images restyled draws so far, and how many draws' materials they made again in all. */
+  get restyleCounts(): { readonly restyles: number; readonly draws: number } {
+    return { ...this.#restyles };
   }
 
   /** The stage camera the view looks through, or `null` for the free camera. */

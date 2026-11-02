@@ -269,7 +269,7 @@ export class Viewport {
    * one it replaces before then would release the pipeline while its
    * replacement still needs it, and three.js would build it again.
    */
-  #retired: Material[] = [];
+  readonly #retired: Material[] = [];
   /** Geometries of static buffers not yet seen uploaded, released once a render has ({@link onUploaded}). */
   readonly #pending = new Set<BufferGeometry>();
   /** GPU picking's target, materials and ids, made at the first pick. */
@@ -332,7 +332,7 @@ export class Viewport {
     for (const geometry of this.#geometries.values()) geometry.dispose();
     this.#geometries.clear();
     for (const material of this.#retired) material.dispose();
-    this.#retired = [];
+    this.#retired.length = 0;
     this.#pending.clear();
     this.#picker?.dispose();
     this.#picker = null;
@@ -493,7 +493,7 @@ export class Viewport {
     this.#controls.dispose();
     for (const id of [...this.#objects.keys()]) this.#drop(id);
     for (const material of this.#retired) material.dispose();
-    this.#retired = [];
+    this.#retired.length = 0;
     for (const geometry of this.#geometries.values()) geometry.dispose();
     this.#geometries.clear();
     for (const path of [...this.#lights.keys()]) this.#dropLight(path);
@@ -906,7 +906,7 @@ export class Viewport {
   #draw(): void {
     this.#render();
     for (const material of this.#retired) material.dispose();
-    this.#retired = [];
+    this.#retired.length = 0;
   }
 
   #render(): void {

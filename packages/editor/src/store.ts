@@ -10,8 +10,8 @@
 // handed.
 import { useSyncExternalStore } from "react";
 import type { Edit, EditReceipt, EditTarget, Layer, Layerstack, LoadOutcome, LoadPolicy, ValueInput } from "@forest-rs/layerstack";
-import type { DrawCost, DrawScope, Stagehand } from "@forest-rs/layerstack_stagehand";
-import { type AssetFocus, assetFocus, type DrawScopeChoice, overLimit, scopeFor } from "./model/assetView.ts";
+import type { BudgetReport, DrawCost, DrawScope, Stagehand } from "@forest-rs/layerstack_stagehand";
+import { type AssetFocus, assetFocus, type BudgetChoice, budgetFor, type DrawScopeChoice, rememberBudget, rememberedBudget, scopeFor } from "./model/assetView.ts";
 import { ViewportModel, type ViewportScene, type ViewportUpdate } from "./model/draws.ts";
 import { type LoadBudget, type OpenPhase, OverBudget, Session } from "./model/session.ts";
 import type { SceneSource } from "./model/sources.ts";
@@ -138,22 +138,23 @@ export class EditorStore {
   /** What the draws hold, measured after the last sync; `null` with no scene. */
   cost: DrawCost | null = null;
   /**
-   * What the viewport draws: the whole scene, the selection alone (the
-   * asset view, {@link assetFocus}), or nothing. A scene over
-   * {@link DRAW_LIMIT} opens drawing the selection; {@link scopeNote} says
-   * why.
+   * What the viewport draws: the whole scene (as a scene opens), the
+   * selection alone (the asset view, {@link assetFocus}), or nothing;
+   * each under the draw budget ({@link budgetChoice}).
    */
   drawScope: DrawScopeChoice = "scene";
-  /** Why the scene opened without drawing it whole; `null` when it did. */
-  scopeNote: string | null = null;
-  /** What drawing the whole scene would cost, estimated when it opened. */
-  sceneEstimate: DrawCost | null = null;
+  /**
+   * The draw budget this viewer chose ({@link budgetFor}), remembered
+   * across visits: what does not fit is drawn as boxes or skipped, the
+   * selection admitted first.
+   */
+  budgetChoice: BudgetChoice = rememberedBudget();
+  /** Where the draws stand against the budget, after the last sync; `null` without a budget or a scene. */
+  budget: BudgetReport | null = null;
   /** What the asset view makes of the selection, as last synced. */
   focus: AssetFocus = { kind: "none" };
-  /** Why the asset view does not draw the selection (over {@link DRAW_LIMIT}); `null` when it does, or when the selection draws nothing anyway. */
-  focusNote: string | null = null;
-  /** The asset view's last decision, so a sync does not estimate the same selection again: its key, scope and note. */
-  #focusScope: { key: string; scope: DrawScope; note: string | null } | null = null;
+  /** The whole scene's estimate, once asked for, and the session and change it was made at. */
+  #estimate: { session: Session; changes: number; time: number | undefined; cost: DrawCost | null } | null = null;
   /** What actions reported, newest last. */
   readonly notices: Notice[] = [];
   readonly #draws: ViewportModel;
@@ -246,7 +247,7 @@ export class EditorStore {
       this.range = timeRange(session);
       this.time = this.range?.start;
       this.status = { kind: "ready" };
-      this.#decideScope(session);
+      this.drawScope = "scene";
       this.#sync();
     } catch (error) {
       if (opening !== this.#opening) return;
@@ -304,7 +305,8 @@ export class EditorStore {
     if (path === this.selection) return;
     this.selection = path;
     if (this.property !== null && (path === null || !this.property.startsWith(`${path}.`))) this.property = null;
-    if (this.drawScope === "selection") {
+    // Drawing the selection, or under a budget (which admits the selection first), the draws change.
+    if (this.drawScope === "selection" || this.budgetChoice !== "unlimited") {
       this.#sync();
       return;
     }
@@ -323,53 +325,41 @@ export class EditorStore {
   setDrawScope(choice: DrawScopeChoice): void {
     if (choice === this.drawScope) return;
     this.drawScope = choice;
-    this.scopeNote = null;
+    this.#sync();
+  }
+
+  /** Draws under the budget `choice` from now on, and remembers it for this viewer. */
+  setBudgetChoice(choice: BudgetChoice): void {
+    if (choice === this.budgetChoice) return;
+    this.budgetChoice = choice;
+    rememberBudget(choice);
     this.#sync();
   }
 
   /**
-   * Chooses what a newly opened scene draws: the whole scene, unless its
-   * estimated draws are over {@link DRAW_LIMIT}; then the selection, and
-   * {@link scopeNote} says why.
+   * What drawing the whole scene would cost in full, estimated from counts
+   * (nothing built), at the current time; made when first asked for and
+   * again after an edit. `null` with no scene, or when it cannot be made.
    */
-  #decideScope(session: Session): void {
-    this.#focusScope = null;
+  sceneEstimate(): DrawCost | null {
+    const session = this.session;
+    if (session === null) return null;
+    const at = this.#estimate;
+    if (at !== null && at.session === session && at.changes === session.changeLog.length && at.time === this.time) return at.cost;
+    let cost: DrawCost | null = null;
     try {
-      this.sceneEstimate = this.#draws.estimate(session.stage, this.time, { roots: ["/"] });
+      cost = this.#draws.estimate(session.stage, this.time, { roots: ["/"] });
     } catch (error) {
       if (moduleTrap(error) !== null) throw error;
-      this.sceneEstimate = null;
     }
-    const over = this.sceneEstimate === null ? null : overLimit(this.sceneEstimate.total);
-    this.drawScope = over === null ? "scene" : "selection";
-    this.scopeNote = over === null ? null : `This scene is not drawn whole: ${over}. Select a prim to draw it alone, or choose Scene.`;
+    this.#estimate = { session, changes: session.changeLog.length, time: this.time, cost };
+    return cost;
   }
 
-  /**
-   * The draw list's scope: {@link scopeFor} the choice and the asset
-   * view's focus, except that a selection over {@link DRAW_LIMIT} is not
-   * drawn ({@link focusNote} says why). Decided once per selection,
-   * property and recomposition.
-   */
+  /** The draw list's scope: {@link scopeFor} the choice and the asset view's focus. */
   #scope(session: Session): DrawScope {
-    const stage = session.stage;
-    this.focus = assetFocus(stage, this.selection, this.property, this.time);
-    if (this.drawScope !== "selection") {
-      this.focusNote = null;
-      return scopeFor(this.drawScope, this.focus);
-    }
-    const scope = scopeFor("selection", this.focus);
-    const key = `${JSON.stringify(scope)} ${session.changeLog.length}`;
-    if (this.#focusScope?.key !== key) {
-      let note: string | null = null;
-      if (scope.roots.length > 0) {
-        const over = overLimit(this.#draws.estimate(stage, this.time, scope).total);
-        if (over !== null) note = `${scope.roots[0]} is not drawn: ${over}. Select a part of it.`;
-      }
-      this.#focusScope = { key, scope: note === null ? scope : { roots: [] }, note };
-    }
-    this.focusNote = this.#focusScope.note;
-    return this.#focusScope.scope;
+    this.focus = assetFocus(session.stage, this.selection, this.property, this.time);
+    return scopeFor(this.drawScope, this.focus);
   }
 
   /** The prim the viewport highlights: the selection, or, drawing it alone, only a face subset of it. */
@@ -624,9 +614,11 @@ export class EditorStore {
   /** Brings the draw list up to the stage, applies what changed to the view, and bumps the revision. */
   #sync(): void {
     if (this.session !== null) {
-      const update = this.#draws.sync(this.session, this.time, this.#scope(this.session));
+      const promoted = this.selection === null || this.selection === "/" ? [] : [this.selection];
+      const update = this.#draws.sync(this.session, this.time, this.#scope(this.session), budgetFor(this.budgetChoice), promoted);
       this.scene = this.#draws.scene(this.time);
       this.cost = this.#draws.cost();
+      this.budget = this.#draws.budgetReport();
       if (update.reset || update.records > 0 || update.timeChanged || update.added.size + update.removed.size > 0) this.lastUpdate = update;
       this.#viewport?.update(this.scene, update, this.#highlighted());
     }

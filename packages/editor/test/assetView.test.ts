@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 // What the asset view makes of a selection, the draw scope it asks the
-// draw list for, the limit a scene opens under, and what an image's
-// header says.
+// draw list for, the draw budget, and what an image's header says.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { loadLayerstack } from "@forest-rs/layerstack";
-import type { CostTotals } from "@forest-rs/layerstack_stagehand";
-import { assetFocus, DRAW_LIMIT, overLimit, scopeFor } from "../src/model/assetView.ts";
+import type { BudgetGrant, BudgetReport } from "@forest-rs/layerstack_stagehand";
+import { assetFocus, budgetFor, budgetNote, DRAW_BUDGET, rememberBudget, rememberedBudget, scopeFor } from "../src/model/assetView.ts";
 import { imageInfo } from "../src/model/images.ts";
 
 const LAYER = `#usda 1.0
@@ -63,21 +62,36 @@ test("each draw scope choice asks the draw list for its scope", () => {
   assert.deepEqual(scopeFor("selection", { kind: "material", material: "/World/Look" }), { roots: [] });
 });
 
-test("a scene over the limit says by how much", () => {
-  const total = (gpuBytes: number, trianglesDrawn: number): CostTotals => ({
-    items: 1,
-    buffers: 1,
-    instances: 1,
-    trianglesDrawn,
-    triangles: trianglesDrawn,
-    vertices: 0,
-    cpuBytes: gpuBytes,
-    gpuBytes,
-    instanceBytes: 64,
+test("the draw budget is one constant, raised by a choice, and says what it simplified", () => {
+  assert.deepEqual(budgetFor("default"), DRAW_BUDGET);
+  assert.deepEqual(budgetFor("double"), { gpuBytes: 2 * 1024 ** 3, triangles: 100_000_000 });
+  assert.deepEqual(budgetFor("quadruple"), { gpuBytes: 4 * 1024 ** 3, triangles: 200_000_000 });
+  assert.equal(budgetFor("unlimited"), null);
+  // No storage here: the default.
+  assert.equal(rememberedBudget(), "default");
+  rememberBudget("double");
+  const grant = (rung: "standin" | "skipped"): BudgetGrant => ({
+    item: null,
+    source: { kind: "gprim", path: "/World/Tile" },
+    prim: "/World/Tile",
+    rung,
+    requested: { gpuBytes: 1, triangles: 1, instances: 1 },
+    granted: { gpuBytes: 0, triangles: 0, instances: 0 },
+    over: ["triangles"],
+    promoted: false,
+    order: 0,
   });
-  assert.equal(overLimit(total(DRAW_LIMIT.gpuBytes, DRAW_LIMIT.trianglesDrawn)), null);
-  assert.match(overLimit(total(14 * 1024 ** 3, 1))!, /upload about 14\.0 GB/);
-  assert.match(overLimit(total(1, 2e9))!, /about 2000 million triangles/);
+  const report = (degraded: BudgetGrant[]): BudgetReport => ({
+    budget: DRAW_BUDGET,
+    requested: { gpuBytes: 1, triangles: 1, instances: 1 },
+    granted: { gpuBytes: 0, triangles: 0, instances: 0 },
+    items: 3,
+    degraded,
+  });
+  assert.equal(budgetNote(null), null);
+  assert.equal(budgetNote(report([])), null);
+  assert.equal(budgetNote(report([grant("standin"), grant("standin"), grant("skipped")])), "3 items simplified to fit the budget (2 as boxes, 1 skipped).");
+  assert.equal(budgetNote(report([grant("skipped")])), "1 item simplified to fit the budget (1 skipped).");
 });
 
 test("an image's header gives its size and channels", () => {

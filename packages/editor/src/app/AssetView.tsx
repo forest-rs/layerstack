@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 // The asset view's parts over the viewport: the draw scope switch (Scene,
-// Selection, Nothing) and why a scene opened without drawing; what the
+// Selection, Nothing), the draw budget and what fitting it simplified; what the
 // selection drawn alone is (a mesh's triangles, points, primvars, subsets
 // and what stagehand made of it; a subtree's items and instances); and a
 // texture as its image, with its size, channels and color space.
@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
 import type { Stage } from "@forest-rs/layerstack";
 import { anchorAssetPath } from "@forest-rs/layerstack_stagehand";
 import { cn } from "@/lib/utils";
-import type { DrawScopeChoice } from "../model/assetView.ts";
+import { BUDGET_CHOICES, budgetNote, type DrawScopeChoice } from "../model/assetView.ts";
 import { imageInfo, type ImageInfo } from "../model/images.ts";
 import { enclosingMaterial } from "../model/network.ts";
 import { resolveAsset } from "../model/sources.ts";
@@ -23,9 +23,9 @@ const CHOICES: readonly [DrawScopeChoice, string, string][] = [
   ["nothing", "Nothing", "Draw nothing: browse and edit without the geometry"],
 ];
 
-/** The draw scope switch, and why the scene, or the selection, is not drawn. */
+/** The draw scope switch, the draw budget, and what fitting the budget simplified. */
 export function DrawScopeSwitch({ store }: { store: EditorStore }) {
-  const notes = [store.focusNote, store.scopeNote].filter((note) => note !== null);
+  const notes = [budgetNote(store.budget)].filter((note) => note !== null);
   return (
     <div className="flex flex-col items-start gap-1">
       <div role="group" aria-label="Draw" className="flex rounded-md bg-black/40 p-0.5 text-[11px] backdrop-blur-sm">
@@ -42,9 +42,25 @@ export function DrawScopeSwitch({ store }: { store: EditorStore }) {
           </button>
         ))}
       </div>
+      <div role="group" aria-label="Draw budget" className="flex items-center rounded-md bg-black/40 p-0.5 text-[11px] backdrop-blur-sm">
+        <span className="px-1.5 text-white/50" title="The most the viewport draws: bytes uploaded and triangles drawn (50 million per GiB). What does not fit is drawn as boxes, or skipped; the selection is admitted first.">
+          Budget
+        </span>
+        {BUDGET_CHOICES.map(([choice, label]) => (
+          <button
+            key={choice}
+            type="button"
+            aria-pressed={store.budgetChoice === choice}
+            onClick={() => store.setBudgetChoice(choice)}
+            className={cn("rounded px-2 py-0.5 text-white/70 hover:text-white", store.budgetChoice === choice && "bg-white/15 text-white")}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       {notes.map((note) => (
         <p key={note} role="status" className="max-w-md rounded-md bg-amber-950/70 px-2 py-1 text-[11px] text-amber-100 backdrop-blur-sm">
-          {note}
+          {note} The Draw cost tab lists them; raise the budget, or select an item to draw it first.
         </p>
       ))}
     </div>

@@ -1,8 +1,9 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-// Vertex formats: the compact encoding's error bounds, and the cost model
-// in both formats.
+// Vertex formats: the compact encoding's error bounds, the cost model in
+// both formats, and releasing a buffer's arrays after upload and filling
+// them again.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -207,6 +208,67 @@ describe("vertex formats in a draw list", () => {
       const buffers = list.buffers(key)!;
       assert.deepEqual([...vertexPositions(buffers.vertices)], [0, 0, 0.5, 1, 0, 0.5, 0, 1, 0.5]);
       assert.deepEqual([...buffers.vertices.indices], [0, 1, 2]);
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+  });
+
+  it("release a static buffer's arrays after upload, and restore them", () => {
+    for (const format of ["compact", "float32"] as const) {
+      const { stage, list } = open(format);
+      try {
+        const tile = bufferOf(list, "/Tile");
+        const ball = bufferOf(list, "/Ball");
+        const wave = bufferOf(list, "/Wave");
+        const before = list.cost().total;
+        const points = vertexPositions(list.buffers(tile)!.vertices);
+        // Not at another revision, and not a mesh whose points vary: it refills.
+        assert.equal(list.release(tile, 1), false);
+        assert.equal(list.release(wave, list.buffers(wave)!.revision), false);
+        assert.equal(list.release(tile, list.buffers(tile)!.revision), true);
+        assert.equal(list.release(ball, list.buffers(ball)!.revision), true);
+        assert.equal(list.release(tile, list.buffers(tile)!.revision), false, "once");
+        const released = list.buffers(tile)!;
+        assert.ok(released.vertices.released);
+        assert.equal(released.vertices.position.array.length, 0);
+        assert.equal(released.vertices.indices.length, 0);
+        assert.equal(released.vertices.count, 4);
+        const after = list.cost().total;
+        assert.equal(after.gpuBytes, before.gpuBytes, "uploaded bytes counted from counts");
+        assert.ok(after.cpuBytes < before.cpuBytes);
+        // One buffer, by key: the others stay released.
+        const one = list.restore([ball, wave]);
+        assert.deepEqual(one.rebuilt, [ball], "the wave was never released");
+        assert.equal(list.buffers(tile)!.vertices.released, true);
+        assert.equal(list.release(ball, list.buffers(ball)!.revision), true);
+        // A lost context: everything released is filled again, and listed as rebuilt.
+        const diff = list.restore();
+        assert.deepEqual(diff.rebuilt, [tile, ball].sort((a, b) => a - b));
+        assert.equal(diff.work.triangulations, 1);
+        assert.equal(diff.work.tessellations, 1);
+        const restored = list.buffers(tile)!;
+        assert.equal(restored.vertices.released, false);
+        assert.deepEqual([...vertexPositions(restored.vertices)], [...points]);
+        assert.deepEqual(list.cost().total, before);
+        assert.deepEqual(list.restore().rebuilt, [], "nothing left to restore");
+      } finally {
+        list.dispose();
+        stage.free();
+      }
+    }
+  });
+
+  it("keep a released mesh released while its input is unchanged, and fill it on an edit", () => {
+    const { stage, list, heard } = open("compact");
+    try {
+      const tile = bufferOf(list, "/Tile");
+      list.release(tile, list.buffers(tile)!.revision);
+      stage.apply([{ type: "setValue", path: "/Tile.points", value: { type: "point3f[]", value: [[0, 0, 2], [1, 0, 2], [1, 1, 2], [0, 1, 2]] } }], stage.root);
+      const diff = list.applyChanges(heard.at(-1)!);
+      assert.deepEqual(diff.rebuilt, [tile]);
+      assert.equal(list.buffers(tile)!.vertices.released, false);
+      assert.equal(vertexPositions(list.buffers(tile)!.vertices)[2], 2);
     } finally {
       list.dispose();
       stage.free();

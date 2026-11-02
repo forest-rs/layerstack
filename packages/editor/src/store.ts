@@ -188,6 +188,20 @@ export class EditorStore {
     this.#viewport = viewport;
     if (viewport === null) return;
     viewport.onImages = () => this.#bumpSoon();
+    // Uploaded buffers' arrays are dropped; what is held is measured again.
+    viewport.onUploaded = (key, revision) => this.#draws.release(key, revision);
+    viewport.onReleased = () => {
+      this.cost = this.#draws.cost();
+      this.#bumpSoon();
+    };
+    // A lost context lost every upload: the released buffers filled again, the view made again.
+    viewport.onContextRestored = () => {
+      this.#draws.restore();
+      this.scene = this.#draws.scene(this.time);
+      this.cost = this.#draws.cost();
+      viewport.update(this.scene, { ...this.#noUpdate(), reset: true }, this.#highlighted());
+      this.#bump();
+    };
     viewport.lookThrough(this.through);
     viewport.setLightSettings(this.lightSettings);
     this.#orient();

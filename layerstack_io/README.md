@@ -3,7 +3,8 @@
 Application-owned OpenUSD file I/O above Layerstack's composition kernel and
 USDA, USDC and USDZ format implementations. `StageDocument` loads dependencies
 into one shared store, exposes its retained stage, saves dirty layers separately
-from session edits, and reloads selected sources with an explicit dirty policy.
+from session edits, and reloads only the sources that changed, with an explicit
+dirty policy.
 
 [API documentation](https://docs.rs/layerstack_io) ·
 [Source](https://github.com/forest-rs/layerstack/tree/main/layerstack_io)
@@ -96,18 +97,33 @@ manifests, templates and missing-value searches can require more files.
 `clip_asset_requests` and `load_asset` remain available for custom scheduling. Other retained clients over
 the document's store synchronize independently after publication.
 
-Use `prepare_reload` or `prepare_reload_layers` when an engine must inspect a
-candidate before publication. `PreparedReload` exposes its store, composed stage,
-import report, source identities and retained decode statistics. Dropping it
-rejects the reload; `commit()` publishes its layers, source catalog and already
-composed stage together, preserving existing change observers. No source reads
-or second composition occur at commit. Rejection leaves dirty generations and
-dependency freshness unchanged, including failed or leaked candidates.
-Preparation copies authored maps and interner indexes into an independent ID
-domain; immutable numeric buffers and package bytes share ownership.
-Candidate-only IDs must not be used on a rejected document. The document stays
-exclusively borrowed until acceptance or rejection. Synchronize direct edits
-before preparation if they change which source layers the snapshot uses.
+A reload reads only what changed. The document records each source's
+version as it reads it (`Storage::version`: modification time and length for
+`Filesystem`; a digest of the bytes for storage that reports none), and
+`reload` skips a clean layer whose source is unchanged, as
+`UsdStage::Reload` does. A changed layer publishes only its differences,
+through `Transaction::transfer_content` in one transaction, so the stage's
+notices name what the file changed (a value info-only on its property, a
+prim added or removed resynced, the pseudo-root info-only for a root layer
+stack layer read again) rather than resyncing the stage. A missing asset
+that now exists resolves, a search path that now finds another file reads
+it, and `force_reload_layers` reads unchanged layers too
+(`SdfLayer::Reload(force)`). With nothing changed a reload reads no layer
+and sends no notice. A layer that cannot be read or parsed again keeps its
+content and is reported in the result's `asset_failures`, while the others
+reload, as in OpenUSD.
+
+Use `prepare_reload` or `prepare_reload_layers` when an engine must inspect
+a reload before publication. `PreparedReload` lists the layers it read
+again, their new content, the import report, source identities and retained
+decode statistics, and `candidate()` composes the scene it would publish,
+on request. Dropping it rejects the reload; `commit()` publishes it without
+reading a source again, preserving existing change observers. Rejection
+leaves layers, dirty generations and dependency freshness unchanged,
+including failed or leaked candidates; the names the layers read intern
+stay in the document's interners. The document stays exclusively borrowed
+until acceptance or rejection. Synchronize direct edits before preparation
+if they change which source layers the stage uses.
 
 `read_asset_bytes(path, authoring_layer)` reads arbitrary images, environment maps
 and other bytes using the same package/member policy as layer imports. Capture

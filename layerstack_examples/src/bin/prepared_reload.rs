@@ -55,7 +55,8 @@ fn validate(
     path: layerstack::PathId,
 ) -> Result<Resources, Box<dyn std::error::Error>> {
     let (points, asset) = {
-        let scene = Scene::new(candidate.stage().stage(), candidate.store());
+        let (store, stage) = candidate.candidate();
+        let scene = Scene::new(stage.stage(), store);
         let mesh = Mesh::get(&scene, path).ok_or("candidate has no mesh")?;
         let points = mesh
             .try_points(Time::Default)?
@@ -63,8 +64,7 @@ fn validate(
         if points.len() > 2 {
             return Err("host point budget exceeded".into());
         }
-        let name = candidate
-            .store()
+        let name = store
             .tokens()
             .lookup("texture")
             .ok_or("no texture attribute")?;

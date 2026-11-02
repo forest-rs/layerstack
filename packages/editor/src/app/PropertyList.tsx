@@ -15,6 +15,7 @@ import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { EditorStore } from "../store.ts";
 import { shown, ValueField } from "./fields.tsx";
+import { Present, presentationContext } from "./presentations/Present.tsx";
 import { Section } from "./Section.tsx";
 
 /** One property row. */
@@ -137,6 +138,11 @@ export function PropertyList({ store, stage, prim }: { store: EditorStore; stage
       }
     >
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-2 gap-y-1">
+        {colorHint(prim, authored) && (
+          <span className="col-span-2 text-[11px] text-muted-foreground">
+            This prim's <span className="font-mono">color</span> is not a schema property, so nothing draws it: renderers draw <span className="font-mono">primvars:displayColor</span>.
+          </span>
+        )}
         {authored.length === 0 && (
           <span className="col-span-2 text-[11px] text-muted-foreground">No layer authors a value here{defined.length > 0 ? ": its schema's fallbacks follow." : "."}</span>
         )}
@@ -144,6 +150,16 @@ export function PropertyList({ store, stage, prim }: { store: EditorStore; stage
       </div>
     </Section>
   );
+}
+
+/**
+ * Whether to say that a gprim's `color` draws nothing: it authors a
+ * `color` attribute, which no geometry schema defines (some exporters
+ * write one), and no `primvars:displayColor`, which is what renderers draw
+ * (`UsdGeomGprim`'s `displayColor`).
+ */
+function colorHint(prim: Prim, authored: readonly Attribute[]): boolean {
+  return authored.some((attribute) => attribute.name === "color") && !authored.some((attribute) => attribute.name === "primvars:displayColor") && prim.isA("Gprim");
 }
 
 /** A metadata field's text, if the property authors or its schema defines one. */
@@ -163,6 +179,7 @@ function Row({ store, entry, under, depth }: { store: EditorStore; entry: Entry;
   );
   const indent = { paddingLeft: `${depth * 12 + 4}px` };
   if (entry.kind === "relationship") {
+    const context = presentationContext(store);
     return (
       <>
         <TooltipTrigger delay={400}>
@@ -179,11 +196,10 @@ function Row({ store, entry, under, depth }: { store: EditorStore; entry: Entry;
         </TooltipTrigger>
         <div className="flex min-w-0 flex-col">
           {entry.targets.length === 0 && <span className="text-[11px] text-muted-foreground">no targets</span>}
-          {entry.targets.map((target) => (
-            <button key={target} type="button" onClick={() => store.select(target.split(".")[0]!)} className="truncate text-left font-mono text-[11px] text-sky-400 hover:underline" title={target}>
-              {target}
-            </button>
-          ))}
+          {context !== null &&
+            entry.targets.map((target) => (
+              <Present key={target} object={target.includes(".") ? { kind: "propertyPath", path: target } : { kind: "primPath", path: target }} context={context} />
+            ))}
         </div>
       </>
     );

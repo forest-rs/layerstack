@@ -156,11 +156,22 @@ nothing more.
   labelled by `displayName` where the schema gives one, each name's tooltip
   giving its full name, type, variability, source, `displayGroup` and
   `documentation`; its bound material; the arcs it composes from. Each
-  editor is chosen by what the stage knows of the property (an animated
-  one, marked with a key, is edited by a sample at the current time): a
-  token the schema gives `allowedTokens` is a picker of them, a `bool` a
-  switch, a number or tuple fields that commit on Enter, a color a swatch.
-  Nothing has to be typed that the stage already knows.
+  section is a panel presentation of one of the prim's types
+  ([Presentations](#presentations)), and each editor is the value's
+  `accept` presentation, chosen by what the stage knows of the property
+  (an animated one, marked with a key, is edited by a sample at the
+  current time): a token the schema gives `allowedTokens` is a picker of
+  them, a `bool` a switch, a number or tuple fields that commit on Enter,
+  a colour (`color3f`, `color4d`, and their arrays) a swatch painted in
+  sRGB from its linear value, with a picker. A colour array is a strip of
+  its first elements (`primvars:displayOpacity` as their alpha) and its
+  interpolation; one of one element (a constant `displayColor`) is edited
+  by the picker. A gprim that authors a `color` no schema defines, and no
+  `displayColor`, says that renderers draw `displayColor`. Paths shown
+  anywhere (relationship targets, connections, the changes panel) and
+  layers (the explain and history panels) are live: a click selects or
+  explains, a context menu offers what else applies. Nothing has to be
+  typed that the stage already knows.
 - **Materials and shaders.** The inspector of a material or shader shows
   what it is (a shader's `info:id` and implementation; a material's
   outputs and what they read) and its inputs as their authors lay them
@@ -214,6 +225,72 @@ nothing more.
   until it loaded. The session runs the loop itself (`unavailable`,
   `supply`, `loadSupplied`) rather than `Stage.resolve` so that every phase
   can be timed. The step-by-step log is a toggle away.
+
+## Presentations
+
+What the editor shows is chosen by what it shows, after CLIM's
+presentations (`src/presentations/registry.ts`): every prim, value, path
+and layer is presented as an object of a **presentation type**, and a
+registration presents one type in the **views** it can do: `inline` (one
+line: a property row, a table cell, the explain and changes panels),
+`accept` (an inline editor), `panel` (an inspector section) and
+`tooltip`.
+
+- A prim's types are its schema type and that type's ancestors, most
+  specific first (`Cube`, `Gprim`, `Boundable`, ..., `Typed`), then its
+  applied API schemas (`Prim.appliedSchemas`: `MaterialBindingAPI`,
+  `CollectionAPI:parts` then `CollectionAPI`), then `Prim`. A value's are
+  its value type (`color3f[]`), its role (`color[]`), its kind (`token`,
+  `asset`, `number`) and shape (`array`, `tuple`), then `value`; a token
+  the schema restricts is `allowedToken` first. Paths are `primPath` or
+  `propertyPath`, then `path`; a layer is `layer`.
+- For `inline`, `accept` and `tooltip`, the registration of the most
+  specific type that has the view wins (priority breaks a tie). Every
+  `panel` that applies is shown, larger `priority` first: the built-ins
+  use 100 for a prim's state, 90 its transform, 50 a view of what it is,
+  0 its properties, below 0 what follows them.
+- An `accept` view authors through the `accept` callback it is given: the
+  host makes it one edit where edits go, undone, logged in Changes and
+  History, and heard by every view as any edit is.
+- What is presented stays live: a **command** registered for a type
+  (`registerCommand`) is offered on every presented object of it, a click
+  running the first that applies and a context menu (or Shift+F10)
+  listing them: a prim path selects, frames, draws alone or selects its
+  material; a property path explains; a layer takes edits or is muted; an
+  asset is shown in the asset view.
+- A panel keys its reads by `usePrimRevision(store, path)`, which changes
+  only when a recomposition reaches its prim, so an edit elsewhere reads
+  nothing of it again. A panel that throws is replaced by a line saying
+  so; the others still show.
+
+The built-ins (`src/app/presentations/builtins.ts`) register through the
+same two calls a plugin makes. A panel for a schema of one's own, and a
+command on prim paths:
+
+```tsx
+import { registerCommand, registerPresentation } from "./presentations/registry.ts";
+import { Section } from "./app/Section.tsx";
+
+registerPresentation({
+  id: "example.label",
+  kind: "prim",
+  type: "SemanticsLabelsAPI",
+  title: "Labels",
+  priority: 50,
+  panel: ({ object, context }) => (
+    <Section title="Labels">{object.prim.attributeNames().filter((name) => name.startsWith("semantics:")).join(", ")}</Section>
+  ),
+});
+
+registerCommand({
+  id: "example.hide",
+  kind: "primPath",
+  type: "primPath",
+  title: "Make invisible",
+  applies: (object, { stage }) => stage.prim(object.path)?.isA("Imageable") ?? false,
+  run: (object, { store }) => store.setValue(`${object.path}.visibility`, { type: "token", value: "invisible" }),
+});
+```
 
 ## Local scenes
 

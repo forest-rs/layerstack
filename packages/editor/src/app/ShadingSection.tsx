@@ -18,6 +18,7 @@ import { formatNumber } from "../model/values.ts";
 import type { EditorStore } from "../store.ts";
 import { CommitNumber, shown, ValueField } from "./fields.tsx";
 import { MaterialPreview } from "./MaterialPreview.tsx";
+import { Live, presentationContext } from "./presentations/Present.tsx";
 import { Section } from "./Section.tsx";
 
 export function ShadingSection({ store, stage, prim }: { store: EditorStore; stage: Stage; prim: Prim }) {
@@ -85,20 +86,15 @@ function Sources({ store, sources }: { store: EditorStore; sources: readonly str
   );
 }
 
+/** A link to `path` (a port, or a prim), live: a click selects its prim and explains it, a context menu offers the rest. */
 function SourceLink({ store, path, text }: { store: EditorStore; path: string; text: string }) {
-  const property = path.includes(".");
+  const context = presentationContext(store);
+  if (context === null) return null;
+  const object = path.includes(".") ? ({ kind: "propertyPath", path } as const) : ({ kind: "primPath", path } as const);
   return (
-    <button
-      type="button"
-      title={path}
-      onClick={() => {
-        store.select(property ? primOf(path) : path);
-        if (property) store.explain(path);
-      }}
-      className="truncate text-left font-mono text-[11px] text-sky-400 hover:underline"
-    >
+    <Live object={object} context={context} title={path}>
       {text}
-    </button>
+    </Live>
   );
 }
 

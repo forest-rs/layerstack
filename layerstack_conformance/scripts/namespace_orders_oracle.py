@@ -27,26 +27,39 @@ old name with the new one in its parent's `primOrder`
 (`pxr/usd/sdf/primSpec.cpp`); `SdfPropertySpec::SetName` leaves
 `propertyOrder` alone.
 
+A moved child joins the end of its new parent's child list, a renamed one
+keeps its place in its own, and composition orders each list by the
+orders as authored (AOUSD Core §7.6.2.4.5 `primOrder`, §11.3.1): a
+renamed child the order listed falls out of the ordered run, and one
+moved under an ordered parent is ordered only if the parent already
+names it. A rename that `UsdNamespaceEditor` makes through relocates
+(`/V/F`, which only `/V`'s variant authors) changes no spec at all, so
+the variant's order keeps naming `F`, and the relocated `F2` keeps its
+place among its siblings.
+
 Each case opens its scene afresh and records whether OpenUSD applies it
 and then, for each layer, every prim spec and variant prim spec with its
-children, properties and orders (`null` when it authors none), and every
-composed prim's children (`GetAllChildrenNames`) and property names
-(`GetPropertyNames`):
+children, properties and orders (`null` when it authors none), the
+layer's `ExportToString`, and every composed prim's children
+(`GetAllChildrenNames`) and property names (`GetPropertyNames`):
 
 - `cases`, each one call: a `UsdNamespaceEditor` rename, reparent or delete
-  of a prim or property through the root layer, or, in `variant.usda`,
-  through `/V`'s variant (`target` `variant`), which `CanApplyEdits`
-  refuses (edit targets that map across arcs are not supported, in
-  `_GatherLayersToEdit`); `SdfLayer::Apply` of one
+  of a prim or property through the root layer, of `scene.usda` (into
+  parents with and without orders of their own, to and from the root) or
+  of `variant.usda` (the variant's host, and a child only the variant
+  authors), or through `/V`'s variant (`target` `variant`), which
+  `CanApplyEdits` refuses (edit targets that map across arcs are not
+  supported, in `_GatherLayersToEdit`); `SdfLayer::Apply` of one
   `SdfBatchNamespaceEdit` on `asset.usda` (`layer_apply`), the edit a
   namespace move through `/R`'s reference node lowers to (OpenUSD's editor
   fails inside `PcpGatherDependentNamespaceEdits` for that target);
   `SdfPrimSpec::RemoveNameChild` and `RemoveProperty` (`remove_spec`); and
   `SdfCopySpec` (`copy_spec`);
 - `before`: each scene's record before any call;
-- `set_name`: `SdfPrimSpec::SetName` and `SdfPropertySpec::SetName` on
-  `scene.usda`, for contrast. No layerstack API makes those calls, so the
-  test does not replay them.
+- `unreplayed`: for contrast, `SdfPrimSpec::SetName` and
+  `SdfPropertySpec::SetName` (`set_name`), and `SdfLayer::Apply` on a
+  variant's child (`layer_apply`), in the root layers. No layerstack API
+  makes those calls, so the test does not replay them.
 
 `--check` rewrites everything into a temporary directory and fails unless
 the layers and `oracle.json` match the checked-in fixture.
@@ -180,34 +193,46 @@ SCENES = {
     "variant.usda": ["variant.usda"],
 }
 
-# (name, call, target, path, destination): `destination` is the new path of
-# a move, `None` for a delete. The `variant` target edits `variant.usda`,
-# every other case `scene.usda`.
+# (name, call, target, path, destination, scene): `destination` is the new
+# path of a move, `None` for a delete; `scene` is the layer the case opens.
 CASES = [
-    ("rename_child", "editor", "root", "/P/A", "/P/A2"),
-    ("rename_onto_ordered_name", "editor", "root", "/P/A", "/P/Gone"),
-    ("rename_unordered_child", "editor", "root", "/P/E", "/P/E2"),
-    ("rename_root_prim", "editor", "root", "/P", "/P2"),
-    ("reparent_child", "editor", "root", "/P/A", "/Q/A"),
-    ("reparent_and_rename_child", "editor", "root", "/P/B", "/Q/B2"),
-    ("delete_child", "editor", "root", "/P/A", None),
-    ("rename_property", "editor", "root", "/P.y", "/P.y2"),
-    ("reparent_property", "editor", "root", "/P.x", "/Q.x"),
-    ("delete_property", "editor", "root", "/P.z", None),
-    ("rename_variant_child", "editor", "variant", "/V/F", "/V/F2"),
-    ("delete_variant_child", "editor", "variant", "/V/F", None),
-    ("rename_asset_child", "layer_apply", "asset.usda", "/Asset/J", "/Asset/J2"),
-    ("remove_child_spec", "remove_spec", "scene.usda", "/P/A", None),
-    ("remove_property_spec", "remove_spec", "scene.usda", "/P.z", None),
-    ("copy_child_spec", "copy_spec", "scene.usda", "/P/A", "/Q/A"),
-    ("copy_ordered_spec", "copy_spec", "scene.usda", "/P", "/P3"),
+    ("rename_child", "editor", "root", "/P/A", "/P/A2", "scene.usda"),
+    ("rename_onto_ordered_name", "editor", "root", "/P/A", "/P/Gone", "scene.usda"),
+    ("rename_unordered_child", "editor", "root", "/P/E", "/P/E2", "scene.usda"),
+    ("rename_root_prim", "editor", "root", "/P", "/P2", "scene.usda"),
+    ("reparent_child", "editor", "root", "/P/A", "/Q/A", "scene.usda"),
+    ("reparent_and_rename_child", "editor", "root", "/P/B", "/Q/B2", "scene.usda"),
+    ("reparent_into_unordered_parent", "editor", "root", "/P/A", "/R/A", "scene.usda"),
+    ("reparent_to_root", "editor", "root", "/P/C", "/C", "scene.usda"),
+    ("reparent_root_prim", "editor", "root", "/Q", "/P/Q", "scene.usda"),
+    ("delete_child", "editor", "root", "/P/A", None, "scene.usda"),
+    ("rename_property", "editor", "root", "/P.y", "/P.y2", "scene.usda"),
+    ("reparent_property", "editor", "root", "/P.x", "/Q.x", "scene.usda"),
+    ("reparent_property_into_unordered", "editor", "root", "/P.y", "/R.y", "scene.usda"),
+    ("delete_property", "editor", "root", "/P.z", None, "scene.usda"),
+    ("rename_variant_host", "editor", "root", "/V", "/V2", "variant.usda"),
+    ("rename_child_from_variant", "editor", "root", "/V/F", "/V/F2", "variant.usda"),
+    ("rename_variant_child", "editor", "variant", "/V/F", "/V/F2", "variant.usda"),
+    ("delete_variant_child", "editor", "variant", "/V/F", None, "variant.usda"),
+    ("rename_asset_child", "layer_apply", "asset.usda", "/Asset/J", "/Asset/J2", "scene.usda"),
+    ("remove_child_spec", "remove_spec", "scene.usda", "/P/A", None, "scene.usda"),
+    ("remove_property_spec", "remove_spec", "scene.usda", "/P.z", None, "scene.usda"),
+    ("copy_child_spec", "copy_spec", "scene.usda", "/P/A", "/Q/A", "scene.usda"),
+    ("copy_ordered_spec", "copy_spec", "scene.usda", "/P", "/P3", "scene.usda"),
 ]
 
-SET_NAME = [
-    ("prim", "/P/A", "A2"),
-    ("prim_onto_ordered_name", "/P/A", "Gone"),
-    ("root_prim", "/P", "P2"),
-    ("property", "/P.y", "y2"),
+# Calls no layerstack API makes, recorded for contrast: (name, call, scene,
+# path, destination). `set_name` is `SdfPrimSpec::SetName` or
+# `SdfPropertySpec::SetName` to the destination's name; `layer_apply` is
+# `SdfLayer::Apply` of one `SdfBatchNamespaceEdit` on the scene's root
+# layer.
+UNREPLAYED = [
+    ("prim", "set_name", "scene.usda", "/P/A", "/P/A2"),
+    ("prim_onto_ordered_name", "set_name", "scene.usda", "/P/A", "/P/Gone"),
+    ("root_prim", "set_name", "scene.usda", "/P", "/P2"),
+    ("property", "set_name", "scene.usda", "/P.y", "/P.y2"),
+    ("variant_prim", "set_name", "variant.usda", "/V{v=x}F", "/V{v=x}F2"),
+    ("variant_prim_apply", "layer_apply", "variant.usda", "/V{v=x}F", "/V{v=x}F2"),
 ]
 
 
@@ -306,24 +331,21 @@ def apply(directory, stage, call, target, path, destination):
     raise ValueError(call)
 
 
-def scene_of(target):
-    return "variant.usda" if target == "variant" else "scene.usda"
-
-
 def record(directory, scene, stage, applied):
     return {
         "applied": applied,
         "layers": {name: layer_record(layer_named(directory, name))
                    for name in SCENES[scene]},
+        "text": {name: layer_named(directory, name).ExportToString()
+                 for name in SCENES[scene]},
         "composed": composed_record(stage),
     }
 
 
 def cases_record(directory):
     out = []
-    for name, call, target, path, destination in CASES:
+    for name, call, target, path, destination, scene in CASES:
         reload_layers()
-        scene = scene_of(target)
         stage = Usd.Stage.Open(os.path.join(directory, scene))
         applied = apply(directory, stage, call, target, path, destination)
         case = {"name": name, "scene": scene, "call": call, "target": target,
@@ -334,16 +356,21 @@ def cases_record(directory):
     return out
 
 
-def set_name_record(directory):
+def unreplayed_record(directory):
     out = []
-    for name, path, new_name in SET_NAME:
+    for name, call, scene, path, destination in UNREPLAYED:
         reload_layers()
-        stage = Usd.Stage.Open(os.path.join(directory, "scene.usda"))
+        stage = Usd.Stage.Open(os.path.join(directory, scene))
         layer = stage.GetRootLayer()
-        spec = layer.GetObjectAtPath(path)
-        spec.name = new_name
-        case = {"name": name, "path": path, "new_name": new_name}
-        case.update(record(directory, "scene.usda", stage, True))
+        if call == "set_name":
+            layer.GetObjectAtPath(path).name = Sdf.Path(destination).name
+            applied = True
+        else:
+            edit = Sdf.NamespaceEdit(path, destination, Sdf.NamespaceEdit.same)
+            applied = bool(layer.Apply(Sdf.BatchNamespaceEdit([edit])))
+        case = {"name": name, "call": call, "scene": scene, "path": path,
+                "destination": destination}
+        case.update(record(directory, scene, stage, applied))
         out.append(case)
     reload_layers()
     return out
@@ -366,7 +393,7 @@ def write(out):
         "openusd_version": f"{minor}.{patch}",
         "before": before,
         "cases": cases_record(out),
-        "set_name": set_name_record(out),
+        "unreplayed": unreplayed_record(out),
     }
     with open(os.path.join(out, "oracle.json"), "w") as f:
         json.dump(oracle, f, indent=1, sort_keys=True)

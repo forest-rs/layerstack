@@ -234,6 +234,11 @@
       "propertyOrder": null
      }
     }
+   },
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int y = 1\n    int z = 2\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"A\"\n    {\n    }\n\n    over \"B\"\n    {\n    }\n}\n\n"
    }
   },
   "variant.usda": {
@@ -302,6 +307,9 @@
       "propertyOrder": null
      }
     }
+   },
+   "text": {
+    "variant.usda": "#usda 1.0\n\ndef \"V\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    variantSet \"v\" = {\n        \"x\" {\n            reorder nameChildren = [\"G\", \"F\"]\n            def \"F\"\n            {\n            }\n\n            def \"G\"\n            {\n            }\n\n        }\n    }\n}\n\n"
    }
   }
  },
@@ -546,7 +554,12 @@
    "name": "rename_child",
    "path": "/P/A",
    "scene": "scene.usda",
-   "target": "root"
+   "target": "root",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int y = 1\n    int z = 2\n\n    def \"A2\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"A2\"\n    {\n    }\n\n    over \"B\"\n    {\n    }\n}\n\n"
+   }
   },
   {
    "applied": true,
@@ -788,7 +801,12 @@
    "name": "rename_onto_ordered_name",
    "path": "/P/A",
    "scene": "scene.usda",
-   "target": "root"
+   "target": "root",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int y = 1\n    int z = 2\n\n    def \"Gone\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"Gone\"\n    {\n    }\n\n    over \"B\"\n    {\n    }\n}\n\n"
+   }
   },
   {
    "applied": true,
@@ -1030,7 +1048,12 @@
    "name": "rename_unordered_child",
    "path": "/P/E",
    "scene": "scene.usda",
-   "target": "root"
+   "target": "root",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int y = 1\n    int z = 2\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E2\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"A\"\n    {\n    }\n\n    over \"B\"\n    {\n    }\n}\n\n"
+   }
   },
   {
    "applied": true,
@@ -1272,7 +1295,12 @@
    "name": "rename_root_prim",
    "path": "/P",
    "scene": "scene.usda",
-   "target": "root"
+   "target": "root",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P2\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int y = 1\n    int z = 2\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P2\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"A\"\n    {\n    }\n\n    over \"B\"\n    {\n    }\n}\n\n"
+   }
   },
   {
    "applied": true,
@@ -1522,7 +1550,12 @@
    "name": "reparent_child",
    "path": "/P/A",
    "scene": "scene.usda",
-   "target": "root"
+   "target": "root",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int y = 1\n    int z = 2\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n\n    def \"A\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"B\"\n    {\n    }\n}\n\nover \"Q\"\n{\n    over \"A\"\n    {\n    }\n}\n\n"
+   }
   },
   {
    "applied": true,
@@ -1772,7 +1805,762 @@
    "name": "reparent_and_rename_child",
    "path": "/P/B",
    "scene": "scene.usda",
-   "target": "root"
+   "target": "root",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int y = 1\n    int z = 2\n\n    def \"A\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n\n    def \"B2\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"A\"\n    {\n    }\n}\n\nover \"Q\"\n{\n    over \"B2\"\n    {\n    }\n}\n\n"
+   }
+  },
+  {
+   "applied": true,
+   "call": "editor",
+   "composed": {
+    "/": {
+     "children": [
+      "Q",
+      "R",
+      "P"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "C",
+      "E",
+      "B"
+     ],
+     "properties": [
+      "z",
+      "y",
+      "x"
+     ]
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J",
+      "A"
+     ],
+     "properties": []
+    },
+    "/R/A": {
+     "children": [],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": "/R/A",
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "B",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [
+       "A"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P",
+       "R"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [
+       "A"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "reparent_into_unordered_parent",
+   "path": "/P/A",
+   "scene": "scene.usda",
+   "target": "root",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int y = 1\n    int z = 2\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n    def \"A\"\n    {\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"B\"\n    {\n    }\n}\n\nover \"R\"\n{\n    over \"A\"\n    {\n    }\n}\n\n"
+   }
+  },
+  {
+   "applied": true,
+   "call": "editor",
+   "composed": {
+    "/": {
+     "children": [
+      "Q",
+      "R",
+      "C",
+      "P"
+     ],
+     "properties": []
+    },
+    "/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "A",
+      "E",
+      "B"
+     ],
+     "properties": [
+      "z",
+      "y",
+      "x"
+     ]
+    },
+    "/P/A": {
+     "children": [],
+     "properties": []
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": "/C",
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q",
+       "R",
+       "C"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "reparent_to_root",
+   "path": "/P/C",
+   "scene": "scene.usda",
+   "target": "root",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int y = 1\n    int z = 2\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"C\"\n{\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"A\"\n    {\n    }\n\n    over \"B\"\n    {\n    }\n}\n\n"
+   }
+  },
+  {
+   "applied": true,
+   "call": "editor",
+   "composed": {
+    "/": {
+     "children": [
+      "R",
+      "P"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "C",
+      "E",
+      "Q",
+      "A",
+      "B"
+     ],
+     "properties": [
+      "z",
+      "y",
+      "x"
+     ]
+    },
+    "/P/A": {
+     "children": [],
+     "properties": []
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E": {
+     "children": [],
+     "properties": []
+    },
+    "/P/Q": {
+     "children": [
+      "D"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/P/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": []
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": "/P/Q",
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B",
+       "C",
+       "E",
+       "Q"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "y",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/Q": {
+      "children": [
+       "D"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/P/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "reparent_root_prim",
+   "path": "/Q",
+   "scene": "scene.usda",
+   "target": "root",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int y = 1\n    int z = 2\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n\n    def \"Q\"\n    {\n        reorder properties = [\"w\", \"x\"]\n        reorder nameChildren = [\"D\", \"A\"]\n        int w = 0\n\n        def \"D\"\n        {\n        }\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"A\"\n    {\n    }\n\n    over \"B\"\n    {\n    }\n}\n\n"
+   }
   },
   {
    "applied": true,
@@ -1995,7 +2783,12 @@
    "name": "delete_child",
    "path": "/P/A",
    "scene": "scene.usda",
-   "target": "root"
+   "target": "root",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int y = 1\n    int z = 2\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"B\"\n    {\n    }\n}\n\n"
+   }
   },
   {
    "applied": true,
@@ -2237,7 +3030,12 @@
    "name": "rename_property",
    "path": "/P.y",
    "scene": "scene.usda",
-   "target": "root"
+   "target": "root",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int y2 = 1\n    int z = 2\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y2 = 5\n\n    over \"A\"\n    {\n    }\n\n    over \"B\"\n    {\n    }\n}\n\n"
+   }
   },
   {
    "applied": true,
@@ -2479,7 +3277,268 @@
    "name": "reparent_property",
    "path": "/P.x",
    "scene": "scene.usda",
-   "target": "root"
+   "target": "root",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int y = 1\n    int z = 2\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n    int x = 0\n\n    def \"D\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"A\"\n    {\n    }\n\n    over \"B\"\n    {\n    }\n}\n\n"
+   }
+  },
+  {
+   "applied": true,
+   "call": "editor",
+   "composed": {
+    "/": {
+     "children": [
+      "Q",
+      "R",
+      "P"
+     ],
+     "properties": []
+    },
+    "/P": {
+     "children": [
+      "C",
+      "E",
+      "A",
+      "B"
+     ],
+     "properties": [
+      "z",
+      "x"
+     ]
+    },
+    "/P/A": {
+     "children": [],
+     "properties": []
+    },
+    "/P/B": {
+     "children": [],
+     "properties": []
+    },
+    "/P/C": {
+     "children": [],
+     "properties": []
+    },
+    "/P/E": {
+     "children": [],
+     "properties": []
+    },
+    "/Q": {
+     "children": [
+      "D"
+     ],
+     "properties": [
+      "w"
+     ]
+    },
+    "/Q/D": {
+     "children": [],
+     "properties": []
+    },
+    "/R": {
+     "children": [
+      "K",
+      "J"
+     ],
+     "properties": [
+      "y"
+     ]
+    },
+    "/R/J": {
+     "children": [],
+     "properties": []
+    },
+    "/R/K": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": "/R.y",
+   "layers": {
+    "asset.usda": {
+     "/": {
+      "children": [
+       "Asset"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset": {
+      "children": [
+       "J",
+       "K"
+      ],
+      "primOrder": [
+       "K",
+       "J"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/J": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Asset/K": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    },
+    "scene.usda": {
+     "/": {
+      "children": [
+       "P",
+       "Q",
+       "R"
+      ],
+      "primOrder": [
+       "Q",
+       "R",
+       "P"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B",
+       "C",
+       "E"
+      ],
+      "primOrder": [
+       "C",
+       "A",
+       "Gone",
+       "B"
+      ],
+      "properties": [
+       "x",
+       "z"
+      ],
+      "propertyOrder": [
+       "z",
+       "y",
+       "x"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/C": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/E": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/Q": {
+      "children": [
+       "D"
+      ],
+      "primOrder": [
+       "D",
+       "A"
+      ],
+      "properties": [
+       "w"
+      ],
+      "propertyOrder": [
+       "w",
+       "x"
+      ]
+     },
+     "/Q/D": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": null
+     }
+    },
+    "sub.usda": {
+     "/": {
+      "children": [
+       "P",
+       "R"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P": {
+      "children": [
+       "A",
+       "B"
+      ],
+      "primOrder": [
+       "B",
+       "A"
+      ],
+      "properties": [],
+      "propertyOrder": [
+       "x",
+       "y"
+      ]
+     },
+     "/P/A": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/P/B": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/R": {
+      "children": [],
+      "primOrder": null,
+      "properties": [
+       "y"
+      ],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "reparent_property_into_unordered",
+   "path": "/P.y",
+   "scene": "scene.usda",
+   "target": "root",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int z = 2\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n    int y = 1\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    over \"A\"\n    {\n    }\n\n    over \"B\"\n    {\n    }\n}\n\nover \"R\"\n{\n    int y = 5\n}\n\n"
+   }
   },
   {
    "applied": true,
@@ -2719,7 +3778,166 @@
    "name": "delete_property",
    "path": "/P.z",
    "scene": "scene.usda",
-   "target": "root"
+   "target": "root",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int y = 1\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"A\"\n    {\n    }\n\n    over \"B\"\n    {\n    }\n}\n\n"
+   }
+  },
+  {
+   "applied": true,
+   "call": "editor",
+   "composed": {
+    "/": {
+     "children": [
+      "V2"
+     ],
+     "properties": []
+    },
+    "/V2": {
+     "children": [
+      "G",
+      "F"
+     ],
+     "properties": []
+    },
+    "/V2/F": {
+     "children": [],
+     "properties": []
+    },
+    "/V2/G": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": "/V2",
+   "layers": {
+    "variant.usda": {
+     "/": {
+      "children": [
+       "V2"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V2": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V2{v=x}": {
+      "children": [
+       "F",
+       "G"
+      ],
+      "primOrder": [
+       "G",
+       "F"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V2{v=x}F": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V2{v=x}G": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "rename_variant_host",
+   "path": "/V",
+   "scene": "variant.usda",
+   "target": "root",
+   "text": {
+    "variant.usda": "#usda 1.0\n\ndef \"V2\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    variantSet \"v\" = {\n        \"x\" {\n            reorder nameChildren = [\"G\", \"F\"]\n            def \"F\"\n            {\n            }\n\n            def \"G\"\n            {\n            }\n\n        }\n    }\n}\n\n"
+   }
+  },
+  {
+   "applied": true,
+   "call": "editor",
+   "composed": {
+    "/": {
+     "children": [
+      "V"
+     ],
+     "properties": []
+    },
+    "/V": {
+     "children": [
+      "G",
+      "F2"
+     ],
+     "properties": []
+    },
+    "/V/F2": {
+     "children": [],
+     "properties": []
+    },
+    "/V/G": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": "/V/F2",
+   "layers": {
+    "variant.usda": {
+     "/": {
+      "children": [
+       "V"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V{v=x}": {
+      "children": [
+       "F",
+       "G"
+      ],
+      "primOrder": [
+       "G",
+       "F"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V{v=x}F": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V{v=x}G": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "rename_child_from_variant",
+   "path": "/V/F",
+   "scene": "variant.usda",
+   "target": "root",
+   "text": {
+    "variant.usda": "#usda 1.0\n(\n    relocates = {\n        </V/F>: </V/F2>\n    }\n)\n\ndef \"V\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    variantSet \"v\" = {\n        \"x\" {\n            reorder nameChildren = [\"G\", \"F\"]\n            def \"F\"\n            {\n            }\n\n            def \"G\"\n            {\n            }\n\n        }\n    }\n}\n\n"
+   }
   },
   {
    "applied": false,
@@ -2793,7 +4011,10 @@
    "name": "rename_variant_child",
    "path": "/V/F",
    "scene": "variant.usda",
-   "target": "variant"
+   "target": "variant",
+   "text": {
+    "variant.usda": "#usda 1.0\n\ndef \"V\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    variantSet \"v\" = {\n        \"x\" {\n            reorder nameChildren = [\"G\", \"F\"]\n            def \"F\"\n            {\n            }\n\n            def \"G\"\n            {\n            }\n\n        }\n    }\n}\n\n"
+   }
   },
   {
    "applied": false,
@@ -2867,7 +4088,10 @@
    "name": "delete_variant_child",
    "path": "/V/F",
    "scene": "variant.usda",
-   "target": "variant"
+   "target": "variant",
+   "text": {
+    "variant.usda": "#usda 1.0\n\ndef \"V\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    variantSet \"v\" = {\n        \"x\" {\n            reorder nameChildren = [\"G\", \"F\"]\n            def \"F\"\n            {\n            }\n\n            def \"G\"\n            {\n            }\n\n        }\n    }\n}\n\n"
+   }
   },
   {
    "applied": true,
@@ -3109,7 +4333,12 @@
    "name": "rename_asset_child",
    "path": "/Asset/J",
    "scene": "scene.usda",
-   "target": "asset.usda"
+   "target": "asset.usda",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J2\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int y = 1\n    int z = 2\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"A\"\n    {\n    }\n\n    over \"B\"\n    {\n    }\n}\n\n"
+   }
   },
   {
    "applied": true,
@@ -3344,7 +4573,12 @@
    "name": "remove_child_spec",
    "path": "/P/A",
    "scene": "scene.usda",
-   "target": "scene.usda"
+   "target": "scene.usda",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int y = 1\n    int z = 2\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"A\"\n    {\n    }\n\n    over \"B\"\n    {\n    }\n}\n\n"
+   }
   },
   {
    "applied": true,
@@ -3584,7 +4818,12 @@
    "name": "remove_property_spec",
    "path": "/P.z",
    "scene": "scene.usda",
-   "target": "scene.usda"
+   "target": "scene.usda",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int y = 1\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"A\"\n    {\n    }\n\n    over \"B\"\n    {\n    }\n}\n\n"
+   }
   },
   {
    "applied": true,
@@ -3838,7 +5077,12 @@
    "name": "copy_child_spec",
    "path": "/P/A",
    "scene": "scene.usda",
-   "target": "scene.usda"
+   "target": "scene.usda",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int y = 1\n    int z = 2\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n\n    def \"A\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"A\"\n    {\n    }\n\n    over \"B\"\n    {\n    }\n}\n\n"
+   }
   },
   {
    "applied": true,
@@ -4159,13 +5403,19 @@
    "name": "copy_ordered_spec",
    "path": "/P",
    "scene": "scene.usda",
-   "target": "scene.usda"
+   "target": "scene.usda",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int y = 1\n    int z = 2\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\ndef \"P3\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int y = 1\n    int z = 2\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"A\"\n    {\n    }\n\n    over \"B\"\n    {\n    }\n}\n\n"
+   }
   }
  ],
  "openusd_version": "26.11",
- "set_name": [
+ "unreplayed": [
   {
    "applied": true,
+   "call": "set_name",
    "composed": {
     "/": {
      "children": [
@@ -4237,6 +5487,7 @@
      "properties": []
     }
    },
+   "destination": "/P/A2",
    "layers": {
     "asset.usda": {
      "/": {
@@ -4405,11 +5656,17 @@
     }
    },
    "name": "prim",
-   "new_name": "A2",
-   "path": "/P/A"
+   "path": "/P/A",
+   "scene": "scene.usda",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A2\", \"Gone\", \"B\"]\n    int x = 0\n    int y = 1\n    int z = 2\n\n    def \"A2\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"A\"\n    {\n    }\n\n    over \"B\"\n    {\n    }\n}\n\n"
+   }
   },
   {
    "applied": true,
+   "call": "set_name",
    "composed": {
     "/": {
      "children": [
@@ -4481,6 +5738,7 @@
      "properties": []
     }
    },
+   "destination": "/P/Gone",
    "layers": {
     "asset.usda": {
      "/": {
@@ -4648,11 +5906,17 @@
     }
    },
    "name": "prim_onto_ordered_name",
-   "new_name": "Gone",
-   "path": "/P/A"
+   "path": "/P/A",
+   "scene": "scene.usda",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"Gone\", \"B\"]\n    int x = 0\n    int y = 1\n    int z = 2\n\n    def \"Gone\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"A\"\n    {\n    }\n\n    over \"B\"\n    {\n    }\n}\n\n"
+   }
   },
   {
    "applied": true,
+   "call": "set_name",
    "composed": {
     "/": {
      "children": [
@@ -4737,6 +6001,7 @@
      "properties": []
     }
    },
+   "destination": "/P2",
    "layers": {
     "asset.usda": {
      "/": {
@@ -4905,11 +6170,17 @@
     }
    },
    "name": "root_prim",
-   "new_name": "P2",
-   "path": "/P"
+   "path": "/P",
+   "scene": "scene.usda",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P2\"]\n\ndef \"P2\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int y = 1\n    int z = 2\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"A\"\n    {\n    }\n\n    over \"B\"\n    {\n    }\n}\n\n"
+   }
   },
   {
    "applied": true,
+   "call": "set_name",
    "composed": {
     "/": {
      "children": [
@@ -4977,6 +6248,7 @@
      "properties": []
     }
    },
+   "destination": "/P.y2",
    "layers": {
     "asset.usda": {
      "/": {
@@ -5145,8 +6417,165 @@
     }
    },
    "name": "property",
-   "new_name": "y2",
-   "path": "/P.y"
+   "path": "/P.y",
+   "scene": "scene.usda",
+   "text": {
+    "asset.usda": "#usda 1.0\n\ndef \"Asset\"\n{\n    reorder nameChildren = [\"K\", \"J\"]\n    def \"J\"\n    {\n    }\n\n    def \"K\"\n    {\n    }\n}\n\n",
+    "scene.usda": "#usda 1.0\n(\n    subLayers = [\n        @sub.usda@\n    ]\n)\n\nreorder rootPrims = [\"Q\", \"R\", \"P\"]\n\ndef \"P\"\n{\n    reorder properties = [\"z\", \"y\", \"x\"]\n    reorder nameChildren = [\"C\", \"A\", \"Gone\", \"B\"]\n    int x = 0\n    int y2 = 1\n    int z = 2\n\n    def \"A\"\n    {\n    }\n\n    def \"B\"\n    {\n    }\n\n    def \"C\"\n    {\n    }\n\n    def \"E\"\n    {\n    }\n}\n\ndef \"Q\"\n{\n    reorder properties = [\"w\", \"x\"]\n    reorder nameChildren = [\"D\", \"A\"]\n    int w = 0\n\n    def \"D\"\n    {\n    }\n}\n\ndef \"R\" (\n    prepend references = @asset.usda@</Asset>\n)\n{\n}\n\n",
+    "sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    reorder properties = [\"x\", \"y\"]\n    reorder nameChildren = [\"B\", \"A\"]\n    int y = 5\n\n    over \"A\"\n    {\n    }\n\n    over \"B\"\n    {\n    }\n}\n\n"
+   }
+  },
+  {
+   "applied": true,
+   "call": "set_name",
+   "composed": {
+    "/": {
+     "children": [
+      "V"
+     ],
+     "properties": []
+    },
+    "/V": {
+     "children": [
+      "G",
+      "F2"
+     ],
+     "properties": []
+    },
+    "/V/F2": {
+     "children": [],
+     "properties": []
+    },
+    "/V/G": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": "/V{v=x}F2",
+   "layers": {
+    "variant.usda": {
+     "/": {
+      "children": [
+       "V"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V{v=x}": {
+      "children": [
+       "F2",
+       "G"
+      ],
+      "primOrder": [
+       "G",
+       "F2"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V{v=x}F2": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V{v=x}G": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "variant_prim",
+   "path": "/V{v=x}F",
+   "scene": "variant.usda",
+   "text": {
+    "variant.usda": "#usda 1.0\n\ndef \"V\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    variantSet \"v\" = {\n        \"x\" {\n            reorder nameChildren = [\"G\", \"F2\"]\n            def \"F2\"\n            {\n            }\n\n            def \"G\"\n            {\n            }\n\n        }\n    }\n}\n\n"
+   }
+  },
+  {
+   "applied": true,
+   "call": "layer_apply",
+   "composed": {
+    "/": {
+     "children": [
+      "V"
+     ],
+     "properties": []
+    },
+    "/V": {
+     "children": [
+      "F2",
+      "G"
+     ],
+     "properties": []
+    },
+    "/V/F2": {
+     "children": [],
+     "properties": []
+    },
+    "/V/G": {
+     "children": [],
+     "properties": []
+    }
+   },
+   "destination": "/V{v=x}F2",
+   "layers": {
+    "variant.usda": {
+     "/": {
+      "children": [
+       "V"
+      ],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V{v=x}": {
+      "children": [
+       "F2",
+       "G"
+      ],
+      "primOrder": [
+       "G",
+       "F"
+      ],
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V{v=x}F2": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     },
+     "/V{v=x}G": {
+      "children": [],
+      "primOrder": null,
+      "properties": [],
+      "propertyOrder": null
+     }
+    }
+   },
+   "name": "variant_prim_apply",
+   "path": "/V{v=x}F",
+   "scene": "variant.usda",
+   "text": {
+    "variant.usda": "#usda 1.0\n\ndef \"V\" (\n    variants = {\n        string v = \"x\"\n    }\n    prepend variantSets = \"v\"\n)\n{\n    variantSet \"v\" = {\n        \"x\" {\n            reorder nameChildren = [\"G\", \"F\"]\n            def \"F2\"\n            {\n            }\n\n            def \"G\"\n            {\n            }\n\n        }\n    }\n}\n\n"
+   }
   }
  ]
 }

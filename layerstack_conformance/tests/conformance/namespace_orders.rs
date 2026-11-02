@@ -5,18 +5,19 @@
 //! as OpenUSD 26.11 leaves them.
 //!
 //! `scripts/namespace_orders_oracle.py` opens
-//! `fixtures/namespace_orders/scene.usda` once per case and makes one
-//! call: a `UsdNamespaceEditor` rename, reparent or delete, an
-//! `SdfLayer::Apply` on the referenced `asset.usda`, a spec removal or an
-//! `SdfCopySpec`. It records whether the call applies, every prim and
+//! `fixtures/namespace_orders/scene.usda` or `variant.usda` once per case
+//! and makes one call: a `UsdNamespaceEditor` rename, reparent or delete,
+//! an `SdfLayer::Apply` on the referenced `asset.usda`, a spec removal or
+//! an `SdfCopySpec`. It records whether the call applies, every prim and
 //! variant prim spec of each layer with its children, properties,
-//! `primOrder` and `propertyOrder`, and every composed prim's children and
-//! property names. `variant.usda` holds the edits through a variant, which
-//! OpenUSD and layerstack refuse. Here each case makes the layerstack call
-//! that documents itself as that one, applied through a `LiveStage`:
+//! `primOrder` and `propertyOrder`, each layer's exported text, and every
+//! composed prim's children and property names. Here each case makes the
+//! layerstack call that documents itself as that one, applied through a
+//! `LiveStage`:
 //!
 //! - `editor`: `NamespaceEdit::prepare` (a move) or `prepare_delete`
-//!   (`UsdNamespaceEditor`), through the root layer or `/V`'s variant;
+//!   (`UsdNamespaceEditor`), through the root layer or `/V`'s variant,
+//!   which OpenUSD and layerstack refuse;
 //! - `layer_apply`: `NamespaceEdit::prepare` through `/R`'s reference node,
 //!   which edits `asset.usda` as the one `SdfBatchNamespaceEdit` the
 //!   oracle applies there;
@@ -24,10 +25,11 @@
 //!   (`SdfPrimSpec::RemoveNameChild`, `RemoveProperty`);
 //! - `copy_spec`: `Transaction::copy_spec` (`SdfCopySpec`).
 //!
-//! The layers and composition must match the oracle's, the live stage
-//! must match a fresh composition, and the inverse must restore every
-//! layer. The oracle's `set_name` records (`SdfPrimSpec::SetName`, which
-//! alone rewrites its parent's `primOrder`) have no layerstack counterpart
+//! The layers, their saved text (byte for byte) and the composition must
+//! match the oracle's, the live stage must match a fresh composition, and
+//! the inverse must restore every layer. The oracle's `unreplayed` records
+//! (`SdfPrimSpec::SetName`, which alone rewrites its parent's `primOrder`,
+//! and `SdfLayer::Apply` inside a variant) have no layerstack counterpart
 //! and are not replayed.
 //!
 //! Spec: AOUSD Core §7.6.2 (`primOrder`, `propertyOrder`), §8 (namespace).
@@ -183,17 +185,22 @@ fn composed_record(store: &InMemoryStore, stage: &Stage) -> Json {
 }
 
 fn record(loaded: &LoadedStage, stage: &Stage) -> Json {
+    let store = &loaded.store;
     let mut layers = Map::new();
+    let mut text = Map::new();
     for name in loaded.layer_names.values() {
         let name = name.rsplit('/').next().unwrap();
-        let layer = loaded.store.layer(layer_named(loaded, name)).unwrap();
-        layers.insert(name.into(), layer_record(&loaded.store, layer));
+        let layer = store.layer(layer_named(loaded, name)).unwrap();
+        layers.insert(name.into(), layer_record(store, layer));
+        let saved =
+            layerstack_usda::save_usda(layer, store.tokens(), store.paths()).expect("saves");
+        text.insert(name.into(), Json::String(saved));
     }
-    json!({"layers": layers, "composed": composed_record(&loaded.store, stage)})
+    json!({"layers": layers, "text": text, "composed": composed_record(store, stage)})
 }
 
 fn expected(case: &Json) -> Json {
-    json!({"layers": case["layers"], "composed": case["composed"]})
+    json!({"layers": case["layers"], "text": case["text"], "composed": case["composed"]})
 }
 
 /// The places where `got` and `want` differ, as `/`-joined keys.

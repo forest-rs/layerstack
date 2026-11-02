@@ -729,7 +729,7 @@ export class Viewport {
       this.#add(view, selected);
       return;
     }
-    const matrix = new Matrix4();
+    const matrix = PLACED;
     for (let i = 0; i < placements; i++) {
       matrix.fromArray(matrices, 16 * i);
       if (decode !== null) matrix.multiply(decode);
@@ -1348,6 +1348,9 @@ const PICK_SIZE = 7;
 
 /** Sixteen numbers, as `Matrix4.set` takes them. */
 type Matrix16 = [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number];
+
+/** The matrix `#place` writes each instance through, reused: placing allocates nothing per instance or update. */
+const PLACED = new Matrix4();
 
 /** OpenGL's clip depth taken to WebGPU's: `z' = (z + w) / 2`. */
 const GL_TO_WEBGPU_DEPTH = new Matrix4().set(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0.5, 0.5, 0, 0, 0, 1);

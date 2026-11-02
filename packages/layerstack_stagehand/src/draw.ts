@@ -928,6 +928,8 @@ export class DrawList implements Disposable {
   #promotedKeys = new Set<string>();
   /** The paths promoted ({@link promote}), sorted. */
   #promoted: string[] = [];
+  /** Prims drawn from a resident level-of-detail set, and what each set holds ({@link setResidentCosts}). */
+  #resident: ReadonlyMap<string, BufferCost> = new Map();
   /** The totals of the last admission. */
   #admitted: { requested: BudgetChange["requested"]; granted: BudgetChange["granted"]; degraded: number } | null = null;
   readonly #cameras = new Map<string, Held<CameraItem>>();
@@ -1025,6 +1027,37 @@ export class DrawList implements Disposable {
       this.#readDirty(dirty, read, gather);
     }
     return this.#settle(read, gather, before);
+  }
+
+  /**
+   * Weighs the meshes at `costs`' prims (an item's {@link DrawItem.prim})
+   * as the host draws them: from a resident level-of-detail set, every
+   * level held at once and each frame drawing the levels it chooses. Such
+   * an item costs the budget the set's bytes and triangles once, however
+   * many instances draw it (plus {@link INSTANCE_GPU_BYTES} an instance),
+   * instead of its triangles times its instances; the triangles a frame
+   * draws are the host's to report. Replaces the costs given before, and
+   * admits every item again under them. Reads nothing but the items'
+   * counts.
+   */
+  setResidentCosts(costs: ReadonlyMap<string, BufferCost>): DrawDiff {
+    const before = this.#stage.transformCache().localComputed;
+    const gather = new Gather();
+    const read = new Set<number>();
+    this.#resident = new Map(costs);
+    if (this.#budget !== null) {
+      this.#weighAll([...this.#requests.values()].map((request) => request.source), gather);
+      this.#order = null;
+      const dirty = new Map<number, Dirty>();
+      this.#regrant(dirty, read, gather);
+      this.#readDirty(dirty, read, gather);
+    }
+    return this.#settle(read, gather, before);
+  }
+
+  /** The resident sets' costs, by prim ({@link setResidentCosts}). */
+  get residentCosts(): ReadonlyMap<string, BufferCost> {
+    return this.#resident;
   }
 
   /** The paths promoted ({@link promote}), sorted. */
@@ -1502,13 +1535,15 @@ export class DrawList implements Disposable {
         }
         cost = geometry.get(key) ?? empty;
       }
+      const resident = source.kind === "drawMode" ? undefined : this.#resident.get(prim);
       return {
         key: sourceKey(source),
         source,
         prim,
-        geometry: cost,
+        geometry: resident ?? cost,
         buffer: key,
         instances,
+        resident: resident !== undefined,
         size: sizes?.[i] ?? 0,
         purpose: purposes?.[i] ?? 0,
         standinInstances: source.kind === "drawMode" ? 0 : source.kind === "pointInstancer" ? Math.min(instances, 1) : instances,

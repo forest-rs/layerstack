@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 import { execFileSync } from "node:child_process";
-import { type Dirent, createReadStream, existsSync, readdirSync, statSync } from "node:fs";
+import { type Dirent, createReadStream, existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -47,7 +47,9 @@ function clusterCacheDirectory(): string | null {
 /**
  * Serves the cluster cache under `/@clusters/` in development: `index.json`
  * lists the keys it holds (so the viewport asks only for sets that exist),
- * and `<key>.lsclust` is a set's file.
+ * `manifests.json` the stages' manifests (each mesh's prim, key and counts,
+ * for the budget before a mesh is built), and `<key>.lsclust` is a set's
+ * file.
  */
 function clusterCache(): Plugin {
   return {
@@ -68,6 +70,15 @@ function clusterCache(): Plugin {
             .map((file) => file.slice(0, -".lsclust".length));
           response.setHeader("content-type", "application/json");
           response.end(JSON.stringify(keys));
+          return;
+        }
+        if (name === "manifests.json") {
+          // Every stage's manifest (`cluster_lod --cache`): its meshes' prims, keys and counts.
+          const manifests = readdirSync(root)
+            .filter((file) => /^manifest-[0-9a-f]{16}\.json$/.test(file))
+            .map((file) => readFileSync(path.join(root, file), "utf8"));
+          response.setHeader("content-type", "application/json");
+          response.end(`[${manifests.join(",")}]`);
           return;
         }
         const file = path.join(root, name);

@@ -100,8 +100,8 @@ import {
   vertexIndex,
 } from "three/tsl";
 import { attributeValues, toHalf } from "@forest-rs/layerstack_stagehand";
-import type { MeshVertices } from "@forest-rs/layerstack_stagehand";
-import { NO_GROUP } from "./clusterFile.ts";
+import type { BufferCost, MeshVertices } from "@forest-rs/layerstack_stagehand";
+import { NO_GROUP, residentCost } from "./clusterFile.ts";
 import type { ClusterSetData } from "./clusterFile.ts";
 
 /** Anything TSL takes: the node types are too loose to be worth spelling here. */
@@ -281,6 +281,23 @@ export class ClusterScene {
       originalBySubset,
     });
     this.#dirty = true;
+  }
+
+  /**
+   * What holding buffer `key`'s set costs, as a draw list's budget weighs
+   * it (`DrawList.setResidentCosts`): every level's triangles, and the
+   * bytes packed for it (eight words a vertex, a word an index, eight a
+   * cluster and a group) and kept in JavaScript (the file and the packed
+   * vertices); `null` without a set.
+   */
+  meshCost(key: number): BufferCost | null {
+    const mesh = this.#meshes.get(key);
+    if (mesh === undefined) return null;
+    const { set } = mesh;
+    let triangles = 0;
+    for (const level of set.levelTriangles) triangles += level;
+    const counts = { vertices: set.vertexCount, indices: set.indices.length, clusters: set.clusters.count, groups: set.groups.count, triangles };
+    return residentCost(counts, set.byteLength + mesh.vertices.byteLength + (mesh.extras?.byteLength ?? 0));
   }
 
   /** The subsets (material ranges) of buffer `key`'s set: a draw of it needs this many non-empty ranges. */

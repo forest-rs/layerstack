@@ -20,6 +20,7 @@
 import type { Stage } from "@forest-rs/layerstack";
 import type {
   BudgetReport,
+  BufferCost,
   CameraItem,
   DrawBudget,
   DrawBuffers,
@@ -364,6 +365,8 @@ function under(path: string, root: string): boolean {
 export class ViewportModel {
   readonly #stagehand: Stagehand;
   #list: DrawList | null = null;
+  /** The resident cluster sets' costs last given to the list ({@link sync}). */
+  #resident: ReadonlyMap<string, BufferCost> | null = null;
   #stage: Stage | null = null;
   /** The session's change log entries already applied. */
   #seen = 0;
@@ -430,9 +433,18 @@ export class ViewportModel {
    * `promoted` admitted first: a new stage is read whole (what is in
    * scope); otherwise the change records since the last sync are applied
    * in order, then the scope, the time, the promoted paths and the budget,
-   * each if it changed. Returns what changed.
+   * each if it changed, and the costs of meshes the viewport draws from a
+   * resident cluster set (`resident`, by prim: `DrawList.setResidentCosts`)
+   * when they are another map. Returns what changed.
    */
-  sync(session: Session, time: number | undefined, scope: DrawScope = { roots: ["/"] }, budget: DrawBudget | null = null, promoted: readonly string[] = []): ViewportUpdate {
+  sync(
+    session: Session,
+    time: number | undefined,
+    scope: DrawScope = { roots: ["/"] },
+    budget: DrawBudget | null = null,
+    promoted: readonly string[] = [],
+    resident: ReadonlyMap<string, BufferCost> | null = null,
+  ): ViewportUpdate {
     const stage = session.stage;
     const diffs: DrawDiff[] = [];
     let reset = false;
@@ -442,6 +454,7 @@ export class ViewportModel {
     if (this.#list === null || this.#stage !== stage) {
       this.#list?.dispose();
       this.#colors.clear();
+      this.#resident = null;
       this.#list = this.#stagehand.drawList(stage, {
         ...(time === undefined ? {} : { time }),
         purposes: PURPOSES,
@@ -472,6 +485,10 @@ export class ViewportModel {
       }
       if (promoted.join("\n") !== this.#list.promoted.join("\n")) diffs.push(this.#list.promote(promoted));
       if (!sameBudget(budget, this.#list.budget)) diffs.push(this.#list.setBudget(budget));
+    }
+    if (resident !== null && resident !== this.#resident) {
+      this.#resident = resident;
+      diffs.push(this.#list.setResidentCosts(resident));
     }
     const union = (pick: (diff: DrawDiff) => readonly number[]) => new Set(diffs.flatMap(pick));
     const paths = (pick: (diff: DrawDiff) => readonly string[]) => new Set(diffs.flatMap(pick));

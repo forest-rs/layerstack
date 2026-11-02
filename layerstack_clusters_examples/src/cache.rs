@@ -29,6 +29,10 @@
 //! which vertices a set's indices name, so a set built from other ones is
 //! still a valid set for the mesh.
 
+use std::fmt::Write as _;
+use std::path::Path;
+
+use layerstack_clusters::ClusterSet;
 use layerstack_clusters::file::FILE_VERSION;
 use layerstack_stagehand::MeshBuffers;
 
@@ -66,6 +70,105 @@ pub(crate) fn cache_key(buffers: &MeshBuffers) -> String {
         hash.word(u32::from_le_bytes([x, y, z, 0]));
     }
     hash.finish()
+}
+
+/// What a stage's meshes find in the cache, by prim, before they are
+/// built: `manifest-<hash of the stage's path>.json`, with each mesh's
+/// prim path, key and what its set holds. The editor weighs a mesh by its
+/// set in the draw budget from this (a mesh it boxed is never built, so
+/// never keyed); the key it computes once the mesh is built decides.
+pub(crate) struct Manifest {
+    stage: String,
+    meshes: String,
+}
+
+impl Manifest {
+    /// An empty manifest of the stage at `stage`.
+    pub(crate) fn new(stage: &Path) -> Self {
+        Self {
+            stage: stage.display().to_string(),
+            meshes: String::new(),
+        }
+    }
+
+    /// Lists the mesh at `prim` with its set's `key` and counts.
+    pub(crate) fn add(&mut self, prim: &str, key: &str, counts: &SetCounts) {
+        if !self.meshes.is_empty() {
+            self.meshes.push(',');
+        }
+        let SetCounts {
+            vertices,
+            indices,
+            clusters,
+            groups,
+            triangles,
+        } = counts;
+        let _ = write!(
+            self.meshes,
+            "\n{{\"prim\":{},\"key\":\"{key}\",\"vertices\":{vertices},\"indices\":{indices},\"clusters\":{clusters},\"groups\":{groups},\"triangles\":{triangles}}}",
+            json_string(prim),
+        );
+    }
+
+    /// `manifest-<16 hex digits>.json`, by the stage's path.
+    pub(crate) fn file_name(&self) -> String {
+        let mut hash = Hasher::default();
+        for byte in self.stage.bytes() {
+            hash.word(u32::from(byte));
+        }
+        format!("manifest-{}.json", hash.finish())
+    }
+
+    /// The manifest as JSON: `{ "stage", "meshes": [...] }`.
+    pub(crate) fn to_json(&self) -> String {
+        format!(
+            "{{\"version\":{KEY_VERSION},\"stage\":{},\"meshes\":[{}\n]}}\n",
+            json_string(&self.stage),
+            self.meshes
+        )
+    }
+}
+
+/// What a set holds, as a manifest lists it: kept per key while writing,
+/// rather than the set.
+pub(crate) struct SetCounts {
+    vertices: u32,
+    indices: usize,
+    clusters: usize,
+    groups: usize,
+    /// Every level's.
+    triangles: u64,
+}
+
+impl SetCounts {
+    /// The counts of `set`.
+    pub(crate) fn of(set: &ClusterSet) -> Self {
+        Self {
+            vertices: set.vertex_count(),
+            indices: set.indices().len(),
+            clusters: set.clusters().len(),
+            groups: set.groups().len(),
+            triangles: set.report().total_triangles(),
+        }
+    }
+}
+
+/// `text` as a JSON string.
+fn json_string(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            c if u32::from(c) < 0x20 => {
+                let _ = write!(out, "\\u{:04x}", u32::from(c));
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }
 
 /// JavaScript's `Math.round`: to the nearest integer, halves up.
@@ -172,6 +275,14 @@ impl Hasher {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_manifest_escapes_its_strings() {
+        assert_eq!(json_string("/a\"b\\c\n"), "\"/a\\\"b\\\\c\\u000a\"");
+        let manifest = Manifest::new(Path::new("/scenes/x.usda"));
+        assert!(manifest.file_name().starts_with("manifest-"));
+        assert!(manifest.to_json().contains("\"meshes\":[\n]"));
+    }
 
     #[test]
     fn rounds_as_javascript_does() {

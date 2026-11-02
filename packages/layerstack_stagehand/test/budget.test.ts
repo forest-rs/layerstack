@@ -156,6 +156,31 @@ describe("draw budgets", () => {
     }
   });
 
+  it("weigh a resident level-of-detail set once, however many instances draw it", () => {
+    // The field's 4 blades of 1 triangle do not fit beside the big mesh's
+    // 4 under 7; drawn from a resident set of 2 triangles (every level),
+    // the field costs those once, and the small mesh is what steps down.
+    const { list, done } = fixture({ triangles: 7 });
+    try {
+      assert.deepEqual(rungs(list), { "/World/Big": "full", [BLADE]: "standin", "/World/Small": "full", "/World/Tiny": "full" });
+      const diff = list.setResidentCosts(new Map([[BLADE, { triangles: 2, vertices: 3, cpuBytes: 0, gpuBytes: 100 }]]));
+      assert.deepEqual(rungs(list), { "/World/Big": "full", [BLADE]: "full", "/World/Small": "standin", "/World/Tiny": "full" });
+      assert.ok(diff.budget !== null && diff.budget.changed.some((grant) => grant.prim === BLADE && grant.rung === "full"));
+      const report = list.budgetReport()!;
+      const field = report.degraded.find((grant) => grant.prim === BLADE);
+      assert.equal(field, undefined, "the field is drawn in full");
+      // Requested: the big mesh's 4, the small one's 2, the tiny one's 1 and the set's 2 once.
+      assert.equal(report.requested.triangles, 4 + 2 + 1 + 2);
+      assert.equal(report.granted.triangles, 4 + 2 + 1);
+      assert.equal(list.residentCosts.get(BLADE)?.triangles, 2);
+      // Without them, the field steps down again.
+      list.setResidentCosts(new Map());
+      assert.equal(rungs(list)[BLADE], "standin");
+    } finally {
+      done();
+    }
+  });
+
   it("skip what no stand-in fits, and degrade the same way every time", () => {
     const budget = { triangles: 3, instances: 3 };
     const { list, done } = fixture(budget);

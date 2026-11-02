@@ -265,7 +265,7 @@ fn run(args: &Args) -> Result<(), String> {
                 "--cache builds with the default configuration, which its key names".into(),
             );
         }
-        return write_cache(dir, &sources, &config);
+        return write_cache(dir, &path, &sources, &config);
     }
     let sets = build_sets(&sources, &config)?;
     if let Some(largest) = (0..sources.len()).max_by_key(|&i| triangles(sources[i].buffers)) {
@@ -287,16 +287,33 @@ fn triangles(buffers: &MeshBuffers) -> u64 {
 
 /// Builds the set of every source not cached in `dir` yet and writes it
 /// there as `<key>.lsclust` ([`cache::cache_key`]), with its positions,
-/// normals and `st`.
-fn write_cache(dir: &Path, sources: &[Source<'_>], config: &ClusterConfig) -> Result<(), String> {
+/// normals and `st`; then the stage's manifest ([`cache::Manifest`]).
+fn write_cache(
+    dir: &Path,
+    stage: &Path,
+    sources: &[Source<'_>],
+    config: &ClusterConfig,
+) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let started = Instant::now();
     let (mut written, mut cached, mut bytes) = (0, 0, 0);
-    let mut seen = std::collections::HashSet::new();
+    let mut seen = HashMap::new();
+    let mut manifest = cache::Manifest::new(stage);
     for source in sources {
         let key = cache::cache_key(source.buffers);
         let path = dir.join(format!("{key}.lsclust"));
-        if !seen.insert(key) || path.exists() {
+        if let Some(counts) = seen.get(&key) {
+            manifest.add(&source.name, &key, counts);
+            cached += 1;
+            continue;
+        }
+        if path.exists() {
+            let bytes = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            let file =
+                ClusterFile::decode(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+            let counts = cache::SetCounts::of(&file.set);
+            manifest.add(&source.name, &key, &counts);
+            seen.insert(key, counts);
             cached += 1;
             continue;
         }
@@ -316,13 +333,16 @@ fn write_cache(dir: &Path, sources: &[Source<'_>], config: &ClusterConfig) -> Re
         };
         let encoded = file.encode();
         bytes += encoded.len();
-        // Written whole under another name, then renamed: a reader never
-        // sees a partial file.
-        let partial = path.with_extension("partial");
-        std::fs::write(&partial, &encoded).map_err(|e| format!("{}: {e}", partial.display()))?;
-        std::fs::rename(&partial, &path).map_err(|e| format!("{}: {e}", path.display()))?;
+        write_whole(&path, &encoded)?;
+        let counts = cache::SetCounts::of(&file.set);
+        manifest.add(&source.name, &key, &counts);
+        seen.insert(key, counts);
         written += 1;
     }
+    write_whole(
+        &dir.join(manifest.file_name()),
+        manifest.to_json().as_bytes(),
+    )?;
     println!(
         "cache {}: wrote {written} sets ({:.1} MB) in {:.2} s, {cached} already there",
         dir.display(),
@@ -330,6 +350,14 @@ fn write_cache(dir: &Path, sources: &[Source<'_>], config: &ClusterConfig) -> Re
         started.elapsed().as_secs_f64(),
     );
     Ok(())
+}
+
+/// Writes `bytes` to `path` whole: under another name, then renamed, so a
+/// reader never sees a partial file.
+fn write_whole(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let partial = path.with_extension("partial");
+    std::fs::write(&partial, bytes).map_err(|e| format!("{}: {e}", partial.display()))?;
+    std::fs::rename(&partial, path).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 /// Prints the cut of the cached set in `--cut-file` from `--camera` at

@@ -128,6 +128,13 @@ export interface BudgetRequest {
   readonly buffer: string;
   /** Instances drawn. */
   readonly instances: number;
+  /**
+   * Whether the host draws it from a resident level-of-detail set
+   * ({@link DrawList.setResidentCosts}): its {@link geometry} is the set's,
+   * paid once like its bytes, and the triangles a frame draws are the
+   * host's to report.
+   */
+  readonly resident: boolean;
   /** World bound diagonal of its prim: times {@link instances}, its importance ({@link density}). */
   readonly size: number;
   /** 0 for `default` and `render`, 1 for `proxy`, 2 for `guide`: render geometry before its proxy. */
@@ -193,11 +200,14 @@ export function admissionOrder(a: BudgetRequest, b: BudgetRequest, promotedA: bo
   return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
 }
 
-/** @internal What `request`'s full geometry costs, its buffer counted unless already paid for. */
+/**
+ * @internal What `request`'s full geometry costs, its buffer counted
+ * unless already paid for: and so its triangles too, when resident.
+ */
 export function fullCost(request: BudgetRequest, bufferPaid: boolean): BudgetCost {
   return {
     gpuBytes: (bufferPaid ? 0 : request.geometry.gpuBytes) + request.instances * INSTANCE_GPU_BYTES,
-    triangles: request.geometry.triangles * request.instances,
+    triangles: request.resident ? (bufferPaid ? 0 : request.geometry.triangles) : request.geometry.triangles * request.instances,
     instances: request.instances,
   };
 }
@@ -260,11 +270,8 @@ export function admit(order: readonly BudgetRequest[], promoted: (request: Budge
   order.forEach((request, index) => {
     rungs[index] = "skipped";
     if (request.instances === 0) return;
-    if (!requestedBuffers.has(request.buffer)) requested.gpuBytes += request.geometry.gpuBytes;
+    add(requested, fullCost(request, requestedBuffers.has(request.buffer)));
     requestedBuffers.add(request.buffer);
-    requested.gpuBytes += request.instances * INSTANCE_GPU_BYTES;
-    requested.triangles += request.geometry.triangles * request.instances;
-    requested.instances += request.instances;
     const floor = standinCost(request);
     if (floor !== null) {
       if (exceeded(budget, used, floor).length === 0) {

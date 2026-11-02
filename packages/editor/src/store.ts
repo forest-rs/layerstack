@@ -10,7 +10,7 @@
 // handed.
 import { useSyncExternalStore } from "react";
 import type { Edit, EditReceipt, EditTarget, Layer, Layerstack, LoadOutcome, LoadPolicy, ValueInput } from "@forest-rs/layerstack";
-import type { BudgetReport, DrawCost, DrawScope, Stagehand } from "@forest-rs/layerstack_stagehand";
+import type { BudgetReport, BufferCost, DrawCost, DrawScope, Stagehand } from "@forest-rs/layerstack_stagehand";
 import { type AssetFocus, assetFocus, type BudgetChoice, budgetFor, type DrawScopeChoice, rememberBudget, rememberedBudget, scopeFor } from "./model/assetView.ts";
 import { ViewportModel, type ViewportScene, type ViewportUpdate } from "./model/draws.ts";
 import { type LoadBudget, type OpenPhase, OverBudget, Session } from "./model/session.ts";
@@ -184,12 +184,20 @@ export class EditorStore {
   };
 
   /** Hands the store the three.js view (or `null` when it goes), which it keeps up to date. */
+  /** The costs of meshes the viewport draws from prebuilt cluster sets, by prim (`Viewport.onResident`); `null` before any. */
+  #resident: ReadonlyMap<string, BufferCost> | null = null;
+
   attachViewport(viewport: Viewport | null): void {
     this.#viewport = viewport;
     if (viewport === null) return;
     viewport.onImages = () => this.#bumpSoon();
     // Uploaded buffers' arrays are dropped; what is held is measured again.
     viewport.onUploaded = (key, revision) => this.#draws.release(key, revision);
+    // Meshes drawn from prebuilt cluster sets cost the budget their sets, once.
+    viewport.onResident = (costs) => {
+      this.#resident = costs;
+      this.#sync();
+    };
     viewport.onReleased = () => {
       this.cost = this.#draws.cost();
       this.#bumpSoon();
@@ -216,6 +224,7 @@ export class EditorStore {
   /** The source's root, opened and resolved: everything it depends on is fetched first. */
   async open(source: SceneSource): Promise<void> {
     const opening = ++this.#opening;
+    this.#resident = null;
     this.status = { kind: "opening", label: source.label };
     this.#bump();
     try {
@@ -629,7 +638,7 @@ export class EditorStore {
   #sync(): void {
     if (this.session !== null) {
       const promoted = this.selection === null || this.selection === "/" ? [] : [this.selection];
-      const update = this.#draws.sync(this.session, this.time, this.#scope(this.session), budgetFor(this.budgetChoice), promoted);
+      const update = this.#draws.sync(this.session, this.time, this.#scope(this.session), budgetFor(this.budgetChoice), promoted, this.#resident);
       this.scene = this.#draws.scene(this.time);
       this.cost = this.#draws.cost();
       this.budget = this.#draws.budgetReport();

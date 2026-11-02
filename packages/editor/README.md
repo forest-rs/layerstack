@@ -231,8 +231,9 @@ named by a hash of the mesh's content as the editor holds it
 (`src/viewport/clusterFile.ts`). A static mesh whose
 set is there is drawn on the GPU (`src/viewport/clusters.ts`): each frame
 a compute pass culls its instances and clusters against the view and
-chooses each instance's cut at a pixel error (1 px), draws instances under
-3 px across as proxies of a few of the mesh's triangles
+against what the last frame drew in front of them (two phases over a depth
+pyramid), chooses each instance's cut at a pixel error (1 px), draws
+instances under 3 px across as proxies of a few of the mesh's triangles
 (`src/viewport/clusterProxies.ts`) and drops those under a pixel, and the
 clusters are drawn indirectly by vertex pulling, a draw per material
 subset, with the mesh's own material (lights, light links, selection and
@@ -250,9 +251,10 @@ and culling take 0.3 ms, the clustered draws 9 to 14 ms of GPU time for
 the 1.0 M triangles they choose, against 35 ms for the full 73 M; from
 four times farther, 1.8 ms (0.1 M triangles) against 21 ms. Close up, where
 most instances are a few pixels across and their meshes' DAGs bottom out
-at one cluster each, proxies take a frame from 48 ms to 27 ms (52 M
-triangles to 7.3 M; 50 ms for the full 73 M), with 1.1% of its pixels 16
-levels or more off the full render (0.4% from the cut alone).
+at one cluster each, proxies and occlusion culling take a frame from 48 ms
+to 22 ms (52 M triangles to 5.0 M; 50 ms for the full 73 M), with 1.1% of
+its pixels 16 levels or more off the full render (0.4% from the cut
+alone).
 The CPU side is unchanged at about 12 ms a frame, three.js's per-object
 updates of 2,302 bundled draws. Packing the element's sets and instances
 takes 335 ms once. An architectural scene of 115 meshes (108 of several

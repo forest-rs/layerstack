@@ -219,10 +219,11 @@ function ClusterLine({ viewport }: { viewport: Viewport }) {
   return (
     <div
       className="text-white/60"
-      title="Meshes with a prebuilt cluster set are culled and cut on the GPU each frame: the triangles drawn are the cut's, at the pixel error shown; held are every level's, once per mesh"
+      title="Meshes with a prebuilt cluster set are culled and cut on the GPU each frame: the triangles drawn are the cut's, at the pixel error shown; hidden are the clusters (and whole instances) occlusion culling left out; held are every level's, once per mesh"
     >
       clustered: {residency.meshes} meshes, {residency.draws} draws, {residency.instances.toLocaleString()} instances · {stats === null ? "…" : stats.triangles.toLocaleString()} triangles
-      drawn at {viewport.clusterView.pixelError} px ({residency.triangles.toLocaleString()} held, {formatBytes(residency.gpuBytes)}, packed in{" "}
+      drawn at {viewport.clusterView.pixelError} px{stats !== null && stats.occluded > 0 ? `, ${stats.occluded.toLocaleString()} hidden` : ""} ({residency.triangles.toLocaleString()} held,{" "}
+      {formatBytes(residency.gpuBytes)}, packed in{" "}
       {residency.packMs.toFixed(0)} ms)
     </div>
   );

@@ -25,7 +25,20 @@
 //! their 1 px cuts from each distance, compares the two pixel by pixel
 //! (coverage, and shading of the interpolated normals), and writes both
 //! and a difference image as PNG files.
+//!
+//! With `--cache <dir>`, each mesh's set is written there instead, as a
+//! `layerstack_clusters` file named by the key the editor computes from the
+//! buffers it draws (`cache.rs`); a mesh whose file is there already is not
+//! built again. With `--cut-file <file> --camera x,y,z,proj_y,height,near`,
+//! the cut of one cached set is printed, cluster ids in ascending order,
+//! for checking a renderer's cut against the library's.
+//!
+//! ```text
+//! cluster_lod <stage.usd> --cache <dir>
+//! cluster_lod --cut-file <dir/key.lsclust> --camera <x,y,z,proj_y,height,near> [--threshold <px>]
+//! ```
 
+mod cache;
 mod raster;
 
 use std::collections::HashMap;
@@ -34,7 +47,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use layerstack::{InMemoryStore, StageOptions, Time};
-use layerstack_clusters::{ClusterConfig, ClusterInput, ClusterSet, CutCamera};
+use layerstack_clusters::{ClusterConfig, ClusterFile, ClusterInput, ClusterSet, CutCamera};
 use layerstack_io::{Filesystem, OpenOptions, StageDocument};
 use layerstack_schemas::Scene;
 use layerstack_stagehand::{DrawList, DrawOptions, MeshBuffers, MeshOptions, MeshPlan, StageMesh};
@@ -66,9 +79,12 @@ struct Args {
     triangulate_only: bool,
     render: Option<PathBuf>,
     size: usize,
+    cache: Option<PathBuf>,
+    cut_file: Option<PathBuf>,
+    camera: Option<CutCamera>,
 }
 
-const USAGE: &str = "usage: cluster_lod <stage.usd> [--prim <path> | --under <path>] [--render <dir>] [--size <px>] [--threshold <px>] [--simplify-root] [--normal-weight <w>] [--unclamped] [--triangulate-only]";
+const USAGE: &str = "usage: cluster_lod <stage.usd> [--prim <path> | --under <path>] [--render <dir>] [--size <px>] [--threshold <px>] [--simplify-root] [--normal-weight <w>] [--unclamped] [--triangulate-only] [--cache <dir>]\n       cluster_lod --cut-file <file.lsclust> --camera <x,y,z,proj_y,height,near> [--threshold <px>]";
 
 fn parse_args() -> Result<Args, String> {
     let mut args = std::env::args().skip(1);
@@ -83,6 +99,9 @@ fn parse_args() -> Result<Args, String> {
         triangulate_only: false,
         render: None,
         size: 1024,
+        cache: None,
+        cut_file: None,
+        camera: None,
     };
     let mut stage = None;
     while let Some(arg) = args.next() {
@@ -106,6 +125,9 @@ fn parse_args() -> Result<Args, String> {
             "--unclamped" => parsed.unclamped = true,
             "--triangulate-only" => parsed.triangulate_only = true,
             "--render" => parsed.render = Some(value("--render")?.into()),
+            "--cache" => parsed.cache = Some(value("--cache")?.into()),
+            "--cut-file" => parsed.cut_file = Some(value("--cut-file")?.into()),
+            "--camera" => parsed.camera = Some(parse_camera(&value("--camera")?)?),
             "--size" => {
                 parsed.size = value("--size")?
                     .parse()
@@ -115,8 +137,28 @@ fn parse_args() -> Result<Args, String> {
             _ => return Err(format!("unexpected argument {arg}\n{USAGE}")),
         }
     }
+    if parsed.cut_file.is_some() {
+        return Ok(parsed);
+    }
     parsed.stage = stage.ok_or(USAGE)?.into();
     Ok(parsed)
+}
+
+/// `x,y,z,proj_y,height,near` as a [`CutCamera`].
+fn parse_camera(text: &str) -> Result<CutCamera, String> {
+    let values: Vec<f32> = text
+        .split(',')
+        .map(|v| v.trim().parse().map_err(|e| format!("--camera: {e}")))
+        .collect::<Result<_, _>>()?;
+    let [x, y, z, projection_y, viewport_height, z_near] = values[..] else {
+        return Err("--camera takes x,y,z,proj_y,height,near".into());
+    };
+    Ok(CutCamera {
+        position: [x, y, z],
+        projection_y,
+        viewport_height,
+        z_near,
+    })
 }
 
 /// A triangulated mesh: its buffers and the matrices of the instances
@@ -142,6 +184,9 @@ fn main() {
 }
 
 fn run(args: &Args) -> Result<(), String> {
+    if let Some(file) = &args.cut_file {
+        return print_cut(file, args);
+    }
     let started = Instant::now();
     let path = args
         .stage
@@ -214,6 +259,14 @@ fn run(args: &Args) -> Result<(), String> {
         clamp_attribute_error: !args.unclamped,
         ..defaults
     };
+    if let Some(dir) = &args.cache {
+        if config != defaults {
+            return Err(
+                "--cache builds with the default configuration, which its key names".into(),
+            );
+        }
+        return write_cache(dir, &sources, &config);
+    }
     let sets = build_sets(&sources, &config)?;
     if let Some(largest) = (0..sources.len()).max_by_key(|&i| triangles(sources[i].buffers)) {
         println!("largest: {}", sources[largest].name);
@@ -230,6 +283,67 @@ fn run(args: &Args) -> Result<(), String> {
 
 fn triangles(buffers: &MeshBuffers) -> u64 {
     (buffers.indices.len() / 3) as u64
+}
+
+/// Builds the set of every source not cached in `dir` yet and writes it
+/// there as `<key>.lsclust` ([`cache::cache_key`]), with its positions,
+/// normals and `st`.
+fn write_cache(dir: &Path, sources: &[Source<'_>], config: &ClusterConfig) -> Result<(), String> {
+    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let started = Instant::now();
+    let (mut written, mut cached, mut bytes) = (0, 0, 0);
+    let mut seen = std::collections::HashSet::new();
+    for source in sources {
+        let key = cache::cache_key(source.buffers);
+        let path = dir.join(format!("{key}.lsclust"));
+        if !seen.insert(key) || path.exists() {
+            cached += 1;
+            continue;
+        }
+        let subsets = triangle_subsets(source.buffers);
+        let input = ClusterInput {
+            normals: Some(&source.buffers.normals),
+            uvs: source.buffers.st.as_deref(),
+            triangle_subsets: subsets.as_deref(),
+            ..ClusterInput::new(&source.buffers.positions, &source.buffers.indices)
+        };
+        let set = ClusterSet::build(&input, config).map_err(|e| format!("{}: {e}", source.name))?;
+        let file = ClusterFile {
+            set,
+            positions: source.buffers.positions.clone(),
+            normals: Some(source.buffers.normals.clone()),
+            uvs: source.buffers.st.clone(),
+        };
+        let encoded = file.encode();
+        bytes += encoded.len();
+        // Written whole under another name, then renamed: a reader never
+        // sees a partial file.
+        let partial = path.with_extension("partial");
+        std::fs::write(&partial, &encoded).map_err(|e| format!("{}: {e}", partial.display()))?;
+        std::fs::rename(&partial, &path).map_err(|e| format!("{}: {e}", path.display()))?;
+        written += 1;
+    }
+    println!(
+        "cache {}: wrote {written} sets ({:.1} MB) in {:.2} s, {cached} already there",
+        dir.display(),
+        mb(bytes),
+        started.elapsed().as_secs_f64(),
+    );
+    Ok(())
+}
+
+/// Prints the cut of the cached set in `--cut-file` from `--camera` at
+/// `--threshold`: the cluster ids, ascending, as one JSON array.
+fn print_cut(file: &Path, args: &Args) -> Result<(), String> {
+    let camera = args.camera.ok_or("--cut-file needs --camera")?;
+    let bytes = std::fs::read(file).map_err(|e| format!("{}: {e}", file.display()))?;
+    let file = ClusterFile::decode(&bytes).map_err(|e| e.to_string())?;
+    let mut cut = Vec::new();
+    file.set.select_cut(&camera, args.threshold, &mut cut);
+    cut.sort_unstable();
+    let ids: Vec<String> = cut.iter().map(u32::to_string).collect();
+    println!("[{}]", ids.join(","));
+    Ok(())
 }
 
 /// Builds every source's DAG, reporting each and the totals.

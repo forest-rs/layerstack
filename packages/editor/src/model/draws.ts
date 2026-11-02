@@ -412,7 +412,7 @@ export class ViewportModel {
 
   /**
    * Fills every released buffer again ({@link DrawList.restore}), for a
-   * viewport whose WebGL context was lost and restored; the scene is then
+   * viewport whose WebGPU device was lost and made again; the scene is then
    * to be read again and drawn with a reset.
    */
   restore(): void {

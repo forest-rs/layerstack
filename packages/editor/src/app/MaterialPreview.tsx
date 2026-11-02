@@ -4,7 +4,8 @@
 // The material preview in the inspector: the material on a sphere, read
 // again after each recomposition (so an edited input shows), with what
 // kind of surface it is and what the drawing approximates. three.js loads
-// in its own chunk, as the viewport's does.
+// in its own chunk, as the viewport's does, and draws with the viewport's
+// WebGPU renderer.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { Stage } from "@forest-rs/layerstack";
@@ -65,13 +66,16 @@ export function MaterialPreview({
   useEffect(() => {
     let disposed = false;
     let made: Preview | null = null;
-    void import("../viewport/materialPreview.ts").then(
-      ({ MaterialPreview: Made }) => {
+    // three.js and the editor's shared WebGPU renderer, loaded after the editor.
+    const loaded = Promise.all([import("../viewport/materialPreview.ts"), import("../viewport/gpu.ts").then(({ sharedRenderer }) => sharedRenderer())]);
+    void loaded.then(
+      ([{ MaterialPreview: Made }, renderer]) => {
         if (disposed || canvas.current === null) return;
         try {
           const source = () => store.source;
           made = new Made(
             canvas.current,
+            renderer,
             async (identifier, anchor) => {
               const scene = source();
               return scene === null ? null : scene.fetch(await resolveAsset(scene, identifier, anchor));

@@ -7,8 +7,8 @@
 // one-sided as Hydra culls their backs, each lit with its texture
 // (`model:cardTexture*`, clamped, its alpha cut out below 0.1 as Hydra's
 // card material does) or, without one or until it loads, the color.
-import { BufferAttribute, BufferGeometry, ClampToEdgeWrapping, Color, FrontSide, LineBasicMaterial, MeshStandardMaterial, SRGBColorSpace } from "three";
-import type { Texture } from "three";
+import { BufferAttribute, BufferGeometry, ClampToEdgeWrapping, Color, FrontSide, LineBasicNodeMaterial, MeshStandardNodeMaterial, SRGBColorSpace } from "three/webgpu";
+import type { Texture } from "three/webgpu";
 import type { CardFace, StandinBuffers } from "@forest-rs/layerstack_stagehand";
 import { CARD_FACES } from "@forest-rs/layerstack_stagehand";
 import type { TextureStore } from "./surfaces.ts";
@@ -50,15 +50,15 @@ export function standinGeometry(standin: StandinBuffers): BufferGeometry {
 }
 
 /** The materials of a stand-in: its lines' color, or one per card. */
-export function standinMaterials(standin: StandinBuffers, highlighted: boolean, textures: TextureStore): LineBasicMaterial | MeshStandardMaterial[] {
+export function standinMaterials(standin: StandinBuffers, highlighted: boolean, textures: TextureStore): LineBasicNodeMaterial | MeshStandardNodeMaterial[] {
   const color = new Color().setRGB(...(standin.color as [number, number, number]));
-  if (standin.mode !== "cards") return new LineBasicMaterial({ color: highlighted ? new Color(HIGHLIGHT) : color });
+  if (standin.mode !== "cards") return new LineBasicNodeMaterial({ color: highlighted ? new Color(HIGHLIGHT) : color });
   const emissive = highlighted ? { emissive: new Color(0x2f5fd0), emissiveIntensity: 0.6 } : {};
   return standin.cards.map((card) => {
     const image = card.texture === null ? null : imageOf(standin, card.texture, textures);
-    if (image == null) return new MeshStandardMaterial({ color, roughness: 1, side: FrontSide, ...emissive });
+    if (image == null) return new MeshStandardNodeMaterial({ color, roughness: 1, side: FrontSide, ...emissive });
     // UsdPreviewSurface's fallbacks besides the card's color and cutout.
-    return new MeshStandardMaterial({ map: cardMap(image.texture), alphaTest: 0.1, roughness: 0.5, side: FrontSide, ...emissive });
+    return new MeshStandardNodeMaterial({ map: cardMap(image.texture), alphaTest: 0.1, roughness: 0.5, side: FrontSide, ...emissive });
   });
 }
 

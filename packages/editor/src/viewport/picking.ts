@@ -7,7 +7,7 @@
 // A pick renders the scene once into a small RGBA8 target around the
 // clicked point (`viewport3d.ts`), every draw in one shader that writes a
 // 32-bit pick id per fragment: its object's first id plus the instance's
-// index (`gl_InstanceID`), the low byte in red. Each drawn object is given
+// index (`instanceIndex`), the low byte in red. Each drawn object is given
 // a run of ids, one per instance it draws, numbered from 1 (0 is the
 // cleared background), so ids are dense: 2^32 - 1 of them, whatever the
 // split between objects and instances, where a fixed split (say 12 bits of
@@ -93,6 +93,15 @@ export function pickOrder(size: number): Int32Array {
   const pixels = Array.from({ length: size * size }, (_, index) => index);
   const distance = (index: number) => (Math.floor(index / size) - center) ** 2 + ((index % size) - center) ** 2;
   return Int32Array.from(pixels.sort((a, b) => distance(a) - distance(b) || a - b));
+}
+
+/**
+ * Where pixel `pixel` of a `size` × `size` pick target ({@link pickOrder}
+ * numbers rows from the bottom, as OpenGL reads them) is in the pixels
+ * WebGPU reads back, whose rows run from the top.
+ */
+export function readIndex(pixel: number, size: number): number {
+  return (size - 1 - Math.floor(pixel / size)) * size + (pixel % size);
 }
 
 /**

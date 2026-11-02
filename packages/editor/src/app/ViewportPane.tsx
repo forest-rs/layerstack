@@ -1,9 +1,9 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-// The viewport: three.js draws the store's draw list on a canvas (in its
-// own chunk, loaded after the editor). A click picks the prim drawn
-// there; a drag orbits.
+// The viewport: three.js draws the store's draw list on a canvas with the
+// editor's WebGPU renderer (in its own chunk, loaded after the editor). A
+// click picks the prim drawn there; a drag orbits.
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useStore } from "./context.ts";
@@ -24,13 +24,16 @@ export function ViewportPane() {
   useEffect(() => {
     let disposed = false;
     let dispose = () => {};
-    void import("../viewport/viewport3d.ts").then(
-      ({ Viewport }) => {
+    // three.js and the shared WebGPU renderer, loaded and started after the editor.
+    const loaded = Promise.all([import("../viewport/viewport3d.ts"), import("../viewport/gpu.ts").then(({ sharedRenderer }) => sharedRenderer())]);
+    void loaded.then(
+      ([{ Viewport }, renderer]) => {
         if (disposed || canvas.current === null) return;
         try {
           const source = () => store.source;
           const viewport = new Viewport(
             canvas.current,
+            renderer,
             async (identifier, anchor) => {
               const scene = source();
               return scene === null ? null : scene.fetch(await resolveAsset(scene, identifier, anchor));

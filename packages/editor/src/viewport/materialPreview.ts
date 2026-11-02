@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 // A material drawn on a sphere (the inspector's) or a shader ball (the
-// viewport's material view): a small three.js renderer of its own, lit by
-// a room environment (for reflections) and a key light (for relief). The
+// viewport's material view): its canvas a target of the editor's one
+// WebGPU renderer (`gpu.ts`), lit by a room environment (for reflections)
+// and a key light (for relief). The
 // shader ball is a ball with a raised band at its equator, on a neutral
 // pedestal and floor: the band's edges and the ball's curve show how the
 // material catches light at grazing angles, the floor where it meets the
@@ -12,7 +13,7 @@
 //
 // A `UsdPreviewSurface` material is the viewport's own three.js material
 // (`surfaceMaterial`, mapped as surfaces.ts describes). An OpenPBR surface
-// (`readOpenPbr`) is approximated by `MeshPhysicalMaterial`:
+// (`readOpenPbr`) is approximated by `MeshPhysicalNodeMaterial`:
 //
 // - `base_color` × `base_weight` → `color` (a texture → `map`, tinted by
 //   the weight); `base_metalness` → `metalness` (`metalnessMap`, blue);
@@ -40,26 +41,27 @@
 // metre is drawn about life size on a sphere of a metre's radius.
 import {
   AgXToneMapping,
+  CanvasTarget,
   CircleGeometry,
   Color,
   DirectionalLight,
   Group,
   LatheGeometry,
   Mesh,
-  MeshPhysicalMaterial,
-  MeshStandardMaterial,
+  MeshPhysicalNodeMaterial,
+  MeshStandardNodeMaterial,
   PerspectiveCamera,
   PMREMGenerator,
   Scene,
   SphereGeometry,
-  SRGBColorSpace,
   TorusGeometry,
   Vector2,
-  WebGLRenderer,
-} from "three";
-import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+} from "three/webgpu";
+import type { Texture, WebGPURenderer } from "three/webgpu";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import type { MaterialItem } from "@forest-rs/layerstack_stagehand";
 import type { OpenPbrSurface } from "../model/openpbr.ts";
+import { onRendererLost, sharedRenderer } from "./gpu.ts";
 import { type AssetExists, type AssetReader, surfaceMaterial, TextureStore, use } from "./surfaces.ts";
 
 /** What the preview draws: a `UsdPreviewSurface` record, or an OpenPBR surface. */
@@ -71,16 +73,16 @@ const NO_CHANNELS = new Map<string, number>();
 export type PreviewShape = "sphere" | "shaderBall";
 
 /** The neutral grey of the shader ball's pedestal: 18% reflectance, as a grey card. */
-const NEUTRAL = new MeshStandardMaterial({ color: new Color(0.18, 0.18, 0.18), roughness: 0.85 });
+const NEUTRAL = new MeshStandardNodeMaterial({ color: new Color(0.18, 0.18, 0.18), roughness: 0.85 });
 /** The floor: darker, so the ball stands out against it. */
-const FLOOR = new MeshStandardMaterial({ color: new Color(0.035, 0.035, 0.035), roughness: 0.95 });
+const FLOOR = new MeshStandardNodeMaterial({ color: new Color(0.035, 0.035, 0.035), roughness: 0.95 });
 
 /**
  * The shader ball's parts that carry the material (the ball and its band)
  * and those that do not (the pedestal and the floor), centred on the
  * ball, which has a radius of 1.
  */
-function shaderBall(material: MeshStandardMaterial | MeshPhysicalMaterial): { readonly group: Group; readonly surfaces: Mesh[] } {
+function shaderBall(material: SurfaceMaterial): { readonly group: Group; readonly surfaces: Mesh[] } {
   const group = new Group();
   const ball = new Mesh(sphereGeometry(), material);
   const band = new Mesh(new TorusGeometry(1.0, 0.07, 32, 160), material);
@@ -104,37 +106,54 @@ function sphereGeometry(): SphereGeometry {
   return geometry;
 }
 
+/** What a preview draws with. */
+type SurfaceMaterial = MeshStandardNodeMaterial | MeshPhysicalNodeMaterial;
+
 /** A sphere or a shader ball in a canvas, drawing one material at a time. */
 export class MaterialPreview {
-  readonly #renderer: WebGLRenderer;
+  /** The shared renderer; `null` while a lost device's is made again. */
+  #renderer: WebGPURenderer | null;
+  /** This canvas, as the shared renderer's target. */
+  readonly #target: CanvasTarget;
+  /** The room's prefiltered environment, made with the renderer (and again with the next after a lost device). */
+  #environment: Texture | null = null;
+  readonly #unlisten: () => void;
   readonly #scene = new Scene();
   readonly #camera = new PerspectiveCamera(30, 1, 0.1, 100);
   /** What turns when dragged. */
   readonly #model: Group | Mesh;
   /** The meshes that carry the material. */
   readonly #surfaces: Mesh[];
-  #material: MeshStandardMaterial | MeshPhysicalMaterial;
+  #material: SurfaceMaterial;
   readonly #textures: TextureStore;
   readonly #resizer: ResizeObserver;
   readonly #canvas: HTMLCanvasElement;
   #source: PreviewSource | null = null;
   #frame = 0;
 
-  /** `read` and `exists` reach the stage's assets, as the viewport's do. */
-  constructor(canvas: HTMLCanvasElement, read: AssetReader, exists: AssetExists, shape: PreviewShape = "sphere") {
+  /**
+   * A preview drawing into `canvas` with `renderer`, the shared one
+   * (`sharedRenderer`, initialized). `read` and `exists` reach the stage's
+   * assets, as the viewport's do.
+   */
+  constructor(canvas: HTMLCanvasElement, renderer: WebGPURenderer, read: AssetReader, exists: AssetExists, shape: PreviewShape = "sphere") {
     this.#canvas = canvas;
-    this.#renderer = new WebGLRenderer({ canvas, antialias: true, alpha: true });
-    this.#renderer.setPixelRatio(window.devicePixelRatio);
-    this.#renderer.toneMapping = AgXToneMapping;
-    this.#renderer.outputColorSpace = SRGBColorSpace;
-    const pmrem = new PMREMGenerator(this.#renderer);
-    this.#scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.#renderer = renderer;
+    this.#target = new CanvasTarget(canvas);
     this.#scene.environmentIntensity = 0.8;
-    pmrem.dispose();
+    this.#unlisten = onRendererLost(() => {
+      // The environment went with the device: made again with the next renderer.
+      this.#renderer = null;
+      this.#environment = null;
+      void sharedRenderer().then((next) => {
+        this.#renderer = next;
+        this.#draw();
+      });
+    });
     const key = new DirectionalLight(0xffffff, 2.2);
     key.position.set(-3, 3, 4);
     this.#scene.add(key);
-    this.#material = new MeshStandardMaterial({ color: new Color(0.5, 0.5, 0.5) });
+    this.#material = new MeshStandardNodeMaterial({ color: new Color(0.5, 0.5, 0.5) });
     if (shape === "shaderBall") {
       const { group, surfaces } = shaderBall(this.#material);
       this.#model = group;
@@ -168,16 +187,16 @@ export class MaterialPreview {
 
   dispose(): void {
     cancelAnimationFrame(this.#frame);
+    this.#unlisten();
     this.#resizer.disconnect();
     disposeMaterial(this.#material);
     this.#model.traverse((object) => {
       if (object instanceof Mesh) object.geometry.dispose();
     });
     this.#textures.dispose();
-    this.#scene.environment?.dispose();
-    this.#renderer.dispose();
-    // Selecting another kind of prim unmounts the preview: give its context back now.
-    this.#renderer.forceContextLoss();
+    this.#environment?.dispose();
+    // The renderer is shared: only this canvas's target is let go.
+    this.#target.dispose();
   }
 
   #rebuild(): void {
@@ -185,7 +204,7 @@ export class MaterialPreview {
     const source = this.#source;
     this.#material =
       source === null
-        ? new MeshStandardMaterial({ color: new Color(0.5, 0.5, 0.5), roughness: 0.6 })
+        ? new MeshStandardNodeMaterial({ color: new Color(0.5, 0.5, 0.5), roughness: 0.6 })
         : source.kind === "previewSurface"
           ? surfaceMaterial(source.item, this.#textures, { vertexColors: false, doubleSided: false, highlighted: false, uvChannels: NO_CHANNELS })
           : openPbrMaterial(source.surface, this.#textures);
@@ -198,25 +217,41 @@ export class MaterialPreview {
     if (this.#frame !== 0) return;
     this.#frame = requestAnimationFrame(() => {
       this.#frame = 0;
+      const renderer = this.#renderer;
       const width = this.#canvas.clientWidth;
       const height = this.#canvas.clientHeight;
-      if (width === 0 || height === 0) return;
-      if (this.#canvas.width !== Math.round(width * window.devicePixelRatio)) this.#renderer.setSize(width, height, false);
+      if (renderer === null || width === 0 || height === 0) return;
+      if (this.#canvas.width !== Math.round(width * window.devicePixelRatio)) {
+        this.#target.setPixelRatio(window.devicePixelRatio);
+        this.#target.setSize(width, height, false);
+      }
       this.#camera.aspect = width / height;
       this.#camera.updateProjectionMatrix();
-      this.#renderer.render(this.#scene, this.#camera);
+      if (this.#environment === null) {
+        const pmrem = new PMREMGenerator(renderer);
+        this.#environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+        pmrem.dispose();
+        this.#scene.environment = this.#environment;
+      }
+      // The shared renderer, pointed at this canvas: transparent over the page's gradient.
+      renderer.setCanvasTarget(this.#target);
+      renderer.setRenderTarget(null);
+      renderer.toneMapping = AgXToneMapping;
+      renderer.toneMappingExposure = 1;
+      renderer.setClearColor(0x000000, 0);
+      renderer.render(this.#scene, this.#camera);
     });
   }
 }
 
 /** Frees a material; the textures it reads are its texture store's, shared by its uses, and freed with the store. */
-function disposeMaterial(material: MeshStandardMaterial | MeshPhysicalMaterial): void {
+function disposeMaterial(material: SurfaceMaterial): void {
   material.dispose();
 }
 
-/** An OpenPBR surface as `MeshPhysicalMaterial`, as the header of this file maps it. */
-export function openPbrMaterial(surface: OpenPbrSurface, store: TextureStore): MeshPhysicalMaterial {
-  const material = new MeshPhysicalMaterial();
+/** An OpenPBR surface as `MeshPhysicalNodeMaterial`, as the header of this file maps it. */
+export function openPbrMaterial(surface: OpenPbrSurface, store: TextureStore): MeshPhysicalNodeMaterial {
+  const material = new MeshPhysicalNodeMaterial();
   const map = (texture: OpenPbrSurface["baseColor"]["texture"], color: boolean) => (texture === null ? null : use(store, NO_CHANNELS, texture, color));
   const weight = surface.baseWeight.value;
   material.map = map(surface.baseColor.texture, true);

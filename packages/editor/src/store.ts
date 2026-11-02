@@ -190,7 +190,6 @@ export class EditorStore {
   attachViewport(viewport: Viewport | null): void {
     this.#viewport = viewport;
     if (viewport === null) return;
-    viewport.onImages = () => this.#bumpSoon();
     // Uploaded buffers' arrays are dropped; what is held is measured again.
     viewport.onUploaded = (key, revision) => this.#draws.release(key, revision);
     // Meshes drawn from prebuilt cluster sets cost the budget their sets, once.

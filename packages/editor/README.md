@@ -309,7 +309,10 @@ line: a property row, a table cell, the explain and changes panels),
   listing them: a prim path selects, frames, draws alone or selects its
   material; a property path explains; a layer takes edits or is muted; an
   asset is shown in the asset view. The prim tree's rows offer the same
-  commands on their paths.
+  commands on their paths. Hovering a live object shows its `tooltip`
+  presentation where its type has one: a prim path's says what is there
+  (type, specifier, instance, children), a layer's whether it is muted,
+  edited or read-only.
 - A panel keys its reads by `usePrimRevision(store, path)`, which changes
   only when a recomposition reaches its prim, so an edit elsewhere reads
   nothing of it again. A panel that throws is replaced by a line saying

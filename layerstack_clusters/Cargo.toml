@@ -1,0 +1,25 @@
+[package]
+name = "layerstack_clusters"
+description = "Cluster level-of-detail DAGs for triangle meshes: clusters, groups simplified with locked borders, monotonic errors, and screen-space cuts."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords = ["mesh", "lod", "clusters", "nanite", "simplification"]
+categories = ["graphics", "rendering"]
+# Experimental: serves the editor showcase for now, and its home may
+# change. It depends on no Layerstack crate, so it can move as it is.
+publish = false
+
+[dependencies]
+# meshoptimizer 1.3 (C++, built by the crate's `cc` build script) through
+# its safe Rust wrappers: cluster building, cluster partitioning,
+# attribute-aware and sloppy simplification, cluster and sphere bounds,
+# spatial clustering. Default features only (`bindgen` stays off; the
+# bindings ship pre-generated). Only this crate depends on it.
+meshopt = "0.7.0"
+
+[lints]
+workspace = true

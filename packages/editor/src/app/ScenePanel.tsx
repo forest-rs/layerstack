@@ -36,18 +36,22 @@ export function ScenePanel() {
 
 /**
  * The layers the stage holds, as it reports them: the root layer stack
- * first, then the assets its arcs read. Muting one recomposes the stage
- * without its opinions; it is the stage's state, not an edit.
+ * first, then the assets its arcs read; then the muted layers it
+ * released, by identifier. Muting one recomposes the stage without its
+ * opinions; it is the stage's state, not an edit.
  */
 function LayerList() {
   const store = useStore();
   const session = store.session;
   if (session === null) return null;
   const stage = session.stage;
-  const root = stage.layers()[0];
+  const layers = stage.layers();
+  const root = layers[0];
+  const held = new Set(layers.map((layer) => layer.identifier));
+  const released = stage.mutedIdentifiers().filter((identifier) => !held.has(identifier));
   return (
     <ul className="flex flex-col p-1">
-      {stage.layers().map((layer) => {
+      {layers.map((layer) => {
         const muted = stage.isMuted(layer);
         const local = stage.hasLocalLayer(layer);
         return (
@@ -69,6 +73,15 @@ function LayerList() {
           </li>
         );
       })}
+      {released.map((identifier) => (
+        <li key={identifier} className="flex items-center gap-2 rounded-md px-2 py-1 text-xs hover:bg-muted">
+          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground line-through" title={layerName(identifier)}>
+            {layerName(identifier)}
+          </span>
+          <Badge variant="outline">released</Badge>
+          <Switch size="sm" aria-label={`Unmute ${layerName(identifier)}`} isSelected={false} onChange={() => void store.setMuted(identifier, false)} />
+        </li>
+      ))}
     </ul>
   );
 }

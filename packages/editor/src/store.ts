@@ -520,7 +520,8 @@ export class EditorStore {
     await this.#actAsync("redo", (session) => session.redo());
   }
 
-  async setMuted(layer: Layer, muted: boolean): Promise<void> {
+  /** Mutes or unmutes a layer, by identifier for a muted layer the stage released. */
+  async setMuted(layer: Layer | string, muted: boolean): Promise<void> {
     await this.#actAsync(muted ? "mute" : "unmute", (session) => session.setMuted(layer, muted));
   }
 
@@ -533,9 +534,17 @@ export class EditorStore {
     await this.#loading(`load ${path}`, path, (session) => session.loadPayloads([path], [], policy));
   }
 
-  /** Unloads the payloads at and beneath `path`: their prims leave the stage and the draws. */
+  /**
+   * Unloads the payloads at and beneath `path`: their prims leave the
+   * stage and the draws, and the layers nothing uses any more are
+   * released, so their memory comes back; loading them again fetches them.
+   */
   async unload(path: string): Promise<void> {
-    await this.#loading(`unload ${path}`, path, (session) => session.loadPayloads([], [path]));
+    await this.#loading(`unload ${path}`, path, async (session) => {
+      const outcome = await session.loadPayloads([], [path]);
+      session.releaseUnusedLayers();
+      return outcome;
+    });
   }
 
   /** Sets how the next scene opens its payloads. */

@@ -97,4 +97,22 @@ describe("payloads in a session", () => {
     await session.loadPayloads(["/"], [], "withDescendants", { bytes: 1024, size: source.size });
     assert.deepEqual(session.stage.loadSet(), ["/World/Rock", "/World/Tree"]);
   });
+
+  it("releases an unloaded payload's layer, and fetches it again to load it", async () => {
+    const source = files();
+    using session = await Session.open(layerstack, "scene.usda", source.fetch);
+    assert.deepEqual(source.fetched.sort(), ["rock.usda", "scene.usda", "tree.usda"]);
+    await session.loadPayloads([], ["/World/Tree"]);
+    const released = session.releaseUnusedLayers();
+    assert.deepEqual(
+      released.released.map((layer) => layer.identifier),
+      ["tree.usda"],
+    );
+    assert.deepEqual(session.released, { layers: 1, bytes: text.encode(FILES["tree.usda"]).byteLength });
+    assert.ok(!session.stage.layers().some((layer) => layer.identifier === "tree.usda"));
+    source.fetched.length = 0;
+    await session.loadPayloads(["/World/Tree"], []);
+    assert.deepEqual(source.fetched, ["tree.usda"], "fetched again");
+    assert.deepEqual(session.stage.children("/World/Tree"), ["/World/Tree/Trunk"]);
+  });
 });

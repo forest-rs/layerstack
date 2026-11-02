@@ -4,9 +4,9 @@
 // three.js materials from stagehand's `UsdPreviewSurface` records, and the
 // textures they read, loaded from the stage's asset bytes.
 //
-// The mapping, input by input (`MaterialItem` → `MeshStandardMaterial`,
-// or `MeshPhysicalMaterial` when clearcoat, `ior`, the specular workflow or
-// a `transparent` opacity needs it):
+// The mapping, input by input (`MaterialItem` → `MeshStandardNodeMaterial`,
+// or `MeshPhysicalNodeMaterial` when clearcoat, `ior`, the specular
+// workflow or a `transparent` opacity needs it):
 //
 // - `diffuseColor` → `color`; a texture's `rgb` → `map` (with `color` its
 //   `scale`); the `displayColor` primvar → `vertexColors`.
@@ -15,7 +15,7 @@
 //   `roughness`, a texture → `roughnessMap`; `occlusion`: a texture →
 //   `aoMap`. Each map reads the input's channel (three.js's own are the
 //   packed occlusion-roughness-metallic `r`, `g`, `b`; `readChannels`
-//   patches the shader for another). The texture's `scale` on that
+//   sets the material's input node for another). The texture's `scale` on that
 //   channel multiplies the factor.
 // - `useSpecularWorkflow` 1 → `metalness` 0 and `specularColor` (or a
 //   texture's `rgb` as `specularColorMap`), `specularIntensity` 1.
@@ -32,7 +32,7 @@
 //   opaque above it; `blend` with `presence` → `transparent` with
 //   `opacity`, which scales the whole response as `presence` does;
 //   `blend` with `transparent` (opacity scales only the diffuse response,
-//   reflections stay) → `MeshPhysicalMaterial.transmission = 1 - opacity`,
+//   reflections stay) → `MeshPhysicalNodeMaterial.transmission = 1 - opacity`,
 //   three.js's closest model. A textured opacity reads the `a` of the
 //   diffuse texture through `map`, or another lookup through `alphaMap`.
 //
@@ -76,8 +76,8 @@ import {
   Color,
   DataTexture,
   DoubleSide,
-  MeshPhysicalMaterial,
-  MeshStandardMaterial,
+  MeshPhysicalNodeMaterial,
+  MeshStandardNodeMaterial,
   MirroredRepeatWrapping,
   NoColorSpace,
   RGBAFormat,
@@ -85,8 +85,8 @@ import {
   SRGBColorSpace,
   Texture,
   UnsignedByteType,
-} from "three";
-import type { Wrapping } from "three";
+} from "three/webgpu";
+import type { Wrapping } from "three/webgpu";
 import { udimTiles } from "@forest-rs/layerstack_stagehand";
 import type { MaterialItem, MaterialTexture, MaterialValue, TextureWrap } from "@forest-rs/layerstack_stagehand";
 import { readChannels } from "./channels.ts";
@@ -392,7 +392,7 @@ export function surfaceMaterial(
   record: MaterialItem,
   store: TextureStore,
   options: { readonly vertexColors: boolean; readonly doubleSided: boolean; readonly highlighted: boolean; readonly uvChannels: UvChannels },
-): MeshStandardMaterial | MeshPhysicalMaterial {
+): MeshStandardNodeMaterial | MeshPhysicalNodeMaterial {
   const blend = record.alpha.kind === "blend" ? record.alpha : null;
   const transmissive = blend !== null && !blend.presence && record.opacity.kind === "constant";
   const physical =
@@ -401,7 +401,7 @@ export function surfaceMaterial(
     constant(record.clearcoat, 0) > 0 ||
     record.clearcoat.kind === "texture" ||
     constant(record.ior, 1.5) !== 1.5;
-  const material = physical ? new MeshPhysicalMaterial() : new MeshStandardMaterial();
+  const material = physical ? new MeshPhysicalNodeMaterial() : new MeshStandardNodeMaterial();
   const map = (value: MaterialValue<unknown>, color: boolean) =>
     value.kind === "texture" ? use(store, options.uvChannels, record.textures[value.texture]!, color) : null;
   // Diffuse: a constant, a texture's rgb (tinted by its scale), or displayColor.
@@ -462,7 +462,7 @@ export function surfaceMaterial(
   if (opacity.kind === "texture" && !(diffuse.kind === "texture" && opacity.texture === diffuse.texture && opacity.channel === "a")) {
     material.alphaMap = channel(opacity, "alpha");
   }
-  if (material instanceof MeshPhysicalMaterial) {
+  if (material instanceof MeshPhysicalNodeMaterial) {
     material.ior = Math.min(2.333, Math.max(1, constant(record.ior, 1.5)));
     material.clearcoat = constant(record.clearcoat, record.clearcoat.kind === "texture" ? channelScale(record, record.clearcoat) : 0);
     material.clearcoatMap = channel(record.clearcoat, "clearcoat");

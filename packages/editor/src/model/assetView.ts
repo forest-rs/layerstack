@@ -20,7 +20,7 @@ export type DrawScopeChoice = "scene" | "selection" | "nothing";
 /**
  * The most the editor draws unless raised: 1 GiB uploaded and 50 million
  * triangles drawn, instanced draws counted in full. A gigabyte of buffers
- * is about what a WebGL context on a laptop holds beside the page, and
+ * is about what a laptop's GPU holds for one page beside the rest, and
  * the editor keeps a JavaScript copy of as much again; 50 million
  * triangles a frame is about what such a GPU draws at an interactive
  * rate. Fixed, not sized to the device, so a scene degrades the same way

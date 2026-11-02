@@ -6,7 +6,7 @@
 // the projection narrowed to the pick window.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { MAX_PICK_ID, PickIds, packPickId, pickOrder, pickWindow, unpackPickId } from "../src/viewport/picking.ts";
+import { MAX_PICK_ID, PickIds, packPickId, pickOrder, pickWindow, readIndex, unpackPickId } from "../src/viewport/picking.ts";
 
 test("pack and unpack every byte of an id, low byte first", () => {
   const pixels = new Uint8Array(8);
@@ -62,4 +62,14 @@ test("narrow the projection to the pixels about the point", () => {
   const ndcY = 1 - (0.5 / 50) * 2;
   assert.ok(Math.abs(corner[0]! * ndcX + corner[3]!) < 1e-9);
   assert.ok(Math.abs(corner[5]! * ndcY + corner[7]!) < 1e-9);
+});
+
+test("pick pixels numbered from the bottom are found in rows read from the top", () => {
+  // A 3 × 3 target: pixel 0 is the bottom left, the read's first row is the top.
+  assert.equal(readIndex(0, 3), 6);
+  assert.equal(readIndex(2, 3), 8);
+  assert.equal(readIndex(4, 3), 4, "the center stays");
+  assert.equal(readIndex(8, 3), 2);
+  const seen = new Set(Array.from({ length: 49 }, (_, pixel) => readIndex(pixel, 7)));
+  assert.equal(seen.size, 49, "every pixel read once");
 });

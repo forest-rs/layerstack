@@ -100,7 +100,8 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
   turns it. It is the default when the scene draws nothing, as a material
   library's does.
 - **Viewport.** The draw list stagehand keeps from the stage's change
-  records, applied to three.js in place; the stage's `upAxis` orients the
+  records, applied to three.js in place and drawn with its
+  `WebGPURenderer`; the stage's `upAxis` orients the
   free camera and the grid. Click to pick, drag to orbit, scroll to zoom,
   **F** to frame the selection, **Esc** to clear it.
 - **Timeline.** The stage's `startTimeCode` to `endTimeCode`: scrub, step
@@ -218,6 +219,9 @@ built: their licenses are their own.
   (HTTP, a picked directory, dropped files).
 - `src/store.ts`: the editor's state outside React; every action runs here,
   syncs the draw list, and bumps the revision components subscribe to.
-- `src/viewport/`: three.js, in its own chunk.
+- `src/viewport/`: three.js, in its own chunk: one `WebGPURenderer`
+  (`gpu.ts`) shared by the viewport and the material previews, each canvas
+  a target of it; node materials and TSL where the editor shades its own
+  way (light links, texture channels, eight-influence skinning, picking).
 - `src/app/`: the panels. `src/components/ui/`: shadcn components on React
   Aria.

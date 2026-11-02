@@ -1,18 +1,21 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-// The viewport: three.js draws what `../model/draws.ts` keeps of the stage.
-// Every matrix and color comes from layerstack and every triangle from
-// stagehand's buffers (indexed, with normals, per-vertex colors and a
-// group per subset range); three.js only rasterizes them. No USD loader is
-// involved. Each update applies the draw list's diffs in place: an
-// `InstancedMesh` per instanced item whose matrices are rewritten, a
-// buffer geometry per stagehand buffer whose attributes are refilled, a
-// three.js light per `UsdLux` light the diff adds or changes, and nothing
-// rebuilt that the diffs do not name.
+// The viewport: three.js's `WebGPURenderer` draws what `../model/draws.ts`
+// keeps of the stage. Every matrix and color comes from layerstack and
+// every triangle from stagehand's buffers (indexed, with normals,
+// per-vertex colors and a group per subset range); three.js only
+// rasterizes them. No USD loader is involved. Each update applies the draw
+// list's diffs in place: an `InstancedMesh` per instanced item whose
+// matrices are rewritten, a buffer geometry per stagehand buffer whose
+// attributes are refilled, a three.js light per `UsdLux` light the diff
+// adds or changes, and nothing rebuilt that the diffs do not name. The
+// renderer is the editor's one WebGPU renderer (`gpu.ts`), drawing into
+// this canvas as one of its canvas targets.
 //
 // The camera is the stage's (`UsdGeomCamera`, its view and projection
-// matrices as `GfFrustum` computes them), fitted to the canvas by
+// matrices as `GfFrustum` computes them, the projection's depth taken from
+// OpenGL's [-1, 1] to WebGPU's [0, 1]), fitted to the canvas by
 // `CameraUtilConformWindow`'s `fit` policy (everything the camera frames
 // stays in view), when the editor looks through one; otherwise orbit
 // controls move a free camera.
@@ -62,7 +65,10 @@
 // makes 1 for a 1-nit light seen directly at exposure 0: the renderer's
 // `toneMappingExposure` is the stage camera's
 // `UsdGeomCamera::ComputeLinearExposureScale` (1 with the free camera), and
-// AgX tone mapping fits the highlights into the display's range.
+// AgX tone mapping fits the highlights into the display's range. WebGPU's
+// renderer tone-maps and encodes sRGB in a pass of its own once the scene
+// is drawn (and blended, and its 4× multisampling resolved); the canvas is
+// cleared transparent, so the page's background is the viewport's.
 //
 // Default lights (`defaultLights.ts`): usdview's. A point light at the
 // camera, moved to it on each draw, and a faint ambient light, added to
@@ -70,72 +76,74 @@
 // default camera light; the camera light can be switched off
 // (`setLightSettings`), as usdview's View > Lights menu does. Switching it
 // zeroes its intensity rather than removing it, so the lit materials keep
-// their programs (three.js compiles a program per count of each light
-// type).
+// their pipelines (three.js builds a shader per set of lights).
 //
 // Light linking: three.js lights every lit material with every light in
-// the scene; `Light.layers` only decides whether a camera sees the light
-// at all (r186's `WebGLRenderer` pushes a light when its layers test the
-// camera's), not which objects it lights, and its node materials'
-// `lightsNode` are `WebGPURenderer`'s. So each draw's `MeshStandardMaterial`
-// (or `MeshPhysicalMaterial`) is patched, once, in `onBeforeCompile`: the
-// `lights_fragment_begin` chunk multiplies each point, spot, directional
-// and rect area light's color, and each hemisphere light's irradiance, by
-// a per-material uniform of 0 or 1 for the light in that slot. The slots
-// are three.js's own: `WebGLLights` numbers the lights of each type in the
-// order the renderer meets them (a depth-first walk of the visible scene),
-// shadow-casting and textured ones first, which none here are. Every
-// patched material shares one program; linking a light again rewrites
-// uniforms only. The masks come from the draw list
-// (`ViewportScene.unlit`: stagehand's evaluated `lightLink`s). Limits: one
-// material per `InstancedMesh`, so a prototype's draw is lit as its first
-// instance is; eight lights of a type are linked (more are lit as three.js
-// lights them); lines and points are unlit anyway; and `shadowLink` is
-// shown but not drawn, as the viewport casts no shadows.
+// the scene, unless the material names its own lights: a node material's
+// `lightsNode` (`lights([...])`). So a draw that `ViewportScene.unlit`
+// (stagehand's evaluated `lightLink`s) leaves out of some `UsdLux` lights
+// has its materials lit by the rest, the default lights (the camera light,
+// the ambient) always among them; the others use the scene's. Light sets
+// are shared (one `LightsNode` per set of lights, `#lightSets`), and a
+// shader is built per material shape and light set, so relinking compiles
+// only the shapes that meet a set for the first time; a set already met
+// rewrites nothing. Limits: one material per `InstancedMesh`, so a
+// prototype's draw is lit as its first instance is; lines and points are
+// unlit anyway; and `shadowLink` is shown but not drawn, as the viewport
+// casts no shadows.
 //
-// Skinning (`../model/skinning.ts`): a draw a skeleton deforms on the GPU
-// is a `SkinnedMesh` over its stagehand buffer, whose `skinIndex` and
-// `skinWeight` (eight per vertex, see `SKINNING`) are the joint
-// influences gathered into vertex order, with a
-// `Skeleton` of its own: one bone per joint of the binding, each bone's
-// world matrix the joint's skinning transform at the time and each bone
-// inverse the geometry's bind transform, bound with an identity bind
-// matrix (detached). three.js then moves a rest point `p` by
+// Skinning (`../model/skinning.ts`, `skinning.ts`): a draw a skeleton
+// deforms on the GPU is a `SkinnedDraw` over its stagehand buffer, whose
+// `skinIndex` and `skinWeight` (eight per vertex) are the joint influences
+// gathered into vertex order, with a `Skeleton` of its own: one bone per
+// joint of the binding, each bone's world matrix the joint's skinning
+// transform at the time and each bone inverse the geometry's bind
+// transform. The shader moves a rest point `p` by
 // `Σ w · skinningTransform · bindTransform · p`, the points UsdSkel skins
-// into the skeleton's space, and the object is placed by the skeleton's
-// world transform. A time change rewrites the bones' matrices and nothing
-// else. Normals are skinned through each joint matrix's inverse transpose,
-// blended and normalized, as `UsdSkelSkinNormals` skins them: three.js's
-// own `skinnormal_vertex` blends the matrices themselves, which bends
-// normals wrong under joints that scale. So the skinned draws' materials
-// are patched in `onBeforeCompile`, beside their light-link patch, and
-// keyed apart (`patches`); three.js's chunks stay as they are. A mesh with
-// blend shapes skins its blend-shaped rest pose, uploaded once (again only
-// when the animation's weights vary). A draw deformed on the CPU (dual
+// into the skeleton's space, skins normals as `UsdSkelSkinNormals` does,
+// and the object is placed by the skeleton's world transform. A time
+// change rewrites the bones' matrices and nothing else. A mesh with blend
+// shapes skins its blend-shaped rest pose, uploaded once (again only when
+// the animation's weights vary). A draw deformed on the CPU (dual
 // quaternions) is a plain mesh whose positions and normals are refilled
 // each time.
 //
 // Vertices (stagehand's `DrawBuffers.vertices`): uploaded in stagehand's
-// compact format as they are, `snorm16` positions, `snorm8` normals and
-// half-float `st`, read normalized by three.js's stock materials. A
-// position decodes to its point by one uniform scale and an offset per
-// buffer, folded into the object's matrix (each instance's, for an
-// `InstancedMesh`: three.js applies the instance matrix first): normals,
-// not quantized relative to the bounds, are transformed as before, since
-// a uniform scale only changes their length. A skinned draw's positions
-// are decoded to `f32` instead (skinning runs before the model matrix).
-// Once three.js has uploaded a static buffer (`BufferAttribute.onUpload`),
-// the arrays are dropped, three.js's and stagehand's (`DrawList.release`):
-// the GPU holds them, and nothing reads them on the CPU after upload
-// (bounds are computed before, framing reads the stage's bounds, picking
-// is on the GPU). A lost WebGL context loses them: on its restoring, the
-// draw list fills every released buffer again (`DrawList.restore`) and
-// the view is made again from it.
+// compact format as they are, `snorm16x4` positions, `snorm8x4` normals
+// and `float16x2` `st` (WebGPU vertex formats, which three.js picks from
+// the arrays' types and `normalized`; half floats are given as a
+// `Float16Array` view of stagehand's bits, which three.js maps to
+// `float16`). A position decodes to its point by one uniform scale and an
+// offset per buffer, folded into the object's matrix (each instance's, for
+// an `InstancedMesh`: three.js applies the instance matrix first): normals,
+// not quantized relative to the bounds, are transformed as before, since a
+// uniform scale only changes their length. A skinned draw's positions are
+// decoded to `f32` instead (skinning runs before the model matrix). Once a
+// render has uploaded a static buffer's index and positions (three.js
+// keeps a GPU buffer per attribute), the arrays are dropped, three.js's and
+// stagehand's (`DrawList.release`): the GPU holds them, and nothing reads
+// them on the CPU after upload (bounds are computed before, framing reads
+// the stage's bounds, picking is on the GPU). A lost device loses them: the
+// view lets everything go, and once the shared renderer is made again, the
+// draw list fills every released buffer again (`DrawList.restore`) and the
+// view is made again from it.
+//
+// Points are drawn as camera-facing squares, one instanced quad per point
+// (WebGPU rasterizes point primitives one pixel wide): each point's width
+// is its diameter in world units, attenuated with distance as
+// `PointsMaterial` attenuated a point's size.
+//
+// Pipelines: an update that adds draws or changes materials asks three.js
+// to compile what the scene now needs off the main thread
+// (`compileAsync`); the draw that follows skips what is still compiling,
+// so a new material pops in a frame or so later instead of holding the
+// page.
 //
 // Picking (`picking.ts`): a click renders the scene once more into a
-// 7×7-pixel RGBA8 target about the point, every draw in one shader that
-// writes its object's pick id plus the instance index, and reads it back
-// with `readRenderTargetPixelsAsync` a frame or so later. The center pixel
+// 7×7-pixel RGBA8 target about the point, every draw with a pick material
+// (one for surfaces and lines, one for points) that writes its object's
+// pick id plus the instance index, and reads it back with
+// `readRenderTargetPixelsAsync` a frame or so later. The center pixel
 // decides; a line or point within three pixels of it is picked when the
 // center shows nothing, as the ray's threshold let a thin line be.
 import {
@@ -145,133 +153,71 @@ import {
   BufferAttribute,
   BufferGeometry,
   Camera,
+  CanvasTarget,
   Color,
-  DetachedBindMode,
   DirectionalLight,
   DoubleSide,
-  Float16BufferAttribute,
   GridHelper,
   HemisphereLight,
+  InstancedBufferAttribute,
+  InstancedBufferGeometry,
   InstancedMesh,
   InterleavedBuffer,
   InterleavedBufferAttribute,
-  LineBasicMaterial,
+  LineBasicNodeMaterial,
   LineSegments,
   Material,
   Matrix4,
   Mesh,
-  MeshStandardMaterial,
+  MeshStandardNodeMaterial,
+  NoBlending,
+  NodeMaterial,
   Object3D,
   PerspectiveCamera,
   PointLight,
-  Points,
-  PointsMaterial,
+  PointsNodeMaterial,
   Quaternion,
   RectAreaLight,
+  RectAreaLightNode,
+  RenderTarget,
   Scene,
-  ShaderChunk,
-  ShaderMaterial,
   Skeleton,
-  SkinnedMesh,
   SpotLight,
+  Vector2,
   Vector3,
-  WebGLRenderTarget,
-  WebGLRenderer,
-} from "three";
+  WebGPUCoordinateSystem,
+} from "three/webgpu";
+import type { LightsNode, WebGPURenderer } from "three/webgpu";
+import { attribute, instanceIndex, lights, materialColor, max, positionView, renderGroup, screenDPR, uniform, varying, vec4 } from "three/tsl";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
+import { RectAreaLightTexturesLib } from "three/addons/lights/RectAreaLightTexturesLib.js";
 import { conformCamera, lightSizeFactor, vertexPositions } from "@forest-rs/layerstack_stagehand";
 import type { CameraItem, LightItem, MaterialItem, MeshVertices, VertexAttribute } from "@forest-rs/layerstack_stagehand";
-import { PickIds, pickOrder, pickWindow, unpackPickId } from "./picking.ts";
+import { PickIds, pickOrder, pickWindow, readIndex, unpackPickId } from "./picking.ts";
 import { DEFAULT_LIGHT_SETTINGS, defaultLights, type LightSettings } from "./defaultLights.ts";
+import { lightSetKey, linkedLights } from "./lightLinks.ts";
+import { onRendererLost, sharedRenderer } from "./gpu.ts";
+import { SkinnedDraw, withSkinning } from "./skinning.ts";
 import { TextureStore, surfaceMaterial, uvChannels } from "./surfaces.ts";
 import { standinGeometry, standinMaterials, standinTextured } from "./standins.ts";
 import type { AssetExists, AssetReader, TextureStats } from "./surfaces.ts";
 import type { ViewItem, ViewportScene, ViewportUpdate } from "../model/draws.ts";
 
-/**
- * The editor's skinning shader, for the editor's own skinned materials
- * ({@link skinnedMaterials}; the chunks of three.js stay as they are, so
- * any other `SkinnedMesh` on the page skins as three.js does): eight
- * influences per vertex (`skinIndex` and `skinWeight`, then `skinIndex1`
- * and `skinWeight1`, which every skinned geometry here has, zero-weighted
- * where unused) where three.js reads four, since production rigs weight
- * more joints than four and dropping the rest moves points visibly; and
- * normals as `UsdSkelSkinNormals` computes them (OpenUSD
- * `pxr/usd/usdSkel/utils.cpp`, `_SkinNormalsLBS`): each joint matrix's
- * linear part inverse transposed (by its cofactors), weighted and summed,
- * then normalized by the fragment shader; a singular joint contributes
- * nothing. three.js's own `skinnormal_vertex` blends the matrices
- * themselves, which bends normals wrong under scaling joints. Each entry
- * replaces one `#include` of the vertex shader.
- */
-const SKINNING: readonly (readonly [string, string])[] = (() => {
-  const slots: [string, string][] = [
-    ["boneMatX", "skinWeight.x"],
-    ["boneMatY", "skinWeight.y"],
-    ["boneMatZ", "skinWeight.z"],
-    ["boneMatW", "skinWeight.w"],
-    ["boneMat1X", "skinWeight1.x"],
-    ["boneMat1Y", "skinWeight1.y"],
-    ["boneMat1Z", "skinWeight1.z"],
-    ["boneMat1W", "skinWeight1.w"],
-  ];
-  const sum = (term: (matrix: string, weight: string) => string) => slots.map(([matrix, weight]) => `\t${term(matrix, weight)}`).join("\n");
-  return [
-    [
-      "#include <skinning_pars_vertex>",
-      `#include <skinning_pars_vertex>
-#ifdef USE_SKINNING
-	attribute vec4 skinIndex1;
-	attribute vec4 skinWeight1;
-	mat3 skinNormalMatrix( mat3 m ) {
-		vec3 bc = cross( m[ 1 ], m[ 2 ] );
-		float det = dot( m[ 0 ], bc );
-		return det == 0.0 ? mat3( 0.0 ) : mat3( bc, cross( m[ 2 ], m[ 0 ] ), cross( m[ 0 ], m[ 1 ] ) ) / det;
-	}
-#endif`,
-    ],
-    [
-      "#include <skinbase_vertex>",
-      `#include <skinbase_vertex>
-#ifdef USE_SKINNING
-	mat4 boneMat1X = getBoneMatrix( skinIndex1.x );
-	mat4 boneMat1Y = getBoneMatrix( skinIndex1.y );
-	mat4 boneMat1Z = getBoneMatrix( skinIndex1.z );
-	mat4 boneMat1W = getBoneMatrix( skinIndex1.w );
-#endif`,
-    ],
-    [
-      "#include <skinning_vertex>",
-      `#ifdef USE_SKINNING
-	vec4 skinVertex = bindMatrix * vec4( transformed, 1.0 );
-	vec4 skinned = vec4( 0.0 );
-${sum((matrix, weight) => `skinned += ${matrix} * skinVertex * ${weight};`)}
-	transformed = ( bindMatrixInverse * skinned ).xyz;
-#endif`,
-    ],
-    [
-      "#include <skinnormal_vertex>",
-      `#ifdef USE_SKINNING
-	mat3 skinBind = mat3( bindMatrix );
-	mat3 skinUnbind = mat3( bindMatrixInverse );
-	vec3 skinnedNormal = vec3( 0.0 );
-${sum((matrix, weight) => `skinnedNormal += ${weight} * ( skinNormalMatrix( skinUnbind * mat3( ${matrix} ) * skinBind ) * objectNormal );`)}
-	#ifdef USE_TANGENT
-		mat4 skinMatrix = mat4( 0.0 );
-${sum((matrix, weight) => `\tskinMatrix += ${weight} * ${matrix};`)}
-		skinMatrix = bindMatrixInverse * skinMatrix * bindMatrix;
-		objectTangent = vec4( skinMatrix * vec4( objectTangent, 0.0 ) ).xyz;
-	#endif
-	objectNormal = skinnedNormal;
-#endif`,
-    ],
-  ];
-})();
+/** The lit materials the viewport makes: a surface's, a stand-in card's, or a plain color's. */
+type LitMaterial = MeshStandardNodeMaterial;
+
+/** What `materials` gives a draw. */
+type Styled = LitMaterial | LitMaterial[] | LineBasicNodeMaterial | PointsNodeMaterial;
+
+/** Anything TSL takes: the node types are too loose to be worth spelling here. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Node = any;
 
 /** A three.js view of a {@link ViewportScene}, updated in place from each {@link ViewportUpdate}. */
 export class Viewport {
-  readonly #renderer: WebGLRenderer;
+  #renderer: WebGPURenderer;
+  /** This canvas, as the shared renderer's target. */
+  readonly #target: CanvasTarget;
   readonly #scene = new Scene();
   /** The free camera, which the orbit controls move. */
   readonly #camera = new PerspectiveCamera(45, 1, 0.05, 500);
@@ -302,7 +248,7 @@ export class Viewport {
   /**
    * One object per draw item, by id: a `Mesh` for a gprim, an
    * `InstancedMesh` for a group, `LineSegments` for curves drawn as lines,
-   * `Points` for a point set.
+   * a `Mesh` of a quad per point for a point set.
    */
   readonly #objects = new Map<number, Drawn>();
   /** Whether an update was applied yet. */
@@ -319,42 +265,31 @@ export class Viewport {
   #applied: ViewportScene | null = null;
   /**
    * Materials a restyle replaced, disposed after the next render. A
-   * material takes its shader program when it is first drawn, so disposing
-   * the one it replaces before then would release the program while its
-   * replacement still needs it, and three.js would compile it again.
+   * material takes its pipeline when it is first drawn, so disposing the
+   * one it replaces before then would release the pipeline while its
+   * replacement still needs it, and three.js would build it again.
    */
   #retired: Material[] = [];
-  /** Geometries a render uploaded, released after it ({@link onUploaded}). */
-  readonly #uploaded: BufferGeometry[] = [];
-  /** GPU picking's target, shader and ids, made at the first pick. */
+  /** Geometries of static buffers not yet seen uploaded, released once a render has ({@link onUploaded}). */
+  readonly #pending = new Set<BufferGeometry>();
+  /** GPU picking's target, materials and ids, made at the first pick. */
   #picker: Picker | null = null;
   /** The pick in flight, which the next follows. */
   #picking: Promise<unknown> = Promise.resolve();
-  /**
-   * A lost context: every object and geometry let go now, while three.js's
-   * calls on the lost context do nothing (disposed after the restore, they
-   * would delete the old context's buffers in the new one); the next
-   * update starts from nothing ({@link onContextRestored}).
-   */
-  readonly #lost = () => {
-    for (const id of [...this.#objects.keys()]) this.#drop(id);
-    for (const geometry of this.#geometries.values()) geometry.dispose();
-    this.#geometries.clear();
-    for (const material of this.#retired) material.dispose();
-    this.#retired = [];
-    this.#uploaded.length = 0;
-    this.#picker?.dispose();
-    this.#picker = null;
-    this.#synced = false;
-  };
-  readonly #restored = () => this.onContextRestored?.();
+  /** The light sets of linked draws' materials, by their lights' ids: one `LightsNode` per set. */
+  #lightSets = new Map<string, LightsNode>();
+  /** Whether a lost device left the view without a renderer, until the next is made. */
+  #deviceLost = false;
+  /** Stops listening for a lost device. */
+  readonly #unlisten: () => void;
 
   /**
-   * `read` and `exists` reach the stage's assets (textures and UDIM tiles)
-   * as the asset loop's host does; without them textures draw as their
-   * fallbacks.
+   * A view drawing into `canvas` with `renderer`, the shared one
+   * (`sharedRenderer`, initialized). `read` and `exists` reach the stage's
+   * assets (textures and UDIM tiles) as the asset loop's host does; without
+   * them textures draw as their fallbacks.
    */
-  constructor(canvas: HTMLCanvasElement, read: AssetReader = async () => null, exists: AssetExists = async () => false) {
+  constructor(canvas: HTMLCanvasElement, renderer: WebGPURenderer, read: AssetReader = async () => null, exists: AssetExists = async () => false) {
     // Images arrive one by one: the draws are restyled once per batch of them.
     this.#textures = new TextureStore(read, exists, () => {
       this.onImages?.();
@@ -366,22 +301,51 @@ export class Viewport {
       }, 100);
     });
     this.#canvas = canvas;
-    this.#renderer = new WebGLRenderer({ canvas, antialias: true });
-    this.#renderer.setPixelRatio(window.devicePixelRatio);
-    this.#renderer.toneMapping = AgXToneMapping;
-    RectAreaLightUniformsLib.init();
-    this.#scene.background = new Color(0x20201e);
+    this.#renderer = renderer;
+    this.#target = new CanvasTarget(canvas);
+    this.#target.setPixelRatio(window.devicePixelRatio);
+    RectAreaLightNode.setLTC(RectAreaLightTexturesLib.init());
     this.#scene.add(this.#cameraLight, this.#ambient);
     this.#stageCamera.matrixAutoUpdate = false;
     this.#stageCamera.matrixWorldAutoUpdate = false;
+    // The stage camera's projection is converted to WebGPU's depth range here ({@link #prepareCamera}).
+    this.#stageCamera.coordinateSystem = WebGPUCoordinateSystem;
+    this.#camera.coordinateSystem = WebGPUCoordinateSystem;
+    this.#camera.updateProjectionMatrix();
     this.#grid = makeGrid("Y", 1);
     this.#scene.add(this.#grid);
     this.#controls = this.#makeControls();
     this.#resizer = new ResizeObserver(() => this.#resize());
     this.#resizer.observe(canvas);
-    // After the renderer's own listeners, which mark the context lost and make its state again.
-    canvas.addEventListener("webglcontextlost", this.#lost);
-    canvas.addEventListener("webglcontextrestored", this.#restored);
+    this.#unlisten = onRendererLost(() => this.#lost());
+  }
+
+  /**
+   * A lost device: every object and geometry let go (their GPU buffers went
+   * with the device), and once the shared renderer is made again, the
+   * draw list's owner refills what was released and updates the view from
+   * nothing ({@link onContextRestored}).
+   */
+  #lost(): void {
+    this.#deviceLost = true;
+    for (const id of [...this.#objects.keys()]) this.#drop(id);
+    for (const geometry of this.#geometries.values()) geometry.dispose();
+    this.#geometries.clear();
+    for (const material of this.#retired) material.dispose();
+    this.#retired = [];
+    this.#pending.clear();
+    this.#picker?.dispose();
+    this.#picker = null;
+    this.#synced = false;
+    sharedRenderer().then(
+      (renderer) => {
+        this.#renderer = renderer;
+        this.#deviceLost = false;
+        this.onContextRestored?.();
+        this.#draw();
+      },
+      (error: unknown) => console.error("WebGPU did not start again after a lost device", error),
+    );
   }
 
   /**
@@ -448,44 +412,42 @@ export class Viewport {
     const canvas = this.#canvas;
     const renderer = this.#renderer;
     const { clientWidth: width, clientHeight: height } = canvas;
-    if (width === 0 || height === 0 || renderer.getContext().isContextLost()) return null;
+    if (width === 0 || height === 0 || this.#deviceLost) return null;
     const started = performance.now();
     const pick = (this.#picker ??= new Picker());
-    // A run of ids per object, one per instance it draws.
+    // A run of ids per object, one per instance it draws, and its pick material in place of its own.
     pick.ids.clear();
-    for (const [id, object] of this.#objects) object.userData.pickBase = pick.ids.add(id, object instanceof InstancedMesh ? object.count : 1) ?? 0;
+    for (const [id, object] of this.#objects) {
+      object.userData.pickBase = pick.ids.add(id, object instanceof InstancedMesh ? object.count : 1) ?? 0;
+      pick.swapped.set(object, object.material);
+      object.material = isPoints(object) ? pick.points : pick.surfaces;
+    }
     const camera = this.#prepareCamera();
     pick.projection.copy(camera.projectionMatrix);
     const ratio = canvas.width / width;
     camera.projectionMatrix.premultiply(pick.window.set(...(pickWindow(x * ratio, y * ratio, PICK_SIZE, PICK_SIZE, canvas.width, canvas.height) as Matrix16)));
-    pick.material.uniforms.pickPointScale!.value = height / 2;
-    const background = this.#scene.background;
-    const target = renderer.getRenderTarget();
-    const alpha = renderer.getClearAlpha();
-    renderer.getClearColor(pick.clearColor);
-    this.#scene.background = null;
-    this.#scene.overrideMaterial = pick.material;
+    camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
     this.#grid.visible = false;
     try {
+      this.#setState();
       renderer.setRenderTarget(pick.target);
-      renderer.setClearColor(0x000000, 0);
       renderer.render(this.#scene, camera);
     } finally {
-      renderer.setRenderTarget(target);
-      renderer.setClearColor(pick.clearColor, alpha);
-      this.#scene.background = background;
-      this.#scene.overrideMaterial = null;
+      renderer.setRenderTarget(null);
+      for (const [object, material] of pick.swapped) object.material = material;
+      pick.swapped.clear();
       this.#grid.visible = true;
       camera.projectionMatrix.copy(pick.projection);
+      camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
     }
-    await renderer.readRenderTargetPixelsAsync(pick.target, 0, 0, PICK_SIZE, PICK_SIZE, pick.pixels);
+    const pixels = (await renderer.readRenderTargetPixelsAsync(pick.target, 0, 0, PICK_SIZE, PICK_SIZE)) as Uint8Array;
     this.lastPickMs = performance.now() - started;
     // The center pixel decides; off it, only a line or point is picked.
     for (const pixel of pick.order) {
-      const hit = pick.ids.find(unpackPickId(pick.pixels, 4 * pixel));
+      const hit = pick.ids.find(unpackPickId(pixels, 4 * readIndex(pixel, PICK_SIZE)));
       const object = hit === null ? undefined : this.#objects.get(hit.owner);
       if (hit === null || object === undefined) continue;
-      if (pixel !== pick.order[0] && !(object instanceof LineSegments || object instanceof Points)) continue;
+      if (pixel !== pick.order[0] && !(object instanceof LineSegments || isPoints(object))) continue;
       const view = this.#applied?.items.find((candidate) => candidate.item.id === hit.owner);
       if (view === undefined) continue;
       const { item } = view;
@@ -509,9 +471,9 @@ export class Viewport {
   onReleased: (() => void) | null = null;
 
   /**
-   * Called when a lost WebGL context is restored: the uploaded buffers are
-   * gone, and the released ones must be filled again (`DrawList.restore`)
-   * and the view updated with a reset.
+   * Called when the shared renderer is made again after a lost device: the
+   * uploaded buffers are gone, and the released ones must be filled again
+   * (`DrawList.restore`) and the view updated with a reset.
    */
   onContextRestored: (() => void) | null = null;
 
@@ -523,10 +485,9 @@ export class Viewport {
     return this.#textures.stats;
   }
 
-  /** Releases the renderer, geometries, materials and textures. */
+  /** Releases the canvas target, geometries, materials and textures; the shared renderer stays. */
   dispose(): void {
-    this.#canvas.removeEventListener("webglcontextlost", this.#lost);
-    this.#canvas.removeEventListener("webglcontextrestored", this.#restored);
+    this.#unlisten();
     this.#picker?.dispose();
     this.#resizer.disconnect();
     this.#controls.dispose();
@@ -536,7 +497,7 @@ export class Viewport {
     for (const geometry of this.#geometries.values()) geometry.dispose();
     this.#geometries.clear();
     for (const path of [...this.#lights.keys()]) this.#dropLight(path);
-    this.#renderer.dispose();
+    this.#target.dispose();
   }
 
   /**
@@ -667,8 +628,12 @@ export class Viewport {
       const light = lights.get(path);
       if (light !== undefined) this.#addLight(light);
     }
-    this.#link(scene);
+    // Linked again when what it reads may have changed: not as time plays.
+    const linking = added.size > 0 || restyle.size > 0 || update.reskinned.size > 0 || relit.length > 0 || update.lightsRemoved.size > 0 || update.links > 0;
+    const relinked = linking && this.#link(scene);
     if (reset || update.cameras.size > 0) this.#cameras = new Map(scene.cameras.map((camera) => [camera.path, camera]));
+    // New draws, materials or light sets: their pipelines compiled off the main thread.
+    if (added.size > 0 || restyle.size > 0 || update.reskinned.size > 0 || relinked) this.#compile();
     this.#controls.enabled = this.#looking() === null;
     // Framed when the bounds change, but not as time plays: an animated
     // extent would move the camera every frame.
@@ -695,14 +660,14 @@ export class Viewport {
     const styled = materials(view, selected, this.#applied?.materials ?? new Map(), this.#textures);
     const object: Drawn =
       view.skin?.mode === "gpu"
-        ? skinnedMesh(geometry, styled as MeshStandardMaterial | MeshStandardMaterial[], view)
+        ? skinnedMesh(geometry, styled as LitMaterial | LitMaterial[], view)
         : view.kind === "lines" || view.kind === "standinLines"
-        ? new LineSegments(geometry, styled as LineBasicMaterial)
+        ? new LineSegments(geometry, styled as LineBasicNodeMaterial)
         : view.kind === "points"
-          ? new Points(geometry, styled as PointsMaterial)
+          ? pointsMesh(geometry, styled as PointsNodeMaterial)
           : view.item.source.kind === "gprim" || view.item.source.kind === "drawMode"
-            ? new Mesh(geometry, styled as MeshStandardMaterial | MeshStandardMaterial[])
-            : new InstancedMesh(geometry, styled as MeshStandardMaterial | MeshStandardMaterial[], Math.max(1, placements));
+            ? new Mesh(geometry, styled as LitMaterial | LitMaterial[])
+            : new InstancedMesh(geometry, styled as LitMaterial | LitMaterial[], Math.max(1, placements));
     object.matrixAutoUpdate = false;
     this.#objects.set(view.item.id, object);
     this.#scene.add(object);
@@ -721,10 +686,12 @@ export class Viewport {
     const skin = view.skin;
     if (object === undefined || skin === null) return;
     object.matrix.fromArray(skin.world);
-    if (object instanceof SkinnedMesh) {
+    if (object instanceof SkinnedDraw) {
       const { bones, boneInverses } = object.skeleton;
       bones.forEach((bone, joint) => bone.matrixWorld.fromArray(skin.palette, 16 * joint));
       for (const inverse of boneInverses) inverse.fromArray(skin.bind);
+      // The joint palette the shader reads (and the bone texture, when it has one).
+      object.skeleton.update();
       // A blend-shaped rest pose, uploaded when it was refilled.
       if (skin.shaped && skin.positions !== null && skin.normals !== null && object.userData.rest !== skin.positions) {
         object.userData.rest = skin.positions;
@@ -775,9 +742,9 @@ export class Viewport {
 
   /**
    * The geometry of the item's buffer ({@link makeGeometry}), watched for
-   * its upload when it is a mesh's own vertices: once three.js has
-   * uploaded its index and positions (one render uploads them all), it is
-   * listed for {@link #releaseUploaded}.
+   * its upload when it is a mesh's own vertices: after each render,
+   * {@link #releaseUploaded} asks whether three.js has made its index's and
+   * positions' GPU buffers (one draw makes them all).
    */
   #makeGeometry(view: ViewItem): BufferGeometry {
     const geometry = makeGeometry(view);
@@ -785,13 +752,8 @@ export class Viewport {
     if (geometry.userData.decode === undefined || geometry.userData.skinned === true || geometry.index === null || position === undefined) return geometry;
     geometry.userData.key = view.item.buffer;
     geometry.userData.revision = view.buffers.revision;
-    let pending = 2;
-    const uploaded = () => {
-      pending -= 1;
-      if (pending === 0) this.#uploaded.push(geometry);
-    };
-    geometry.index.onUpload(uploaded);
-    (position instanceof InterleavedBufferAttribute ? position.data : (position as BufferAttribute)).onUpload(uploaded);
+    this.#pending.add(geometry);
+    geometry.addEventListener("dispose", () => this.#pending.delete(geometry));
     return geometry;
   }
 
@@ -805,26 +767,52 @@ export class Viewport {
   }
 
   /**
-   * Writes every draw's light-link masks: 0 in the slot of each three.js
-   * light whose `UsdLux` light `scene.unlit` says does not light the draw,
-   * 1 elsewhere. Slots move when lights come and go, so every draw is
-   * written; only uniforms change.
+   * Gives each draw's lit materials the lights that light it: the scene's
+   * (`lightsNode` `null`) when `scene.unlit` leaves it out of none, else a
+   * shared set of the rest ({@link #lightSet}). A material whose set is
+   * unchanged is left as it is; one whose set changed is rebuilt against a
+   * shader of that set, compiled only if no material of its shape met the
+   * set before. Answers whether any material's set changed.
    */
-  #link(scene: ViewportScene): void {
-    const slots = lightSlots(this.#scene);
+  #link(scene: ViewportScene): boolean {
+    const all: Object3D[] = [this.#cameraLight, this.#ambient];
+    for (const objects of this.#lights.values()) for (const object of objects) if ((object as { isLight?: boolean }).isLight === true) all.push(object);
+    const sets = new Map<string, LightsNode>();
+    // Each distinct list of unlinked lights resolved once.
+    const byUnlit = new Map<string, LightsNode | null>();
+    let changed = false;
     for (const [id, object] of this.#objects) {
       const unlit = scene.unlit.get(id);
-      for (const material of [object.material].flat()) {
-        if (!(material instanceof MeshStandardMaterial)) continue;
-        const masks = linkMasks(material);
-        for (const mask of Object.values(masks)) mask.fill(1);
-        if (unlit === undefined) continue;
-        for (const [light, [type, slot]] of slots) {
-          const key = this.#lightKeys.get(light);
-          if (key !== undefined && unlit.has(key) && slot < LINK_SLOTS) masks[type][slot] = 0;
+      let node: LightsNode | null = null;
+      if (unlit !== undefined) {
+        const signature = [...unlit].join("\n");
+        let found = byUnlit.get(signature);
+        if (found === undefined) {
+          const lit = linkedLights(all, (light) => this.#lightKeys.get(light), unlit);
+          found = lit === all ? null : this.#lightSet(lit, sets);
+          byUnlit.set(signature, found);
         }
+        node = found;
+      }
+      for (const material of [object.material].flat()) {
+        if (!(material instanceof MeshStandardNodeMaterial) || material.lightsNode === node) continue;
+        material.lightsNode = node;
+        material.needsUpdate = true;
+        changed = true;
       }
     }
+    // Sets no draw uses any more are let go.
+    this.#lightSets = sets;
+    return changed;
+  }
+
+  /** The one `LightsNode` of `lit`, kept in `sets` (the sets in use) and reused from the last link. */
+  #lightSet(lit: readonly Object3D[], sets: Map<string, LightsNode>): LightsNode {
+    const key = lightSetKey(lit.map((light) => light.id));
+    let node = sets.get(key) ?? this.#lightSets.get(key);
+    node ??= lights(lit as never[]);
+    sets.set(key, node);
+    return node;
   }
 
   #dropLight(path: string): void {
@@ -864,6 +852,8 @@ export class Viewport {
     this.#scene.remove(object);
     for (const material of [object.material].flat()) material.dispose();
     if (object instanceof InstancedMesh) object.dispose();
+    // A point set's geometry is its own (a quad per point over its samples).
+    if (isPoints(object)) object.geometry.dispose();
     this.#objects.delete(id);
   }
 
@@ -906,7 +896,8 @@ export class Viewport {
   #resize(): void {
     const { clientWidth: width, clientHeight: height } = this.#canvas;
     if (width === 0 || height === 0) return;
-    this.#renderer.setSize(width, height, false);
+    this.#target.setPixelRatio(window.devicePixelRatio);
+    this.#target.setSize(width, height, false);
     this.#camera.aspect = width / height;
     this.#camera.updateProjectionMatrix();
     this.#draw();
@@ -919,12 +910,49 @@ export class Viewport {
   }
 
   #render(): void {
+    if (this.#deviceLost) return;
     const camera = this.#prepareCamera();
     this.#cameraLight.position.setFromMatrixPosition(camera.matrixWorld);
-    this.#renderer.toneMappingExposure = this.#looking()?.camera?.linearExposureScale ?? 1;
+    this.#setState();
     this.#renderer.render(this.#scene, camera);
     this.#releaseUploaded();
   }
+
+  /**
+   * Points the shared renderer at this canvas with the view's output: AgX
+   * at the camera's exposure, cleared transparent (the page behind is the
+   * viewport's background). Before each render and compile here, since the
+   * material previews draw with the same renderer.
+   */
+  #setState(): void {
+    const renderer = this.#renderer;
+    renderer.setCanvasTarget(this.#target);
+    renderer.toneMapping = AgXToneMapping;
+    renderer.toneMappingExposure = this.#looking()?.camera?.linearExposureScale ?? 1;
+    renderer.setClearColor(0x000000, 0);
+  }
+
+  /**
+   * Compiles the pipelines the scene needs off the main thread, then draws:
+   * the draws made meanwhile skip what is still compiling instead of
+   * waiting for it (see the header).
+   */
+  #compile(): void {
+    if (this.#deviceLost) return;
+    const camera = this.#prepareCamera();
+    this.#setState();
+    const started = performance.now();
+    this.#renderer.compileAsync(this.#scene, camera).then(
+      () => {
+        this.lastCompileMs = performance.now() - started;
+        this.#draw();
+      },
+      (error: unknown) => console.warn("pipeline compile failed", error),
+    );
+  }
+
+  /** How long the last asynchronous compile took, in milliseconds (0 before the first). */
+  lastCompileMs = 0;
 
   /** The camera drawn through: the free one, or the stage camera with its matrices set for the canvas. */
   #prepareCamera(): Camera {
@@ -938,7 +966,8 @@ export class Viewport {
     const { clientWidth: width, clientHeight: height } = this.#canvas;
     const fitted = conformCamera(looking, "fit", height > 0 ? width / height : 1);
     const camera = this.#stageCamera;
-    camera.projectionMatrix.fromArray(fitted.projectionMatrix);
+    // OpenGL's clip depth, [-w, w], taken to WebGPU's [0, w].
+    camera.projectionMatrix.fromArray(fitted.projectionMatrix).premultiply(GL_TO_WEBGPU_DEPTH);
     camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
     camera.matrixWorldInverse.fromArray(fitted.view);
     camera.matrixWorld.copy(camera.matrixWorldInverse).invert();
@@ -951,15 +980,17 @@ export class Viewport {
    * released: the GPU holds them now.
    */
   #releaseUploaded(): void {
-    if (this.#uploaded.length === 0) return;
+    if (this.#pending.size === 0) return;
     let released = false;
-    for (const geometry of this.#uploaded) {
+    for (const geometry of this.#pending) {
+      const position = geometry.getAttribute("position") as BufferAttribute | InterleavedBufferAttribute;
+      if (!uploaded(this.#renderer, geometry.index!) || !uploaded(this.#renderer, position)) continue;
+      this.#pending.delete(geometry);
       const { key, revision } = geometry.userData as { key: number; revision: number };
       if (this.#geometries.get(key) !== geometry || this.onUploaded?.(key, revision) !== true) continue;
       dropArrays(geometry);
       released = true;
     }
-    this.#uploaded.length = 0;
     if (released) this.onReleased?.();
   }
 }
@@ -984,7 +1015,7 @@ function materials(
   selected: string | null,
   records: ReadonlyMap<string, MaterialItem>,
   textures: TextureStore,
-): MeshStandardMaterial | MeshStandardMaterial[] | LineBasicMaterial | PointsMaterial {
+): Styled {
   const { item } = view;
   const paths = [item.prim, ...item.instances];
   const subset = selected === null ? -1 : view.buffers.subsets.indexOf(selected);
@@ -997,16 +1028,9 @@ function materials(
   if (view.buffers.standin !== null) return standinMaterials(view.buffers.standin, highlighted, textures);
   if (view.kind === "lines") {
     const vertexColors = view.buffers.curves?.colors != null;
-    return new LineBasicMaterial({ color: tint(vertexColors), vertexColors });
+    return new LineBasicNodeMaterial({ color: tint(vertexColors), vertexColors });
   }
-  if (view.kind === "points") {
-    const points = view.buffers.points!;
-    const vertexColors = points.colors !== null;
-    // One size for the set (three.js points take one): its widest point's
-    // width, in world units with size attenuation.
-    const size = points.widths.reduce((widest, width) => Math.max(widest, width), 0);
-    return new PointsMaterial({ color: tint(vertexColors), vertexColors, size, sizeAttenuation: true });
-  }
+  if (view.kind === "points") return pointsMaterial(tint(view.buffers.points!.colors !== null), view.buffers.points!.colors !== null);
   const colors = view.buffers.vertices.color;
   // One map for every range's material: a subset's reads its sets' channels.
   const channels = uvChannels(view.buffers.vertices);
@@ -1028,7 +1052,7 @@ function materials(
   const material = (color: readonly [number, number, number] | null) => {
     const vertexColors = color === null && colors !== null;
     const [r, g, b] = vertexColors ? [1, 1, 1] : (color ?? view.color);
-    return new MeshStandardMaterial({
+    return new MeshStandardNodeMaterial({
       color: new Color().setRGB(r, g, b),
       vertexColors,
       roughness: 0.7,
@@ -1054,17 +1078,17 @@ function subsetMaterials(
   subset: number,
   records: ReadonlyMap<string, MaterialItem>,
   textures: TextureStore,
-): MeshStandardMaterial | MeshStandardMaterial[] {
+): LitMaterial | LitMaterial[] {
   const base = materials(view, null, records, textures);
   // One range (the subset is every face): no groups, one material.
   if (view.buffers.mesh.ranges.length <= 1) {
-    const material = (Array.isArray(base) ? base[0] : base) as MeshStandardMaterial;
+    const material = (Array.isArray(base) ? base[0] : base) as LitMaterial;
     material.emissive = new Color(0x2f5fd0);
     material.emissiveIntensity = 0.6;
     return material;
   }
   const each = view.buffers.mesh.ranges.map((_, index) => {
-    const material = (Array.isArray(base) ? base[index] : index === 0 ? base : (base as MeshStandardMaterial).clone()) as MeshStandardMaterial;
+    const material = (Array.isArray(base) ? base[index] : index === 0 ? base : (base as LitMaterial).clone()) as LitMaterial;
     return material;
   });
   view.buffers.mesh.ranges.forEach((range, index) => {
@@ -1118,23 +1142,32 @@ function decodeMatrix(vertices: MeshVertices): Matrix4 | null {
 /**
  * A three.js attribute over a stagehand {@link VertexAttribute}'s array,
  * not copied: interleaved where a vertex is padded (`snorm16` ×4 for three
- * components), half floats read as `HALF_FLOAT`, integers normalized.
+ * components), integers normalized (`snorm16x4`, `snorm8x4`), half floats
+ * a `Float16Array` view of the same bits (`float16x2`: three.js widens a
+ * `Uint16Array` of half floats to 32-bit integers, as it would indices).
  */
 function threeAttribute(attribute: VertexAttribute): BufferAttribute | InterleavedBufferAttribute {
+  const { array: stored } = attribute;
+  const array = attribute.type === "float16" ? new Float16(stored.buffer, stored.byteOffset, stored.length) : stored;
   if (attribute.stride !== attribute.size) {
-    return new InterleavedBufferAttribute(new InterleavedBuffer(attribute.array, attribute.stride), attribute.size, 0, attribute.normalized);
+    return new InterleavedBufferAttribute(new InterleavedBuffer(array as Float32Array, attribute.stride), attribute.size, 0, attribute.normalized);
   }
-  if (attribute.type === "float16") {
-    // Over the array as it is: the constructor would copy it.
-    return Object.assign(new Float16BufferAttribute(new Uint16Array(0), attribute.size), { array: attribute.array, count: attribute.array.length / attribute.size });
-  }
-  return new BufferAttribute(attribute.array, attribute.size, attribute.normalized);
+  return new BufferAttribute(array as Float32Array, attribute.size, attribute.normalized);
+}
+
+/** `Float16Array`, which every browser with WebGPU has (TypeScript's library does not name it yet). */
+const Float16 = (globalThis as unknown as { Float16Array: new (buffer: ArrayBufferLike, byteOffset: number, length: number) => ArrayLike<number> }).Float16Array;
+
+/** Whether three.js has made `attribute`'s GPU buffer (an interleaved one's buffer's). */
+function uploaded(renderer: WebGPURenderer, attribute: BufferAttribute | InterleavedBufferAttribute): boolean {
+  const held = attribute instanceof InterleavedBufferAttribute ? attribute.data : attribute;
+  return (renderer.backend as unknown as { get(object: object): { buffer?: unknown } }).get(held).buffer !== undefined;
 }
 
 /**
  * Drops the arrays of a geometry three.js has uploaded: each attribute's
  * (an interleaved one's buffer's) and the index's become empty arrays of
- * their type. Counts stay, so it draws as before; only a lost context,
+ * their type. Counts stay, so it draws as before; only a lost device,
  * which needs the arrays again, makes it again ({@link Viewport.onContextRestored}).
  */
 function dropArrays(geometry: BufferGeometry): void {
@@ -1145,14 +1178,19 @@ function dropArrays(geometry: BufferGeometry): void {
   if (geometry.index !== null) empty(geometry.index);
 }
 
-/** The three.js objects a draw item becomes. */
-type Drawn = Mesh | InstancedMesh | LineSegments | Points;
+/** The three.js objects a draw item becomes: a point set is a `Mesh` of a quad per point ({@link pointsMesh}). */
+type Drawn = Mesh | InstancedMesh | LineSegments;
+
+/** Whether `object` draws a point set. */
+function isPoints(object: Object3D): boolean {
+  return object.userData.points === true;
+}
 
 /** Whether `object` draws a view of `kind`: lines, points, or triangles. */
 function fits(object: Drawn, kind: string): boolean {
   if (kind === "lines" || kind === "standinLines") return object instanceof LineSegments;
-  if (kind === "points") return object instanceof Points;
-  return object instanceof Mesh;
+  if (kind === "points") return isPoints(object);
+  return object instanceof Mesh && !isPoints(object);
 }
 
 /** A curves' samples (with their line segments) or a point set's points, as positions and colors. */
@@ -1165,28 +1203,107 @@ function samplesOf(view: ViewItem): { positions: Float32Array; colors: Float32Ar
 
 /** New sample positions and colors in place: a curves' or point set's refill. */
 function refillSamples(geometry: BufferGeometry, view: ViewItem): void {
+  if (geometry.userData.points === true) {
+    setPoints(geometry as InstancedBufferGeometry, view);
+    return;
+  }
   const { positions, colors } = samplesOf(view);
   geometry.setAttribute("position", new BufferAttribute(positions, 3));
   if (colors !== null) geometry.setAttribute("color", new BufferAttribute(colors, 3));
   geometry.computeBoundingSphere();
 }
 
-/** New materials for `object`: a skinned draw's patched for its skinning. */
-function restyled(object: Drawn, styled: ReturnType<typeof materials>): ReturnType<typeof materials> {
-  return object instanceof SkinnedMesh ? skinnedMaterials(styled as MeshStandardMaterial | MeshStandardMaterial[]) : styled;
+/** New materials for `object`: a skinned draw's skinning it ({@link withSkinning}). */
+function restyled(object: Drawn, styled: Styled): Styled {
+  return object instanceof SkinnedDraw ? skinnedMaterials(styled as LitMaterial | LitMaterial[]) : styled;
+}
+
+/** The materials of a {@link SkinnedDraw}, each skinning it. */
+function skinnedMaterials<T extends LitMaterial | LitMaterial[]>(styled: T): T {
+  for (const material of [styled].flat()) withSkinning(material);
+  return styled;
+}
+
+/** A quad's corners, about its center, one unit across: each point's square, scaled by its width. */
+const QUAD = [-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0];
+
+/**
+ * A point set's geometry: one quad, drawn once per point (instanced), with
+ * each point's position, width (its diameter) and color as per-instance
+ * attributes ({@link pointsMaterial} reads them).
+ */
+function pointsGeometry(view: ViewItem): InstancedBufferGeometry {
+  const geometry = new InstancedBufferGeometry();
+  geometry.setIndex([0, 1, 2, 0, 2, 3]);
+  geometry.setAttribute("position", new BufferAttribute(new Float32Array(QUAD), 3));
+  geometry.userData.points = true;
+  setPoints(geometry, view);
+  return geometry;
+}
+
+/** A point set's samples as its geometry's per-instance attributes, new or refilled. */
+function setPoints(geometry: InstancedBufferGeometry, view: ViewItem): void {
+  const points = view.buffers.points!;
+  const count = points.positions.length / 3;
+  const widths = points.widths.length === count ? points.widths : new Float32Array(count).fill(points.widths[0] ?? 1);
+  geometry.setAttribute("pointPosition", new InstancedBufferAttribute(points.positions, 3));
+  geometry.setAttribute("pointWidth", new InstancedBufferAttribute(widths, 1));
+  if (points.colors !== null) geometry.setAttribute("pointColor", new InstancedBufferAttribute(points.colors, 3));
+  geometry.instanceCount = count;
+}
+
+/** The canvas's size in device pixels, as {@link HALF_HEIGHT} reads it. */
+const DRAWING_SIZE = new Vector2();
+
+/** Half the canvas's height in device pixels: a point's width at depth 1 is this many pixels per unit. */
+const HALF_HEIGHT = (uniform(1) as Node).setGroup(renderGroup).onRenderUpdate(({ renderer }: { renderer: WebGPURenderer }) => renderer.getDrawingBufferSize(DRAWING_SIZE).y / 2);
+
+/**
+ * The nodes every point set's material places its quads by: each point's
+ * position and color, and its size on screen, in CSS pixels as
+ * `PointsNodeMaterial.sizeNode` takes it: its width attenuated with
+ * distance as `PointsMaterial` attenuated a point's size in WebGL
+ * (`width · height / 2 / depth` device pixels), and at least a device
+ * pixel, as WebGL's points were, so a far point still shows and picks.
+ */
+const POINT = {
+  position: attribute("pointPosition", "vec3"),
+  size: max(attribute("pointWidth", "float").mul(HALF_HEIGHT).div(positionView.z.negate()), 1).div(screenDPR),
+  color: attribute("pointColor", "vec3"),
+};
+
+/**
+ * A point set's material: camera-facing squares of each point's width in
+ * world units ({@link POINT}), in `color` (times each point's color when
+ * `vertexColors`). Unlit.
+ */
+function pointsMaterial(color: Color, vertexColors: boolean): PointsNodeMaterial {
+  const material = new PointsNodeMaterial({ color, sizeAttenuation: false, transparent: false });
+  material.positionNode = POINT.position;
+  material.sizeNode = POINT.size;
+  if (vertexColors) material.colorNode = vec4(materialColor.mul(POINT.color), 1);
+  return material;
+}
+
+/** A point set's object: a `Mesh` of its quads (the point material draws it as sprites), never culled by its quad's bounds. */
+function pointsMesh(geometry: BufferGeometry, material: PointsNodeMaterial): Mesh {
+  const mesh = new Mesh(geometry, material);
+  mesh.userData.points = true;
+  mesh.frustumCulled = false;
+  return mesh;
 }
 
 /**
- * A `SkinnedMesh` drawing a GPU-skinned item: its geometry gets the
+ * A {@link SkinnedDraw} drawing a GPU-skinned item: its geometry gets the
  * gathered influences as `skinIndex`, `skinWeight`, `skinIndex1` and
  * `skinWeight1`, and the mesh a skeleton of one bone per joint, outside
  * the scene graph, posed by {@link Viewport} each time. Never
  * frustum-culled: three.js would cull it by the bounds of one pose.
  */
-function skinnedMesh(geometry: BufferGeometry, material: MeshStandardMaterial | MeshStandardMaterial[], view: ViewItem): SkinnedMesh {
+function skinnedMesh(geometry: BufferGeometry, material: LitMaterial | LitMaterial[], view: ViewItem): SkinnedDraw {
   const skin = view.skin!;
   const influences = skin.influences!;
-  // Eight per vertex, as two attributes of four ({@link patchSkinning}).
+  // Eight per vertex, as two attributes of four (`skinning.ts`).
   const joints = new InterleavedBuffer(influences.joints, influences.slots);
   const weights = new InterleavedBuffer(influences.weights, influences.slots);
   geometry.setAttribute("skinIndex", new InterleavedBufferAttribute(joints, 4, 0));
@@ -1200,17 +1317,14 @@ function skinnedMesh(geometry: BufferGeometry, material: MeshStandardMaterial | 
     return bone;
   });
   const inverse = new Matrix4().fromArray(skin.bind);
-  const mesh = new SkinnedMesh(geometry, skinnedMaterials(material));
-  mesh.bindMode = DetachedBindMode;
-  mesh.bind(new Skeleton(bones, bones.map(() => inverse.clone())), new Matrix4());
-  mesh.frustumCulled = false;
-  return mesh;
+  return new SkinnedDraw(geometry, skinnedMaterials(material), new Skeleton(bones, bones.map(() => inverse.clone())));
 }
 
 /** A geometry over the item's stagehand buffer: indexed, with normals, colors and a group per range ({@link setVertices}). */
 function makeGeometry(view: ViewItem): BufferGeometry {
   if (view.buffers.standin !== null) return standinGeometry(view.buffers.standin);
-  if (view.kind === "lines" || view.kind === "points") {
+  if (view.kind === "points") return pointsGeometry(view);
+  if (view.kind === "lines") {
     // Curves drawn as lines: two sample indices per segment; points: one vertex each.
     const { positions, colors, lines } = samplesOf(view);
     const geometry = new BufferGeometry();
@@ -1235,215 +1349,58 @@ const PICK_SIZE = 7;
 /** Sixteen numbers, as `Matrix4.set` takes them. */
 type Matrix16 = [number, number, number, number, number, number, number, number, number, number, number, number, number, number, number, number];
 
-/**
- * The pick shader: every draw's fragments write its pick id, the object's
- * first (`pickBase`) plus `gl_InstanceID`, as four bytes, low first. It
- * places vertices as three.js's own shaders do (instancing, and skinning
- * with the editor's eight influences, {@link SKINNING}); points are sized
- * as `PointsMaterial` attenuates them (`pickPointSize`, 0 for anything
- * else).
- */
-const PICK_VERTEX = SKINNING.reduce(
-  (shader, [include, chunk]) => shader.replace(include, chunk),
-  `#include <common>
-#include <skinning_pars_vertex>
-uniform highp uint pickBase;
-uniform float pickPointSize;
-uniform float pickPointScale;
-flat out highp uint vPick;
-void main() {
-	#include <skinbase_vertex>
-	#include <begin_vertex>
-	#include <skinning_vertex>
-	#include <project_vertex>
-	gl_PointSize = pickPointSize > 0.0 ? max( 1.0, pickPointSize * pickPointScale / - mvPosition.z ) : 1.0;
-	vPick = pickBase + uint( gl_InstanceID );
-}`,
-);
+/** OpenGL's clip depth taken to WebGPU's: `z' = (z + w) / 2`. */
+const GL_TO_WEBGPU_DEPTH = new Matrix4().set(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
 
-const PICK_FRAGMENT = `flat in highp uint vPick;
-void main() {
-	gl_FragColor = vec4( float( vPick & 255u ), float( ( vPick >> 8 ) & 255u ), float( ( vPick >> 16 ) & 255u ), float( vPick >> 24 ) ) / 255.0;
-}`;
+/** A pick id as the four bytes of an RGBA8 texel, low byte in red ({@link unpackPickId}). */
+function pickBytes(id: Node): Node {
+  return vec4(id.bitAnd(255), id.shiftRight(8).bitAnd(255), id.shiftRight(16).bitAnd(255), id.shiftRight(24)).div(255);
+}
 
 /**
- * What a pick reuses, made at the first: the target and its pixels, the
- * shader (one program for every draw, its uniforms written per object in
- * `onBeforeRender`), the ids and the matrices it swaps. A pick allocates
- * nothing per object or per frame.
+ * What a pick reuses, made at the first: the target, the materials (one
+ * pipeline per object shape, their id uniform written per object), the
+ * ids and the matrices it swaps. A pick allocates nothing per object but
+ * the swap of its material.
  */
 class Picker {
-  readonly target = new WebGLRenderTarget(PICK_SIZE, PICK_SIZE);
-  readonly pixels = new Uint8Array(4 * PICK_SIZE * PICK_SIZE);
+  readonly target = new RenderTarget(PICK_SIZE, PICK_SIZE);
   readonly order = pickOrder(PICK_SIZE);
   readonly ids = new PickIds();
   readonly projection = new Matrix4();
   readonly window = new Matrix4();
-  readonly clearColor = new Color();
-  readonly material = new ShaderMaterial({
-    vertexShader: PICK_VERTEX,
-    fragmentShader: PICK_FRAGMENT,
-    uniforms: { pickBase: { value: 0 }, pickPointSize: { value: 0 }, pickPointScale: { value: 1 } },
-    side: DoubleSide,
-    blending: 0,
-    toneMapped: false,
-  });
+  /** Each object's own material while the pick material draws it. */
+  readonly swapped = new Map<Drawn, Drawn["material"]>();
+  /** The object's first pick id (`userData.pickBase`), written as each object is drawn. */
+  readonly #base: Node = (uniform(0, "uint") as Node).onObjectUpdate(({ object }: { object: Object3D }) => (object.userData.pickBase as number | undefined) ?? 0);
+  /**
+   * Surfaces and lines: the object's first id plus the instance's index,
+   * placed as three.js places them (instancing, and the editor's skinning),
+   * passed to the fragment unblended (`flat`).
+   */
+  readonly surfaces = withSkinning(new NodeMaterial());
+  /** Points: the object's id alone (its quads are instances), placed as the point material places them. */
+  readonly points = new PointsNodeMaterial({ sizeAttenuation: false, transparent: false });
 
   constructor() {
-    const uniforms = this.material.uniforms;
-    this.material.onBeforeRender = (_renderer, _scene, _camera, _geometry, object) => {
-      uniforms.pickBase!.value = (object.userData.pickBase as number | undefined) ?? 0;
-      uniforms.pickPointSize!.value = object instanceof Points ? (object.material as PointsMaterial).size : 0;
-      this.material.uniformsNeedUpdate = true;
-    };
+    for (const material of [this.surfaces, this.points]) {
+      material.side = DoubleSide;
+      material.blending = NoBlending;
+      material.lights = false;
+    }
+    const id = varying(pickBytes(this.#base.add(instanceIndex))) as Node;
+    id.setInterpolation("flat");
+    this.surfaces.fragmentNode = id;
+    this.points.positionNode = POINT.position;
+    this.points.sizeNode = POINT.size;
+    this.points.fragmentNode = pickBytes(this.#base);
   }
 
   dispose(): void {
     this.target.dispose();
-    this.material.dispose();
+    this.surfaces.dispose();
+    this.points.dispose();
   }
-}
-
-/** The lights of one three.js type a material is linked against; more are lit as three.js lights them. */
-const LINK_SLOTS = 8;
-
-/** The three.js light types whose contributions a link mask scales, by their uniform's suffix. */
-type LinkType = "Point" | "Spot" | "Directional" | "RectArea" | "Hemisphere";
-
-/** A material's link masks: per light type, 1 where the light in that slot lights it, 0 where a light link leaves it out. */
-type LinkMasks = Record<LinkType, Float32Array>;
-
-/**
- * `lights_fragment_begin` with each light's contribution scaled by its
- * slot's mask; `null` if this three.js's chunk does not have the lines
- * patched, and draws are then lit by every light.
- */
-const LINKED_LIGHTS = ((): string | null => {
-  let chunk = ShaderChunk.lights_fragment_begin;
-  const guarded = (statement: string) => `\n\t\t#if ( UNROLLED_LOOP_INDEX < ${LINK_SLOTS} )\n\t\t${statement}\n\t\t#endif\n`;
-  const patches: [string, string][] = [
-    ["pointLight = pointLights[ i ];", `pointLight = pointLights[ i ];${guarded("pointLight.color *= linkPoint[ i ];")}`],
-    ["spotLight = spotLights[ i ];", `spotLight = spotLights[ i ];${guarded("spotLight.color *= linkSpot[ i ];")}`],
-    ["directionalLight = directionalLights[ i ];", `directionalLight = directionalLights[ i ];${guarded("directionalLight.color *= linkDirectional[ i ];")}`],
-    ["rectAreaLight = rectAreaLights[ i ];", `rectAreaLight = rectAreaLights[ i ];${guarded("rectAreaLight.color *= linkRectArea[ i ];")}`],
-    [
-      "irradiance += getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal );",
-      `${guarded("irradiance += ( linkHemisphere[ i ] - 1.0 ) * getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal );")}irradiance += getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal );`,
-    ],
-  ];
-  for (const [line, patched] of patches) {
-    if (!chunk.includes(line)) return null;
-    chunk = chunk.replace(line, patched);
-  }
-  return chunk;
-})();
-
-/** The uniforms the patched chunk reads. */
-const LINK_UNIFORMS = (["Point", "Spot", "Directional", "RectArea", "Hemisphere"] as const)
-  .map((type) => `uniform float link${type}[ ${LINK_SLOTS} ];`)
-  .join("\n");
-
-/**
- * The patches a material's shader carries: its light-link masks
- * ({@link linkMasks}) and the editor's skinning ({@link skinnedMaterials}).
- * One `onBeforeCompile` applies whichever it has, after the material's own
- * (its maps' channels, `readChannels`), so all compose on one material, and its `customProgramCacheKey` names them, so materials
- * patched alike share one program and never one patched otherwise (three.js
- * would key every material with a custom `onBeforeCompile` by the
- * function's source, the same for all of them).
- */
-interface Patches {
-  links: LinkMasks | null;
-  skinning: boolean;
-}
-
-/** The material's patches, its shader hooked the first time. */
-function patches(material: MeshStandardMaterial): Patches {
-  const kept = material.userData.patches as Patches | undefined;
-  if (kept !== undefined) return kept;
-  const patched: Patches = { links: null, skinning: false };
-  material.userData.patches = patched;
-  // After the material's own patch (`readChannels`, the maps' channels), keyed with it.
-  const before = material.onBeforeCompile;
-  const own = material.customProgramCacheKey();
-  material.onBeforeCompile = (shader, renderer) => {
-    before.call(material, shader, renderer);
-    const { links, skinning } = patched;
-    if (links !== null && LINKED_LIGHTS !== null) {
-      for (const type of Object.keys(links) as LinkType[]) shader.uniforms[`link${type}`] = { value: links[type] };
-      shader.fragmentShader = shader.fragmentShader
-        .replace("void main() {", `${LINK_UNIFORMS}\nvoid main() {`)
-        .replace("#include <lights_fragment_begin>", LINKED_LIGHTS);
-    }
-    if (skinning) for (const [include, chunk] of SKINNING) shader.vertexShader = shader.vertexShader.replace(include, chunk);
-  };
-  material.customProgramCacheKey = () =>
-    [own, patched.links !== null && LINKED_LIGHTS !== null ? "light-links" : "", patched.skinning ? "usdskel-skinning" : ""].join("|");
-  return patched;
-}
-
-/** The material's link masks, its shader patched the first time. */
-function linkMasks(material: MeshStandardMaterial): LinkMasks {
-  const patched = patches(material);
-  if (patched.links !== null) return patched.links;
-  patched.links = {
-    Point: new Float32Array(LINK_SLOTS).fill(1),
-    Spot: new Float32Array(LINK_SLOTS).fill(1),
-    Directional: new Float32Array(LINK_SLOTS).fill(1),
-    RectArea: new Float32Array(LINK_SLOTS).fill(1),
-    Hemisphere: new Float32Array(LINK_SLOTS).fill(1),
-  };
-  // A program compiled without the masks is compiled again.
-  material.needsUpdate = true;
-  return patched.links;
-}
-
-/** The materials of a {@link skinnedMesh}, their shaders patched with the editor's skinning ({@link SKINNING}). */
-function skinnedMaterials<T extends MeshStandardMaterial | MeshStandardMaterial[]>(styled: T): T {
-  for (const material of [styled].flat()) {
-    const patched = patches(material);
-    if (patched.skinning) continue;
-    patched.skinning = true;
-    material.needsUpdate = true;
-  }
-  return styled;
-}
-
-/**
- * Each light's type and slot as `WebGLLights` numbers them: lights of a
- * type in the order the renderer meets them, a depth-first walk of the
- * visible objects, shadow-casting and textured ones first (`castShadow`,
- * `map`), stably.
- */
-function lightSlots(scene: Scene): Map<Object3D, [LinkType, number]> {
-  const found: Object3D[] = [];
-  const walk = (object: Object3D) => {
-    if (!object.visible) return;
-    if ((object as { isLight?: boolean }).isLight) found.push(object);
-    for (const child of object.children) walk(child);
-  };
-  walk(scene);
-  const rank = (light: Object3D) => ((light as { castShadow?: boolean }).castShadow ? 2 : 0) + ((light as { map?: unknown }).map ? 1 : 0);
-  found.sort((a, b) => rank(b) - rank(a));
-  const counts: Record<LinkType, number> = { Point: 0, Spot: 0, Directional: 0, RectArea: 0, Hemisphere: 0 };
-  const slots = new Map<Object3D, [LinkType, number]>();
-  for (const light of found) {
-    const type: LinkType | null =
-      light instanceof PointLight
-        ? "Point"
-        : light instanceof SpotLight
-          ? "Spot"
-          : light instanceof DirectionalLight
-            ? "Directional"
-            : light instanceof RectAreaLight
-              ? "RectArea"
-              : light instanceof HemisphereLight
-                ? "Hemisphere"
-                : null;
-    if (type === null) continue;
-    slots.set(light, [type, counts[type]++]);
-  }
-  return slots;
 }
 
 /**

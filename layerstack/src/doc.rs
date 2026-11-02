@@ -4363,6 +4363,38 @@ impl Layer {
     /// may be one of the layer's sublayers by asset path
     /// ([`SublayerEntry::unresolved`]), whose binding changes the layer
     /// stacks holding the layer.
+    /// Whether an arc composition has yet to resolve names `asset`: an
+    /// unresolved sublayer (or one authored as an expression), or a
+    /// deferred reference or payload of a prim or variant spec.
+    fn names_deferred_asset(&self, asset: &str) -> bool {
+        if self.sublayers.iter().any(|sublayer| {
+            sublayer.is_unresolved()
+                && (sublayer.is_expression() || sublayer.asset.as_deref() == Some(asset))
+        }) {
+            return true;
+        }
+        let asset = crate::asset::FormatArgs::strip(asset);
+        let names = |op: &ListOp<Reference>| {
+            op.items().any(|arc| {
+                arc.deferred
+                    && arc
+                        .asset
+                        .as_deref()
+                        .is_some_and(|named| crate::asset::FormatArgs::strip(named) == asset)
+            })
+        };
+        self.prims
+            .values()
+            .chain(self.variant_prims.values().flatten())
+            .any(|spec| {
+                names(&spec.references)
+                    || names(&spec.payloads)
+                    || spec.variant_branches().any(|branch| {
+                        names(&branch.spec.references) || names(&branch.spec.payloads)
+                    })
+            })
+    }
+
     fn deferred_arc_paths(&self, assets: &[&str]) -> Option<Vec<PathId>> {
         if self.known_without_reference_arcs()
             || self.sublayers.iter().any(|sublayer| {
@@ -5217,6 +5249,37 @@ impl InMemoryStore {
             let changed: Vec<&str> = changed.iter().map(|asset| &**asset).collect();
             let paths = source.deferred_arc_paths(&changed);
             source.record_change(true, paths);
+        }
+    }
+
+    /// Records the layers several asset paths of the arcs `anchor`
+    /// authors resolve to, as [`Self::insert_asset_layers`] does, for a host
+    /// that has just published those arcs' specs in an edit the stages
+    /// recompose (a reload publishing a layer's new content with
+    /// [`crate::Transaction::transfer_content`]): a path a deferred arc
+    /// ([`Reference::deferred`]) names records its change as
+    /// [`Self::insert_asset_layers`] does; the others record none, as the
+    /// resolved arcs naming them carry their layers and were recomposed with
+    /// their specs.
+    pub fn insert_published_asset_layers<A: Into<Arc<str>>>(
+        &mut self,
+        anchor: LayerId,
+        bindings: impl IntoIterator<Item = (A, LayerId)>,
+    ) {
+        let mut deferred: Vec<(Arc<str>, LayerId)> = Vec::new();
+        let source = self.layers.get(&anchor);
+        let assets = self.asset_layers.entry(anchor).or_default();
+        for (asset_path, layer) in bindings {
+            let asset_path: Arc<str> = asset_path.into();
+            let named = source.is_some_and(|source| source.names_deferred_asset(&asset_path));
+            if named {
+                deferred.push((asset_path, layer));
+            } else {
+                assets.insert(asset_path, layer);
+            }
+        }
+        if !deferred.is_empty() {
+            self.insert_asset_layers(anchor, deferred);
         }
     }
 

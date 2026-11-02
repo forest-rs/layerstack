@@ -106,6 +106,7 @@ pub(crate) mod same;
 mod spec;
 mod target;
 mod transaction;
+mod transfer;
 mod variant_sets;
 
 #[cfg(test)]

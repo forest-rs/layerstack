@@ -1145,6 +1145,9 @@ impl LiveStage {
             .filter(|(prim, _)| changes.changed_info_only.contains(prim))
             .map(|(prim, fields)| crate::PrimPropertyChanges { prim, fields })
             .collect();
+        if !outcome.reloaded.is_empty() {
+            self.include_reloaded(store, &mut changes, &outcome.reloaded);
+        }
         // A property field edited where the transaction otherwise changed
         // only inert specs (a relationship's targets a namespace edit
         // repaired, say) changes its prim info-only with that field, as
@@ -1188,6 +1191,63 @@ impl LiveStage {
             changes,
             asset_requests: Vec::new(),
         })
+    }
+
+    /// Lists, info-only, where the layers `reloaded` compose
+    /// ([`Transaction::mark_reloaded`]): the pseudo-root for a layer of the
+    /// stage's own layer stack, otherwise each prim composing a spec at a
+    /// child of the layer's pseudo-root, unless resynced already; such a
+    /// prim's entry has no property inventory, as anything of it may have
+    /// changed.
+    ///
+    /// OpenUSD: `SdfChangeList::DidReloadLayerContent` records
+    /// `didReloadContent` at the layer's pseudo-root, and
+    /// `UsdStage::_HandleLayersDidChange` maps that site's info change to the
+    /// stage paths composing from it.
+    fn include_reloaded(
+        &mut self,
+        store: &dyn LayerStore,
+        changes: &mut Changes,
+        reloaded: &[LayerId],
+    ) {
+        let pseudo_root = store.paths().intern(crate::Path::root());
+        let mut found = Vec::new();
+        for &layer in reloaded {
+            if self.stage.layer_stack().contains(&layer) {
+                found.push(pseudo_root);
+                continue;
+            }
+            let Some(root) = store.layer(layer).and_then(|l| l.prims.get(&pseudo_root)) else {
+                continue;
+            };
+            for name in &root.authored_children {
+                let child = store.paths().resolve(pseudo_root).join(&[*name]);
+                if let Some(child) = store.paths().lookup(&child) {
+                    found.extend(self.source_share(layer).prims(child).copied());
+                }
+            }
+        }
+        let resynced: HashSet<PathId> = changes.resynced.iter().copied().collect();
+        let mut reported = HashSet::new();
+        for prim in found {
+            if (prim == pseudo_root || self.stage.has_prim(prim))
+                && !resynced.contains(&prim)
+                && !is_beneath_set(store, prim, &resynced)
+            {
+                reported.insert(prim);
+                if !changes.changed_info_only.contains(&prim) {
+                    changes.changed_info_only.push(prim);
+                }
+            }
+        }
+        // Anything of a prim composing a layer read again may have changed:
+        // its info-only entry has no field inventory.
+        changes
+            .property_changes
+            .retain(|entry| !reported.contains(&entry.prim));
+        if !reported.is_empty() {
+            changes.sort(store.paths(), store.tokens());
+        }
     }
 
     /// Updates local namespace regions using the source index. Composition of

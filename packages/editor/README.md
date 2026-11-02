@@ -56,7 +56,10 @@ nothing more.
   painted before work that holds the page begins, so a large root layer's
   read is announced, not a frozen page. Below that are what has arrived
   and the time taken, and **Cancel** keeps the scene the editor had. Once
-  the scene is drawn, a corner note counts the textures still loading.
+  the scene is drawn, a corner note counts the textures still loading and
+  the decodes in flight. Textures are decoded and scaled in a few workers,
+  off the page's thread, and the draws waiting on them are restyled a
+  budgeted batch a frame as they arrive, so the viewport keeps drawing.
 - **Draw scope and asset view.** The viewport's **Scene | Selection |
   Nothing** switch chooses what is drawn: the whole scene, the selection
   alone, or nothing (the prims, inspector, layers, shading and asset loop
@@ -135,12 +138,13 @@ nothing more.
 - **Draw modes.** A model whose `model:drawMode` applies is drawn by its
   stand-in, as Hydra draws it: axes for `origin`, its box's edges for
   `bounds`, its card textures on quads for `cards` (cut out at their alpha,
-  in `model:drawModeColor` until or unless they load). The inspector's
-  **Draw mode** section, on prims with `GeomModelAPI`, picks a prim's mode
-  (inherited, itself, origin, bounds or cards) and whether it applies it;
-  a mode on an assembly reaches the components beneath. An asset-structure
-  scene with card textures and no geometry (ALab's) shows as its lab once
-  `/root/alab_set01` draws as cards.
+  in `model:drawModeColor` until or unless they load); a model's cards are
+  one draw, its six textures in one material, as Hydra draws them. The
+  inspector's **Draw mode** section, on prims with `GeomModelAPI`, picks a
+  prim's mode (inherited, itself, origin, bounds or cards) and whether it
+  applies it; a mode on an assembly reaches the components beneath. An
+  asset-structure scene with card textures and no geometry draws once its
+  set's model draws as cards.
 - **Inspector.** The selected prim as the stage composes it: its type,
   specifier and kind; active and instanceable; its transform as
   translation, rotation, scale and pivot, each field authoring its one op as

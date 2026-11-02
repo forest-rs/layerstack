@@ -87,7 +87,13 @@ export function ViewportPane() {
             down.current = null;
             if (start === null || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) return;
             const rect = event.currentTarget.getBoundingClientRect();
-            store.select(store.viewport?.pick(event.clientX - rect.left, event.clientY - rect.top) ?? null);
+            const viewport = store.viewport;
+            if (viewport === null) return store.select(null);
+            // Read from the GPU: the selection follows a frame or so later.
+            viewport.pick(event.clientX - rect.left, event.clientY - rect.top).then(
+              (path) => store.select(path),
+              (error: unknown) => console.warn("pick failed", error),
+            );
           }}
         />
         {texture !== null && stage !== null && <TextureView store={store} stage={stage} attribute={texture} />}

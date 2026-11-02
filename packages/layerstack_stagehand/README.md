@@ -101,6 +101,45 @@ if (planned.gpuBytes < budget) upload(list.setScope({ roots: ["/"] }));
 list.cost().items; // what each drawn item holds, most bytes first
 ```
 
+A list can draw under a budget (`budget: { gpuBytes, triangles,
+instances }` in its options, every limit optional; `setBudget` to change
+it, `null` for none, which is the default). Each item is weighed from
+counts before it is built, as `estimate` reads them, and given a rung:
+`full`, its geometry; `standin`, a `bounds` box of its extent at each
+instance (one box over a point instancer's instances), drawn as a draw
+mode stand-in; or `skipped`, not listed. Admission is deterministic:
+those `promote(paths)` names come first, `default` and `render` purposes
+before `proxy`, then most worth per share of the budget (world bound
+diagonal times instances, over the largest of its bytes, triangles and
+instances as fractions of their limits: greedy by value density), ties
+by path. Every item gets its box first, then items are refined to full
+geometry in that order while the budget holds, as 3D Tiles keeps coarser
+tiles and stops refining; so a scene a little over budget boxes a few of
+its costliest items, not everything after its largest. Triangles count
+instanced draws in full. An item drawing no instance (invisible, or of a
+purpose not drawn) is not listed and costs nothing until it draws one.
+
+`budgetReport()` lists every degraded item: its rung, what its full
+geometry would cost and what it was granted, and the limits it would
+have passed; each diff's `budget` gives the totals and the items whose
+rung changed. A change re-weighs only the items it reaches (their
+instances, visibility or geometry) and re-admits in one pass over the
+cached order; only items whose rung changed are built, rebound or
+removed (`work.itemsWeighed`, `work.itemsRegranted`). On a large public
+scene of 862 items asking for 13 GiB and 1.1 trillion instanced
+triangles, under 1 GiB and 50 million triangles, the first refresh
+weighs and admits every item in 0.35 s and draws 170 in full and 692 as
+boxes (571 MiB uploaded, measured); admitting again with nothing to move
+takes 2 ms.
+
+```ts
+const list = stagehand.drawList(stage, { budget: { gpuBytes: 2 ** 30, triangles: 50e6 } });
+upload(list.refresh());
+list.budgetReport()!.degraded; // [{ prim, rung: "standin", over: ["triangles"], requested, granted, ... }]
+upload(list.promote([selected])); // the selection drawn in full first
+upload(list.setBudget(null)); // everything, in full
+```
+
 The list also holds the stage's cameras and lights, by path:
 `list.cameras()` (`CameraItem`: the `Camera` `stage.camera` computes, view
 and projection matrices as `GfFrustum` computes them; conform it to a

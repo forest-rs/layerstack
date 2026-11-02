@@ -370,6 +370,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerstack_clusters_examples"
+version = "0.1.0"
+dependencies = [
+ "layerstack",
+ "layerstack_clusters",
+ "layerstack_io",
+ "layerstack_schemas",
+ "layerstack_stagehand",
+]
+
+[[package]]
 name = "layerstack_conformance"
 version = "0.1.0"
 dependencies = [

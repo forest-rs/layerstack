@@ -96,21 +96,38 @@ export function ViewportPane() {
           <MaterialPreview store={store} stage={stage} material={material} shape="shaderBall" />
         </div>
       )}
-      {material !== null && texture === null && (
-        <div className="absolute top-2 right-2 flex rounded-md bg-black/40 p-0.5 text-[11px] backdrop-blur-sm">
-          {(["Scene", "Material"] as const).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              aria-pressed={(mode === "Material") === showMaterial}
-              onClick={() => setMaterialChoice(mode === "Material")}
-              className={cn("rounded px-2 py-0.5 text-white/70 hover:text-white", (mode === "Material") === showMaterial && "bg-white/15 text-white")}
-            >
-              {mode}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
+        {material !== null && texture === null && (
+          <div className="flex rounded-md bg-black/40 p-0.5 text-[11px] backdrop-blur-sm">
+            {(["Scene", "Material"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={(mode === "Material") === showMaterial}
+                onClick={() => setMaterialChoice(mode === "Material")}
+                className={cn("rounded px-2 py-0.5 text-white/70 hover:text-white", (mode === "Material") === showMaterial && "bg-white/15 text-white")}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+        )}
+        {/* usdview's View > Lights > Enable Default Camera Light: a light at the camera, beside the stage's own. */}
+        {store.session !== null && !showMaterial && texture === null && (
+          <button
+            type="button"
+            aria-pressed={store.lightSettings.cameraLight}
+            title="A light at the camera, added to the stage's own lights, as usdview's default camera light"
+            onClick={() => store.setLightSettings({ ...store.lightSettings, cameraLight: !store.lightSettings.cameraLight })}
+            className={cn(
+              "rounded-md bg-black/40 px-2 py-1 text-[11px] text-white/70 backdrop-blur-sm hover:text-white",
+              store.lightSettings.cameraLight && "text-white",
+            )}
+          >
+            Camera light: {store.lightSettings.cameraLight ? "on" : "off"}
+          </button>
+        )}
+      </div>
       <LoadingOverlay />
       {textures !== undefined && textures.pending > 0 && store.status.kind !== "opening" && (
         <div role="status" className="pointer-events-none absolute bottom-2 left-2 flex items-center gap-2 rounded-md bg-black/40 px-2 py-1 font-mono text-[11px] text-white/80 backdrop-blur-sm">

@@ -15,6 +15,7 @@ import { type AssetFocus, assetFocus, type DrawScopeChoice, overLimit, scopeFor 
 import { ViewportModel, type ViewportScene, type ViewportUpdate } from "./model/draws.ts";
 import { type LoadBudget, type OpenPhase, OverBudget, Session } from "./model/session.ts";
 import type { SceneSource } from "./model/sources.ts";
+import { DEFAULT_LIGHT_SETTINGS, type LightSettings } from "./viewport/defaultLights.ts";
 import type { Viewport } from "./viewport/viewport3d.ts";
 
 /** Where the editor is with its scene. */
@@ -120,6 +121,8 @@ export class EditorStore {
   playing = false;
   /** The stage camera the viewport looks through, by path; `null` for the free camera. */
   through: string | null = null;
+  /** The default lights the viewport adds to the stage's, as usdview's View > Lights menu sets them: the camera light on. */
+  lightSettings: LightSettings = DEFAULT_LIGHT_SETTINGS;
   /** The session being opened, while its assets are fetched. */
   opening: Session | null = null;
   /** How the next scene opens its payloads ({@link PayloadChoice}). */
@@ -185,6 +188,7 @@ export class EditorStore {
     if (viewport === null) return;
     viewport.onImages = () => this.#bumpSoon();
     viewport.lookThrough(this.through);
+    viewport.setLightSettings(this.lightSettings);
     this.#orient();
     const update = this.session === null ? null : this.#draws.sync(this.session, this.time, this.#scope(this.session));
     if (update !== null) {
@@ -378,6 +382,13 @@ export class EditorStore {
   lookThrough(path: string | null): void {
     this.through = path;
     this.#viewport?.lookThrough(path);
+    this.#bump();
+  }
+
+  /** Switches the viewport's default lights (usdview's View > Lights menu). */
+  setLightSettings(settings: LightSettings): void {
+    this.lightSettings = settings;
+    this.#viewport?.setLightSettings(settings);
     this.#bump();
   }
 

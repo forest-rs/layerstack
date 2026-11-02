@@ -236,7 +236,10 @@ under a pixel across, and the clusters are drawn indirectly by vertex
 pulling, a draw per material subset, with the mesh's own material (lights,
 light links, selection and picking unchanged). The status line reports
 what the clustered draws hold and the triangles the last cut drew. A mesh
-without a set, or edited since, draws as before.
+without a set, or edited since, draws as before. The draw budget weighs a
+clustered mesh by its set (every level, once), found by prim in the
+stages' manifests before the mesh is built, so an element whose instances
+draw far more triangles than the budget allows is still admitted.
 
 On a production element of 594 k instances drawing 73 M triangles
 (Apple silicon, headless Chrome, 1400 x 900), framed whole: the GPU's cut

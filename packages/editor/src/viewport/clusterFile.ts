@@ -226,3 +226,63 @@ export function selectCut(set: ClusterSetData, view: CutView, pixelError: number
   }
   return out;
 }
+
+/** A mesh of a stage's manifest (`cluster_lod --cache`): its prim on that stage, its set's key and what the set holds. */
+export interface ManifestMesh {
+  readonly prim: string;
+  readonly key: string;
+  readonly vertices: number;
+  readonly indices: number;
+  readonly clusters: number;
+  readonly groups: number;
+  /** Every level's triangles. */
+  readonly triangles: number;
+}
+
+/**
+ * The meshes of every manifest the dev server has, found by prim before
+ * they are built: a mesh the draw budget boxed is never built, so its
+ * content key is never computed, and its set would never be found. The
+ * prims are the paths on the stage `cluster_lod` opened, which may be an
+ * element a larger stage references under another path, so a prim is
+ * matched by its longest tail of whole path components a manifest lists
+ * (`/world/rock/geo` finds `/rock/geo`). A hint only: the key computed once
+ * the mesh is built decides.
+ */
+export class ClusterManifest {
+  readonly #byPrim = new Map<string, ManifestMesh>();
+
+  constructor(manifests: readonly { readonly meshes: readonly ManifestMesh[] }[]) {
+    for (const manifest of manifests) for (const mesh of manifest.meshes) this.#byPrim.set(mesh.prim, mesh);
+  }
+
+  /** How many meshes it lists. */
+  get size(): number {
+    return this.#byPrim.size;
+  }
+
+  /** The mesh listed at `prim`, or at its longest tail of whole components; `null` when none is. */
+  find(prim: string): ManifestMesh | null {
+    if (this.#byPrim.size === 0) return null;
+    for (let at = 0; at >= 0 && at < prim.length; at = prim.indexOf("/", at + 1)) {
+      const mesh = this.#byPrim.get(prim.slice(at));
+      if (mesh !== undefined) return mesh;
+    }
+    return null;
+  }
+}
+
+/** What a set's counts cost as the clustered draws hold it (eight words a vertex, a word an index, eight a cluster and a group), as a draw list's budget weighs it. */
+export function residentCost(counts: Pick<ManifestMesh, "vertices" | "indices" | "clusters" | "groups" | "triangles">, cpuBytes: number): {
+  triangles: number;
+  vertices: number;
+  cpuBytes: number;
+  gpuBytes: number;
+} {
+  return {
+    triangles: counts.triangles,
+    vertices: counts.vertices,
+    cpuBytes,
+    gpuBytes: 4 * (8 * counts.vertices + counts.indices + 8 * counts.clusters + 8 * counts.groups),
+  };
+}

@@ -209,7 +209,7 @@ import { attribute, instanceIndex, lights, materialColor, max, positionView, ren
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RectAreaLightTexturesLib } from "three/addons/lights/RectAreaLightTexturesLib.js";
 import { conformCamera, lightSizeFactor, vertexPositions } from "@forest-rs/layerstack_stagehand";
-import type { CameraItem, LightItem, MaterialItem, MeshVertices, VertexAttribute } from "@forest-rs/layerstack_stagehand";
+import type { BufferCost, CameraItem, LightItem, MaterialItem, MeshVertices, VertexAttribute } from "@forest-rs/layerstack_stagehand";
 import { PickIds, pickOrder, pickWindow, readIndex, unpackPickId } from "./picking.ts";
 import { DEFAULT_LIGHT_SETTINGS, defaultLights, type LightSettings } from "./defaultLights.ts";
 import { DrawBundles, type BundleCounts } from "./bundles.ts";
@@ -221,7 +221,8 @@ import { standinGeometry, standinMaterials, standinTextured } from "./standins.t
 import { ClusterScene, MAX_CLUSTER_TRIANGLES, clusterable, packVertices } from "./clusters.ts";
 import type { PackedVertices } from "./clusters.ts";
 import type { ClusterResidency, ClusterStats, ClusterView } from "./clusters.ts";
-import { clusterKey, readClusterFile } from "./clusterFile.ts";
+import { ClusterManifest, clusterKey, readClusterFile, residentCost } from "./clusterFile.ts";
+import type { ManifestMesh } from "./clusterFile.ts";
 import type { AssetExists, AssetReader, TextureStats } from "./surfaces.ts";
 import type { ViewItem, ViewportScene, ViewportUpdate } from "../model/draws.ts";
 
@@ -325,6 +326,10 @@ export class Viewport {
   readonly #clusterLoads = new Map<number, BufferGeometry>();
   /** Each clustered buffer's set key, for checking a cut against the set's file. */
   readonly #clusterKeyOf = new Map<number, string>();
+  /** The stages' manifests: sets found by prim before a mesh is built, for the budget ({@link #reportResident}). */
+  #manifest = new ClusterManifest([]);
+  /** Prims whose mesh, once built, did not have the set its manifest named: weighed as any other from then on. */
+  readonly #manifestMisses = new Set<string>();
   /** Buffers looked up before the server listed its sets, fetched once it has (when it has theirs). */
   #clusterWaiting: { buffer: number; geometry: BufferGeometry; key: string; vertices: PackedVertices; decode: readonly [number, number, number, number] }[] = [];
   /** Buffers whose set arrived, their draws not yet made again ({@link #convertArrived}). */
@@ -387,6 +392,14 @@ export class Viewport {
         this.#listed(response.ok && (response.headers.get("content-type") ?? "").includes("json") ? new Set((await response.json()) as string[]) : new Set());
       },
       () => this.#listed(new Set()),
+    );
+    fetch(new URL("/@clusters/manifests.json", window.location.href)).then(
+      async (response) => {
+        if (!response.ok || !(response.headers.get("content-type") ?? "").includes("json")) return;
+        this.#manifest = new ClusterManifest((await response.json()) as { meshes: ManifestMesh[] }[]);
+        this.#reportResident();
+      },
+      () => undefined,
     );
   }
 
@@ -649,6 +662,7 @@ export class Viewport {
     // directly from then on: recording its bundle each frame would cost more.
     const playing = update.timeChanged && !reset;
     if (reset) {
+      this.#manifestMisses.clear();
       for (const id of [...this.#objects.keys()]) this.#drop(id);
       for (const geometry of this.#geometries.values()) geometry.dispose();
       for (const key of this.#geometries.keys()) this.#clusters.dropMesh(key);
@@ -784,6 +798,8 @@ export class Viewport {
     }
     // Every lit shader is built for the scene's lights: every bundle recorded again.
     if (relit.length > 0 || update.lightsRemoved.size > 0) this.#draws.touchAll();
+    // A clustered buffer freed or rebuilt no longer costs its set; new items may be in a manifest.
+    if (update.freed.size + update.rebuilt.size + update.added.size > 0 || reset) queueMicrotask(() => this.#reportResident());
     // Linked again when what it reads may have changed: not as time plays.
     const linking = added.size > 0 || restyle.size > 0 || update.reskinned.size > 0 || relit.length > 0 || update.lightsRemoved.size > 0 || update.links > 0;
     const relinked = linking && this.#link(scene);
@@ -937,8 +953,16 @@ export class Viewport {
    */
   #findClusters(view: ViewItem, geometry: BufferGeometry): void {
     const keys = this.#clusterKeys;
-    if ((keys !== null && keys.size === 0) || !clusterDrawable(view) || !clusterable(view.buffers.vertices)) return;
-    const key = clusterKey(view.buffers.vertices);
+    // A stand-in's box is not the mesh: nothing to look up, nothing to judge the manifest by.
+    if (view.buffers.standin !== null) return;
+    const listed = this.#manifest.find(view.item.prim);
+    const drawable = clusterDrawable(view) && clusterable(view.buffers.vertices);
+    const key = drawable && keys?.size !== 0 ? clusterKey(view.buffers.vertices) : null;
+    // The manifest's hint for the prim is right only if the built mesh has its set.
+    if (listed !== null && listed.key !== key && !this.#manifestMisses.has(view.item.prim)) {
+      this.#manifestMisses.add(view.item.prim);
+      queueMicrotask(() => this.#reportResident());
+    }
     if (key === null || (keys !== null && !keys.has(key))) return;
     const buffer = view.item.buffer;
     const vertices = packVertices(view.buffers.vertices);
@@ -993,7 +1017,41 @@ export class Viewport {
     this.#link(this.#applied);
     this.#compile();
     this.#draw();
+    this.#reportResident();
   }
+
+  /**
+   * Tells the page what the clustered meshes cost the budget, by the prim
+   * of each item drawing one ({@link onResident}): a new map whenever the
+   * clustered buffers change.
+   */
+  #reportResident(): void {
+    const costs = new Map<string, BufferCost>();
+    for (const view of this.#applied?.items ?? []) {
+      const prim = view.item.prim;
+      let cost = this.#clusters.meshCost(view.item.buffer);
+      // Not built yet (a box, say): its manifest's set, until the built mesh says otherwise.
+      if (cost === null && !this.#manifestMisses.has(prim)) {
+        const listed = this.#manifest.find(prim);
+        if (listed !== null) cost = residentCost(listed, 0);
+      }
+      if (cost !== null) costs.set(prim, cost);
+    }
+    const signature = [...costs.keys()].sort().join("\n");
+    if (signature === this.#residentSignature) return;
+    this.#residentSignature = signature;
+    this.onResident?.(costs);
+  }
+
+  /** The prims last reported clustered ({@link #reportResident}). */
+  #residentSignature = "";
+
+  /**
+   * Called with the costs of the meshes drawn from prebuilt cluster sets,
+   * by item prim, whenever they change: their whole sets, once each, for
+   * the draw list's budget (`DrawList.setResidentCosts`).
+   */
+  onResident: ((costs: ReadonlyMap<string, BufferCost>) => void) | null = null;
 
   #addLight(light: LightItem): void {
     const objects = threeLights(light);

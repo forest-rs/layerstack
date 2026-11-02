@@ -173,7 +173,11 @@ by path. Every item gets its box first, then items are refined to full
 geometry in that order while the budget holds, as 3D Tiles keeps coarser
 tiles and stops refining; so a scene a little over budget boxes a few of
 its costliest items, not everything after its largest. Triangles count
-instanced draws in full. An item drawing no instance (invisible, or of a
+instanced draws in full, except for meshes the host draws from a resident
+level-of-detail set (`setResidentCosts(new Map([[prim, cost]]))`, a GPU
+cut through a cluster DAG, say): those cost their set's bytes and
+triangles (every level) once, however many instances draw them, and the
+triangles a frame draws are the host's to report. An item drawing no instance (invisible, or of a
 purpose not drawn) is not listed and costs nothing until it draws one.
 
 `budgetReport()` lists every degraded item: its rung, what its full

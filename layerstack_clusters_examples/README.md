@@ -40,8 +40,13 @@ hits, measures what a viewer sees; it needs no GPU and no image crate.
   of the mesh bit for bit, its indices and the `compact` encoding of its
   positions and normals (`src/cache.rs` reproduces
   `@forest-rs/layerstack_stagehand`'s encoder), so the editor finds a
-  mesh's set by content wherever the mesh sits on the stage. The editor's
-  dev server serves `.local/cluster-cache` from the main checkout.
+  mesh's set by content wherever the mesh sits on the stage. It also
+  writes the stage's manifest, `manifest-<hash of the stage's path>.json`:
+  each mesh's prim, key and set counts, which the editor's draw budget
+  weighs a mesh by before it is built (by the longest tail of its prim
+  path the manifest lists, so an element cached alone serves the larger
+  stage referencing it). The editor's dev server serves
+  `.local/cluster-cache` from the main checkout.
 - **One cut** (`--cut-file <file> --camera x,y,z,proj_y,height,near
   [--threshold <px>]`): prints a cached set's cut, cluster ids ascending,
   to check a renderer's cut against the library's.

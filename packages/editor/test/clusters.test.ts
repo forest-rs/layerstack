@@ -74,3 +74,14 @@ test("a damaged cluster file is refused", () => {
   new Uint32Array(outOfRange.buffer, 8 + 64 + 48, 1)[0] = 99;
   assert.throws(() => readClusterFile(outOfRange.buffer), /out of range/);
 });
+
+test("a manifest finds a mesh by its prim's longest listed tail", async () => {
+  const { ClusterManifest } = await import("../src/viewport/clusterFile.ts");
+  const mesh = (prim: string, key: string) => ({ prim, key, vertices: 3, indices: 3, clusters: 1, groups: 1, triangles: 1 });
+  const manifest = new ClusterManifest([{ meshes: [mesh("/rock/geo", "a"), mesh("/geo", "b")] }, { meshes: [mesh("/world/rock/geo", "c")] }]);
+  assert.equal(manifest.find("/world/rock/geo")?.key, "c", "the whole path first");
+  assert.equal(manifest.find("/scene/rock/geo")?.key, "a", "then its longest tail");
+  assert.equal(manifest.find("/scene/stone/geo")?.key, "b");
+  assert.equal(manifest.find("/scene/rock/geometry"), null, "whole components only");
+  assert.equal(new ClusterManifest([]).find("/rock/geo"), null);
+});

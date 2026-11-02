@@ -55,6 +55,8 @@ import type {
   Changes,
   ConnectionSourceInfo,
   CoordSysBinding,
+  BracketingSamples,
+  TimeInterval,
   Edit,
   Explanation,
   FlattenResult,
@@ -155,6 +157,14 @@ export interface NativeStage extends Disposable {
   attribute(path: string): unknown;
   get(path: string, time?: number | null): unknown;
   timeSamples(path: string): Float64Array;
+  unionedTimeSamples(
+    paths: string[],
+    min: number | undefined,
+    max: number | undefined,
+    minClosed: boolean,
+    maxClosed: boolean,
+  ): Float64Array;
+  bracketingSamples(paths: string[], time: number): Float64Array;
   valuesMightVary(paths: string[]): Uint8Array;
   valueSourcesMightVary(paths: string[]): Uint8Array;
   isA(path: string, schema: string): boolean;
@@ -1695,6 +1705,54 @@ export class Stage implements Disposable {
   }
 
   /**
+   * The sorted union of the composed time sample times of the attributes
+   * at `paths` (`UsdAttribute::GetUnionedTimeSamples`), within `interval`
+   * when given (`GetUnionedTimeSamplesInInterval`); a path no attribute is
+   * at adds none. {@link Attribute.timeSamplesInInterval} reads one.
+   *
+   * Throws `path.invalid` for a path that is not a property path.
+   */
+  unionedTimeSamples(paths: readonly string[], interval: TimeInterval = {}): number[] {
+    const times = this.#call("unionedTimeSamples", (native) =>
+      native.unionedTimeSamples(
+        [...paths],
+        interval.min,
+        interval.max,
+        interval.minClosed ?? true,
+        interval.maxClosed ?? true,
+      ),
+    );
+    return Array.from(times);
+  }
+
+  /**
+   * The composed samples bracketing stage time `time` of each attribute
+   * at `paths`, for interpolating between them
+   * (`UsdAttribute::GetBracketingTimeSamples`): layer offsets apply, and
+   * value clips bracket with their activation and mapping times too. One
+   * read for many attributes, as a renderer bracketing every animated
+   * attribute of a frame wants; {@link Attribute.bracketingSamples} asks
+   * for one. Each read composes the attribute's sample grid again.
+   *
+   * Throws `path.invalid` for a path that is not a property path.
+   */
+  bracketingSamples(paths: readonly string[], time: number): BracketingSamples[] {
+    const triples = this.#call("bracketingSamples", (native) => native.bracketingSamples([...paths], time));
+    const out: BracketingSamples[] = [];
+    for (let i = 0; i < triples.length; i += 3) {
+      const kind = triples[i];
+      out.push(
+        kind === 0
+          ? { kind: "samples", lower: triples[i + 1] as number, upper: triples[i + 2] as number }
+          : kind === 1
+            ? { kind: "noSamples" }
+            : { kind: "noValue" },
+      );
+    }
+    return out;
+  }
+
+  /**
    * Whether each attribute's value might vary with time: several time
    * samples, a spline, or value clips that may supply several, directly
    * or under sparse edits (`UsdAttribute::ValueMightBeTimeVarying`). A
@@ -3080,9 +3138,24 @@ export class Attribute {
     };
   }
 
-  /** Its composed time sample times, ascending. */
+  /** Its composed time sample times, ascending (`UsdAttribute::GetTimeSamples`). */
   timeSamples(): number[] {
     return Array.from(this.stage.native("timeSamples", (native) => native.timeSamples(this.path)));
+  }
+
+  /** How many composed time samples it has (`UsdAttribute::GetNumTimeSamples`). */
+  sampleCount(): number {
+    return this.stage.native("timeSamples", (native) => native.timeSamples(this.path)).length;
+  }
+
+  /** Its composed time sample times within `interval`, ascending (`UsdAttribute::GetTimeSamplesInInterval`). */
+  timeSamplesInInterval(interval: TimeInterval): number[] {
+    return this.stage.unionedTimeSamples([this.path], interval);
+  }
+
+  /** The composed samples bracketing stage time `time`, as {@link Stage.bracketingSamples} reads them. */
+  bracketingSamples(time: number): BracketingSamples {
+    return this.stage.bracketingSamples([this.path], time)[0] ?? { kind: "noValue" };
   }
 
   /** Whether its value source might vary with time, the default time included (`UsdAttributeQuery::ValueSourceMightBeTimeVarying`); see {@link Stage.valueSourcesMightBeTimeVarying}. */

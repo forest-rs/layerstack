@@ -1240,6 +1240,83 @@ impl Stage {
             .unwrap_or_default())
     }
 
+    /// The sorted union of the composed sample times of the attributes at
+    /// `paths` within an interval: `min` and `max` bound it (`None` for an
+    /// infinite end), closed or open by `min_closed` and `max_closed`; a
+    /// NaN bound or a reversed interval selects none. One path reads that
+    /// attribute's times in the interval; a path no attribute is at adds
+    /// none.
+    ///
+    /// Spec: AOUSD Core §12.3.2 (effective stage-time samples). OpenUSD:
+    /// `UsdAttribute::GetUnionedTimeSamplesInInterval`,
+    /// `GetTimeSamplesInInterval`.
+    ///
+    /// # Errors
+    ///
+    /// `path.invalid` for a path that is not a property path.
+    pub(crate) fn unioned_time_samples(
+        &self,
+        paths: &[String],
+        min: Option<f64>,
+        max: Option<f64>,
+        min_closed: bool,
+        max_closed: bool,
+    ) -> Result<Vec<f64>, Error> {
+        use core::ops::Bound;
+        let end = |value: Option<f64>, closed: bool| match value {
+            None => Bound::Unbounded,
+            Some(value) if closed => Bound::Included(value),
+            Some(value) => Bound::Excluded(value),
+        };
+        let view = self.document.view();
+        let mut attributes = Vec::with_capacity(paths.len());
+        for path in paths {
+            check_property_path(path)?;
+            attributes.extend(view.attribute(path.as_str()));
+        }
+        Ok(layerstack::Attribute::union_sample_times_in_range(
+            attributes,
+            (end(min, min_closed), end(max, max_closed)),
+        ))
+    }
+
+    /// The samples bracketing stage time `time` of each attribute at
+    /// `paths`, three numbers per path: `[kind, lower, upper]`, `kind`
+    /// `0` with the bracketing sample times, `1` for a value without
+    /// samples (a default, a fallback, nothing authored) and `2` for no
+    /// value (a block, an animation block or a spline first, a NaN time,
+    /// or no attribute at the path), the times `NaN` for `1` and `2`.
+    ///
+    /// Spec: AOUSD Core §12.3.2 (bracketing samples). OpenUSD:
+    /// `UsdAttribute::GetBracketingTimeSamples`.
+    ///
+    /// # Errors
+    ///
+    /// `path.invalid` for a path that is not a property path.
+    pub(crate) fn bracketing_samples(
+        &self,
+        paths: &[String],
+        time: f64,
+    ) -> Result<Vec<f64>, Error> {
+        use layerstack::BracketingSamples;
+        let view = self.document.view();
+        let mut out = Vec::with_capacity(paths.len() * 3);
+        for path in paths {
+            check_property_path(path)?;
+            let bracketing = view
+                .attribute(path.as_str())
+                .map_or(BracketingSamples::NoValue, |attribute| {
+                    attribute.bracketing_samples(time)
+                });
+            out.extend_from_slice(&match bracketing {
+                BracketingSamples::Samples(bracket) => [0.0, bracket.lower, bracket.upper],
+                BracketingSamples::NoSamples => [1.0, f64::NAN, f64::NAN],
+                BracketingSamples::NoValue => [2.0, f64::NAN, f64::NAN],
+            });
+        }
+        Ok(out)
+    }
+
     /// Whether each attribute's value might vary with time: several time
     /// samples, a spline, or value clips that may supply several, directly
     /// or under sparse edits; also while the clip metadata, or a set's
@@ -2914,6 +2991,29 @@ impl Stage {
         Ok(self.time_samples(path)?)
     }
 
+    /// The times `unioned_time_samples` reads, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = unionedTimeSamples)]
+    pub fn js_unioned_time_samples(
+        &self,
+        paths: Vec<String>,
+        min: Option<f64>,
+        max: Option<f64>,
+        min_closed: bool,
+        max_closed: bool,
+    ) -> Result<Vec<f64>, JsValue> {
+        Ok(self.unioned_time_samples(&paths, min, max, min_closed, max_closed)?)
+    }
+
+    /// The triples `bracketing_samples` reads, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = bracketingSamples)]
+    pub fn js_bracketing_samples(
+        &self,
+        paths: Vec<String>,
+        time: f64,
+    ) -> Result<Vec<f64>, JsValue> {
+        Ok(self.bracketing_samples(&paths, time)?)
+    }
+
     /// The flags `values_might_vary` reads, as documented in `stage.rs`.
     #[wasm_bindgen(js_name = valuesMightVary)]
     pub fn js_values_might_vary(&self, paths: Vec<String>) -> Result<Vec<u8>, JsValue> {
@@ -3897,6 +3997,48 @@ def "Ball" {
             let error = open(refused).map(|_| ()).unwrap_err();
             assert_eq!(error.code, "argument.invalid", "{refused:?}");
         }
+    }
+
+    /// Bracketing triples and interval unions, as `bracketing_samples`
+    /// and `unioned_time_samples` document them.
+    #[test]
+    fn bracketing_triples_and_interval_unions() {
+        let stage = Stage::open_with_provenance(
+            "scene.usda",
+            b"#usda 1.0\ndef \"P\" {\n    double a.timeSamples = { 1: 1, 3: 3 }\n    double b.timeSamples = { 2: 2 }\n    double d = 1\n    double x = None\n}\n".to_vec(),
+            false,
+            SessionLayer::None,
+            BROWSER_LIMITS,
+            false,
+            &[],
+            &[],
+        )
+        .unwrap();
+        let paths = ["/P.a", "/P.d", "/P.x", "/P.gone"].map(String::from);
+        let triples = stage.bracketing_samples(&paths, 2.0).unwrap();
+        assert_eq!(triples[..3], [0.0, 1.0, 3.0]);
+        assert_eq!([triples[3], triples[6], triples[9]], [1.0, 2.0, 2.0]);
+        assert!(triples[4].is_nan() && triples[11].is_nan());
+        let both = ["/P.a", "/P.b"].map(String::from);
+        assert_eq!(
+            stage
+                .unioned_time_samples(&both, None, None, false, false)
+                .unwrap(),
+            [1.0, 2.0, 3.0]
+        );
+        assert_eq!(
+            stage
+                .unioned_time_samples(&both, Some(1.0), Some(3.0), false, true)
+                .unwrap(),
+            [2.0, 3.0]
+        );
+        assert_eq!(
+            stage
+                .bracketing_samples(&["/P".into()], 0.0)
+                .unwrap_err()
+                .code,
+            "path.invalid"
+        );
     }
 
     #[test]

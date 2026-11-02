@@ -1193,6 +1193,73 @@ impl<'a> Attribute<'a> {
             interval,
         )
     }
+    /// How many composed sample times [`Self::sample_times`] has.
+    ///
+    /// Composes the grid, as OpenUSD does: a stronger default hides weaker
+    /// samples, and value clips count their activation and mapping times.
+    /// [`AttributeQuery::sample_count`] keeps the grid for repeated reads.
+    ///
+    /// Spec: AOUSD Core §12.3.2 (effective stage-time samples).
+    #[doc(alias = "UsdAttribute::GetNumTimeSamples")]
+    #[doc(alias = "GetNumTimeSamples")]
+    pub fn sample_count(self) -> usize {
+        self.sample_times().len()
+    }
+    /// The composed samples bracketing stage time `time`, for
+    /// interpolating between them: on a sample both are `time`; between
+    /// samples, the nearest each side; before the first sample or after
+    /// the last, both that end sample. Value clips bracket with their
+    /// activation and mapping times too; layer offsets are applied.
+    ///
+    /// Without samples, [`BracketingSamples::NoSamples`] when a default,
+    /// a schema fallback or nothing at all supplies the value, and
+    /// [`BracketingSamples::NoValue`] when a block, an animation block or
+    /// a spline ends resolution first (as OpenUSD's call returns false,
+    /// splines included), or `time` is NaN.
+    ///
+    /// Composes the grid on every call; [`AttributeQuery::bracketing_samples`]
+    /// keeps it, for hosts that bracket every frame.
+    ///
+    /// Spec: AOUSD Core §12.3.2 (bracketing samples and interpolation),
+    /// §12.3.4 (value clips), §12.3.6 (blocks).
+    #[doc(alias = "UsdAttribute::GetBracketingTimeSamples")]
+    #[doc(alias = "GetBracketingTimeSamples")]
+    pub fn bracketing_samples(self, time: f64) -> BracketingSamples {
+        let path = self.property.path;
+        self.property
+            .stage
+            .property_bracketing_samples(path.prim_path(), path.property(), time)
+    }
+    /// The sorted union of the composed sample times of `attributes`, which
+    /// may come from different stages; empty for none.
+    ///
+    /// Spec: AOUSD Core §12.3.2 (effective stage-time samples).
+    #[doc(alias = "UsdAttribute::GetUnionedTimeSamples")]
+    #[doc(alias = "GetUnionedTimeSamples")]
+    pub fn union_sample_times<'b>(attributes: impl IntoIterator<Item = Attribute<'b>>) -> Vec<f64> {
+        Self::union_sample_times_in_range(attributes, ..)
+    }
+    /// The sorted union of each attribute's [`Self::sample_times_in_range`]
+    /// over `interval`.
+    ///
+    /// Spec: AOUSD Core §12.3.2 (effective stage-time samples).
+    #[doc(alias = "UsdAttribute::GetUnionedTimeSamplesInInterval")]
+    #[doc(alias = "GetUnionedTimeSamplesInInterval")]
+    pub fn union_sample_times_in_range<'b>(
+        attributes: impl IntoIterator<Item = Attribute<'b>>,
+        interval: impl core::ops::RangeBounds<f64>,
+    ) -> Vec<f64> {
+        let mut times = Vec::new();
+        for attribute in attributes {
+            let path = attribute.property.path;
+            let grid = attribute
+                .property
+                .stage
+                .property_sample_times(path.prim_path(), path.property());
+            sample_reads::merge_times(&mut times, sample_reads::times_in_range(&grid, &interval));
+        }
+        times
+    }
     /// Conservative whether a numeric-time query can vary with time: a
     /// contributing source with several samples, or a spline, counts as
     /// varying even when its values agree. When the strongest value is a
@@ -1301,6 +1368,11 @@ pub struct AttributeQueryWork {
     pub evaluations: u64,
     /// Same-time evaluations reused from an unchanged snapshot identity.
     pub cache_hits: u64,
+    /// Compositions of the sample-time grid the sample reads
+    /// ([`AttributeQuery::bracketing_samples`] and the rest) answer from.
+    pub sample_evaluations: u64,
+    /// Sample reads answered from the kept grid of an unchanged snapshot.
+    pub sample_cache_hits: u64,
 }
 
 /// Retained composition identity of one prim, including absence and schema data.
@@ -1380,12 +1452,17 @@ struct CachedQuery {
 /// identity on every read. No change notice can be missed: even a replacement
 /// stage invalidates the cached value. Store-local paths must stay in one store.
 /// Unrelated prim edits preserve hits; changes to this prim or prepared clips
-/// invalidate conservatively. Memory is bounded to one result and its sources.
+/// invalidate conservatively. Memory is bounded to one result and its sources,
+/// plus, once a sample read asks for it, the composed sample-time grid, which
+/// the sample reads ([`Self::sample_times`], [`Self::bracketing_samples`] and
+/// the rest) answer from without allocating, as OpenUSD's query answers
+/// them from its kept resolve info.
 #[derive(Clone, Debug)]
 #[doc(alias = "UsdAttributeQuery")]
 pub struct AttributeQuery {
     path: PropertyPath,
     cached: Option<CachedQuery>,
+    samples: Option<TimeInfo>,
     stamp: Option<QueryStamp>,
     work: AttributeQueryWork,
 }
@@ -1395,6 +1472,7 @@ impl AttributeQuery {
         Self {
             path,
             cached: None,
+            samples: None,
             stamp: None,
             work: AttributeQueryWork::default(),
         }
@@ -1441,27 +1519,14 @@ impl AttributeQuery {
         time: Time,
         checked: bool,
     ) -> Result<Option<Resolved<Value>>, crate::ArrayReadError> {
-        if self
-            .stamp
-            .as_ref()
-            .is_some_and(|s| s.matches(stage, self.path))
-            && let Some(cached) = &self.cached
+        self.refresh(stage);
+        if let Some(cached) = &self.cached
             && cached.time == time
             && cached.checked == checked
         {
             self.work.cache_hits = self.work.cache_hits.saturating_add(1);
             return cached.value.clone();
         }
-        let current = stage.prims.get(&self.path.prim_path());
-        self.stamp = Some(QueryStamp {
-            store_identity: stage.store_identity.clone(),
-            index: current.map(|i| i.data.clone()),
-            type_info: current.and_then(|i| i.type_info.clone()),
-            clips: stage
-                .clips
-                .query_identity(self.path.prim_path(), self.path.property()),
-            provenance: stage.with_provenance,
-        });
         let value = if stage.property_kind(self.path) != Some(PropertyKind::Attribute) {
             Ok(None)
         } else if checked {
@@ -1477,9 +1542,126 @@ impl AttributeQuery {
         self.work.evaluations = self.work.evaluations.saturating_add(1);
         value
     }
+    /// Keeps the cached value and sample grid only while `stage` is the
+    /// snapshot they were read from, so no change can be missed.
+    fn refresh(&mut self, stage: &Stage) {
+        if self
+            .stamp
+            .as_ref()
+            .is_some_and(|s| s.matches(stage, self.path))
+        {
+            return;
+        }
+        let current = stage.prims.get(&self.path.prim_path());
+        self.stamp = Some(QueryStamp {
+            store_identity: stage.store_identity.clone(),
+            index: current.map(|i| i.data.clone()),
+            type_info: current.and_then(|i| i.type_info.clone()),
+            clips: stage
+                .clips
+                .query_identity(self.path.prim_path(), self.path.property()),
+            provenance: stage.with_provenance,
+        });
+        self.cached = None;
+        self.samples = None;
+    }
+    /// The composed sample-time grid for the current snapshot, composed
+    /// once per snapshot identity.
+    fn time_info(&mut self, stage: &Stage) -> &TimeInfo {
+        self.refresh(stage);
+        if self.samples.is_some() {
+            self.work.sample_cache_hits = self.work.sample_cache_hits.saturating_add(1);
+        } else {
+            self.work.sample_evaluations = self.work.sample_evaluations.saturating_add(1);
+        }
+        let path = self.path;
+        self.samples.get_or_insert_with(|| {
+            if stage.property_kind(path) == Some(PropertyKind::Attribute) {
+                stage.property_time_info(path.prim_path(), path.property())
+            } else {
+                TimeInfo::default()
+            }
+        })
+    }
+    /// The attribute's composed sample times, as [`Attribute::sample_times`]
+    /// reads them, from the grid this query keeps: composed on the first
+    /// sample read of a snapshot, then borrowed without allocating.
+    ///
+    /// Spec: AOUSD Core §12.3.2 (effective stage-time samples).
+    #[doc(alias = "UsdAttributeQuery::GetTimeSamples")]
+    #[doc(alias = "GetTimeSamples")]
+    pub fn sample_times(&mut self, stage: &Stage) -> &[f64] {
+        &self.time_info(stage).times
+    }
+    /// The kept sample times within `interval`, as
+    /// [`Attribute::sample_times_in_range`] selects them: a borrowed run of
+    /// [`Self::sample_times`], found by binary search.
+    ///
+    /// Spec: AOUSD Core §12.3.2 (effective stage-time samples).
+    #[doc(alias = "UsdAttributeQuery::GetTimeSamplesInInterval")]
+    #[doc(alias = "GetTimeSamplesInInterval")]
+    pub fn sample_times_in_range(
+        &mut self,
+        stage: &Stage,
+        interval: impl core::ops::RangeBounds<f64>,
+    ) -> &[f64] {
+        sample_reads::times_in_range(&self.time_info(stage).times, &interval)
+    }
+    /// How many kept sample times there are ([`Attribute::sample_count`]).
+    ///
+    /// Spec: AOUSD Core §12.3.2 (effective stage-time samples).
+    #[doc(alias = "UsdAttributeQuery::GetNumTimeSamples")]
+    #[doc(alias = "GetNumTimeSamples")]
+    pub fn sample_count(&mut self, stage: &Stage) -> usize {
+        self.time_info(stage).times.len()
+    }
+    /// The kept samples bracketing stage time `time`, as
+    /// [`Attribute::bracketing_samples`] answers: a binary search of the
+    /// kept grid, without allocating, once the first sample read of a
+    /// snapshot has composed it. A path with no attribute answers
+    /// [`BracketingSamples::NoValue`].
+    ///
+    /// Spec: AOUSD Core §12.3.2 (bracketing samples and interpolation),
+    /// §12.3.4 (value clips), §12.3.6 (blocks).
+    #[doc(alias = "UsdAttributeQuery::GetBracketingTimeSamples")]
+    #[doc(alias = "GetBracketingTimeSamples")]
+    pub fn bracketing_samples(&mut self, stage: &Stage, time: f64) -> BracketingSamples {
+        self.time_info(stage).bracketing(time)
+    }
+    /// The sorted union of the kept sample times of `queries` over the same
+    /// snapshot; empty for none.
+    ///
+    /// Spec: AOUSD Core §12.3.2 (effective stage-time samples).
+    #[doc(alias = "UsdAttributeQuery::GetUnionedTimeSamples")]
+    #[doc(alias = "GetUnionedTimeSamples")]
+    pub fn union_sample_times<'q>(
+        queries: impl IntoIterator<Item = &'q mut Self>,
+        stage: &Stage,
+    ) -> Vec<f64> {
+        Self::union_sample_times_in_range(queries, stage, ..)
+    }
+    /// The sorted union of each query's [`Self::sample_times_in_range`]
+    /// over `interval`.
+    ///
+    /// Spec: AOUSD Core §12.3.2 (effective stage-time samples).
+    #[doc(alias = "UsdAttributeQuery::GetUnionedTimeSamplesInInterval")]
+    #[doc(alias = "GetUnionedTimeSamplesInInterval")]
+    pub fn union_sample_times_in_range<'q>(
+        queries: impl IntoIterator<Item = &'q mut Self>,
+        stage: &Stage,
+        interval: impl core::ops::RangeBounds<f64>,
+    ) -> Vec<f64> {
+        let mut times = Vec::new();
+        for query in queries {
+            let grid = &query.time_info(stage).times;
+            sample_reads::merge_times(&mut times, sample_reads::times_in_range(grid, &interval));
+        }
+        times
+    }
     /// Drops retained source/value state while preserving cumulative counters.
     pub fn clear(&mut self) {
         self.cached = None;
+        self.samples = None;
         self.stamp = None;
     }
     /// Cumulative query work for measuring reuse.

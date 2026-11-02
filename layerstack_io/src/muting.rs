@@ -166,9 +166,32 @@ impl<B: Storage> StageDocument<B> {
         }
         let muted = &self.stage.options().muted_layers;
         // An unmuted layer not read: the assets bound to its id ask again.
-        for &layer in unmute {
-            if !muted.contains(&layer) && self.store.layer(layer).is_none() {
+        // Bindings are not authored content, so an anchor clean before
+        // stays clean, as a read that binds an anchor's assets keeps it.
+        let forgetting: Vec<LayerId> = unmute
+            .iter()
+            .copied()
+            .filter(|&layer| !muted.contains(&layer) && self.store.layer(layer).is_none())
+            .collect();
+        if !forgetting.is_empty() {
+            let mut clean: Vec<LayerId> = self
+                .store
+                .asset_bindings()
+                .into_iter()
+                .filter(|(anchor, _, bound)| {
+                    forgetting.contains(bound)
+                        && self.store.layer(*anchor).is_some()
+                        && !self.is_dirty(*anchor)
+                })
+                .map(|(anchor, _, _)| anchor)
+                .collect();
+            clean.dedup();
+            for &layer in &forgetting {
                 self.store.forget_assets_bound_to(layer);
+            }
+            for anchor in clean {
+                let generation = self.store.layer(anchor).expect("anchor").generation();
+                self.catalog.set_saved(anchor, generation);
             }
         }
         // A muted layer storage could not supply: bound, so its arcs

@@ -120,6 +120,8 @@ pub use format::{
 };
 mod reload;
 pub use reload::PreparedReload;
+mod release;
+pub use release::{ReleasedLayer, ReleasedLayers};
 mod asset_bytes;
 mod clips;
 mod package;
@@ -460,8 +462,10 @@ pub trait Storage: layerstack::MaybeSync {
     /// and [`IoErrorKind::Unavailable`] makes the document ask for the
     /// source again ([`StageDocument::unavailable_assets`]). Called after
     /// each successful read of a layer from storage, never after a failed
-    /// one, nor for [`StageDocument::read_asset_bytes`]. The default keeps
-    /// everything. AOUSD Core §9 (host asset transport).
+    /// one, nor for [`StageDocument::read_asset_bytes`], and again once
+    /// [`StageDocument::release_unused_layers`] releases the layer, whose
+    /// views of the bytes are then gone. The default keeps everything.
+    /// AOUSD Core §9 (host asset transport).
     fn release_source(&mut self, _identifier: &str) {}
     /// Writes a complete source.
     fn write(&mut self, identifier: &str, bytes: &[u8]) -> Result<(), IoError>;
@@ -953,6 +957,12 @@ struct LayerRecord {
     package: Option<Arc<PackageSnapshot>>,
     /// For a package read as a layer: its root member's path.
     package_root: Option<String>,
+    /// The encoded bytes the layer was last read from, which
+    /// [`ReleasedLayer::source_bytes`] reports.
+    source_bytes: Option<u64>,
+    /// Whether [`StageDocument::release_unused_layers`] released the layer
+    /// and nothing has read it since.
+    released: bool,
 }
 impl Catalog {
     /// The record of `layer`, if the catalog knows it.
@@ -2415,6 +2425,9 @@ impl<'a, B: Storage> Reader<'a, B> {
         paths: &PathInterner,
     ) -> Result<Layer, IoError> {
         let started = self.log.begin(id, data.len());
+        let record = self.catalog.record_mut(id);
+        record.source_bytes = Some(data.len() as u64);
+        record.released = false;
         let read = self.read_layer(data, identifier, id, tokens, paths);
         let prims = read
             .as_ref()

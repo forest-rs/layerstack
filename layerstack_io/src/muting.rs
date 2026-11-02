@@ -147,6 +147,23 @@ impl<B: Storage> StageDocument<B> {
         unmute: &[LayerId],
     ) -> Result<bool, LayerMuteError> {
         let changed = self.stage.mute_and_unmute_layers(mute, unmute)?;
+        // An unmuted layer released while muted
+        // (`Self::release_unused_layers`) is read again from its source
+        // before the stage composes, as OpenUSD opens it again when it
+        // recomposes: the arcs bound to its id then compose it as they
+        // did before it was muted. One storage cannot supply yet is asked
+        // for as one never read is.
+        for &layer in unmute {
+            if self.stage.options().muted_layers.contains(&layer)
+                || self.store.layer(layer).is_some()
+                || !self.catalog.record(layer).is_some_and(|r| r.released)
+            {
+                continue;
+            }
+            if let Some(identifier) = self.identifier(layer).map(String::from) {
+                let _ = self.read_released(layer, &identifier);
+            }
+        }
         let muted = &self.stage.options().muted_layers;
         // An unmuted layer not read: the assets bound to its id ask again.
         for &layer in unmute {

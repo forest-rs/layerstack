@@ -1,0 +1,1013 @@
+{
+ "cases": [
+  {
+   "name": "unload",
+   "steps": [
+    {
+     "heard": [],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open",
+      "sub.usda": "open"
+     },
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [],
+       "resynced": [
+        "/P"
+       ]
+      }
+     ],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "freed",
+      "payload_sub.usda": "freed",
+      "ref.usda": "open",
+      "root.usda": "open",
+      "sub.usda": "open"
+     },
+     "step": [
+      "unload",
+      "/P"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": null,
+      "/P.q": null,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "freed",
+      "payload_sub.usda": "freed",
+      "ref.usda": "open",
+      "root.usda": "open",
+      "sub.usda": "open"
+     },
+     "step": [
+      "rewrite",
+      "payload.usda",
+      "payload_sub.usda"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": null,
+      "/P.q": null,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [],
+       "resynced": [
+        "/P"
+       ]
+      }
+     ],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open",
+      "sub.usda": "open"
+     },
+     "step": [
+      "load",
+      "/P"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 44.0,
+      "/P.q": 55.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    }
+   ]
+  },
+  {
+   "name": "unload_dirty",
+   "steps": [
+    {
+     "heard": [],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open",
+      "sub.usda": "open"
+     },
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/P.p"
+       ],
+       "resynced": []
+      }
+     ],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open dirty",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open",
+      "sub.usda": "open"
+     },
+     "step": [
+      "edit",
+      "payload.usda",
+      "/P.p",
+      40.0
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 40.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [],
+       "resynced": [
+        "/P"
+       ]
+      }
+     ],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "freed",
+      "payload_sub.usda": "freed",
+      "ref.usda": "open",
+      "root.usda": "open",
+      "sub.usda": "open"
+     },
+     "step": [
+      "unload",
+      "/P"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": null,
+      "/P.q": null,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [],
+       "resynced": [
+        "/P"
+       ]
+      }
+     ],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open",
+      "sub.usda": "open"
+     },
+     "step": [
+      "load",
+      "/P"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    }
+   ]
+  },
+  {
+   "name": "mute",
+   "steps": [
+    {
+     "heard": [],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open",
+      "sub.usda": "open"
+     },
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [],
+       "resynced": [
+        "/B",
+        "/S"
+       ]
+      }
+     ],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open",
+      "sub.usda": "freed"
+     },
+     "step": [
+      "mute",
+      "sub.usda"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": null,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": null,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open",
+      "sub.usda": "freed"
+     },
+     "step": [
+      "rewrite",
+      "sub.usda"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": null,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": null,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [],
+       "resynced": [
+        "/B",
+        "/T"
+       ]
+      }
+     ],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open",
+      "sub.usda": "open"
+     },
+     "step": [
+      "unmute",
+      "sub.usda"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 20.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": null,
+      "/T.w": 8.0
+     }
+    }
+   ]
+  },
+  {
+   "name": "mute_dirty",
+   "steps": [
+    {
+     "heard": [],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open",
+      "sub.usda": "open"
+     },
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/B.y"
+       ],
+       "resynced": []
+      }
+     ],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open",
+      "sub.usda": "open dirty"
+     },
+     "step": [
+      "edit",
+      "sub.usda",
+      "/B.y",
+      300.0
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 300.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [],
+       "resynced": [
+        "/B",
+        "/S"
+       ]
+      }
+     ],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open",
+      "sub.usda": "freed"
+     },
+     "step": [
+      "mute",
+      "sub.usda"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": null,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": null,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [],
+       "resynced": [
+        "/B",
+        "/S"
+       ]
+      }
+     ],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open",
+      "sub.usda": "open"
+     },
+     "step": [
+      "unmute",
+      "sub.usda"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    }
+   ]
+  },
+  {
+   "name": "sublayer",
+   "steps": [
+    {
+     "heard": [],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open",
+      "sub.usda": "open"
+     },
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/",
+        "/A"
+       ],
+       "resynced": [
+        "/A.e"
+       ]
+      }
+     ],
+     "layers": {
+      "extra.usda": "freed",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open dirty",
+      "sub.usda": "open"
+     },
+     "step": [
+      "remove_sublayer",
+      "extra.usda"
+     ],
+     "values": {
+      "/A.e": null,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [],
+     "layers": {
+      "extra.usda": "freed",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open dirty",
+      "sub.usda": "open"
+     },
+     "step": [
+      "rewrite",
+      "extra.usda"
+     ],
+     "values": {
+      "/A.e": null,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/",
+        "/A"
+       ],
+       "resynced": [
+        "/A.e"
+       ]
+      }
+     ],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open dirty",
+      "sub.usda": "open"
+     },
+     "step": [
+      "append_sublayer",
+      "extra.usda"
+     ],
+     "values": {
+      "/A.e": 70.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    }
+   ]
+  },
+  {
+   "name": "sublayer_dirty",
+   "steps": [
+    {
+     "heard": [],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open",
+      "sub.usda": "open"
+     },
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/A.e"
+       ],
+       "resynced": []
+      }
+     ],
+     "layers": {
+      "extra.usda": "open dirty",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open",
+      "sub.usda": "open"
+     },
+     "step": [
+      "edit",
+      "extra.usda",
+      "/A.e",
+      700.0
+     ],
+     "values": {
+      "/A.e": 700.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/",
+        "/A"
+       ],
+       "resynced": [
+        "/A.e"
+       ]
+      }
+     ],
+     "layers": {
+      "extra.usda": "freed",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open dirty",
+      "sub.usda": "open"
+     },
+     "step": [
+      "remove_sublayer",
+      "extra.usda"
+     ],
+     "values": {
+      "/A.e": null,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/",
+        "/A"
+       ],
+       "resynced": [
+        "/A.e"
+       ]
+      }
+     ],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open dirty",
+      "sub.usda": "open"
+     },
+     "step": [
+      "append_sublayer",
+      "extra.usda"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    }
+   ]
+  },
+  {
+   "name": "reference",
+   "steps": [
+    {
+     "heard": [],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open",
+      "sub.usda": "open"
+     },
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [],
+       "resynced": [
+        "/R"
+       ]
+      }
+     ],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "freed",
+      "root.usda": "open dirty",
+      "sub.usda": "open"
+     },
+     "step": [
+      "clear_references",
+      "/R"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": null,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "freed",
+      "root.usda": "open dirty",
+      "sub.usda": "open"
+     },
+     "step": [
+      "rewrite",
+      "ref.usda"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": null,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [],
+       "resynced": [
+        "/R"
+       ]
+      }
+     ],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open dirty",
+      "sub.usda": "open"
+     },
+     "step": [
+      "add_reference",
+      "/R",
+      "ref.usda",
+      "/R"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 60.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    }
+   ]
+  },
+  {
+   "name": "reference_dirty",
+   "steps": [
+    {
+     "heard": [],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open",
+      "sub.usda": "open"
+     },
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/R.r"
+       ],
+       "resynced": []
+      }
+     ],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open dirty",
+      "root.usda": "open",
+      "sub.usda": "open"
+     },
+     "step": [
+      "edit",
+      "ref.usda",
+      "/R.r",
+      600.0
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 600.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [],
+       "resynced": [
+        "/R"
+       ]
+      }
+     ],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "freed",
+      "root.usda": "open dirty",
+      "sub.usda": "open"
+     },
+     "step": [
+      "clear_references",
+      "/R"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": null,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [],
+       "resynced": [
+        "/R"
+       ]
+      }
+     ],
+     "layers": {
+      "extra.usda": "open",
+      "payload.usda": "open",
+      "payload_sub.usda": "open",
+      "ref.usda": "open",
+      "root.usda": "open dirty",
+      "sub.usda": "open"
+     },
+     "step": [
+      "add_reference",
+      "/R",
+      "ref.usda",
+      "/R"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/P.p": 4.0,
+      "/P.q": 5.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/T.w": null
+     }
+    }
+   ]
+  }
+ ],
+ "openusd_version": "26.11",
+ "rewrites": {
+  "extra.usda": "#usda 1.0\n\nover \"A\"\n{\n    double e = 70\n}\n",
+  "payload.usda": "#usda 1.0\n(\n    subLayers = [\n        @payload_sub.usda@\n    ]\n)\n\ndef \"P\"\n{\n    double p = 44\n}\n",
+  "payload_sub.usda": "#usda 1.0\n\nover \"P\"\n{\n    double q = 55\n}\n",
+  "ref.usda": "#usda 1.0\n\ndef \"R\"\n{\n    double r = 60\n}\n",
+  "sub.usda": "#usda 1.0\n\ndef \"B\"\n{\n    double y = 20\n}\n\ndef \"T\"\n{\n    double w = 8\n}\n"
+ }
+}

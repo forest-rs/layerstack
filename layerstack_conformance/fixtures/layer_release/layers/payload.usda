@@ -1,0 +1,11 @@
+#usda 1.0
+(
+    subLayers = [
+        @payload_sub.usda@
+    ]
+)
+
+def "P"
+{
+    double p = 4
+}

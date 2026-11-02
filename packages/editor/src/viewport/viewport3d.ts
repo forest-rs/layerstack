@@ -1277,7 +1277,7 @@ export class Viewport {
     this.#cameraLight.position.setFromMatrixPosition(camera.matrixWorld);
     this.#setState();
     // The clustered draws' cut for this camera, on the GPU, before the draws read it.
-    this.#clusters.prepare(this.#renderer, camera, this.#canvas.height);
+    this.#clusters.prepare(this.#renderer, camera, this.#canvas.width, this.#canvas.height);
     this.#renderer.render(this.#scene, camera);
     this.#releaseUploaded();
   }

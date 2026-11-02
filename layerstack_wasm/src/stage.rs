@@ -442,6 +442,81 @@ impl Stage {
         Ok(Wire::List(vec![Wire::List(released), Wire::List(kept)]))
     }
 
+    /// Reloads the layers the stage uses from their sources
+    /// ([`StageDocument::reload`]), discarding the edits of dirty ones when
+    /// `discard_dirty`, else refusing them: reads only the sources whose
+    /// version changed ([`HostStorage`]), publishes only what each changed,
+    /// so the stage's notices name only that, and retries the assets
+    /// recorded missing. Returns `[reloaded, loaded, failures, reads,
+    /// compositions]`: the ids of the layers read again, then
+    /// [`Self::load_supplied`]'s record, whose `loaded` lists the layers
+    /// read, those newly reached included. Nothing changed, it reads and
+    /// publishes nothing.
+    ///
+    /// OpenUSD: `UsdStage::Reload`, which always discards.
+    ///
+    /// # Errors
+    ///
+    /// `io.dirty_reload` when a used layer is dirty and `discard_dirty` is
+    /// not set; nothing is read then. A layer that cannot be read again (a
+    /// changed source whose bytes the storage no longer holds,
+    /// `io.unavailable`; one that does not parse, `io.rejected`) is not an
+    /// error: it keeps its content and is among the record's `failures`,
+    /// while the others reload, as in OpenUSD.
+    pub(crate) fn reload(&mut self, discard_dirty: bool) -> Result<Wire, Error> {
+        self.document.synchronize();
+        let policy = reload_policy(discard_dirty);
+        let prepared = self.document.prepare_reload(policy)?;
+        let reloaded = prepared.reloaded_layers().to_vec();
+        let report = prepared.commit();
+        Ok(self.reload_wire(&reloaded, &report))
+    }
+
+    /// Reloads the layers `ids` ([`StageDocument::reload_layers`]), as
+    /// [`Self::reload`] reloads the used ones, every one read when `force`
+    /// even if its source is unchanged
+    /// ([`StageDocument::force_reload_layers`]). A package member reloads
+    /// its package. Returns what [`Self::reload`] returns.
+    ///
+    /// OpenUSD: `SdfLayer::Reload(force)`.
+    ///
+    /// # Errors
+    ///
+    /// `layer.unknown` for an id the stage has no layer for, and those of
+    /// [`Self::reload`].
+    pub(crate) fn reload_layers(
+        &mut self,
+        ids: &[u64],
+        discard_dirty: bool,
+        force: bool,
+    ) -> Result<Wire, Error> {
+        let layers: Vec<LayerId> = ids.iter().map(|&id| LayerId(id)).collect();
+        for &layer in &layers {
+            self.check_layer(layer)?;
+        }
+        let policy = reload_policy(discard_dirty);
+        let prepared = if force {
+            self.document.prepare_force_reload_layers(&layers, policy)?
+        } else {
+            self.document.prepare_reload_layers(&layers, policy)?
+        };
+        let reloaded = prepared.reloaded_layers().to_vec();
+        let report = prepared.commit();
+        Ok(self.reload_wire(&reloaded, &report))
+    }
+
+    /// `[reloaded, loaded, failures, reads, compositions]`, as
+    /// [`Self::reload`] returns it.
+    fn reload_wire(&self, reloaded: &[LayerId], report: &LoadReport) -> Wire {
+        let Wire::List(record) = self.load_wire(report) else {
+            unreachable!("a load result is a list")
+        };
+        let reloaded = reloaded.iter().map(|id| Wire::UInt64(id.0)).collect();
+        let mut result = vec![Wire::List(reloaded)];
+        result.extend(record);
+        Wire::List(result)
+    }
+
     /// Reads what the host supplied for the assets the stage wants
     /// ([`StageDocument::load_requested_assets`]):
     /// `[loaded, failures, reads, compositions]`, the ids of the layers it
@@ -2875,6 +2950,34 @@ impl Stage {
         self.document.storage_mut().confirm_absent(identifier);
     }
 
+    /// The record `reload` builds, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = reload)]
+    pub fn js_reload(&mut self, discard_dirty: bool) -> Result<JsValue, JsValue> {
+        Ok(self.reload(discard_dirty)?.into())
+    }
+
+    /// The record `reload_layers` builds, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = reloadLayers)]
+    pub fn js_reload_layers(
+        &mut self,
+        ids: Vec<u64>,
+        discard_dirty: bool,
+        force: bool,
+    ) -> Result<JsValue, JsValue> {
+        Ok(self.reload_layers(&ids, discard_dirty, force)?.into())
+    }
+
+    /// Supplies `bytes` as the source `identifier` with the version the host
+    /// knows them by ([`HostStorage::supply_versioned`]).
+    #[wasm_bindgen(js_name = supplyVersioned)]
+    pub fn js_supply_versioned(&mut self, identifier: &str, bytes: Vec<u8>, version: &str) {
+        self.document.storage_mut().supply_versioned(
+            identifier,
+            bytes,
+            layerstack_io::SourceVersion::new(version),
+        );
+    }
+
     /// The record `release_unused_layers` builds, as documented in `stage.rs`.
     #[wasm_bindgen(js_name = releaseUnusedLayers)]
     pub fn js_release_unused_layers(&mut self, keep: Vec<u64>) -> Result<JsValue, JsValue> {
@@ -3980,6 +4083,14 @@ pub(crate) fn check_property_path(path: &str) -> Result<(), Error> {
     }
 }
 
+/// The reload policy `discard_dirty` asks for.
+fn reload_policy(discard_dirty: bool) -> layerstack_io::ReloadPolicy {
+    if discard_dirty {
+        layerstack_io::ReloadPolicy::DiscardDirty
+    } else {
+        layerstack_io::ReloadPolicy::PreserveDirty
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5470,7 +5581,7 @@ def "Lone" (
 
     /// A released source read again is unavailable until the host
     /// supplies it again: another layer of it waits in `unavailable`, and
-    /// a reload that selects it reports it failed and keeps its layer.
+    /// a reload that must read it reports it failed and keeps its layer.
     #[test]
     fn a_released_source_reread_is_unavailable_until_supplied_again() {
         use layerstack_io::{IoErrorKind, ReloadPolicy};
@@ -5501,18 +5612,25 @@ def "Lone" (
         assert!(stage.unavailable().as_list().unwrap().is_empty());
         assert!(stage.document().storage().is_released("parts/ball.usda"));
 
-        // A reload of a released layer reads it to compare, and keeps the
-        // layer as it was until the host supplies it again.
+        // A reload of a released layer whose source did not change reads
+        // nothing; forced, it needs the bytes again, and keeps the layer as
+        // it was until they come.
         let sub = stage.document_mut().layer_named("sub.usda").unwrap();
-        let reload = stage
+        let unchanged = stage
             .document_mut()
             .prepare_reload_layers(&[sub], ReloadPolicy::PreserveDirty)
             .unwrap();
-        assert!(reload.reloaded_layers().is_empty());
-        let error = &reload.load_report().asset_failures[0].error;
+        assert!(unchanged.is_empty());
+        drop(unchanged);
+        let forced = stage
+            .document_mut()
+            .prepare_force_reload_layers(&[sub], ReloadPolicy::PreserveDirty)
+            .unwrap();
+        assert!(forced.reloaded_layers().is_empty());
+        let error = &forced.load_report().asset_failures[0].error;
         assert_eq!(error.kind, IoErrorKind::Unavailable);
         assert_eq!(error.identifier.as_deref(), Some("sub.usda"));
-        reload.commit();
+        forced.commit();
         assert_eq!(serial(&stage), Wire::Int64(9_007_199_254_740_993));
         stage.document_mut().storage_mut().supply(
             "sub.usda",

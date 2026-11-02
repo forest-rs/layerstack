@@ -80,6 +80,9 @@ import type {
   PropertyChange,
   PackageResult,
   ReleasedLayers,
+  ReloadOptions,
+  ReloadResult,
+  LayerReloadOptions,
   ResolveClipQueryOptions,
   ResolveClipQueryResult,
   ResolveOptions,
@@ -133,6 +136,9 @@ export interface NativeStage extends Disposable {
   loadSupplied(): unknown;
   readSupplied(): unknown;
   releaseUnusedLayers(keep: BigUint64Array): unknown;
+  reload(discardDirty: boolean): unknown;
+  reloadLayers(ids: BigUint64Array, discardDirty: boolean, force: boolean): unknown;
+  supplyVersioned(identifier: string, bytes: Uint8Array, version: string): void;
   prepareClipQuery(path: string, time: number | null | undefined, maxLoads: number, maxDemands: number): unknown;
   layers(): unknown;
   layerDirty(id: bigint): boolean;
@@ -909,16 +915,95 @@ export class Stage implements Disposable {
    * arguments) is unavailable again and must be supplied again;
    * {@link Stage.resolve} does so.
    */
-  supply(identifier: string, bytes: Uint8Array | null): void {
-    if (typeof identifier !== "string" || !(bytes === null || bytes instanceof Uint8Array)) {
-      throw new LayerstackError("argument.invalid", "supply", "expected (identifier: string, bytes: Uint8Array | null)");
+  supply(identifier: string, bytes: Uint8Array | null, version?: string): void {
+    if (
+      typeof identifier !== "string" ||
+      !(bytes === null || bytes instanceof Uint8Array) ||
+      !(version === undefined || typeof version === "string")
+    ) {
+      throw new LayerstackError(
+        "argument.invalid",
+        "supply",
+        "expected (identifier: string, bytes: Uint8Array | null, version?: string)",
+      );
     }
     if (bytes === null) {
       this.#call("supply", (native) => native.confirmAbsent(identifier));
-    } else {
+    } else if (version === undefined) {
       this.#call("supply", (native) => native.supply(identifier, bytes));
       this.#ls.count("in", bytes.byteLength);
+    } else {
+      this.#call("supply", (native) => native.supplyVersioned(identifier, bytes, version));
+      this.#ls.count("in", bytes.byteLength);
     }
+  }
+
+  /**
+   * Reloads the layers the stage uses from their sources, as OpenUSD's
+   * `UsdStage::Reload`: a layer is read again only when its source changed
+   * since it was read, which supplying it again with other bytes (or
+   * another `version`, {@link Stage.supply}) says, and each publishes only
+   * what it changed, so listeners hear only that: a changed value
+   * info-only on its property, a prim added or removed resynced, and `/`
+   * info-only for a layer of the root layer stack read again (the prim
+   * referencing a layer read again otherwise). An asset that was missing
+   * and is supplied now resolves, resyncing the prims naming it. Nothing
+   * changed, nothing is read and nothing is heard.
+   *
+   * A source the stage read and the module then released
+   * ({@link Stage.supply}) is not read again unless supplied again.
+   *
+   * A layer that cannot be read again (its changed bytes are gone,
+   * `io.unavailable`, or do not parse, `io.rejected`) keeps its content
+   * and is among the result's `failures`, while the others reload, as in
+   * OpenUSD, which raises the error afterwards.
+   *
+   * Throws `io.dirty_reload` when a layer it would read is dirty and
+   * `discardDirty` is not set, with nothing changed.
+   */
+  reload(options: ReloadOptions = {}): ReloadResult {
+    const discard = options.discardDirty ?? false;
+    let record: [bigint[], ...LoadRecord];
+    try {
+      record = this.#call("reload", (native) => native.reload(discard)) as typeof record;
+    } finally {
+      this.#notify();
+    }
+    return this.#reloadResult(record, "reload");
+  }
+
+  /**
+   * Reloads `layers` from their sources, as {@link Stage.reload} reloads
+   * the used ones, as OpenUSD's `SdfLayer::Reload`: an unchanged layer is
+   * not read unless `force`. A package member reloads its package.
+   *
+   * Throws `layer.affinity` for a layer of another stage, and what
+   * {@link Stage.reload} throws.
+   */
+  reloadLayers(layers: Iterable<Layer>, options: LayerReloadOptions = {}): ReloadResult {
+    const ids: bigint[] = [];
+    for (const layer of layers) {
+      this.#own("reloadLayers", layer);
+      ids.push(layer.id);
+    }
+    const discard = options.discardDirty ?? false;
+    const force = options.force ?? false;
+    let record: [bigint[], ...LoadRecord];
+    try {
+      record = this.#call("reloadLayers", (native) =>
+        native.reloadLayers(BigUint64Array.from(ids), discard, force),
+      ) as typeof record;
+    } finally {
+      this.#notify();
+    }
+    return this.#reloadResult(record, "reloadLayers");
+  }
+
+  #reloadResult([reloaded, ...load]: [bigint[], ...LoadRecord], operation: string): ReloadResult {
+    return {
+      reloaded: reloaded.map((id) => this.#layer(id, operation)),
+      ...this.#loadResult(load),
+    };
   }
 
   /**

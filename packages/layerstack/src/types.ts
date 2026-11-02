@@ -435,6 +435,42 @@ export interface LoadOutcome {
 }
 
 /**
+ * What {@link Stage.reload} and {@link Stage.reloadLayers} read and
+ * published: the {@link LoadResult} of the reads, whose `loaded` lists
+ * every layer read, those newly reached included, and the layers read
+ * again from their sources.
+ */
+export interface ReloadResult extends LoadResult {
+  /**
+   * The layers read again from their sources, package members included:
+   * those whose source changed (its version, {@link Stage.supply}), the
+   * dirty ones discarded, and those forced. Empty when nothing changed:
+   * then nothing was read and nothing is heard.
+   */
+  readonly reloaded: readonly Layer[];
+}
+
+/** How {@link Stage.reload} treats layers with edits not saved. */
+export interface ReloadOptions {
+  /**
+   * Replace dirty layers with their sources, losing their edits, as
+   * OpenUSD's `UsdStage::Reload` always does. When `false`, the default, a
+   * dirty layer the reload would read refuses the reload
+   * (`io.dirty_reload`), with nothing changed.
+   */
+  readonly discardDirty?: boolean;
+}
+
+/** How {@link Stage.reloadLayers} reads its layers. */
+export interface LayerReloadOptions extends ReloadOptions {
+  /**
+   * Read every layer even when its source is unchanged, as OpenUSD's
+   * `SdfLayer::Reload(force)`; each is heard as read again.
+   */
+  readonly force?: boolean;
+}
+
+/**
  * What {@link Stage.releaseUnusedLayers} released and kept.
  */
 export interface ReleasedLayers {

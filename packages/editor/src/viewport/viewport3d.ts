@@ -42,7 +42,8 @@
 //   axis (`2 r length`, its world side area / π).
 // - `RectLight` → `RectAreaLight` facing -Z, its width and height scaled
 //   by the transform: the radiance itself (its `texture:file` is not
-//   loaded).
+//   loaded). Every rect light shades with one shared pair of lookup
+//   tables (`rectAreaLights.ts`), not two per light, per object.
 // - `DistantLight` → `DirectionalLight` along -Z: the illuminance of a disk
 //   of the light's angular size, radiance × π sin²(angle / 2) (the
 //   `sizeFactor` `UsdLux` normalizes by, so a normalized light's intensity
@@ -195,7 +196,6 @@ import {
   PointsNodeMaterial,
   Quaternion,
   RectAreaLight,
-  RectAreaLightNode,
   RenderTarget,
   Scene,
   Skeleton,
@@ -207,13 +207,13 @@ import {
 import type { LightsNode, WebGPURenderer } from "three/webgpu";
 import { attribute, instanceIndex, lights, materialColor, max, positionView, renderGroup, screenDPR, uniform, varying, vec4 } from "three/tsl";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { RectAreaLightTexturesLib } from "three/addons/lights/RectAreaLightTexturesLib.js";
 import { conformCamera, lightSizeFactor, vertexPositions } from "@forest-rs/layerstack_stagehand";
 import type { BufferCost, CameraItem, LightItem, MaterialItem, MeshVertices, VertexAttribute } from "@forest-rs/layerstack_stagehand";
 import { PickIds, pickOrder, pickWindow, readIndex, unpackPickId } from "./picking.ts";
 import { DEFAULT_LIGHT_SETTINGS, defaultLights, type LightSettings } from "./defaultLights.ts";
 import { DrawBundles, type BundleCounts } from "./bundles.ts";
 import { lightSetKey, linkedLights } from "./lightLinks.ts";
+import { useSharedRectAreaTables } from "./rectAreaLights.ts";
 import { onRendererLost, sharedRenderer } from "./gpu.ts";
 import { SkinnedDraw, withSkinning } from "./skinning.ts";
 import { TextureStore, surfaceMaterial, uvChannels } from "./surfaces.ts";
@@ -356,7 +356,7 @@ export class Viewport {
     this.#renderer = renderer;
     this.#target = new CanvasTarget(canvas);
     this.#target.setPixelRatio(window.devicePixelRatio);
-    RectAreaLightNode.setLTC(RectAreaLightTexturesLib.init());
+    useSharedRectAreaTables();
     this.#scene.add(this.#cameraLight, this.#ambient);
     this.#draws = new DrawBundles<Drawn>(
       this.#scene,

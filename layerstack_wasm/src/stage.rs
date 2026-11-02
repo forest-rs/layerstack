@@ -398,6 +398,50 @@ impl Stage {
         )
     }
 
+    /// Releases the clean layers the stage does not use, keeping the
+    /// layers of `keep` ([`StageDocument::release_unused_layers`]), and
+    /// returns `[released, keptDirty]`: each layer released
+    /// `[id, identifier, sourceBytes, muted]`, `sourceBytes` `null` when
+    /// unknown, and the ids of the unused layers kept because they hold
+    /// edits not saved. The stage and its notices do not change. A
+    /// released layer's source, when the stage next asks for it (a payload
+    /// loaded again, a sublayer authored again, a layer unmuted), is
+    /// unavailable ([`Self::unavailable`]) until the host supplies it
+    /// again, as storage releases its bytes ([`HostStorage`]).
+    ///
+    /// OpenUSD frees such layers once nothing holds them, dirty ones and
+    /// their edits included; this keeps those and lists them.
+    ///
+    /// # Errors
+    ///
+    /// `layer.unknown` for an id of `keep` the document has no layer for;
+    /// nothing is released.
+    pub(crate) fn release_unused_layers(&mut self, keep: &[u64]) -> Result<Wire, Error> {
+        let keep: Vec<LayerId> = keep.iter().map(|&id| LayerId(id)).collect();
+        for &layer in &keep {
+            self.check_layer(layer)?;
+        }
+        let report = self.document.release_unused_layers(&keep);
+        let released = report
+            .released
+            .iter()
+            .map(|layer| {
+                Wire::List(vec![
+                    Wire::UInt64(layer.layer.0),
+                    Wire::text(&layer.identifier),
+                    layer.source_bytes.map_or(Wire::Null, Wire::UInt64),
+                    Wire::Bool(layer.muted),
+                ])
+            })
+            .collect();
+        let kept = report
+            .kept_dirty
+            .iter()
+            .map(|id| Wire::UInt64(id.0))
+            .collect();
+        Ok(Wire::List(vec![Wire::List(released), Wire::List(kept)]))
+    }
+
     /// Reads what the host supplied for the assets the stage wants
     /// ([`StageDocument::load_requested_assets`]):
     /// `[loaded, failures, reads, compositions]`, the ids of the layers it
@@ -659,7 +703,9 @@ impl Stage {
     /// `UsdStage::MuteAndUnmuteLayers`. Returns whether the muted set
     /// changed. A muted layer contributes no opinions and no sublayers
     /// wherever the stage reaches it, and the stage keeps it as it is: its
-    /// content, edits and dirty state stay, and unmuting composes it again.
+    /// content, edits and dirty state stay, and unmuting composes it again,
+    /// unless [`Self::release_unused_layers`] released it clean, when
+    /// unmuting reads it anew.
     /// Muting is the stage's state, not an authored edit, so it makes no
     /// receipt.
     ///
@@ -850,7 +896,8 @@ impl Stage {
     /// ([`Self::load_supplied`]); the rest are unavailable
     /// ([`Self::unavailable`]) until supplied. Returns whether the rules
     /// changed. The rules are the stage's state, not an authored edit:
-    /// they make no receipt, and a payload unloaded keeps its layers.
+    /// they make no receipt, and a payload unloaded keeps its layers
+    /// until [`Self::release_unused_layers`] releases them.
     ///
     /// Spec: AOUSD Core §10.3.2.2 (payloads); OpenUSD `UsdStage::SetLoadRules`.
     ///
@@ -2807,6 +2854,12 @@ impl Stage {
     #[wasm_bindgen(js_name = confirmAbsent)]
     pub fn js_confirm_absent(&mut self, identifier: &str) {
         self.document.storage_mut().confirm_absent(identifier);
+    }
+
+    /// The record `release_unused_layers` builds, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = releaseUnusedLayers)]
+    pub fn js_release_unused_layers(&mut self, keep: Vec<u64>) -> Result<JsValue, JsValue> {
+        Ok(self.release_unused_layers(&keep)?.into())
     }
 
     /// The record `load_supplied` builds, as documented in `stage.rs`.

@@ -434,6 +434,33 @@ export interface LoadOutcome {
   readonly refused: readonly { readonly path: string; readonly code: "inactive" | "not_on_stage" | "prototype" }[];
 }
 
+/**
+ * What {@link Stage.releaseUnusedLayers} released and kept.
+ */
+export interface ReleasedLayers {
+  /** The layers released, by ascending id. */
+  readonly released: readonly ReleasedLayer[];
+  /**
+   * The layers nothing uses that were kept because they hold edits not
+   * saved, anonymous layers among them: save them ({@link Stage.save}) or
+   * discard their edits, and a later release frees them. OpenUSD frees
+   * them and loses the edits.
+   */
+  readonly keptDirty: readonly Layer[];
+  /** The bytes the released layers were read from, summed over those known. */
+  readonly sourceBytes: number;
+}
+
+/** One layer {@link Stage.releaseUnusedLayers} released. */
+export interface ReleasedLayer {
+  /** The identifier it was read from: the key to supply again when the stage next asks for it. */
+  readonly identifier: string;
+  /** The bytes it was read from, or `null` when unknown. The memory it held is larger: decoded specs, values and indexes. */
+  readonly sourceBytes: number | null;
+  /** Whether the stage mutes it: unmuting it asks for it again. */
+  readonly muted: boolean;
+}
+
 export interface OpenOptions {
   /**
    * Which payloads the stage includes ({@link LoadRules}): `"all"` (the

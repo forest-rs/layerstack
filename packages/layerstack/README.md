@@ -200,6 +200,17 @@ await stage.resolve(source);
   payloads are included (`UsdStage::GetLoadSet`). Load rules
   are not edits: they make no receipt, and undo neither reverts them nor
   is blocked by them.
+- **Unused layers are released on request.** Unloading a payload or
+  muting a layer keeps its layers; `stage.releaseUnusedLayers(keep?)`
+  then frees the clean ones the stage no longer uses (nothing composed
+  changes and listeners hear nothing) and returns `{ released, keptDirty,
+  sourceBytes }`. The next time the stage asks for one (the payload
+  loaded again, the layer unmuted, an arc or sublayer to it authored
+  again) it is unavailable until supplied, and is read anew, as OpenUSD
+  opens a file again once it freed the layer. `keep` lists layers the
+  host holds, such as the layer an edit target writes. A layer with
+  unsaved edits is never released: OpenUSD frees it and loses them,
+  this keeps it and lists it in `keptDirty`.
 - **Everything native is disposable.** A `Stage` owns native memory: call
   `free()` or declare it with `using`. Afterwards every call fails with
   `stage.disposed`.

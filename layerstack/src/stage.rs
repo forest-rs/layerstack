@@ -16,6 +16,8 @@ pub use authoring::{
 };
 mod objects;
 mod relationships;
+mod sample_reads;
+pub use sample_reads::BracketingSamples;
 mod targets;
 mod view;
 pub use authored_targets::{
@@ -1709,7 +1711,7 @@ impl Stage {
     /// OpenUSD's is: `true` over a single weaker time sample.
     #[must_use]
     pub(crate) fn property_might_be_time_varying(&self, prim: PathId, field: TokenId) -> bool {
-        self.property_time_info(prim, field).1 || self.clip_variation_unknown(prim, field)
+        self.property_time_info(prim, field).varying || self.clip_variation_unknown(prim, field)
     }
 
     /// Whether a clip set that may supply the property waits for clip
@@ -1791,7 +1793,7 @@ impl Stage {
     /// splines have no discrete sample times. Default-time reads ignore clips.
     #[must_use]
     pub(crate) fn property_sample_times(&self, prim: PathId, field: TokenId) -> Vec<f64> {
-        self.property_time_info(prim, field).0
+        self.property_time_info(prim, field).times
     }
 
     /// Effective property sample times within open, closed or unbounded stage-time bounds.
@@ -1808,24 +1810,23 @@ impl Stage {
         field: TokenId,
         interval: impl core::ops::RangeBounds<f64>,
     ) -> Vec<f64> {
-        let mut times = self.property_sample_times(prim, field);
-        times.retain(|time| interval.contains(time));
-        times
+        let times = self.property_sample_times(prim, field);
+        sample_reads::times_in_range(&times, &interval).to_vec()
     }
 
     // AOUSD Core §12.3.2: variability belongs to each contributing series;
     // merging differently timed single samples cannot create animation.
     // OpenUSD still answers from the strongest source alone where it is a
     // sparse default or a single sample that composes (`Strongest`).
-    fn property_time_info(&self, prim: PathId, field: TokenId) -> (Vec<f64>, bool) {
+    pub(crate) fn property_time_info(&self, prim: PathId, field: TokenId) -> TimeInfo {
         let Some(index) = self.prims.get(&prim) else {
-            return (Vec::new(), false);
+            return TimeInfo::default();
         };
         let authored = index.property_opinions(field).unwrap_or_default();
         let animation = stage_time::animation_opinions(authored.records());
         let ordinary = authored.with_records(&animation);
         if ordinary.is_empty() && self.property_definition_ref(prim, field).is_none() {
-            return (Vec::new(), false);
+            return TimeInfo::default();
         }
         let clip_opinions =
             self.clip_opinions_after_authored(prim, field, ordinary, 0.0, InterpolationType::Held);
@@ -1840,6 +1841,13 @@ impl Stage {
         }
         let mut times = Vec::new();
         let mut varying = false;
+        // OpenUSD `_BracketingSamplesResolver::_hasAnyValue`
+        // (`pxr/usd/usd/stage.cpp`): samples, a default (sparse or not) or,
+        // once every opinion is passed, the fallback; a block, an animation
+        // block or a spline met first leaves it unset. `None` until one of
+        // those settles it.
+        let mut has_value = None;
+        let mut found_default = false;
         let mut masking: Vec<Vec<(f64, bool)>> = Vec::new();
         // OpenUSD answers from the strongest opinion offering a value, its
         // resolve info source (`_ValueMightBeTimeVaryingFromResolveInfo`,
@@ -1880,16 +1888,26 @@ impl Stage {
                     })
                     .collect()
             } else {
+                let settled = !times.is_empty() || found_default;
                 if op.value().spline().is_some() {
                     varying = true;
+                    has_value.get_or_insert(settled);
                     break;
                 }
-                if op
-                    .value()
-                    .default_value()
-                    .is_some_and(|v| !shows_weaker_samples(v))
-                {
-                    break;
+                // An animation block settles it too, though the walk goes
+                // on (weaker samples and splines are already stripped, and
+                // weaker defaults bear on whether the value might vary).
+                if op.value().blocks_animation() {
+                    has_value.get_or_insert(settled);
+                }
+                match op.value().default_value() {
+                    Some(Value::Blocked) => {
+                        has_value.get_or_insert(settled);
+                        break;
+                    }
+                    Some(v) if !shows_weaker_samples(v) => break,
+                    Some(_) => found_default = true,
+                    None => {}
                 }
                 continue;
             };
@@ -1928,7 +1946,11 @@ impl Stage {
             Some(Strongest::ComposingSample) => varying = true,
             Some(Strongest::Other) | None => {}
         }
-        (times, varying)
+        TimeInfo {
+            times,
+            varying,
+            has_value: has_value.unwrap_or(true),
+        }
     }
 
     pub(crate) fn from_parts(
@@ -4888,6 +4910,21 @@ pub(crate) fn materialize_selected(value: &mut Value) -> Result<(), crate::Array
         _ => {}
     }
     Ok(())
+}
+
+/// A property's composed sample times and what its value source says
+/// about time, from one walk of its opinions.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct TimeInfo {
+    /// Sorted, unique stage-time samples ([`Stage::property_sample_times`]).
+    pub(crate) times: Vec<f64>,
+    /// [`Stage::property_might_be_time_varying`], before clip metadata
+    /// that is not loaded is considered.
+    pub(crate) varying: bool,
+    /// Whether a sample, a default or the fallback supplies a value before
+    /// a block, an animation block or a spline ends the walk: OpenUSD's
+    /// `GetBracketingTimeSamples` result when there are no samples.
+    pub(crate) has_value: bool,
 }
 
 /// What the strongest property opinion offering a value is, for

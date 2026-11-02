@@ -171,6 +171,7 @@ mod render_spec;
 mod retained_queries;
 mod retained_text_values;
 mod runtime_prototypes;
+mod sample_brackets;
 mod sample_ranges;
 mod schema_bases;
 mod schema_compiler;

@@ -662,6 +662,8 @@ export class Viewport {
   /** Releases the canvas target, geometries, materials and textures; the shared renderer stays. */
   dispose(): void {
     this.#unlisten();
+    cancelAnimationFrame(this.#restyleFrame);
+    this.#restyleQueue.clear();
     this.#picker?.dispose();
     this.#resizer.disconnect();
     this.#controls.dispose();
@@ -1198,21 +1200,55 @@ export class Viewport {
   }
 
   /**
-   * Makes again the materials of the draws reading an image that arrived
-   * since the last restyle; the others' materials already have theirs, or
-   * still wait on another.
+   * Queues the draws reading an image that arrived since the last restyle,
+   * and restyles a batch of them; the others' materials already have
+   * theirs, or still wait on another.
    */
   #restyleTextured(): void {
     const scene = this.#applied;
     const arrived = this.#textures.takeArrived();
-    if (scene === null || arrived.size === 0) return;
-    const reads = (path: string | null) => path !== null && (scene.materials.get(path)?.textures.some(({ file }) => file.identifier !== null && arrived.has(file.identifier)) ?? false);
+    if (scene !== null && arrived.size > 0) {
+      if (scene !== this.#restyleScene) this.#requeue(scene);
+      const reads = (path: string | null) => path !== null && (scene.materials.get(path)?.textures.some(({ file }) => file.identifier !== null && arrived.has(file.identifier)) ?? false);
+      for (const view of scene.items) {
+        const standin = view.buffers.standin;
+        const waited = standin !== null ? standin.textures.some((file) => file?.identifier != null && arrived.has(file.identifier)) : reads(view.item.material) || view.item.subsetMaterials.some(reads);
+        if (waited) this.#restyleQueue.set(view.item.id, view);
+      }
+    }
+    if (this.#restyleFrame === 0) this.#restyleSome();
+  }
+
+  /** The queued draws' views taken from `scene`, the one applied now. */
+  #requeue(scene: ViewportScene): void {
+    this.#restyleScene = scene;
+    if (this.#restyleQueue.size === 0) return;
+    const current = new Map(scene.items.map((view) => [view.item.id, view]));
+    for (const id of [...this.#restyleQueue.keys()]) {
+      const view = current.get(id);
+      if (view === undefined) this.#restyleQueue.delete(id);
+      else this.#restyleQueue.set(id, view);
+    }
+  }
+
+  /**
+   * Restyles the next batch of queued draws and draws the frame, which
+   * uploads their new images; the rest wait for the next frame. A batch
+   * is sized from the last one so that it and its frame take about
+   * {@link RESTYLE_BUDGET_MS}: a set of 1,280 card models whose images
+   * arrived together restyled and uploaded in one 600 ms task otherwise.
+   */
+  #restyleSome(): void {
+    this.#restyleFrame = 0;
+    const scene = this.#applied;
+    if (scene === null || this.#restyleQueue.size === 0) return;
+    if (scene !== this.#restyleScene) this.#requeue(scene);
+    const started = performance.now();
     let count = 0;
-    for (const view of scene.items) {
-      const standin = view.buffers.standin;
-      const waited = standin !== null ? standin.textures.some((file) => file?.identifier != null && arrived.has(file.identifier)) : reads(view.item.material) || view.item.subsetMaterials.some(reads);
-      if (!waited) continue;
-      const object = this.#objects.get(view.item.id);
+    for (const [id, view] of this.#restyleQueue) {
+      if (count >= this.#restyles.batch) break;
+      this.#restyleQueue.delete(id);
+      const object = this.#objects.get(id);
       if (object === undefined) continue;
       this.#retired.push(...[object.material].flat());
       object.material = restyled(object, materials(view, this.#selected, scene.materials, this.#textures));
@@ -1220,19 +1256,35 @@ export class Viewport {
       this.#draws.drawDirectly(object);
       count += 1;
     }
-    this.#restyles.restyles += 1;
-    this.#restyles.draws += count;
-    if (count === 0) return;
-    this.#link(scene);
-    this.#draw();
-    this.#compile();
+    if (count > 0) {
+      this.#link(scene);
+      this.#draw();
+      this.#compile();
+      const elapsed = performance.now() - started;
+      this.#restyles.restyles += 1;
+      this.#restyles.draws += count;
+      this.#restyles.lastMs = elapsed;
+      // Only a full batch says how many fit the budget.
+      if (count === this.#restyles.batch) this.#restyles.batch = Math.round(Math.min(1024, Math.max(4, (count * RESTYLE_BUDGET_MS) / Math.max(elapsed, 0.5))));
+    }
+    if (this.#restyleQueue.size > 0) this.#restyleFrame = requestAnimationFrame(() => this.#restyleSome());
   }
 
-  readonly #restyles = { restyles: 0, draws: 0 };
+  /** Draws waiting to be restyled for images that arrived, with their views. */
+  readonly #restyleQueue = new Map<number, ViewItem>();
+  /** The scene the queued views are from. */
+  #restyleScene: ViewportScene | null = null;
+  /** The frame the next batch is restyled in; 0 when none is asked for. */
+  #restyleFrame = 0;
+  readonly #restyles = { restyles: 0, draws: 0, batch: 32, lastMs: 0 };
 
-  /** How often arrived images restyled draws so far, and how many draws' materials they made again in all. */
-  get restyleCounts(): { readonly restyles: number; readonly draws: number } {
-    return { ...this.#restyles };
+  /**
+   * Restyles for arrived images so far: batches, the draws they made
+   * materials for again in all, the draws still queued, the size of the
+   * next batch and how long the last took (with its frame), in ms.
+   */
+  get restyleCounts(): { readonly restyles: number; readonly draws: number; readonly queued: number; readonly batch: number; readonly lastMs: number } {
+    return { ...this.#restyles, queued: this.#restyleQueue.size };
   }
 
   /** The stage camera the view looks through, or `null` for the free camera. */
@@ -1637,6 +1689,13 @@ type Drawn = Mesh | InstancedMesh | LineSegments;
  * did (a millisecond or so), and a frame replays a bundle per this many.
  */
 const BUNDLE_CAPACITY = 256;
+
+/**
+ * About how long a batch of draws restyled for arrived images may take,
+ * with the frame that uploads their images, in milliseconds: a share of a
+ * frame, so the page keeps drawing while they arrive.
+ */
+const RESTYLE_BUDGET_MS = 8;
 
 /**
  * Whether `object` may be drawn from a render bundle: every material

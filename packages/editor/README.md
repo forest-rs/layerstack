@@ -234,7 +234,8 @@ a compute pass culls its instances and clusters against the view and
 chooses each instance's cut at a pixel error (1 px), dropping instances
 under a pixel across, and the clusters are drawn indirectly by vertex
 pulling, a draw per material subset, with the mesh's own material (lights,
-light links, selection and picking unchanged). The status line reports
+light links, selection and picking unchanged). The mesh's own geometry is
+never uploaded: its draws wait for its set. The status line reports
 what the clustered draws hold and the triangles the last cut drew. A mesh
 without a set, or edited since, draws as before. The draw budget weighs a
 clustered mesh by its set (every level, once), found by prim in the

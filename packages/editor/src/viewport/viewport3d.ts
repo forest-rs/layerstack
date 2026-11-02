@@ -139,6 +139,22 @@
 // so a new material pops in a frame or so later instead of holding the
 // page.
 //
+// Bundles (`bundles.ts`): once its compile is done, an opaque draw is
+// recorded into a WebGPU render bundle (three.js's `BundleGroup`, up to
+// {@link BUNDLE_CAPACITY} draws each) that each frame replays, rather than
+// three.js comparing its matrix, material, geometry and lights with what
+// it last drew, which was most of a frame's CPU time with a thousand draws
+// or more. A replay does not look at the draws, so the view records a
+// bundle again whenever it changes one of its draws (placed, posed, given
+// another geometry, refilled, relinked), all of them when the scene's
+// lights change, and a draw with new materials is drawn directly until
+// they compile. Transparent and transmissive draws stay direct (three.js
+// sorts them each frame, and transmission reads the frame drawn so far),
+// as does a draw that moves as time plays. Bundled draws are not culled
+// against the view, as direct ones are: a replay draws them all. Picking
+// draws its own bundles with the pick materials, recorded again when the
+// view's are.
+//
 // Picking (`picking.ts`): a click renders the scene once more into a
 // 7×7-pixel RGBA8 target about the point, every draw with a pick material
 // (one for surfaces and lines, one for points) that writes its object's
@@ -151,6 +167,7 @@ import {
   AmbientLight,
   Bone,
   BufferAttribute,
+  BundleGroup,
   BufferGeometry,
   Camera,
   CanvasTarget,
@@ -195,6 +212,7 @@ import { conformCamera, lightSizeFactor, vertexPositions } from "@forest-rs/laye
 import type { CameraItem, LightItem, MaterialItem, MeshVertices, VertexAttribute } from "@forest-rs/layerstack_stagehand";
 import { PickIds, pickOrder, pickWindow, readIndex, unpackPickId } from "./picking.ts";
 import { DEFAULT_LIGHT_SETTINGS, defaultLights, type LightSettings } from "./defaultLights.ts";
+import { DrawBundles, type BundleCounts } from "./bundles.ts";
 import { lightSetKey, linkedLights } from "./lightLinks.ts";
 import { onRendererLost, sharedRenderer } from "./gpu.ts";
 import { SkinnedDraw, withSkinning } from "./skinning.ts";
@@ -251,6 +269,8 @@ export class Viewport {
    * a `Mesh` of a quad per point for a point set.
    */
   readonly #objects = new Map<number, Drawn>();
+  /** Where each object is drawn from: a bundle, or the scene directly (see the header). */
+  readonly #draws: DrawBundles<Drawn>;
   /** Whether an update was applied yet. */
   #synced = false;
   /** The selection the materials were last made for. */
@@ -306,6 +326,15 @@ export class Viewport {
     this.#target.setPixelRatio(window.devicePixelRatio);
     RectAreaLightNode.setLTC(RectAreaLightTexturesLib.init());
     this.#scene.add(this.#cameraLight, this.#ambient);
+    this.#draws = new DrawBundles<Drawn>(
+      this.#scene,
+      () => {
+        const bundle = new BundleGroup();
+        this.#scene.add(bundle);
+        return bundle;
+      },
+      BUNDLE_CAPACITY,
+    );
     this.#stageCamera.matrixAutoUpdate = false;
     this.#stageCamera.matrixWorldAutoUpdate = false;
     // The stage camera's projection is converted to WebGPU's depth range here ({@link #prepareCamera}).
@@ -512,6 +541,9 @@ export class Viewport {
     // render) starts from nothing, as a new stage's does.
     const reset = update.reset || !this.#synced;
     this.#synced = true;
+    // A draw an update moves, poses or refills as time plays is drawn
+    // directly from then on: recording its bundle each frame would cost more.
+    const playing = update.timeChanged && !reset;
     if (reset) {
       for (const id of [...this.#objects.keys()]) this.#drop(id);
       for (const geometry of this.#geometries.values()) geometry.dispose();
@@ -577,6 +609,7 @@ export class Viewport {
       }
       if (view.kind === "lines" || view.kind === "points") {
         refillSamples(geometry, view);
+        for (const id of drawing.get(key) ?? []) this.#changed(this.#objects.get(id), playing);
         continue;
       }
       // New vertices (and their decode) over the same indices, and the objects placed again.
@@ -592,7 +625,9 @@ export class Viewport {
     for (const id of update.rebound) {
       const view = items.get(id);
       const object = this.#objects.get(id);
-      if (view !== undefined && object !== undefined) object.geometry = this.#geometries.get(view.item.buffer)!;
+      if (view === undefined || object === undefined) continue;
+      object.geometry = this.#geometries.get(view.item.buffer)!;
+      this.#changed(object, playing);
     }
     // Skinning bound again, begun or ended: the object made again over its buffer.
     for (const id of update.reskinned) {
@@ -603,7 +638,9 @@ export class Viewport {
     }
     for (const id of new Set([...update.matrices, ...update.visibility, ...replace])) {
       const view = items.get(id);
-      if (view !== undefined && !added.has(id) && !update.reskinned.has(id)) this.#place(view, selected);
+      if (view === undefined || added.has(id) || update.reskinned.has(id)) continue;
+      if (playing) this.#changed(this.#objects.get(id), true);
+      this.#place(view, selected);
     }
     for (const id of update.skinned) {
       const view = items.get(id);
@@ -616,6 +653,7 @@ export class Viewport {
       if (view === undefined || object === undefined || added.has(id)) continue;
       this.#retired.push(...[object.material].flat());
       object.material = restyled(object, materials(view, selected, scene.materials, this.#textures));
+      this.#draws.drawDirectly(object);
     }
     this.#selected = selected;
     // Lights: those the update names made again, the rest left as they are.
@@ -628,6 +666,8 @@ export class Viewport {
       const light = lights.get(path);
       if (light !== undefined) this.#addLight(light);
     }
+    // Every lit shader is built for the scene's lights: every bundle recorded again.
+    if (relit.length > 0 || update.lightsRemoved.size > 0) this.#draws.touchAll();
     // Linked again when what it reads may have changed: not as time plays.
     const linking = added.size > 0 || restyle.size > 0 || update.reskinned.size > 0 || relit.length > 0 || update.lightsRemoved.size > 0 || update.links > 0;
     const relinked = linking && this.#link(scene);
@@ -670,7 +710,9 @@ export class Viewport {
             : new InstancedMesh(geometry, styled as LitMaterial | LitMaterial[], Math.max(1, placements));
     object.matrixAutoUpdate = false;
     this.#objects.set(view.item.id, object);
-    this.#scene.add(object);
+    // Skinned draws are posed as time plays: never bundled.
+    if (view.skin !== null) this.#draws.keepDirect(object);
+    else this.#draws.drawDirectly(object);
     this.#place(view, selected);
     if (view.skin !== null) this.#pose(view);
   }
@@ -685,6 +727,7 @@ export class Viewport {
     const object = this.#objects.get(view.item.id);
     const skin = view.skin;
     if (object === undefined || skin === null) return;
+    this.#draws.touch(object);
     object.matrix.fromArray(skin.world);
     if (object instanceof SkinnedDraw) {
       const { bones, boneInverses } = object.skeleton;
@@ -710,6 +753,7 @@ export class Viewport {
   #place(view: ViewItem, selected: string | null): void {
     const object = this.#objects.get(view.item.id);
     if (object === undefined) return;
+    this.#draws.touch(object);
     const matrices = view.item.matrices;
     const placements = matrices.length / 16;
     object.visible = placements > 0;
@@ -799,6 +843,8 @@ export class Viewport {
         material.lightsNode = node;
         material.needsUpdate = true;
         changed = true;
+        // A shader of another light set: drawn directly until it compiles.
+        this.#draws.drawDirectly(object);
       }
     }
     // Sets no draw uses any more are let go.
@@ -835,9 +881,11 @@ export class Viewport {
       if (object === undefined) continue;
       this.#retired.push(...[object.material].flat());
       object.material = restyled(object, materials(view, this.#selected, scene.materials, this.#textures));
+      this.#draws.drawDirectly(object);
     }
     this.#link(scene);
     this.#draw();
+    this.#compile();
   }
 
   /** The stage camera the view looks through, or `null` for the free camera. */
@@ -849,7 +897,7 @@ export class Viewport {
   #drop(id: number): void {
     const object = this.#objects.get(id);
     if (object === undefined) return;
-    this.#scene.remove(object);
+    this.#draws.remove(object);
     for (const material of [object.material].flat()) material.dispose();
     if (object instanceof InstancedMesh) object.dispose();
     // A point set's geometry is its own (a quad per point over its samples).
@@ -942,9 +990,12 @@ export class Viewport {
     const camera = this.#prepareCamera();
     this.#setState();
     const started = performance.now();
+    // The direct draws this compile meets join bundles once it is done.
+    const met = this.#draws.compiling();
     this.#renderer.compileAsync(this.#scene, camera).then(
       () => {
         this.lastCompileMs = performance.now() - started;
+        this.#draws.settle(met, bundleable);
         this.#draw();
       },
       (error: unknown) => console.warn("pipeline compile failed", error),
@@ -953,6 +1004,32 @@ export class Viewport {
 
   /** How long the last asynchronous compile took, in milliseconds (0 before the first). */
   lastCompileMs = 0;
+
+  /** How many draws are in render bundles and how many are drawn directly (see the header). */
+  get bundleCounts(): BundleCounts {
+    return this.#draws.counts;
+  }
+
+  /**
+   * `object` changed: its bundle recorded again, or, when time playing
+   * changed it, the object drawn directly from now on.
+   */
+  #changed(object: Drawn | undefined, playing: boolean): void {
+    if (object === undefined) return;
+    if (!playing) {
+      this.#draws.touch(object);
+      return;
+    }
+    if (this.#draws.isBundled(object)) {
+      // three.js's render objects remember the bundle they were recorded
+      // in, and once its version is theirs they skip the per-frame check
+      // as if still bundled: a draw leaving a bundle for good is given
+      // copies of its materials, and with them render objects of its own.
+      this.#retired.push(...[object.material].flat());
+      object.material = Array.isArray(object.material) ? object.material.map((material) => material.clone()) : object.material.clone();
+    }
+    this.#draws.keepDirect(object);
+  }
 
   /** The camera drawn through: the free one, or the stage camera with its matrices set for the canvas. */
   #prepareCamera(): Camera {
@@ -1180,6 +1257,26 @@ function dropArrays(geometry: BufferGeometry): void {
 
 /** The three.js objects a draw item becomes: a point set is a `Mesh` of a quad per point ({@link pointsMesh}). */
 type Drawn = Mesh | InstancedMesh | LineSegments;
+
+/**
+ * The most draws one render bundle holds: a change to one draw records
+ * this many again, which costs about what drawing them directly each frame
+ * did (a millisecond or so), and a frame replays a bundle per this many.
+ */
+const BUNDLE_CAPACITY = 256;
+
+/**
+ * Whether `object` may be drawn from a render bundle: every material
+ * opaque. A transparent one is sorted by distance each frame, and a
+ * transmissive one reads the frame drawn so far, neither of which a
+ * recording can do.
+ */
+function bundleable(object: Drawn): boolean {
+  for (const material of [object.material].flat()) {
+    if (material.transparent || ((material as { transmission?: number }).transmission ?? 0) > 0) return false;
+  }
+  return true;
+}
 
 /** Whether `object` draws a point set. */
 function isPoints(object: Object3D): boolean {

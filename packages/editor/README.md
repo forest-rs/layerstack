@@ -49,9 +49,7 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
 - **Draw scope and asset view.** The viewport's **Scene | Selection |
   Nothing** switch chooses what is drawn: the whole scene, the selection
   alone, or nothing (the prims, inspector, layers, shading and asset loop
-  all work without draws). A scene whose draws are estimated before
-  building anything (`DrawList.estimate`) at over 512 MB uploaded or 50
-  million triangles drawn opens drawing the selection, and says why.
+  all work without draws). Either is drawn under the draw budget.
   Drawing the selection is the asset view: the selected prim's subtree in
   its own space, framed at the origin (a draw list scope), with what it
   is: a mesh's faces, points, triangles, vertices, primvars, subsets and
@@ -60,9 +58,21 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
   ghosted; a point instancer its instances; a prototype inside one that
   prototype alone; a `UsdUVTexture` (or an asset-valued property chosen
   in the inspector) its image, with its size, channels, bits, color space
-  and the material reading it; a material its shader ball. A selection
-  over the same limit is not drawn, and the viewport says why. Clicking a
+  and the material reading it; a material its shader ball. Clicking a
   part of what is drawn selects and draws that part.
+- **Draw budget.** The viewport draws at most 1 GiB uploaded and 50
+  million triangles drawn (instanced draws counted in full) unless the
+  viewer raises it: the **Budget** switch offers 2 GiB, 4 GiB (bytes and
+  triangles raised together) and **Unlimited**, and the choice is
+  remembered for the viewer. The draw list weighs each item from counts
+  before building it, gives every item a box of its extent, and then
+  draws in full the items worth most per share of the budget (bound size
+  times instances, over their share of bytes or triangles) while it
+  holds, so any scene opens drawing, however large, and one a little over
+  boxes only a few of its costliest items. A note says how many items were
+  simplified, and the Draw cost tab's **Simplified** list names each:
+  drawn as a box or skipped, the limits it would pass, what it asked
+  for. Selecting a prim admits it first.
 - **Payloads.** The **Open** menu chooses how the next scene opens its
   payloads: **Load all**, **Load none**, or (the default) load them unless
   over 1 GiB of layers. That automatic open composes the scene with no
@@ -166,9 +176,10 @@ the editor links them from `../layerstack` and `../layerstack_stagehand`.
   attributes, `u32` indices, 64 per instance matrix) and the JavaScript
   bytes it holds; sortable by any column, a row selecting its prim. The
   viewport's stats add the totals, each shared buffer counted once.
-  **Whole scene, estimated** lists what drawing everything would cost, as
-  estimated when the scene opened: the figures for a scene too big to
-  draw, its heaviest items a click from the asset view.
+  **Whole scene, estimated** lists what drawing everything in full would
+  cost, estimated from counts when first shown: its heaviest items a
+  click from the asset view. **Simplified** lists the items the draw
+  budget drew as boxes or skipped, in admission order.
 - **Explain, Changes, History, Asset loop, Notices.** A property's value and
   every opinion consulted for it, strongest first, each with "Edit here";
   each recomposition and the action that caused it; the undo history; the

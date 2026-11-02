@@ -19,7 +19,9 @@
 // diffs to three.js.
 import type { Stage } from "@forest-rs/layerstack";
 import type {
+  BudgetReport,
   CameraItem,
+  DrawBudget,
   DrawBuffers,
   DrawCost,
   DrawDiff,
@@ -265,6 +267,8 @@ const EMPTY_WORK: DrawWork = {
   linksClassified: 0,
   standinsRead: 0,
   drawModeRoots: 0,
+  itemsWeighed: 0,
+  itemsRegranted: 0,
 };
 
 /** The `diffuseColor` of the surface shader of the material at `material`, if it has one. */
@@ -337,7 +341,15 @@ function addWork(into: DrawWork, work: DrawWork): DrawWork {
     linksClassified: into.linksClassified + work.linksClassified,
     standinsRead: into.standinsRead + work.standinsRead,
     drawModeRoots: into.drawModeRoots + work.drawModeRoots,
+    itemsWeighed: into.itemsWeighed + work.itemsWeighed,
+    itemsRegranted: into.itemsRegranted + work.itemsRegranted,
   };
+}
+
+/** Whether two budgets limit the same. */
+function sameBudget(a: DrawBudget | null, b: DrawBudget | null): boolean {
+  if (a === null || b === null) return a === b;
+  return a.gpuBytes === b.gpuBytes && a.triangles === b.triangles && a.instances === b.instances;
 }
 
 /** Whether `path` is `root` or beneath it. */
@@ -390,13 +402,20 @@ export class ViewportModel {
     }
   }
 
+  /** Where the draws stand against their budget ({@link DrawList.budgetReport}); `null` without one or before the first sync. */
+  budgetReport(): BudgetReport | null {
+    return this.#list?.budgetReport() ?? null;
+  }
+
   /**
-   * Brings the list up to `session`'s stage at `time`, drawing `scope`: a
-   * new stage is read whole (what is in scope); otherwise the change
-   * records since the last sync are applied in order, then the scope, if
-   * it changed, then the time, if it changed. Returns what changed.
+   * Brings the list up to `session`'s stage at `time`, drawing `scope`
+   * under `budget` (`null` draws everything) with the items at or beneath
+   * `promoted` admitted first: a new stage is read whole (what is in
+   * scope); otherwise the change records since the last sync are applied
+   * in order, then the scope, the time, the promoted paths and the budget,
+   * each if it changed. Returns what changed.
    */
-  sync(session: Session, time: number | undefined, scope: DrawScope = { roots: ["/"] }): ViewportUpdate {
+  sync(session: Session, time: number | undefined, scope: DrawScope = { roots: ["/"] }, budget: DrawBudget | null = null, promoted: readonly string[] = []): ViewportUpdate {
     const stage = session.stage;
     const diffs: DrawDiff[] = [];
     let reset = false;
@@ -412,9 +431,12 @@ export class ViewportModel {
         tessellation: TESSELLATION,
         curves: CURVES,
         scope,
+        ...(budget === null ? {} : { budget }),
       });
       this.#stage = stage;
       this.#seen = session.changeLog.length;
+      // Promoted before the first read, which then admits them first.
+      this.#list.promote(promoted);
       diffs.push(this.#list.refresh());
       reset = true;
     } else {
@@ -431,6 +453,8 @@ export class ViewportModel {
         diffs.push(this.#list.setTime(time));
         timeChanged = true;
       }
+      if (promoted.join("\n") !== this.#list.promoted.join("\n")) diffs.push(this.#list.promote(promoted));
+      if (!sameBudget(budget, this.#list.budget)) diffs.push(this.#list.setBudget(budget));
     }
     const union = (pick: (diff: DrawDiff) => readonly number[]) => new Set(diffs.flatMap(pick));
     const paths = (pick: (diff: DrawDiff) => readonly string[]) => new Set(diffs.flatMap(pick));

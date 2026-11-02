@@ -7,22 +7,31 @@ import { loadLayerstack } from "@forest-rs/layerstack";
 import { loadStagehand } from "@forest-rs/layerstack_stagehand";
 import { App } from "./app/App.tsx";
 import { EditorContext } from "./app/context.ts";
+import { NoWebGPU } from "./app/NoWebGPU.tsx";
 import { initialSource } from "./app/scenes.ts";
 import { EditorStore } from "./store.ts";
+import { webGpuMissing } from "./viewport/support.ts";
 import "./index.css";
 
-const [layerstack, stagehand] = await Promise.all([loadLayerstack(), loadStagehand()]);
-const store = new EditorStore(layerstack, stagehand);
-// A module that traps outside an open (an edit, a frame, a draw) stops the
-// editor the same way: its instance is dead.
-window.addEventListener("error", (event) => store.lose(event.error));
-window.addEventListener("unhandledrejection", (event) => store.lose(event.reason));
-void store.open(await initialSource());
+async function start(): Promise<void> {
+  const [layerstack, stagehand] = await Promise.all([loadLayerstack(), loadStagehand()]);
+  const store = new EditorStore(layerstack, stagehand);
+  // A module that traps outside an open (an edit, a frame, a draw) stops the
+  // editor the same way: its instance is dead.
+  window.addEventListener("error", (event) => store.lose(event.error));
+  window.addEventListener("unhandledrejection", (event) => store.lose(event.reason));
+  void store.open(await initialSource());
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <EditorContext value={store}>
-      <App />
-    </EditorContext>
-  </StrictMode>,
-);
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <EditorContext value={store}>
+        <App />
+      </EditorContext>
+    </StrictMode>,
+  );
+}
+
+// The viewport draws with WebGPU only: without it, the page says so and loads nothing more.
+const missing = await webGpuMissing();
+if (missing === null) await start();
+else createRoot(document.getElementById("root")!).render(<NoWebGPU missing={missing} />);

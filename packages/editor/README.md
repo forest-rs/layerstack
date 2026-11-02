@@ -16,6 +16,17 @@ npm test         # the model's tests, in Node
 Build the two packages first (`npm run build:wasm && npm run build` in each):
 the editor links them from `../layerstack` and `../layerstack_stagehand`.
 
+## Requirements
+
+A browser with WebGPU: the viewport and the material previews draw with
+three.js's `WebGPURenderer` and nothing else (no WebGL fallback). As of
+late 2026 that is Chrome and Edge (113 or later on Windows, macOS and
+ChromeOS; 144 or later on Linux, Intel Gen12+ GPUs only; 121 or later on
+Android), Safari 26 or later, and Firefox 141 or later on Windows and 147
+or later on Apple silicon Macs. WebGPU is offered only to secure pages
+(HTTPS, or `localhost`). Without it, the editor says so and why, and loads
+nothing more.
+
 ## What it shows
 
 - **Toolbar.** Open a scene: the sample, a folder on this computer (picked

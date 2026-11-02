@@ -30,6 +30,10 @@
 //!   level, groups that could not simplify further, and groups that needed
 //!   the sloppy fallback.
 //!
+//! [`ClusterFile`] encodes a set and the vertices it indexes as one
+//! versioned little-endian file of plain columns ([`mod@file`]), for sets built
+//! ahead of time and loaded by a renderer that cannot build them.
+//!
 //! [`ClusterSet::select_cut`] picks the clusters to draw for a
 //! [`CutCamera`] and a pixel error: a cluster is drawn when its own group's
 //! simplified error projects above the threshold (its replacement would be
@@ -103,6 +107,7 @@
 
 mod build;
 mod cut;
+pub mod file;
 mod hierarchy;
 #[cfg(test)]
 mod tests;
@@ -110,6 +115,7 @@ mod tests;
 use core::fmt;
 
 pub use cut::CutCamera;
+pub use file::{ClusterFile, DecodeError};
 
 /// The group id of "no group": the [`ClusterTable::refined`] of a cluster
 /// of the original triangles, and the [`NodeTable::group`] of an internal

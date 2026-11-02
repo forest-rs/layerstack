@@ -573,3 +573,55 @@ fn levels_match_upstream_clusterlod() {
         );
     }
 }
+
+#[test]
+fn a_file_round_trips_and_refuses_damage() {
+    use crate::file::{FILE_VERSION, HEADER_BYTES};
+    use crate::{ClusterFile, DecodeError};
+
+    let grid = grid(24);
+    let halves = halves(&grid);
+    let input = ClusterInput {
+        uvs: Some(&grid.uvs),
+        triangle_subsets: Some(&halves),
+        ..ClusterInput::new(&grid.positions, &grid.indices)
+    };
+    let file = ClusterFile {
+        set: build(&input),
+        positions: grid.positions.clone(),
+        normals: None,
+        uvs: Some(grid.uvs.clone()),
+    };
+    let bytes = file.encode();
+    assert_eq!(bytes.len(), file.encoded_len());
+    assert_eq!(bytes.len() % 4, 0, "every column is 4-byte aligned");
+    let decoded = ClusterFile::decode(&bytes).expect("its own encoding");
+    assert_eq!(
+        decoded, file,
+        "the set, its report and its vertices come back"
+    );
+
+    assert_eq!(
+        ClusterFile::decode(&bytes[..bytes.len() - 4]),
+        Err(DecodeError::Truncated {
+            expected: bytes.len(),
+            len: bytes.len() - 4
+        })
+    );
+    let mut other = bytes.clone();
+    other[8..12].copy_from_slice(&(FILE_VERSION + 1).to_le_bytes());
+    assert_eq!(
+        ClusterFile::decode(&other),
+        Err(DecodeError::Version {
+            found: FILE_VERSION + 1
+        })
+    );
+    // The first index, pointing past the vertices.
+    let mut bad = bytes;
+    let first_index = HEADER_BYTES + 4 * 5 * grid.positions.len();
+    bad[first_index..first_index + 4].copy_from_slice(&u32::MAX.to_le_bytes());
+    assert!(matches!(
+        ClusterFile::decode(&bad),
+        Err(DecodeError::Inconsistent(_))
+    ));
+}

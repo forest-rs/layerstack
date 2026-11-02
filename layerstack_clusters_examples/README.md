@@ -7,6 +7,7 @@ lives in its own crate so the C++ build of meshoptimizer stays out of
 
 ```sh
 cargo run --release -p layerstack_clusters_examples --bin cluster_lod -- scene.usda --render out
+cargo run --release -p layerstack_clusters_examples --bin cluster_lod -- scene.usda --cache .local/cluster-cache
 ```
 
 - **Meshes**: `layerstack_stagehand`'s draw list triangulates what the
@@ -33,6 +34,18 @@ cargo run --release -p layerstack_clusters_examples --bin cluster_lod -- scene.u
 
 Comparing filtered renders, rather than which triangle each pixel's center
 hits, measures what a viewer sees; it needs no GPU and no image crate.
+- **Cache** (`--cache <dir>`): instead of reporting, writes each mesh's
+  set as a `layerstack_clusters` file, `<key>.lsclust`, skipping a mesh
+  whose file is there already. The key is a hash of what the editor holds
+  of the mesh bit for bit, its indices and the `compact` encoding of its
+  positions and normals (`src/cache.rs` reproduces
+  `@forest-rs/layerstack_stagehand`'s encoder), so the editor finds a
+  mesh's set by content wherever the mesh sits on the stage. The editor's
+  dev server serves `.local/cluster-cache` from the main checkout.
+- **One cut** (`--cut-file <file> --camera x,y,z,proj_y,height,near
+  [--threshold <px>]`): prints a cached set's cut, cluster ids ascending,
+  to check a renderer's cut against the library's.
+
 `--normal-weight`, `--unclamped` and `--simplify-root` change the build
 configuration for experiments; `--triangulate-only` stops before building,
 for measuring the build's memory against the stage's.

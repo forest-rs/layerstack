@@ -78,6 +78,37 @@ upstream `clodBuild`'s within 1% of triangles per level, built in 2.27 s
 against upstream's 2.09 s (it also computes every cluster's precise
 bounds); a test checks the levels against upstream on every run.
 
+## Files
+
+`ClusterFile` encodes a set with the vertices it indexes (positions, and
+optionally normals and texture coordinates) as one file, for sets built
+ahead of time and loaded by a renderer that cannot build them (the
+editor in the browser, until the WebAssembly build works). Format version
+1 (`FILE_VERSION`):
+
+- **Little-endian, every value 4 bytes** (`u32` or `f32`; a `u64` is its
+  low then high `u32`), so every column of a file read whole is aligned
+  for a typed array at its offset.
+- **Header**: the magic `LSCLUSTR`, then 16 `u32`: the version, flags
+  (bit 0 normals, bit 1 texture coordinates), the counts of vertices,
+  indices, clusters, groups, nodes, levels and report levels, and 7
+  reserved zeros (72 bytes).
+- **Structure of arrays**, one whole column after another: positions
+  (`f32` x3), normals, texture coordinates; the set's indices; the cluster
+  table (`index_start`, `triangle_count`, `vertex_count`, `group`,
+  `refined`, `subset`, then `bounds` as `f32` x4); the group table
+  (`depth`, `bounds`, `error`, `cluster_start`, `cluster_count`); the node
+  table (`bounds`, `error`, `group`, `child_start`, `child_count`); the
+  report. Infinite errors (roots, stuck groups) are stored as IEEE
+  infinity.
+- **Checked on read**: a reader refuses another version, a length the
+  counts do not account for, and any index, cluster, group or node out of
+  range, so a decoded set is as safe to draw as a built one.
+
+The production element below writes 2,302 files of 101 MB in all (sets
+plus `f32` vertices), 3.6 s to build and write. No compression yet:
+meshoptimizer's vertex and index codecs would roughly halve it.
+
 ## Dependency: `meshopt`
 
 `meshopt` 0.7 (default features only; `bindgen` stays off, the bindings
@@ -152,5 +183,5 @@ What the numbers show:
   inside groups; its cuts hold up close and lose the canopy's look from
   afar.
 
-Not yet: a parallel build, a cache encoding (content hash plus
-meshoptimizer's vertex and index codecs), and the WebAssembly build.
+Not yet: a parallel build, compressed files (meshoptimizer's vertex and
+index codecs), and the WebAssembly build.

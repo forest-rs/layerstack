@@ -230,8 +230,11 @@ impl PrimvarValues {
     }
 }
 
+/// The namespace primvars' attributes are in.
+const PRIMVARS_NAMESPACE: &str = "primvars:";
+
 fn full_name(name: &str) -> String {
-    if name.starts_with("primvars:") {
+    if name.starts_with(PRIMVARS_NAMESPACE) {
         name.to_string()
     } else {
         format!("primvars:{name}")
@@ -535,7 +538,12 @@ impl<'a> Primvar<'a> {
 
 impl<'a> PrimView<'a> {
     /// Declared primvars, including schema properties; excludes indices and
-    /// relationships. Results are sorted by full property name.
+    /// relationships. Results are sorted by full property name. Only
+    /// properties in the `primvars:` namespace are primvars: a property
+    /// `normals` (`UsdGeomPointBased`'s) is not `primvars:normals`, though
+    /// [`Primvar::new`] takes either spelling of a primvar's name.
+    ///
+    /// OpenUSD: `UsdGeomPrimvarsAPI::GetPrimvars`.
     #[must_use]
     pub fn primvars(&self) -> Vec<Primvar<'a>> {
         let scene = self.scene();
@@ -544,6 +552,7 @@ impl<'a> PrimView<'a> {
             .map(layerstack::Prim::property_names)
             .unwrap_or_default()
             .into_iter()
+            .filter(|name| name.starts_with(PRIMVARS_NAMESPACE))
             .filter_map(|name| Primvar::new(&scene, self.path(), name))
             .collect();
         sort::sort_by_key(&mut result, |p| p.name);
@@ -578,7 +587,10 @@ impl<'a> PrimView<'a> {
         local
     }
     /// Authored primvar declarations, including declarations without values.
-    /// Schema-only properties are excluded; names are sorted.
+    /// Schema-only properties are excluded; names are sorted. As
+    /// [`Self::primvars`], only `primvars:` properties are primvars.
+    ///
+    /// OpenUSD: `UsdGeomPrimvarsAPI::GetAuthoredPrimvars`.
     #[must_use]
     pub fn authored_primvars(&self) -> Vec<Primvar<'a>> {
         let scene = self.scene();
@@ -587,6 +599,7 @@ impl<'a> PrimView<'a> {
             .map(layerstack::Prim::authored_property_names)
             .unwrap_or_default()
             .into_iter()
+            .filter(|name| name.starts_with(PRIMVARS_NAMESPACE))
             .filter_map(|name| Primvar::new(&scene, self.path(), name))
             .collect();
         sort::sort_by_key(&mut result, |p| p.name);

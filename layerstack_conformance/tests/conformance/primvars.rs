@@ -932,3 +932,40 @@ fn validated_primvar_mapping_shares_sources_without_expanding_values() {
         }
     );
 }
+
+/// A property outside the `primvars:` namespace is not a primvar, though
+/// `Primvar::new` takes a primvar's name with or without the prefix: a
+/// mesh authoring `UsdGeomPointBased`'s `normals` and `primvars:normals`
+/// has the one primvar, listed once, as `UsdGeomPrimvarsAPI::GetPrimvars`
+/// and `GetAuthoredPrimvars` list it.
+#[test]
+fn only_primvars_namespace_properties_are_primvars() {
+    let (store, live) = support::scene(
+        r#"#usda 1.0
+def Mesh "Mesh"
+{
+    normal3f[] normals = [(0, 1, 0)]
+    float3[] primvars:normals = [(0, 0, 1)] (
+        interpolation = "constant"
+    )
+    float width = 2
+}
+"#,
+    );
+    let scene = Scene::new(live.stage(), &store);
+    let mesh = PrimView::new(scene, store.path("/Mesh"));
+    let names = |primvars: Vec<Primvar<'_>>| {
+        primvars
+            .iter()
+            .map(|p| p.name().to_string())
+            .collect::<Vec<_>>()
+    };
+    let listed = names(mesh.primvars());
+    assert_eq!(
+        listed.iter().filter(|name| *name == "normals").count(),
+        1,
+        "{listed:?}"
+    );
+    assert!(!listed.iter().any(|name| name == "width"), "{listed:?}");
+    assert_eq!(names(mesh.authored_primvars()), ["normals"]);
+}

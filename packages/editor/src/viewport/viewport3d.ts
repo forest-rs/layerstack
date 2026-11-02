@@ -130,6 +130,12 @@
 // draw list fills every released buffer again (`DrawList.restore`) and the
 // view is made again from it.
 //
+// A mesh with a prebuilt cluster set (`clusters.ts`) is resident once: its
+// draws wait, undrawn, while its set is fetched, then draw from the set's
+// storage buffers, and its own geometry is never uploaded; its arrays are
+// released then as an upload would release them. A set that fails to
+// arrive lets its draws draw as any other.
+//
 // Points are drawn as camera-facing squares, one instanced quad per point
 // (WebGPU rasterizes point primitives one pixel wide): each point's width
 // is its diameter in world units, attenuated with distance as
@@ -334,8 +340,10 @@ export class Viewport {
   readonly #manifestMisses = new Set<string>();
   /** Buffers looked up before the server listed its sets, fetched once it has (when it has theirs). */
   #clusterWaiting: { buffer: number; geometry: BufferGeometry; key: string; vertices: PackedVertices; decode: readonly [number, number, number, number] }[] = [];
-  /** Buffers whose set arrived, their draws not yet made again ({@link #convertArrived}). */
+  /** Buffers whose set arrived (or failed to), their draws not yet made again ({@link #convertArrived}). */
   readonly #clusterArrived = new Set<number>();
+  /** Items not drawn yet because their buffer's set is on its way: drawn from it once it arrives, so their own geometry is never uploaded. */
+  readonly #awaitingSet = new Set<number>();
 
   /**
    * A view drawing into `canvas` with `renderer`, the shared one
@@ -411,8 +419,16 @@ export class Viewport {
     const waiting = this.#clusterWaiting;
     this.#clusterWaiting = [];
     for (const { buffer, geometry, key, vertices, decode } of waiting) {
-      if (keys.has(key) && this.#geometries.get(buffer) === geometry) this.#fetchClusters(buffer, geometry, key, vertices, decode);
+      if (this.#geometries.get(buffer) !== geometry) continue;
+      if (keys.has(key)) {
+        this.#fetchClusters(buffer, geometry, key, vertices, decode);
+        continue;
+      }
+      // No set after all: its waiting draws drawn as any other.
+      delete geometry.userData.awaitingSet;
+      this.#clusterArrived.add(buffer);
     }
+    this.#convertArrived();
   }
 
   /** How the clustered draws choose their cuts: the pixel error, the smallest instance drawn, culling. */
@@ -467,6 +483,7 @@ export class Viewport {
     this.#clusterArrived.clear();
     this.#clusterWaiting = [];
     this.#clusterKeyOf.clear();
+    this.#awaitingSet.clear();
     for (const geometry of this.#geometries.values()) geometry.dispose();
     this.#geometries.clear();
     for (const material of this.#retired) material.dispose();
@@ -830,6 +847,11 @@ export class Viewport {
       geometry = this.#makeGeometry(view);
       this.#geometries.set(view.item.buffer, geometry);
     }
+    // Its set on its way: drawn once it arrives, the geometry never uploaded meanwhile.
+    if (geometry.userData.awaitingSet === true && clusterDrawable(view)) {
+      this.#awaitingSet.add(view.item.id);
+      return;
+    }
     const placements = view.item.matrices.length / 16;
     const styled = materials(view, selected, this.#applied?.materials ?? new Map(), this.#textures);
     // Clustered: one part per subset (non-empty range), as the set was built.
@@ -970,7 +992,9 @@ export class Viewport {
     const vertices = packVertices(view.buffers.vertices);
     const { scale, offset } = view.buffers.vertices.decode;
     const decode = [scale, offset[0], offset[1], offset[2]] as const;
-    // Before the server has listed its sets: kept (the arrays may be released meanwhile) until it has.
+    // Its draws wait for the set (`#add`), unless it fails to arrive.
+    geometry.userData.awaitingSet = true;
+    // Before the server has listed its sets: kept until it has.
     if (keys === null) {
       this.#clusterWaiting.push({ buffer, geometry, key, vertices, decode });
       return;
@@ -990,12 +1014,18 @@ export class Viewport {
         // The buffer was rebuilt or freed meanwhile: the set is not its.
         if (this.#clusterLoads.get(buffer) !== geometry || this.#geometries.get(buffer) !== geometry) return;
         this.#clusterLoads.delete(buffer);
+        delete geometry.userData.awaitingSet;
         this.#clusters.addMesh(buffer, set, vertices, decode);
         this.#clusterKeyOf.set(buffer, key);
         this.#clusterArrived.add(buffer);
         this.#convertArrived();
       })
       .catch((error: unknown) => {
+        if (this.#clusterLoads.get(buffer) === geometry) {
+          // Drawn as any other mesh instead.
+          delete geometry.userData.awaitingSet;
+          this.#clusterArrived.add(buffer);
+        }
         this.#clusterLoads.delete(buffer);
         console.warn(error);
         this.#convertArrived();
@@ -1011,15 +1041,42 @@ export class Viewport {
     if (this.#clusterLoads.size > 0 || this.#clusterArrived.size === 0 || this.#applied === null) return;
     const arrived = this.#clusterArrived;
     for (const view of this.#applied.items) {
-      if (!arrived.has(view.item.buffer) || !this.#objects.has(view.item.id)) continue;
+      if (!arrived.has(view.item.buffer) || !(this.#objects.has(view.item.id) || this.#awaitingSet.has(view.item.id))) continue;
       this.#drop(view.item.id);
       this.#add(view, this.#selected);
     }
+    this.#releaseClustered(arrived);
     arrived.clear();
     this.#link(this.#applied);
     this.#compile();
     this.#draw();
     this.#reportResident();
+  }
+
+  /**
+   * Lets go of the own geometry of each of `buffers` that draws only
+   * through its cluster set: never uploaded, its arrays are released as an
+   * upload releases them ({@link onUploaded}); uploaded (drawn before its
+   * set arrived), its GPU buffers are freed as well.
+   */
+  #releaseClustered(buffers: ReadonlySet<number>): void {
+    const drawn = new Set<BufferGeometry>();
+    for (const object of this.#objects.values()) if (!this.#clusters.isDraw(object)) drawn.add(object.geometry);
+    let released = false;
+    for (const key of buffers) {
+      const geometry = this.#geometries.get(key);
+      if (geometry === undefined || !this.#clusters.hasMesh(key) || drawn.has(geometry) || geometry.userData.clusterReleased === true) continue;
+      geometry.userData.clusterReleased = true;
+      const pending = this.#pending.delete(geometry);
+      const position = geometry.getAttribute("position") as BufferAttribute | InterleavedBufferAttribute | undefined;
+      if (geometry.index !== null && position !== undefined && (uploaded(this.#renderer, geometry.index) || uploaded(this.#renderer, position))) geometry.dispose();
+      if (!pending) continue;
+      const { revision } = geometry.userData as { revision: number };
+      if (this.onUploaded?.(key, revision) !== true) continue;
+      dropArrays(geometry);
+      released = true;
+    }
+    if (released) this.onReleased?.();
   }
 
   /**
@@ -1150,6 +1207,7 @@ export class Viewport {
   }
 
   #drop(id: number): void {
+    this.#awaitingSet.delete(id);
     const object = this.#objects.get(id);
     if (object === undefined) return;
     this.#draws.remove(object);

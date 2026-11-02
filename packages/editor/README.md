@@ -172,6 +172,20 @@ nothing more.
   layers (the explain and history panels) are live: a click selects or
   explains, a context menu offers what else applies. Nothing has to be
   typed that the stage already knows.
+- **Point instancers.** The inspector's view of a `PointInstancer`: its
+  prototypes, each with how many instances place it (the `protoIndices`
+  histogram, and how many name no prototype), whether `ids` are authored,
+  how many instances the mask hides (`invisibleIds`, `inactiveIds`), the
+  range of the positions and scales, and a table of every instance (index,
+  id, prototype, position, scale), read as typed columns once per change
+  and time and virtualized, so half a million rows scroll as ten; a column
+  header sorts by it (an index permutation). Choosing a row outlines the
+  instance in the viewport (its prototype's bound through the instance's
+  transform, composed as `ComputeInstanceTransformsAtTime` does) and shows
+  it in full; double-clicking, or **Frame**, frames it; picking an instance
+  in the viewport chooses its row. Each row hides its instance
+  (`invisibleIds`) or deactivates it (`inactiveIds`), an edit where edits
+  go.
 - **Materials and shaders.** The inspector of a material or shader shows
   what it is (a shader's `info:id` and implementation; a material's
   outputs and what they read) and its inputs as their authors lay them

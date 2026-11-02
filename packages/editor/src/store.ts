@@ -13,6 +13,8 @@ import type { Edit, EditReceipt, EditTarget, Layer, Layerstack, LoadOutcome, Loa
 import type { BudgetReport, BufferCost, DrawCost, DrawScope, Stagehand } from "@forest-rs/layerstack_stagehand";
 import { type AssetFocus, assetFocus, type BudgetChoice, budgetFor, type DrawScopeChoice, rememberBudget, rememberedBudget, scopeFor } from "./model/assetView.ts";
 import { ViewportModel, type ViewportScene, type ViewportUpdate } from "./model/draws.ts";
+import { primRevision } from "./model/revisions.ts";
+import { boxCorners, indexOfId, instanceMatrix, type InstancerColumns, multiply, readColumns } from "./model/instancer.ts";
 import { type LoadBudget, type OpenPhase, OverBudget, Session } from "./model/session.ts";
 import type { SceneSource } from "./model/sources.ts";
 import { DEFAULT_LIGHT_SETTINGS, type LightSettings } from "./viewport/defaultLights.ts";
@@ -108,6 +110,12 @@ export class EditorStore {
   source: SceneSource | null = null;
   /** The selected prim's path. */
   selection: string | null = null;
+  /**
+   * The point instancer instance selected (in its inspector view, or
+   * picked in the viewport): its instancer, which is the selection, and
+   * its index in the instancer's arrays; `null` for none.
+   */
+  instance: { readonly instancer: string; readonly index: number } | null = null;
   /** The property whose value the explain panel shows, by path. */
   property: string | null = null;
   /**
@@ -153,6 +161,8 @@ export class EditorStore {
   budget: BudgetReport | null = null;
   /** What the asset view makes of the selection, as last synced. */
   focus: AssetFocus = { kind: "none" };
+  /** The point instancer columns last read, and the session, prim revision and time they were read at. */
+  #columns: { session: Session; path: string; revision: number; time: number | undefined; columns: InstancerColumns | null } | null = null;
   /** The whole scene's estimate, once asked for, and the session and change it was made at. */
   #estimate: { session: Session; changes: number; time: number | undefined; cost: DrawCost | null } | null = null;
   /** What actions reported, newest last. */
@@ -261,6 +271,8 @@ export class EditorStore {
       this.session = session;
       this.source = source;
       this.selection = null;
+      this.instance = null;
+      this.#viewport?.setMarker(null);
       this.property = null;
       this.through = null;
       this.#viewport?.lookThrough(null);
@@ -326,6 +338,10 @@ export class EditorStore {
   select(path: string | null): void {
     if (path === this.selection) return;
     this.selection = path;
+    if (this.instance !== null && this.instance.instancer !== path) {
+      this.instance = null;
+      this.#viewport?.setMarker(null);
+    }
     if (this.property !== null && (path === null || !this.property.startsWith(`${path}.`))) this.property = null;
     // Drawing the selection, or under a budget (which admits the selection first), the draws change.
     if (this.drawScope === "selection" || this.budgetChoice !== "unlimited") {
@@ -334,6 +350,64 @@ export class EditorStore {
     }
     this.#viewport?.update(this.scene, this.#noUpdate(), this.#highlighted());
     this.#bump();
+  }
+
+  /** The columns of the point instancer at `path` at the current time, read again only when a change reaches it ({@link primRevision}) or the time moves ({@link readColumns}). */
+  instancerColumns(path: string): InstancerColumns | null {
+    const session = this.session;
+    if (session === null) return null;
+    const at = this.#columns;
+    const revision = primRevision(session, path);
+    if (at !== null && at.session === session && at.path === path && at.revision === revision && at.time === this.time) return at.columns;
+    const columns = session.stage.prim(path)?.isA("PointInstancer") === true ? readColumns(session.stage, path, this.time) : null;
+    this.#columns = { session, path, revision, time: this.time, columns };
+    return columns;
+  }
+
+  /**
+   * Selects instance `index` of the point instancer at `instancer` (and
+   * the instancer), outlining it in the viewport while the whole scene is
+   * drawn, and with `frame` framing it; `null` clears it.
+   */
+  selectInstance(instancer: string, index: number | null, frame = false): void {
+    if (this.selection !== instancer) this.select(instancer);
+    this.instance = index === null ? null : { instancer, index };
+    const corners = index === null || this.drawScope !== "scene" ? null : this.#instanceCorners(instancer, index);
+    this.#viewport?.setMarker(corners);
+    if (frame && corners !== null && this.#viewport !== null) {
+      const box = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+      for (let corner = 0; corner < 8; corner++) {
+        for (let c = 0; c < 3; c++) {
+          box[c] = Math.min(box[c]!, corners[corner * 3 + c]!);
+          box[c + 3] = Math.max(box[c + 3]!, corners[corner * 3 + c]!);
+        }
+      }
+      this.lookThrough(null);
+      this.#viewport.frame(box);
+    }
+    this.#bump();
+  }
+
+  /** Selects the instance with `id` of the point instancer at `instancer` (a pick's), by its index. */
+  selectInstanceById(instancer: string, id: bigint): void {
+    const columns = this.instancerColumns(instancer);
+    const index = columns === null ? -1 : indexOfId(columns, id);
+    this.selectInstance(instancer, index < 0 ? null : index);
+  }
+
+  /** The world-space corners of instance `index`'s box: its prototype's local bound through its transform and the instancer's. */
+  #instanceCorners(instancer: string, index: number): Float64Array | null {
+    const stage = this.session?.stage;
+    const columns = this.instancerColumns(instancer);
+    if (stage === undefined || columns === null || index >= columns.count) return null;
+    const prototype = columns.prototypes[columns.protoIndices[index]!];
+    if (prototype === undefined) return null;
+    const time = this.time === undefined ? {} : { time: this.time };
+    const bounds = stage.localBounds([prototype], { purposes: ["default", "proxy", "render"], ...time });
+    const range = bounds.ranges.subarray(0, 6);
+    if (!(range[0]! <= range[3]!)) return null;
+    const world = stage.worldTransforms([instancer], time);
+    return boxCorners(range, multiply(multiply(bounds.matrices.subarray(0, 16), instanceMatrix(columns, index)), world));
   }
 
   /** Shows `path`'s value and opinions in the explain panel (and, drawing the selection, an image it names). */
@@ -652,6 +726,9 @@ export class EditorStore {
       this.budget = this.#draws.budgetReport();
       if (update.reset || update.records > 0 || update.timeChanged || update.added.size + update.removed.size > 0) this.lastUpdate = update;
       this.#viewport?.update(this.scene, update, this.#highlighted());
+      // The selected instance's outline follows edits, time and the draw scope.
+      const instance = this.instance;
+      if (instance !== null) this.#viewport?.setMarker(this.drawScope === "scene" ? this.#instanceCorners(instance.instancer, instance.index) : null);
     }
     this.#bump();
   }

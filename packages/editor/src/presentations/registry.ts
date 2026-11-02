@@ -259,7 +259,12 @@ export class PresentationRegistry {
    * on a tie, the larger priority, then the later registration. `null`
    * when none does.
    */
-  find<K extends PresentedKind>(object: Presented<K>, view: Exclude<PresentationView, "panel">, context: PresentationContext, types: readonly string[] = typesOf(object as Presented)): Presentation<K> | null {
+  find<K extends PresentedKind>(
+    object: Presented<K>,
+    view: Exclude<PresentationView, "panel">,
+    context: PresentationContext,
+    types: readonly string[] = typesOf(object as Presented),
+  ): Presentation<K> | null {
     let best: Presentation | null = null;
     let bestRank = Infinity;
     for (const entry of this.#entries.values()) {

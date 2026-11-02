@@ -62,8 +62,16 @@
 // makes 1 for a 1-nit light seen directly at exposure 0: the renderer's
 // `toneMappingExposure` is the stage camera's
 // `UsdGeomCamera::ComputeLinearExposureScale` (1 with the free camera), and
-// AgX tone mapping fits the highlights into the display's range. A stage
-// without lights is lit by a fixed sky and sun, as before.
+// AgX tone mapping fits the highlights into the display's range.
+//
+// Default lights (`defaultLights.ts`): usdview's. A point light at the
+// camera, moved to it on each draw, and a faint ambient light, added to
+// the stage's own lights whether or not it has any, as usdview adds its
+// default camera light; the camera light can be switched off
+// (`setLightSettings`), as usdview's View > Lights menu does. Switching it
+// zeroes its intensity rather than removing it, so the lit materials keep
+// their programs (three.js compiles a program per count of each light
+// type).
 //
 // Light linking: three.js lights every lit material with every light in
 // the scene; `Light.layers` only decides whether a camera sees the light
@@ -108,6 +116,7 @@
 // each time.
 import {
   AgXToneMapping,
+  AmbientLight,
   Bone,
   BufferAttribute,
   BufferGeometry,
@@ -117,7 +126,6 @@ import {
   DirectionalLight,
   DoubleSide,
   GridHelper,
-  Group,
   HemisphereLight,
   InstancedMesh,
   InterleavedBuffer,
@@ -149,6 +157,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
 import { conformCamera, lightSizeFactor } from "@forest-rs/layerstack_stagehand";
 import type { CameraItem, LightItem, MaterialItem, StagehandMesh } from "@forest-rs/layerstack_stagehand";
+import { DEFAULT_LIGHT_SETTINGS, defaultLights, type LightSettings } from "./defaultLights.ts";
 import { TextureStore, surfaceMaterial, uvChannels } from "./surfaces.ts";
 import { standinGeometry, standinMaterials, standinTextured } from "./standins.ts";
 import type { AssetExists, AssetReader, TextureStats } from "./surfaces.ts";
@@ -258,8 +267,10 @@ export class Viewport {
   readonly #lights = new Map<string, Object3D[]>();
   /** The `UsdLux` light each three.js light draws, by object. */
   readonly #lightKeys = new Map<Object3D, string>();
-  /** The sky and sun lighting a stage without lights, laid out for +Y up and turned with {@link Viewport.setUpAxis}. */
-  readonly #fallback = new Group();
+  /** usdview's default camera light: a point light without falloff, put at the camera on each draw. */
+  readonly #cameraLight = new PointLight(0xffffff, defaultLights(DEFAULT_LIGHT_SETTINGS).cameraLight, 0, 0);
+  /** usdview's scene ambient. */
+  readonly #ambient = new AmbientLight(0xffffff, defaultLights(DEFAULT_LIGHT_SETTINGS).ambient);
   /** One geometry per stagehand buffer, by key: a sphere of one radius is uploaded once. */
   readonly #geometries = new Map<number, BufferGeometry>();
   /**
@@ -310,11 +321,7 @@ export class Viewport {
     this.#renderer.toneMapping = AgXToneMapping;
     RectAreaLightUniformsLib.init();
     this.#scene.background = new Color(0x20201e);
-    this.#fallback.add(new HemisphereLight(0xffffff, 0x404038, 1.4));
-    const sun = new DirectionalLight(0xffffff, 1.8);
-    sun.position.set(5, 10, 7);
-    this.#fallback.add(sun);
-    this.#scene.add(this.#fallback);
+    this.#scene.add(this.#cameraLight, this.#ambient);
     this.#stageCamera.matrixAutoUpdate = false;
     this.#stageCamera.matrixWorldAutoUpdate = false;
     this.#grid = makeGrid("Y", 1);
@@ -326,15 +333,12 @@ export class Viewport {
 
   /**
    * Orients the view to the stage's `upAxis`: the free camera orbits
-   * about it, the grid lies across it, and the fallback lights' sky is
-   * above it. Stage cameras are unaffected: their matrices are the stage's.
+   * about it and the grid lies across it. Stage cameras are unaffected:
+   * their matrices are the stage's.
    */
   setUpAxis(up: "Y" | "Z"): void {
     this.#up = up;
     this.#regrid();
-    // A quarter turn about +X takes +Y to +Z: the hemisphere's sky color
-    // comes from above, not from the side, and the sun keeps its height.
-    this.#fallback.rotation.x = up === "Z" ? Math.PI / 2 : 0;
     this.#camera.up.set(0, up === "Y" ? 1 : 0, up === "Z" ? 1 : 0);
     // The orbit controls take the camera's up when they are made.
     const target = this.#controls.target.clone();
@@ -354,6 +358,17 @@ export class Viewport {
   lookThrough(path: string | null): void {
     this.#through = path;
     this.#controls.enabled = this.#looking() === null;
+    this.#draw();
+  }
+
+  /**
+   * Switches the default lights the stage's own are drawn with, as
+   * usdview's View > Lights menu does (`defaultLights.ts`).
+   */
+  setLightSettings(settings: LightSettings): void {
+    const lights = defaultLights(settings);
+    this.#cameraLight.intensity = lights.cameraLight;
+    this.#ambient.intensity = lights.ambient;
     this.#draw();
   }
 
@@ -524,7 +539,6 @@ export class Viewport {
       const light = lights.get(path);
       if (light !== undefined) this.#addLight(light);
     }
-    this.#fallback.visible = this.#lights.size === 0;
     this.#link(scene);
     if (reset || update.cameras.size > 0) this.#cameras = new Map(scene.cameras.map((camera) => [camera.path, camera]));
     this.#controls.enabled = this.#looking() === null;
@@ -744,6 +758,7 @@ export class Viewport {
     const looking = this.#looking()?.camera ?? null;
     if (looking === null) {
       this.#renderer.toneMappingExposure = 1;
+      this.#cameraLight.position.copy(this.#camera.position);
       this.#renderer.render(this.#scene, this.#camera);
       return;
     }
@@ -756,6 +771,7 @@ export class Viewport {
     camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
     camera.matrixWorldInverse.fromArray(fitted.view);
     camera.matrixWorld.copy(camera.matrixWorldInverse).invert();
+    this.#cameraLight.position.setFromMatrixPosition(camera.matrixWorld);
     this.#renderer.toneMappingExposure = looking.linearExposureScale;
     this.#renderer.render(this.#scene, camera);
   }

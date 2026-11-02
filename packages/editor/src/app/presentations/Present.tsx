@@ -86,7 +86,6 @@ export function Live<K extends PresentedKind>({
 }) {
   const ref = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
-  const offered = open ? commands.forObject(object, context) : [];
   return (
     <>
       <button
@@ -108,29 +107,53 @@ export function Live<K extends PresentedKind>({
       >
         {children}
       </button>
-      <Popover
-        triggerRef={ref}
-        isOpen={open && offered.length > 0}
-        onOpenChange={setOpen}
-        placement="bottom start"
-        className="z-50 min-w-40 rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 outline-none"
-      >
-        <Menu
-          aria-label="Commands"
-          className="outline-hidden"
-          onAction={(key) => {
-            offered.find((command) => command.id === key)?.run(object, context);
-            setOpen(false);
-          }}
-        >
-          {offered.map((command) => (
-            <MenuItem key={command.id} id={command.id} className="cursor-default rounded-md px-2 py-1 text-xs outline-hidden data-focused:bg-foreground/10">
-              {command.title}
-            </MenuItem>
-          ))}
-        </Menu>
-      </Popover>
+      {open && <CommandMenu object={object} context={context} triggerRef={ref} onClose={() => setOpen(false)} />}
     </>
+  );
+}
+
+/**
+ * The commands that apply to `object`, as a menu at `triggerRef` (what a
+ * context menu on a presented object opens): choosing one runs it, and
+ * either closes the menu (`onClose`). Read when it opens.
+ */
+export function CommandMenu<K extends PresentedKind>({
+  object,
+  context,
+  triggerRef,
+  onClose,
+}: {
+  object: Presented<K>;
+  context: PresentationContext;
+  triggerRef: React.RefObject<Element | null>;
+  onClose: () => void;
+}) {
+  const [offered] = useState(() => commands.forObject(object, context));
+  if (offered.length === 0) return null;
+  return (
+    <Popover
+      triggerRef={triggerRef}
+      isOpen
+      onOpenChange={(open) => !open && onClose()}
+      placement="bottom start"
+      className="z-50 min-w-40 rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 outline-none"
+    >
+      <Menu
+        aria-label="Commands"
+        autoFocus="first"
+        className="outline-hidden"
+        onAction={(key) => {
+          offered.find((command) => command.id === key)?.run(object, context);
+          onClose();
+        }}
+      >
+        {offered.map((command) => (
+          <MenuItem key={command.id} id={command.id} className="cursor-default rounded-md px-2 py-1 text-xs outline-hidden data-focused:bg-foreground/10">
+            {command.title}
+          </MenuItem>
+        ))}
+      </Menu>
+    </Popover>
   );
 }
 

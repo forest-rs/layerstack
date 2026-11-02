@@ -8,7 +8,7 @@
 // picked in the viewport opens its ancestors. A prim with payloads says
 // whether they are loaded, and loads or unloads them in place, as
 // usdview's tree does.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button as AriaButton, Collection, ListLayout, Tree, TreeItem, TreeItemContent, Virtualizer, type Key } from "react-aria-components";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
@@ -19,6 +19,7 @@ import type { EditorStore } from "../store.ts";
 import { useStore } from "./context.ts";
 import { primIcon } from "./icons.ts";
 import { PrimActions } from "./PrimActions.tsx";
+import { CommandMenu, presentationContext } from "./presentations/Present.tsx";
 
 /** A row: a prim, and its children when it is open. */
 interface Row {
@@ -164,8 +165,22 @@ const treeItemClass = ({ isSelected, isFocusVisible }: { isSelected: boolean; is
 
 function PrimRow({ store, row, isExpanded, hasChildItems, level }: { store: EditorStore; row: Row; isExpanded: boolean; hasChildItems: boolean; level: number }) {
   const { prim } = row;
+  // A context menu offers the commands on its path, as on any presented prim path.
+  const anchor = useRef<HTMLDivElement>(null);
+  const [menu, setMenu] = useState(false);
+  const context = presentationContext(store);
   return (
-    <div className="flex w-full min-w-0 items-center gap-1 pr-2" style={{ paddingLeft: `${(level - 1) * 12 + 2}px` }}>
+    <div
+      ref={anchor}
+      className="flex w-full min-w-0 items-center gap-1 pr-2"
+      style={{ paddingLeft: `${(level - 1) * 12 + 2}px` }}
+      onContextMenu={(event) => {
+        if (context === null) return;
+        event.preventDefault();
+        setMenu(true);
+      }}
+    >
+      {menu && context !== null && <CommandMenu object={{ kind: "primPath", path: prim.path }} context={context} triggerRef={anchor} onClose={() => setMenu(false)} />}
       {hasChildItems ? (
         <AriaButton slot="chevron" className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground outline-none hover:text-foreground">
           <HugeiconsIcon icon={ArrowRight01Icon} className={cn("size-3 transition-transform", isExpanded && "rotate-90")} />

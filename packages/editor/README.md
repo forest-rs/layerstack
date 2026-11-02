@@ -301,7 +301,8 @@ line: a property row, a table cell, the explain and changes panels),
   running the first that applies and a context menu (or Shift+F10)
   listing them: a prim path selects, frames, draws alone or selects its
   material; a property path explains; a layer takes edits or is muted; an
-  asset is shown in the asset view.
+  asset is shown in the asset view. The prim tree's rows offer the same
+  commands on their paths.
 - A panel keys its reads by `usePrimRevision(store, path)`, which changes
   only when a recomposition reaches its prim, so an edit elsewhere reads
   nothing of it again. A panel that throws is replaced by a line saying

@@ -17,6 +17,33 @@ import { LoadingOverlay } from "./LoadingOverlay.tsx";
 import { MaterialPreview } from "./MaterialPreview.tsx";
 import { Timeline } from "./Timeline.tsx";
 import type { Viewport } from "../viewport/viewport3d.ts";
+import type { TextureStats } from "../viewport/surfaces.ts";
+
+/**
+ * The viewport's texture counts, re-rendering the pane once a frame at
+ * most while images arrive. The pane alone: bumping the store for each
+ * frame of arrivals rendered the whole editor again, 60 ms a frame on a
+ * production stage, while the images waited for the thread.
+ */
+function useTextureStats(viewport: Viewport | null): TextureStats | undefined {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (viewport === null) return;
+    let frame = 0;
+    viewport.onImages = () => {
+      if (frame !== 0) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        setTick((tick) => tick + 1);
+      });
+    };
+    return () => {
+      viewport.onImages = null;
+      cancelAnimationFrame(frame);
+    };
+  }, [viewport]);
+  return viewport?.textureStats;
+}
 
 export function ViewportPane() {
   const store = useStore();
@@ -74,7 +101,7 @@ export function ViewportPane() {
   // The asset view's texture: the image a selected texture names, in place of the draws.
   const texture = store.drawScope === "selection" && store.focus.kind === "texture" ? store.focus.attribute : null;
   const showMaterial = texture === null && material !== null && (materialChoice ?? summary.drawn.length === 0);
-  const textures = store.viewport?.textureStats;
+  const textures = useTextureStats(store.viewport);
   const skinning = store.scene.skinning;
   const skinned = skinning.gpu + skinning.cpu + skinning.failed.length > 0;
   return (
@@ -143,6 +170,7 @@ export function ViewportPane() {
         <div role="status" className="pointer-events-none absolute bottom-2 left-2 flex items-center gap-2 rounded-md bg-black/40 px-2 py-1 font-mono text-[11px] text-white/80 backdrop-blur-sm">
           <span className="size-1.5 animate-pulse rounded-full bg-sky-400" />
           Loading textures: {textures.images} of {textures.images + textures.pending}
+          {textures.decoding > 0 && ` · ${textures.decoding} decoding in ${textures.decoders} workers`}
         </div>
       )}
       {failed !== null && (

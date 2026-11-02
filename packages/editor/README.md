@@ -221,6 +221,35 @@ material library three folders down); `?scene=<path>` opens any layer
 under it at load. Scenes there are never committed or
 built: their licenses are their own.
 
+## Prebuilt cluster sets
+
+In development the server also serves `.local/cluster-cache` from the
+main checkout (`LAYERSTACK_CLUSTER_CACHE` overrides it) under
+`/@clusters/`: cluster level-of-detail sets built natively by
+`cluster_lod --cache` (`layerstack_clusters_examples`), one file per mesh,
+named by a hash of the mesh's content as the editor holds it
+(`src/viewport/clusterFile.ts`). A static mesh whose
+set is there is drawn on the GPU (`src/viewport/clusters.ts`): each frame
+a compute pass culls its instances and clusters against the view and
+chooses each instance's cut at a pixel error (1 px), dropping instances
+under a pixel across, and the clusters are drawn indirectly by vertex
+pulling, a draw per material subset, with the mesh's own material (lights,
+light links, selection and picking unchanged). The status line reports
+what the clustered draws hold and the triangles the last cut drew. A mesh
+without a set, or edited since, draws as before.
+
+On a production element of 594 k instances drawing 73 M triangles
+(Apple silicon, headless Chrome, 1400 x 900), framed whole: the GPU's cut
+and culling take 0.3 ms, the clustered draws 9 to 14 ms of GPU time for
+the 1.0 M triangles they choose, against 35 ms for the full 73 M; from
+four times farther, 1.8 ms (0.1 M triangles) against 21 ms. Close up, where
+most instances are a few pixels across and their meshes' DAGs bottom out
+at one cluster each, both take about 70 ms (52 M triangles against 73 M).
+The CPU side is unchanged at about 12 ms a frame, three.js's per-object
+updates of 2,302 bundled draws. Packing the element's sets and instances
+takes 335 ms once. An architectural scene of 115 meshes (108 of several
+materials, 3.7 M triangles) draws 0.6 to 1.1 M.
+
 ## Layout
 
 - `src/model/`: no DOM and no React. `session.ts` (a stage, its undo

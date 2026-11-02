@@ -88,10 +88,11 @@
 // are shared (one `LightsNode` per set of lights, `#lightSets`), and a
 // shader is built per material shape and light set, so relinking compiles
 // only the shapes that meet a set for the first time; a set already met
-// rewrites nothing. Limits: one material per `InstancedMesh`, so a
-// prototype's draw is lit as its first instance is; lines and points are
-// unlit anyway; and `shadowLink` is shown but not drawn, as the viewport
-// casts no shadows.
+// rewrites nothing. A set is a fixed node (`fixedNodes.ts`): three.js does
+// not refresh each linked draw in full on each frame for it. Limits: one
+// material per `InstancedMesh`, so a prototype's draw is lit as its first
+// instance is; lines and points are unlit anyway; and `shadowLink` is
+// shown but not drawn, as the viewport casts no shadows.
 //
 // Skinning (`../model/skinning.ts`, `skinning.ts`): a draw a skeleton
 // deforms on the GPU is a `SkinnedDraw` over its stagehand buffer, whose
@@ -214,6 +215,7 @@ import { DEFAULT_LIGHT_SETTINGS, defaultLights, type LightSettings } from "./def
 import { DrawBundles, type BundleCounts } from "./bundles.ts";
 import { lightSetKey, linkedLights } from "./lightLinks.ts";
 import { useSharedRectAreaTables } from "./rectAreaLights.ts";
+import { fixNodes, setFixedNode } from "./fixedNodes.ts";
 import { onRendererLost, sharedRenderer } from "./gpu.ts";
 import { SkinnedDraw, withSkinning } from "./skinning.ts";
 import { TextureStore, surfaceMaterial, uvChannels } from "./surfaces.ts";
@@ -1092,7 +1094,7 @@ export class Viewport {
       }
       for (const material of [object.material].flat()) {
         if (!(material instanceof MeshStandardNodeMaterial) || material.lightsNode === node) continue;
-        material.lightsNode = node;
+        setFixedNode(material, "lightsNode", node);
         material.needsUpdate = true;
         changed = true;
         // A shader of another light set: drawn directly until it compiles.
@@ -1283,6 +1285,7 @@ export class Viewport {
       // copies of its materials, and with them render objects of its own.
       this.#retired.push(...[object.material].flat());
       object.material = Array.isArray(object.material) ? object.material.map((material) => material.clone()) : object.material.clone();
+      for (const material of [object.material].flat()) fixNodes(material);
       if (this.#clusters.isDraw(object)) this.#clusters.style(object);
     }
     this.#draws.keepDirect(object);

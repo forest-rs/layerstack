@@ -220,6 +220,25 @@ impl<'a> Scene<'a> {
         }
     }
 
+    /// The applied schemas of the prim at `path`, strongest first, by
+    /// their applied names (`MaterialBindingAPI`, `CollectionAPI:lightLink`):
+    /// its type's built-ins and auto-applies, then each authored one with
+    /// its own built-ins. Empty when no prim is at `path`.
+    ///
+    /// Spec: AOUSD Core §13.3.2. OpenUSD: `UsdPrim::GetAppliedSchemas`.
+    #[must_use]
+    pub fn applied_schemas(&self, path: PathId) -> Vec<&'a str> {
+        let Some(definition) = self.definition(path) else {
+            return Vec::new();
+        };
+        let tokens = self.store.tokens();
+        definition
+            .applied_schemas()
+            .iter()
+            .map(|applied| tokens.resolve(applied.name))
+            .collect()
+    }
+
     /// The instance names with which the multiple-apply schema `schema` is
     /// applied to the prim at `path`, in the order the prim's definition
     /// applies them.
@@ -1138,6 +1157,42 @@ mod handle_tests {
         assert_eq!(explained.source, layerstack::ValueSource::Fallback);
         assert_eq!(explained.value, Some(layerstack::Value::Double(1.0)));
         assert_eq!(by_text.radius(), Some(1.0));
+    }
+
+    /// Applied schemas list by applied name, in the definition's order.
+    #[test]
+    fn applied_schemas_list_authored_names_with_instances() {
+        let mut store = InMemoryStore::default();
+        let options = StageOptions {
+            schemas: Some(Arc::new(crate::openusd(store.tokens()))),
+            ..StageOptions::default()
+        };
+        let ball = store.path("/Ball");
+        let bare = store.path("/Bare");
+        let sphere = store.tokens().intern("Sphere");
+        let api_schemas = store.tokens().intern("apiSchemas");
+        let binding = store.tokens().intern("MaterialBindingAPI");
+        let collection = store.tokens().intern("CollectionAPI:parts");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(
+            ball,
+            PrimSpec::def().with_type_name(sphere).with_field(
+                api_schemas,
+                layerstack::FieldValue::TokenListOp(alloc::boxed::Box::new(
+                    layerstack::ListOp::explicit(alloc::vec![binding, collection]),
+                )),
+            ),
+        );
+        layer.insert_prim(bare, PrimSpec::def());
+        store.insert_layer(layer);
+        let stage = Stage::compose(&mut store, LayerId(1), options);
+        let scene = Scene::from(stage.view(&store));
+        assert_eq!(
+            scene.applied_schemas(ball),
+            ["MaterialBindingAPI", "CollectionAPI:parts"]
+        );
+        assert!(scene.applied_schemas(bare).is_empty());
+        assert!(scene.applied_schemas(store.path("/Nowhere")).is_empty());
     }
 }
 

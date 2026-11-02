@@ -2578,6 +2578,25 @@ impl Stage {
         Ok(scene.has_api(prim, schema, instance))
     }
 
+    /// The prim's applied schemas by applied name, strongest first, its
+    /// type's built-ins included, as `UsdPrim::GetAppliedSchemas` lists them.
+    ///
+    /// Spec: AOUSD Core §13.3.2.
+    ///
+    /// # Errors
+    ///
+    /// `path.invalid`, or `prim.not_found` when no prim is at `path`.
+    pub(crate) fn applied_schemas(&self, path: &str) -> Result<Vec<String>, Error> {
+        let prim = self.existing_prim(path)?.path();
+        let scene =
+            layerstack_schemas::Scene::new(self.document.stage().stage(), self.document.store());
+        Ok(scene
+            .applied_schemas(prim)
+            .into_iter()
+            .map(String::from)
+            .collect())
+    }
+
     pub(crate) fn existing_prim(&self, path: &str) -> Result<layerstack::Prim<'_>, Error> {
         check_prim_path(path)?;
         self.document.view().prim(path).ok_or_else(|| {
@@ -3036,6 +3055,13 @@ impl Stage {
         instance: Option<String>,
     ) -> Result<bool, JsValue> {
         Ok(self.has_api(path, schema, instance.as_deref())?)
+    }
+
+    /// The prim's applied schemas (`applied_schemas`), as documented in
+    /// `stage.rs`.
+    #[wasm_bindgen(js_name = appliedSchemas)]
+    pub fn js_applied_schemas(&self, path: &str) -> Result<Vec<String>, JsValue> {
+        Ok(self.applied_schemas(path)?)
     }
 
     /// The record `time_samples` builds, as documented in `stage.rs`.

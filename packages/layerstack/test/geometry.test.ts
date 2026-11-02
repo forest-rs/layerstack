@@ -713,6 +713,12 @@ describe("cameras and lights", () => {
       assert.ok(prim.hasAPI("LightAPI"), "built in");
       assert.ok(prim.hasAPI("CollectionAPI", "lightLink"), "built in, multiple-apply");
       assert.ok(!prim.hasAPI("CollectionAPI", "other"));
+      // Each schema `hasAPI` answers for is listed by its applied name.
+      const applied = prim.appliedSchemas();
+      assert.ok(applied.includes("LightAPI") && applied.includes("CollectionAPI:lightLink"), `${row.path}: ${applied.join(" ")}`);
+      assert.equal(applied.includes("ShapingAPI"), row.shaping, row.path);
+      assert.equal(applied.includes("ShadowAPI"), row.shadow, row.path);
+      assert.equal(new Set(applied).size, applied.length, "each once");
     }
   });
 });

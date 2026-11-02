@@ -171,6 +171,7 @@ export interface NativeStage extends Disposable {
   valueSourcesMightVary(paths: string[]): Uint8Array;
   isA(path: string, schema: string): boolean;
   hasAPI(path: string, schema: string, instance?: string | null): boolean;
+  appliedSchemas(path: string): string[];
   explain(path: string, time?: number | null): unknown;
   metadata(path: string, key: string): unknown;
   stageMetadata(key: string): unknown;
@@ -2857,6 +2858,17 @@ export class Prim {
    */
   hasAPI(schema: string, instance?: string): boolean {
     return this.stage.native("hasAPI", (native) => native.hasAPI(this.path, schema, instance));
+  }
+
+  /**
+   * Its applied API schemas by applied name, strongest first
+   * (`MaterialBindingAPI`, `CollectionAPI:lightLink`): its type's built-ins
+   * and auto-applies, then each one `apiSchemas` authors with its own, each
+   * once, as `UsdPrim::GetAppliedSchemas` lists them. {@link hasAPI} asks
+   * of one.
+   */
+  appliedSchemas(): string[] {
+    return this.stage.native("appliedSchemas", (native) => native.appliedSchemas(this.path));
   }
 
   /** The names of its attributes, schema-defined and authored, in property order. */

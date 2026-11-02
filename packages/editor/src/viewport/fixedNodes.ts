@@ -14,10 +14,13 @@
 // shader and frame (its shared uniforms), and a bundled object's other
 // state only when its bundle is recorded again.
 //
-// The viewport gives its materials two such nodes whose values never change
+// The viewport gives its materials such nodes whose values never change
 // behind three.js's back: a draw's light set (`lightsNode`, a `LightsNode`
-// of fixed lights whose uniforms are the render's, shared) and a clustered
-// draw's context (`contextNode`, reads of storage buffers the GPU writes).
+// of fixed lights whose uniforms are the render's, shared), a clustered
+// draw's context (`contextNode`, reads of storage buffers the GPU writes),
+// and a card stand-in's color and roughness (`colorNode`, `roughnessNode`,
+// shared by every card material and reading its own textures by
+// reference, `standins.ts`).
 // Each is replaced, never changed, and replacing one is a material change
 // (`needsUpdate`) that builds the material's shader again. So they are set
 // as own properties that are not enumerable: three.js still builds them
@@ -32,7 +35,7 @@
 import type { Material, Node } from "three/webgpu";
 
 /** The node properties of a material the viewport sets as fixed. */
-export type FixedNodeProperty = "lightsNode" | "contextNode";
+export type FixedNodeProperty = "lightsNode" | "contextNode" | "colorNode" | "roughnessNode";
 
 /**
  * Sets `material`'s node property `property` to `node` (or `null`), as a

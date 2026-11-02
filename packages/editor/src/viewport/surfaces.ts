@@ -138,6 +138,8 @@ export class TextureStore {
   readonly #loaded: () => void;
   readonly #images = new Map<string, Promise<Image | null>>();
   readonly #ready = new Map<string, Image | null>();
+  /** Identifiers ready (or failed) since the last {@link takeArrived}. */
+  #arrived = new Set<string>();
   #decoded = 0;
   #capped = 0;
 
@@ -164,10 +166,21 @@ export class TextureStore {
       this.#images.set(identifier, loading);
       void loading.then((image) => {
         this.#ready.set(identifier, image);
+        this.#arrived.add(identifier);
         this.#loaded();
       });
     }
     return undefined;
+  }
+
+  /**
+   * The identifiers whose images arrived (or failed) since the last call:
+   * only the draws reading one of them need materials made again.
+   */
+  takeArrived(): ReadonlySet<string> {
+    const arrived = this.#arrived;
+    this.#arrived = new Set();
+    return arrived;
   }
 
   /** What the store has decoded: images, and how many were scaled down to {@link MAX_TEXTURE_SIZE}. */
@@ -246,6 +259,7 @@ export class TextureStore {
     }
     this.#ready.clear();
     this.#images.clear();
+    this.#arrived.clear();
   }
 }
 

@@ -201,6 +201,10 @@ pub(crate) enum Op {
     },
     /// A storage-level step of an inverse, guarded by the step it undoes.
     Raw(Box<Guarded>),
+    /// Reports the layer's content as read again from its source.
+    Reloaded {
+        layer: LayerId,
+    },
 }
 
 /// A condition a [`Transaction`] checks before applying anything.
@@ -394,6 +398,23 @@ impl Transaction {
             expected: Box::new(expected),
         });
         self
+    }
+
+    /// Reports the content of `layer` as read again from its source, as
+    /// [`Transaction::transfer_content`] publishes a layer a host read again:
+    /// applied, a [`LiveStage`](crate::LiveStage) reports the reload where
+    /// the layer composes, besides the changes the other edits make. A layer
+    /// of the stage's own layer stack changes the pseudo-root, info-only;
+    /// another changes, info-only, the topmost prims composing specs of it
+    /// (a prim referencing it, say). This edits nothing, and the inverse
+    /// leaves it out. A layer the store does not hold is rejected.
+    ///
+    /// OpenUSD: `SdfLayer::Reload` records `didReloadContent` at the
+    /// layer's pseudo-root (`SdfChangeList::DidReloadLayerContent`), which
+    /// `UsdStage::_HandleLayersDidChange` reports as an info change of the
+    /// stage paths that site maps to.
+    pub fn mark_reloaded(&mut self, layer: LayerId) -> &mut Self {
+        self.push(Op::Reloaded { layer })
     }
 
     /// Creates an empty transaction.
@@ -1283,7 +1304,8 @@ impl Op {
             Self::Raw(guarded) => guarded.step.layer(),
             Self::LayerMetadata { layer, .. }
             | Self::EditSublayers { layer, .. }
-            | Self::SetRelocates { layer, .. } => *layer,
+            | Self::SetRelocates { layer, .. }
+            | Self::Reloaded { layer } => *layer,
             _ => self
                 .slot()
                 .map(|(at, _)| at.layer())
@@ -1313,7 +1335,8 @@ impl Op {
             Self::Raw(_)
             | Self::LayerMetadata { .. }
             | Self::EditSublayers { .. }
-            | Self::SetRelocates { .. } => return None,
+            | Self::SetRelocates { .. }
+            | Self::Reloaded { .. } => return None,
             Self::CopySpec { to, .. } => (to, Slot::Spec),
             Self::AddVariantSet { at, .. } => (at, Slot::Prim(PrimField::VariantSetNames)),
             Self::RemoveVariantSet { at, .. } => (at, Slot::Spec),

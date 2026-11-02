@@ -612,6 +612,9 @@ pub(crate) struct Outcome {
     /// transaction changed only in fields that compose nothing
     /// ([`composes_nothing`]): the pseudo-root changed, info-only.
     pub(crate) layer_info: Vec<LayerId>,
+    /// The layers the transaction reports as read again from their
+    /// sources ([`Transaction::mark_reloaded`]), in order, without repeats.
+    pub(crate) reloaded: Vec<LayerId>,
 }
 
 /// An edit of a prim metadata field or an attribute default, the inputs
@@ -946,6 +949,8 @@ pub(super) struct Journal<'a> {
     /// `apiSchemas` among them: a later edit plans against the prim
     /// definition those fields now give ([`planned_definition`]).
     prim_fields: hashbrown::HashSet<(LayerId, PathId)>,
+    /// [`Outcome::reloaded`].
+    reloaded: Vec<LayerId>,
 }
 
 impl Journal<'_> {
@@ -1170,6 +1175,7 @@ pub(crate) fn apply(
         touched_set: _,
         children: _,
         prim_fields: _,
+        reloaded,
     } = journal;
     let layer_stack_only = !structural_layers.is_empty()
         && steps.iter().all(|g| match (&g.written, &g.step) {
@@ -1295,6 +1301,7 @@ pub(crate) fn apply(
         layer_stack_only,
         property_fields,
         layer_info,
+        reloaded,
         inverse: Transaction {
             preconditions: Vec::new(),
             ops: steps.into_iter().map(|g| Op::Raw(Box::new(g))).collect(),
@@ -1697,6 +1704,13 @@ fn apply_op(
             )
         }
         Op::Raw(guarded) => journal.run(store, guarded.step.clone()),
+        Op::Reloaded { layer: id } => {
+            layer(store, *id)?;
+            if !journal.reloaded.contains(id) {
+                journal.reloaded.push(*id);
+            }
+            Ok(())
+        }
         Op::CreatePrim {
             at,
             specifier,

@@ -127,6 +127,15 @@ fn seen_shard(id: LayerId) -> usize {
 }
 
 impl LayerDiscovery {
+    /// Forgets what was read of each layer of `released`, and the reads of
+    /// every layer that reached one, which the next walk reads again from
+    /// the store's current bindings.
+    pub(super) fn forget(&mut self, released: &BTreeSet<LayerId>) {
+        self.layers.retain(|id, reads| {
+            !released.contains(id) && !reads.reached().any(|layer| released.contains(&layer))
+        });
+    }
+
     pub(super) fn has_expressions(&self) -> bool {
         self.layers.values().any(LayerReads::has_expressions)
     }

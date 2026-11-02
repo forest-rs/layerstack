@@ -13,7 +13,7 @@
 //! `pxr/usd/pcp/composeSite.cpp`.
 
 use crate::sort;
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{collections::BTreeSet, sync::Arc, vec::Vec};
 
 use hashbrown::{HashMap, HashSet};
 
@@ -700,6 +700,12 @@ impl ChildIndex {
                 state.identity = Some(identity);
             }
         });
+    }
+
+    /// Forgets the entries of `layers`, keeping the work counted.
+    pub(crate) fn forget(&self, layers: &BTreeSet<LayerId>) {
+        self.state
+            .write(|state| state.layers.retain(|id, _| !layers.contains(id)));
     }
 
     /// Forgets every entry, keeping the work counted.

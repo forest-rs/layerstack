@@ -1410,6 +1410,35 @@ impl LiveStage {
         changed.into_iter().map(|(layer, _)| layer).collect()
     }
 
+    /// Forgets what the stage keeps of each layer of `layers` that its
+    /// composition does not use ([`Stage::used_layers`], clips included),
+    /// which the host released from the store
+    /// ([`crate::InMemoryStore::release_layers`]): the generations it last
+    /// saw, the arcs and child specs it read. Changes nothing composed and
+    /// queues no notice. A later read of the layer is then heard as a new
+    /// layer is, through the binding that names it, not as a layer that
+    /// changed while the stage watched it. A layer of `layers` the
+    /// composition uses is kept.
+    ///
+    /// OpenUSD frees a layer no layer stack holds
+    /// (`pxr/usd/pcp/layerStackRegistry.cpp` holds stacks weakly), and opens
+    /// it again when composition next asks for it.
+    pub fn forget_released_layers(&mut self, layers: &[LayerId]) {
+        let used = self.stage.used_layers(true);
+        let released: BTreeSet<LayerId> = layers
+            .iter()
+            .copied()
+            .filter(|layer| !used.contains(layer))
+            .collect();
+        if released.is_empty() {
+            return;
+        }
+        self.generations
+            .retain(|layer, _| !released.contains(layer));
+        self.layer_discovery.forget(&released);
+        self.child_index.forget(&released);
+    }
+
     /// Records the generations of every layer the stage reads.
     fn record_generations(&mut self, store: &dyn LayerStore) {
         let mut layers = self.layer_discovery.participating_on(

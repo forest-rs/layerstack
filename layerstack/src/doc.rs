@@ -1423,6 +1423,47 @@ impl Hash for Reference {
     }
 }
 
+/// Makes the arcs of `op` that name one of `layers` by id, and author an
+/// asset path, resolve through the bindings of `anchor`, the layer
+/// authoring them ([`Reference::deferred`]).
+fn defer_list_arcs(
+    op: &mut SparseListOp<Reference>,
+    anchor: LayerId,
+    layers: &alloc::collections::BTreeSet<LayerId>,
+) {
+    let Some(op) = op.get_mut() else {
+        return;
+    };
+    for list in op.lists_mut() {
+        for arc in list.iter_mut() {
+            if !arc.deferred
+                && arc.asset.is_some()
+                && !arc.is_expression()
+                && layers.contains(&arc.layer)
+            {
+                arc.layer = anchor;
+                arc.deferred = true;
+            }
+        }
+    }
+}
+
+/// [`defer_list_arcs`] for the arcs of the branches of `sets`, nested sets
+/// included.
+fn defer_variant_arcs(
+    sets: &mut VariantSets,
+    anchor: LayerId,
+    layers: &alloc::collections::BTreeSet<LayerId>,
+) {
+    for (_, set) in sets.iter_mut() {
+        for (_, variant) in set.variants.iter_mut() {
+            defer_list_arcs(&mut variant.references, anchor, layers);
+            defer_list_arcs(&mut variant.payloads, anchor, layers);
+            defer_variant_arcs(&mut variant.variant_sets, anchor, layers);
+        }
+    }
+}
+
 impl Reference {
     /// Where the arc leads: the layer it targets, or the asset path or
     /// expression composition resolves relative to the layer that authors
@@ -2820,6 +2861,16 @@ const NO_PATHS: &ListOp<PathId> = &ListOp::new();
 const NO_TOKENS: &ListOp<TokenId> = &ListOp::new();
 
 impl PrimSpec {
+    /// [`Layer::defer_arcs_to`] for this spec's arcs, those of its variant
+    /// branches included, authored in `anchor`.
+    fn defer_arcs_to(&mut self, anchor: LayerId, layers: &alloc::collections::BTreeSet<LayerId>) {
+        defer_list_arcs(&mut self.references, anchor, layers);
+        defer_list_arcs(&mut self.payloads, anchor, layers);
+        if let Some(rare) = self.rare.as_deref_mut() {
+            defer_variant_arcs(&mut rare.variant_sets, anchor, layers);
+        }
+    }
+
     /// The rarely authored fields, if this spec has allocated them: `None`
     /// when it authors none of them (see [`RarePrimFields`]).
     #[inline]
@@ -4282,6 +4333,29 @@ impl Layer {
         Some(Path::root().join(&segments))
     }
 
+    /// Makes this layer's arcs and sublayers that name one of `layers` by
+    /// id, and author an asset path, resolve through the store's bindings
+    /// instead ([`Reference::deferred`], [`SublayerEntry::unresolved`]),
+    /// recording no change: they keep their asset paths, and compose the
+    /// same while the bindings name the same layers
+    /// ([`InMemoryStore::release_layers`]).
+    pub(crate) fn defer_arcs_to(&mut self, layers: &alloc::collections::BTreeSet<LayerId>) {
+        let anchor = self.id;
+        for sublayer in &mut self.sublayers {
+            if sublayer.asset.is_some() && layers.contains(&sublayer.layer) {
+                sublayer.layer = LayerId::UNRESOLVED;
+            }
+        }
+        for (_, spec) in self.prims.iter_mut() {
+            spec.defer_arcs_to(anchor, layers);
+        }
+        for specs in self.variant_prims.values_mut() {
+            for spec in specs {
+                spec.defer_arcs_to(anchor, layers);
+            }
+        }
+    }
+
     /// Returns the paths of the prim specs whose deferred references or
     /// payloads ([`Reference::deferred`]) name one of `assets`, in their own
     /// lists or in their variant branches, sorted; `None` when some asset
@@ -4824,6 +4898,10 @@ pub struct InMemoryStore {
     /// The layers hosts marked as unsavable
     /// ([`Self::set_layer_read_only`], [`LayerStore::layer_read_only`]).
     pub(crate) read_only: HashMap<LayerId, ReadOnlyReason>,
+    /// The generation and structural generation of each layer the host
+    /// released ([`Self::release_layers`]) and has not inserted since, so
+    /// that a later [`Self::insert_layer`] of its id continues them.
+    pub(crate) released: HashMap<LayerId, (u64, u64)>,
 }
 
 impl InMemoryStore {
@@ -4862,6 +4940,7 @@ impl InMemoryStore {
             asset_layers: self.asset_layers.clone(),
             identifiers: self.identifiers.clone(),
             read_only: self.read_only.clone(),
+            released: self.released.clone(),
         }
     }
 
@@ -4892,18 +4971,26 @@ impl InMemoryStore {
     /// Inserts (or replaces) a layer.
     /// Replacing a layer advances its generations so live stages detect reloads,
     /// even when the new layer happened to have the same generation counters.
+    /// A layer inserted again after [`Self::release_layers`] released its id
+    /// continues the generations the released one reached, as a replaced
+    /// layer does: an id's generations never repeat in one store, so what a
+    /// stage cached of the released content is never taken for the new.
     pub fn insert_layer(&mut self, mut layer: Layer) {
         debug_assert_ne!(layer.id, LayerId::UNRESOLVED, "reserved layer ID");
-        if let Some(previous) = self.layers.get(&layer.id) {
+        let previous = match self.layers.get(&layer.id) {
+            Some(previous) => Some((previous.generation, previous.structure)),
+            None => self.released.remove(&layer.id),
+        };
+        if let Some((generation, structure)) = previous {
             layer.generation = layer
                 .generation
-                .max(previous.generation)
+                .max(generation)
                 .checked_add(1)
                 .expect("layer generation exhausted");
             layer.change_history.clear();
             layer.structure = layer
                 .structure
-                .max(previous.structure)
+                .max(structure)
                 .checked_add(1)
                 .expect("layer structural generation exhausted");
         }
@@ -4954,6 +5041,74 @@ impl InMemoryStore {
     /// Removes the layer `id`, returning it. Bindings that name it stay.
     pub fn remove_layer(&mut self, id: LayerId) -> Option<Layer> {
         self.layers.remove(&id)
+    }
+
+    /// Releases the layers `layers`, which no stage composes, returning
+    /// those the store held, in the order given. The store drops each with
+    /// the bindings of the assets it names (those anchored to it) and
+    /// records no change, as nothing composed reads them. The arcs and
+    /// sublayers of the layers bound to one by asset path stop naming it by
+    /// id and resolve through their bindings instead
+    /// ([`Reference::deferred`], [`SublayerEntry::unresolved`]): the same
+    /// asset paths, composing the same, so they record no change either.
+    /// Bindings that name a released layer stay;
+    /// [`Self::forget_unused_assets_bound_to`] forgets them, so composition
+    /// asks for the asset again. Each id keeps its generations, so a layer
+    /// inserted again under it ([`Self::insert_layer`]) continues them.
+    ///
+    /// A host releases what nothing holds to free its memory, as OpenUSD
+    /// frees a layer once no layer stack or handle holds it
+    /// (`SdfLayer`'s registry holds layers weakly, `pxr/usd/sdf/layerRegistry.h`);
+    /// a stage that still composes a layer would lose its opinions without
+    /// a notice, so the stages that do are the host's to keep it for
+    /// ([`crate::Stage::used_layers`]). Tell each live stage on the store
+    /// ([`crate::LiveStage::forget_released_layers`]), so it hears a later
+    /// read of a layer as a new layer.
+    pub fn release_layers(&mut self, layers: &[LayerId]) -> Vec<Layer> {
+        let released: alloc::collections::BTreeSet<LayerId> = layers
+            .iter()
+            .copied()
+            .filter(|id| self.layers.contains_key(id))
+            .collect();
+        let mut anchors: Vec<LayerId> = self
+            .asset_layers
+            .iter()
+            .filter(|(anchor, assets)| {
+                !released.contains(anchor) && assets.values().any(|id| released.contains(id))
+            })
+            .map(|(anchor, _)| *anchor)
+            .collect();
+        sort::sort_unstable(&mut anchors);
+        for anchor in anchors {
+            if let Some(layer) = self.layers.get_mut(&anchor) {
+                layer.defer_arcs_to(&released);
+            }
+        }
+        let mut removed = Vec::with_capacity(released.len());
+        for &id in layers {
+            let Some(layer) = self.layers.remove(&id) else {
+                continue;
+            };
+            self.asset_layers.remove(&id);
+            self.released
+                .insert(id, (layer.generation, layer.structure));
+            removed.push(layer);
+        }
+        removed
+    }
+
+    /// Forgets every asset path bound to the layer `layer` and records no
+    /// change: for a layer released because no stage composes it
+    /// ([`Self::release_layers`]), whose bindings no composed arc reads.
+    /// Composition asks for each asset again
+    /// ([`crate::Stage::asset_requests`]) when an arc naming it next
+    /// composes, such as a payload loaded again or a sublayer authored
+    /// again. [`Self::forget_assets_bound_to`] forgets them recording a
+    /// change, so stages recompose the arcs that read them.
+    pub fn forget_unused_assets_bound_to(&mut self, layer: LayerId) {
+        for assets in self.asset_layers.values_mut() {
+            assets.retain(|_, bound| *bound != layer);
+        }
     }
 
     /// Every recorded asset binding, `(anchor, asset path, layer)`, sorted
@@ -5261,6 +5416,60 @@ impl LayerStore for InMemoryStore {
 mod tests {
     use super::*;
     use alloc::boxed::Box;
+
+    /// A released layer leaves with the bindings of its own assets; the
+    /// arcs bound to it resolve through their bindings, recording no
+    /// change; and a layer inserted again under its id continues its
+    /// generations.
+    #[test]
+    fn released_layers_defer_their_arcs_and_keep_their_generations() {
+        let (root, asset) = (LayerId(1), LayerId(2));
+        let mut store = InMemoryStore::default();
+        let mut anchor = Layer::new(root);
+        anchor.sublayers.push(SublayerEntry::with_asset(
+            asset,
+            "a.usda",
+            LayerOffset::IDENTITY,
+        ));
+        store.insert_asset_layer(root, "a.usda", asset);
+        store.insert_layer(anchor);
+        store.insert_asset_layer(asset, "b.usda", LayerId(3));
+        store.insert_layer(Layer::new(asset));
+        store.insert_layer(Layer::new(asset));
+        let seen = store.layer(asset).unwrap().generation();
+        let root_generation = store.layer(root).unwrap().generation();
+
+        let released = store.release_layers(&[asset, LayerId(9)]);
+        assert_eq!(released.len(), 1, "only held layers are returned");
+        assert!(store.layer(asset).is_none());
+        assert!(
+            store.asset_layer(asset, "b.usda").is_none(),
+            "its own bindings go"
+        );
+        assert_eq!(
+            store.asset_layer(root, "a.usda"),
+            Some(asset),
+            "bindings to it stay"
+        );
+        let root_layer = store.layer(root).unwrap();
+        assert!(
+            root_layer.sublayers[0].is_unresolved(),
+            "resolved through the binding"
+        );
+        assert_eq!(root_layer.sublayers[0].asset.as_deref(), Some("a.usda"));
+        assert_eq!(
+            root_layer.generation(),
+            root_generation,
+            "no change recorded"
+        );
+
+        store.forget_unused_assets_bound_to(asset);
+        assert!(store.asset_layer(root, "a.usda").is_none());
+        assert_eq!(store.layer(root).unwrap().generation(), root_generation);
+
+        store.insert_layer(Layer::new(asset));
+        assert!(store.layer(asset).unwrap().generation() > seen);
+    }
 
     /// A set has one selection; a new one replaces it, and iteration
     /// visits each set once.

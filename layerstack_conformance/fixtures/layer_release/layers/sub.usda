@@ -1,0 +1,11 @@
+#usda 1.0
+
+def "B"
+{
+    double y = 2
+}
+
+def "S"
+{
+    double z = 3
+}

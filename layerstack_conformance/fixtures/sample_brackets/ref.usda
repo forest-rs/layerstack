@@ -1,0 +1,10 @@
+#usda 1.0
+
+def "Source"
+{
+    double a.timeSamples = {
+        0: 0,
+        5: 5,
+        10: 10,
+    }
+}

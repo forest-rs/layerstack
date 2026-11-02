@@ -207,13 +207,17 @@ nothing more.
   outputs and what they read) and its inputs as their authors lay them
   out: grouped by `displayGroup`, labelled by `displayName`, ordered by
   `uiorder`; a number between `uimin` and `uimax` is a slider over its
-  soft range (`uisoftmin`, `uisoftmax`) where one is given. A connected
-  input is a link to its source. A dot marks the inputs the prim sets
-  itself, as opposed to those it inherits from a base material. Above
-  them, the material (a shader's, its material's) on a sphere, read again
-  after each edit: `UsdPreviewSurface` as the viewport draws it, OpenPBR
-  approximated by three.js's physical material (what is approximated is
-  listed under the sphere).
+  soft range (`uisoftmin`, `uisoftmax`) where one is given, a colour a
+  swatch and picker. A connected input is a live link to its source, and
+  one that reads a `UsdUVTexture` shows the image as a thumbnail with its
+  file (a click shows it in the asset view), `sourceColorSpace` and wrap
+  modes. A dot marks the inputs the prim sets itself, as opposed to those
+  it inherits from a base material. Above them, the material (a shader's,
+  its material's) on a shader ball, read again after each edit:
+  `UsdPreviewSurface` as the viewport draws it, OpenPBR approximated by
+  three.js's physical material (what is approximated is listed under the
+  sphere); and, for a material, the prims the viewport draws with it bound
+  (from the draws, not a search of the stage), each live.
 - **Shading.** The network of the selected material (or of the material
   or node graph around a selected shader) as a node graph, left to right:
   the material's inputs, each shader with its inputs and outputs as rows,

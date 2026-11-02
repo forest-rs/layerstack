@@ -1,0 +1,26 @@
+[package]
+name = "layerstack_clusters_examples"
+description = "Builds cluster level-of-detail DAGs for the meshes of a USD stage, reports them, and renders cuts against the full mesh."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords = ["usd", "mesh", "lod", "examples"]
+categories = ["graphics", "rendering"]
+publish = false
+
+[dependencies]
+layerstack = { workspace = true }
+layerstack_clusters = { path = "../layerstack_clusters" }
+layerstack_io = { features = ["std"], workspace = true }
+layerstack_schemas = { features = ["usd-geom", "usd-lux", "usd-shade"], workspace = true }
+layerstack_stagehand = { path = "../layerstack_stagehand" }
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "cluster_lod"
+path = "src/main.rs"

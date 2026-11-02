@@ -30,9 +30,10 @@ env:
   # modules; their no_std builds are checked by the gate, and a `cdylib` is
   # not a crate type `x86_64-unknown-none` supports. `layerstack_clusters`
   # builds meshoptimizer's C++ through `meshopt`, which needs the standard
-  # library.
+  # library, as does its example crate.
   RUST_NO_STD_PKGS: >-
     --exclude layerstack_clusters
+    --exclude layerstack_clusters_examples
     --exclude layerstack_conformance
     --exclude layerstack_examples
     --exclude layerstack_schemagen
@@ -46,6 +47,7 @@ env:
   # meshoptimizer's C++, which has no WASI sysroot here.
   RUST_NO_WASIP1_PKGS: >-
     --exclude layerstack_clusters
+    --exclude layerstack_clusters_examples
     --exclude layerstack_examples
     --exclude layerstack_schemagen
     --exclude layerstack_stagehand_wasm
@@ -57,6 +59,7 @@ env:
   # WebAssembly build.
   RUST_NO_WASM_PKGS: >-
     --exclude layerstack_clusters
+    --exclude layerstack_clusters_examples
     --exclude layerstack_examples
     --exclude layerstack_schemagen
     --exclude wind_tunnel
@@ -303,6 +306,8 @@ jobs:
           for binary in live_scene material_network procedural_graph; do
             cargo run --locked --all-features -p layerstack_examples --bin "$binary"
           done
+          cargo run --locked --all-features -p layerstack_clusters_examples --bin cluster_lod -- \
+            packages/editor/public/scene/scene.usda --render "$RUNNER_TEMP/clusters" --size 128
 
   test-stable-wasm:
     name: cargo test (wasm32)

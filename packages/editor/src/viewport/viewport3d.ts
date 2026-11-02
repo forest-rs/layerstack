@@ -562,6 +562,25 @@ export class Viewport {
   }
 
   /**
+   * The geometry the view made for the draw list's buffer `key`, with the
+   * matrix taking its position values to points (stagehand's `compact`
+   * decode; `null` for none), for another canvas of the shared renderer to
+   * draw without uploading it again (the mesh view's preview). `null` when
+   * the view holds none it can draw: none made, a skinned one (posed on the
+   * GPU here), or one whose arrays were released without its GPU buffers
+   * made (a clustered mesh's). Its arrays may be released: read nothing
+   * from them.
+   */
+  sharedGeometry(key: number): { readonly geometry: BufferGeometry; readonly decode: Matrix4 | null } | null {
+    const geometry = this.#geometries.get(key);
+    const position = geometry?.getAttribute("position");
+    if (geometry === undefined || position === undefined || geometry.index === null || geometry.userData.skinned === true) return null;
+    const drawable = position.array.length > 0 || uploaded(this.#renderer, position as BufferAttribute | InterleavedBufferAttribute);
+    if (!drawable) return null;
+    return { geometry, decode: (geometry.userData.decode as Matrix4 | null | undefined) ?? null };
+  }
+
+  /**
    * What {@link setMarker} draws, in a pass of its own after the scene's
    * (render bundles replay in the scene's pass, so an outline drawn there
    * would be drawn over by them), and whether it is shown.

@@ -172,6 +172,22 @@ nothing more.
   layers (the explain and history panels) are live: a click selects or
   explains, a context menu offers what else applies. Nothing has to be
   typed that the stage already knows.
+- **Meshes.** The inspector's view of a `Mesh`: the mesh alone in a
+  preview (drag to orbit, scroll to zoom, framed on its extent), what
+  stagehand made of it (faces, points, triangles, vertices, concave faces
+  and how many were ear-clipped, holes, degenerate faces, normals authored
+  or computed), its subdivision scheme (drawn as its cage), orientation
+  and `doubleSided`, its primvars with type, interpolation and element
+  size, and its face subsets with their family and face count; hovering a
+  subset highlights its triangles in the preview, the rest ghosted. The
+  preview can draw a checker on `st`, the triangles' edges and the vertex
+  normals. For a mesh the viewport draws, nothing is triangulated again:
+  the facts are its draw list buffers' report and the preview draws the
+  geometry the viewport uploaded (`Viewport.sharedGeometry`, the same GPU
+  buffers on the shared renderer). A mesh the viewport does not draw
+  (over the budget, out of the draw scope, or with Nothing drawn), and
+  the edges and normals (read on the CPU, where the viewport released its
+  arrays once uploaded), are built for this mesh alone with stagehand.
 - **Point instancers.** The inspector's view of a `PointInstancer`: its
   prototypes, each with how many instances place it (the `protoIndices`
   histogram, and how many name no prototype), whether `ids` are authored,

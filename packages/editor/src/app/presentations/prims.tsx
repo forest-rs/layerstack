@@ -13,6 +13,7 @@ import { PropertyList } from "../PropertyList.tsx";
 import { ShadingSection } from "../ShadingSection.tsx";
 import { TransformSection } from "../TransformSection.tsx";
 import { InstancerView } from "../views/InstancerView.tsx";
+import { MeshView } from "../views/MeshView.tsx";
 
 /** Registers the built-in prim panels. */
 export function registerPrimPresentations(): void {
@@ -42,6 +43,7 @@ export function registerPrimPresentations(): void {
       panel: ({ object, context }) => <ShadingSection store={context.store} stage={context.stage} prim={object.prim} />,
     });
   }
+  registerPresentation({ id: "builtin.mesh", kind: "prim", type: "Mesh", title: "Mesh", priority: 50, panel: MeshView });
   registerPresentation({ id: "builtin.point-instancer", kind: "prim", type: "PointInstancer", title: "Point instancer", priority: 50, panel: InstancerView });
   registerPresentation({
     id: "builtin.draw-mode",

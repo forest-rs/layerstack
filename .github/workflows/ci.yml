@@ -28,8 +28,11 @@ env:
   # List of packages that don't support `no_std`.
   # `layerstack_wasm` and `layerstack_stagehand_wasm` are WebAssembly
   # modules; their no_std builds are checked by the gate, and a `cdylib` is
-  # not a crate type `x86_64-unknown-none` supports.
+  # not a crate type `x86_64-unknown-none` supports. `layerstack_clusters`
+  # builds meshoptimizer's C++ through `meshopt`, which needs the standard
+  # library.
   RUST_NO_STD_PKGS: >-
+    --exclude layerstack_clusters
     --exclude layerstack_conformance
     --exclude layerstack_examples
     --exclude layerstack_schemagen
@@ -39,15 +42,21 @@ env:
   # List of packages that don't support wasip1
   # `layerstack_wasm`'s and `layerstack_stagehand_wasm`'s exports import
   # wasm-bindgen's JavaScript glue, which a WASI runtime does not provide;
-  # the `typescript` job runs the modules.
+  # the `typescript` job runs the modules. `layerstack_clusters` compiles
+  # meshoptimizer's C++, which has no WASI sysroot here.
   RUST_NO_WASIP1_PKGS: >-
+    --exclude layerstack_clusters
     --exclude layerstack_examples
     --exclude layerstack_schemagen
     --exclude layerstack_stagehand_wasm
     --exclude layerstack_wasm
     --exclude wind_tunnel
-  # List of packages that don't support wasm32
+  # List of packages that don't support wasm32. `meshopt` 0.7 compiles
+  # meshoptimizer for wasm32 against minimal headers that lack functions
+  # meshoptimizer 1.3 calls, so `layerstack_clusters` waits for its
+  # WebAssembly build.
   RUST_NO_WASM_PKGS: >-
+    --exclude layerstack_clusters
     --exclude layerstack_examples
     --exclude layerstack_schemagen
     --exclude wind_tunnel

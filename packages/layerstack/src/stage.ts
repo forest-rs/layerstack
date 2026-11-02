@@ -79,6 +79,7 @@ import type {
   Opinion,
   PropertyChange,
   PackageResult,
+  ReleasedLayers,
   ResolveClipQueryOptions,
   ResolveClipQueryResult,
   ResolveOptions,
@@ -131,6 +132,7 @@ export interface NativeStage extends Disposable {
   confirmAbsent(identifier: string): void;
   loadSupplied(): unknown;
   readSupplied(): unknown;
+  releaseUnusedLayers(keep: BigUint64Array): unknown;
   prepareClipQuery(path: string, time: number | null | undefined, maxLoads: number, maxDemands: number): unknown;
   layers(): unknown;
   layerDirty(id: bigint): boolean;
@@ -930,6 +932,55 @@ export class Stage implements Disposable {
     const record = this.#call("loadSupplied", (native) => native.loadSupplied()) as LoadRecord;
     this.#notify();
     return this.#loadResult(record);
+  }
+
+  /**
+   * Releases the layers the stage no longer uses, so their memory comes
+   * back, and returns what it released and the unused dirty layers it
+   * kept ({@link ReleasedLayers}). A layer is used when it is in the root
+   * or session layer stack, in a layer stack composition reaches (a
+   * loaded payload's included), a clip layer held for queries, or in
+   * `keep`: what the host holds, such as the layer of an edit target it
+   * will author to. Call it after unloading payloads or muting layers;
+   * the stage composes nothing differently and listeners hear nothing.
+   *
+   * When the stage next asks for a released layer (the payload loaded
+   * again, the layer unmuted, a sublayer or reference to it authored
+   * again), its source is unavailable ({@link Stage.unavailable}) until
+   * supplied again, and the stage reads it anew, as OpenUSD opens the
+   * file again once it freed the layer. A layer with edits not saved is
+   * never released: OpenUSD frees it and loses them, this keeps it and
+   * lists it in {@link ReleasedLayers.keptDirty}.
+   *
+   * Throws `layer.affinity` for a layer of another stage in `keep`, with
+   * nothing released.
+   */
+  releaseUnusedLayers(keep: Iterable<Layer> = []): ReleasedLayers {
+    const ids: bigint[] = [];
+    for (const layer of keep) {
+      this.#own("releaseUnusedLayers", layer);
+      ids.push(layer.id);
+    }
+    let record: [[bigint, string, bigint | null, boolean][], bigint[]];
+    try {
+      record = this.#call("releaseUnusedLayers", (native) =>
+        native.releaseUnusedLayers(BigUint64Array.from(ids)),
+      ) as typeof record;
+    } finally {
+      // Edits made through the module and not yet heard compose first.
+      this.#notify();
+    }
+    const [released, kept] = record;
+    const rows = released.map(([, identifier, bytes, muted]) => ({
+      identifier,
+      sourceBytes: bytes === null ? null : Number(bytes),
+      muted,
+    }));
+    return {
+      released: rows,
+      keptDirty: kept.map((id) => this.#layer(id, "releaseUnusedLayers")),
+      sourceBytes: rows.reduce((sum, row) => sum + (row.sourceBytes ?? 0), 0),
+    };
   }
 
   /**

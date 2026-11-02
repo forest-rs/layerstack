@@ -2177,6 +2177,12 @@ export class Stage implements Disposable {
    * several layers of the stack. Atomic, with change listeners run before
    * it returns; the receipt undoes it.
    *
+   * Child and property orders (`reorder nameChildren`, `reorder
+   * properties`) stay as authored, as OpenUSD leaves them: they keep the
+   * old name and do not list the new one, so a renamed child the order
+   * placed takes its place among the unordered ones, and moving it back
+   * restores its place.
+   *
    * As OpenUSD, it repairs only the paths of specs a composed prim uses:
    * those in a variant no prim selects keep naming the old path, and
    * {@link EditReceipt.unrepaired} lists them, so a variant switch that

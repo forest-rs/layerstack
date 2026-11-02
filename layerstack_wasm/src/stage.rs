@@ -1748,7 +1748,13 @@ impl Stage {
     /// move may edit several layers of the stack; a layer it would edit
     /// that cannot be saved fails it with `layer.read_only`.
     ///
-    /// Spec: AOUSD Core §8 (namespace), §12.4 (path list ops).
+    /// Child and property orders (`reorder nameChildren`, `reorder
+    /// properties`) stay as authored, as `UsdNamespaceEditor` leaves them:
+    /// they keep the old name and do not list the new one, so moving the
+    /// object back restores its place.
+    ///
+    /// Spec: AOUSD Core §8 (namespace), §7.6.2.4.5 (`primOrder`), §12.4
+    /// (path list ops).
     /// OpenUSD: `UsdNamespaceEditor::MovePrimAtPath` and
     /// `MovePropertyAtPath`.
     ///

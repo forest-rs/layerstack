@@ -2534,6 +2534,39 @@ impl Stage {
         ]))
     }
 
+    /// The bytes of the package member `identifier` names
+    /// (`set/model.usdz[textures/wood.png]`, as an asset path authored
+    /// inside the package is anchored), read from a USDZ package the stage
+    /// holds ([`StageDocument::read_asset_bytes`]): a texture or other
+    /// non-layer asset packaged with the layers that use it. The host has
+    /// no other way to read one: it supplied the package as one source.
+    /// `None` when `identifier` names no package member, the stage holds
+    /// no such package, or the package has no such member.
+    ///
+    /// Spec: AOUSD Core §9.4 (asset paths), §16 (packages).
+    ///
+    /// # Errors
+    ///
+    /// `io.rejected` for a malformed package path or a member that cannot
+    /// be read from its archive.
+    pub(crate) fn package_member(&mut self, identifier: &str) -> Result<Option<Vec<u8>>, Error> {
+        if !identifier.ends_with(']') {
+            return Ok(None);
+        }
+        match self.document.read_asset_bytes(identifier, None) {
+            Ok(read) => Ok(Some(read.bytes.to_vec())),
+            Err(error)
+                if matches!(
+                    error.kind,
+                    layerstack_io::IoErrorKind::NotFound | layerstack_io::IoErrorKind::Unavailable
+                ) =>
+            {
+                Ok(None)
+            }
+            Err(error) => Err(error.into()),
+        }
+    }
+
     /// The root layer and everything it depends on, packaged as a USDZ
     /// ([`StageDocument::prepare_package`], OpenUSD's
     /// `UsdUtilsCreateNewUsdzPackage`): resident layers with their unsaved
@@ -3231,6 +3264,12 @@ impl Stage {
     #[wasm_bindgen(js_name = exportFlattened)]
     pub fn js_export_flattened(&mut self, format: &str) -> Result<JsValue, JsValue> {
         Ok(self.export_flattened(format)?.into())
+    }
+
+    /// The bytes `package_member` reads, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = packageMember)]
+    pub fn js_package_member(&mut self, identifier: &str) -> Result<Option<Vec<u8>>, JsValue> {
+        Ok(self.package_member(identifier)?)
     }
 
     /// The record `export_package` builds, as documented in `stage.rs`.

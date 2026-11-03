@@ -6,6 +6,7 @@
 // `../textures/wood.png`); a source answers it from HTTP, a directory the
 // person picked, or files they dropped. The stage never reads storage
 // itself: the session's asset loop asks, and the source answers.
+import type { Stage } from "@forest-rs/layerstack";
 import type { Fetcher } from "./session.ts";
 
 /** A scene to open: its root, and the storage its identifiers resolve in. */
@@ -172,4 +173,61 @@ export async function resolveAsset(source: SceneSource, identifier: string, anch
   if (slash < 0) return identifier;
   const beside = `${anchor.slice(0, slash + 1)}${identifier}`;
   return (await source.exists(beside)) ? beside : identifier;
+}
+
+/** What {@link readAsset} asks of the stage: a member of a package it holds. */
+export type PackagedAssets = Pick<Stage, "packageMember">;
+
+/**
+ * The package members a search path (`textures/wood.png`) authored in a
+ * USDZ package names, in the order OpenUSD looks: beside the authoring
+ * member, then beside the package's root layer at the archive's top level
+ * (`SdfComputeAssetPathRelativeToLayer`; `Sdf_ComputeAnchorPath` in
+ * `pxr/usd/sdf/layerUtils.cpp`). `anchor` is the authoring layer's
+ * identifier: a member (`set/model.usdz[geo/rock.usda]`) or the package
+ * read as a layer (`set/model.usdz`). Empty for any other path or layer:
+ * it is not looked for in a package.
+ */
+export function packagedSearch(identifier: string, anchor: string | null): string[] {
+  if (anchor === null || !isSearchPath(identifier)) return [];
+  const open = anchor.indexOf("[");
+  if (open < 0) return /.\.usdz$/i.test(anchor.slice(anchor.lastIndexOf("/") + 1)) ? [`${anchor}[${identifier}]`] : [];
+  if (!anchor.endsWith("]")) return [];
+  const outer = anchor.slice(0, open);
+  const member = anchor.slice(open + 1, -1);
+  // A member of a package inside the package: only the outer root is looked in.
+  if (member.includes("[")) return [`${outer}[${identifier}]`];
+  const slash = member.lastIndexOf("/");
+  const beside = slash < 0 ? identifier : `${member.slice(0, slash + 1)}${identifier}`;
+  return [...new Set([`${outer}[${beside}]`, `${outer}[${identifier}]`])];
+}
+
+/** The bytes of the first package member of `identifiers` the stage holds. */
+function packaged(stage: PackagedAssets | null, identifiers: readonly string[]): Uint8Array | null {
+  if (stage === null) return null;
+  for (const identifier of identifiers) {
+    const bytes = stage.packageMember(identifier);
+    if (bytes !== null) return bytes;
+  }
+  return null;
+}
+
+/**
+ * An asset's bytes, as the viewport and the views read a texture: a member
+ * of a USDZ package the stage read (`set/model.usdz[wood.png]`, as a path
+ * authored inside the package is anchored, or a search path found in the
+ * package, {@link packagedSearch}) from the stage, which holds the
+ * package's bytes, the source having supplied it as one asset; anything
+ * else from `source`, found as {@link resolveAsset} finds it.
+ */
+export async function readAsset(source: SceneSource, stage: PackagedAssets | null, identifier: string, anchor: string | null): Promise<Uint8Array | null> {
+  const bytes = packaged(stage, [identifier, ...packagedSearch(identifier, anchor)]);
+  if (bytes !== null) return bytes;
+  return source.fetch(await resolveAsset(source, identifier, anchor));
+}
+
+/** Whether {@link readAsset} would find the asset: a UDIM set's tiles are asked one by one. */
+export async function assetExists(source: SceneSource, stage: PackagedAssets | null, identifier: string, anchor: string | null): Promise<boolean> {
+  if (packaged(stage, [identifier, ...packagedSearch(identifier, anchor)]) !== null) return true;
+  return source.exists(await resolveAsset(source, identifier, anchor));
 }

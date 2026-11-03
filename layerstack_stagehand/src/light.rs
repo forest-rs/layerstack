@@ -27,11 +27,14 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::cell::RefCell;
 
-use layerstack::{PathId, TargetPath, Time, TokenInterner, Value};
+use layerstack::{PathId, PropertyPath, TargetPath, Time, TokenInterner, Value};
+use layerstack_schemas::assets::AssetReference;
 use layerstack_schemas::light::blackbody_temperature_rgb;
 use layerstack_schemas::shading::ValueSourceKind;
 use layerstack_schemas::value::{read_asset, read_bool, read_float, read_float3, read_token};
 use layerstack_schemas::{PrimView, Scene};
+
+use crate::material::{TextureFile, texture_file};
 
 /// The `UsdLux` light a [`LightItem`] is: a built-in light by its typed
 /// schema, or a mesh made a light by an applied API schema.
@@ -158,6 +161,9 @@ pub enum LightGeometry {
         height: f32,
         /// `inputs:texture:file`, the asset path as authored, if any.
         texture: Option<Arc<str>>,
+        /// That texture's file, anchored to the layer authoring it, as a
+        /// material's texture's is ([`TextureFile`]).
+        file: Option<TextureFile>,
     },
     /// A `DiskLight`.
     Disk {
@@ -177,6 +183,9 @@ pub enum LightGeometry {
     Dome {
         /// `inputs:texture:file`, the asset path as authored, if any.
         texture: Option<Arc<str>>,
+        /// That texture's file, anchored to the layer authoring it, as a
+        /// material's texture's is ([`TextureFile`]).
+        file: Option<TextureFile>,
         /// `inputs:texture:format`: `automatic`, `latlong`,
         /// `mirroredBall`, `angular` or `cubeMapVerticalCross`.
         format: Arc<str>,
@@ -475,6 +484,21 @@ pub(crate) fn read_light(
         )
         .filter(|asset| !asset.is_empty())
     };
+    // A texture's file: the attribute the input reads (its own, or the one
+    // authored value it is connected to), anchored to the layer authoring
+    // it, as a material's texture's is.
+    let asset_file = |name: &str| {
+        let property = match connected_source(scene, path, name, &mut sources.borrow_mut()) {
+            Connected::Not => PrimView::new(*scene, path).property_path(name)?,
+            Connected::To(property) => property,
+            Connected::Nothing => return None,
+        };
+        AssetReference::read(scene, property, time)
+            .ok()
+            .flatten()
+            .filter(|asset| !asset.asset_path.is_empty())
+            .map(|asset| texture_file(scene, &asset))
+    };
     let token = |name: &str, fallback: &str| -> Arc<str> {
         input_at(
             scene,
@@ -499,6 +523,7 @@ pub(crate) fn read_light(
             width: float("inputs:width", 1.),
             height: float("inputs:height", 1.),
             texture: asset("inputs:texture:file"),
+            file: asset_file("inputs:texture:file"),
         },
         LightKind::Disk => LightGeometry::Disk {
             radius: float("inputs:radius", 0.5),
@@ -510,6 +535,7 @@ pub(crate) fn read_light(
         },
         LightKind::Dome => LightGeometry::Dome {
             texture: asset("inputs:texture:file"),
+            file: asset_file("inputs:texture:file"),
             format: token("inputs:texture:format", "automatic"),
             pole_axis: scene
                 .is_a(path, "DomeLight_1")
@@ -622,6 +648,36 @@ fn input_at<'a, T>(
     read: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
     sources: &mut Vec<PathId>,
 ) -> Option<T> {
+    match connected_source(scene, path, name, sources) {
+        Connected::Not => PrimView::new(*scene, path).read_value_at(name, time, read),
+        Connected::To(property) => {
+            let name = scene.store().tokens().resolve(property.property());
+            PrimView::new(*scene, property.prim_path()).read_value_at(name, time, read)
+        }
+        Connected::Nothing => None,
+    }
+}
+
+/// Where a light input's value comes from.
+enum Connected {
+    /// Not connected: the input's own value.
+    Not,
+    /// Connected, to one authored value: that attribute's.
+    To(PropertyPath),
+    /// Connected to a shader output or several sources: none, so the input
+    /// takes its fallback.
+    Nothing,
+}
+
+/// Where `path`'s input `name` reads its value
+/// (`GetValueProducingAttributes`), the prims the connections inspected
+/// added to `sources`.
+fn connected_source(
+    scene: &Scene<'_>,
+    path: PathId,
+    name: &str,
+    sources: &mut Vec<PathId>,
+) -> Connected {
     let prim = PrimView::new(*scene, path);
     if name.starts_with("inputs:")
         && let Some(property) = prim.property_path(name)
@@ -635,16 +691,12 @@ fn input_at<'a, T>(
                 }
             }
             return match found.sources.as_slice() {
-                [one] if one.kind == ValueSourceKind::AuthoredValue => {
-                    let property = scene.store().tokens().resolve(one.attribute.property());
-                    PrimView::new(*scene, one.attribute.prim_path())
-                        .read_value_at(property, time, read)
-                }
-                _ => None,
+                [one] if one.kind == ValueSourceKind::AuthoredValue => Connected::To(one.attribute),
+                _ => Connected::Nothing,
             };
         }
     }
-    prim.read_value_at(name, time, read)
+    Connected::Not
 }
 
 /// `color * temperature_color * intensity * 2^exposure / size_factor`.
@@ -905,7 +957,7 @@ def Xform "World" {
         uniform bool collection:lightLink:includeRoot = false
     }
     def DomeLight_1 "Sky" {
-        asset inputs:texture:file = @sky.exr@
+        asset inputs:texture:file = @./sky.exr@
         token inputs:texture:format = "latlong"
     }
     def CylinderLight "Tube" {
@@ -941,6 +993,7 @@ def Xform "World" {
                 read.diagnostics().collect::<Vec<_>>()
             );
             store.insert_layer(read.emitted.layer);
+            store.set_layer_identifier(LayerId(1), "set/scene.usda");
             let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
             let live = LiveStage::compose(
                 &mut store,
@@ -1000,10 +1053,16 @@ def Xform "World" {
         let panel = list.light(fixture.path("/World/Panel")).unwrap();
         close(panel.emission.size_factor, 6.);
         assert_eq!(panel.direction, [0., 0., -1.]);
-        let LightGeometry::Rect { texture, .. } = &panel.geometry else {
+        let LightGeometry::Rect { texture, file, .. } = &panel.geometry else {
             panic!("{:?}", panel.geometry);
         };
         assert_eq!(texture.as_deref(), Some("panel.png"));
+        // A search path is kept as authored.
+        let file = file.as_ref().unwrap();
+        assert_eq!(
+            (file.identifier.as_deref(), file.layer),
+            (Some("panel.png"), Some(LayerId(1)))
+        );
 
         // The sun: rotated to shine down, blackbody tinted, its fallback
         // angle unused without `normalize`.
@@ -1030,13 +1089,18 @@ def Xform "World" {
         let sky = list.light(fixture.path("/World/Sky")).unwrap();
         let LightGeometry::Dome {
             texture,
+            file,
             format,
             pole_axis,
         } = &sky.geometry
         else {
             panic!("{:?}", sky.geometry);
         };
-        assert_eq!(texture.as_deref(), Some("sky.exr"));
+        assert_eq!(texture.as_deref(), Some("./sky.exr"));
+        // Anchored to the layer authoring it, as a material's texture is.
+        let file = file.as_ref().unwrap();
+        assert_eq!(file.identifier.as_deref(), Some("./set/sky.exr"));
+        assert!(!file.udim);
         assert_eq!(&**format, "latlong");
         assert_eq!(pole_axis.as_deref(), Some("scene"));
 
@@ -1677,10 +1741,16 @@ def Xform "World" {
                     width,
                     height,
                     texture,
+                    file,
                 } => {
                     assert_eq!(*width, f32_of(&inputs["width"]), "{at}");
                     assert_eq!(*height, f32_of(&inputs["height"]), "{at}");
                     assert_eq!(*texture, text_of(&inputs["texture:file"]), "{at}");
+                    assert_eq!(
+                        file.as_ref().map(|file| Arc::from(&*file.asset_path)),
+                        *texture,
+                        "{at}"
+                    );
                 }
                 LightGeometry::Disk { radius } => {
                     assert_eq!(*radius, f32_of(&inputs["radius"]), "{at}");
@@ -1696,10 +1766,16 @@ def Xform "World" {
                 }
                 LightGeometry::Dome {
                     texture,
+                    file,
                     format,
                     pole_axis,
                 } => {
                     assert_eq!(*texture, text_of(&inputs["texture:file"]), "{at}");
+                    assert_eq!(
+                        file.as_ref().map(|file| Arc::from(&*file.asset_path)),
+                        *texture,
+                        "{at}"
+                    );
                     assert_eq!(
                         Some(format.clone()),
                         text_of(&inputs["texture:format"]),

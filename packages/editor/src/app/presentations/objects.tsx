@@ -124,10 +124,7 @@ export function registerObjectPresentations(): void {
     type: "primPath",
     title: "Draw it alone (asset view)",
     applies: (object, { stage }) => exists(object.path, stage),
-    run: (object, { store }) => {
-      store.select(object.path);
-      store.setDrawScope("selection");
-    },
+    run: (object, { store }) => store.drawAlone(object.path),
   });
   registerCommand({
     id: "builtin.prim-path.material",

@@ -14,10 +14,11 @@ import type { BudgetReport, BufferCost, DrawCost, DrawScope, Stagehand } from "@
 import { type AssetFocus, assetFocus, type BudgetChoice, budgetFor, type DrawScopeChoice, rememberBudget, rememberedBudget, scopeFor } from "./model/assetView.ts";
 import { ViewportModel, type ViewportScene, type ViewportUpdate } from "./model/draws.ts";
 import { primRevision } from "./model/revisions.ts";
-import { boxCorners, indexOfId, instanceMatrix, type InstancerColumns, multiply, readColumns } from "./model/instancer.ts";
+import { boxCorners, indexOfId, instanceMatrix, type InstancerColumns, invert, multiply, readColumns } from "./model/instancer.ts";
 import { type LoadBudget, type OpenPhase, OverBudget, Session } from "./model/session.ts";
 import type { SceneSource } from "./model/sources.ts";
 import { DEFAULT_LIGHT_SETTINGS, type LightSettings } from "./viewport/defaultLights.ts";
+import { isBox } from "./viewport/framing.ts";
 import type { Viewport } from "./viewport/viewport3d.ts";
 
 /** Where the editor is with its scene. */
@@ -372,19 +373,9 @@ export class EditorStore {
   selectInstance(instancer: string, index: number | null, frame = false): void {
     if (this.selection !== instancer) this.select(instancer);
     this.instance = index === null ? null : { instancer, index };
-    const corners = index === null || this.drawScope !== "scene" ? null : this.#instanceCorners(instancer, index);
+    const corners = index === null ? null : this.#instanceCorners(instancer, index);
     this.#viewport?.setMarker(corners);
-    if (frame && corners !== null && this.#viewport !== null) {
-      const box = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
-      for (let corner = 0; corner < 8; corner++) {
-        for (let c = 0; c < 3; c++) {
-          box[c] = Math.min(box[c]!, corners[corner * 3 + c]!);
-          box[c + 3] = Math.max(box[c + 3]!, corners[corner * 3 + c]!);
-        }
-      }
-      this.lookThrough(null);
-      this.#viewport.frame(box);
-    }
+    if (frame && corners !== null) this.#frameBox(cornersBox(corners));
     this.#bump();
   }
 
@@ -395,19 +386,34 @@ export class EditorStore {
     this.selectInstance(instancer, index < 0 ? null : index);
   }
 
-  /** The world-space corners of instance `index`'s box: its prototype's local bound through its transform and the instancer's. */
+  /**
+   * The corners of instance `index`'s box, in the space the viewport
+   * draws in (the world, or drawing the selection alone, its root's own
+   * space): its prototype's local bound through its transform and the
+   * instancer's. `null` when nothing is drawn or it has no finite box.
+   */
   #instanceCorners(instancer: string, index: number): Float64Array | null {
     const stage = this.session?.stage;
+    if (stage === undefined || this.drawScope === "nothing") return null;
     const columns = this.instancerColumns(instancer);
-    if (stage === undefined || columns === null || index >= columns.count) return null;
+    if (columns === null || index >= columns.count) return null;
     const prototype = columns.prototypes[columns.protoIndices[index]!];
     if (prototype === undefined) return null;
     const time = this.time === undefined ? {} : { time: this.time };
     const bounds = stage.localBounds([prototype], { purposes: ["default", "proxy", "render"], ...time });
     const range = bounds.ranges.subarray(0, 6);
     if (!(range[0]! <= range[3]!)) return null;
-    const world = stage.worldTransforms([instancer], time);
-    return boxCorners(range, multiply(multiply(bounds.matrices.subarray(0, 16), instanceMatrix(columns, index)), world));
+    let world: ArrayLike<number> = stage.worldTransforms([instancer], time);
+    if (this.drawScope === "selection") {
+      // Drawn alone, the draws are in the root's space (`DrawScope.space`).
+      if (this.focus.kind !== "geometry") return null;
+      const root = invert(stage.worldTransforms([this.focus.root], time));
+      if (root === null) return null;
+      world = multiply(world, root);
+    }
+    const corners = boxCorners(range, multiply(multiply(bounds.matrices.subarray(0, 16), instanceMatrix(columns, index)), world));
+    // An instance whose arrays are shorter than `protoIndices` has no transform to outline or frame.
+    return corners.every(Number.isFinite) ? corners : null;
   }
 
   /** Shows `path`'s value and opinions in the explain panel (and, drawing the selection, an image it names). */
@@ -478,23 +484,47 @@ export class EditorStore {
     this.#bump();
   }
 
-  /** Frames the free camera on the selection, or the whole stage; drawing the selection alone, on what is drawn. */
-  frameSelection(): void {
+  /**
+   * Frames the free camera on the selection (its chosen instance, for a
+   * point instancer with one), or the whole stage; drawing the selection
+   * alone, on what is drawn. It frames again what is in view already.
+   * Returns whether it framed anything: not for a selection without
+   * bounds (a material, a camera, an empty prim), which leaves the view
+   * as it was.
+   */
+  frameSelection(): boolean {
     const stage = this.session?.stage;
-    if (stage === undefined || this.#viewport === null) return;
-    if (this.drawScope !== "scene") {
-      if (this.scene.bounds === null) return;
-      this.lookThrough(null);
-      this.#viewport.frame(this.scene.bounds);
-      return;
+    if (stage === undefined || this.#viewport === null) return false;
+    const instance = this.instance;
+    if (instance !== null && instance.instancer === this.selection) {
+      const corners = this.#instanceCorners(instance.instancer, instance.index);
+      if (corners !== null) return this.#frameBox(cornersBox(corners));
     }
+    if (this.drawScope !== "scene") return this.scene.bounds !== null && this.#frameBox(this.scene.bounds);
     const bounds = stage.worldBounds([this.selection ?? "/"], {
       purposes: ["default", "proxy"],
       ...(this.time === undefined ? {} : { time: this.time }),
     }).alignedRanges;
-    if (bounds[0]! > bounds[3]!) return;
+    return this.#frameBox(Array.from(bounds.subarray(0, 6)));
+  }
+
+  /**
+   * Draws the prim at `path` alone (the asset view) and frames it: also
+   * when it is drawn alone already, so asking again brings it back into
+   * view.
+   */
+  drawAlone(path: string): void {
+    this.select(path);
+    this.setDrawScope("selection");
+    this.frameSelection();
+  }
+
+  /** Frames `box` with the free camera; `false`, the view as it was, when it is not a box. */
+  #frameBox(box: readonly number[]): boolean {
+    const viewport = this.#viewport;
+    if (viewport === null || !isBox(box)) return false;
     this.lookThrough(null);
-    this.#viewport.frame(Array.from(bounds));
+    return viewport.frame(box);
   }
 
   /** Reads everything at `time` (clamped to the range): the draws move to it, the panels read it. */
@@ -728,7 +758,7 @@ export class EditorStore {
       this.#viewport?.update(this.scene, update, this.#highlighted());
       // The selected instance's outline follows edits, time and the draw scope.
       const instance = this.instance;
-      if (instance !== null) this.#viewport?.setMarker(this.drawScope === "scene" ? this.#instanceCorners(instance.instancer, instance.index) : null);
+      if (instance !== null) this.#viewport?.setMarker(this.#instanceCorners(instance.instancer, instance.index));
     }
     this.#bump();
   }
@@ -778,6 +808,18 @@ export class EditorStore {
     this.revision += 1;
     for (const listener of this.#listeners) listener();
   }
+}
+
+/** The axis-aligned box around eight corners (24 numbers, {@link boxCorners}'s). */
+function cornersBox(corners: ArrayLike<number>): number[] {
+  const box = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+  for (let corner = 0; corner < 8; corner++) {
+    for (let c = 0; c < 3; c++) {
+      box[c] = Math.min(box[c]!, corners[corner * 3 + c]!);
+      box[c + 3] = Math.max(box[c + 3]!, corners[corner * 3 + c]!);
+    }
+  }
+  return box;
 }
 
 /** Resolves after the next frame is rendered. */

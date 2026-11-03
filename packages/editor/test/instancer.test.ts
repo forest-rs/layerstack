@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { loadLayerstack } from "@forest-rs/layerstack";
-import { boxCorners, histogram, indexOfId, instanceId, instanceMatrix, multiply, ranges, readColumns, sortOrder, toggled } from "../src/model/instancer.ts";
+import { boxCorners, histogram, indexOfId, instanceId, instanceMatrix, invert, multiply, ranges, readColumns, sortOrder, toggled } from "../src/model/instancer.ts";
 
 const LAYER = `#usda 1.0
 def PointInstancer "Field" (
@@ -134,5 +134,27 @@ describe("point instancer columns", () => {
     }
     const corners = boxCorners([-1, -1, -1, 1, 1, 1], m);
     assert.equal(corners.length, 24);
+  });
+});
+
+describe("invert", () => {
+  it("undoes a transform, and refuses a singular one", () => {
+    const one = {
+      count: 1,
+      prototypes: [],
+      protoIndices: new Int32Array(1),
+      ids: null,
+      positions: Float32Array.of(3, -2, 5),
+      orientations: Float32Array.of(0, 0.7071068, 0, 0.7071068),
+      scales: Float32Array.of(2, 1, 0.5),
+      invisibleIds: [],
+      inactiveIds: [],
+      mask: new Uint8Array(),
+    };
+    const m = multiply(instanceMatrix(one, 0), [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 2, 3, 1]);
+    const product = multiply(m, invert(m)!);
+    product.forEach((value, at) => assert.ok(Math.abs(value - (at % 5 === 0 ? 1 : 0)) < 1e-9, `${at}: ${value}`));
+    assert.equal(invert(new Float64Array(16)), null);
+    assert.equal(invert([Number.NaN, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]), null);
   });
 });

@@ -202,12 +202,12 @@ fn collection_touched(
     roots: &[PathId],
     collection: PropertyPath,
 ) -> bool {
-    let tokens = scene.store().tokens();
+    let (paths, tokens) = (scene.store().paths(), scene.store().tokens());
     let prim = collection.prim_path();
     let name = tokens.resolve(collection.property());
     roots.iter().any(|&root| under(scene, prim, root))
         || changes
-            .properties_of(prim)
+            .properties_of(prim, paths, tokens)
             .iter()
             .any(|changed| of_collection(name, Some(tokens.resolve(changed.property.property()))))
         || changes.resynced_properties.iter().any(|property| {

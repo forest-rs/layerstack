@@ -139,7 +139,7 @@ fn actual(changes: &Changes, live: &LiveStage, loaded: &LoadedStage) -> Report {
     let view = live.view(&loaded.store);
     for &path in &changes.changed_info_only {
         let fields = changes
-            .fields_of_prim(path)
+            .fields_of_prim(path, paths, tokens)
             .map(|field| field.name(tokens).to_string())
             .collect();
         info.insert(prim(path), fields);

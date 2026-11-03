@@ -103,7 +103,11 @@ use crate::{
 /// field order, and [`Self::changed_properties`] and
 /// [`Self::resynced_properties`] order by prim, then property name (then
 /// field). The field lists are flat, one allocation each however many
-/// prims or properties change.
+/// prims or properties change. The per-prim queries
+/// ([`Self::properties_of`], [`Self::fields_of_prim`] and the like)
+/// binary-search these orders, which is why they take the interners: a
+/// query costs O(log n) path comparisons however large the notice, and a
+/// list edited out of its order answers them wrongly.
 ///
 /// ```
 /// use layerstack::{EditTarget, InMemoryStore, Layer, LayerId, LiveStage,
@@ -275,6 +279,22 @@ pub(crate) struct PropertyChange {
     pub(crate) field: PropertyField,
 }
 
+/// The run of `list`, ordered by the prims `prim_of` gives in namespace
+/// order ([`PathInterner::cmp_paths`]), whose prim is `prim`: two binary
+/// searches, O(log n) path comparisons.
+fn run_of<'a, T>(
+    list: &'a [T],
+    prim: PathId,
+    prim_of: impl Fn(&T) -> PathId,
+    paths: &PathInterner,
+    tokens: &TokenInterner,
+) -> &'a [T] {
+    let start = list
+        .partition_point(|entry| paths.cmp_paths(prim_of(entry), prim, tokens) == Ordering::Less);
+    let len = list[start..].partition_point(|entry| prim_of(entry) == prim);
+    &list[start..start + len]
+}
+
 /// Compares fields by declaration order, metadata fields by name.
 fn cmp_property_fields(a: PropertyField, b: PropertyField, tokens: &TokenInterner) -> Ordering {
     match (a, b) {
@@ -299,7 +319,7 @@ impl Changes {
 
     /// Whether `path` is resynced: it, or an ancestor of it, is in
     /// [`Self::resynced`]. A walk up `path`'s ancestors, each looked up in
-    /// the resynced roots.
+    /// the resynced roots: O(depth × resynced roots).
     ///
     /// OpenUSD: `UsdNotice::ObjectsChanged::ResyncedObject`.
     #[must_use]
@@ -319,7 +339,8 @@ impl Changes {
 
     /// Whether the property `property` is resynced: it is in
     /// [`Self::resynced_properties`], or its prim is resynced
-    /// ([`Self::is_resynced`]).
+    /// ([`Self::is_resynced`]). O(resynced properties + depth × resynced
+    /// roots).
     #[must_use]
     pub fn is_property_resynced(&self, property: PropertyPath, paths: &PathInterner) -> bool {
         self.resynced_properties.contains(&property)
@@ -327,74 +348,104 @@ impl Changes {
     }
 
     /// Whether `prim`'s own information changed info-only: it is in
-    /// [`Self::changed_info_only`].
+    /// [`Self::changed_info_only`]. A binary search of the list in
+    /// namespace order, so it takes the interners: O(log n) path
+    /// comparisons.
     ///
     /// OpenUSD: `UsdNotice::ObjectsChanged::ChangedInfoOnly` of a prim.
     #[must_use]
-    pub fn prim_info_changed(&self, prim: PathId) -> bool {
-        self.changed_info_only.contains(&prim)
+    pub fn prim_info_changed(
+        &self,
+        prim: PathId,
+        paths: &PathInterner,
+        tokens: &TokenInterner,
+    ) -> bool {
+        !run_of(&self.changed_info_only, prim, |at| *at, paths, tokens).is_empty()
     }
 
     /// The fields changed of `prim`'s own information
     /// ([`Self::prim_fields`]): none for a prim not in
-    /// [`Self::changed_info_only`], or listed there without a field.
+    /// [`Self::changed_info_only`], or listed there without a field. A
+    /// binary search of the list, ordered by prim in namespace order:
+    /// O(log n) path comparisons, then one step a field.
     ///
     /// OpenUSD: `UsdNotice::ObjectsChanged::GetChangedFields` of a prim path.
-    pub fn fields_of_prim(&self, prim: PathId) -> impl Iterator<Item = PrimInfoField> + '_ {
-        self.prim_fields
+    pub fn fields_of_prim(
+        &self,
+        prim: PathId,
+        paths: &PathInterner,
+        tokens: &TokenInterner,
+    ) -> impl ExactSizeIterator<Item = PrimInfoField> + '_ {
+        run_of(&self.prim_fields, prim, |change| change.prim, paths, tokens)
             .iter()
-            .filter(move |change| change.prim == prim)
             .map(|change| change.field)
     }
 
     /// The info-only property changes of `prim`
     /// ([`Self::changed_properties`]), in order: one run of the list, as
     /// it is ordered by prim. Empty when none of its properties changed
-    /// info-only.
+    /// info-only. A binary search of the list in namespace order: O(log n)
+    /// path comparisons, however many of the prim's properties changed.
     #[must_use]
-    pub fn properties_of(&self, prim: PathId) -> &[PropertyFieldChange] {
-        let list = &self.changed_properties;
-        let Some(start) = list.iter().position(|c| c.property.prim_path() == prim) else {
-            return &[];
-        };
-        let len = list[start..]
-            .iter()
-            .take_while(|c| c.property.prim_path() == prim)
-            .count();
-        &list[start..start + len]
+    pub fn properties_of(
+        &self,
+        prim: PathId,
+        paths: &PathInterner,
+        tokens: &TokenInterner,
+    ) -> &[PropertyFieldChange] {
+        run_of(
+            &self.changed_properties,
+            prim,
+            |change| change.property.prim_path(),
+            paths,
+            tokens,
+        )
     }
 
     /// The fields changed of `property` info-only
-    /// ([`Self::changed_properties`]).
+    /// ([`Self::changed_properties`]). A binary search for its prim's
+    /// changes ([`Self::properties_of`]), then for its name among them:
+    /// O(log n) comparisons, then one step a field.
     ///
     /// OpenUSD: `UsdNotice::ObjectsChanged::GetChangedFields` of a property path.
     pub fn fields_of_property(
         &self,
         property: PropertyPath,
-    ) -> impl Iterator<Item = PropertyField> + '_ {
-        self.properties_of(property.prim_path())
+        paths: &PathInterner,
+        tokens: &TokenInterner,
+    ) -> impl ExactSizeIterator<Item = PropertyField> + '_ {
+        let changes = self.properties_of(property.prim_path(), paths, tokens);
+        let name = property.property();
+        let text = tokens.resolve(name);
+        let start =
+            changes.partition_point(|change| tokens.resolve(change.property.property()) < text);
+        let len = changes[start..].partition_point(|change| change.property.property() == name);
+        changes[start..start + len]
             .iter()
-            .filter(move |change| change.property == property)
             .map(|change| change.field)
     }
 
     /// Whether anything of `prim` may have changed: it is resynced, or it
-    /// changed info-only, or a property of it did, either way.
+    /// changed info-only, or a property of it did, either way. A walk up
+    /// its ancestors in the resynced roots ([`Self::is_resynced`]), then a
+    /// binary search of each other list: O(depth × resynced roots + log n)
+    /// path comparisons.
     ///
     /// OpenUSD: `UsdNotice::ObjectsChanged::AffectedObject` of the prim
     /// or any of its properties.
     #[must_use]
-    pub fn affects_prim(&self, prim: PathId, paths: &PathInterner) -> bool {
+    pub fn affects_prim(&self, prim: PathId, paths: &PathInterner, tokens: &TokenInterner) -> bool {
         self.is_resynced(prim, paths)
-            || self.changed_info_only.contains(&prim)
-            || self
-                .changed_properties
-                .iter()
-                .any(|c| c.property.prim_path() == prim)
-            || self
-                .resynced_properties
-                .iter()
-                .any(|p| p.prim_path() == prim)
+            || self.prim_info_changed(prim, paths, tokens)
+            || !self.properties_of(prim, paths, tokens).is_empty()
+            || !run_of(
+                &self.resynced_properties,
+                prim,
+                |property| property.prim_path(),
+                paths,
+                tokens,
+            )
+            .is_empty()
     }
 
     /// Whether anything at or beneath `root` may have changed: a prim or
@@ -557,5 +608,121 @@ impl Changes {
                 .then_with(|| cmp_property_fields(a.field, b.field, tokens))
         });
         self.changed_properties.dedup();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::{format, vec::Vec};
+
+    use crate::{
+        EditTarget, FieldValue, InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, PropertySpec,
+        PropertyType, StageOptions, Transaction, Value,
+    };
+
+    /// The per-prim queries binary-search lists in namespace order; they
+    /// answer what a scan of the lists does, for prims interned in another
+    /// order than namespace order (`/P10` before `/P2`, children after
+    /// their parents' siblings) and for prims the lists do not hold.
+    #[test]
+    fn queries_find_what_a_scan_finds() {
+        let mut store = InMemoryStore::default();
+        let double = PropertyType::parse("double").unwrap();
+        let mut layer = Layer::new(LayerId(1));
+        let mut prims = Vec::new();
+        for at in (0..12).rev() {
+            prims.push(store.path(&format!("/P{at}")));
+        }
+        for at in 0..12 {
+            prims.push(store.path(&format!("/P{at}/C")));
+        }
+        let names: Vec<_> = ["b", "a", "c10", "c2"]
+            .iter()
+            .map(|name| store.tokens.intern(name))
+            .collect();
+        for &prim in &prims {
+            let mut spec = PrimSpec::def();
+            for &name in &names {
+                spec = spec.with_property(
+                    name,
+                    PropertySpec::typed_attribute(double.clone()).with_default(Value::Double(0.0)),
+                );
+            }
+            layer.insert_prim(prim, spec);
+        }
+        store.insert_layer(layer);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let documentation = store.tokens.intern("documentation");
+        let comment = store.tokens.intern("comment");
+        let mut edit = Transaction::new();
+        for (at, &prim) in prims.iter().enumerate() {
+            let target = EditTarget::for_layer(LayerId(1));
+            if at % 3 != 0 {
+                edit.set_metadata(
+                    target.prim(prim),
+                    documentation,
+                    FieldValue::Value(Value::string("noted")),
+                );
+            }
+            if at % 4 == 1 {
+                edit.set_metadata(
+                    target.prim(prim),
+                    comment,
+                    FieldValue::Value(Value::string("noted")),
+                );
+            }
+            for (n, &name) in names.iter().enumerate() {
+                if (at + n) % 2 == 0 {
+                    edit.set_default(
+                        target.property(crate::PropertyPath::new(prim, name)),
+                        Value::Double(1.0),
+                    );
+                }
+            }
+        }
+        let changes = live.apply(&mut store, &edit).unwrap().changes;
+        assert!(!changes.prim_fields.is_empty() && !changes.changed_properties.is_empty());
+        let (paths, tokens) = (&store.paths, &store.tokens);
+        let absent = store.path("/Elsewhere");
+        for &prim in prims.iter().chain([&absent]) {
+            let scanned: Vec<_> = changes
+                .changed_properties
+                .iter()
+                .filter(|change| change.property.prim_path() == prim)
+                .copied()
+                .collect();
+            assert_eq!(changes.properties_of(prim, paths, tokens), scanned);
+            let scanned: Vec<_> = changes
+                .prim_fields
+                .iter()
+                .filter(|change| change.prim == prim)
+                .map(|change| change.field)
+                .collect();
+            let found: Vec<_> = changes.fields_of_prim(prim, paths, tokens).collect();
+            assert_eq!(found, scanned);
+            assert_eq!(
+                changes.prim_info_changed(prim, paths, tokens),
+                changes.changed_info_only.contains(&prim)
+            );
+            assert_eq!(
+                changes.affects_prim(prim, paths, tokens),
+                prim != absent,
+                "{}",
+                paths.display(prim, tokens)
+            );
+            for &name in &names {
+                let property = crate::PropertyPath::new(prim, name);
+                let scanned: Vec<_> = changes
+                    .changed_properties
+                    .iter()
+                    .filter(|change| change.property == property)
+                    .map(|change| change.field)
+                    .collect();
+                let found: Vec<_> = changes
+                    .fields_of_property(property, paths, tokens)
+                    .collect();
+                assert_eq!(found, scanned);
+            }
+        }
     }
 }

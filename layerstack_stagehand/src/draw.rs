@@ -701,10 +701,10 @@ fn shading_property(name: &str) -> bool {
 /// a resync over it (one of `roots`), or a shading property of it changed
 /// or resynced.
 fn shading_touched(scene: &Scene<'_>, changes: &Changes, roots: &[PathId], prim: PathId) -> bool {
-    let tokens = scene.store().tokens();
+    let (paths, tokens) = (scene.store().paths(), scene.store().tokens());
     roots.iter().any(|&root| under(scene, prim, root))
         || changes
-            .properties_of(prim)
+            .properties_of(prim, paths, tokens)
             .iter()
             .any(|changed| shading_property(tokens.resolve(changed.property.property())))
         || changes.resynced_properties.iter().any(|property| {

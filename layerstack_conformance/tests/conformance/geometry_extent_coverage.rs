@@ -393,7 +393,11 @@ fn edits_to_authored_shape_dimensions_invalidate_bounds_and_instancers() {
             );
             let changes = fixture.edit(&mut cached, input, Value::Double(8.));
             assert!(changes.resynced.is_empty(), "{schema} {input}");
-            assert!(!changes.properties_of(fixture.path).is_empty());
+            assert!(
+                !changes
+                    .properties_of(fixture.path, fixture.store.paths(), fixture.store.tokens())
+                    .is_empty()
+            );
             assert_eq!(
                 fixture.query(&mut cached).unwrap().max,
                 after,

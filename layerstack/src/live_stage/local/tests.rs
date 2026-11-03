@@ -139,8 +139,8 @@ fn local_subtree_delete_undo_and_value_sequence_has_precise_reports() {
             field: crate::PropertyField::Default,
         }]
     );
-    assert!(!info.changes.affects_prim(a, store.paths()));
-    assert!(info.changes.affects_prim(b, store.paths()));
+    assert!(!info.changes.affects_prim(a, store.paths(), store.tokens()));
+    assert!(info.changes.affects_prim(b, store.paths(), store.tokens()));
     assert!(info.changes.affects_subtree(world, store.paths()));
     assert!(live.local_index(&store).unwrap().current(&store));
     let mut remove = Transaction::new();
@@ -198,7 +198,10 @@ fn deleting_child_and_editing_parent_preserves_complete_child_list() {
     // The structural path tells the value edit apart too.
     assert_eq!(report.changes.changed_info_only, []);
     let value = store.property_path("/World.value");
-    let fields: Vec<_> = report.changes.fields_of_property(value).collect();
+    let fields: Vec<_> = report
+        .changes
+        .fields_of_property(value, store.paths(), store.tokens())
+        .collect();
     assert_eq!(fields, [crate::PropertyField::Default]);
     matches_clean(&mut store, &live);
     live.apply(&mut store, &report.inverse).unwrap();
@@ -320,7 +323,9 @@ fn property_resyncs_leave_other_field_edits_info_only() {
     assert!(applied.changes.resynced.is_empty());
     assert_eq!(applied.changes.resynced_properties, [property]);
     assert_eq!(applied.changes.changed_info_only, []);
-    let fields = applied.changes.properties_of(owner);
+    let fields = applied
+        .changes
+        .properties_of(owner, store.paths(), store.tokens());
     assert_eq!(fields.len(), 1);
     assert_eq!(fields[0].property, PropertyPath::new(owner, value));
     assert_eq!(fields[0].field, crate::PropertyField::Default);

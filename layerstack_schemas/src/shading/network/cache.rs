@@ -163,10 +163,11 @@ impl MaterialNetworkCache {
         changes: &Changes,
     ) -> Result<(), MaterialCaptureError> {
         self.check_domain(scene)?;
+        let (paths, tokens) = (scene.store().paths(), scene.store().tokens());
         for held in self.held.values_mut() {
             held.dirty |= held.network.dependencies.iter().any(|dep| {
-                changes.changed_info_only.contains(&dep.prim)
-                    || !changes.properties_of(dep.prim).is_empty()
+                changes.prim_info_changed(dep.prim, paths, tokens)
+                    || !changes.properties_of(dep.prim, paths, tokens).is_empty()
                     || changes
                         .resynced_properties
                         .iter()

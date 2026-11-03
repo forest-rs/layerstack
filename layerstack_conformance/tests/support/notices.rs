@@ -37,7 +37,7 @@ pub(crate) fn info_fields(
     let mut info: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for &prim in &changes.changed_info_only {
         let fields = changes
-            .fields_of_prim(prim)
+            .fields_of_prim(prim, paths, tokens)
             .map(|field| field.name(tokens).to_string())
             .collect();
         info.insert(paths.display(prim, tokens), fields);

@@ -43,7 +43,9 @@ fn referenced_values_and_undo_report_composed_properties() {
     // prims' own.
     assert!(applied.changes.changed_info_only.is_empty());
     for path in [a, b] {
-        let fields = applied.changes.properties_of(path);
+        let fields = applied
+            .changes
+            .properties_of(path, store.paths(), store.tokens());
         assert_eq!(fields.len(), 1);
         assert_eq!(fields[0].property, PropertyPath::new(path, value));
         assert_eq!(fields[0].field, PropertyField::Default);

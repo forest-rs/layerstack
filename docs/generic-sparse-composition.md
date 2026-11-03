@@ -230,6 +230,7 @@ value differs from the expected one. Any other difference from OpenUSD fails
 | `sampled-block-drops-fallback` | 26.11 | a held sampled block resolves no value despite a schema fallback, and edits over it compose over `[]` | the fallback resolves, and edits compose over it, as for a default block | Core §12.3.6, §16.2.16.3 |
 | `default-time-block-hides-fallback` | 26.11 | at the default time a default block resolves no value despite a schema fallback | the fallback resolves, as at numeric times | Core §12.3.6, §16.2.16.2 |
 | `default-time-edits-over-block` | 26.11 | at the default time sparse edits over a default block resolve no value | the edits compose over the empty array, as at numeric times | Core §12.3.6; proposal |
+| `default-time-edits-over-other-type` | 26.11 | at the default time sparse edits over a weaker value of another type resolve to that value, and a weaker edit of another type replaces them | the value ends the fold and the edits compose over the empty array; the weaker edit is skipped, as at numeric times | proposal; `VtValueComposeOver` |
 | `sampled-path-expression-anchoring` | 26.11 | a sampled path expression's relative patterns stay unanchored, and drop out across arcs | every opinion's relative patterns anchor at the prim that authors it | OpenUSD's own anchoring of defaults |
 | `instance-proxy-clips-not-varying` | 26.11 | an instance proxy's clip-valued attribute is not time-varying | it varies as its prototype's does | Core §12.3.4, §11 |
 | `bracketing-composability-in-stage-time` | 26.11 | brackets behind a layer offset can end at a stronger sparse series | brackets follow the composed sample grid | Core §12.3.2.1 |
@@ -278,7 +279,22 @@ value differs from the expected one. Any other difference from OpenUSD fails
   stronger than a block resolve no value, while numeric times and
   `UsdAttributeQuery::Get` at the default time compose them over the empty
   array. A block discards weaker opinions only (Core §12.3.6), so Layerstack
-  composes the edits at every time.
+  composes the edits at every time. OpenUSD's own flatten writes the block
+  (OpenUSD bug B039).
+- **`default-time-edits-over-other-type`.** The same metadata composition
+  (`MetadataValueComposer::ConsumeAuthored`, `pxr/usd/usd/stage.cpp:6160`)
+  keeps the weaker value when `VtValueTryComposeOver` has no function for the
+  pair, so an `int[]` edit over a weaker `float[]` or `double` reads that
+  value, and over a weaker `float[]` edit reads what the weaker edit composes
+  to. Numeric times and `UsdAttributeQuery::Get` end the opinions at the
+  value that does not compose (`:9087`, `ProcessLayerAtTime`), skip a weaker
+  edit they cannot compose over (`SdfComposeTimeSampleSeries` keeps the
+  stronger), and compose what is left over the empty array (`:8065`).
+  `VtValueComposeOver` documents that the stronger value wins where no
+  function is registered, and the proposal composes a sparse linearization
+  over a weakest empty dense array, so Layerstack folds every time that way.
+  A typed default read still skips a dense value not of the type read, as
+  `UsdAttribute::Get<T>` does (OpenUSD bug B039).
 - **`sampled-path-expression-anchoring`.** OpenUSD's text parser makes a
   default path expression absolute at the prim that authors it
   (`pxr/usd/sdf/textParserHelpers.cpp:114`) but leaves time samples as

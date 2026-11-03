@@ -929,3 +929,73 @@ fn stage_metadata_asset_paths_anchor_to_the_layer_authoring_them() {
         Some(&FieldValue::Value(anchored))
     );
 }
+
+/// A sparse default over a weaker series with a blocked sample flattens to
+/// what the stage reads: the edit over each held sample, and over the empty
+/// array where the block is held. OpenUSD 26.11 writes a background marker
+/// that no USDA parser reads in the blocked sample's place (OpenUSD bug
+/// B040).
+///
+/// Spec: sparse-array-edits proposal, "Value Resolution" (a sparse
+/// linearization composes over a weakest empty dense array).
+#[test]
+fn a_sparse_default_over_a_blocked_sample_flattens_to_the_composed_values() {
+    use crate::array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
+
+    let mut store = InMemoryStore::default();
+    referenced_scene(&mut store, LayerOffset::IDENTITY);
+    let ids = store.tokens.intern("ids");
+    let ints = PropertyType::parse("int[]").unwrap();
+    let array = |items: &[i32]| Value::Array(items.iter().map(|&i| Value::Int(i)).collect());
+    let asset = store.path("/Asset");
+    store
+        .layers
+        .get_mut(&LayerId(2))
+        .unwrap()
+        .prims
+        .get_mut(&asset)
+        .unwrap()
+        .set_property(
+            ids,
+            PropertySpec::typed_attribute(ints.clone())
+                .with_time_samples(vec![(1.0, array(&[1])), (2.0, Value::Blocked)]),
+        );
+    let tree = store.path("/World/Tree");
+    let edit = ArrayEdit {
+        ops: vec![ArrayEditOp::Insert {
+            src: ArrayEditOperand::Literal(Value::Int(9)),
+            index: ArrayIndex::End,
+        }],
+    };
+    store
+        .layers
+        .get_mut(&LayerId(1))
+        .unwrap()
+        .prims
+        .get_mut(&tree)
+        .unwrap()
+        .set_property(
+            ids,
+            PropertySpec::typed_attribute(ints).with_default(Value::ArrayEdit(edit)),
+        );
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    let flat = stage
+        .flatten(
+            &mut store,
+            &crate::NoAssets,
+            LayerId(1),
+            LayerId(9),
+            &FlattenRequirements::default(),
+        )
+        .expect("flattens");
+    let spec = flat.layer.prims[&tree].property(ids).unwrap();
+    assert_eq!(spec.default, Some(array(&[9])));
+    assert_eq!(
+        spec.time_samples.get().map(<[_]>::to_vec),
+        Some(vec![(1.0, array(&[1, 9])), (2.0, array(&[9]))])
+    );
+    store.insert_layer(flat.layer.clone());
+    let flattened = Stage::compose(&mut store, LayerId(9), StageOptions::default());
+    let verification = stage.verify_flattened(&flattened, &store, &flat.report, &[1.5, 3.0]);
+    assert!(verification.is_equivalent(), "{verification:?}");
+}

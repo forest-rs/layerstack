@@ -24,7 +24,7 @@ use opinionated::{
 
 use crate::{
     array_edit::{apply_in_place, apply_to_array},
-    doc::{InterpolationType, Value, combine_dictionary_chain},
+    doc::{InterpolationType, Value},
     half::{from_f32 as f32_to_half, to_f32 as half_to_f32},
     prim_index::{Opinion, OpinionRef, OpinionValue, Opinions},
     property::PropertyType,
@@ -360,10 +360,25 @@ pub(crate) fn resolve_sparse_default_matching(
     resolve_sparse_default_matching_source(opinions, property_type, fallback, accepts).0
 }
 
-/// Default-time USD composition retains a partial edit across incompatible
-/// dense reads, but an incompatible composable opinion replaces that partial.
-/// OpenUSD: `MetadataValueComposer::ConsumeValue`, `VtValue::TryComposeOver`.
-/// The source is the strongest contributor that survives this grouping.
+/// Folds array edits over authored defaults, as numeric times do.
+///
+/// The fold runs strongest first from a leading edit. A block, or a value
+/// the edits cannot compose over (a dense array of another element type, a
+/// scalar), ends it, and the edits compose over the seed: the schema
+/// fallback `accepts` takes, else the empty array. A weaker edit of another
+/// element type, a dictionary or a path expression composes with nothing
+/// here and is skipped. A dense value `accepts` rejects is skipped too, the
+/// typed default-time retry of `UsdAttribute::Get<T>` (its typed storage
+/// refuses the value and the walk goes on).
+///
+/// The source is the strongest contributor.
+///
+/// Spec: sparse-array-edits proposal, "Value Resolution" (a sparse
+/// linearization composes over a weakest empty dense array). OpenUSD:
+/// `_GetValueFromResolveInfoImpl` (numeric times, `UsdAttributeQuery`);
+/// OpenUSD 26.11's default-time `UsdAttribute::Get` keeps the weaker opinion
+/// instead (`MetadataValueComposer::ConsumeAuthored`), the named divergence
+/// `default-time-edit-yields-to-weaker`.
 pub(crate) fn resolve_sparse_default_matching_source(
     opinions: &[Opinion],
     property_type: Option<&PropertyType>,
@@ -400,10 +415,10 @@ fn resolve_sparse_default_matching_impl(
                 value.array_edit_type(),
             ) && !same_element_kind(strong.default_scalar(), weak.default_scalar())
             {
-                for (position, _) in &edits {
-                    trace(DefaultTrace::Ignored(*position));
-                }
-                edits.clear();
+                // An edit composes over no edit of another element type, and
+                // a stronger one keeps composing past it.
+                trace(DefaultTrace::Ignored(position));
+                continue;
             }
             edits.push((position, value));
             continue;
@@ -413,35 +428,9 @@ fn resolve_sparse_default_matching_impl(
             break;
         }
         if matches!(value, Value::Dictionary(_) | Value::PathExpression(_)) {
-            // These are composable values too. Failed cross-family
-            // composition replaces the partial, unlike a failed dense read.
-            for (position, _) in &edits {
-                trace(DefaultTrace::Ignored(*position));
-            }
-            edits.clear();
-            let composed = match value {
-                Value::Dictionary(_) => {
-                    let dictionaries = crate::stage::dictionary_chain(&opinions[position..])
-                        .map(|(_, entries)| entries)
-                        .chain(fallback.and_then(|value| match value {
-                            Value::Dictionary(entries) => Some(entries.as_slice()),
-                            _ => None,
-                        }));
-                    Some(Value::Dictionary(combine_dictionary_chain(dictionaries)))
-                }
-                Value::PathExpression(_) => {
-                    crate::path_expression::fold_default(&opinions[position..], fallback)
-                        .and_then(|fold| fold.value)
-                }
-                _ => None,
-            };
-            if let Some(composed) = composed
-                && accepts(&composed)
-            {
-                trace(DefaultTrace::Dense(position));
-                trace(DefaultTrace::Base(FamilyBase::Dense));
-                return (SparseResolveResult::Resolved(composed), Some(position));
-            }
+            // Composable values of another family: an edit composes over
+            // neither, and the fold goes on past them.
+            trace(DefaultTrace::Ignored(position));
             continue;
         }
         let accepted = accepts(value);
@@ -467,12 +456,10 @@ fn resolve_sparse_default_matching_impl(
             );
         }
         if accepted {
-            for (position, _) in &edits {
-                trace(DefaultTrace::Ignored(*position));
-            }
-            trace(DefaultTrace::Dense(position));
-            trace(DefaultTrace::Base(FamilyBase::Dense));
-            return (SparseResolveResult::Resolved(value.clone()), Some(position));
+            // A value the edits cannot compose over ends the fold, as a
+            // block does.
+            trace(DefaultTrace::Ignored(position));
+            break;
         }
     }
     let seed_type = edits

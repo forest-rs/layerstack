@@ -166,6 +166,38 @@ fn fixture() -> (LoadedStage, Stage, LayerId) {
     (loaded, stage, weak)
 }
 
+/// Prims whose default is an edit over a weaker value or edit of another
+/// type, with the untyped default layerstack reads: the named divergence
+/// `default-time-edits-over-other-type` (OpenUSD bug B039). OpenUSD's
+/// default-time `Get` answers with the weaker opinion (or what it composes
+/// to); layerstack ends the fold at a weaker value of another type and skips
+/// a weaker edit of another type, as OpenUSD's numeric times do. Each value
+/// is the one OpenUSD 26.11's `UsdAttributeQuery::Get` reads at the default
+/// time from the same layers.
+const EDIT_OVER_OTHER_TYPE: &[(&str, &[f64])] = &[
+    ("/SparseCompatibleBase", &[4.0]),
+    ("/SparseSampledBase", &[4.0]),
+    ("/SparseScalarBase", &[4.0]),
+    ("/SparseResizeKind", &[0.0]),
+    ("/SparseDeleteKind", &[]),
+    ("/SparseMixedEdits", &[1.0, 0.0]),
+    ("/SparseMisdeclaredWeakEdit", &[1.0, 0.0]),
+];
+
+/// The prims whose typed default the same divergence changes, to the typed
+/// numeric answer: the weaker value of another type is of the type read
+/// (`/WrongEdit`'s `float` under a `float[]` edit), or the weaker edit of
+/// another type is skipped. `/SparseCompatibleBase` keeps OpenUSD's typed
+/// retry: its weaker `double[]` is not of the type read, so it is skipped
+/// rather than ending the fold.
+const TYPED_EDIT_OVER_OTHER_TYPE: &[&str] = &[
+    "/WrongEdit",
+    "/SparseResizeKind",
+    "/SparseDeleteKind",
+    "/SparseMixedEdits",
+    "/SparseMisdeclaredWeakEdit",
+];
+
 #[test]
 fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
     let oracle: Json =
@@ -230,13 +262,33 @@ fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
         }
         if prim.starts_with("/Sparse") {
             let property = layerstack::PropertyPath::new(path, field);
+            // The named divergence `default-time-edits-over-other-type`
+            // (OpenUSD bug B039): OpenUSD's untyped default-time `Get` answers with the
+            // weaker `double[]` the edit cannot compose over. layerstack ends
+            // the fold there and composes the edit over the empty array, as
+            // OpenUSD's numeric times (and so `rawNumeric`) do.
+            let over_other_type = EDIT_OVER_OTHER_TYPE
+                .iter()
+                .find(|(name, _)| *name == prim)
+                .map(|(_, value)| json!(value));
+            let (raw_default_kind, raw_default_expected) = match &over_other_type {
+                Some(value) => {
+                    assert_ne!(
+                        &record["rawDefault"], value,
+                        "{text}: OpenUSD agrees now; drop the divergence"
+                    );
+                    ("float[]", value)
+                }
+                None => (
+                    record["rawDefaultKind"].as_str().unwrap(),
+                    &record["rawDefault"],
+                ),
+            };
             let raw_default = stage
                 .view(&loaded.store)
                 .attribute(property)
                 .and_then(|attribute| attribute.authored_value(Time::Default))
-                .and_then(|resolved| {
-                    convert(&resolved.value, record["rawDefaultKind"].as_str().unwrap())
-                });
+                .and_then(|resolved| convert(&resolved.value, raw_default_kind));
             let raw_numeric = stage
                 .view(&loaded.store)
                 .attribute(property)
@@ -250,7 +302,7 @@ fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
                 .and_then(|a| a.explain(Time::Default))
                 .unwrap()
                 .value
-                .and_then(|value| convert(&value, record["rawDefaultKind"].as_str().unwrap()));
+                .and_then(|value| convert(&value, raw_default_kind));
             let explained_numeric = stage
                 .view(&loaded.store)
                 .attribute(property)
@@ -267,8 +319,8 @@ fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
                 "{text}: numeric explanation agrees with resolution"
             );
             assert_eq!(
-                raw_default.unwrap_or(Json::Null),
-                record["rawDefault"],
+                &raw_default.unwrap_or(Json::Null),
+                raw_default_expected,
                 "{text}: raw default storage and value"
             );
             assert_eq!(
@@ -282,6 +334,13 @@ fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
         let expected_default = if matches!(prim, "/Block" | "/BelowBlock") {
             assert!(record["default"].is_null());
             json!(50000.0)
+        } else if TYPED_EDIT_OVER_OTHER_TYPE.contains(&prim) {
+            // `default-time-edits-over-other-type` again, read typed.
+            assert_ne!(
+                record["default"], record["numeric"],
+                "{text}: OpenUSD agrees now; drop the divergence"
+            );
+            record["numeric"].clone()
         } else {
             record["default"].clone()
         };
@@ -319,30 +378,13 @@ fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
                     | "/SparseWrongLower"
                     | "/SparseWrongUpper"
                     | "/SparseMisdeclaredEdit"
+                    | "/SparseMixedEdits"
+                    | "/SparseMisdeclaredWeakEdit"
                     | "/SparseContribution"
                     | "/SparseWrongEditUpper"
                     | "/SparseEmptySamples"
             ) {
                 loaded.root_layer
-            } else if matches!(prim, "/SparseMixedEdits" | "/SparseMisdeclaredWeakEdit") {
-                loaded
-                    .store
-                    .layers()
-                    .map(|layer| (layer.id(), layer))
-                    .find(|(_, layer)| {
-                        layer
-                            .property(layerstack::PropertyPath::new(path, field))
-                            .is_some_and(|spec| {
-                                spec.default.as_ref().is_some_and(|value| {
-                                    value.array_ref().is_some_and(|array| {
-                                        array.len() == 1
-                                            && matches!(&*array.get(0).unwrap(), Value::Float(1.0))
-                                    })
-                                })
-                            })
-                    })
-                    .unwrap()
-                    .0
             } else {
                 weak
             };

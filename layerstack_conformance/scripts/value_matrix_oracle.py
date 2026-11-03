@@ -100,31 +100,9 @@ OPENUSD = "0.26.11"
 DIVERGENCES = {
     name: temporal_sparse_oracle.DIVERGENCES[name]
     for name in ("nan-before-first-sample", "sampled-block-drops-fallback",
-                 "default-time-block-hides-fallback")
+                 "default-time-block-hides-fallback", "default-time-edits-over-block")
 }
 DIVERGENCES.update({
-    "default-time-edits-over-block": {
-        "openusd": OPENUSD,
-        "openusd_behavior": (
-            "At the default time, sparse array edits stronger than a default "
-            "block resolve to no value, although numeric times and "
-            "`UsdAttributeQuery::Get` at the default time compose them over "
-            "the empty array."
-        ),
-        "openusd_source": (
-            "pxr/usd/usd/stage.cpp:7271 and :7282 "
-            "(`Usd_AttrGetValueHelper::GetValue` composes the `default` field "
-            "as metadata and clears the block)"
-        ),
-        "layerstack": (
-            "Composes the edits over the empty array, as at numeric times."
-        ),
-        "authority": (
-            "AOUSD Core 12.3.6 (a block discards weaker opinions only) and "
-            "the sparse-array-edits proposal (edits compose over an empty "
-            "array when nothing weaker remains)"
-        ),
-    },
     "sampled-path-expression-anchoring": {
         "openusd": OPENUSD,
         "openusd_behavior": (

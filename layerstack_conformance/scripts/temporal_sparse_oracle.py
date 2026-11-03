@@ -14,7 +14,8 @@ edits in OpenUSD's syntax, `edit [op; op]`. The script records for every query
 time and interpolation mode:
 
 - `openusd`: `UsdAttribute::Get` on the composed stage;
-- `flattened`: `UsdAttribute::Get` on `UsdStage::Flatten()` of that stage.
+- `flattened`: `UsdAttribute::Get` on `UsdStage::Flatten()` of that stage;
+- `query`: `UsdAttributeQuery::Get`, only where it differs from `openusd`.
 
 A case records the flattened layer text only when layerstack is expected to
 resolve it to the composed result (`flatten_equivalent`).
@@ -169,6 +170,61 @@ DIVERGENCES = {
             "fallback is available, the fallback is returned) and 16.2.16.2 "
             "(`None` skips authored weaker opinions and resolves only to the "
             "fallback)"
+        ),
+    },
+    "default-time-edits-over-block": {
+        "openusd": "0.26.11",
+        "openusd_behavior": (
+            "At the default time, sparse array edits stronger than a default "
+            "block resolve to no value, although numeric times and "
+            "`UsdAttributeQuery::Get` at the default time compose them over "
+            "the empty array."
+        ),
+        "openusd_source": (
+            "pxr/usd/usd/stage.cpp:7271 and :7282 "
+            "(`Usd_AttrGetValueHelper::GetValue` composes the `default` field "
+            "as metadata and clears the block)"
+        ),
+        "layerstack": (
+            "Composes the edits over the empty array, as at numeric times."
+        ),
+        "authority": (
+            "AOUSD Core 12.3.6 (a block discards weaker opinions only) and "
+            "the sparse-array-edits proposal (edits compose over an empty "
+            "array when nothing weaker remains)"
+        ),
+    },
+    "default-time-edits-over-other-type": {
+        "openusd": "0.26.11",
+        "openusd_behavior": (
+            "At the default time, sparse array edits over a weaker value of "
+            "another type are dropped and that value is the answer: a "
+            "`float[]` or a `double` under `int[]` edits, or what a weaker "
+            "edit of another element type composes to. Numeric times and "
+            "`UsdAttributeQuery::Get` at the default time compose the edits "
+            "over the empty array, skipping a weaker edit of another element "
+            "type."
+        ),
+        "openusd_source": (
+            "pxr/usd/usd/stage.cpp:6160-6220 (`MetadataValueComposer::"
+            "ConsumeAuthored` keeps the weaker value when "
+            "`VtValueTryComposeOver` has no function for the pair) and "
+            ":7261-7287 (`Usd_AttrGetValueHelper::GetValue` reads the default "
+            "through it), while :9087 (`ProcessLayerAtTime` ends the chain at "
+            "a value that does not compose) and :8065 "
+            "(`_GetValueFromResolveInfoImpl` composes what is left over "
+            "`VtBackground`)"
+        ),
+        "layerstack": (
+            "Ends the fold at the value of another type, as at numeric "
+            "times, and composes the edits over the empty array; a weaker "
+            "edit of another element type is skipped."
+        ),
+        "authority": (
+            "the sparse-array-edits proposal, 'Value Resolution' (a sparse "
+            "linearization composes over a weakest empty dense array); "
+            "`VtValueComposeOver` (with no function for the pair, the "
+            "stronger value wins)"
         ),
     },
 }
@@ -794,6 +850,149 @@ case(
 )
 
 
+# -- Edits over blocks and values of other types -----------------------------------
+#
+# A block ends the fold; so does a dense value of another type, which an
+# array edit cannot compose over. The stronger edits then compose over the
+# empty array. A weaker edit of another type is skipped. OpenUSD's numeric
+# times and `UsdAttributeQuery` agree; its default-time `Get` does not
+# (`default-time-edits-over-block`, `default-time-edits-over-other-type`;
+# OpenUSD bug B039).
+
+EDIT = "int[] e = edit [append 9]"
+OVER_BLOCK = "default-time-edits-over-block"
+OVER_OTHER_TYPE = "default-time-edits-over-other-type"
+
+
+def stacked(*bodies):
+    """`root.usda` defines `/A` with `bodies[0]`; each later body is an
+    `over` in a sublayer, strongest first."""
+    names = [f"l{i}.usda" for i in range(1, len(bodies))]
+    layers = {"root.usda": (sublayers(*(f"@{n}@" for n in names)) if names else HEADER)
+              + "\n" + prim("def", "A", bodies[0])}
+    for name, body in zip(names, bodies[1:]):
+        layers[name] = layer(prim("over", "A", body))
+    return layers
+
+
+case(
+    "edit_over_default_block",
+    "A sparse default over a weaker default block composes over the empty "
+    "array.",
+    stacked(EDIT, "int[] e = None"),
+    {"/A.e": [None, 1]},
+    divergences={("/A.e", None, None): ([9], OVER_BLOCK)},
+    flatten_equivalent=False,
+    flatten_note="OpenUSD's flatten writes the block (OpenUSD bug B039).",
+)
+
+case(
+    "edit_over_edit_over_block",
+    "Two sparse defaults over a weaker block compose over the empty array.",
+    stacked(EDIT, "int[] e = edit [append 8]", "int[] e = None"),
+    {"/A.e": [None, 1]},
+    divergences={("/A.e", None, None): ([8, 9], OVER_BLOCK)},
+    flatten_equivalent=False,
+    flatten_note="OpenUSD's flatten writes the block (OpenUSD bug B039).",
+)
+
+case(
+    "edit_over_block_over_dense",
+    "A block between a sparse default and a weaker dense one hides the dense "
+    "one.",
+    stacked(EDIT, "int[] e = None", "int[] e = [1]"),
+    {"/A.e": [None, 1]},
+    divergences={("/A.e", None, None): ([9], OVER_BLOCK)},
+    flatten_equivalent=False,
+    flatten_note="OpenUSD's flatten writes the block (OpenUSD bug B039).",
+)
+
+case(
+    "edit_over_other_type",
+    "A dense default of another type ends the fold: the `int[]` edit "
+    "composes over the empty array, and the `int[]` beneath stays hidden.",
+    stacked(EDIT, "float[] e = [1.5]", "int[] e = [1]"),
+    {"/A.e": [None, 1]},
+    divergences={("/A.e", None, None): ([9], OVER_OTHER_TYPE)},
+    flatten_equivalent=False,
+    flatten_note="OpenUSD's flatten writes the `float[]` (OpenUSD bug B039).",
+)
+
+case(
+    "edit_over_other_type_edit",
+    "A weaker edit of another type is skipped; the `int[]` edit composes "
+    "over the `int[]` beneath it.",
+    stacked(EDIT, "float[] e = edit [append 2.5]", "int[] e = [1]"),
+    {"/A.e": [None, 1]},
+    divergences={("/A.e", None, None): ([1, 9], OVER_OTHER_TYPE)},
+    flatten_equivalent=False,
+    flatten_note="OpenUSD's flatten writes `[1]` (OpenUSD bug B039).",
+)
+
+case(
+    "edit_over_scalar",
+    "A scalar default ends the fold like a dense array of another type.",
+    stacked(EDIT, "double e = 2"),
+    {"/A.e": [None, 1]},
+    divergences={("/A.e", None, None): ([9], OVER_OTHER_TYPE)},
+    flatten_equivalent=False,
+    flatten_note="OpenUSD's flatten writes the scalar (OpenUSD bug B039).",
+)
+
+case(
+    "edit_over_animation_block",
+    "An animation block hides no default: the edit composes over the empty "
+    "array.",
+    stacked(EDIT, "int[] e = AnimationBlock"),
+    {"/A.e": [None, 1]},
+)
+
+case(
+    "edit_over_no_value",
+    "A sparse default over a weaker declaration without a value composes "
+    "over the empty array.",
+    stacked(EDIT, "int[] e"),
+    {"/A.e": [None, 1]},
+)
+
+case(
+    "dense_over_default_block",
+    "Control: a dense default over a weaker block is itself.",
+    stacked("int[] e = [9]", "int[] e = None"),
+    {"/A.e": [None, 1]},
+)
+
+case(
+    "sparse_samples_over_default_block",
+    "Sparse samples over a weaker default block compose over the empty "
+    "array; the default time reads the block.",
+    stacked("int[] e.timeSamples = { 1: edit [append 9] }", "int[] e = None"),
+    {"/A.e": [None, 1, 2]},
+    flatten_equivalent=False,
+    flatten_note="Flattening writes the block as the default next to the "
+                 "samples; layerstack's layer model keeps one of the two.",
+)
+
+case(
+    "sparse_samples_over_other_type_samples",
+    "Sparse samples over weaker samples of another type compose over the "
+    "empty array.",
+    stacked("int[] e.timeSamples = { 1: edit [append 9] }",
+            "float[] e.timeSamples = { 1: [1.5], 2: [2.5] }"),
+    {"/A.e": [1, 2]},
+)
+
+case(
+    "sparse_default_over_blocked_sample",
+    "A sparse default composes over a weaker series' samples, and over the "
+    "empty array where that series holds a block.",
+    stacked(EDIT, "int[] e.timeSamples = { 1: [1], 2: None }"),
+    {"/A.e": [None, 1, 1.5, 2, 3]},
+    flatten_equivalent=False,
+    flatten_note="OpenUSD's flatten writes a `VtBackgroundType` sample at 2 "
+                 "that no parser reads (B040).",
+)
+
 # -- Bit-exact interpolation --------------------------------------------------------
 #
 # OpenUSD interpolates with `GfLerp`, `(1 - alpha) * a + alpha * b`, in the
@@ -1149,6 +1348,14 @@ def resolve(stage, attr, time, interp):
     return encode(value)
 
 
+def resolve_query(stage, attr, time, interp):
+    """As `resolve`, through a `UsdAttributeQuery`."""
+    stage.SetInterpolationType(
+        Usd.InterpolationTypeHeld if interp == HELD else Usd.InterpolationTypeLinear)
+    query = Usd.AttributeQuery(stage.GetAttributeAtPath(attr))
+    return encode(query.Get() if time is None else query.Get(time))
+
+
 def flattened_text(stage):
     layer = stage.Flatten()
     # Drop the generated `doc`, which names the temporary directory.
@@ -1199,6 +1406,9 @@ def run_case(tmp, spec, version):
                     "openusd": openusd,
                     "flattened": resolve(flat, attr, time, interp),
                 }
+                by_query = resolve_query(stage, attr, time, interp)
+                if not close(by_query, openusd):
+                    q["query"] = by_query
                 div = (spec["divergences"].get((attr, time, interp))
                        or spec["divergences"].get((attr, time, None)))
                 if div:
@@ -1213,6 +1423,12 @@ def run_case(tmp, spec, version):
                                  f"was confirmed with OpenUSD "
                                  f"{DIVERGENCES[reason]['openusd']}, not {version}; "
                                  "re-check its source lines and bump it")
+                    if (reason in (OVER_BLOCK, OVER_OTHER_TYPE)
+                            and not close(by_query, expected)):
+                        sys.exit(f"{spec['name']} {attr}@{time} {interp}: "
+                                 f"`{reason}` expects {expected}, which "
+                                 f"UsdAttributeQuery no longer answers "
+                                 f"({by_query})")
                     q["expected"] = expected
                     q["divergence"] = reason
                     USED.add(reason)

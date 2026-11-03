@@ -36,6 +36,20 @@
    "openusd_source": "pxr/usd/usd/stage.cpp:7272 and :7282 (`Usd_AttrGetValueHelper::GetValue` reads the strongest `default` field and clears a block without consulting the fallback), while :9170 (`ProcessLayerAtDefault`) resolves to the fallback source",
    "layerstack": "Resolves the schema fallback, as at numeric times.",
    "authority": "AOUSD Core 12.3.6 (if the strongest opinion is blocked and a fallback is available, the fallback is returned) and 16.2.16.2 (`None` skips authored weaker opinions and resolves only to the fallback)"
+  },
+  "default-time-edits-over-block": {
+   "openusd": "0.26.11",
+   "openusd_behavior": "At the default time, sparse array edits stronger than a default block resolve to no value, although numeric times and `UsdAttributeQuery::Get` at the default time compose them over the empty array.",
+   "openusd_source": "pxr/usd/usd/stage.cpp:7271 and :7282 (`Usd_AttrGetValueHelper::GetValue` composes the `default` field as metadata and clears the block)",
+   "layerstack": "Composes the edits over the empty array, as at numeric times.",
+   "authority": "AOUSD Core 12.3.6 (a block discards weaker opinions only) and the sparse-array-edits proposal (edits compose over an empty array when nothing weaker remains)"
+  },
+  "default-time-edits-over-other-type": {
+   "openusd": "0.26.11",
+   "openusd_behavior": "At the default time, sparse array edits over a weaker value of another type are dropped and that value is the answer: a `float[]` or a `double` under `int[]` edits, or what a weaker edit of another element type composes to. Numeric times and `UsdAttributeQuery::Get` at the default time compose the edits over the empty array, skipping a weaker edit of another element type.",
+   "openusd_source": "pxr/usd/usd/stage.cpp:6160-6220 (`MetadataValueComposer::ConsumeAuthored` keeps the weaker value when `VtValueTryComposeOver` has no function for the pair) and :7261-7287 (`Usd_AttrGetValueHelper::GetValue` reads the default through it), while :9087 (`ProcessLayerAtTime` ends the chain at a value that does not compose) and :8065 (`_GetValueFromResolveInfoImpl` composes what is left over `VtBackground`)",
+   "layerstack": "Ends the fold at the value of another type, as at numeric times, and composes the edits over the empty array; a weaker edit of another element type is skipped.",
+   "authority": "the sparse-array-edits proposal, 'Value Resolution' (a sparse linearization composes over a weakest empty dense array); `VtValueComposeOver` (with no function for the pair, the stronger value wins)"
   }
  },
  "cases": [
@@ -11687,6 +11701,798 @@
     }
    ],
    "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    double x.timeSamples = {\n        0: 0,\n        5e-7: 10,\n        1: 20,\n    }\n}\n\n"
+  },
+  {
+   "name": "edit_over_default_block",
+   "description": "A sparse default over a weaker default block composes over the empty array.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @l1.usda@\n    ]\n)\n\ndef \"A\"\n{\n    int[] e = edit [append 9]\n}\n",
+    "l1.usda": "#usda 1.0\nover \"A\"\n{\n    int[] e = None\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "held",
+     "openusd": null,
+     "flattened": null,
+     "query": [
+      9.0
+     ],
+     "expected": [
+      9
+     ],
+     "divergence": "default-time-edits-over-block"
+    },
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "linear",
+     "openusd": null,
+     "flattened": null,
+     "query": [
+      9.0
+     ],
+     "expected": [
+      9
+     ],
+     "divergence": "default-time-edits-over-block"
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      9.0
+     ],
+     "flattened": null
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      9.0
+     ],
+     "flattened": null
+    }
+   ],
+   "flatten_note": "OpenUSD's flatten writes the block (OpenUSD bug B039)."
+  },
+  {
+   "name": "edit_over_edit_over_block",
+   "description": "Two sparse defaults over a weaker block compose over the empty array.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @l1.usda@,\n        @l2.usda@\n    ]\n)\n\ndef \"A\"\n{\n    int[] e = edit [append 9]\n}\n",
+    "l1.usda": "#usda 1.0\nover \"A\"\n{\n    int[] e = edit [append 8]\n}\n",
+    "l2.usda": "#usda 1.0\nover \"A\"\n{\n    int[] e = None\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "held",
+     "openusd": null,
+     "flattened": null,
+     "query": [
+      8.0,
+      9.0
+     ],
+     "expected": [
+      8,
+      9
+     ],
+     "divergence": "default-time-edits-over-block"
+    },
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "linear",
+     "openusd": null,
+     "flattened": null,
+     "query": [
+      8.0,
+      9.0
+     ],
+     "expected": [
+      8,
+      9
+     ],
+     "divergence": "default-time-edits-over-block"
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      8.0,
+      9.0
+     ],
+     "flattened": null
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      8.0,
+      9.0
+     ],
+     "flattened": null
+    }
+   ],
+   "flatten_note": "OpenUSD's flatten writes the block (OpenUSD bug B039)."
+  },
+  {
+   "name": "edit_over_block_over_dense",
+   "description": "A block between a sparse default and a weaker dense one hides the dense one.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @l1.usda@,\n        @l2.usda@\n    ]\n)\n\ndef \"A\"\n{\n    int[] e = edit [append 9]\n}\n",
+    "l1.usda": "#usda 1.0\nover \"A\"\n{\n    int[] e = None\n}\n",
+    "l2.usda": "#usda 1.0\nover \"A\"\n{\n    int[] e = [1]\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "held",
+     "openusd": null,
+     "flattened": null,
+     "query": [
+      9.0
+     ],
+     "expected": [
+      9
+     ],
+     "divergence": "default-time-edits-over-block"
+    },
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "linear",
+     "openusd": null,
+     "flattened": null,
+     "query": [
+      9.0
+     ],
+     "expected": [
+      9
+     ],
+     "divergence": "default-time-edits-over-block"
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      9.0
+     ],
+     "flattened": null
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      9.0
+     ],
+     "flattened": null
+    }
+   ],
+   "flatten_note": "OpenUSD's flatten writes the block (OpenUSD bug B039)."
+  },
+  {
+   "name": "edit_over_other_type",
+   "description": "A dense default of another type ends the fold: the `int[]` edit composes over the empty array, and the `int[]` beneath stays hidden.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @l1.usda@,\n        @l2.usda@\n    ]\n)\n\ndef \"A\"\n{\n    int[] e = edit [append 9]\n}\n",
+    "l1.usda": "#usda 1.0\nover \"A\"\n{\n    float[] e = [1.5]\n}\n",
+    "l2.usda": "#usda 1.0\nover \"A\"\n{\n    int[] e = [1]\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "held",
+     "openusd": [
+      1.5
+     ],
+     "flattened": [
+      1.5
+     ],
+     "query": [
+      9.0
+     ],
+     "expected": [
+      9
+     ],
+     "divergence": "default-time-edits-over-other-type"
+    },
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "linear",
+     "openusd": [
+      1.5
+     ],
+     "flattened": [
+      1.5
+     ],
+     "query": [
+      9.0
+     ],
+     "expected": [
+      9
+     ],
+     "divergence": "default-time-edits-over-other-type"
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      1.5
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      1.5
+     ]
+    }
+   ],
+   "flatten_note": "OpenUSD's flatten writes the `float[]` (OpenUSD bug B039)."
+  },
+  {
+   "name": "edit_over_other_type_edit",
+   "description": "A weaker edit of another type is skipped; the `int[]` edit composes over the `int[]` beneath it.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @l1.usda@,\n        @l2.usda@\n    ]\n)\n\ndef \"A\"\n{\n    int[] e = edit [append 9]\n}\n",
+    "l1.usda": "#usda 1.0\nover \"A\"\n{\n    float[] e = edit [append 2.5]\n}\n",
+    "l2.usda": "#usda 1.0\nover \"A\"\n{\n    int[] e = [1]\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "held",
+     "openusd": [
+      1.0
+     ],
+     "flattened": [
+      1.0
+     ],
+     "query": [
+      1.0,
+      9.0
+     ],
+     "expected": [
+      1,
+      9
+     ],
+     "divergence": "default-time-edits-over-other-type"
+    },
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "linear",
+     "openusd": [
+      1.0
+     ],
+     "flattened": [
+      1.0
+     ],
+     "query": [
+      1.0,
+      9.0
+     ],
+     "expected": [
+      1,
+      9
+     ],
+     "divergence": "default-time-edits-over-other-type"
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      1.0,
+      9.0
+     ],
+     "flattened": [
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      1.0,
+      9.0
+     ],
+     "flattened": [
+      1.0
+     ]
+    }
+   ],
+   "flatten_note": "OpenUSD's flatten writes `[1]` (OpenUSD bug B039)."
+  },
+  {
+   "name": "edit_over_scalar",
+   "description": "A scalar default ends the fold like a dense array of another type.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @l1.usda@\n    ]\n)\n\ndef \"A\"\n{\n    int[] e = edit [append 9]\n}\n",
+    "l1.usda": "#usda 1.0\nover \"A\"\n{\n    double e = 2\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "held",
+     "openusd": 2.0,
+     "flattened": 2.0,
+     "query": [
+      9.0
+     ],
+     "expected": [
+      9
+     ],
+     "divergence": "default-time-edits-over-other-type"
+    },
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "linear",
+     "openusd": 2.0,
+     "flattened": 2.0,
+     "query": [
+      9.0
+     ],
+     "expected": [
+      9
+     ],
+     "divergence": "default-time-edits-over-other-type"
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      9.0
+     ],
+     "flattened": 2.0
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      9.0
+     ],
+     "flattened": 2.0
+    }
+   ],
+   "flatten_note": "OpenUSD's flatten writes the scalar (OpenUSD bug B039)."
+  },
+  {
+   "name": "edit_over_animation_block",
+   "description": "An animation block hides no default: the edit composes over the empty array.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @l1.usda@\n    ]\n)\n\ndef \"A\"\n{\n    int[] e = edit [append 9]\n}\n",
+    "l1.usda": "#usda 1.0\nover \"A\"\n{\n    int[] e = AnimationBlock\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "held",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "linear",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    int[] e = [9]\n}\n\n"
+  },
+  {
+   "name": "edit_over_no_value",
+   "description": "A sparse default over a weaker declaration without a value composes over the empty array.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @l1.usda@\n    ]\n)\n\ndef \"A\"\n{\n    int[] e = edit [append 9]\n}\n",
+    "l1.usda": "#usda 1.0\nover \"A\"\n{\n    int[] e\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "held",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "linear",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    int[] e = [9]\n}\n\n"
+  },
+  {
+   "name": "dense_over_default_block",
+   "description": "Control: a dense default over a weaker block is itself.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @l1.usda@\n    ]\n)\n\ndef \"A\"\n{\n    int[] e = [9]\n}\n",
+    "l1.usda": "#usda 1.0\nover \"A\"\n{\n    int[] e = None\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "held",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "linear",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    int[] e = [9]\n}\n\n"
+  },
+  {
+   "name": "sparse_samples_over_default_block",
+   "description": "Sparse samples over a weaker default block compose over the empty array; the default time reads the block.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @l1.usda@\n    ]\n)\n\ndef \"A\"\n{\n    int[] e.timeSamples = { 1: edit [append 9] }\n}\n",
+    "l1.usda": "#usda 1.0\nover \"A\"\n{\n    int[] e = None\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "held",
+     "openusd": null,
+     "flattened": null
+    },
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "linear",
+     "openusd": null,
+     "flattened": null
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 2,
+     "interp": "held",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 2,
+     "interp": "linear",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    }
+   ],
+   "flatten_note": "Flattening writes the block as the default next to the samples; layerstack's layer model keeps one of the two."
+  },
+  {
+   "name": "sparse_samples_over_other_type_samples",
+   "description": "Sparse samples over weaker samples of another type compose over the empty array.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @l1.usda@\n    ]\n)\n\ndef \"A\"\n{\n    int[] e.timeSamples = { 1: edit [append 9] }\n}\n",
+    "l1.usda": "#usda 1.0\nover \"A\"\n{\n    float[] e.timeSamples = { 1: [1.5], 2: [2.5] }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 2,
+     "interp": "held",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 2,
+     "interp": "linear",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    int[] e.timeSamples = {\n        1: [9],\n    }\n}\n\n"
+  },
+  {
+   "name": "sparse_default_over_blocked_sample",
+   "description": "A sparse default composes over a weaker series' samples, and over the empty array where that series holds a block.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @l1.usda@\n    ]\n)\n\ndef \"A\"\n{\n    int[] e = edit [append 9]\n}\n",
+    "l1.usda": "#usda 1.0\nover \"A\"\n{\n    int[] e.timeSamples = { 1: [1], 2: None }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "held",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": null,
+     "interp": "linear",
+     "openusd": [
+      9.0
+     ],
+     "flattened": [
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      1.0,
+      9.0
+     ],
+     "flattened": [
+      1.0,
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      1.0,
+      9.0
+     ],
+     "flattened": [
+      1.0,
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 1.5,
+     "interp": "held",
+     "openusd": [
+      1.0,
+      9.0
+     ],
+     "flattened": [
+      1.0,
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 1.5,
+     "interp": "linear",
+     "openusd": [
+      1.0,
+      9.0
+     ],
+     "flattened": [
+      1.0,
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 2,
+     "interp": "held",
+     "openusd": [
+      9.0
+     ],
+     "flattened": null
+    },
+    {
+     "attr": "/A.e",
+     "time": 2,
+     "interp": "linear",
+     "openusd": [
+      9.0
+     ],
+     "flattened": null
+    },
+    {
+     "attr": "/A.e",
+     "time": 3,
+     "interp": "held",
+     "openusd": [
+      9.0
+     ],
+     "flattened": null
+    },
+    {
+     "attr": "/A.e",
+     "time": 3,
+     "interp": "linear",
+     "openusd": [
+      9.0
+     ],
+     "flattened": null
+    }
+   ],
+   "flatten_note": "OpenUSD's flatten writes a `VtBackgroundType` sample at 2 that no parser reads (B040)."
   },
   {
    "name": "vectors_interpolate_bit_exact",
@@ -39165,6 +39971,18 @@
      "interp": "held",
      "openusd": null,
      "flattened": null,
+     "query": [
+      [
+       -1.0,
+       -1.0,
+       -1.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ],
      "expected": [
       [
        -1.0,
@@ -39185,6 +40003,18 @@
      "interp": "linear",
      "openusd": null,
      "flattened": null,
+     "query": [
+      [
+       -1.0,
+       -1.0,
+       -1.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ],
      "expected": [
       [
        -1.0,
@@ -39475,6 +40305,7 @@
      "interp": "held",
      "openusd": null,
      "flattened": null,
+     "query": 2.0,
      "expected": 2.0,
      "divergence": "default-time-block-hides-fallback"
     },
@@ -39484,6 +40315,7 @@
      "interp": "linear",
      "openusd": null,
      "flattened": null,
+     "query": 2.0,
      "expected": 2.0,
      "divergence": "default-time-block-hides-fallback"
     },

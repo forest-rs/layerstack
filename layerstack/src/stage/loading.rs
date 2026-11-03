@@ -379,6 +379,12 @@ impl super::Stage {
         self.local_layers.contains(&layer)
     }
 
+    /// Whether the snapshot's composition uses the layer, clips aside
+    /// ([`Self::used_layers`]), without collecting the others.
+    pub(crate) fn uses_layer(&self, layer: LayerId) -> bool {
+        self.used_layers.contains(&layer)
+    }
+
     /// The root layer's declared default prim, if populated. This differs from
     /// authored metadata presence: a declared path may be absent from the stage.
     #[must_use]

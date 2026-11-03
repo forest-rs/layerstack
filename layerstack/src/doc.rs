@@ -3585,6 +3585,9 @@ pub(crate) struct LayerChange {
     /// indexes change, not the namespace beneath them (see
     /// [`Layer::changed_supports_since`]).
     scope_ignored: Vec<PathId>,
+    /// Whether the batch changed only the layers the layer's sublayers are
+    /// bound to (see [`Layer::changed_layer_stack_only_since`]).
+    layer_stack: bool,
 }
 impl crate::change_history::Record for LayerChange {
     fn revision(&self) -> u64 {
@@ -4139,7 +4142,41 @@ impl Layer {
             generation: self.generation,
             paths,
             scope_ignored,
+            layer_stack: false,
         });
+    }
+
+    /// Records a structural batch that changed only the layers the layer's
+    /// sublayers are bound to, as binding an asset path a sublayer names
+    /// does: the layer stacks holding the layer gain or lose those layers,
+    /// and nothing else of it changed. Its prim evidence is unknown, as
+    /// for [`Self::touch_structure`], to readers that do not ask
+    /// [`Self::changed_layer_stack_only_since`].
+    pub(crate) fn record_layer_stack_change(&mut self) {
+        self.generation += 1;
+        self.structure += 1;
+        self.change_history.record(LayerChange {
+            generation: self.generation,
+            paths: None,
+            scope_ignored: Vec::new(),
+            layer_stack: true,
+        });
+    }
+
+    /// Whether every batch since `generation` changed only the layers the
+    /// layer's sublayers are bound to ([`Self::record_layer_stack_change`]),
+    /// and at least one did; false after history expiry.
+    pub(crate) fn changed_layer_stack_only_since(&self, generation: u64) -> bool {
+        generation < self.generation
+            && self
+                .change_history
+                .front()
+                .is_some_and(|front| front.generation <= generation + 1)
+            && self
+                .change_history
+                .iter()
+                .filter(|change| change.generation > generation)
+                .all(|change| change.layer_stack)
     }
 
     /// Complete authored prim evidence, or None after unknown writes/history expiry.
@@ -4391,6 +4428,45 @@ impl Layer {
                     || names(&spec.payloads)
                     || spec.variant_branches().any(|branch| {
                         names(&branch.spec.references) || names(&branch.spec.payloads)
+                    })
+            })
+    }
+
+    /// Whether every one of `assets` is named by a sublayer bound to no
+    /// layer yet, and by no deferred arc: binding them changes the layer
+    /// stacks holding this layer alone.
+    fn names_only_as_sublayers(&self, assets: &[&str]) -> bool {
+        let sublayer_named = |asset: &str| {
+            self.sublayers.iter().any(|sublayer| {
+                sublayer.is_unresolved()
+                    && !sublayer.is_expression()
+                    && sublayer.asset.as_deref() == Some(asset)
+            })
+        };
+        if !assets.iter().all(|asset| sublayer_named(asset)) {
+            return false;
+        }
+        let assets: Vec<&str> = assets
+            .iter()
+            .map(|asset| crate::asset::FormatArgs::strip(asset))
+            .collect();
+        let named = |op: &ListOp<Reference>| {
+            op.items().any(|arc| {
+                arc.deferred
+                    && arc.asset.as_deref().is_some_and(|asset| {
+                        assets.contains(&crate::asset::FormatArgs::strip(asset))
+                    })
+            })
+        };
+        !self
+            .prims
+            .values()
+            .chain(self.variant_prims.values().flatten())
+            .any(|spec| {
+                named(&spec.references)
+                    || named(&spec.payloads)
+                    || spec.variant_branches().any(|branch| {
+                        named(&branch.spec.references) || named(&branch.spec.payloads)
                     })
             })
     }
@@ -5195,8 +5271,12 @@ impl InMemoryStore {
             }
             if let Some(source) = self.layers.get_mut(anchor) {
                 let forgotten: Vec<&str> = forgotten.iter().map(|asset| &**asset).collect();
-                let paths = source.deferred_arc_paths(&forgotten);
-                source.record_change(true, paths);
+                if source.names_only_as_sublayers(&forgotten) {
+                    source.record_layer_stack_change();
+                } else {
+                    let paths = source.deferred_arc_paths(&forgotten);
+                    source.record_change(true, paths);
+                }
             }
         }
     }
@@ -5207,8 +5287,10 @@ impl InMemoryStore {
     /// A changed binding is a structural change of `anchor`. When deferred
     /// arcs ([`Reference::deferred`]) name the asset, it is recorded at the
     /// prims that author them, so a live stage recomposes only what those
-    /// arcs reach; otherwise at no known prim, which composes the stage
-    /// anew.
+    /// arcs reach; when only sublayers bound to no layer name it, as a
+    /// change of the layer stacks holding `anchor` alone, which a live
+    /// stage reports as the specs the layer brings or takes; otherwise at
+    /// no known prim, which composes the stage anew.
     pub fn insert_asset_layer(&mut self, anchor: LayerId, asset_path: &str, layer: LayerId) {
         self.insert_asset_layers(anchor, [(asset_path, layer)]);
     }
@@ -5247,8 +5329,12 @@ impl InMemoryStore {
             && let Some(source) = source
         {
             let changed: Vec<&str> = changed.iter().map(|asset| &**asset).collect();
-            let paths = source.deferred_arc_paths(&changed);
-            source.record_change(true, paths);
+            if source.names_only_as_sublayers(&changed) {
+                source.record_layer_stack_change();
+            } else {
+                let paths = source.deferred_arc_paths(&changed);
+                source.record_change(true, paths);
+            }
         }
     }
 

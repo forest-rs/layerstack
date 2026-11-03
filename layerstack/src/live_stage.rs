@@ -96,39 +96,82 @@ fn minimal_roots(store: &dyn LayerStore, paths: &[PathId]) -> Vec<PathId> {
     roots
 }
 
-/// What `new` composes differently from `old` when only the layers of the
-/// stage's own layer stack changed, as changes: the prims that came or
-/// went, or whose prototype changed, and the children a new order moved
-/// among their kept siblings, are resynced, as minimal roots. A prim whose spec stack only gained or
-/// lost specs with no opinions of the prim's own (an `over` holding
-/// properties, say) changes info-only, and the properties those specs
-/// hold are resynced; one whose spec stack changed otherwise is resynced.
-/// A prim whose spec stack is the same composes the same specs, so the
-/// same opinions (the offsets of the layers kept are kept), arcs and
-/// children. The pseudo-root's own specs compose nothing: it changes
-/// info-only when `sublayers`, a layer's `subLayers` changed, as OpenUSD
-/// reports it, and not for a layer muted or unmuted.
+/// What a full rebuild that follows changes of the stage's layer stacks
+/// alone reports: the stages before and after are compared
+/// ([`layer_stack_changes`]).
+#[derive(Clone, Debug, Default)]
+struct LayerStackDiff {
+    /// Whether a layer of the stage's own layer stack changed its
+    /// `subLayers`, which changes the pseudo-root info-only.
+    pseudo_root: bool,
+    /// The sublayers a sublayer list edit added or removed, as OpenUSD
+    /// counts them (a reorder moves every sublayer of the list): each of
+    /// their specs, and those of their own sublayers, is reported as added
+    /// or removed, though a prim composes it before and after.
+    moved: Vec<LayerId>,
+}
+
+/// What `new` composes differently from `old` when only the layer stacks
+/// the stage uses changed, as changes: the prims that came or went, or
+/// whose prototype changed, and the children a new order moved among
+/// their kept siblings, are resynced, as minimal roots. A prim whose spec
+/// stack only gained or lost specs with no opinions of the prim's own (an
+/// `over` holding properties, say) changes info-only, and the properties
+/// those specs hold are resynced; one whose spec stack changed otherwise
+/// is resynced. The specs of `diff`'s moved sublayers, and of their own
+/// sublayers, count as gained and lost wherever they compose. A prim whose
+/// spec stack is the same, and holds none of those, composes the same
+/// specs, so the same opinions (the offsets of the layers kept are kept),
+/// arcs and children. The pseudo-root's own specs compose nothing: it
+/// changes info-only when `diff` says a layer of the stage's own layer
+/// stack changed its `subLayers`, as OpenUSD reports it, and not for a
+/// layer muted or unmuted.
 ///
 /// OpenUSD: `PcpChanges::DidChange` handles a sublayer added or removed
-/// (`_DidAddOrRemoveSublayer`) as the addition or removal of its specs,
-/// which `UsdStage` reports as for authored specs (an inert prim spec's
-/// prim info-only, its property specs resynced), and the pseudo-root's
-/// `subLayers` change info-only.
+/// (`_DidAddOrRemoveSublayer`) as the addition or removal of its specs
+/// (the difference of the sublayer and an empty layer, which lists its
+/// own sublayers as added too), which `UsdStage` reports as for authored
+/// specs (an inert prim spec's prim info-only, its property specs
+/// resynced), in whichever layer stack holds the edited layer, and the
+/// pseudo-root's `subLayers` change info-only for a layer of the stage's
+/// own. A sublayer bound to no layer, or empty, changes no spec
+/// (`_DidChangeSublayer`).
+///
+/// Spec: AOUSD Core §10.3.1 (sublayers form a layer stack), §12 (composed
+/// scene observation).
 fn layer_stack_changes(
     store: &dyn LayerStore,
     old: &Stage,
     new: &Stage,
-    sublayers: bool,
+    diff: &LayerStackDiff,
 ) -> Changes {
     let root = store.paths().intern(crate::Path::root());
-    // The children of a prim that its kept children's new order moved.
-    let moved = |prim: PathId| {
+    let mut moved_layers: HashSet<LayerId> = HashSet::new();
+    let mut pending = diff.moved.clone();
+    while let Some(layer) = pending.pop() {
+        if !moved_layers.insert(layer) {
+            continue;
+        }
+        if let Some(found) = store.layer(layer) {
+            for entry in &found.sublayers {
+                pending.extend(entry.stored_layer(store, layer));
+            }
+        }
+    }
+    let holds_moved = |stack: &[(LayerId, crate::SpecPath)]| {
+        stack.iter().any(|(layer, _)| moved_layers.contains(layer))
+    };
+    // The children of a prim that its kept children's new order moved,
+    // those resynced aside: they are placed anew in any case.
+    let moved = |prim: PathId, resynced: &HashSet<PathId>| {
+        let kept = |list: &[PathId], other: &[PathId]| {
+            let mut kept = controls::kept_order(list, other);
+            kept.retain(|child| !resynced.contains(child));
+            kept
+        };
         let before = old.all_children_of(prim).unwrap_or_default();
         let after = new.all_children_of(prim).unwrap_or_default();
-        moved_children(
-            &controls::kept_order(before, after),
-            &controls::kept_order(after, before),
-        )
+        moved_children(&kept(before, after), &kept(after, before))
     };
     // The specs one stack has and the other not, when the specs both have
     // keep their order; None otherwise.
@@ -142,7 +185,7 @@ fn layer_stack_changes(
                      after: &[(LayerId, crate::SpecPath)]| {
         let only = |a: &[(LayerId, crate::SpecPath)], b: &[(LayerId, crate::SpecPath)]| {
             a.iter()
-                .filter(|entry| !b.contains(entry))
+                .filter(|entry| !b.contains(entry) || moved_layers.contains(&entry.0))
                 .cloned()
                 .collect::<Vec<_>>()
         };
@@ -164,12 +207,18 @@ fn layer_stack_changes(
             if bare != crate::PrimSpec::default() {
                 return None;
             }
-            properties.extend(spec.properties.iter().map(|entry| entry.name));
+            for entry in &spec.properties {
+                if !properties.contains(&entry.name) {
+                    properties.push(entry.name);
+                }
+            }
         }
         Some(properties)
     };
     let mut changes = Changes::default();
     let mut resynced = Vec::new();
+    // The prims both stages compose, whose children may have moved.
+    let mut kept = Vec::new();
     for prim in new
         .prim_paths()
         .chain(old.prim_paths().filter(|prim| !new.has_prim(*prim)))
@@ -181,18 +230,19 @@ fn layer_stack_changes(
             resynced.push(prim);
             continue;
         }
-        resynced.extend(moved(prim));
+        kept.push(prim);
         if prim == root {
             continue;
         }
         let (before, after) = (old.prim_stack(prim), new.prim_stack(prim));
-        if before == after {
-            continue;
-        }
-        match restacked(
+        let (before, after) = (
             before.as_deref().unwrap_or_default(),
             after.as_deref().unwrap_or_default(),
-        ) {
+        );
+        if before == after && !holds_moved(before) {
+            continue;
+        }
+        match restacked(before, after) {
             Some(properties) => {
                 changes.changed_info_only.push(prim);
                 changes.resynced_properties.extend(
@@ -204,8 +254,12 @@ fn layer_stack_changes(
             None => resynced.push(prim),
         }
     }
+    let placed: HashSet<PathId> = resynced.iter().copied().collect();
+    for prim in kept {
+        resynced.extend(moved(prim, &placed));
+    }
     changes.resynced = minimal_roots(store, &resynced);
-    if sublayers && !changes.resynced.contains(&root) {
+    if diff.pseudo_root && !changes.resynced.contains(&root) {
         changes.changed_info_only.push(root);
     }
     let within: HashSet<PathId> = changes.resynced.iter().copied().collect();
@@ -474,13 +528,12 @@ pub struct LiveStage {
     /// the sites they compose from; empty outside [`Self::apply`], and when
     /// unnotified or pending edits may have changed more.
     inert_prims: HashSet<PathId>,
-    /// Whether the full rebuild pending follows a change of the stage's
-    /// own layer stack alone (a sublayer [`Self::apply`] inserts or
-    /// removes, a layer muted or unmuted), with nothing else pending: its
-    /// report compares the stages before and after
-    /// ([`layer_stack_changes`]). `Some(true)` when a layer's `subLayers`
-    /// changed, which changes the pseudo-root info-only too.
-    layer_stack_diff: Option<bool>,
+    /// Whether the full rebuild pending follows changes of the layer
+    /// stacks the stage uses alone (a sublayer [`Self::apply`] inserts or
+    /// removes, or a host binds to its layer, a layer muted or unmuted),
+    /// with nothing else pending: its report compares the stages before
+    /// and after ([`layer_stack_changes`]).
+    layer_stack_diff: Option<LayerStackDiff>,
     /// Whether the recomposition just made reported its changes from a
     /// comparison of the stages before and after, which
     /// [`Self::recompose_changes`] then reports as they are, not widened
@@ -1112,8 +1165,16 @@ impl LiveStage {
                 }
             }
         }
-        self.layer_stack_diff =
-            (outcome.layer_stack_only && sources_current && !pending_recomposition).then_some(true);
+        self.layer_stack_diff = (outcome.layer_stack_only
+            && sources_current
+            && !pending_recomposition)
+            .then(|| LayerStackDiff {
+                pseudo_root: outcome
+                    .layers
+                    .iter()
+                    .any(|layer| self.stage.layer_stack().contains(layer)),
+                moved: outcome.moved_sublayers.clone(),
+            });
         let mut recomposed = match refreshed {
             Some(paths) => {
                 changes.changed_info_only = paths.clone();
@@ -1448,6 +1509,10 @@ impl LiveStage {
             .map(|(layer, _, found)| (layer, found))
             .collect();
         sort::sort_unstable_by_key(&mut changed, |(layer, _)| *layer);
+        // The layers whose changes only add layers to the layer stacks
+        // holding them, or that join one: a host bound a sublayer's asset,
+        // or read a sublayer's layer.
+        let mut restacked = false;
         for &(layer, found) in &changed {
             let seen = self.generations.insert(layer, found).flatten();
             match (seen, found) {
@@ -1459,10 +1524,20 @@ impl LiveStage {
                         self.queue_source_structure(store, layer, &paths, &supports);
                     }
                     None if seen.1 == found.1 => self.notify_layer_edit(layer),
+                    None if store
+                        .layer(layer)
+                        .is_some_and(|found| found.changed_layer_stack_only_since(seen.0)) =>
+                    {
+                        restacked = true;
+                    }
                     None => self.notify_structural_change(),
                 },
+                (None, Some(_)) if self.is_bound_sublayer(store, layer) => restacked = true,
                 _ => self.notify_structural_change(),
             }
+        }
+        if restacked {
+            self.notify_layer_stack_change();
         }
         if !changed.is_empty() {
             self.publish_preparation(store);
@@ -1853,7 +1928,47 @@ impl LiveStage {
     /// than trusting the generations it indexed them at.
     pub fn notify_structural_change(&mut self) {
         self.needs_full_rebuild = true;
+        self.layer_stack_diff = None;
         self.child_index.clear();
+    }
+
+    /// Whether `layer` is bound to a sublayer of a layer the stage reads,
+    /// one that is not muted.
+    fn is_bound_sublayer(&self, store: &dyn LayerStore, layer: LayerId) -> bool {
+        !self.options.muted_layers.contains(&layer)
+            && self.generations.iter().any(|(&parent, seen)| {
+                seen.is_some()
+                    && !self.options.muted_layers.contains(&parent)
+                    && store.layer(parent).is_some_and(|found| {
+                        found
+                            .sublayers
+                            .iter()
+                            .any(|entry| entry.stored_layer(store, parent) == Some(layer))
+                    })
+            })
+    }
+
+    /// Notifies that layers joined the layer stacks the stage uses, with no
+    /// other change: the next [`recompose`](Self::recompose) composes the
+    /// whole stage and reports what it composes differently
+    /// ([`layer_stack_changes`]), when nothing else is pending; otherwise
+    /// it is a structural change ([`Self::notify_structural_change`]).
+    fn notify_layer_stack_change(&mut self) {
+        // Layers muted or unmuted change spec stacks alone too.
+        let previous = self.stage.options();
+        let controls_mute_only = !self.controls_pending
+            || (previous.load_rules == self.options.load_rules
+                && previous.mask == self.options.mask);
+        let alone = !self.needs_full_rebuild
+            && controls_mute_only
+            && self.structural_roots.is_empty()
+            && self.structural_sources.is_empty()
+            && self.support_sources.is_empty()
+            && !self.tracker.has_invalidated(OPINION_EDIT);
+        self.notify_structural_change();
+        if alone {
+            self.layer_stack_diff = Some(LayerStackDiff::default());
+        }
     }
 
     /// Recomposes affected prims and returns the set of prims that were updated.
@@ -2471,7 +2586,14 @@ impl LiveStage {
         store: &mut dyn LayerStore,
         changes: Option<&mut Changes>,
     ) -> Vec<PathId> {
-        let diff = core::mem::take(&mut self.layer_stack_diff);
+        // Edits notified since the layer stacks changed may have changed
+        // more than spec stacks show.
+        let diff = core::mem::take(&mut self.layer_stack_diff).filter(|_| {
+            !self.tracker.has_invalidated(OPINION_EDIT)
+                && self.structural_roots.is_empty()
+                && self.structural_sources.is_empty()
+                && self.support_sources.is_empty()
+        });
         self.needs_full_rebuild = false;
         self.controls_pending = false;
         self.structural_roots.clear();
@@ -2520,8 +2642,8 @@ impl LiveStage {
             let root = store.paths().intern(crate::Path::root());
             changes.resynced = alloc::vec![root];
             self.exact_report = diff.is_some();
-            if let Some(sublayers) = diff {
-                let found = layer_stack_changes(store, &old_stage, &self.stage, sublayers);
+            if let Some(diff) = &diff {
+                let found = layer_stack_changes(store, &old_stage, &self.stage, diff);
                 changes.resynced = found.resynced;
                 changes.changed_info_only = found.changed_info_only;
                 changes.resynced_properties = found.resynced_properties;

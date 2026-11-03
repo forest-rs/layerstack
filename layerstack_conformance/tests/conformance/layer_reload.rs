@@ -412,40 +412,23 @@ fn expected(step: &Json) -> Json {
     expected
 }
 
-/// The cases whose reload layerstack reports at a coarser grain than
-/// OpenUSD, as it reports the same edit made through a transaction: a
-/// sublayer added or removed resyncs the pseudo-root's subtree where
-/// OpenUSD resyncs the specs the sublayer brings or takes (the
-/// `change_evidence` tests cover such edits). Their notices must cover
-/// OpenUSD's.
-const COARSER: [&str; 2] = ["sublayer_added", "sublayer_removed"];
-
-/// Whether every path `want` reports is at or beneath a path `got`
-/// resyncs, or one `got` reports info-only too.
-fn covers(got: &Json, want: &Json) -> bool {
-    let paths = |heard: &Json, key: &str| -> Vec<String> {
-        heard
-            .as_array()
-            .unwrap()
-            .iter()
-            .flat_map(|notice| notice[key].as_array().unwrap().clone())
-            .map(|path| path.as_str().unwrap().to_owned())
-            .collect()
-    };
-    let resynced = paths(got, "resynced");
-    let info = paths(got, "info");
-    let beneath = |path: &str| {
-        resynced.iter().any(|root| {
-            root == "/"
-                || path == root
-                || path.starts_with(&format!("{root}/"))
-                || path.starts_with(&format!("{root}."))
-        })
-    };
-    paths(want, "resynced").iter().all(|path| beneath(path))
-        && paths(want, "info")
-            .iter()
-            .all(|path| beneath(path) || info.contains(path))
+/// What layerstack announces for a case's step where OpenUSD announces
+/// otherwise: each a deliberate difference.
+///
+/// `sublayer_added` (OpenUSD bug B037): the sublayer `extra.usda` holds an `over`
+/// of `/A`, which moves `/A` before `/B` and `/S` among the pseudo-root's
+/// children (children compose weakest layer first). OpenUSD changes `/A`
+/// info-only and resyncs `/A.e`, and its stage keeps the old order
+/// (`UsdStage` composes a parent's children again only for a resynced
+/// child), so a stage opened afresh on the same layers orders its root
+/// prims otherwise; layerstack composes the new order and resyncs the
+/// child it moved, as it reports any child order a change moves
+/// (`prim_resync.rs`, `override_reorders_children`).
+fn deliberate(name: &str, call: &[&str]) -> Option<Json> {
+    match (name, call) {
+        ("sublayer_added", ["reload"]) => Some(json!([{"resynced": ["/A"], "info": ["/"]}])),
+        _ => None,
+    }
 }
 
 fn replay(versions: bool) {
@@ -496,14 +479,8 @@ fn replay(versions: bool) {
                 "{name} ({mode}): {call:?} reports a failure as OpenUSD raises one"
             );
             let mut want = expected(step);
-            if COARSER.contains(&name) && call == ["reload"] {
-                assert!(
-                    covers(&got["heard"], &want["heard"]),
-                    "{name} ({mode}): {} does not cover {}",
-                    got["heard"],
-                    want["heard"]
-                );
-                want["heard"] = got["heard"].clone();
+            if let Some(heard) = deliberate(name, &call) {
+                want["heard"] = heard;
             }
             assert_eq!(got, want, "{name} ({mode}): {call:?}");
         }

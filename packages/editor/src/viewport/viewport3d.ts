@@ -18,7 +18,12 @@
 // OpenGL's [-1, 1] to WebGPU's [0, 1]), fitted to the canvas by
 // `CameraUtilConformWindow`'s `fit` policy (everything the camera frames
 // stays in view), when the editor looks through one; otherwise orbit
-// controls move a free camera.
+// controls move a free camera. Framing (`framing.ts`) puts the free camera
+// where a box fits the view, the same way each time it is asked (framing
+// what is already in view centres and fits it again); a box that is not
+// one frames nothing, and one of no size is framed in its surroundings.
+// The clipping range follows the camera as it orbits and zooms, so it
+// always reaches the scene.
 //
 // Lights: `UsdLux` emission is luminance in nits (cd/m²); stagehand's
 // `LightItem.emission.radiance` is `color * blackbody * intensity *
@@ -223,6 +228,7 @@ import { lightSetKey, linkedLights } from "./lightLinks.ts";
 import { useSharedRectAreaTables } from "./rectAreaLights.ts";
 import { fixNodes, setFixedNode } from "./fixedNodes.ts";
 import { onRendererLost, sharedRenderer } from "./gpu.ts";
+import { type Box, clipRange, frameBox, reachFrom, sphereOf, viewDirection } from "./framing.ts";
 import { SkinnedDraw, withSkinning } from "./skinning.ts";
 import { TextureStore, surfaceMaterial, uvChannels } from "./surfaces.ts";
 import { standinGeometry, standinMaterials } from "./standins.ts";
@@ -301,6 +307,8 @@ export class Viewport {
   #selected: string | null = null;
   /** The bounds the camera was last framed on, to frame again only when they change. */
   #framed = "";
+  /** What is drawn's bounds, as last applied: the far plane reaches them. */
+  #sceneBounds: Box | null = null;
   /** The textures the materials read. */
   readonly #textures: TextureStore;
   /** Whether a restyle for arrived images is scheduled. */
@@ -555,10 +563,19 @@ export class Viewport {
     this.#draw();
   }
 
-  /** Frames the free camera on `bounds` (`[minX, minY, minZ, maxX, maxY, maxZ]`). */
-  frame(bounds: readonly number[]): void {
-    this.#frame(bounds);
-    this.#draw();
+  /**
+   * Frames the free camera on `bounds` (`[minX, minY, minZ, maxX, maxY,
+   * maxZ]`): centres them and fits them in view, also when they are in
+   * view already. Returns whether it framed them: `false` (the camera
+   * left as it was) when they are not a box (empty, inverted, NaN or
+   * infinite).
+   */
+  frame(bounds: readonly number[]): boolean {
+    try {
+      return this.#frame(bounds);
+    } finally {
+      this.#draw();
+    }
   }
 
   /**
@@ -909,6 +926,7 @@ export class Viewport {
     this.#controls.enabled = this.#looking() === null;
     // Framed when the bounds change, but not as time plays: an animated
     // extent would move the camera every frame.
+    this.#sceneBounds = scene.bounds;
     const framed = JSON.stringify(scene.bounds);
     if (scene.bounds !== null && framed !== this.#framed && (!update.timeChanged || this.#framed === "")) {
       this.#framed = framed;
@@ -1369,26 +1387,57 @@ export class Viewport {
     this.#objects.delete(id);
   }
 
-  /** Points the camera at the bounds' center from far enough to see them whole. */
-  #frame(bounds: readonly number[]): void {
-    const [x0, y0, z0, x1, y1, z1] = bounds as [number, number, number, number, number, number];
-    const center = new Vector3((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
-    const radius = Math.max(1e-3, Math.hypot(x1 - x0, y1 - y0, z1 - z0) / 2);
-    // Cells a power of ten: 10 to 100 of them across what is framed.
-    const cell = 10 ** Math.floor(Math.log10(Math.max(radius / 5, 1e-6)));
-    if (cell !== this.#cell) {
-      this.#cell = cell;
-      this.#regrid();
+  /**
+   * Points the free camera at the bounds' center from far enough to see
+   * them whole ({@link frameBox}); `false`, the camera untouched, when they
+   * are not a box. Whatever happens, the orbit controls end enabled with
+   * the free camera.
+   */
+  #frame(bounds: readonly number[]): boolean {
+    try {
+      // A box of no size (a point, an empty prim's) is framed at a hundredth of the scene.
+      const scene = sphereOf(this.#sceneBounds);
+      const framing = frameBox(bounds, {
+        fov: this.#camera.fov,
+        aspect: this.#camera.aspect,
+        direction: viewDirection(this.#up),
+        fallbackRadius: scene === null || scene.radius === 0 ? 1 : scene.radius / 100,
+        scene: this.#sceneBounds,
+      });
+      if (framing === null) return false;
+      // Cells a power of ten: 10 to 100 of them across what is framed.
+      const cell = 10 ** Math.floor(Math.log10(Math.max(framing.radius / 5, 1e-6)));
+      if (cell !== this.#cell) {
+        this.#cell = cell;
+        this.#regrid();
+      }
+      this.#camera.position.set(...framing.position);
+      this.#camera.near = framing.near;
+      this.#camera.far = framing.far;
+      this.#camera.updateProjectionMatrix();
+      this.#controls.target.set(...framing.center);
+      this.#controls.update();
+      return true;
+    } finally {
+      this.#controls.enabled = this.#looking() === null;
     }
-    // Far enough that the bounds' sphere fits the view's height, with a margin.
-    const distance = (1.1 * radius) / Math.tan((this.#camera.fov * Math.PI) / 360);
-    const toward = this.#up === "Y" ? new Vector3(0.55, 0.45, 0.7) : new Vector3(0.55, -0.7, 0.45);
-    this.#camera.position.copy(center).add(toward.normalize().multiplyScalar(distance));
-    this.#camera.near = distance / 100;
-    this.#camera.far = distance * 10;
-    this.#camera.updateProjectionMatrix();
-    this.#controls.target.copy(center);
-    this.#controls.update();
+  }
+
+  /**
+   * Keeps the free camera's clipping range around what it orbits as it
+   * moves ({@link clipRange}): near a hundredth of the way to the target,
+   * far past the whole scene. Without it, zooming out from something
+   * small framed clipped everything away.
+   */
+  #reclip(): void {
+    const camera = this.#camera;
+    const distance = camera.position.distanceTo(this.#controls.target);
+    const position = [camera.position.x, camera.position.y, camera.position.z] as const;
+    const range = clipRange(distance, reachFrom(position, this.#sceneBounds));
+    if (range === null || (range.near === camera.near && range.far === camera.far)) return;
+    camera.near = range.near;
+    camera.far = range.far;
+    camera.updateProjectionMatrix();
   }
 
   /** Makes the grid again, across the up axis with cells of `#cell`. */
@@ -1401,7 +1450,10 @@ export class Viewport {
 
   #makeControls(): OrbitControls {
     const controls = new OrbitControls(this.#camera, this.#canvas);
-    controls.addEventListener("change", () => this.#draw());
+    controls.addEventListener("change", () => {
+      this.#reclip();
+      this.#draw();
+    });
     return controls;
   }
 

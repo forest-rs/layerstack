@@ -43,7 +43,11 @@ which resyncs `/`. Muting or unmuting a sublayer adds or removes its specs
 the same way. A sublayer that is muted is opened anyway when it is
 inserted (`_LoadSublayerForChange` does not ask), so its prims are
 resynced though none composes; removing a muted sublayer the stage no
-longer holds open finds no layer and changes no spec.
+longer holds open finds no layer and changes no spec. An added sublayer's
+specs are processed in the layer stacks holding the edited layer alone
+(`_SetLayerStacksUsingLayerOverride`), but a removed one's in every layer
+stack holding the removed layer, so removing a sublayer that `/R` also
+references resyncs `/R`.
 
 `--check` rewrites everything into a temporary directory and fails unless
 it matches the checked-in fixture.
@@ -182,7 +186,7 @@ over "Asset"
 
 # The attributes recorded after each step; `/W.t` is read at time 5.
 ATTRIBUTES = ["/A.x", "/A.y", "/S.s", "/W.t", "/W.w", "/N.n", "/Other.v", "/Other.a",
-              "/R.a", "/R.b"]
+              "/R.a", "/R.b", "/Asset.a"]
 SAMPLED = {"/W.t": 5.0}
 
 # Each case: its name and its steps. A step edits a layer's sublayers
@@ -203,6 +207,10 @@ CASES = [
                          ["remove", "weak.usda", 0]]),
     ("referenced_stack", [["insert", "asset.usda", 0, "asset_extra.usda"],
                           ["remove", "asset.usda", 0]]),
+    # The layer `/R` references, inserted as a sublayer too, then reordered.
+    ("referenced_as_sublayer", [["insert", "root.usda", 0, "asset.usda"],
+                                ["reorder", "root.usda", [1, 0, 2]],
+                                ["remove", "root.usda", 1]]),
     ("muted_insert", [["mute", "prims.usda"], ["insert", "root.usda", 1, "prims.usda"],
                       ["unmute", "prims.usda"], ["mute", "prims.usda"],
                       ["remove", "root.usda", 1]]),

@@ -104,11 +104,11 @@ struct LayerStackDiff {
     /// Whether a layer of the stage's own layer stack changed its
     /// `subLayers`, which changes the pseudo-root info-only.
     pseudo_root: bool,
-    /// The sublayers a sublayer list edit added or removed, as OpenUSD
-    /// counts them (a reorder moves every sublayer of the list): each of
-    /// their specs, and those of their own sublayers, is reported as added
-    /// or removed, though a prim composes it before and after.
-    moved: Vec<LayerId>,
+    /// The sublayers a sublayer list edit only reordered, which OpenUSD
+    /// announces as removed and added again: each of their specs, and
+    /// those of their own sublayers, is reported as removed and added,
+    /// though a prim composes it before and after.
+    reordered: Vec<LayerId>,
 }
 
 /// What `new` composes differently from `old` when only the layer stacks
@@ -118,8 +118,8 @@ struct LayerStackDiff {
 /// stack only gained or lost specs with no opinions of the prim's own (an
 /// `over` holding properties, say) changes info-only, and the properties
 /// those specs hold are resynced; one whose spec stack changed otherwise
-/// is resynced. The specs of `diff`'s moved sublayers, and of their own
-/// sublayers, count as gained and lost wherever they compose. A prim whose
+/// is resynced. The specs of `diff`'s reordered sublayers, and of their
+/// own sublayers, count as lost and gained again wherever they compose. A prim whose
 /// spec stack is the same, and holds none of those, composes the same
 /// specs, so the same opinions (the offsets of the layers kept are kept),
 /// arcs and children. The pseudo-root's own specs compose nothing: it
@@ -147,7 +147,7 @@ fn layer_stack_changes(
 ) -> Changes {
     let root = store.paths().intern(crate::Path::root());
     let mut moved_layers: HashSet<LayerId> = HashSet::new();
-    let mut pending = diff.moved.clone();
+    let mut pending = diff.reordered.clone();
     while let Some(layer) = pending.pop() {
         if !moved_layers.insert(layer) {
             continue;
@@ -1176,7 +1176,7 @@ impl LiveStage {
                     .layers
                     .iter()
                     .any(|layer| self.stage.layer_stack().contains(layer)),
-                moved: outcome.moved_sublayers.clone(),
+                reordered: outcome.reordered_sublayers.clone(),
             });
         let mut recomposed = match refreshed {
             Some(paths) => {

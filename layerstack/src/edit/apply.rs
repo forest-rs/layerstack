@@ -600,10 +600,9 @@ pub(crate) struct Outcome {
     /// every prim then composes the specs it composed, and those of the
     /// layers that came, without those of the layers that went.
     pub(crate) layer_stack_only: bool,
-    /// The sublayers the transaction's sublayer list edits added or
-    /// removed, as OpenUSD counts them ([`moved_sublayers`]), without
-    /// those not yet bound to a layer.
-    pub(crate) moved_sublayers: Vec<LayerId>,
+    /// The sublayers the transaction's sublayer list edits only reordered
+    /// ([`reordered_sublayers`]), without those not yet bound to a layer.
+    pub(crate) reordered_sublayers: Vec<LayerId>,
     /// `(layer, source prim path, change)` of every property field the
     /// transaction changed, property spec additions and removals aside.
     pub(crate) property_fields: Vec<(LayerId, PathId, super::PropertyChange)>,
@@ -1180,7 +1179,7 @@ pub(crate) fn apply(
         prim_fields: _,
         reloaded,
     } = journal;
-    let mut moved = Vec::new();
+    let mut reordered = Vec::new();
     let layer_stack_only = !structural_layers.is_empty()
         && steps.iter().all(|g| match (&g.written, &g.step) {
             (
@@ -1189,7 +1188,7 @@ pub(crate) fn apply(
                     sublayers: before, ..
                 },
             ) => {
-                moved.extend(moved_sublayers(store, *layer, sublayers, before));
+                reordered.extend(reordered_sublayers(store, *layer, sublayers, before));
                 stage.is_some_and(|stage| stage.uses_layer(*layer))
                     && keeps_offsets(sublayers, before)
             }
@@ -1304,7 +1303,7 @@ pub(crate) fn apply(
         inert_sites,
         other_sites,
         layer_stack_only,
-        moved_sublayers: moved,
+        reordered_sublayers: reordered,
         property_fields,
         layer_info,
         reloaded,
@@ -1318,19 +1317,20 @@ pub(crate) fn apply(
     })
 }
 
-/// The sublayers of `layer` that a change of its sublayer list from
-/// `before` to `after` adds or removes, as OpenUSD counts them, with the
-/// layers they are bound to: those one list names and the other does not,
-/// or, when both name the same sublayers in another order, all of them, as
-/// a reorder is announced as the removal and addition of every sublayer.
-/// A sublayer is named by its asset path, or by its layer when it has
-/// none; one bound to no layer yet is left out.
+/// The sublayers of `layer`, with the layers they are bound to, that a
+/// change of its sublayer list from `before` to `after` only reorders: all
+/// of them when both lists name the same sublayers (by asset path, or by
+/// layer when there is none), as OpenUSD announces a reorder as the
+/// removal and addition of every sublayer of the list; none otherwise, as
+/// the sublayers added or removed come to or leave the spec stacks they
+/// compose into, and the others are not announced. A sublayer bound to no
+/// layer yet is left out.
 ///
 /// Spec: AOUSD Core §10.3.1 (sublayers). OpenUSD:
 /// `Sdf_ChangeManager::DidChangeField` records a `subLayers` change as
-/// `SubLayerAdded` and `SubLayerRemoved` entries
-/// (`pxr/usd/sdf/changeManager.cpp`).
-fn moved_sublayers(
+/// `SubLayerAdded` and `SubLayerRemoved` entries, every sublayer of a
+/// reordered list as both (`pxr/usd/sdf/changeManager.cpp`).
+fn reordered_sublayers(
     store: &dyn LayerStore,
     layer: LayerId,
     after: &[crate::SublayerEntry],
@@ -1344,15 +1344,11 @@ fn moved_sublayers(
     }
     let after_names: alloc::collections::BTreeSet<_> = after.iter().map(name).collect();
     let before_names: alloc::collections::BTreeSet<_> = before.iter().map(name).collect();
-    let reordered = after_names == before_names;
+    if after_names != before_names {
+        return Vec::new();
+    }
     after
         .iter()
-        .filter(|entry| reordered || !before_names.contains(&name(entry)))
-        .chain(
-            before
-                .iter()
-                .filter(|entry| reordered || !after_names.contains(&name(entry))),
-        )
         .filter_map(|entry| entry.stored_layer(store, layer))
         .collect()
 }

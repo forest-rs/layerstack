@@ -24,12 +24,25 @@
 //! notices of one step are merged, as one change block merges them, and a
 //! notice naming nothing is no notice.
 //!
-//! One difference is deliberate (`muted_insert`): inserting a sublayer
-//! that is muted composes nothing and announces only the `subLayers`
-//! change at `/`, where OpenUSD opens the muted layer to compute the
-//! change (`PcpChanges::_LoadSublayerForChange` does not ask whether it is
-//! muted) and resyncs `/N`, a prim it defines that composes neither
-//! before nor after.
+//! Three differences are deliberate:
+//!
+//! - `muted_insert` (OpenUSD bug B038): inserting a sublayer that is muted
+//!   composes nothing and announces only the `subLayers` change at `/`,
+//!   where OpenUSD opens the muted layer to compute the change
+//!   (`PcpChanges::_LoadSublayerForChange` does not ask whether it is
+//!   muted) and resyncs `/N`, a prim it defines that composes neither
+//!   before nor after.
+//! - `referenced_as_sublayer`, reorder: a layer that `/R` references and
+//!   the root layer stack holds as a sublayer too. Reordering the root
+//!   layer's sublayers resyncs `/R` as well, as layerstack counts a
+//!   reordered sublayer's specs as removed and added wherever they compose
+//!   (its spec stacks do not record the layer stack an entry came
+//!   through), where OpenUSD counts them in the reordered layer stack
+//!   alone. Coarser, and covering OpenUSD's.
+//! - `referenced_as_sublayer`, removal: removing that sublayer does not
+//!   resync `/R`, which composes the same, where OpenUSD processes the
+//!   removed layer's specs in every layer stack holding the layer, `/R`'s
+//!   referenced one among them, and resyncs it.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -315,7 +328,15 @@ fn expected_heard(step: &Json) -> Json {
 /// announces for a case's step where OpenUSD announces otherwise.
 fn deliberate(name: &str, step: usize) -> Option<Json> {
     match (name, step) {
+        // OpenUSD bug B038: OpenUSD resyncs `/N` too.
         ("muted_insert", 2) => Some(json!([{"resynced": [], "info": ["/"]}])),
+        // The reorder resyncs `/R` too, which OpenUSD does not.
+        ("referenced_as_sublayer", 2) => Some(json!([{
+            "resynced": ["/A.y", "/Asset", "/R", "/S", "/W"],
+            "info": ["/", "/A"],
+        }])),
+        // The removal leaves `/R`, which OpenUSD resyncs.
+        ("referenced_as_sublayer", 3) => Some(json!([{"resynced": ["/Asset"], "info": ["/"]}])),
         _ => None,
     }
 }

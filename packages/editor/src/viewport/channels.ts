@@ -27,6 +27,18 @@
 // (`fixedNodes.ts`): a material is made again when its record changes,
 // never changed in place.
 //
+// Coordinates: a lookup samples its map at `<map>Transform · (uv, 1)`,
+// the matrix `lookups.ts`'s `coordinateMatrix` makes (the texture's
+// `UsdTransform2d`, and a UDIM atlas's tile grid), a uniform by reference
+// like the scale and bias, of the uv set its texture reads (`uv`, `uv1`,
+// ...), named by the node itself. three.js would take both from the
+// texture instead, its `matrix` and `channel`, when it builds the shader:
+// but the shader is shared by every material of the shape, and the
+// texture a shared node holds while one is built is whichever material it
+// last drew, so a material reading another set than the first one built
+// would sample that one's. So each uv set has its nodes, and a matrix is
+// set per material.
+//
 // A map's texture is read through a reference three.js does not merge
 // with another reading the same texture: it merges texture uniforms by
 // their texture when it builds a shader, so the shader every material of
@@ -46,30 +58,30 @@
 // position after it; a displacement reading another channel than `r` is
 // drawn through `positionNode`, so on an instanced draw its offset is in
 // instance space, scaled by the instance's matrix.
-import { materialReference, nodeObject, normalLocal, normalMap, positionLocal, texture, vec4 } from "three/tsl";
-import { MaterialReferenceNode, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, Vector4 } from "three/webgpu";
+import { materialReference, nodeObject, normalLocal, normalMap, positionLocal, texture, uv, vec3, vec4 } from "three/tsl";
+import { MaterialReferenceNode, Matrix3, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, Vector4 } from "three/webgpu";
 import type { Texture } from "three/webgpu";
 import { setFixedNode } from "./fixedNodes.ts";
 import type { FixedNodeProperty } from "./fixedNodes.ts";
 import { LOOKUP_MAPS } from "./lookups.ts";
-import type { LookupChannel, LookupMap, SurfaceLookups, TextureLookup } from "./lookups.ts";
+import type { LookupChannel, LookupMap, Mat3, SurfaceLookups, TextureLookup } from "./lookups.ts";
 
 /** Anything TSL takes: the node types are too loose to be worth spelling here. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyNode = any;
 
-/** A lookup's scale and bias on the material, by map: `mapScale`, `mapBias`, ... */
-export type LookupFields = Record<`${LookupMap}${"Scale" | "Bias"}`, Vector4>;
+/** A lookup's scale, bias and coordinate matrix on the material, by map: `mapScale`, `mapBias`, `mapTransform`, ... */
+export type LookupFields = Record<`${LookupMap}${"Scale" | "Bias"}`, Vector4> & Record<`${LookupMap}Transform`, Matrix3>;
 
-/** Gives `material` each map's scale (1) and bias (0), as fields three.js copies with the material. */
+/** Gives `material` each map's scale (1), bias (0) and coordinate matrix (identity), as fields three.js copies with the material. */
 function addLookupFields(material: object): void {
   for (const map of LOOKUP_MAPS) {
-    Object.assign(material, { [`${map}Scale`]: new Vector4(1, 1, 1, 1), [`${map}Bias`]: new Vector4(0, 0, 0, 0) });
+    Object.assign(material, { [`${map}Scale`]: new Vector4(1, 1, 1, 1), [`${map}Bias`]: new Vector4(0, 0, 0, 0), [`${map}Transform`]: new Matrix3() });
   }
 }
 
 /**
- * `MeshStandardNodeMaterial` with each map's scale and bias
+ * `MeshStandardNodeMaterial` with each map's scale, bias and coordinate matrix
  * ({@link LookupFields}): fields of every instance, so a copy (`clone`)
  * has them.
  */
@@ -80,7 +92,7 @@ export class SurfaceStandardMaterial extends MeshStandardNodeMaterial {
   }
 }
 
-/** `MeshPhysicalNodeMaterial` with each map's scale and bias, as {@link SurfaceStandardMaterial}. */
+/** `MeshPhysicalNodeMaterial` with each map's scale, bias and coordinate matrix, as {@link SurfaceStandardMaterial}. */
 export class SurfacePhysicalMaterial extends MeshPhysicalNodeMaterial {
   constructor() {
     super();
@@ -91,11 +103,25 @@ export class SurfacePhysicalMaterial extends MeshPhysicalNodeMaterial {
 /** A surface material, standard or physical. */
 export type SurfaceMaterial = SurfaceStandardMaterial | SurfacePhysicalMaterial;
 
-/** A material's map by reference, never merged with another map's texture (see the header). */
+/**
+ * A material's map by reference, sampled at `coordinates` rather than at
+ * its texture's channel moved by its texture's matrix, and never merged
+ * with another map's texture (see the header).
+ */
 class MapReferenceNode extends MaterialReferenceNode {
+  readonly #coordinates: AnyNode;
+
+  constructor(property: string, coordinates: AnyNode) {
+    super(property, "texture");
+    this.#coordinates = coordinates;
+  }
+
   override setNodeType(uniformType: string): void {
     super.setNodeType(uniformType);
-    (this.node as unknown as { mergeable: boolean }).mergeable = false;
+    const node = this.node as unknown as { mergeable: boolean; uvNode: unknown; setUpdateMatrix(value: boolean): void };
+    node.mergeable = false;
+    node.uvNode = this.#coordinates;
+    node.setUpdateMatrix(false);
   }
 }
 
@@ -116,24 +142,29 @@ function cached(key: string, make: () => AnyNode): AnyNode {
   return node;
 }
 
-/** `map`'s lookup: its texel times its scale plus its bias, a `vec4`. */
-function lookupNode(map: LookupMap): AnyNode {
-  return cached(map, () =>
-    (nodeObject(new MapReferenceNode(map, "texture")) as AnyNode).mul(ref(`${map}Scale`, "vec4")).add(ref(`${map}Bias`, "vec4")),
-  );
+/**
+ * `map`'s lookup of uv set `set` (three.js's `uv`, `uv1`, ...): its texel
+ * at `<map>Transform · (uv, 1)`, times its scale plus its bias, a `vec4`.
+ */
+function lookupNode(map: LookupMap, set: number): AnyNode {
+  return cached(`${map}@${set}`, () => {
+    const coordinates = ref(`${map}Transform`, "mat3").mul(vec3(uv(set), 1)).xy;
+    return (nodeObject(new MapReferenceNode(map, coordinates)) as AnyNode).mul(ref(`${map}Scale`, "vec4")).add(ref(`${map}Bias`, "vec4"));
+  });
 }
 
-/** The input node `lookup` is drawn as, and the material property it is set as; `null` for one three.js draws itself. */
-function inputNode(lookup: TextureLookup, surface: SurfaceLookups): { property: FixedNodeProperty; node: AnyNode } | null {
+/** The input node `lookup` (of uv set `set`) is drawn as, and the material property it is set as; `null` for one three.js draws itself. */
+function inputNode(lookup: TextureLookup, set: number, surface: SurfaceLookups): { property: FixedNodeProperty; node: AnyNode } | null {
   const { map } = lookup;
   const channel = lookup.channel as LookupChannel;
-  const value = lookupNode(map);
-  const one = (property: FixedNodeProperty, make: () => AnyNode = () => value[channel]) => ({ property, node: cached(`${map}.${channel}`, make) });
+  const value = lookupNode(map, set);
+  const key = `${map}@${set}`;
+  const one = (property: FixedNodeProperty, make: () => AnyNode = () => value[channel]) => ({ property, node: cached(`${key}.${channel}`, make) });
   switch (map) {
     case "map":
       // Opacity is the lookup's `a` when it reads the diffuse texture's,
       // else a lookup of its own (or a constant) multiplies 1.
-      return surface.opacityInMap ? { property: "colorNode", node: value } : { property: "colorNode", node: cached("map.rgb1", () => vec4(value.rgb, 1)) };
+      return surface.opacityInMap ? { property: "colorNode", node: value } : { property: "colorNode", node: cached(`${key}.rgb1`, () => vec4(value.rgb, 1)) };
     case "emissiveMap":
       // Times the emissive color and intensity, which highlight a selection.
       return one("emissiveNode", () => value.rgb.mul(ref("emissive", "color")).mul(ref("emissiveIntensity", "float")));
@@ -162,16 +193,30 @@ function inputNode(lookup: TextureLookup, surface: SurfaceLookups): { property: 
 }
 
 /**
- * Draws `surface`'s lookups on `material`: each map set to its texture
- * (`textureOf`), its scale and bias set, and its input node set as the
- * header of this file describes. Set before the material is first drawn.
+ * How a lookup samples on a draw: its texture, the uv set its
+ * coordinates are (0 for `uv`, `st`), and the matrix moving them
+ * (`coordinateMatrix`).
  */
-export function drawLookups(material: SurfaceMaterial, surface: SurfaceLookups, textureOf: (lookup: TextureLookup) => Texture): void {
+export interface LookupSampling {
+  readonly texture: Texture;
+  readonly set: number;
+  readonly matrix: Mat3;
+}
+
+/**
+ * Draws `surface`'s lookups on `material`: each map set to its texture
+ * (`samplingOf`), its scale, bias and coordinate matrix set, and its input
+ * node set as the header of this file describes. Set before the material
+ * is first drawn.
+ */
+export function drawLookups(material: SurfaceMaterial, surface: SurfaceLookups, samplingOf: (lookup: TextureLookup) => LookupSampling): void {
   const fields = material as unknown as LookupFields & Record<LookupMap, Texture | null>;
   for (const lookup of surface.lookups) {
-    fields[lookup.map] = textureOf(lookup);
+    const sampling = samplingOf(lookup);
+    fields[lookup.map] = sampling.texture;
     fields[`${lookup.map}Scale`].set(...lookup.scale);
     fields[`${lookup.map}Bias`].set(...lookup.bias);
+    fields[`${lookup.map}Transform`].set(...sampling.matrix);
     if (lookup.map === "displacementMap") {
       if (lookup.channel === "r") {
         // three.js's own displacement is `r * scale + bias`.
@@ -187,7 +232,7 @@ export function drawLookups(material: SurfaceMaterial, surface: SurfaceLookups, 
       }
       continue;
     }
-    const input = inputNode(lookup, surface);
+    const input = inputNode(lookup, sampling.set, surface);
     if (input !== null) setFixedNode(material, input.property, input.node);
   }
 }

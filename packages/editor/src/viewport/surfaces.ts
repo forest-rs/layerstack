@@ -47,12 +47,12 @@
 //   `MirroredRepeatWrapping`, `clamp` → `ClampToEdgeWrapping`; `black`
 //   (three.js has no border color) and `useMetadata` (a PNG has none) →
 //   clamp and repeat.
-// - `UsdTransform2d` → the texture's `matrix`, set directly
-//   (`matrixAutoUpdate` off): `st' = R(rotation) · S(scale) · st +
-//   translation`, scale first, then a counter-clockwise rotation, as
-//   `UsdTransform2d.osl` computes it; three.js's own offset, repeat and
-//   rotation apply rotation before scale and clockwise, so they are not
-//   used.
+// - `UsdTransform2d` → `st' = R(rotation) · S(scale) · st + translation`,
+//   scale first, then a counter-clockwise rotation, as `UsdTransform2d.osl`
+//   computes it (`coordinateMatrix`, `lookups.ts`): each lookup's matrix
+//   (`channels.ts`), and the texture's `matrix`, set directly
+//   (`matrixAutoUpdate` off), for the maps three.js samples itself (a
+//   plain normal map, a displacement's `r`).
 // - Coordinates: stagehand's buffers carry `primvars:st` as the `uv`
 //   attribute, and the other sets its materials read (`st1`, `uv`), in
 //   the buffer's order (`StagehandMesh.uvSets`), as `uv1` to `uv3`. The
@@ -88,9 +88,9 @@ import type { Wrapping } from "three/webgpu";
 import { udimTiles } from "@forest-rs/layerstack_stagehand";
 import type { MaterialItem, MaterialTexture, MaterialValue, TextureWrap } from "@forest-rs/layerstack_stagehand";
 import { drawLookups, SurfacePhysicalMaterial, SurfaceStandardMaterial } from "./channels.ts";
-import type { SurfaceMaterial } from "./channels.ts";
+import type { LookupSampling, SurfaceMaterial } from "./channels.ts";
 import { imageDecoders } from "./imageDecoders.ts";
-import { needsPhysical, surfaceLookups } from "./lookups.ts";
+import { coordinateMatrix, needsPhysical, surfaceLookups } from "./lookups.ts";
 
 /**
  * Reads an asset's bytes from the host: `null` when it has none. `anchor`
@@ -325,6 +325,20 @@ const FALLBACKS = new Map<string, DataTexture>();
  */
 const USES = new WeakMap<Texture, Map<string, Texture>>();
 
+/**
+ * How a lookup of `texture` samples on a mesh of `channels`: its
+ * {@link use}, its uv set, and its coordinate matrix (its `UsdTransform2d`,
+ * and its UDIM atlas's grid once loaded).
+ */
+export function sampling(store: TextureStore, channels: UvChannels, texture: MaterialTexture, color: boolean): LookupSampling {
+  const image = store.image(texture);
+  return {
+    texture: use(store, channels, texture, color),
+    set: channelOf(texture, channels),
+    matrix: coordinateMatrix(texture.coordinates.transform, image?.columns, image?.rows),
+  };
+}
+
 /** A use of `texture`: its image (or fallback color) with this use's sampling, color space and coordinate transform. */
 export function use(store: TextureStore, channels: UvChannels, texture: MaterialTexture, color: boolean): Texture {
   const image = store.image(texture);
@@ -342,15 +356,8 @@ export function use(store: TextureStore, channels: UvChannels, texture: Material
   }
   const channel = channelOf(texture, channels);
   const srgb = texture.colorSpace === "sRGB" || (texture.colorSpace === "auto" && color);
-  // `UsdTransform2d`: scale, then rotate counter-clockwise, then translate;
-  // a UDIM atlas then scales the tile grid into [0, 1].
-  const transform = texture.coordinates.transform;
-  const rotation = ((transform?.rotation ?? 0) * Math.PI) / 180;
-  const [sx, sy] = transform?.scale ?? [1, 1];
-  const [tx, ty] = transform?.translation ?? [0, 0];
-  const [c, s] = [Math.cos(rotation), Math.sin(rotation)];
-  const [ax, ay] = [1 / image.columns, 1 / image.rows];
-  const matrix = [ax * c * sx, -ax * s * sy, ax * tx, ay * s * sx, ay * c * sy, ay * ty, 0, 0, 1] as const;
+  // `UsdTransform2d`, then a UDIM atlas's grid, for the maps three.js samples itself.
+  const matrix = coordinateMatrix(texture.coordinates.transform, image.columns, image.rows);
   const key = [channel, srgb, texture.wrapS, texture.wrapT, ...matrix].join(" ");
   let uses = USES.get(image.texture);
   if (uses === undefined) {
@@ -455,7 +462,7 @@ export function surfaceMaterial(
     }
     if (transmissive) material.transmission = 1 - constant(record.opacity, 1);
   }
-  drawLookups(material, surface, (lookup) => use(store, options.uvChannels, record.textures[lookup.texture]!, lookup.color));
+  drawLookups(material, surface, (lookup) => sampling(store, options.uvChannels, record.textures[lookup.texture]!, lookup.color));
   if (options.doubleSided) material.side = DoubleSide;
   if (options.highlighted) {
     material.emissive = new Color(0x2f5fd0);

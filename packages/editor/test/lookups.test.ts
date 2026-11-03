@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 // The texture lookups a surface draws: every one `texel * scale + bias`,
-// with its texture's scale and bias, whichever input reads it.
+// with its texture's scale and bias, whichever input reads it, at its `st`
+// moved by its `UsdTransform2d`.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { MaterialItem, MaterialTexture, MaterialValue } from "@forest-rs/layerstack_stagehand";
-import { decodesNormal, surfaceLookups } from "../src/viewport/lookups.ts";
-import type { Vec4 } from "../src/viewport/lookups.ts";
+import { coordinateMatrix, decodesNormal, surfaceLookups } from "../src/viewport/lookups.ts";
+import type { Mat3, Vec4 } from "../src/viewport/lookups.ts";
 
 /** A texture of `scale` and `bias`. */
 function texture(scale: Vec4 = [1, 1, 1, 1], bias: Vec4 = [0, 0, 0, 0]): MaterialTexture {
@@ -136,4 +137,33 @@ test("inputs the material does not draw are not lookups", () => {
   assert.deepEqual(standard.lookups, []);
   // A number read from a texture's rgb is drawn as its fallback.
   assert.deepEqual(surfaceLookups(record({ roughness: lookup(0, "rgb") }, [texture()])).lookups, []);
+});
+
+/** Where `matrix` takes `(u, v)`, rounded so a cosine of 90 degrees is 0. */
+function moved(matrix: Mat3, u: number, v: number): [number, number] {
+  const round = (x: number) => Math.round(x * 1e9) / 1e9 + 0;
+  return [round(matrix[0] * u + matrix[1] * v + matrix[2]), round(matrix[3] * u + matrix[4] * v + matrix[5])];
+}
+
+test("a UsdTransform2d scales, then rotates counter-clockwise, then translates st", () => {
+  const transform = (rotation: number, scale: [number, number], translation: [number, number]) => ({ rotation, scale, translation });
+  assert.deepEqual(moved(coordinateMatrix(null), 0.3, 0.7), [0.3, 0.7]);
+  assert.deepEqual(moved(coordinateMatrix(transform(0, [2, 2], [0, 0])), 0.5, 0.25), [1, 0.5]);
+  assert.deepEqual(moved(coordinateMatrix(transform(90, [1, 1], [0, 0])), 1, 0), [0, 1], "counter-clockwise");
+  assert.deepEqual(moved(coordinateMatrix(transform(0, [1, 1], [0.25, 0])), 0, 0), [0.25, 0]);
+  // (1, 0) scaled to (2, 0), rotated to (0, 2), translated to (0.5, 2);
+  // rotating first would give (0, 1), then (0, 1), then (0.5, 1).
+  assert.deepEqual(moved(coordinateMatrix(transform(90, [2, 1], [0.5, 0])), 1, 0), [0.5, 2]);
+  // As `UsdTransform2d.osl` computes it, at 45 degrees.
+  const [x, y] = [2 * 0.3, 1.5 * 0.7];
+  const [c, s] = [Math.cos(Math.PI / 4), Math.sin(Math.PI / 4)];
+  const expected = moved([1, 0, 0, 0, 1, 0, 0, 0, 1], c * x - s * y + 0.25, s * x + c * y + 0.1);
+  assert.deepEqual(moved(coordinateMatrix(transform(45, [2, 1.5], [0.25, 0.1])), 0.3, 0.7), expected);
+});
+
+test("a UDIM atlas's grid scales the transformed st into [0, 1]", () => {
+  // Tile 1002 of a 2 × 1 atlas covers [1, 2] × [0, 1], the atlas's right half.
+  assert.deepEqual(moved(coordinateMatrix(null, 2, 1), 1.5, 0.5), [0.75, 0.5]);
+  // Tile 1011 of a 1 × 2 atlas, reached by a translation.
+  assert.deepEqual(moved(coordinateMatrix({ rotation: 0, scale: [1, 1], translation: [0, 1] }, 1, 2), 0.5, 0.5), [0.5, 0.75]);
 });

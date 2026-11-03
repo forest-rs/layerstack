@@ -16,10 +16,49 @@
 // a tangent-space normal, normalised (`previewSurface.glslfx`,
 // `perturbFragmentNormal`).
 //
-// This module says which lookups a record draws and with which scale and
-// bias; `channels.ts` builds the three.js nodes that compute them.
+// A lookup reads its texture at its `st`, moved by the `UsdTransform2d`
+// feeding the texture's `st` input, if any: scaled, then rotated
+// counter-clockwise by `rotation` degrees, then translated
+// (UsdPreviewSurface specification, `UsdTransform2d`; `UsdTransform2d.osl`
+// computes `R(rotation) · S(scale) · st + translation` in that order).
+// Each texture has its own: textures reading one primvar reader through
+// different transforms each read their own coordinates.
+//
+// This module says which lookups a record draws, with which scale and
+// bias, and the matrix its coordinates are moved by
+// ({@link coordinateMatrix}); `channels.ts` builds the three.js nodes that
+// compute them.
 
 import type { MaterialItem, MaterialValue } from "@forest-rs/layerstack_stagehand";
+
+/** A 3×3 matrix, row by row, as three.js's `Matrix3.set` takes it. */
+export type Mat3 = readonly [number, number, number, number, number, number, number, number, number];
+
+/** A `UsdTransform2d`'s inputs (stagehand's `TextureTransform`). */
+export interface Transform2d {
+  /** Degrees, counter-clockwise. */
+  readonly rotation: number;
+  readonly scale: readonly [number, number];
+  readonly translation: readonly [number, number];
+}
+
+/**
+ * The matrix taking a lookup's `st` to the coordinates it samples its
+ * image at, as `(u, v, 1)`: `transform` (scale, then rotate
+ * counter-clockwise, then translate, as the header says; identity for
+ * none), then, for a UDIM set drawn as an atlas of `columns` × `rows`
+ * tiles, the tile grid scaled into [0, 1] (tile 1001 + u + 10 v covers
+ * [u, u + 1] × [v, v + 1]). three.js's own offset, repeat and rotation
+ * rotate before scaling, and clockwise, so they are not used.
+ */
+export function coordinateMatrix(transform: Transform2d | null, columns = 1, rows = 1): Mat3 {
+  const rotation = ((transform?.rotation ?? 0) * Math.PI) / 180;
+  const [sx, sy] = transform?.scale ?? [1, 1];
+  const [tx, ty] = transform?.translation ?? [0, 0];
+  const [c, s] = [Math.cos(rotation), Math.sin(rotation)];
+  const [ax, ay] = [1 / columns, 1 / rows];
+  return [ax * c * sx, -ax * s * sy, ax * tx, ay * s * sx, ay * c * sy, ay * ty, 0, 0, 1];
+}
 
 /** Four channels, `r`, `g`, `b`, `a`. */
 export type Vec4 = readonly [number, number, number, number];
@@ -29,8 +68,8 @@ export type LookupChannel = "rgb" | "r" | "g" | "b" | "a";
 
 /**
  * The three.js material property each lookup's texture is set as. The
- * material carries the lookup's scale and bias beside it, as
- * `<map>Scale` and `<map>Bias` (`channels.ts`).
+ * material carries the lookup's scale, bias and coordinate matrix beside
+ * it, as `<map>Scale`, `<map>Bias` and `<map>Transform` (`channels.ts`).
  */
 export type LookupMap =
   | "map"

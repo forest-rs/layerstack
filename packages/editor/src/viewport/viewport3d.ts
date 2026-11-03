@@ -228,7 +228,7 @@ import { lightSetKey, linkedLights } from "./lightLinks.ts";
 import { useSharedRectAreaTables } from "./rectAreaLights.ts";
 import { fixNodes, setFixedNode } from "./fixedNodes.ts";
 import { onRendererLost, sharedRenderer } from "./gpu.ts";
-import { type Box, clipRange, frameBox, reachFrom, sphereOf, viewDirection } from "./framing.ts";
+import { type Box, clipRange, frameBox, orbitFrom, reachFrom, sphereOf, verticalFov, viewDirection } from "./framing.ts";
 import { SkinnedDraw, withSkinning } from "./skinning.ts";
 import { TextureStore, surfaceMaterial, uvChannels } from "./surfaces.ts";
 import { standinGeometry, standinMaterials } from "./standins.ts";
@@ -250,6 +250,9 @@ export interface ClusterCut {
   readonly camera: { readonly position: readonly number[]; readonly projectionY: number; readonly viewportHeight: number; readonly zNear: number };
   readonly view: ClusterView;
 }
+
+/** A stage camera, as the draw list lists it (`UsdGeomCamera`, read by layerstack). */
+type StageCamera = NonNullable<CameraItem["camera"]>;
 
 /** The lit materials the viewport makes: a surface's, a stand-in card's, or a plain color's. */
 type LitMaterial = MeshStandardNodeMaterial;
@@ -544,12 +547,19 @@ export class Viewport {
   /**
    * Looks through the stage camera at `path`, or with `null` through the
    * free camera the orbit controls move. A path the stage has no camera
-   * at draws the free camera until one appears there.
+   * at draws the free camera until one appears there. Leaving a stage
+   * camera for the free camera starts the free camera where the stage
+   * camera was ({@link #takeOver}).
    */
   lookThrough(path: string | null): void {
+    const leaving = path === null ? this.#looking() : null;
     this.#through = path;
-    this.#controls.enabled = this.#looking() === null;
-    this.#draw();
+    try {
+      if (leaving?.camera != null) this.#takeOver(leaving.camera);
+    } finally {
+      this.#controls.enabled = this.#looking() === null;
+      this.#draw();
+    }
   }
 
   /**
@@ -1421,6 +1431,35 @@ export class Viewport {
     } finally {
       this.#controls.enabled = this.#looking() === null;
     }
+  }
+
+  /**
+   * Puts the free camera where the stage camera `stage` is, as the view
+   * fits it to the canvas (`CameraUtilConformWindow`'s `fit`, as
+   * {@link #prepareCamera} does): its position and view direction, its
+   * vertical field of view (from its window, so from its focal length and
+   * aperture), orbiting a point on its view axis ({@link orbitFrom}: its
+   * focus distance, else as far as the scene's center, else part of the
+   * scene's radius) about the stage's up axis. An orthographic camera
+   * keeps the free camera's field of view.
+   */
+  #takeOver(stage: StageCamera): void {
+    const { clientWidth: width, clientHeight: height } = this.#canvas;
+    const fitted = conformCamera(stage, "fit", height > 0 ? width / height : 1);
+    // The view matrix is world to eye, row-vector rows read as three.js's columns; the eye looks down its -z.
+    const world = new Matrix4().fromArray(fitted.view).invert();
+    const position = new Vector3().setFromMatrixPosition(world);
+    const forward = new Vector3().setFromMatrixColumn(world, 2).negate();
+    const takeover = orbitFrom(position.toArray(), forward.toArray(), stage.focusDistance, this.#sceneBounds);
+    if (takeover === null) return;
+    const fov = stage.projection === "perspective" ? verticalFov(fitted.window) : null;
+    if (fov !== null) this.#camera.fov = fov;
+    this.#camera.position.copy(position);
+    this.#camera.near = takeover.near;
+    this.#camera.far = takeover.far;
+    this.#camera.updateProjectionMatrix();
+    this.#controls.target.set(...takeover.target);
+    this.#controls.update();
   }
 
   /**

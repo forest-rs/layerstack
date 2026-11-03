@@ -192,3 +192,51 @@ export function localView(up: UpAxis, world: ArrayLike<number> | null): ViewOrie
     ]);
   return { up: local(inWorld.up), direction: local(inWorld.direction) };
 }
+
+/** Where the free camera takes over from a stage camera ({@link orbitFrom}). */
+export interface Takeover {
+  /** What the free camera orbits about: along the stage camera's view, {@link Takeover.distance} ahead. */
+  readonly target: Vec3;
+  readonly distance: number;
+  readonly near: number;
+  readonly far: number;
+}
+
+/**
+ * What the free camera orbits about when it takes over from a stage
+ * camera at `position` looking along `forward`: a point on its view axis,
+ * at its `focusDistance` when one is authored (> 0), else as far along as
+ * the scene's center is (its projection on the axis), else, with the
+ * center behind it, half the scene's radius (1 with no scene). The
+ * clipping range is {@link clipRange}'s from there. `null` when the
+ * position or direction is not finite.
+ */
+export function orbitFrom(position: Vec3, forward: Vec3, focusDistance: number, scene: Box | null | undefined): Takeover | null {
+  if (!position.every(Number.isFinite) || !forward.every(Number.isFinite) || Math.hypot(...forward) === 0) return null;
+  const axis = normalize(forward);
+  const sphere = sphereOf(scene);
+  let distance = 0;
+  if (focusDistance > 0 && Number.isFinite(focusDistance)) distance = focusDistance;
+  else if (sphere !== null) {
+    const ahead = (sphere.center[0] - position[0]) * axis[0] + (sphere.center[1] - position[1]) * axis[1] + (sphere.center[2] - position[2]) * axis[2];
+    distance = ahead > sphere.radius * 1e-3 ? ahead : sphere.radius / 2;
+  }
+  if (!(distance > 0)) distance = 1;
+  const range = clipRange(distance, reachFrom(position, scene));
+  if (range === null) return null;
+  const target: Vec3 = [position[0] + axis[0] * distance, position[1] + axis[1] * distance, position[2] + axis[2] * distance];
+  return { target, distance, near: range.near, far: range.far };
+}
+
+/**
+ * A perspective camera's vertical field of view in degrees, from its
+ * window at depth 1 (`[left, bottom, right, top]`, `GfFrustum`'s, as
+ * `Camera.window` gives it): the angle between its bottom and top edges.
+ * `null` for a window without height.
+ */
+export function verticalFov(window: ArrayLike<number>): number | null {
+  const bottom = window[1]!;
+  const top = window[3]!;
+  const degrees = ((Math.atan(top) - Math.atan(bottom)) * 180) / Math.PI;
+  return degrees > 0 && degrees < 180 ? degrees : null;
+}

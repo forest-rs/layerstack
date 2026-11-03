@@ -64,7 +64,7 @@ def Xform "World" {
         uniform bool collection:lightLink:includeRoot = false
     }
     def DomeLight_1 "Sky" {
-        asset inputs:texture:file = @sky.exr@
+        asset inputs:texture:file = @./sky.exr@
         token inputs:texture:format = "latlong"
     }
     def CylinderLight "Tube" {
@@ -139,7 +139,9 @@ describe("a draw list's cameras and lights", () => {
       assert.equal(spot.shadowLink.includeRoot, true);
 
       const sky = list.light("/World/Sky")!.geometry as Extract<LightGeometry, { kind: "dome" }>;
-      assert.deepEqual([sky.texture, sky.format, sky.poleAxis], ["sky.exr", "latlong", "scene"]);
+      assert.deepEqual([sky.texture, sky.format, sky.poleAxis], ["./sky.exr", "latlong", "scene"]);
+      // Anchored to the layer authoring it, as a material's texture is.
+      assert.deepEqual([sky.file?.layer, sky.file?.identifier], ["scene.usda", "./sky.exr"]);
 
       const tube = list.light("/World/Tube")!;
       close(tube.emission.sizeFactor, 2 * Math.PI * 0.75 * 4);

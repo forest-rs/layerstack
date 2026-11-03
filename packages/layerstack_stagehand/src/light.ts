@@ -10,6 +10,8 @@
 // `inputs:intensity`, `inputs:exposure`, `inputs:color`,
 // `inputs:colorTemperature`, `inputs:normalize`); see {@link LightEmission}.
 import type { Camera, Prim, Stage, Value } from "@forest-rs/layerstack";
+import { anchorAssetPath, isUdim } from "./material.js";
+import type { TextureFile } from "./material.js";
 import { readMesh } from "./read.js";
 
 /**
@@ -89,12 +91,16 @@ export type LightGeometry =
   /** `inputs:angle`: the angular diameter, in degrees. */
   | { readonly kind: "distant"; readonly angle: number }
   | { readonly kind: "sphere"; readonly radius: number; readonly treatAsPoint: boolean }
-  /** `texture` is `inputs:texture:file` as authored. */
-  | { readonly kind: "rect"; readonly width: number; readonly height: number; readonly texture: string | null }
+  /** `texture` is `inputs:texture:file` as authored, `file` its file anchored to the layer authoring it. */
+  | { readonly kind: "rect"; readonly width: number; readonly height: number; readonly texture: string | null; readonly file: TextureFile | null }
   | { readonly kind: "disk"; readonly radius: number }
   | { readonly kind: "cylinder"; readonly radius: number; readonly length: number; readonly treatAsLine: boolean }
-  /** `poleAxis` is `DomeLight_1`'s, `null` for a `DomeLight`. */
-  | { readonly kind: "dome"; readonly texture: string | null; readonly format: string; readonly poleAxis: string | null }
+  /**
+   * `texture` is `inputs:texture:file` as authored, `file` its file
+   * anchored to the layer authoring it; `poleAxis` is `DomeLight_1`'s,
+   * `null` for a `DomeLight`.
+   */
+  | { readonly kind: "dome"; readonly texture: string | null; readonly file: TextureFile | null; readonly format: string; readonly poleAxis: string | null }
   | { readonly kind: "portal"; readonly width: number; readonly height: number }
   /** The mesh's own faces, drawn as the item of the same prim; `area` is their world-space area. */
   | { readonly kind: "mesh"; readonly area: number }
@@ -337,6 +343,14 @@ export function readLight(
     const value = text(name, "asset");
     return value === "" ? null : value;
   };
+  // A texture's file, anchored to the layer whose opinion it is, as a material's texture's is.
+  const assetFile = (name: string): TextureFile | null => {
+    const assetPath = asset(name);
+    const at = source(name);
+    if (assetPath === null || at === null) return null;
+    const layer = stage.attribute(at)?.explain(time)?.opinions.find((opinion) => opinion.role === "contributed")?.layer.identifier ?? null;
+    return Object.freeze({ assetPath, layer, identifier: anchorAssetPath(assetPath, layer), udim: isUdim(assetPath) });
+  };
   const prim = stage.prim(path)!;
   let geometry: LightGeometry;
   switch (kind) {
@@ -347,7 +361,7 @@ export function readLight(
       geometry = { kind, radius: float("inputs:radius", 0.5), treatAsPoint: boolean("treatAsPoint", false) };
       break;
     case "rect":
-      geometry = { kind, width: float("inputs:width", 1), height: float("inputs:height", 1), texture: asset("inputs:texture:file") };
+      geometry = { kind, width: float("inputs:width", 1), height: float("inputs:height", 1), texture: asset("inputs:texture:file"), file: assetFile("inputs:texture:file") };
       break;
     case "disk":
       geometry = { kind, radius: float("inputs:radius", 0.5) };
@@ -364,6 +378,7 @@ export function readLight(
       geometry = {
         kind,
         texture: asset("inputs:texture:file"),
+        file: assetFile("inputs:texture:file"),
         format: text("inputs:texture:format", "token") ?? "automatic",
         poleAxis: prim.typeName === "DomeLight_1" || prim.isA("DomeLight_1") ? (text("poleAxis", "token") ?? "scene") : null,
       };

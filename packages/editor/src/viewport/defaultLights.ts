@@ -19,7 +19,14 @@
 //   diffuse and specular are `GlfSimpleLight`'s defaults, white at 1, and
 //   its attenuation (1, 0, 0) does not fall off with distance
 //   (`pxr/imaging/glf/simpleLight.cpp`, the constructor). usdview zeroes
-//   its ambient; usdrecord sets it to the scene ambient.
+//   its ambient; usdrecord sets it to the scene ambient. Storm inserts it as
+//   a `simpleLight` sprim (`HdxTaskController::_GetCameraLightType`,
+//   `pxr/imaging/hdx/taskController.cpp:934-936`), and
+//   `HdStLight::_PrepareSimpleLight` scales its diffuse and specular by π
+//   (`_ScaleColor`, `pxr/imaging/hdSt/light.cpp:342-366`, since OpenUSD
+//   commit 06f540dff), "the expected color a white Lambertian surface
+//   would have if one of these colored simple lights was pointed directly
+//   at it": its diffuse irradiance is π, not 1. Its ambient is not scaled.
 // - The camera light does not depend on the stage's lights: it is added
 //   whether or not the stage has any. Storm's `HdxSimpleLightTask` gathers
 //   every light sprim under its include paths, the absolute root by
@@ -38,27 +45,32 @@
 // How Storm shades with them, and the three.js lights that shade the same:
 //
 // - A `UsdPreviewSurface` (`pxr/usd/plugin/usdShaders/shaders/
-//   previewSurface.glslfx`, `evaluateLight`) reflects a light's diffuse
-//   irradiance × `NdotL` × diffuseColor / π, and no ambient at all. A prim
-//   without a material is shaded by `simpleLightingMaterial`
-//   (`pxr/imaging/glf/shaders/simpleLighting.glslfx`): diffuse × `NdotL` ×
+//   previewSurface.glslfx`: `evaluateDirectDiffuse` is 1 / π, line 195;
+//   `evaluateLight`, lines 243 and 286; `evaluateLights`, line 438)
+//   reflects a light's diffuse irradiance × `NdotL` × diffuseColor / π, and
+//   no ambient at all. A prim without a material is shaded by
+//   `simpleLighting.glslfx` (`integrateLightsDefault`,
+//   `pxr/imaging/hdSt/shaders/simpleLighting.glslfx`): diffuse × `NdotL` ×
 //   light diffuse / π too, plus scene ambient × material ambient (0.002,
 //   not scaled by its color) and a Blinn-Phong highlight of 0.1 × `NdotH`³²
 //   / π. three.js (r155 on) shades a `MeshStandardMaterial` with
 //   `BRDF_Lambert`, irradiance × albedo / π, a `PointLight`'s irradiance
 //   being its intensity × `NdotL` (with `decay` 0, constant with
-//   distance). So a `PointLight` of intensity 1 at the camera, decay 0,
+//   distance). So a `PointLight` of intensity π at the camera, decay 0,
 //   reflects off a Lambertian surface what Storm's camera light does, for
-//   every albedo and angle: {@link CAMERA_LIGHT_INTENSITY}.
+//   every albedo and angle: albedo × `NdotL`, a white surface lit head on
+//   white ({@link CAMERA_LIGHT_INTENSITY}).
 // - An `AmbientLight` adds intensity × albedo / π. Storm's ambient term is
 //   0.01 × 0.2 regardless of albedo, and only for prims without a
 //   material; the closest one light does is that term on a white surface:
 //   {@link AMBIENT_INTENSITY} = π × 0.01 × 0.2. It is a twentieth of a
 //   percent of white: kept for fidelity, not visible.
 // - The viewport's AgX tone mapping is left as it is (usdview's default is
-//   sRGB without one). A gray of albedo 0.1 to 0.8 lit head on displays
-//   within 0.045 (of 1) of Storm's sRGB value, a little brighter; saturated
-//   colors desaturate a little.
+//   sRGB without one). Lit head on by the camera light alone, a gray of
+//   albedo 0.1, 0.2, 0.4, 0.6 and 0.8 displays 100, 133, 165, 182 and 194
+//   (of 255) where Storm's sRGB is 89, 124, 170, 203 and 231: darks a
+//   little brighter, lights compressed; saturated colors desaturate a
+//   little.
 // - The default material's highlight is not matched: a draw without a
 //   material is a `MeshStandardMaterial` of roughness 0.7, as before.
 
@@ -73,9 +85,10 @@ export const MATERIAL_SHININESS = 32;
 
 /**
  * The camera light's three.js `PointLight` intensity (candela, decay 0):
- * 1, as `GlfSimpleLight`'s diffuse of 1 shades a surface in Storm.
+ * π, as Storm scales `GlfSimpleLight`'s diffuse of 1 for a simple light
+ * (`HdStLight::_PrepareSimpleLight`).
  */
-export const CAMERA_LIGHT_INTENSITY = 1;
+export const CAMERA_LIGHT_INTENSITY = Math.PI;
 
 /**
  * The `AmbientLight` intensity that adds Storm's scene ambient term

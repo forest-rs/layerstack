@@ -139,7 +139,6 @@ import {
   BufferAttribute,
   BufferGeometry,
   DepthTexture,
-  Frustum,
   IndexNode,
   IndirectStorageBufferAttribute,
   Matrix4,
@@ -201,6 +200,7 @@ import type { ClusterSetData } from "./clusterFile.ts";
 import { PROXY_TRIANGLES, buildProxy } from "./clusterProxies.ts";
 import { setFixedNode } from "./fixedNodes.ts";
 import { RangeArena } from "./rangeArena.ts";
+import { cutViewOf, makeCutView } from "./viewCamera.ts";
 
 /** Anything TSL takes: the node types are too loose to be worth spelling here. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -502,11 +502,10 @@ export class ClusterScene {
   #stats: ClusterStats | null = null;
   #frames = 0;
   #reading = false;
-  /** The last frame's camera and frustum, reused: preparing allocates nothing. */
-  readonly #frustum = new Frustum();
-  readonly #projectionView = new Matrix4();
-  readonly #cameraPosition = uniform(new Vector3());
-  readonly #planes = [0, 1, 2, 3, 4, 5].map(() => uniform(new Vector4()));
+  /** The last frame's view ({@link cutViewOf}), reused: preparing allocates nothing. Its position and planes are the cull's uniforms' values. */
+  readonly #view = makeCutView();
+  readonly #cameraPosition = uniform(this.#view.position);
+  readonly #planes = this.#view.planes.map((plane) => uniform(plane));
   readonly #projectionScale = uniform(1);
   readonly #near = uniform(0.1);
   readonly #pixelError = uniform(1);
@@ -780,23 +779,17 @@ export class ClusterScene {
     if (packed === null || this.residency.draws === 0) return;
     if (this.#ranges.size > 0) this.#upload(renderer, packed);
     const view = this.view;
-    this.#projectionView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-    this.#frustum.setFromProjectionMatrix(this.#projectionView, camera.coordinateSystem);
-    for (let i = 0; i < 6; i++) {
-      const plane = this.#frustum.planes[i]!;
-      this.#planes[i]!.value.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant);
-    }
-    this.#cameraPosition.value.setFromMatrixPosition(camera.matrixWorld);
-    // `CutCamera::projected_error`'s `proj[1][1] / 2 * height`.
+    // The cull's planes and position are the view's own vectors.
+    const viewed = cutViewOf(camera, height, this.#view);
     const cut = this.#cutCamera;
-    cut.projectionY = camera.projectionMatrix.elements[5]!;
+    cut.projectionY = viewed.projectionY;
     cut.viewportHeight = height;
-    cut.zNear = (camera as { near?: number }).near ?? 0.01;
-    cut.position[0] = this.#cameraPosition.value.x;
-    cut.position[1] = this.#cameraPosition.value.y;
-    cut.position[2] = this.#cameraPosition.value.z;
-    this.#projectionScale.value = cut.projectionY * 0.5 * height;
-    this.#near.value = cut.zNear;
+    cut.zNear = viewed.zNear;
+    cut.position[0] = viewed.position.x;
+    cut.position[1] = viewed.position.y;
+    cut.position[2] = viewed.position.z;
+    this.#projectionScale.value = viewed.projectionScale;
+    this.#near.value = viewed.zNear;
     this.#pixelError.value = view.pixelError;
     this.#minPixels.value = view.minInstancePixels;
     this.#proxyPixels.value = view.proxyPixels;
@@ -805,7 +798,7 @@ export class ClusterScene {
       renderer.compute(packed.passes);
     } else {
       const occlusion = this.#occlusion;
-      occlusion.viewProjection.value.copy(this.#projectionView);
+      occlusion.viewProjection.value.copy(viewed.projectionView);
       renderer.compute(packed.firstPasses);
       // What the first phase drew, depth only, then its pyramid, then the rest tested against it.
       const target = renderer.getRenderTarget();

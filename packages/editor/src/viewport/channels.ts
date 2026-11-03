@@ -1,119 +1,193 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-// The texture channel each one-channel map of a three.js node material
-// reads.
+// The three.js nodes that draw a material's texture lookups
+// (`lookups.ts`): each `texel * scale + bias`, per channel, as a
+// `UsdUVTexture` lookup is.
 //
-// three.js reads fixed channels, packed as glTF packs occlusion, roughness
-// and metalness: roughness `g`, metalness `b`, ambient occlusion `r`,
-// clearcoat `r`, clearcoat roughness `g`, displacement `r` (and its node
-// materials an alpha map's `r`, where `WebGLRenderer` read `g`). A
-// `UsdPreviewSurface` input names its own (stagehand's
+// three.js's own maps multiply a texel by a factor (`roughness`,
+// `aoMapIntensity`, ...) and read fixed channels, packed as glTF packs
+// occlusion, roughness and metalness: roughness `g`, metalness `b`,
+// ambient occlusion `r`, clearcoat `r`, clearcoat roughness `g`,
+// displacement `r` (and its node materials an alpha map's `r`). A
+// `UsdPreviewSurface` input names its own channel (stagehand's
 // `MaterialValue.channel`: a float connected to a texture's `rgb` reads
-// `r`, as Storm does). So each map a material reads is given as the
-// material's input node (`roughnessNode`, `metalnessNode`, `aoNode`,
-// `opacityNode`, `clearcoatNode`, `clearcoatRoughnessNode`) the product
-// three.js would make, with the map's channel swizzled in. The nodes read
-// the material's own properties by reference (`materialReference`), so
-// they are made once per map and channel and shared by every material: a
-// material's shader is keyed by its nodes, and materials reading the same
-// channels share one pipeline.
+// `r`, as Storm does), and adds a bias. So each lookup a material draws is
+// given as the material's input node (`colorNode`, `emissiveNode`,
+// `specularColorNode`, `metalnessNode`, `roughnessNode`, `aoNode`,
+// `opacityNode`, `clearcoatNode`, `clearcoatRoughnessNode`, `normalNode`):
+// the map's texel times its scale plus its bias, with the input's channel
+// swizzled in. The nodes read the material's map and its scale and bias
+// (`<map>Scale`, `<map>Bias`, fields of {@link SurfaceStandardMaterial}
+// and {@link SurfacePhysicalMaterial}) by reference (`materialReference`),
+// so they are made once per map and channel and shared by every material:
+// a material's shader is keyed by its nodes, materials reading the same
+// maps and channels share one pipeline, and a scale or bias is a uniform,
+// so changing one builds no shader. The nodes are set as fixed nodes
+// (`fixedNodes.ts`): a material is made again when its record changes,
+// never changed in place.
+//
+// A map's texture is read through a reference three.js does not merge
+// with another reading the same texture: it merges texture uniforms by
+// their texture when it builds a shader, so the shader every material of
+// the shape shares would otherwise read one texture for two maps that held
+// the same one (a packed occlusion-roughness-metallic image) in the first
+// material built.
+//
+// Normals: a lookup that is exactly a normal map's decoding
+// (`decodesNormal`) is left to three.js's normal map, which decodes `* 2 -
+// 1` itself; another is drawn as its scaled and biased value, a
+// tangent-space normal (`normalMap` of the value encoded back into [0,
+// 1]), as Storm reads `normalize(lookup.xyz)`.
 //
 // Displacement moves vertices before instancing in three.js
-// (`NodeMaterial.setupPosition`), and a material's `positionNode` replaces
-// the position after it; a displacement reading another channel than `r`
-// is drawn through `positionNode`, so on an instanced draw its offset is
-// in instance space, scaled by the instance's matrix.
-import { materialReference, normalLocal, positionLocal, texture } from "three/tsl";
-import type { MeshPhysicalNodeMaterial, MeshStandardNodeMaterial } from "three/webgpu";
-
-/** One channel of a texture. */
-export type MapChannel = "r" | "g" | "b" | "a";
-
-/** The one-channel maps whose channel can be chosen. */
-export type ChannelMap = "roughness" | "metalness" | "ao" | "alpha" | "clearcoat" | "clearcoatRoughness" | "displacement";
-
-/** The channel each map reads; a map not named reads three.js's own. */
-export type MapChannels = Partial<Record<ChannelMap, MapChannel>>;
+// (`NodeMaterial.setupPosition`, `x * displacementScale +
+// displacementBias`), and a material's `positionNode` replaces the
+// position after it; a displacement reading another channel than `r` is
+// drawn through `positionNode`, so on an instanced draw its offset is in
+// instance space, scaled by the instance's matrix.
+import { materialReference, nodeObject, normalLocal, normalMap, positionLocal, texture, vec4 } from "three/tsl";
+import { MaterialReferenceNode, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, Vector4 } from "three/webgpu";
+import type { Texture } from "three/webgpu";
+import { setFixedNode } from "./fixedNodes.ts";
+import type { FixedNodeProperty } from "./fixedNodes.ts";
+import { LOOKUP_MAPS } from "./lookups.ts";
+import type { LookupChannel, LookupMap, SurfaceLookups, TextureLookup } from "./lookups.ts";
 
 /** Anything TSL takes: the node types are too loose to be worth spelling here. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type FloatNode = any;
+type AnyNode = any;
 
-/** The texel of a material's map property, by reference, at the map's own coordinates. */
-function mapTexel(property: string): FloatNode {
-  return materialReference(property, "texture");
-}
+/** A lookup's scale and bias on the material, by map: `mapScale`, `mapBias`, ... */
+export type LookupFields = Record<`${LookupMap}${"Scale" | "Bias"}`, Vector4>;
 
-/** The input node of each map and channel, made at its first use. */
-const NODES = new Map<string, FloatNode>();
-
-/** The node three.js would make for `map`'s input, reading `channel`. */
-function inputNode(map: Exclude<ChannelMap, "displacement">, channel: MapChannel): FloatNode {
-  const key = `${map}.${channel}`;
-  let node = NODES.get(key);
-  if (node !== undefined) return node;
-  const factor = (property: string): FloatNode => materialReference(property, "float");
-  switch (map) {
-    case "roughness":
-      node = factor("roughness").mul(mapTexel("roughnessMap")[channel]);
-      break;
-    case "metalness":
-      node = factor("metalness").mul(mapTexel("metalnessMap")[channel]);
-      break;
-    case "ao":
-      node = mapTexel("aoMap")[channel].sub(1).mul(factor("aoMapIntensity")).add(1);
-      break;
-    case "alpha":
-      node = factor("opacity").mul(mapTexel("alphaMap")[channel]);
-      break;
-    case "clearcoat":
-      node = factor("clearcoat").mul(mapTexel("clearcoatMap")[channel]);
-      break;
-    case "clearcoatRoughness":
-      node = factor("clearcoatRoughness").mul(mapTexel("clearcoatRoughnessMap")[channel]);
-      break;
+/** Gives `material` each map's scale (1) and bias (0), as fields three.js copies with the material. */
+function addLookupFields(material: object): void {
+  for (const map of LOOKUP_MAPS) {
+    Object.assign(material, { [`${map}Scale`]: new Vector4(1, 1, 1, 1), [`${map}Bias`]: new Vector4(0, 0, 0, 0) });
   }
-  NODES.set(key, node);
-  return node;
 }
 
 /**
- * Makes `material`'s maps read `channels`. Set after the maps: a map the
- * material does not have is left to three.js (its node is not set).
+ * `MeshStandardNodeMaterial` with each map's scale and bias
+ * ({@link LookupFields}): fields of every instance, so a copy (`clone`)
+ * has them.
  */
-export function readChannels(material: MeshStandardNodeMaterial | MeshPhysicalNodeMaterial, channels: MapChannels): void {
-  for (const [map, channel] of Object.entries(channels) as [ChannelMap, MapChannel][]) {
-    switch (map) {
-      case "roughness":
-        if (material.roughnessMap !== null) material.roughnessNode = inputNode(map, channel);
-        break;
-      case "metalness":
-        if (material.metalnessMap !== null) material.metalnessNode = inputNode(map, channel);
-        break;
-      case "ao":
-        if (material.aoMap !== null) material.aoNode = inputNode(map, channel);
-        break;
-      case "alpha":
-        if (material.alphaMap !== null) material.opacityNode = inputNode(map, channel);
-        break;
-      case "clearcoat":
-        if ("clearcoatMap" in material && material.clearcoatMap !== null) material.clearcoatNode = inputNode(map, channel);
-        break;
-      case "clearcoatRoughness":
-        if ("clearcoatRoughnessMap" in material && material.clearcoatRoughnessMap !== null) {
-          material.clearcoatRoughnessNode = inputNode(map, channel);
-        }
-        break;
-      case "displacement": {
-        const displacement = material.displacementMap;
-        if (displacement === null || channel === "r") break;
-        // Drawn by the position node instead (see the header).
-        material.displacementMap = null;
-        const offset = (texture(displacement) as FloatNode)[channel].mul(material.displacementScale).add(material.displacementBias);
-        material.positionNode = positionLocal.add(normalLocal.normalize().mul(offset));
-        break;
+export class SurfaceStandardMaterial extends MeshStandardNodeMaterial {
+  constructor() {
+    super();
+    addLookupFields(this);
+  }
+}
+
+/** `MeshPhysicalNodeMaterial` with each map's scale and bias, as {@link SurfaceStandardMaterial}. */
+export class SurfacePhysicalMaterial extends MeshPhysicalNodeMaterial {
+  constructor() {
+    super();
+    addLookupFields(this);
+  }
+}
+
+/** A surface material, standard or physical. */
+export type SurfaceMaterial = SurfaceStandardMaterial | SurfacePhysicalMaterial;
+
+/** A material's map by reference, never merged with another map's texture (see the header). */
+class MapReferenceNode extends MaterialReferenceNode {
+  override setNodeType(uniformType: string): void {
+    super.setNodeType(uniformType);
+    (this.node as unknown as { mergeable: boolean }).mergeable = false;
+  }
+}
+
+/** A reference to the material's `property`, of `type`. */
+function ref(property: string, type: string): AnyNode {
+  return materialReference(property, type);
+}
+
+/** Each map's lookup and input nodes, made at their first use. */
+const NODES = new Map<string, AnyNode>();
+
+function cached(key: string, make: () => AnyNode): AnyNode {
+  let node = NODES.get(key);
+  if (node === undefined) {
+    node = make();
+    NODES.set(key, node);
+  }
+  return node;
+}
+
+/** `map`'s lookup: its texel times its scale plus its bias, a `vec4`. */
+function lookupNode(map: LookupMap): AnyNode {
+  return cached(map, () =>
+    (nodeObject(new MapReferenceNode(map, "texture")) as AnyNode).mul(ref(`${map}Scale`, "vec4")).add(ref(`${map}Bias`, "vec4")),
+  );
+}
+
+/** The input node `lookup` is drawn as, and the material property it is set as; `null` for one three.js draws itself. */
+function inputNode(lookup: TextureLookup, surface: SurfaceLookups): { property: FixedNodeProperty; node: AnyNode } | null {
+  const { map } = lookup;
+  const channel = lookup.channel as LookupChannel;
+  const value = lookupNode(map);
+  const one = (property: FixedNodeProperty, make: () => AnyNode = () => value[channel]) => ({ property, node: cached(`${map}.${channel}`, make) });
+  switch (map) {
+    case "map":
+      // Opacity is the lookup's `a` when it reads the diffuse texture's,
+      // else a lookup of its own (or a constant) multiplies 1.
+      return surface.opacityInMap ? { property: "colorNode", node: value } : { property: "colorNode", node: cached("map.rgb1", () => vec4(value.rgb, 1)) };
+    case "emissiveMap":
+      // Times the emissive color and intensity, which highlight a selection.
+      return one("emissiveNode", () => value.rgb.mul(ref("emissive", "color")).mul(ref("emissiveIntensity", "float")));
+    case "specularColorMap":
+      return one("specularColorNode", () => value.rgb);
+    case "metalnessMap":
+      return one("metalnessNode");
+    case "roughnessMap":
+      return one("roughnessNode");
+    case "aoMap":
+      return one("aoNode");
+    case "alphaMap":
+      // Times the material's opacity, which ghosts a selection's neighbors.
+      return one("opacityNode", () => ref("opacity", "float").mul(value[channel]));
+    case "clearcoatMap":
+      return one("clearcoatNode");
+    case "clearcoatRoughnessMap":
+      return one("clearcoatRoughnessNode");
+    case "normalMap":
+      if (surface.normalDecodes) return null;
+      return one("normalNode", () => normalMap(value.xyz.mul(0.5).add(0.5)));
+    case "displacementMap":
+      // Drawn by `drawLookups`.
+      return null;
+  }
+}
+
+/**
+ * Draws `surface`'s lookups on `material`: each map set to its texture
+ * (`textureOf`), its scale and bias set, and its input node set as the
+ * header of this file describes. Set before the material is first drawn.
+ */
+export function drawLookups(material: SurfaceMaterial, surface: SurfaceLookups, textureOf: (lookup: TextureLookup) => Texture): void {
+  const fields = material as unknown as LookupFields & Record<LookupMap, Texture | null>;
+  for (const lookup of surface.lookups) {
+    fields[lookup.map] = textureOf(lookup);
+    fields[`${lookup.map}Scale`].set(...lookup.scale);
+    fields[`${lookup.map}Bias`].set(...lookup.bias);
+    if (lookup.map === "displacementMap") {
+      if (lookup.channel === "r") {
+        // three.js's own displacement is `r * scale + bias`.
+        material.displacementScale = lookup.scale[0];
+        material.displacementBias = lookup.bias[0];
+      } else {
+        // Drawn by the position node instead (see the header), reading the texture directly.
+        const offset = (texture(fields.displacementMap!) as AnyNode)[lookup.channel]
+          .mul(ref("displacementMapScale", "vec4")[lookup.channel])
+          .add(ref("displacementMapBias", "vec4")[lookup.channel]);
+        fields.displacementMap = null;
+        setFixedNode(material, "positionNode", positionLocal.add(normalLocal.normalize().mul(offset)));
       }
+      continue;
     }
+    const input = inputNode(lookup, surface);
+    if (input !== null) setFixedNode(material, input.property, input.node);
   }
 }

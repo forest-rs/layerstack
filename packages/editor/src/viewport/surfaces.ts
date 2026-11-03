@@ -8,33 +8,30 @@
 // or `MeshPhysicalNodeMaterial` when clearcoat, `ior`, the specular
 // workflow or a `transparent` opacity needs it):
 //
-// - `diffuseColor` → `color`; a texture's `rgb` → `map` (with `color` its
-//   `scale`); the `displayColor` primvar → `vertexColors`.
+// - `diffuseColor` → `color`; a texture's `rgb` → `map`; the
+//   `displayColor` primvar → `vertexColors`.
 // - `emissiveColor` → `emissive`; a texture's `rgb` → `emissiveMap`.
 // - `metallic` → `metalness`, a texture → `metalnessMap`; `roughness` →
 //   `roughness`, a texture → `roughnessMap`; `occlusion`: a texture →
-//   `aoMap`. Each map reads the input's channel (three.js's own are the
-//   packed occlusion-roughness-metallic `r`, `g`, `b`; `readChannels`
-//   sets the material's input node for another). The texture's `scale` on that
-//   channel multiplies the factor.
+//   `aoMap`. Each map reads the input's channel.
 // - `useSpecularWorkflow` 1 → `metalness` 0 and `specularColor` (or a
 //   texture's `rgb` as `specularColorMap`), `specularIntensity` 1.
 // - `clearcoat`, `clearcoatRoughness` → `clearcoat`, `clearcoatRoughness`
 //   (maps, any channel). `ior` → `ior` (three.js clamps it to [1, 2.333]).
-// - `normal`: a texture's `rgb` → `normalMap`. The spec has the texture
-//   decode tangent-space normals itself, `scale` (2, 2, 2, 1) and `bias`
-//   (-1, -1, -1, 0); three.js decodes `* 2 - 1` in its shader, so a map
-//   with exactly that scale and bias is used as is, and another is not
-//   used.
+// - `normal`: a texture's `rgb` → `normalMap`, a tangent-space normal.
 // - `displacement`: a texture → `displacementMap` (three.js moves
 //   vertices, so it shows on dense meshes only); a constant is ignored.
+// - Every texture lookup is `texel * scale + bias`, per channel, as
+//   `UsdUVTexture` defines it: which lookups a record draws is
+//   `lookups.ts`, and the nodes that draw them, with the scale and bias as
+//   uniforms, `channels.ts`.
 // - Opacity (`AlphaMode`): `mask` → `alphaTest` at `opacityThreshold`,
 //   opaque above it; `blend` with `presence` → `transparent` with
 //   `opacity`, which scales the whole response as `presence` does;
 //   `blend` with `transparent` (opacity scales only the diffuse response,
 //   reflections stay) → `MeshPhysicalNodeMaterial.transmission = 1 - opacity`,
 //   three.js's closest model. A textured opacity reads the `a` of the
-//   diffuse texture through `map`, or another lookup through `alphaMap`.
+//   diffuse lookup through `map`, or another lookup through `alphaMap`.
 //
 // Textures: `file`'s identifier is fetched from the stage's asset loop's
 // host and decoded off the main thread (`createImageBitmap` in a worker,
@@ -69,7 +66,9 @@
 //   atlas canvas, a column per tile number's last digit and a row per ten,
 //   and the texture matrix scales `st` into it: tile 1001 + u + 10 v covers
 //   [u, u + 1] × [v, v + 1].
-// - A texture that cannot be read draws as its `fallback`.
+// - A texture that cannot be read (or is still loading) draws as its
+//   `fallback`, scaled and biased as its texels would be, as Storm does;
+//   the fallback is one 8-bit texel, so it is clamped to [0, 1].
 import {
   CanvasTexture,
   ClampToEdgeWrapping,
@@ -77,7 +76,6 @@ import {
   DataTexture,
   DoubleSide,
   MeshPhysicalNodeMaterial,
-  MeshStandardNodeMaterial,
   MirroredRepeatWrapping,
   NoColorSpace,
   RGBAFormat,
@@ -89,9 +87,10 @@ import {
 import type { Wrapping } from "three/webgpu";
 import { udimTiles } from "@forest-rs/layerstack_stagehand";
 import type { MaterialItem, MaterialTexture, MaterialValue, TextureWrap } from "@forest-rs/layerstack_stagehand";
-import { readChannels } from "./channels.ts";
+import { drawLookups, SurfacePhysicalMaterial, SurfaceStandardMaterial } from "./channels.ts";
+import type { SurfaceMaterial } from "./channels.ts";
 import { imageDecoders } from "./imageDecoders.ts";
-import type { ChannelMap, MapChannels } from "./channels.ts";
+import { needsPhysical, surfaceLookups } from "./lookups.ts";
 
 /**
  * Reads an asset's bytes from the host: `null` when it has none. `anchor`
@@ -402,12 +401,6 @@ function fallbackChannel(record: MaterialItem, value: MaterialValue<number>, oth
   return value.channel === "rgb" ? otherwise : texture.fallback["rgba".indexOf(value.channel)]!;
 }
 
-/** The scale of a texture lookup's channel, else 1. */
-function channelScale(record: MaterialItem, value: MaterialValue<number>): number {
-  if (value.kind !== "texture" || value.channel === "rgb") return 1;
-  return record.textures[value.texture]!.scale["rgba".indexOf(value.channel)]!;
-}
-
 /**
  * A three.js material for `record` on a draw (`vertexColors` when the
  * buffer has colors for a `displayColor` primvar; its textures sampling
@@ -418,64 +411,29 @@ export function surfaceMaterial(
   record: MaterialItem,
   store: TextureStore,
   options: { readonly vertexColors: boolean; readonly doubleSided: boolean; readonly highlighted: boolean; readonly uvChannels: UvChannels },
-): MeshStandardNodeMaterial | MeshPhysicalNodeMaterial {
+): SurfaceMaterial {
   const blend = record.alpha.kind === "blend" ? record.alpha : null;
   const transmissive = blend !== null && !blend.presence && record.opacity.kind === "constant";
-  const physical =
-    transmissive ||
-    record.useSpecularWorkflow ||
-    constant(record.clearcoat, 0) > 0 ||
-    record.clearcoat.kind === "texture" ||
-    constant(record.ior, 1.5) !== 1.5;
-  const material = physical ? new MeshPhysicalNodeMaterial() : new MeshStandardNodeMaterial();
-  const map = (value: MaterialValue<unknown>, color: boolean) =>
-    value.kind === "texture" ? use(store, options.uvChannels, record.textures[value.texture]!, color) : null;
-  // Diffuse: a constant, a texture's rgb (tinted by its scale), or displayColor.
+  const material = needsPhysical(record) ? new SurfacePhysicalMaterial() : new SurfaceStandardMaterial();
+  const surface = surfaceLookups(record);
+  const drawn = new Set(surface.lookups.map((lookup) => lookup.map));
+  // Diffuse: a constant, a texture lookup (`map`), or displayColor.
   const diffuse = record.diffuseColor;
-  if (diffuse.kind === "texture") {
-    material.map = map(diffuse, true);
-    const [r, g, b] = record.textures[diffuse.texture]!.scale;
-    material.color.setRGB(r!, g!, b!);
-  } else if (diffuse.kind === "primvar") {
+  if (diffuse.kind === "primvar") {
     material.vertexColors = options.vertexColors && diffuse.name === "displayColor";
     const [r, g, b] = material.vertexColors ? [1, 1, 1] : diffuse.fallback;
     material.color.setRGB(r, g, b);
-  } else {
+  } else if (diffuse.kind === "constant") {
     material.color.setRGB(...(diffuse.value as [number, number, number]));
   }
-  // Emission.
+  // Emission: a lookup times the emissive color, white but for a selection.
   const emissive = record.emissiveColor;
-  if (emissive.kind === "texture") {
-    material.emissiveMap = map(emissive, true);
-    material.emissive.setRGB(1, 1, 1);
-  } else {
-    material.emissive.setRGB(...(constant(emissive, [0, 0, 0] as const) as [number, number, number]));
-  }
-  // One-channel maps, each reading the input's channel (`readChannels`).
-  const reads: MapChannels = {};
-  const channel = (value: MaterialValue<number>, read: ChannelMap) => {
-    if (value.kind !== "texture" || value.channel === "rgb") return null;
-    reads[read] = value.channel;
-    return map(value, false);
-  };
-  material.metalnessMap = channel(record.metallic, "metalness");
-  material.metalness = record.useSpecularWorkflow
-    ? 0
-    : material.metalnessMap !== null
-      ? channelScale(record, record.metallic)
-      : constant(record.metallic, fallbackChannel(record, record.metallic, 0));
-  material.roughnessMap = channel(record.roughness, "roughness");
-  material.roughness =
-    material.roughnessMap !== null ? channelScale(record, record.roughness) : constant(record.roughness, fallbackChannel(record, record.roughness, 0.5));
-  material.aoMap = channel(record.occlusion, "ao");
-  if (material.aoMap !== null) material.aoMapIntensity = channelScale(record, record.occlusion);
-  // Normals: a map that decodes as three.js does.
-  if (record.normal.kind === "texture") {
-    const texture = record.textures[record.normal.texture]!;
-    const decodes = texture.scale.slice(0, 3).every((v) => v === 2) && texture.bias.slice(0, 3).every((v) => v === -1);
-    if (decodes) material.normalMap = use(store, options.uvChannels, texture, false);
-  }
-  material.displacementMap = channel(record.displacement, "displacement");
+  if (emissive.kind === "texture") material.emissive.setRGB(1, 1, 1);
+  else material.emissive.setRGB(...(constant(emissive, [0, 0, 0] as const) as [number, number, number]));
+  // One-channel inputs: a lookup's channel, else the constant (or the
+  // fallback of a texture three.js cannot read).
+  material.metalness = record.useSpecularWorkflow ? 0 : constant(record.metallic, fallbackChannel(record, record.metallic, 0));
+  material.roughness = constant(record.roughness, fallbackChannel(record, record.roughness, 0.5));
   // Opacity.
   if (record.alpha.kind === "mask") {
     material.alphaTest = record.alpha.threshold;
@@ -484,25 +442,20 @@ export function surfaceMaterial(
     material.opacity = constant(record.opacity, 1);
     material.depthWrite = false;
   }
-  const opacity = record.opacity;
-  if (opacity.kind === "texture" && !(diffuse.kind === "texture" && opacity.texture === diffuse.texture && opacity.channel === "a")) {
-    material.alphaMap = channel(opacity, "alpha");
-  }
   if (material instanceof MeshPhysicalNodeMaterial) {
     material.ior = Math.min(2.333, Math.max(1, constant(record.ior, 1.5)));
-    material.clearcoat = constant(record.clearcoat, record.clearcoat.kind === "texture" ? channelScale(record, record.clearcoat) : 0);
-    material.clearcoatMap = channel(record.clearcoat, "clearcoat");
-    material.clearcoatRoughness = constant(record.clearcoatRoughness, 0.01);
-    material.clearcoatRoughnessMap = channel(record.clearcoatRoughness, "clearcoatRoughness");
+    // A clearcoat lookup's value is drawn whole (three.js reads clearcoat
+    // only where `clearcoat` is above 0).
+    material.clearcoat = drawn.has("clearcoatMap") ? 1 : constant(record.clearcoat, fallbackChannel(record, record.clearcoat, 0));
+    material.clearcoatRoughness = constant(record.clearcoatRoughness, fallbackChannel(record, record.clearcoatRoughness, 0.01));
     if (record.useSpecularWorkflow) {
       material.specularIntensity = 1;
       const specular = record.specularColor;
-      if (specular.kind === "texture") material.specularColorMap = map(specular, true);
-      else material.specularColor.setRGB(...(constant(specular, [0, 0, 0] as const) as [number, number, number]));
+      if (specular.kind !== "texture") material.specularColor.setRGB(...(constant(specular, [0, 0, 0] as const) as [number, number, number]));
     }
     if (transmissive) material.transmission = 1 - constant(record.opacity, 1);
   }
-  readChannels(material, reads);
+  drawLookups(material, surface, (lookup) => use(store, options.uvChannels, record.textures[lookup.texture]!, lookup.color));
   if (options.doubleSided) material.side = DoubleSide;
   if (options.highlighted) {
     material.emissive = new Color(0x2f5fd0);

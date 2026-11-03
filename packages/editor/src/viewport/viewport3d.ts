@@ -28,34 +28,21 @@
 // the outline) draws through one view camera that takes its matrices each
 // frame (`viewCamera.ts`, which says why).
 //
-// Lights: `UsdLux` emission is luminance in nits (cd/m²); stagehand's
-// `LightItem.emission.radiance` is `color * blackbody * intensity *
-// 2^exposure / sizeFactor` per channel. Since r155, three.js lights are in
-// physical units (`physicallyCorrectLights` is gone: always on): a
-// `PointLight` or `SpotLight` in candela (cd, falling off as 1/d²), a
-// `DirectionalLight` in lux (lx), a `RectAreaLight` in nits, a
-// `HemisphereLight` as the irradiance (lx) it adds, and a Lambertian
-// surface reflects irradiance × albedo / π. Each light's color is its
-// radiance divided by its largest channel, its intensity that channel
-// times:
+// Lights: as Storm draws them (`sceneLights.ts`, after
+// `HdStLight::_ApproximateAreaLight`): each `UsdLux` light but a dome is
+// one three.js light whose intensity is the irradiance Storm gives it
+// (color × intensity × 2^exposure, × its authored area, or a distant
+// light's cone's solid angle, unless normalized), in three.js's physical
+// units (since r155): a `DirectionalLight`'s intensity is its irradiance,
+// a `PointLight`'s or `SpotLight`'s (decay 2) its intensity / d², and a
+// Lambertian surface reflects irradiance × albedo / π, as a
+// `UsdPreviewSurface` does in Storm.
 //
-// - `SphereLight` → `PointLight`: the sphere's projected area, a quarter
-//   of its world surface area (luminous intensity = luminance × projected
-//   area). `treatAsPoint` changes nothing: a point light either way.
-// - `DiskLight` → `SpotLight` along -Z: the disk's world area (its
-//   intensity on its axis); `ShapingAPI`'s cone angle is the spot's angle
-//   and its softness the penumbra (`focus` and IES profiles are not
-//   drawn). Without `ShapingAPI`, a 90° spot (a hemisphere).
-// - `CylinderLight` → `PointLight`: its side's projected area across its
-//   axis (`2 r length`, its world side area / π).
-// - `RectLight` → `RectAreaLight` facing -Z, its width and height scaled
-//   by the transform: the radiance itself (its `texture:file` is not
-//   loaded). Every rect light shades with one shared pair of lookup
-//   tables (`rectAreaLights.ts`), not two per light, per object.
-// - `DistantLight` → `DirectionalLight` along -Z: the illuminance of a disk
-//   of the light's angular size, radiance × π sin²(angle / 2) (the
-//   `sizeFactor` `UsdLux` normalizes by, so a normalized light's intensity
-//   is its illuminance in lux), or the radiance itself at angle 0.
+// - `DistantLight` → `DirectionalLight` along -Z.
+// - `SphereLight`, `CylinderLight` → `PointLight`.
+// - `RectLight`, `DiskLight` → `SpotLight` along -Z of `ShapingAPI`'s cone
+//   angle (90° without one), as Storm approximates both (`focus`, IES
+//   profiles and a rect's `texture:file` are not drawn).
 // - `DomeLight` → `HemisphereLight`: a uniform dome of luminance L gives
 //   a surface facing its pole π L of irradiance; a `latlong` texture's
 //   upper and lower halves color its sky and ground (`domeLights.ts`).
@@ -216,8 +203,6 @@ import {
   PerspectiveCamera,
   PointLight,
   PointsNodeMaterial,
-  Quaternion,
-  RectAreaLight,
   RenderTarget,
   Scene,
   Skeleton,
@@ -229,13 +214,13 @@ import {
 import type { LightsNode, WebGPURenderer } from "three/webgpu";
 import { attribute, instanceIndex, lights, materialColor, max, positionView, renderGroup, screenDPR, uniform, varying, vec4 } from "three/tsl";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { conformCamera, lightSizeFactor, vertexPositions } from "@forest-rs/layerstack_stagehand";
+import { conformCamera, vertexPositions } from "@forest-rs/layerstack_stagehand";
 import type { BufferCost, CameraItem, LightItem, MaterialItem, MeshVertices, VertexAttribute } from "@forest-rs/layerstack_stagehand";
 import { PickIds, pickOrder, pickWindow, readIndex, unpackPickId } from "./picking.ts";
 import { DEFAULT_LIGHT_SETTINGS, defaultLights, type LightSettings } from "./defaultLights.ts";
 import { DrawBundles, type BundleCounts } from "./bundles.ts";
 import { lightSetKey, linkedLights } from "./lightLinks.ts";
-import { useSharedRectAreaTables } from "./rectAreaLights.ts";
+import { stormLight } from "./sceneLights.ts";
 import { fixNodes, setFixedNode } from "./fixedNodes.ts";
 import { onRendererLost, sharedRenderer } from "./gpu.ts";
 import { type Box, clipRange, frameBox, orbitFrom, reachFrom, sphereOf, verticalFov, viewDirection } from "./framing.ts";
@@ -397,7 +382,6 @@ export class Viewport {
     this.#renderer = renderer;
     this.#target = new CanvasTarget(canvas);
     this.#target.setPixelRatio(window.devicePixelRatio);
-    useSharedRectAreaTables();
     this.#scene.add(this.#cameraLight, this.#ambient);
     this.#draws = new DrawBundles<Drawn>(
       this.#scene,
@@ -2218,61 +2202,39 @@ class Picker {
  * file states: the light, and a directional or spot light's target.
  */
 function threeLights(light: LightItem): Object3D[] {
-  if (light.hidden || light.kind === "portal") return [];
-  const radiance = light.emission.radiance;
-  const peak = Math.max(...radiance);
-  if (!(peak > 0)) return [];
-  const color = new Color().setRGB(radiance[0] / peak, radiance[1] / peak, radiance[2] / peak);
+  const storm = stormLight(light);
+  if (storm === null) return [];
+  const color = new Color().setRGB(...storm.color);
   const position = new Vector3(...light.position);
   const direction = new Vector3(...light.direction);
-  // The light's area in world space: `sizeFactor` as `normalize` would make it.
-  const area = lightSizeFactor(light.geometry, light.matrix);
   const aimed = (object: DirectionalLight | SpotLight): Object3D[] => {
     object.target.position.copy(position).add(direction);
     return [object, object.target];
   };
-  switch (light.geometry.kind) {
-    case "sphere":
-    case "cylinder": {
-      const projected = light.geometry.kind === "sphere" ? area / 4 : area / Math.PI;
-      const point = new PointLight(color, peak * projected, 0, 2);
+  switch (storm.kind) {
+    case "point": {
+      const point = new PointLight(color, storm.intensity, 0, 2);
       point.position.copy(position);
       return [point];
     }
-    case "disk": {
-      const shaping = light.shaping;
-      const angle = Math.min(Math.PI / 2, ((shaping?.coneAngle ?? 90) * Math.PI) / 180);
-      const spot = new SpotLight(color, peak * area, 0, angle, Math.min(1, Math.max(0, shaping?.coneSoftness ?? 0)), 2);
+    case "spot": {
+      const spot = new SpotLight(color, storm.intensity, 0, storm.angle, 0, 2);
       spot.position.copy(position);
       return aimed(spot);
     }
-    case "rect": {
-      const translation = new Vector3();
-      const rotation = new Quaternion();
-      const scale = new Vector3();
-      new Matrix4().fromArray(light.matrix).decompose(translation, rotation, scale);
-      const rect = new RectAreaLight(color, peak, light.geometry.width * Math.abs(scale.x), light.geometry.height * Math.abs(scale.y));
-      rect.position.copy(translation);
-      rect.quaternion.copy(rotation);
-      return [rect];
-    }
-    case "distant": {
-      const sun = new DirectionalLight(color, peak * area);
+    case "directional": {
+      const sun = new DirectionalLight(color, storm.intensity);
       sun.position.copy(position).sub(direction);
       return aimed(sun);
     }
     case "dome": {
       // Its sky toward the dome's pole (`DomeLight_1`'s `poleAxis` Z, else its +Y), colored by its texture once loaded (`domeLights.ts`).
-      const dome = new HemisphereLight(color, color, Math.PI * peak);
-      const pole = (light.geometry.poleAxis === "Z" ? new Vector3(0, 0, 1) : new Vector3(0, 1, 0)).transformDirection(new Matrix4().fromArray(light.matrix));
+      const dome = new HemisphereLight(color, color, Math.PI * storm.intensity);
+      const pole = (light.geometry.kind === "dome" && light.geometry.poleAxis === "Z" ? new Vector3(0, 0, 1) : new Vector3(0, 1, 0)).transformDirection(
+        new Matrix4().fromArray(light.matrix),
+      );
       if (Number.isFinite(pole.x + pole.y + pole.z) && pole.lengthSq() > 0) dome.position.copy(pole);
       return [dome];
     }
-    // A portal only guides a dome's light; three.js has no light of a
-    // mesh's shape, so a mesh or geometry light is not drawn as one.
-    case "portal":
-    case "mesh":
-    case "geometry":
-      return [];
   }
 }

@@ -85,11 +85,9 @@ describe("reloading", () => {
     const [changes] = heard;
     // OpenUSD: info-only `/` (the layer read again) and `/B.y`.
     assert.deepEqual(changes!.resynced, []);
-    assert.deepEqual(changes!.changedInfoOnly, ["/", "/B"]);
-    assert.deepEqual(
-      changes!.properties.map((prim) => [prim.prim, prim.fields.map((field) => field.property)]),
-      [["/B", ["y"]]],
-    );
+    assert.deepEqual(changes!.changedInfoOnly, ["/"]);
+    assert.deepEqual(changes!.primFields, []);
+    assert.deepEqual(changes!.changedProperties, [{ property: "/B.y", field: "default", metadata: null }]);
     assert.equal(stage.isDirty(named(stage, "sub.usda")), false);
   });
 
@@ -124,7 +122,10 @@ describe("reloading", () => {
     assert.deepEqual(result.reloaded, [stage.root]);
     assert.equal(double(stage, "/A.x"), 1);
     assert.equal(stage.isDirty(stage.root), false);
-    assert.deepEqual(heard.map((changes) => changes.changedInfoOnly), [["/", "/A"]]);
+    assert.deepEqual(
+      heard.map((changes) => [changes.changedInfoOnly, changes.changedProperties.map((change) => change.property)]),
+      [[["/"], ["/A.x"]]],
+    );
   });
 
   it("reloads chosen layers, forced or not", async () => {

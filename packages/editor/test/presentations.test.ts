@@ -227,7 +227,7 @@ describe("skeleton joints", () => {
 describe("prim revisions", () => {
   it("change only when a recomposition reaches the prim", async () => {
     const { primRevision, reaches } = await import("../src/model/revisions.ts");
-    const none = { created: [], removed: [], resynced: [], changedInfoOnly: [], properties: [], resyncedProperties: [], mutedLayers: [], unmutedLayers: [], mutedIdentifiers: [], unmutedIdentifiers: [] } as { readonly [key: string]: readonly string[] };
+    const none = { created: [], removed: [], resynced: [], changedInfoOnly: [], primFields: [], changedProperties: [], resyncedProperties: [], mutedLayers: [], unmutedLayers: [], mutedIdentifiers: [], unmutedIdentifiers: [] } as { readonly [key: string]: readonly unknown[] };
     const changeLog: { cause: string; changes: typeof none }[] = [];
     const session = { changeLog } as unknown as Parameters<typeof primRevision>[0];
     assert.equal(primRevision(session, "/World/Rock"), 0);

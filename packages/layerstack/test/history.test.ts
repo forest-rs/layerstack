@@ -264,7 +264,11 @@ describe("UndoHistory", () => {
     history.record("spin", apply(stage, set("/World.spin", 1)));
     history.record("radius", apply(stage, set("/World/Rock.radius", 4)));
     const unwound = history.unwindTo(mark);
-    assert.deepEqual(unwound?.changes.changedInfoOnly, ["/World", "/World/Rock"]);
+    assert.deepEqual(unwound?.changes.changedInfoOnly, []);
+    assert.deepEqual(
+      unwound?.changes.changedProperties.map((change) => change.property),
+      ["/World.spin", "/World/Rock.radius"],
+    );
     assert.equal(bytes(stage), afterSize);
     assert.deepEqual(history.undoSteps.map((step) => step.label), ["size"]);
     assert.equal(history.canRedo, false, "unwound steps are forgotten");

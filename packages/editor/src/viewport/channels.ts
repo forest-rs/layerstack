@@ -52,15 +52,31 @@
 // tangent-space normal (`normalMap` of the value encoded back into [0,
 // 1]), as Storm reads `normalize(lookup.xyz)`.
 //
+// Opacity under `opacityMode` `transparent` scales only the diffuse
+// response, as Storm's `UsdPreviewSurface` does (`previewSurface.glslfx`,
+// `surfaceShader`: `diffuseColor *= opacity` before the lights are
+// evaluated, and the lit color returned unscaled with `opacity` as its
+// alpha), which Storm composites as premultiplied color (the OIT resolve
+// adds each fragment's color under `1 - alpha` of those in front,
+// `oitResolveImageShader.glslfx`, and blends the result `One,
+// OneMinusSrcAlpha`, `oitResolveTask.cpp`). A material with
+// `opacityScalesDiffuse` draws the same: its diffuse color is scaled by its
+// opacity before lighting, so the specular response, a metal's tint of it
+// and the emission are not, and it blends premultiplied
+// (`premultipliedAlpha`, `One, OneMinusSrcAlpha`) without three.js
+// premultiplying its output again. Opacity stays the material's uniform or
+// lookup; the flag is part of the shader's cache key, so only the mode
+// chooses a pipeline.
+//
 // Displacement moves vertices before instancing in three.js
 // (`NodeMaterial.setupPosition`, `x * displacementScale +
 // displacementBias`), and a material's `positionNode` replaces the
 // position after it; a displacement reading another channel than `r` is
 // drawn through `positionNode`, so on an instanced draw its offset is in
 // instance space, scaled by the instance's matrix.
-import { materialReference, nodeObject, normalLocal, normalMap, positionLocal, texture, uv, vec3, vec4 } from "three/tsl";
+import { diffuseColor, materialReference, nodeObject, normalLocal, normalMap, positionLocal, texture, uv, vec3, vec4 } from "three/tsl";
 import { MaterialReferenceNode, Matrix3, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, Vector4 } from "three/webgpu";
-import type { Texture } from "three/webgpu";
+import type { Node, NodeBuilder, Texture } from "three/webgpu";
 import { setFixedNode } from "./fixedNodes.ts";
 import type { FixedNodeProperty } from "./fixedNodes.ts";
 import { LOOKUP_MAPS } from "./lookups.ts";
@@ -80,23 +96,57 @@ function addLookupFields(material: object): void {
   }
 }
 
+/** Scales the diffuse color by its opacity (`diffuseColor.a`, the material's opacity times its lookup's), as the header says. */
+function scaleDiffuseByOpacity(): void {
+  diffuseColor.rgb.assign(diffuseColor.rgb.mul(diffuseColor.a));
+}
+
 /**
  * `MeshStandardNodeMaterial` with each map's scale, bias and coordinate matrix
  * ({@link LookupFields}): fields of every instance, so a copy (`clone`)
  * has them.
  */
 export class SurfaceStandardMaterial extends MeshStandardNodeMaterial {
+  /**
+   * Whether opacity scales only the diffuse response (`opacityMode`
+   * `transparent`): the diffuse color is scaled by it before lighting and
+   * the output is premultiplied as it is; set with `transparent` and
+   * `premultipliedAlpha` (see the header).
+   */
+  opacityScalesDiffuse = false;
+
   constructor() {
     super();
     addLookupFields(this);
+  }
+
+  override setupDiffuseColor(builder: NodeBuilder): void {
+    super.setupDiffuseColor(builder);
+    if (this.opacityScalesDiffuse) scaleDiffuseByOpacity();
+  }
+
+  override setupPremultipliedAlpha(builder: NodeBuilder, outputNode: Node): Node {
+    return this.opacityScalesDiffuse ? outputNode : super.setupPremultipliedAlpha(builder, outputNode);
   }
 }
 
 /** `MeshPhysicalNodeMaterial` with each map's scale, bias and coordinate matrix, as {@link SurfaceStandardMaterial}. */
 export class SurfacePhysicalMaterial extends MeshPhysicalNodeMaterial {
+  /** As {@link SurfaceStandardMaterial.opacityScalesDiffuse}. */
+  opacityScalesDiffuse = false;
+
   constructor() {
     super();
     addLookupFields(this);
+  }
+
+  override setupDiffuseColor(builder: NodeBuilder): void {
+    super.setupDiffuseColor(builder);
+    if (this.opacityScalesDiffuse) scaleDiffuseByOpacity();
+  }
+
+  override setupPremultipliedAlpha(builder: NodeBuilder, outputNode: Node): Node {
+    return this.opacityScalesDiffuse ? outputNode : super.setupPremultipliedAlpha(builder, outputNode);
   }
 }
 

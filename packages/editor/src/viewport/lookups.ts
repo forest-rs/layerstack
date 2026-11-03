@@ -134,14 +134,11 @@ export interface SurfaceLookups {
 
 /**
  * Whether a record is drawn with `MeshPhysicalNodeMaterial`: for
- * clearcoat, an `ior` other than 1.5, the specular workflow, or a
- * `transparent` blend of constant opacity (drawn as transmission).
+ * clearcoat, an `ior` other than 1.5, or the specular workflow.
  */
 export function needsPhysical(record: MaterialItem): boolean {
-  const blend = record.alpha.kind === "blend" ? record.alpha : null;
-  const transmissive = blend !== null && !blend.presence && record.opacity.kind === "constant";
   const constant = <T>(value: MaterialValue<T>, fallback: T): T => (value.kind === "constant" ? value.value : fallback);
-  return transmissive || record.useSpecularWorkflow || constant(record.clearcoat, 0) > 0 || record.clearcoat.kind === "texture" || constant(record.ior, 1.5) !== 1.5;
+  return record.useSpecularWorkflow || constant(record.clearcoat, 0) > 0 || record.clearcoat.kind === "texture" || constant(record.ior, 1.5) !== 1.5;
 }
 
 /** Whether a texture's scale and bias are exactly a normal map's decoding on `rgb`. */

@@ -1802,6 +1802,9 @@ function subsetMaterials(
       material.transparent = true;
       material.opacity = 0.15;
       material.depthWrite = false;
+      // Faded whole, highlights too, whatever the surface's `opacityMode`.
+      if ("opacityScalesDiffuse" in material) material.opacityScalesDiffuse = false;
+      material.premultipliedAlpha = false;
     }
   });
   return each;

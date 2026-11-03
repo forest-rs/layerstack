@@ -6,7 +6,7 @@
 //
 // The mapping, input by input (`MaterialItem` → `MeshStandardNodeMaterial`,
 // or `MeshPhysicalNodeMaterial` when clearcoat, `ior`, the specular
-// workflow or a `transparent` opacity needs it):
+// workflow needs it):
 //
 // - `diffuseColor` → `color`; a texture's `rgb` → `map`; the
 //   `displayColor` primvar → `vertexColors`.
@@ -29,9 +29,11 @@
 //   opaque above it; `blend` with `presence` → `transparent` with
 //   `opacity`, which scales the whole response as `presence` does;
 //   `blend` with `transparent` (opacity scales only the diffuse response,
-//   reflections stay) → `MeshPhysicalNodeMaterial.transmission = 1 - opacity`,
-//   three.js's closest model. A textured opacity reads the `a` of the
-//   diffuse lookup through `map`, or another lookup through `alphaMap`.
+//   reflections and emission stay) → `transparent` with `opacity`,
+//   `opacityScalesDiffuse` and `premultipliedAlpha`, Storm's composition
+//   (`channels.ts`). A textured opacity reads the `a` of the diffuse lookup
+//   through `map`, or another lookup through `alphaMap`; under either mode
+//   it is drawn as a constant is.
 //
 // Textures: `file`'s identifier is fetched from the stage's asset loop's
 // host and decoded off the main thread (`createImageBitmap` in a worker,
@@ -420,7 +422,6 @@ export function surfaceMaterial(
   options: { readonly vertexColors: boolean; readonly doubleSided: boolean; readonly highlighted: boolean; readonly uvChannels: UvChannels },
 ): SurfaceMaterial {
   const blend = record.alpha.kind === "blend" ? record.alpha : null;
-  const transmissive = blend !== null && !blend.presence && record.opacity.kind === "constant";
   const material = needsPhysical(record) ? new SurfacePhysicalMaterial() : new SurfaceStandardMaterial();
   const surface = surfaceLookups(record);
   const drawn = new Set(surface.lookups.map((lookup) => lookup.map));
@@ -444,10 +445,14 @@ export function surfaceMaterial(
   // Opacity.
   if (record.alpha.kind === "mask") {
     material.alphaTest = record.alpha.threshold;
-  } else if (blend !== null && !transmissive) {
+  } else if (blend !== null) {
     material.transparent = true;
     material.opacity = constant(record.opacity, 1);
     material.depthWrite = false;
+    // `transparent`: the diffuse response scaled by opacity, the rest not,
+    // composited premultiplied, as Storm does (`channels.ts`).
+    material.opacityScalesDiffuse = !blend.presence;
+    material.premultipliedAlpha = !blend.presence;
   }
   if (material instanceof MeshPhysicalNodeMaterial) {
     material.ior = Math.min(2.333, Math.max(1, constant(record.ior, 1.5)));
@@ -460,7 +465,6 @@ export function surfaceMaterial(
       const specular = record.specularColor;
       if (specular.kind !== "texture") material.specularColor.setRGB(...(constant(specular, [0, 0, 0] as const) as [number, number, number]));
     }
-    if (transmissive) material.transmission = 1 - constant(record.opacity, 1);
   }
   drawLookups(material, surface, (lookup) => sampling(store, options.uvChannels, record.textures[lookup.texture]!, lookup.color));
   if (options.doubleSided) material.side = DoubleSide;

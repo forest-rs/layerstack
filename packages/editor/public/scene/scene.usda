@@ -281,7 +281,7 @@ def Xform "World"
         def Material "Checker"
         {
             string inputs:coordinates = "st"
-            float4 inputs:tint = (1, 1, 1, 1)
+            color4f inputs:tint = (1, 1, 1, 1)
             token outputs:surface.connect = </World/Looks/Checker/Surface.outputs:surface>
 
             def Shader "Surface"

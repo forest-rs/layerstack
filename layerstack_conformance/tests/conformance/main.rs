@@ -213,6 +213,7 @@ mod specializes_propagation;
 mod stage_api;
 mod stage_controls;
 mod stage_notices;
+mod sublayer_changes;
 mod sublayer_offset_counts;
 mod subset_authoring;
 mod subset_family_type;

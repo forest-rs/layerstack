@@ -146,7 +146,8 @@ impl<B> PreparedReload<'_, B> {
     /// changes, through the document's change cursors and subscriptions,
     /// as it reports an edit's: a changed value info-only, a prim added or
     /// removed resynced, the pseudo-root info-only for a layer of the
-    /// stage's own layer stack. A layer naming an asset recorded missing
+    /// stage's own layer stack, and a sublayer added or removed as the
+    /// specs it brings or takes, wherever they compose. A layer naming an asset recorded missing
     /// that now resolves was read again with it, so its arc resolves in
     /// the same transaction and resyncs its prim alone; a deferred arc
     /// naming one resyncs as the asset is bound, in a second notice.

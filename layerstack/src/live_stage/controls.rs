@@ -222,10 +222,14 @@ impl LiveStage {
             })
             .collect();
         roots.extend(self.structural_roots.iter().copied());
+        // A layer the store does not hold composes nothing, muted or not:
+        // once read, it joins the stage as a layer read is heard
+        // ([`Self::notify_changed_layers`]).
         let changed: Vec<_> = previous
             .muted_layers
             .symmetric_difference(&self.options.muted_layers)
             .copied()
+            .filter(|layer| store.layer(*layer).is_some())
             .collect();
         if !changed.is_empty() {
             let identifier = crate::LayerStackIdentifier {
@@ -236,8 +240,8 @@ impl LiveStage {
             if changed.iter().any(|id| local.layers.contains(id)) {
                 // The stage is composed again whole; with nothing else to
                 // recompose, its report compares the stages.
-                self.layer_stack_diff =
-                    (roots.is_empty() && self.support_sources.is_empty()).then_some(false);
+                self.layer_stack_diff = (roots.is_empty() && self.support_sources.is_empty())
+                    .then(LayerStackDiff::default);
                 return None;
             }
             let stacks: Vec<_> = core::iter::once(self.root)

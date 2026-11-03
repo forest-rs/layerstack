@@ -595,12 +595,15 @@ pub(crate) struct Outcome {
     /// before and after such an edit changed its spec stack alone.
     pub(crate) inert_sites: Vec<(LayerId, PathId)>,
     /// Whether the transaction only inserted, removed or reordered
-    /// sublayers of layers of the stage's own layer stack, keeping the
-    /// offsets of the sublayers it kept, and changed layer fields that
-    /// compose nothing: every prim then composes the specs it composed,
-    /// and those of the layers that came, without those of the layers that
-    /// went.
+    /// sublayers of layers the stage uses, keeping the offsets of the
+    /// sublayers it kept, and changed layer fields that compose nothing:
+    /// every prim then composes the specs it composed, and those of the
+    /// layers that came, without those of the layers that went.
     pub(crate) layer_stack_only: bool,
+    /// The sublayers the transaction's sublayer list edits added or
+    /// removed, as OpenUSD counts them ([`moved_sublayers`]), without
+    /// those not yet bound to a layer.
+    pub(crate) moved_sublayers: Vec<LayerId>,
     /// `(layer, source prim path, change)` of every property field the
     /// transaction changed, property spec additions and removals aside.
     pub(crate) property_fields: Vec<(LayerId, PathId, super::PropertyChange)>,
@@ -1177,6 +1180,7 @@ pub(crate) fn apply(
         prim_fields: _,
         reloaded,
     } = journal;
+    let mut moved = Vec::new();
     let layer_stack_only = !structural_layers.is_empty()
         && steps.iter().all(|g| match (&g.written, &g.step) {
             (
@@ -1185,7 +1189,8 @@ pub(crate) fn apply(
                     sublayers: before, ..
                 },
             ) => {
-                stage.is_some_and(|stage| stage.layer_stack().contains(layer))
+                moved.extend(moved_sublayers(store, *layer, sublayers, before));
+                stage.is_some_and(|stage| stage.uses_layer(*layer))
                     && keeps_offsets(sublayers, before)
             }
             (Raw::LayerMetadata { key, .. }, _) => composes_nothing(store.tokens().resolve(*key)),
@@ -1299,6 +1304,7 @@ pub(crate) fn apply(
         inert_sites,
         other_sites,
         layer_stack_only,
+        moved_sublayers: moved,
         property_fields,
         layer_info,
         reloaded,
@@ -1310,6 +1316,45 @@ pub(crate) fn apply(
         touched,
         structural: !structural_layers.is_empty(),
     })
+}
+
+/// The sublayers of `layer` that a change of its sublayer list from
+/// `before` to `after` adds or removes, as OpenUSD counts them, with the
+/// layers they are bound to: those one list names and the other does not,
+/// or, when both name the same sublayers in another order, all of them, as
+/// a reorder is announced as the removal and addition of every sublayer.
+/// A sublayer is named by its asset path, or by its layer when it has
+/// none; one bound to no layer yet is left out.
+///
+/// Spec: AOUSD Core §10.3.1 (sublayers). OpenUSD:
+/// `Sdf_ChangeManager::DidChangeField` records a `subLayers` change as
+/// `SubLayerAdded` and `SubLayerRemoved` entries
+/// (`pxr/usd/sdf/changeManager.cpp`).
+fn moved_sublayers(
+    store: &dyn LayerStore,
+    layer: LayerId,
+    after: &[crate::SublayerEntry],
+    before: &[crate::SublayerEntry],
+) -> Vec<LayerId> {
+    fn name(entry: &crate::SublayerEntry) -> (Option<&str>, LayerId) {
+        match entry.asset.as_deref() {
+            Some(asset) => (Some(asset), LayerId::UNRESOLVED),
+            None => (None, entry.layer),
+        }
+    }
+    let after_names: alloc::collections::BTreeSet<_> = after.iter().map(name).collect();
+    let before_names: alloc::collections::BTreeSet<_> = before.iter().map(name).collect();
+    let reordered = after_names == before_names;
+    after
+        .iter()
+        .filter(|entry| reordered || !before_names.contains(&name(entry)))
+        .chain(
+            before
+                .iter()
+                .filter(|entry| reordered || !after_names.contains(&name(entry))),
+        )
+        .filter_map(|entry| entry.stored_layer(store, layer))
+        .collect()
 }
 
 /// Whether each sublayer of `after` that `before` lists too keeps its

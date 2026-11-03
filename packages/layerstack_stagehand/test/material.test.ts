@@ -287,6 +287,9 @@ describe("materials", () => {
     assert.equal(anchorAssetPath("./tex/../grid.png", "/abs/rock.usda"), "/abs/grid.png");
     assert.equal(anchorAssetPath("textures/grid.png", "assets/rock.usda"), "textures/grid.png");
     assert.equal(anchorAssetPath("./grid.png", "rock.usdz[geo/rock.usdc]"), "rock.usdz[geo/grid.png]");
+    // A package read as a layer stands for its root layer, at the archive's top level.
+    assert.equal(anchorAssetPath("./tex/grid.png", "set/rock.usdz"), "set/rock.usdz[tex/grid.png]");
+    assert.equal(anchorAssetPath("./grid.png", "Rock.USDZ"), "Rock.USDZ[grid.png]");
     assert.equal(anchorAssetPath("", "scene.usda"), null);
   });
 });

@@ -781,6 +781,28 @@ fn anchor(scene: &Scene<'_>, asset_path: &str, layer: Option<LayerId>) -> Option
     let location = layer
         .and_then(|layer| scene.store().layer_identifier(layer))
         .unwrap_or("");
+    anchor_to_layer(asset_path, location)
+}
+
+/// `asset_path` anchored to the layer at `location`, as
+/// [`anchor_asset_path`] anchors it, except that a package read as a
+/// layer (`set/model.usdz`: a USDZ root, or the package an arc names)
+/// stands for its root layer, as `SdfComputeAssetPathRelativeToLayer`
+/// anchors to `GetPackageRootLayerPath`: `./wood.png` there is the member
+/// `./set/model.usdz[wood.png]`, not a file beside the package. The root
+/// layer is the archive's first file, which packagers write at its top
+/// level; only that directory matters, so a top-level stand-in for its
+/// name anchors alike (AOUSD Core §9.4, §16).
+fn anchor_to_layer(asset_path: &str, location: &str) -> Option<String> {
+    let name = location.rsplit(['/', '\\']).next().unwrap_or(location);
+    let package = !location.contains('[')
+        && name.len() > ".usdz".len()
+        && name
+            .get(name.len() - ".usdz".len()..)
+            .is_some_and(|extension| extension.eq_ignore_ascii_case(".usdz"));
+    if package {
+        return anchor_asset_path(asset_path, &alloc::format!("{location}[root.usd]"));
+    }
     anchor_asset_path(asset_path, location)
 }
 
@@ -983,6 +1005,36 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    #[test]
+    fn a_path_in_a_package_read_as_a_layer_anchors_inside_it() {
+        for (path, location, anchored) in [
+            (
+                "./wood.png",
+                "set/model.usdz",
+                Some("./set/model.usdz[wood.png]"),
+            ),
+            (
+                "./tex/wood.png",
+                "Model.USDZ",
+                Some("./Model.USDZ[tex/wood.png]"),
+            ),
+            (
+                "./wood.png",
+                "set/model.usdz[geo/rock.usda]",
+                Some("./set/model.usdz[geo/wood.png]"),
+            ),
+            ("tex/wood.png", "set/model.usdz", Some("tex/wood.png")),
+            ("./wood.png", "set/model.usda", Some("./set/wood.png")),
+            ("./wood.png", "set/usdz", Some("./set/wood.png")),
+        ] {
+            assert_eq!(
+                super::anchor_to_layer(path, location).as_deref(),
+                anchored,
+                "{path} in {location}"
+            );
         }
     }
 

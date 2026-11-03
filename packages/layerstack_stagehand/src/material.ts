@@ -581,8 +581,10 @@ export function isUdim(path: string): boolean {
  * `assetPath` anchored to the layer `layer` identifies, as
  * `layerstack::asset::anchor_asset_path` and OpenUSD's
  * `SdfComputeAssetPathRelativeToLayer` anchor it: a `./` or `../` path is
- * joined to the layer's directory (a member's, inside a package); any
- * other path is normalized. `null` for an empty path, an expression, or a
+ * joined to the layer's directory (a member's, inside a package; a
+ * package file read as a layer, `set/model.usdz`, stands for its root
+ * layer at the archive's top level, so `./wood.png` there is
+ * `set/model.usdz[wood.png]`); any other path is normalized. `null` for an empty path, an expression, or a
  * relative path without a layer. AOUSD Core §9.4.
  */
 export function anchorAssetPath(assetPath: string, layer: string | null): string | null {
@@ -590,7 +592,11 @@ export function anchorAssetPath(assetPath: string, layer: string | null): string
   const path = assetPath.replaceAll("\\", "/");
   if (!path.startsWith("./") && !path.startsWith("../")) return normalize(path);
   if (layer === null || layer === "") return null;
-  const location = layer.replaceAll("\\", "/");
+  let location = layer.replaceAll("\\", "/");
+  // A package read as a layer (a `.usdz` root, or one an arc names) stands
+  // for its root layer, the archive's first file, which packagers write at
+  // its top level: a path relative to it is anchored inside the package.
+  if (!location.includes("[") && /.\.usdz$/i.test(location.slice(location.lastIndexOf("/") + 1))) location = `${location}[root.usd]`;
   const open = location.indexOf("[");
   if (open >= 0 && location.endsWith("]")) {
     const member = location.slice(open + 1, -1);

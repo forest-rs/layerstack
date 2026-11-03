@@ -111,6 +111,26 @@ struct LayerStackDiff {
     reordered: Vec<LayerId>,
 }
 
+impl LayerStackDiff {
+    /// The layers whose specs count as lost and gained again: the
+    /// sublayers reordered, and their own sublayers.
+    fn moved_layers(&self, store: &dyn LayerStore) -> HashSet<LayerId> {
+        let mut moved_layers: HashSet<LayerId> = HashSet::new();
+        let mut pending = self.reordered.clone();
+        while let Some(layer) = pending.pop() {
+            if !moved_layers.insert(layer) {
+                continue;
+            }
+            if let Some(found) = store.layer(layer) {
+                for entry in &found.sublayers {
+                    pending.extend(entry.stored_layer(store, layer));
+                }
+            }
+        }
+        moved_layers
+    }
+}
+
 /// What `new` composes differently from `old` when only the layer stacks
 /// the stage uses changed, as changes: the prims that came or went, or
 /// whose prototype changed, and the children a new order moved among
@@ -145,19 +165,47 @@ fn layer_stack_changes(
     new: &Stage,
     diff: &LayerStackDiff,
 ) -> Changes {
-    let root = store.paths().intern(crate::Path::root());
-    let mut moved_layers: HashSet<LayerId> = HashSet::new();
-    let mut pending = diff.reordered.clone();
-    while let Some(layer) = pending.pop() {
-        if !moved_layers.insert(layer) {
-            continue;
-        }
-        if let Some(found) = store.layer(layer) {
-            for entry in &found.sublayers {
-                pending.extend(entry.stored_layer(store, layer));
-            }
-        }
+    let prims = new
+        .prim_paths()
+        .chain(old.prim_paths().filter(|prim| !new.has_prim(*prim)));
+    layer_stack_changes_of(store, old, new, prims, diff)
+}
+
+/// What a stage composed before a layer stack change holds of each prim,
+/// as [`layer_stack_changes_of`] compares it with the stage after.
+trait StageBefore {
+    fn has_prim(&self, prim: PathId) -> bool;
+    fn instance_prototype(&self, prim: PathId) -> Option<crate::stage::PrototypeId>;
+    fn prim_stack(&self, prim: PathId) -> Option<Vec<(LayerId, crate::SpecPath)>>;
+    fn all_children_of(&self, prim: PathId) -> Option<&[PathId]>;
+}
+
+impl StageBefore for Stage {
+    fn has_prim(&self, prim: PathId) -> bool {
+        Self::has_prim(self, prim)
     }
+    fn instance_prototype(&self, prim: PathId) -> Option<crate::stage::PrototypeId> {
+        Self::instance_prototype(self, prim)
+    }
+    fn prim_stack(&self, prim: PathId) -> Option<Vec<(LayerId, crate::SpecPath)>> {
+        Self::prim_stack(self, prim)
+    }
+    fn all_children_of(&self, prim: PathId) -> Option<&[PathId]> {
+        Self::all_children_of(self, prim)
+    }
+}
+
+/// [`layer_stack_changes`] of `prims` alone: every prim that either stage
+/// composes differently must be among them, each once.
+fn layer_stack_changes_of(
+    store: &dyn LayerStore,
+    old: &dyn StageBefore,
+    new: &Stage,
+    prims: impl Iterator<Item = PathId>,
+    diff: &LayerStackDiff,
+) -> Changes {
+    let root = store.paths().intern(crate::Path::root());
+    let moved_layers = diff.moved_layers(store);
     let holds_moved = |stack: &[(LayerId, crate::SpecPath)]| {
         stack.iter().any(|(layer, _)| moved_layers.contains(layer))
     };
@@ -219,10 +267,7 @@ fn layer_stack_changes(
     let mut resynced = Vec::new();
     // The prims both stages compose, whose children may have moved.
     let mut kept = Vec::new();
-    for prim in new
-        .prim_paths()
-        .chain(old.prim_paths().filter(|prim| !new.has_prim(*prim)))
-    {
+    for prim in prims {
         if !(old.has_prim(prim)
             && new.has_prim(prim)
             && old.instance_prototype(prim) == new.instance_prototype(prim))

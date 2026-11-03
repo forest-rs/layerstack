@@ -31,6 +31,12 @@
 //! layerstack publishes a reload in one notice, but a deferred arc whose
 //! missing asset now resolves in a second.
 //!
+//! The root layer opened by a search-path identifier (`search_root.usda`)
+//! is resolved again too: a stage reload looks for it where it is first,
+//! as OpenUSD binds the stage's resolver context (the root layer's
+//! directory), and a reload of the layer alone looks for it as it was
+//! opened, moving it to the directory that now holds it.
+//!
 //! A layer that does not parse keeps its content while the others reload,
 //! as in OpenUSD, which raises the parse error after the reload; layerstack
 //! returns it among the report's `asset_failures` (`parse_failure`).
@@ -47,7 +53,7 @@ use serde_json::{Value as Json, json};
 const ORACLE: &str = include_str!("../../fixtures/layer_reload/oracle.json");
 
 /// The fixture's layers, as the oracle wrote them.
-const LAYERS: [(&str, &str); 6] = [
+const LAYERS: [(&str, &str); 7] = [
     (
         "root.usda",
         include_str!("../../fixtures/layer_reload/layers/root.usda"),
@@ -71,6 +77,10 @@ const LAYERS: [(&str, &str); 6] = [
     (
         "second/asset.usda",
         include_str!("../../fixtures/layer_reload/layers/second/asset.usda"),
+    ),
+    (
+        "second/search_root.usda",
+        include_str!("../../fixtures/layer_reload/layers/second/search_root.usda"),
     ),
 ];
 
@@ -162,7 +172,8 @@ struct Case {
 }
 
 impl Case {
-    fn open(versions: bool) -> Self {
+    /// The case's stage, opened on `root`.
+    fn open(versions: bool, root: &str) -> Self {
         let files = Files {
             files: LAYERS
                 .iter()
@@ -172,7 +183,7 @@ impl Case {
             reads: Mutex::default(),
         };
         let mut doc =
-            StageDocument::open(files, "root.usda", layerstack::StageOptions::default()).unwrap();
+            StageDocument::open(files, root, layerstack::StageOptions::default()).unwrap();
         let heard: Heard = Arc::default();
         let sink = Arc::clone(&heard);
         let (_, live) = doc.parts_mut();
@@ -424,9 +435,19 @@ fn expected(step: &Json) -> Json {
 /// prims otherwise; layerstack composes the new order and resyncs the
 /// child it moved, as it reports any child order a change moves
 /// (`prim_resync.rs`, `override_reorders_children`).
+///
+/// `search_path_root_layer_reload`, a deliberate coarser grain: the root
+/// layer, read again from where its search path now finds it, adds `/Y`
+/// and changes `/Z.z`. A transaction of the root layer that changes
+/// namespace takes the local structure path, which reports the other prims
+/// it changes info-only without a property inventory, so `/Z` stands for
+/// `/Z.z`, which OpenUSD lists alone: coarser, and covering it.
 fn deliberate(name: &str, call: &[&str]) -> Option<Json> {
     match (name, call) {
         ("sublayer_added", ["reload"]) => Some(json!([{"resynced": ["/A"], "info": ["/"]}])),
+        ("search_path_root_layer_reload", ["layer_reload", _]) => {
+            Some(json!([{"resynced": ["/Y"], "info": ["/", "/Z"]}]))
+        }
         _ => None,
     }
 }
@@ -436,7 +457,11 @@ fn replay(versions: bool) {
     let rewrites = &oracle["rewrites"];
     for case in oracle["cases"].as_array().unwrap() {
         let name = case["name"].as_str().unwrap();
-        let mut run = Case::open(versions);
+        let root = case
+            .get("root")
+            .and_then(Json::as_str)
+            .unwrap_or("root.usda");
+        let mut run = Case::open(versions, root);
         for step in case["steps"].as_array().unwrap() {
             let call: Vec<&str> = step["step"]
                 .as_array()
@@ -502,7 +527,7 @@ fn reloads_publish_what_changed_comparing_bytes() {
 #[test]
 fn an_unchanged_reload_reads_nothing_it_need_not() {
     for versions in [true, false] {
-        let mut run = Case::open(versions);
+        let mut run = Case::open(versions, "root.usda");
         run.doc.storage().reads.lock().unwrap().clear();
         let report = run.doc.reload(ReloadPolicy::DiscardDirty).unwrap();
         assert!(report.layers.is_empty(), "no layer read again");

@@ -298,7 +298,7 @@ impl<B: Storage> StageDocument<B> {
             .chain(muted)
             .filter(|id| self.catalog.source(*id).is_some())
             .collect();
-        self.prepare_reload_internal(&ids, policy, Reading::Changed)
+        self.prepare_reload_internal(&ids, policy, Reading::Changed, true)
     }
     /// Prepares a selected reload without publishing its layers or source catalog.
     ///
@@ -318,7 +318,7 @@ impl<B: Storage> StageDocument<B> {
         layers: &[LayerId],
         policy: ReloadPolicy,
     ) -> Result<PreparedReload<'_, B>, IoError> {
-        self.prepare_reload_internal(layers, policy, Reading::Changed)
+        self.prepare_reload_internal(layers, policy, Reading::Changed, false)
     }
     /// [`Self::prepare_reload_layers`], reading each selected source even
     /// when it is unchanged; each is reported as read again, its changes
@@ -330,7 +330,7 @@ impl<B: Storage> StageDocument<B> {
         layers: &[LayerId],
         policy: ReloadPolicy,
     ) -> Result<PreparedReload<'_, B>, IoError> {
-        self.prepare_reload_internal(layers, policy, Reading::Forced)
+        self.prepare_reload_internal(layers, policy, Reading::Forced, false)
     }
     /// Refreshes the authored root and its freshly reachable dependencies once.
     /// Unlike explicit selection, obsolete resident sources and package members
@@ -346,13 +346,17 @@ impl<B: Storage> StageDocument<B> {
         policy: ReloadPolicy,
     ) -> Result<PreparedReload<'_, B>, IoError> {
         let root = self.stage.stage().root_layer().expect("document root");
-        self.prepare_reload_internal(&[root], policy, Reading::Reachable)
+        self.prepare_reload_internal(&[root], policy, Reading::Reachable, false)
     }
+    /// Prepares the reload of `layers`; `whole_stage` for a reload of the
+    /// stage ([`Self::prepare_reload`]), whose root layer's asset path is
+    /// resolved again where the root is found first.
     fn prepare_reload_internal(
         &mut self,
         layers: &[LayerId],
         policy: ReloadPolicy,
         reading: Reading,
+        whole_stage: bool,
     ) -> Result<PreparedReload<'_, B>, IoError> {
         let root_closure = reading == Reading::Reachable;
         let roots: BTreeSet<_> = layers
@@ -409,13 +413,29 @@ impl<B: Storage> StageDocument<B> {
             })
             .collect();
         // The asset paths bound to each layer, by anchor, to ask storage
-        // where each resolves now.
-        let mut bound_to: HashMap<LayerId, Vec<(LayerId, Arc<str>)>> = HashMap::new();
+        // where each resolves now; the root layer's by the asset path it
+        // was opened by. A stage resolves its root where the root is first,
+        // as `UsdStage::Reload` binds the stage's resolver context, which
+        // `ArDefaultResolver` makes of the root layer's directory; a layer
+        // reload resolves it with no anchor, as `SdfLayer::Reload` does
+        // with no context bound.
+        let mut bound_to: BoundAssets = HashMap::new();
         if !root_closure {
             for (anchor, asset, layer) in self.store.asset_bindings() {
                 if roots.contains(&layer) {
-                    bound_to.entry(layer).or_default().push((anchor, asset));
+                    bound_to
+                        .entry(layer)
+                        .or_default()
+                        .push((Some(anchor), asset));
                 }
+            }
+            let root = self.stage.stage().root_layer().expect("document root");
+            if roots.contains(&root) {
+                let anchor = whole_stage.then_some(root);
+                bound_to
+                    .entry(root)
+                    .or_default()
+                    .push((anchor, Arc::clone(&self.root_asset)));
             }
         }
         for &root in &roots {
@@ -743,7 +763,7 @@ impl<B: Storage> StageDocument<B> {
         &self,
         layer: LayerId,
         catalog: &Catalog,
-        bound_to: &HashMap<LayerId, Vec<(LayerId, Arc<str>)>>,
+        bound_to: &BoundAssets,
     ) -> Option<String> {
         let source = catalog.source(layer)?;
         if source.package.is_some()
@@ -757,7 +777,7 @@ impl<B: Storage> StageDocument<B> {
             if asset.contains('[') || asset.contains(FORMAT_ARGS_DELIMITER) {
                 continue;
             }
-            let anchor = catalog.source(*anchor).map(|s| {
+            let anchor = anchor.and_then(|anchor| catalog.source(anchor)).map(|s| {
                 let identifier = FormatArgs::strip(&s.identifier);
                 String::from(
                     identifier
@@ -778,6 +798,10 @@ impl<B: Storage> StageDocument<B> {
         (!catalog.ids.contains_key(moved.as_str())).then_some(moved)
     }
 }
+
+/// The asset paths each layer is bound by, with the layer anchoring each
+/// (none for the root layer's own asset path resolved as it was opened).
+type BoundAssets = HashMap<LayerId, Vec<(Option<LayerId>, Arc<str>)>>;
 
 /// Which selected sources a reload reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -1,0 +1,1585 @@
+{
+ "cases": [
+  {
+   "name": "prims",
+   "steps": [
+    {
+     "heard": [],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/"
+       ],
+       "resynced": [
+        "/N"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "prims.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/N",
+      "/N/C",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "insert",
+      "root.usda",
+      1,
+      "prims.usda"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": 1.0,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/"
+       ],
+       "resynced": [
+        "/N"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "remove",
+      "root.usda",
+      1
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "name": "values",
+   "steps": [
+    {
+     "heard": [],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/",
+        "/W"
+       ],
+       "resynced": [
+        "/W.w"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "values.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "insert",
+      "root.usda",
+      1,
+      "values.usda"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 5.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/",
+        "/W"
+       ],
+       "resynced": [
+        "/W.w"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "remove",
+      "root.usda",
+      1
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "name": "arc",
+   "steps": [
+    {
+     "heard": [],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/"
+       ],
+       "resynced": [
+        "/Other"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "arc.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "insert",
+      "root.usda",
+      0,
+      "arc.usda"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": 1.0,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/"
+       ],
+       "resynced": [
+        "/Other"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "remove",
+      "root.usda",
+      0
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "name": "nested",
+   "steps": [
+    {
+     "heard": [],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/",
+        "/W"
+       ],
+       "resynced": [
+        "/N",
+        "/W.w"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "nested.usda",
+      "prims.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/N",
+      "/N/C",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "insert",
+      "root.usda",
+      0,
+      "nested.usda"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": 1.0,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 6.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/",
+        "/W"
+       ],
+       "resynced": [
+        "/N",
+        "/W.w"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "remove",
+      "root.usda",
+      0
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "name": "empty",
+   "steps": [
+    {
+     "heard": [],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/"
+       ],
+       "resynced": []
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda",
+      "empty.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "insert",
+      "root.usda",
+      2,
+      "empty.usda"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/"
+       ],
+       "resynced": []
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "remove",
+      "root.usda",
+      2
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "name": "remove_existing",
+   "steps": [
+    {
+     "heard": [],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/",
+        "/A"
+       ],
+       "resynced": [
+        "/A.y",
+        "/W"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S"
+     ],
+     "step": [
+      "remove",
+      "root.usda",
+      1
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": null,
+      "/W.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/",
+        "/A"
+       ],
+       "resynced": [
+        "/A.y",
+        "/S"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R"
+     ],
+     "step": [
+      "remove",
+      "root.usda",
+      0
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": null,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": null,
+      "/W.t": null,
+      "/W.w": null
+     }
+    }
+   ]
+  },
+  {
+   "name": "reorder",
+   "steps": [
+    {
+     "heard": [],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/",
+        "/A"
+       ],
+       "resynced": [
+        "/A.y",
+        "/S",
+        "/W"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "weak.usda",
+      "strong.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "reorder",
+      "root.usda",
+      [
+       1,
+       0
+      ]
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 3.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "name": "offset",
+   "steps": [
+    {
+     "heard": [],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [],
+       "resynced": [
+        "/"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "offset",
+      "root.usda",
+      1,
+      10.0,
+      1.0
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 0.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [],
+       "resynced": [
+        "/"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "offset",
+      "root.usda",
+      1,
+      0.0,
+      2.0
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 2.5,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [],
+       "resynced": [
+        "/"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "offset",
+      "root.usda",
+      1,
+      0.0,
+      1.0
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "name": "within_sublayer",
+   "steps": [
+    {
+     "heard": [],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/"
+       ],
+       "resynced": [
+        "/N"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda",
+      "prims.usda"
+     ],
+     "prims": [
+      "/A",
+      "/N",
+      "/N/C",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "insert",
+      "weak.usda",
+      0,
+      "prims.usda"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": 1.0,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/"
+       ],
+       "resynced": [
+        "/N"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "remove",
+      "weak.usda",
+      0
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "name": "referenced_stack",
+   "steps": [
+    {
+     "heard": [],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/R"
+       ],
+       "resynced": [
+        "/R.a",
+        "/R.b",
+        "/R/Extra"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/R/Extra",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "insert",
+      "asset.usda",
+      0,
+      "asset_extra.usda"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": 2.0,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/R"
+       ],
+       "resynced": [
+        "/R.a",
+        "/R.b",
+        "/R/Extra"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "remove",
+      "asset.usda",
+      0
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "name": "muted_insert",
+   "steps": [
+    {
+     "heard": [],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [],
+       "resynced": []
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "mute",
+      "prims.usda"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/"
+       ],
+       "resynced": [
+        "/N"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "insert",
+      "root.usda",
+      1,
+      "prims.usda"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [],
+       "resynced": [
+        "/N"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "prims.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/N",
+      "/N/C",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "unmute",
+      "prims.usda"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": 1.0,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [],
+       "resynced": [
+        "/N"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "mute",
+      "prims.usda"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/"
+       ],
+       "resynced": []
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "remove",
+      "root.usda",
+      1
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "name": "muted_existing",
+   "steps": [
+    {
+     "heard": [],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/A"
+       ],
+       "resynced": [
+        "/A.y",
+        "/W"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S"
+     ],
+     "step": [
+      "mute",
+      "weak.usda"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": null,
+      "/W.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/"
+       ],
+       "resynced": []
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S"
+     ],
+     "step": [
+      "remove",
+      "root.usda",
+      1
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": null,
+      "/W.w": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [],
+       "resynced": []
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S"
+     ],
+     "step": [
+      "unmute",
+      "weak.usda"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": null,
+      "/W.w": null
+     }
+    }
+   ]
+  }
+ ],
+ "openusd_version": "26.11",
+ "sampled": {
+  "/W.t": 5.0
+ }
+}

@@ -16,8 +16,10 @@ export type TextureChannel = "r" | "g" | "b" | "a" | "rgb";
 export type TextureWrap = "useMetadata" | "black" | "clamp" | "repeat" | "mirror";
 /**
  * How a texture's texels are encoded (`sourceColorSpace`): `sRGB` decodes
- * through the sRGB curve, `raw` is linear, `auto` leaves it to the file (an
- * 8-bit color texture read as sRGB, data as raw, as Hydra decides).
+ * through the sRGB curve, `raw` is linear, `auto` leaves it to the file,
+ * whatever input reads it: its gamma metadata, else sRGB for an 8-bit image
+ * of three or four channels and raw for any other, as `UsdUVTexture`
+ * defines it and Storm reads it (`Hio_StbImage::IsColorSpaceSRGB`).
  */
 export type TextureColorSpace = "auto" | "raw" | "sRGB";
 

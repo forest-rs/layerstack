@@ -88,6 +88,17 @@ export interface Notice {
   readonly code: string | null;
 }
 
+/** Why a request to frame framed nothing, shown briefly in the viewport ({@link EditorStore.frameNote}). */
+export interface FrameNote {
+  /** Distinct for each request, so asking again shows it again. */
+  readonly id: number;
+  /** `Nothing to frame: /World/Looks/Checker has no bounds`. */
+  readonly message: string;
+}
+
+/** How long a {@link FrameNote} is shown, in milliseconds. */
+export const FRAME_NOTE_MS = 3000;
+
 const EMPTY_SCENE: ViewportScene = {
   items: [],
   hidden: [],
@@ -170,6 +181,14 @@ export class EditorStore {
   #estimate: { session: Session; changes: number; time: number | undefined; cost: DrawCost | null } | null = null;
   /** What actions reported, newest last. */
   readonly notices: Notice[] = [];
+  /**
+   * Why the last request to frame (the F key, the frame command, a
+   * double-click on an instance) framed nothing, for
+   * {@link FRAME_NOTE_MS}; `null` otherwise, and once one frames.
+   */
+  frameNote: FrameNote | null = null;
+  #frameNoteTimer: ReturnType<typeof setTimeout> | undefined = undefined;
+  #frameNotes = 0;
   readonly #draws: ViewportModel;
   readonly #listeners = new Set<() => void>();
   #viewport: Viewport | null = null;
@@ -377,7 +396,7 @@ export class EditorStore {
     this.instance = index === null ? null : { instancer, index };
     const corners = index === null ? null : this.#instanceCorners(instancer, index);
     this.#viewport?.setMarker(corners);
-    if (frame && corners !== null) this.#frameBox(cornersBox(corners));
+    if (frame) this.#noteFrame(corners !== null && this.#frameBox(cornersBox(corners)), `instance ${index} of ${instancer}`);
     this.#bump();
   }
 
@@ -523,7 +542,7 @@ export class EditorStore {
    * alone, on what is drawn. It frames again what is in view already.
    * Returns whether it framed anything: not for a selection without
    * bounds (a material, a camera, an empty prim), which leaves the view
-   * as it was.
+   * as it was and says so ({@link frameNote}).
    */
   frameSelection(): boolean {
     const stage = this.session?.stage;
@@ -531,14 +550,45 @@ export class EditorStore {
     const instance = this.instance;
     if (instance !== null && instance.instancer === this.selection) {
       const corners = this.#instanceCorners(instance.instancer, instance.index);
-      if (corners !== null) return this.#frameBox(cornersBox(corners));
+      if (corners !== null) return this.#noteFrame(this.#frameBox(cornersBox(corners)), null);
     }
-    if (this.drawScope !== "scene") return this.scene.bounds !== null && this.#frameBox(this.scene.bounds);
-    const bounds = stage.worldBounds([this.selection ?? "/"], {
-      purposes: ["default", "proxy"],
-      ...(this.time === undefined ? {} : { time: this.time }),
-    }).alignedRanges;
-    return this.#frameBox(Array.from(bounds.subarray(0, 6)));
+    if (this.drawScope !== "scene") return this.#noteFrame(this.scene.bounds !== null && this.#frameBox(this.scene.bounds), "what is drawn");
+    const path = this.selection ?? "/";
+    const bounds = Array.from(
+      stage
+        .worldBounds([path], {
+          purposes: ["default", "proxy"],
+          ...(this.time === undefined ? {} : { time: this.time }),
+        })
+        .alignedRanges.subarray(0, 6),
+    );
+    // A camera is not framed at its position: nothing is drawn there, so
+    // the view would show nothing; the note points at looking through it.
+    const camera = this.scene.cameras.some((each) => each.path === path);
+    return this.#noteFrame(this.#frameBox(bounds), path === "/" ? "the stage" : path, camera ? "look through it instead" : null);
+  }
+
+  /**
+   * Shows why a request to frame framed nothing (`what` has no bounds, and
+   * a `hint`) for {@link FRAME_NOTE_MS}, or clears the last note when it
+   * framed. Returns `framed`.
+   */
+  #noteFrame(framed: boolean, what: string | null, hint: string | null = null): boolean {
+    clearTimeout(this.#frameNoteTimer);
+    this.#frameNoteTimer = undefined;
+    const message = `Nothing to frame: ${what} has no bounds${hint === null ? "" : `; ${hint}`}`;
+    const note = framed || what === null ? null : { id: ++this.#frameNotes, message };
+    if (note === null && this.frameNote === null) return framed;
+    this.frameNote = note;
+    if (note !== null) {
+      this.#frameNoteTimer = setTimeout(() => {
+        this.#frameNoteTimer = undefined;
+        this.frameNote = null;
+        this.#bump();
+      }, FRAME_NOTE_MS);
+    }
+    this.#bump();
+    return framed;
   }
 
   /**

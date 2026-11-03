@@ -171,6 +171,16 @@ export function ViewportPane() {
         )}
       </div>
       <LoadingOverlay />
+      {/* Why the last request to frame framed nothing, for a few seconds. */}
+      {store.frameNote !== null && (
+        <div
+          key={store.frameNote.id}
+          role="status"
+          className="pointer-events-none absolute top-2 left-1/2 max-w-[60%] -translate-x-1/2 truncate rounded-md bg-black/60 px-2 py-1 font-mono text-[11px] text-white/90 backdrop-blur-sm"
+        >
+          {store.frameNote.message}
+        </div>
+      )}
       {textures !== undefined && textures.pending > 0 && store.status.kind !== "opening" && (
         <div role="status" className="pointer-events-none absolute bottom-2 left-2 flex items-center gap-2 rounded-md bg-black/40 px-2 py-1 font-mono text-[11px] text-white/80 backdrop-blur-sm">
           <span className="size-1.5 animate-pulse rounded-full bg-sky-400" />

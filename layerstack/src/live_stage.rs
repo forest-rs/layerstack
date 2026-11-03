@@ -20,6 +20,7 @@ mod discovery;
 pub use controls::RecompositionWork;
 mod local;
 mod notices;
+mod restack;
 pub use notices::{ChangeCursor, ChangeHistoryError, ChangeNotice, ChangeSubscription};
 
 use hashbrown::{HashMap, HashSet};
@@ -592,6 +593,10 @@ pub struct LiveStage {
     /// [`Self::child_index`]'s work when [`Self::work`] was last reset.
     child_index_mark: crate::prim_indexing::ChildIndexWork,
     notices: notices::Journal,
+    /// Whether layer stack changes are composed whole, as a reference the
+    /// tests compare the incremental path with.
+    #[cfg(test)]
+    restack_disabled: bool,
 }
 
 impl LiveStage {
@@ -644,6 +649,8 @@ impl LiveStage {
             child_index,
             work: RecompositionWork::default(),
             notices: notices::Journal::default(),
+            #[cfg(test)]
+            restack_disabled: false,
         };
         live.reindex_all_sources();
         live.record_generations(store);
@@ -1998,9 +2005,11 @@ impl LiveStage {
 
     /// Notifies that layers joined the layer stacks the stage uses, with no
     /// other change: the next [`recompose`](Self::recompose) composes the
-    /// whole stage and reports what it composes differently
-    /// ([`layer_stack_changes`]), when nothing else is pending; otherwise
-    /// it is a structural change ([`Self::notify_structural_change`]).
+    /// prims whose specs those layers hold, carries every other prim across
+    /// the change ([`Self::recompose_restacked`]), and reports what it
+    /// composes differently ([`layer_stack_changes`]), when nothing else is
+    /// pending; otherwise it is a structural change
+    /// ([`Self::notify_structural_change`]).
     fn notify_layer_stack_change(&mut self) {
         // Layers muted or unmuted change spec stacks alone too.
         let previous = self.stage.options();
@@ -2021,7 +2030,13 @@ impl LiveStage {
 
     /// Recomposes affected prims and returns the set of prims that were updated.
     ///
-    /// - If a structural change was notified, performs a full rebuild and
+    /// - If the layer stacks the stage reads changed alone (a sublayer
+    ///   inserted, removed, reordered or bound, a layer muted or unmuted),
+    ///   composes the prims whose specs the layers that came, went or moved
+    ///   hold, carries every other prim index across the change (its layers
+    ///   renumbered), and returns the prims composed. A changed sublayer
+    ///   offset, and what this cannot carry, composes the whole stage.
+    /// - If another structural change was notified, performs a full rebuild and
     ///   returns every prim path of the new stage plus every path that the
     ///   previous stage had and the new one lacks (removed prims), in
     ///   namespace order ([`crate::PathInterner::cmp_paths`]). Removal is computed as a before/after difference; callers
@@ -2594,12 +2609,28 @@ impl LiveStage {
     /// `affected` complete, so [`Stage::hierarchy_diverges`] can detect
     /// hierarchy changes.
     fn compose_scoped(&mut self, store: &mut dyn LayerStore, affected: &[PathId]) -> Stage {
+        self.compose_exact(store, affected, true)
+    }
+
+    /// Composes `affected` with a population mask that holds them exactly
+    /// and the arc sources they draw on, and, with `children`, their
+    /// current children ([`Self::compose_scoped`]). Without them the
+    /// masked composition still lists each prim's children whole, but
+    /// does not compose them, so it cannot tell which are inactive.
+    fn compose_exact(
+        &mut self,
+        store: &mut dyn LayerStore,
+        affected: &[PathId],
+        children: bool,
+    ) -> Stage {
         let mut mask_set: HashSet<PathId> = HashSet::from_iter(affected.iter().copied());
         for &prim in affected {
             for dep in self.tracker.graph().dependencies(prim, OPINION_EDIT) {
                 mask_set.insert(dep);
             }
-            mask_set.extend(self.stage.children_of(prim).unwrap_or(&[]).iter().copied());
+            if children {
+                mask_set.extend(self.stage.children_of(prim).unwrap_or(&[]).iter().copied());
+            }
         }
         let mask_vec: Vec<PathId> = mask_set.into_iter().collect();
         let scoped_opts = StageOptions {
@@ -2632,10 +2663,13 @@ impl LiveStage {
     fn full_rebuild(
         &mut self,
         store: &mut dyn LayerStore,
-        changes: Option<&mut Changes>,
+        mut changes: Option<&mut Changes>,
     ) -> Vec<PathId> {
         // Edits notified since the layer stacks changed may have changed
         // more than spec stacks show.
+        if let Some(recomposed) = self.recompose_restacked(store, changes.as_deref_mut()) {
+            return recomposed;
+        }
         let diff = core::mem::take(&mut self.layer_stack_diff).filter(|_| {
             !self.tracker.has_invalidated(OPINION_EDIT)
                 && self.structural_roots.is_empty()
@@ -5858,8 +5892,9 @@ mod tests {
     /// the pseudo-root's child list composed once and the pseudo-root not
     /// reported, even when the first one brings the pseudo-root's spec into
     /// being and its undo takes it away. A reorder and a `defaultPrim` edit
-    /// resync the stage; a sublayer, which the stage is composed again for,
-    /// resyncs the root prim it defines and changes `/` info-only.
+    /// resync the stage; a sublayer, whose root prim alone is composed, the
+    /// rest carried across, resyncs the root prim it defines and changes `/`
+    /// info-only.
     ///
     /// Spec: AOUSD Core §11.3.1 (child order), §10.3.1 (layer stacks),
     /// §7.6.1.2.3 (`defaultPrim`). OpenUSD resyncs the child a spec is added
@@ -5950,7 +5985,7 @@ mod tests {
             &mut live,
             &mut store,
             &txn,
-            (7, 7, true),
+            (2, 2, false),
             &["/Pebble"],
             &["/"],
         ));
@@ -5962,7 +5997,7 @@ mod tests {
             ((3, 2, false), &["/Rock"], &[]),
             ((6, 6, true), &["/"], &[]),
             ((6, 6, true), &["/"], &[]),
-            ((6, 7, true), &["/Pebble"], &["/"]),
+            ((1, 2, false), &["/Pebble"], &["/"]),
         ];
         for (inverse, (work, resynced, info)) in undo.iter().rev().zip(expected.iter().rev()) {
             apply_root_edit(&mut live, &mut store, inverse, *work, resynced, info);

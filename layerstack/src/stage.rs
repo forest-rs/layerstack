@@ -45,6 +45,7 @@ pub use loading::{
 };
 pub(crate) mod preparation;
 mod prototypes;
+pub(crate) mod restack;
 pub use prototypes::{CompositionStorage, CompositionWork, Prototype, PrototypeId, PrototypePrim};
 pub(crate) use prototypes::{InstanceIndexKey, InstanceIndexKeys};
 pub mod flatten;
@@ -3605,6 +3606,11 @@ impl Stage {
                 FieldKey::Metadata(_) => None,
             })
             .collect()
+    }
+
+    /// The prims composed as instances, in no particular order.
+    pub(crate) fn instance_roots(&self) -> impl Iterator<Item = PathId> + '_ {
+        self.instances.iter().copied()
     }
 
     /// Whether `prim` is a composed native instance root. Default USD

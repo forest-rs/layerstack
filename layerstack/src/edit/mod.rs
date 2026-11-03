@@ -254,9 +254,25 @@ pub struct Changes {
     /// edit rewrites one whose relationship targets it repairs, is listed
     /// here with the fields it changed in [`Self::property_changes`], and
     /// the properties it adds, removes or renames are resynced. A sublayer
-    /// inserted or removed lists the pseudo-root, and the prims whose spec
-    /// stacks gained or lost only inert specs (`over`s, properties aside).
-    /// A change to stage metadata that composes nothing (`documentation`,
+    /// inserted or removed lists the pseudo-root (when the stage's own
+    /// layer stack holds the edited layer), and the prims whose spec stacks
+    /// gained or lost only inert specs (`over`s, properties aside), in
+    /// whichever layer stack it joins or leaves; the prims it defines, or
+    /// whose arcs it changes, are resynced. Reordering a layer's sublayers
+    /// counts as removing and inserting every one of them, as OpenUSD
+    /// announces it. Four differences from OpenUSD are deliberate: a
+    /// sublayer that moves a child among its siblings resyncs that child,
+    /// where OpenUSD reports it info-only and keeps a stale child order
+    /// (OpenUSD bug B037); inserting a muted sublayer lists `/` alone,
+    /// where OpenUSD resyncs the prims it defines, which compose neither
+    /// before nor after (OpenUSD bug B038); for a layer a reference reaches
+    /// that is a sublayer too, a reorder of its sublayer list resyncs the
+    /// referencing prims as well (the spec stacks compared do not record
+    /// the layer stack a spec came through), and its removal does not
+    /// resync them, where OpenUSD does though they compose the same; and a
+    /// root layer reloaded with namespace changes lists its other changed
+    /// prims here without a property inventory, where OpenUSD lists their
+    /// properties. A change to stage metadata that composes nothing (`documentation`,
     /// `startTimeCode`, `metersPerUnit` and the like) lists the
     /// pseudo-root.
     pub changed_info_only: Vec<PathId>,

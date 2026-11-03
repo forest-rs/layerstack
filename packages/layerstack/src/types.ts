@@ -798,6 +798,24 @@ export interface VariantSet {
  * it; a property spec in it is in `resyncedProperties`. A change to stage
  * metadata that composes nothing (`documentation`, `startTimeCode`,
  * `metersPerUnit` and the like) reports `/` info-only.
+ *
+ * A sublayer inserted or removed reports the specs it brings or takes, in
+ * whichever layer stack it joins or leaves: the prims it defines, or whose
+ * arcs it changes, are resynced; those it only overrides are info-only,
+ * with the properties it holds for them in `resyncedProperties`; `/` is
+ * info-only when the stage's own layer stack changed. Reordering a layer's
+ * sublayers counts as removing and inserting every one of them, as
+ * OpenUSD announces it. Four differences from OpenUSD are deliberate: a
+ * sublayer that moves a child among its siblings resyncs that child, where
+ * OpenUSD reports it info-only and keeps a stale child order (OpenUSD bug
+ * B037); inserting a muted sublayer reports `/` alone, where OpenUSD
+ * resyncs the prims it defines, which compose neither before nor after
+ * (OpenUSD bug B038); for a layer a reference reaches that is a sublayer
+ * too, a reorder of its sublayer list resyncs the referencing prims as
+ * well, and its removal does not resync them, where OpenUSD does though
+ * they compose the same; and a root layer reloaded with namespace changes
+ * reports its other changed prims in `changedInfoOnly` without `properties`,
+ * where OpenUSD lists their properties.
  */
 export interface Changes {
   /** Prims that exist now and did not before. */

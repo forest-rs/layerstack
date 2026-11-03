@@ -30,6 +30,7 @@
     {
      "heard": [
       {
+       "fields": {},
        "info": [],
        "resynced": [
         "/P"
@@ -88,6 +89,7 @@
     {
      "heard": [
       {
+       "fields": {},
        "info": [],
        "resynced": [
         "/P"
@@ -149,6 +151,11 @@
     {
      "heard": [
       {
+       "fields": {
+        "/P.p": [
+         "default"
+        ]
+       },
        "info": [
         "/P.p"
        ],
@@ -183,6 +190,7 @@
     {
      "heard": [
       {
+       "fields": {},
        "info": [],
        "resynced": [
         "/P"
@@ -215,6 +223,7 @@
     {
      "heard": [
       {
+       "fields": {},
        "info": [],
        "resynced": [
         "/P"
@@ -276,6 +285,7 @@
     {
      "heard": [
       {
+       "fields": {},
        "info": [],
        "resynced": [
         "/B",
@@ -334,6 +344,7 @@
     {
      "heard": [
       {
+       "fields": {},
        "info": [],
        "resynced": [
         "/B",
@@ -396,6 +407,11 @@
     {
      "heard": [
       {
+       "fields": {
+        "/B.y": [
+         "default"
+        ]
+       },
        "info": [
         "/B.y"
        ],
@@ -430,6 +446,7 @@
     {
      "heard": [
       {
+       "fields": {},
        "info": [],
        "resynced": [
         "/B",
@@ -463,6 +480,7 @@
     {
      "heard": [
       {
+       "fields": {},
        "info": [],
        "resynced": [
         "/B",
@@ -525,6 +543,13 @@
     {
      "heard": [
       {
+       "fields": {
+        "/": [
+         "subLayerOffsets",
+         "subLayers"
+        ],
+        "/A": []
+       },
        "info": [
         "/",
         "/A"
@@ -585,6 +610,13 @@
     {
      "heard": [
       {
+       "fields": {
+        "/": [
+         "subLayerOffsets",
+         "subLayers"
+        ],
+        "/A": []
+       },
        "info": [
         "/",
         "/A"
@@ -649,6 +681,11 @@
     {
      "heard": [
       {
+       "fields": {
+        "/A.e": [
+         "default"
+        ]
+       },
        "info": [
         "/A.e"
        ],
@@ -683,6 +720,13 @@
     {
      "heard": [
       {
+       "fields": {
+        "/": [
+         "subLayerOffsets",
+         "subLayers"
+        ],
+        "/A": []
+       },
        "info": [
         "/",
         "/A"
@@ -718,6 +762,13 @@
     {
      "heard": [
       {
+       "fields": {
+        "/": [
+         "subLayerOffsets",
+         "subLayers"
+        ],
+        "/A": []
+       },
        "info": [
         "/",
         "/A"
@@ -782,6 +833,7 @@
     {
      "heard": [
       {
+       "fields": {},
        "info": [],
        "resynced": [
         "/R"
@@ -839,6 +891,7 @@
     {
      "heard": [
       {
+       "fields": {},
        "info": [],
        "resynced": [
         "/R"
@@ -902,6 +955,11 @@
     {
      "heard": [
       {
+       "fields": {
+        "/R.r": [
+         "default"
+        ]
+       },
        "info": [
         "/R.r"
        ],
@@ -936,6 +994,7 @@
     {
      "heard": [
       {
+       "fields": {},
        "info": [],
        "resynced": [
         "/R"
@@ -968,6 +1027,7 @@
     {
      "heard": [
       {
+       "fields": {},
        "info": [],
        "resynced": [
         "/R"

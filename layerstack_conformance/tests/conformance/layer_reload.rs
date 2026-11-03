@@ -26,10 +26,10 @@
 //!
 //! Notices map as `property_resync.rs` maps them: resynced prims and
 //! properties are resynced paths, and info-only prims and properties
-//! info-only paths. The notices of one step are merged, as one
-//! `SdfChangeBlock` merges them:
-//! layerstack publishes a reload in one notice, but a deferred arc whose
-//! missing asset now resolves in a second.
+//! info-only paths, each with its changed fields (`GetChangedFields`).
+//! The notices of one step are merged, as one `SdfChangeBlock` merges
+//! them: layerstack publishes a reload in one notice, but a deferred arc
+//! whose missing asset now resolves in a second.
 //!
 //! The root layer opened by a search-path identifier (`search_root.usda`)
 //! is resolved again too: a stage reload looks for it where it is first,
@@ -49,6 +49,8 @@ use layerstack_io::{
     IoError, IoErrorKind, LoadReport, ReloadPolicy, SourceVersion, StageDocument, Storage,
 };
 use serde_json::{Value as Json, json};
+
+use crate::support::notices;
 
 const ORACLE: &str = include_str!("../../fixtures/layer_reload/oracle.json");
 
@@ -163,8 +165,9 @@ impl Storage for Files {
     }
 }
 
-/// The notices a stage sent, as the oracle records them.
-type Heard = Arc<Mutex<Vec<(BTreeSet<String>, BTreeSet<String>)>>>;
+/// The notices a stage sent, as the oracle records them: the resynced
+/// paths, and the info-only ones with their changed fields.
+type Heard = Arc<Mutex<Vec<(BTreeSet<String>, BTreeMap<String, BTreeSet<String>>)>>>;
 
 struct Case {
     doc: StageDocument<Files>,
@@ -189,29 +192,8 @@ impl Case {
         let (_, live) = doc.parts_mut();
         live.subscribe_changes(move |notice| {
             let (paths, tokens) = (notice.store.paths(), notice.store.tokens());
-            let changes = notice.changes;
-            let resynced: BTreeSet<String> = changes
-                .resynced
-                .iter()
-                .map(|p| paths.display(*p, tokens))
-                .chain(
-                    changes
-                        .resynced_properties
-                        .iter()
-                        .map(|p| p.display(paths, tokens)),
-                )
-                .collect();
-            let info: BTreeSet<String> = changes
-                .changed_info_only
-                .iter()
-                .map(|p| paths.display(*p, tokens))
-                .chain(
-                    changes
-                        .changed_properties
-                        .iter()
-                        .map(|c| c.property.display(paths, tokens)),
-                )
-                .collect();
+            let resynced = notices::resynced_paths(notice.changes, paths, tokens);
+            let info = notices::notice_info_fields(&notice);
             if !resynced.is_empty() || !info.is_empty() {
                 sink.lock().unwrap().push((resynced, info));
             }
@@ -228,10 +210,12 @@ impl Case {
             return json!([]);
         }
         let mut resynced = BTreeSet::new();
-        let mut info = BTreeSet::new();
+        let mut info: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
         for (r, i) in heard {
             resynced.extend(r);
-            info.extend(i);
+            for (path, fields) in i {
+                info.entry(path).or_default().extend(fields);
+            }
         }
         let beneath = |path: &str, roots: &BTreeSet<String>| {
             roots.iter().any(|root| {
@@ -241,7 +225,7 @@ impl Case {
                             || path.starts_with(&format!("{root}."))))
             })
         };
-        info.retain(|path| !beneath(path, &resynced));
+        info.retain(|path, _| !beneath(path, &resynced));
         json!([{"resynced": resynced, "info": info}])
     }
 
@@ -386,7 +370,7 @@ fn expected(step: &Json) -> Json {
             .as_array()
             .unwrap()
             .iter()
-            .map(|notice| json!({"resynced": notice["resynced"], "info": notice["info"]}))
+            .map(|notice| json!({"resynced": notice["resynced"], "info": notice["fields"]}))
             .collect::<Vec<_>>(),
     });
     if let Some(returned) = step.get("returned") {
@@ -407,10 +391,12 @@ fn expected(step: &Json) -> Json {
 /// prims otherwise; layerstack composes the new order and resyncs the
 /// child it moved, as it reports any child order a change moves
 /// (`prim_resync.rs`, `override_reorders_children`).
-///
 fn deliberate(name: &str, call: &[&str]) -> Option<Json> {
     match (name, call) {
-        ("sublayer_added", ["reload"]) => Some(json!([{"resynced": ["/A"], "info": ["/"]}])),
+        ("sublayer_added", ["reload"]) => Some(json!([{
+            "resynced": ["/A"],
+            "info": {"/": ["subLayerOffsets", "subLayers"]},
+        }])),
         _ => None,
     }
 }

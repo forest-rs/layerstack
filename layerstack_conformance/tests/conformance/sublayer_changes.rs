@@ -19,8 +19,8 @@
 //! what a stage composed afresh on the same layers composes.
 //!
 //! Notices map as `layer_reload.rs` maps them: resynced prims and
-//! properties are resynced paths; an info-only prim with a property
-//! inventory is its properties' paths, one without is its own path. The
+//! properties are resynced paths, and info-only prims and properties
+//! info-only paths, each with its changed fields (`GetChangedFields`). The
 //! notices of one step are merged, as one change block merges them, and a
 //! notice naming nothing is no notice.
 //!
@@ -44,7 +44,7 @@
 //!   removed layer's specs in every layer stack holding the layer, `/R`'s
 //!   referenced one among them, and resyncs it.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -52,6 +52,8 @@ use layerstack::{LayerId, LayerOffset, Stage, StageOptions, SublayerEntry, Time,
 use layerstack_conformance::workspace_root;
 use layerstack_io::{Filesystem, StageDocument};
 use serde_json::{Value as Json, json};
+
+use crate::support::notices;
 
 const ORACLE: &str = include_str!("../../fixtures/sublayer_changes/oracle.json");
 
@@ -89,8 +91,12 @@ fn relative(directory: &Path, identifier: &str) -> String {
         .map_or(identifier.clone(), str::to_string)
 }
 
-/// The notices a stage sent: resynced and info-only paths of each.
-type Heard = Arc<Mutex<Vec<(BTreeSet<String>, BTreeSet<String>)>>>;
+/// The paths of one notice: the resynced ones, and the info-only ones with
+/// their changed fields.
+type Notice = (BTreeSet<String>, BTreeMap<String, BTreeSet<String>>);
+
+/// The notices a stage sent.
+type Heard = Arc<Mutex<Vec<Notice>>>;
 
 struct Case {
     directory: PathBuf,
@@ -110,29 +116,8 @@ impl Case {
         let (_, live) = doc.parts_mut();
         live.subscribe_changes(move |notice| {
             let (paths, tokens) = (notice.store.paths(), notice.store.tokens());
-            let changes = notice.changes;
-            let resynced: BTreeSet<String> = changes
-                .resynced
-                .iter()
-                .map(|p| paths.display(*p, tokens))
-                .chain(
-                    changes
-                        .resynced_properties
-                        .iter()
-                        .map(|p| p.display(paths, tokens)),
-                )
-                .collect();
-            let info: BTreeSet<String> = changes
-                .changed_info_only
-                .iter()
-                .map(|p| paths.display(*p, tokens))
-                .chain(
-                    changes
-                        .changed_properties
-                        .iter()
-                        .map(|c| c.property.display(paths, tokens)),
-                )
-                .collect();
+            let resynced = notices::resynced_paths(notice.changes, paths, tokens);
+            let info = notices::notice_info_fields(&notice);
             if !resynced.is_empty() || !info.is_empty() {
                 sink.lock().unwrap().push((resynced, info));
             }
@@ -266,13 +251,15 @@ impl Case {
 
 /// `heard`'s notices merged as one change block merges them: a path
 /// resynced in one is not info-only in another, nor is a path beneath a
-/// resynced one, and an info-only prim covers its properties.
-fn merged(heard: impl Iterator<Item = (BTreeSet<String>, BTreeSet<String>)>) -> Json {
+/// resynced one, and an info-only path's fields are those of all.
+fn merged(heard: impl Iterator<Item = Notice>) -> Json {
     let mut resynced = BTreeSet::new();
-    let mut info = BTreeSet::new();
+    let mut info: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for (r, i) in heard {
         resynced.extend(r);
-        info.extend(i);
+        for (path, fields) in i {
+            info.entry(path).or_default().extend(fields);
+        }
     }
     if resynced.is_empty() && info.is_empty() {
         return json!([]);
@@ -285,19 +272,8 @@ fn merged(heard: impl Iterator<Item = (BTreeSet<String>, BTreeSet<String>)>) -> 
                         || path.starts_with(&format!("{root}."))))
         })
     };
-    info.retain(|path| !beneath(path, &resynced));
-    json!([{"resynced": resynced, "info": covered(info)}])
-}
-
-/// `info` without the properties of the prims it lists.
-fn covered(info: BTreeSet<String>) -> BTreeSet<String> {
-    info.iter()
-        .filter(|path| {
-            path.rsplit_once('.')
-                .is_none_or(|(prim, _)| prim.is_empty() || !info.contains(prim))
-        })
-        .cloned()
-        .collect()
+    info.retain(|path, _| !beneath(path, &resynced));
+    json!([{"resynced": resynced, "info": info}])
 }
 
 /// The oracle's notices of a step, as [`merged`] merges them.
@@ -309,13 +285,15 @@ fn expected_heard(step: &Json) -> Json {
             .map(|path| path.as_str().unwrap().to_owned())
             .collect()
     };
-    merged(
-        step["heard"]
-            .as_array()
+    merged(step["heard"].as_array().unwrap().iter().map(|notice| {
+        let fields = notice["fields"]
+            .as_object()
             .unwrap()
             .iter()
-            .map(|notice| (strings(&notice["resynced"]), strings(&notice["info"]))),
-    )
+            .map(|(path, fields)| (path.clone(), strings(fields)))
+            .collect();
+        (strings(&notice["resynced"]), fields)
+    }))
 }
 
 /// The deliberate differences of the module docs: what layerstack
@@ -323,14 +301,20 @@ fn expected_heard(step: &Json) -> Json {
 fn deliberate(name: &str, step: usize) -> Option<Json> {
     match (name, step) {
         // OpenUSD bug B038: OpenUSD resyncs `/N` too.
-        ("muted_insert", 2) => Some(json!([{"resynced": [], "info": ["/"]}])),
+        ("muted_insert", 2) => Some(json!([{
+            "resynced": [],
+            "info": {"/": ["subLayerOffsets", "subLayers"]},
+        }])),
         // The reorder resyncs `/R` too, which OpenUSD does not.
         ("referenced_as_sublayer", 2) => Some(json!([{
             "resynced": ["/A.y", "/Asset", "/R", "/S", "/W"],
-            "info": ["/", "/A"],
+            "info": {"/": ["subLayers"], "/A": []},
         }])),
         // The removal leaves `/R`, which OpenUSD resyncs.
-        ("referenced_as_sublayer", 3) => Some(json!([{"resynced": ["/Asset"], "info": ["/"]}])),
+        ("referenced_as_sublayer", 3) => Some(json!([{
+            "resynced": ["/Asset"],
+            "info": {"/": ["subLayerOffsets", "subLayers"]},
+        }])),
         _ => None,
     }
 }

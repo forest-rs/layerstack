@@ -20,7 +20,7 @@ force). After each step it records the composed values of the attributes
 the layers author (`null` for none), the stage's prims, each file layer
 the stage uses with whether it is dirty and where it resolves (relative to
 the case's directory), the `UsdNotice::ObjectsChanged` paths the step
-sent, whether OpenUSD raised an error, and what a layer reload returned.
+sent (with `GetChangedFields` of the info-only ones), whether OpenUSD raised an error, and what a layer reload returned.
 
 What it shows, with the 26.11 code that does it:
 
@@ -263,16 +263,20 @@ CASES = [
 
 
 class Listener:
-    """The paths of the `ObjectsChanged` notices a stage sends."""
+    """The paths of the `ObjectsChanged` notices a stage sends, with the
+    changed fields of the info-only ones."""
 
     def __init__(self, stage):
         self.heard = []
         self.key = Tf.Notice.Register(Usd.Notice.ObjectsChanged, self.on, stage)
 
     def on(self, notice, sender):
+        info = sorted(str(p) for p in notice.GetChangedInfoOnlyPaths())
         self.heard.append({
             "resynced": sorted(str(p) for p in notice.GetResyncedPaths()),
-            "info": sorted(str(p) for p in notice.GetChangedInfoOnlyPaths()),
+            "info": info,
+            # `GetChangedFields` of each info-only path.
+            "fields": {p: sorted(notice.GetChangedFields(p)) for p in info},
         })
 
     def take(self):

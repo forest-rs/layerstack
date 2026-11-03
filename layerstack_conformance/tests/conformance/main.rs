@@ -85,6 +85,7 @@ mod generated_assets;
 mod geometry_extent_coverage;
 mod guarded_xform;
 mod implied_classes;
+mod inactive_children;
 mod incremental_edge_cases;
 mod inner_loops;
 mod instance_proxies;

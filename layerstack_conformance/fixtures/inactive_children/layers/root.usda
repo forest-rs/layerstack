@@ -1,0 +1,82 @@
+#usda 1.0
+(
+    subLayers = [
+        @weak.usda@
+    ]
+)
+
+def "P"
+{
+    def "A"
+    {
+    }
+
+    def "B" (
+        active = false
+    )
+    {
+        def "Inner"
+        {
+        }
+    }
+
+    def "C"
+    {
+    }
+
+    def "D" (
+        active = false
+    )
+    {
+    }
+}
+
+def "R" (
+    prepend references = @asset.usda@</Asset>
+)
+{
+    over "Y" (
+        active = false
+    )
+    {
+    }
+}
+
+def "V" (
+    variants = {
+        string look = "one"
+    }
+    prepend variantSets = "look"
+)
+{
+    variantSet "look" = {
+        "one" {
+            def "M"
+            {
+            }
+
+            def "N" (
+                active = false
+            )
+            {
+            }
+
+            def "O"
+            {
+            }
+
+        }
+        "two" {
+            def "N"
+            {
+            }
+
+            def "M" (
+                active = false
+            )
+            {
+            }
+
+        }
+    }
+}

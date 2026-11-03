@@ -2486,18 +2486,28 @@ impl Stage {
 
     /// Returns `true` if a partial composition shows that recomposing
     /// `recomposed` changes hierarchy: a recomposed prim appears or
-    /// disappears, its children differ in membership or order, or it becomes
-    /// or stops being an instance, which recomposes all its descendants.
+    /// disappears, becomes active or inactive (which changes its parent's
+    /// active children), its children, active or inactive, differ in
+    /// membership or order, or it becomes or stops being an instance,
+    /// which recomposes all its descendants.
     ///
     /// The partial composition's mask must include the current children of
-    /// every recomposed prim, so its child lists for those prims are complete
-    /// with respect to this stage. Paths this stage has never populated (for
+    /// every recomposed prim, inactive ones included, so its child lists
+    /// for those prims are complete with respect to this stage, and tell
+    /// inactive children from active ones. Paths this stage has never populated (for
     /// example children introduced by a new variant selection) are outside
     /// the mask and invisible here; such edits must be reported as structural
     /// changes.
     pub(crate) fn hierarchy_diverges(&self, partial: &Self, recomposed: &[PathId]) -> bool {
+        // Spec: AOUSD Core §7.6 (`active`), §11 (stage population: an
+        // inactive prim is populated, its descendants are not). OpenUSD
+        // resyncs a prim whose `active` or `primOrder` changes
+        // (`UsdStage::_HandleLayersDidChange`).
         recomposed.iter().any(|prim| {
             self.has_prim(*prim) != partial.has_prim(*prim)
+                || self.is_active(*prim) != partial.is_active(*prim)
+                || self.all_children_of(*prim).unwrap_or(&[])
+                    != partial.all_children_of(*prim).unwrap_or(&[])
                 || self.children_of(*prim).unwrap_or(&[])
                     != partial.children_of(*prim).unwrap_or(&[])
                 || self.instances.contains(prim) != partial.instances.contains(prim)

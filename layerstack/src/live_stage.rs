@@ -13,11 +13,15 @@
 use crate::sort;
 use alloc::{collections::BTreeSet, sync::Arc, vec::Vec};
 
+#[cfg(test)]
+mod as_fresh;
 mod controls;
 mod mask;
 pub use mask::MaskExpansionReport;
 mod discovery;
 pub use controls::RecompositionWork;
+#[cfg(test)]
+mod inactive_children;
 mod local;
 mod notices;
 mod restack;
@@ -2687,19 +2691,23 @@ impl LiveStage {
     }
 
     /// Composes `affected` with a population mask that also holds the arc
-    /// sources they draw on and their current children.
+    /// sources they draw on and their current children, inactive ones
+    /// included.
     ///
     /// The arc sources let composition read inherit and reference targets;
     /// the children make the masked composition's child lists for
     /// `affected` complete, so [`Stage::hierarchy_diverges`] can detect
-    /// hierarchy changes.
+    /// hierarchy changes. Inactive children are composed too (their own
+    /// descendants are not), so that the masked composition tells them
+    /// from active ones: a child list the mask leaves out is listed whole,
+    /// as if every child were active.
     fn compose_scoped(&mut self, store: &mut dyn LayerStore, affected: &[PathId]) -> Stage {
         self.compose_exact(store, affected, true)
     }
 
     /// Composes `affected` with a population mask that holds them exactly
     /// and the arc sources they draw on, and, with `children`, their
-    /// current children ([`Self::compose_scoped`]). Without them the
+    /// current children, inactive ones included ([`Self::compose_scoped`]). Without them the
     /// masked composition still lists each prim's children whole, but
     /// does not compose them, so it cannot tell which are inactive.
     fn compose_exact(
@@ -2714,7 +2722,13 @@ impl LiveStage {
                 mask_set.insert(dep);
             }
             if children {
-                mask_set.extend(self.stage.children_of(prim).unwrap_or(&[]).iter().copied());
+                mask_set.extend(
+                    self.stage
+                        .all_children_of(prim)
+                        .unwrap_or(&[])
+                        .iter()
+                        .copied(),
+                );
             }
         }
         let mask_vec: Vec<PathId> = mask_set.into_iter().collect();

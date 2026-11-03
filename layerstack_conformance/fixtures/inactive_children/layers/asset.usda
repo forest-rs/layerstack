@@ -1,0 +1,18 @@
+#usda 1.0
+
+def "Asset"
+{
+    def "X"
+    {
+    }
+
+    def "Y"
+    {
+    }
+
+    def "Z" (
+        active = false
+    )
+    {
+    }
+}

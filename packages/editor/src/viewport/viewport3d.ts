@@ -23,7 +23,10 @@
 // what is already in view centres and fits it again); a box that is not
 // one frames nothing, and one of no size is framed in its surroundings.
 // The clipping range follows the camera as it orbits and zooms, so it
-// always reaches the scene.
+// always reaches the scene. Whichever camera is active, every pass (the
+// cluster cut, the bundled and direct draws, the translucent pass, picking,
+// the outline) draws through one view camera that takes its matrices each
+// frame (`viewCamera.ts`, which says why).
 //
 // Lights: `UsdLux` emission is luminance in nits (cd/m²); stagehand's
 // `LightItem.emission.radiance` is `color * blackbody * intensity *
@@ -236,6 +239,7 @@ import { useSharedRectAreaTables } from "./rectAreaLights.ts";
 import { fixNodes, setFixedNode } from "./fixedNodes.ts";
 import { onRendererLost, sharedRenderer } from "./gpu.ts";
 import { type Box, clipRange, frameBox, orbitFrom, reachFrom, sphereOf, verticalFov, viewDirection } from "./framing.ts";
+import { followCamera, followMatrices, makeViewCamera } from "./viewCamera.ts";
 import { SkinnedDraw, withSkinning } from "./skinning.ts";
 import { TextureStore, surfaceMaterial, uvChannels } from "./surfaces.ts";
 import { standinGeometry, standinMaterials } from "./standins.ts";
@@ -279,8 +283,12 @@ export class Viewport {
   readonly #scene = new Scene();
   /** The free camera, which the orbit controls move. */
   readonly #camera = new PerspectiveCamera(45, 1, 0.05, 500);
-  /** The stage's camera: its matrices are set from layerstack's, never computed by three.js. */
-  readonly #stageCamera = new Camera();
+  /**
+   * The camera every pass draws through: the free camera's or the stage
+   * camera's matrices, set before each pass ({@link #prepareCamera},
+   * `viewCamera.ts`), never computed by three.js.
+   */
+  readonly #view = makeViewCamera();
   #controls: OrbitControls;
   /** The ground grid, across the stage's up axis, its cells a power of ten sized to what is framed. */
   #grid: GridHelper;
@@ -395,10 +403,7 @@ export class Viewport {
       },
       BUNDLE_CAPACITY,
     );
-    this.#stageCamera.matrixAutoUpdate = false;
-    this.#stageCamera.matrixWorldAutoUpdate = false;
-    // The stage camera's projection is converted to WebGPU's depth range here ({@link #prepareCamera}).
-    this.#stageCamera.coordinateSystem = WebGPUCoordinateSystem;
+    // A stage camera's projection is converted to WebGPU's depth range in {@link #prepareCamera}.
     this.#camera.coordinateSystem = WebGPUCoordinateSystem;
     this.#camera.updateProjectionMatrix();
     this.#grid = makeGrid("Y", 1);
@@ -1636,24 +1641,28 @@ export class Viewport {
     this.#draws.keepDirect(object);
   }
 
-  /** The camera drawn through: the free one, or the stage camera with its matrices set for the canvas. */
-  #prepareCamera(): Camera {
+  /**
+   * The camera drawn through, {@link #view}, pointed as the active camera
+   * is now: the free one, or the stage camera with its matrices set for
+   * the canvas. One camera object whichever is active, so three.js's
+   * render bundles stay valid across a switch (`viewCamera.ts`).
+   */
+  #prepareCamera(): PerspectiveCamera {
+    const view = this.#view;
     const looking = this.#looking()?.camera ?? null;
     if (looking === null) {
       this.#camera.updateMatrixWorld();
-      return this.#camera;
+      followCamera(view, this.#camera);
+      return view;
     }
     // Row-by-row row-vector matrices are three.js's column-major
     // column-vector ones: `fromArray` reads them as they are.
     const { clientWidth: width, clientHeight: height } = this.#canvas;
     const fitted = conformCamera(looking, "fit", height > 0 ? width / height : 1);
-    const camera = this.#stageCamera;
     // OpenGL's clip depth, [-w, w], taken to WebGPU's [0, w].
-    camera.projectionMatrix.fromArray(fitted.projectionMatrix).premultiply(GL_TO_WEBGPU_DEPTH);
-    camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
-    camera.matrixWorldInverse.fromArray(fitted.view);
-    camera.matrixWorld.copy(camera.matrixWorldInverse).invert();
-    return camera;
+    const projection = STAGE_PROJECTION.fromArray(fitted.projectionMatrix).premultiply(GL_TO_WEBGPU_DEPTH);
+    followMatrices(view, fitted.view, projection, fitted.clippingRange[0]!, fitted.clippingRange[1]!);
+    return view;
   }
 
   /**
@@ -2119,6 +2128,9 @@ type Matrix16 = [number, number, number, number, number, number, number, number,
 
 /** The matrix `#place` writes each instance through, reused: placing allocates nothing per instance or update. */
 const PLACED = new Matrix4();
+
+/** A stage camera's projection in WebGPU's clip space, reused. */
+const STAGE_PROJECTION = new Matrix4();
 
 /** OpenGL's clip depth taken to WebGPU's: `z' = (z + w) / 2`. */
 const GL_TO_WEBGPU_DEPTH = new Matrix4().set(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0.5, 0.5, 0, 0, 0, 1);

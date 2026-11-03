@@ -4,19 +4,21 @@
 // The built-in presentations of values: what a value is shown as, inline,
 // and the editor that accepts a new one, by the value's presentation type
 // (`registry.ts`'s `valueTypes`). A colour is a swatch (linear values
-// painted in sRGB, `color.ts`) and a picker; a colour array a strip of its
-// first elements, `displayOpacity` as their alpha; a token the schema
-// restricts a menu of its tokens; a `bool` a switch; a number or a tuple
-// fields that commit on Enter; an asset path its file, live (a click shows
-// the image). Each `accept` authors through the callback the host gives,
-// one edit where edits go.
+// painted in sRGB, `color.ts`) and a picker, and so is a float tuple that
+// is a colour by what it is for (dashed, saying why); a colour array a
+// strip of its first elements, `displayOpacity` as their alpha; a token
+// the schema restricts a menu of its tokens; a `bool` a switch; a number
+// or a tuple fields that commit on Enter; an asset path its file, live (a
+// click shows the image). Each `accept` authors through the callback the
+// host gives, one edit where edits go.
 import type { Attribute, ValueInput } from "@forest-rs/layerstack";
 import { ColorPickerButton, ColorSwatch } from "@/components/ui/color-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { type ColorLike, colorLike, colorLikeCue } from "../../model/colorLike.ts";
 import { formatNumber, leadingNumbers, releaseValue } from "../../model/values.ts";
 import { hexToLinear, linearToHex, swatchCss, swatches } from "../../presentations/color.ts";
-import { type AcceptProps, type PresentProps, registerCommand, registerPresentation } from "../../presentations/registry.ts";
+import { type AcceptProps, type PresentationContext, type PresentProps, registerCommand, registerPresentation, type ValueObject } from "../../presentations/registry.ts";
 import { allowedTokens, CommitField } from "../fields.tsx";
 import { Live } from "./Present.tsx";
 
@@ -41,8 +43,12 @@ function ValueText(props: PresentProps<"value">) {
   return <Text text={props.object.shown.text} />;
 }
 
-/** Fields of a tuple's numbers (and, for a colour, its picker), each committing the tuple with one number changed. */
-function TupleFields({ props, accept, color }: { props: PresentProps<"value">; accept: (value: ValueInput) => void; color: boolean }) {
+/**
+ * Fields of a tuple's numbers (and, for a colour, its picker), each
+ * committing the tuple with one number changed. A colour inferred from
+ * what the value is for (`cue`) has a dashed picker that says why.
+ */
+function TupleFields({ props, accept, color, cue }: { props: PresentProps<"value">; accept: (value: ValueInput) => void; color: boolean; cue?: string }) {
   const channels = tupleOf(props);
   if (channels === null || channels.length > 4) return <ValueText {...props} />;
   const type = props.object.typeName;
@@ -51,7 +57,8 @@ function TupleFields({ props, accept, color }: { props: PresentProps<"value">; a
     <div className="flex w-full items-center gap-1">
       {color && (
         <ColorPickerButton
-          label={`${label} color`}
+          label={cue === undefined ? `${label} color` : `${label} ${cue}`}
+          className={cue === undefined ? undefined : "border-dashed border-foreground/40"}
           value={linearToHex(channels)}
           onCommit={(hex) => {
             const rgb = hexToLinear(hex);
@@ -84,6 +91,37 @@ function ColorInline(props: PresentProps<"value">) {
     <span className="flex min-w-0 items-center gap-1.5">
       <ColorSwatch color={swatchCss(channels, channels.length > 3 ? channels[3] : 1)} />
       <Text text={props.object.shown.text} />
+    </span>
+  );
+}
+
+/** Why a `colorLike` value is a colour, from the session's cached network reads; `null` when it is not one (or there is no session). */
+function inferred(object: ValueObject, context: PresentationContext): ColorLike | null {
+  const session = context.store?.session ?? null;
+  return object.attribute === null || session === null ? null : colorLike(session, object.attribute.path);
+}
+
+/** A float tuple that is a colour by what it is for: a dashed swatch, its numbers, and why in its tooltip. */
+function ColorLikeInline(props: PresentProps<"value">) {
+  const channels = tupleOf(props);
+  const found = inferred(props.object, props.context);
+  if (channels === null || found === null) return <ValueText {...props} />;
+  const cue = colorLikeCue(found);
+  return (
+    <span className="flex min-w-0 items-center gap-1.5" title={`${cue}: ${props.object.shown.text}`}>
+      <ColorSwatch color={swatchCss(channels, channels.length > 3 ? channels[3] : 1)} className="border-dashed border-foreground/60" />
+      <Text text={props.object.shown.text} />
+    </span>
+  );
+}
+
+/** A colour-like tuple's editor: the picker (dashed, saying why it is a colour) beside the fields of its numbers. */
+function ColorLikeAccept(props: AcceptProps<"value">) {
+  const found = inferred(props.object, props.context);
+  const cue = found === null ? null : colorLikeCue(found);
+  return (
+    <span className="flex w-full min-w-0" title={cue === null ? undefined : `${cue}: ${props.object.shown.text}`}>
+      <TupleFields props={props} accept={props.accept} color={cue !== null} cue={cue ?? undefined} />
     </span>
   );
 }
@@ -261,6 +299,17 @@ export function registerValuePresentations(): void {
     type: "color",
     inline: ColorInline,
     accept: (props) => <TupleFields props={props} accept={props.accept} color />,
+  });
+  // A float tuple that is a colour by the input it is or what it feeds
+  // (`model/colorLike.ts`); the numbers stay beside the picker. The picker
+  // edits the linear values, painted in sRGB as any colour.
+  registerPresentation({
+    id: "builtin.color-like",
+    kind: "value",
+    type: "colorLike",
+    applies: (object, context) => object.shown.value?.kind === "tuple" && inferred(object, context) !== null,
+    inline: ColorLikeInline,
+    accept: ColorLikeAccept,
   });
   registerPresentation({ id: "builtin.color-array", kind: "value", type: "color[]", inline: ColorArrayInline, accept: ColorArrayAccept });
 

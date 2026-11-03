@@ -43,6 +43,9 @@ What it shows, with the 26.11 code that does it:
   reload in the same call; `SdfLayer::ReloadLayers` warns and the parse
   error is raised after the stage has processed the rest.
 - A file that appears where an arc failed to open resyncs the arc's prim.
+- `SdfLayer::_Reload` re-resolves the root layer's identifier too: a root
+  opened by a search-path identifier moves to the directory that now holds
+  it, on a stage reload as on a reload of the layer alone.
 - A muted layer is not one the stage uses, so a stage reload skips it, and
   the stage held its only use, so it was freed; unmuting opens the file
   anew and composes what was written while it was muted.
@@ -137,6 +140,15 @@ def "Q"
     double q = 1
 }
 ''',
+    # A root layer opened by a search-path identifier, found only in
+    # `second/` until a case writes one into `first/`.
+    "second/search_root.usda": '''#usda 1.0
+
+def "Z"
+{
+    double z = 1
+}
+''',
 }
 
 # The search path each case sets before it opens its stage, relative to
@@ -191,6 +203,17 @@ def "M"
     double m = 5
 }
 ''',
+    "search_root_first": '''#usda 1.0
+
+def "Z"
+{
+    double z = 2
+}
+
+def "Y"
+{
+}
+''',
     "asset_first": '''#usda 1.0
 
 def "Q"
@@ -201,9 +224,11 @@ def "Q"
 }
 
 # The attributes recorded after each step.
-ATTRIBUTES = ["/A.x", "/A.e", "/B.y", "/S.z", "/S2.z", "/T.w", "/R.r", "/M.m", "/Q.q"]
+ATTRIBUTES = ["/A.x", "/A.e", "/B.y", "/S.z", "/S2.z", "/T.w", "/R.r", "/M.m", "/Q.q", "/Z.z"]
 
-# Each case: its name and the steps it takes after opening the stage.
+# Each case: its name, the steps it takes after opening the stage, and
+# optionally the identifier it opens the stage on (`root.usda` in the
+# case's directory otherwise).
 CASES = [
     ("unchanged", [["reload"]]),
     ("value", [["rewrite", "sub.usda", "sub_value"], ["reload"]]),
@@ -229,6 +254,11 @@ CASES = [
                                   ["layer_reload", "asset.usda"]]),
     ("muted", [["mute", "sub.usda"], ["rewrite", "sub.usda", "sub_changed"], ["reload"],
                ["unmute", "sub.usda"]]),
+    ("search_path_root", [["create_search", "first", "search_root.usda", "search_root_first"],
+                          ["reload"]], "search_root.usda"),
+    ("search_path_root_layer_reload",
+     [["create_search", "first", "search_root.usda", "search_root_first"],
+      ["layer_reload", "search_root.usda"]], "search_root.usda"),
 ]
 
 
@@ -347,7 +377,7 @@ def record(stage, directory, step, listener, returned=None, raised=False):
     return entry
 
 
-def case_record(out, name, steps):
+def case_record(out, name, steps, root=None):
     directory = os.path.join(out, "work", name)
     shutil.copytree(os.path.join(out, "layers"), directory)
     directory = os.path.realpath(directory)
@@ -355,7 +385,9 @@ def case_record(out, name, steps):
     # before it opens its stage.
     Ar.DefaultResolver.SetDefaultSearchPath(
         [os.path.join(directory, d) for d in SEARCH_PATH])
-    stage = Usd.Stage.Open(os.path.join(directory, "root.usda"))
+    # A search-path identifier is looked for in the working directory
+    # first; the oracle's is not the case's.
+    stage = Usd.Stage.Open(root or os.path.join(directory, "root.usda"))
     listener = Listener(stage)
     recorded = [record(stage, directory, ["open"], listener)]
     for step in steps:
@@ -365,7 +397,10 @@ def case_record(out, name, steps):
     del stage
     gc.collect()
     Ar.DefaultResolver.SetDefaultSearchPath([])
-    return {"name": name, "steps": recorded}
+    recorded_case = {"name": name, "steps": recorded}
+    if root:
+        recorded_case["root"] = root
+    return recorded_case
 
 
 def write(out):

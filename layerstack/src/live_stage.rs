@@ -1047,6 +1047,9 @@ impl LiveStage {
                 self.refresh_local_structure(store, paths, &outcome.child_lists, &outcome.touched)
         {
             include_resyncs(store, &mut changes, &declaration_resyncs);
+            if !outcome.reloaded.is_empty() {
+                self.include_reloaded(store, &mut changes, &outcome.reloaded);
+            }
             self.publish_preparation(store);
             self.notices.publish(&mut changes, &self.stage, store);
             store.paths().sort_paths(&mut recomposed, store.tokens());

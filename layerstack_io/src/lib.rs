@@ -1141,6 +1141,10 @@ pub struct StageDocument<B> {
     stage: LiveStage,
     storage: B,
     catalog: Catalog,
+    /// The asset path the root layer was opened or created by, which a
+    /// reload resolves again, as `SdfLayer::Reload` resolves a layer's
+    /// identifier again (`pxr/usd/sdf/layer.cpp`).
+    root_asset: Arc<str>,
     import_policy: ImportPolicy,
     usdc_options: UsdcReadOptions,
     package_limits: PackageLimits,
@@ -1281,6 +1285,7 @@ impl<B: Storage> StageDocument<B> {
             stage,
             storage,
             catalog,
+            root_asset: Arc::from(target),
             import_policy: loading.import_policy,
             usdc_options: loading.usdc,
             package_limits: loading.package,
@@ -1387,6 +1392,7 @@ impl<B: Storage> StageDocument<B> {
             stage,
             storage,
             catalog,
+            root_asset: Arc::from(asset),
             import_policy,
             usdc_options: loading.usdc,
             package_limits: loading.package,

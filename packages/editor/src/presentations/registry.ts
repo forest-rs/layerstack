@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 // Presentations, after CLIM's: whatever the editor shows (a prim, a
-// value, a path, a layer) is shown as an object of a presentation type,
+// value, a path, a layer, a point instancer's instance) is shown as an object of a presentation type,
 // and what shows it is chosen by that type, not by the panel showing it.
 // A colour swatch is the presentation of a `color3f` value wherever one
 // appears; a Mesh preview the presentation of a `Mesh` prim.
@@ -17,7 +17,8 @@
 //   three- or four-channel float tuple without a role is `colorLike`
 //   before its type (a presentation that applies when what the value is
 //   for makes it a colour). Paths
-//   are `primPath` or `propertyPath`, then `path`; a layer is `layer`.
+//   are `primPath` or `propertyPath`, then `path`; a layer is `layer`; a
+//   point instancer's instance is `instance`.
 // - **Views.** A registration presents one type in the views it can do:
 //   `inline` (one line: property rows, tables, the explain and changes
 //   panels), `accept` (an inline editor: a colour picker, a token menu),
@@ -63,6 +64,23 @@ export interface ValueObject {
   readonly at: number | null;
 }
 
+/**
+ * One instance of a point instancer, as its view, its chosen-instance
+ * summary and a viewport pick name it (`UsdGeomPointInstancer`: an
+ * instance is an index into its per-instance arrays, and its id is its
+ * `ids` entry, or its index without them).
+ */
+export interface InstanceObject {
+  /** The point instancer's path. */
+  readonly instancer: string;
+  /** Its index in the instancer's arrays (`protoIndices`, `positions`, ...). */
+  readonly index: number;
+  /** Its id: its `ids` entry, or its index when there are none (what `invisibleIds` and `inactiveIds` list). */
+  readonly id: bigint;
+  /** The prototype it places (the `prototypes` target its `protoIndices` entry names); `null` when it names none. */
+  readonly prototype: string | null;
+}
+
 /** Each kind of object the editor presents, and what it holds. */
 export interface PresentedObjects {
   /** A composed prim. */
@@ -75,6 +93,8 @@ export interface PresentedObjects {
   readonly propertyPath: { readonly path: string };
   /** A layer of the stage. */
   readonly layer: { readonly layer: Layer };
+  /** An instance of a point instancer. */
+  readonly instance: InstanceObject;
 }
 
 /** A kind of presented object. */
@@ -239,6 +259,8 @@ export function typesOf(object: Presented): readonly string[] {
       return ["propertyPath", "path"];
     case "layer":
       return ["layer"];
+    case "instance":
+      return ["instance"];
   }
 }
 

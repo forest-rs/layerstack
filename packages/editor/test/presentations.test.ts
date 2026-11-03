@@ -157,6 +157,29 @@ describe("the command registry", () => {
   });
 });
 
+describe("instances", () => {
+  it("are presented as `instance`, with their own commands", () => {
+    const instance = { kind: "instance", instancer: "/World/Field", index: 2, id: 30n, prototype: "/World/Field/Rock" } as const;
+    assert.deepEqual(typesOf(instance), ["instance"]);
+    const registry = new CommandRegistry();
+    const ran: string[] = [];
+    registry.register({ id: "path.select", kind: "primPath", type: "primPath", title: "Select", run: () => ran.push("path") });
+    registry.register({ id: "select", kind: "instance", type: "instance", title: "Select", run: (object) => ran.push(`select ${object.instancer} ${object.index}`) });
+    registry.register({ id: "prototype", kind: "instance", type: "instance", title: "Select its prototype", applies: (object) => object.prototype !== null, run: () => ran.push("prototype") });
+    assert.deepEqual(
+      registry.forObject(instance, context).map((command) => command.id),
+      ["select", "prototype"],
+    );
+    registry.forObject(instance, context)[0]!.run(instance, context);
+    assert.deepEqual(ran, ["select /World/Field 2"]);
+    // An instance that names no prototype is not offered its prototype.
+    assert.deepEqual(
+      registry.forObject({ ...instance, prototype: null }, context).map((command) => command.id),
+      ["select"],
+    );
+  });
+});
+
 describe("swatch colours", () => {
   it("paint linear values through the sRGB transfer function", () => {
     assert.equal(linearToSrgb(0), 0);

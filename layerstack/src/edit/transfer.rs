@@ -821,7 +821,13 @@ mod tests {
         // The pseudo-root, read again, and `/A.x`, whose value it changed.
         assert_eq!(applied.changes.changed_info_only, [root]);
         assert_eq!(applied.changes.prim_fields, []);
-        assert_eq!(applied.changes.properties_of(a).len(), 1);
+        assert_eq!(
+            applied
+                .changes
+                .properties_of(a, store.paths(), store.tokens())
+                .len(),
+            1
+        );
         // Marked alone, it still is.
         let mut edit = Transaction::new();
         edit.mark_reloaded(LayerId(1));

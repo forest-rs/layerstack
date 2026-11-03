@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import type { Stage } from "@forest-rs/layerstack";
 import { anchorAssetPath } from "@forest-rs/layerstack_stagehand";
 import { primOf } from "../../model/network.ts";
-import { resolveAsset } from "../../model/sources.ts";
+import { readAsset } from "../../model/sources.ts";
 import { releaseValue } from "../../model/values.ts";
 import type { PresentationContext } from "../../presentations/registry.ts";
 import type { EditorStore } from "../../store.ts";
@@ -39,7 +39,7 @@ function useImage(store: EditorStore, stage: Stage, file: string, time: number |
       if (identifier === null || source === null) return { url: null, error: assetPath === "" ? "no file" : "cannot be anchored" };
       // Formats the browser cannot show are named, not drawn.
       if (/\.(exr|hdr|tga|tiff?)$/i.test(identifier)) return { url: null, error: identifier.split(".").at(-1)!.toUpperCase() };
-      const bytes = await source.fetch(await resolveAsset(source, identifier, layer));
+      const bytes = await readAsset(source, stage, identifier, layer);
       if (bytes === null) return { url: null, error: "not found" };
       url = URL.createObjectURL(new Blob([bytes.slice()]));
       return { url, error: null };

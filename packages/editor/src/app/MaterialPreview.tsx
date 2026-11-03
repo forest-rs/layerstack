@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import type { Stage } from "@forest-rs/layerstack";
 import { readMaterial } from "@forest-rs/layerstack_stagehand";
 import { readOpenPbr } from "../model/openpbr.ts";
-import { resolveAsset } from "../model/sources.ts";
+import { assetExists, readAsset } from "../model/sources.ts";
 import type { EditorStore } from "../store.ts";
 import type { MaterialPreview as Preview, PreviewSource } from "../viewport/materialPreview.ts";
 
@@ -78,11 +78,11 @@ export function MaterialPreview({
             renderer,
             async (identifier, anchor) => {
               const scene = source();
-              return scene === null ? null : scene.fetch(await resolveAsset(scene, identifier, anchor));
+              return scene === null ? null : readAsset(scene, store.session?.stage ?? null, identifier, anchor);
             },
             async (identifier, anchor) => {
               const scene = source();
-              return scene === null ? false : scene.exists(await resolveAsset(scene, identifier, anchor));
+              return scene === null ? false : assetExists(scene, store.session?.stage ?? null, identifier, anchor);
             },
             shape,
           );

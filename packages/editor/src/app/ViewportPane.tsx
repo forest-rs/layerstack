@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useStore } from "./context.ts";
 import { updateSummary, viewportSummary } from "../model/draws.ts";
-import { resolveAsset } from "../model/sources.ts";
+import { assetExists, readAsset } from "../model/sources.ts";
 import { SKIN_SLOTS } from "../model/skinning.ts";
 import { enclosingMaterial } from "../model/network.ts";
 import { AssetCard, DrawScopeSwitch, TextureView } from "./AssetView.tsx";
@@ -64,11 +64,11 @@ export function ViewportPane() {
             renderer,
             async (identifier, anchor) => {
               const scene = source();
-              return scene === null ? null : scene.fetch(await resolveAsset(scene, identifier, anchor));
+              return scene === null ? null : readAsset(scene, store.session?.stage ?? null, identifier, anchor);
             },
             async (identifier, anchor) => {
               const scene = source();
-              return scene === null ? false : scene.exists(await resolveAsset(scene, identifier, anchor));
+              return scene === null ? false : assetExists(scene, store.session?.stage ?? null, identifier, anchor);
             },
           );
           store.attachViewport(viewport);

@@ -318,6 +318,22 @@ def "Model" (
     await stage.resolve(mockSource({ "set/outside.usda": `#usda 1.0\ndef "Part" {\n    int count = 4\n}\n` }));
     assert.deepEqual(stage.attribute("/Model.count")?.get(), { kind: "scalar", type: "int", value: 4 });
   });
+
+  it("reads a member that is not a layer from the package it holds", () => {
+    // A texture travels inside the package: the host supplied the archive
+    // as one source, so only the stage can read the member.
+    const pack = usdz([
+      ["root.usda", `#usda 1.0\ndef "Model" {\n    asset file = @./tex/wood.png@\n}\n`],
+      ["tex/wood.png", "not really a png"],
+    ]);
+    using stage = layerstack.open({ identifier: "set/model.usdz", bytes: pack });
+    const member = stage.packageMember("set/model.usdz[tex/wood.png]");
+    assert.equal(member === null ? null : new TextDecoder().decode(member), "not really a png");
+    assert.equal(stage.packageMember("./set/model.usdz[tex/wood.png]")?.byteLength, 16, "marked relative to the host's root");
+    assert.equal(stage.packageMember("set/model.usdz[tex/oak.png]"), null, "no such member");
+    assert.equal(stage.packageMember("set/other.usdz[tex/wood.png]"), null, "no such package");
+    assert.equal(stage.packageMember("set/tex/wood.png"), null, "not a package member: the host reads it");
+  });
 });
 
 describe("values and explanations", () => {

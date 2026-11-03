@@ -200,6 +200,7 @@ export interface NativeStage extends Disposable {
   exportLayer(layer: bigint, format: string): Uint8Array;
   exportFlattened(format: string): unknown;
   exportPackage(): unknown;
+  packageMember(identifier: string): Uint8Array | undefined;
   boundMaterials(paths: string[], purpose: string): unknown;
   collectionMembership(path: string, name: string, paths: string[]): unknown;
   materialSubsets(path: string, purpose: string, time?: number | null): unknown;
@@ -2515,6 +2516,25 @@ export class Stage implements Disposable {
     this.#own("exportLayer", layer);
     const bytes = this.#call("exportLayer", (native) => native.exportLayer(layer.id, format));
     this.#ls.count("out", bytes.byteLength);
+    return bytes;
+  }
+
+  /**
+   * The bytes of the package member `identifier` names, as an asset path
+   * authored inside a USDZ package is anchored (`set/model.usdz[textures/wood.png]`,
+   * `@forest-rs/layerstack_stagehand`'s texture identifiers among them),
+   * read from a package the stage holds: a texture packaged with the layers
+   * that use it, which the host cannot read itself since it supplied the
+   * package as one source. `null` when `identifier` names no package member
+   * (read it from the host's storage), the stage holds no such package, or
+   * the package has no such member (AOUSD Core §9.4, §16).
+   *
+   * Throws `io.rejected` for a malformed package path or a member that
+   * cannot be read from its archive.
+   */
+  packageMember(identifier: string): Uint8Array | null {
+    const bytes = this.#call("packageMember", (native) => native.packageMember(identifier)) ?? null;
+    if (bytes !== null) this.#ls.count("out", bytes.byteLength);
     return bytes;
   }
 

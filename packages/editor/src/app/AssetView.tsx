@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { BUDGET_CHOICES, budgetNote, type DrawScopeChoice } from "../model/assetView.ts";
 import { imageInfo, type ImageInfo } from "../model/images.ts";
 import { enclosingMaterial } from "../model/network.ts";
-import { resolveAsset } from "../model/sources.ts";
+import { readAsset } from "../model/sources.ts";
 import type { EditorStore } from "../store.ts";
 import { formatBytes } from "./format.ts";
 
@@ -136,7 +136,7 @@ export function TextureView({ store, stage, attribute }: { store: EditorStore; s
       const identifier = anchorAssetPath(assetPath.replace("<UDIM>", "1001"), layer);
       const source = store.source;
       if (identifier === null || source === null) return { error: assetPath === "" ? "no file authored" : `${assetPath} cannot be anchored` };
-      const bytes = await source.fetch(await resolveAsset(source, identifier, layer));
+      const bytes = await readAsset(source, stage, identifier, layer);
       if (bytes === null) return { error: `${identifier} was not found` };
       url = URL.createObjectURL(new Blob([bytes.slice()]));
       return { url, info: imageInfo(bytes), bytes: bytes.byteLength, identifier };

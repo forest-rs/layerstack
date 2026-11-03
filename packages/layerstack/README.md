@@ -100,7 +100,9 @@ await stage.resolve(source);
   `resolve(source)` runs that loop for you, fetching each round's
   identifiers at once. A USDZ is one buffer: its
   members resolve inside it, and what it references outside is unavailable
-  like anything else. Identifiers are the authored path anchored to the anchor layer's
+  like anything else; `packageMember("set/model.usdz[tex/wood.png]")` reads
+  a member that is not a layer (a texture packaged with them) from the
+  package the stage holds, since the host has no file for it. Identifiers are the authored path anchored to the anchor layer's
   directory (`./a.usda` from `set/scene.usda` is `set/a.usda`); map them to
   URLs however you like. The module keeps supplied bytes only until the
   stage has read a layer from them, unless the layer keeps views of them

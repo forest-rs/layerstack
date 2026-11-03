@@ -30,7 +30,8 @@ export function changesReach(path: string, changes: Changes): boolean {
     reaches(path, changes.created, true) ||
     reaches(path, changes.removed, true) ||
     reaches(path, changes.changedInfoOnly, true) ||
-    reaches(path, changes.resyncedProperties, true)
+    reaches(path, changes.resyncedProperties, true) ||
+    reaches(path, changes.changedProperties.map((change) => change.property), true)
   );
 }
 

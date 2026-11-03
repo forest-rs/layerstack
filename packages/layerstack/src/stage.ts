@@ -77,7 +77,7 @@ import type {
   MeshTopologyProblemCode,
   OpenOptions,
   Opinion,
-  PropertyChange,
+  PropertyFieldChange,
   PackageResult,
   ReleasedLayers,
   ReloadOptions,
@@ -2785,9 +2785,9 @@ export class Stage implements Disposable {
         const [record, muted, unmuted] = this.#call("onChange", (native) =>
           native.takeChanges(this.#listeners.length > 0),
         ) as [Row[] | null, MutingRow[], MutingRow[]];
-        const batches = record === null ? [decodeChanges([[], [], ["/"], [], [], []])] : record.map(decodeChanges);
+        const batches = record === null ? [decodeChanges([[], [], ["/"], [], [], [], []])] : record.map(decodeChanges);
         if (muted.length > 0 || unmuted.length > 0) {
-          const last = batches.pop() ?? decodeChanges([[], [], [], [], [], []]);
+          const last = batches.pop() ?? decodeChanges([[], [], [], [], [], [], []]);
           const [mutedLayers, mutedIdentifiers] = this.#muting(muted);
           const [unmutedLayers, unmutedIdentifiers] = this.#muting(unmuted);
           batches.push({ ...last, mutedLayers, unmutedLayers, mutedIdentifiers, unmutedIdentifiers });
@@ -3465,24 +3465,23 @@ function readMetadata(stage: Stage, path: string, key: string): Value | null {
 }
 
 function decodeChanges(row: unknown): Changes {
-  const [created, removed, resynced, changedInfoOnly, properties, resyncedProperties] = row as [
+  const [created, removed, resynced, resyncedProperties, changedInfoOnly, primFields, changedProperties] = row as [
     string[],
     string[],
     string[],
     string[],
-    [string, [string, PropertyChange["field"], string | null][]][],
     string[],
+    [string, string][],
+    [string, PropertyFieldChange["field"], string | null][],
   ];
   return {
     created,
     removed,
     resynced,
-    changedInfoOnly,
-    properties: properties.map(([prim, fields]) => ({
-      prim,
-      fields: fields.map(([property, field, metadata]) => ({ property, field, metadata })),
-    })),
     resyncedProperties,
+    changedInfoOnly,
+    primFields: primFields.map(([prim, field]) => ({ prim, field })),
+    changedProperties: changedProperties.map(([property, field, metadata]) => ({ property, field, metadata })),
     mutedLayers: [],
     unmutedLayers: [],
     mutedIdentifiers: [],

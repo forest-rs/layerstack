@@ -716,14 +716,21 @@ function stageMetadata(prim: string): boolean {
   return prim === "/";
 }
 
+/** A property path's prim path and property name. */
+function split(property: string): [string, string] {
+  const dot = property.lastIndexOf(".");
+  return [property.slice(0, dot), property.slice(dot + 1)];
+}
+
 /** Whether `changes` reach the shading properties of the prim at `prim`, as `layerstack_stagehand` decides it. */
-function shadingTouched(changes: Pick<Changes, "changedInfoOnly" | "properties" | "resyncedProperties">, roots: readonly string[], prim: string): boolean {
+function shadingTouched(changes: Pick<Changes, "changedInfoOnly" | "changedProperties" | "resyncedProperties">, roots: readonly string[], prim: string): boolean {
   return (
     roots.some((root) => under(prim, root)) ||
-    changes.changedInfoOnly.some((changed) => {
-      if (stageMetadata(changed)) return false;
-      const inventory = changes.properties.find((properties) => properties.prim === changed);
-      return inventory === undefined ? under(prim, changed) : changed === prim && inventory.fields.some((field) => shadingProperty(field.property));
+    // A prim's own information, conservatively, reaches beneath it.
+    changes.changedInfoOnly.some((changed) => !stageMetadata(changed) && under(prim, changed)) ||
+    changes.changedProperties.some((changed) => {
+      const [owner, name] = split(changed.property);
+      return owner === prim && shadingProperty(name);
     }) ||
     changes.resyncedProperties.some((property) => {
       const dot = property.lastIndexOf(".");
@@ -1177,7 +1184,7 @@ export class DrawList implements Disposable {
 
   /** Reads the whole stage: the first call adds every item; a later one reports what differs, reusing what did not change. */
   refresh(): DrawDiff {
-    return this.#apply({ resynced: ["/"], changedInfoOnly: [], properties: [], resyncedProperties: [] });
+    return this.#apply({ resynced: ["/"], changedInfoOnly: [], changedProperties: [], resyncedProperties: [] });
   }
 
   /**
@@ -1301,7 +1308,7 @@ export class DrawList implements Disposable {
       }
     }
     for (const path of [...this.#instancers.keys()]) if (!this.#inScope(path)) this.#instancers.delete(path);
-    return this.#apply({ resynced: [...this.#scope.roots], changedInfoOnly: [], properties: [], resyncedProperties: [] }, gather, before);
+    return this.#apply({ resynced: [...this.#scope.roots], changedInfoOnly: [], changedProperties: [], resyncedProperties: [] }, gather, before);
   }
 
   /**
@@ -1726,7 +1733,7 @@ export class DrawList implements Disposable {
 
   /** Brings materials and links up to the items a diff that read no change record listed, and finishes it. */
   #settle(read: Set<number>, gather: Gather, before: number): DrawDiff {
-    this.#applyToMaterials({ changedInfoOnly: [], properties: [], resyncedProperties: [] }, [], gather);
+    this.#applyToMaterials({ changedInfoOnly: [], changedProperties: [], resyncedProperties: [] }, [], gather);
     this.#applyToLinks({ changes: null, roots: [], relink: new Set(), reclassify: new Set() }, read, gather);
     return this.#finish(gather, read, before);
   }
@@ -1813,7 +1820,7 @@ export class DrawList implements Disposable {
   }
 
   #apply(
-    changes: Pick<Changes, "resynced" | "changedInfoOnly" | "properties" | "resyncedProperties">,
+    changes: Pick<Changes, "resynced" | "changedInfoOnly" | "changedProperties" | "resyncedProperties">,
     gather = new Gather(),
     before = this.#stage.transformCache().localComputed,
   ): DrawDiff {
@@ -1829,8 +1836,9 @@ export class DrawList implements Disposable {
     // A draw mode input changed: which prims beneath it are drawn, or drawn
     // by a stand-in, is discovered again, as for a resync.
     const drawModeRoots = new Set<string>();
-    for (const changed of changes.properties) {
-      if (changed.fields.some((field) => DRAW_MODE_FIELDS.has(field.property))) drawModeRoots.add(changed.prim);
+    for (const changed of changes.changedProperties) {
+      const [prim, name] = split(changed.property);
+      if (DRAW_MODE_FIELDS.has(name)) drawModeRoots.add(prim);
     }
     for (const property of changes.resyncedProperties) {
       const dot = property.lastIndexOf(".");
@@ -1853,12 +1861,16 @@ export class DrawList implements Disposable {
       reachWithheld((depends) => depends.some((path) => under(path, root)));
     }
     const reached: [string, Dirty][] = [];
+    // A prim's own information changed: conservatively, all of it.
     for (const prim of changes.changedInfoOnly) {
-      if (stageMetadata(prim)) continue;
-      const inventory = changes.properties.find((changed) => changed.prim === prim);
-      const what = inventory === undefined ? all() : none();
-      for (const field of inventory?.fields ?? []) merge(what, this.#propertyDirt(field.property));
-      reached.push([prim, what]);
+      if (!stageMetadata(prim)) reached.push([prim, all()]);
+    }
+    // Properties: what each one's name reaches, a prim's run merged.
+    for (const changed of changes.changedProperties) {
+      const [prim, name] = split(changed.property);
+      const last = reached.at(-1);
+      if (last !== undefined && last[0] === prim) merge(last[1], this.#propertyDirt(name));
+      else reached.push([prim, this.#propertyDirt(name)]);
     }
     for (const property of changes.resyncedProperties) {
       const dot = property.lastIndexOf(".");
@@ -1967,7 +1979,7 @@ export class DrawList implements Disposable {
    * newly bound one read, and a held one read again when a shading
    * property of it, or of a prim its network reads, changes.
    */
-  #applyToMaterials(changes: Pick<Changes, "changedInfoOnly" | "properties" | "resyncedProperties">, roots: readonly string[], gather: Gather): void {
+  #applyToMaterials(changes: Pick<Changes, "changedInfoOnly" | "changedProperties" | "resyncedProperties">, roots: readonly string[], gather: Gather): void {
     const bound = new Set<string>();
     for (const entry of this.#entries.values()) {
       if (entry.item.material !== null) bound.add(entry.item.material);
@@ -2281,7 +2293,7 @@ export class DrawList implements Disposable {
    * resync over it).
    */
   #applyToViews(
-    changes: Pick<Changes, "resynced" | "changedInfoOnly" | "properties" | "resyncedProperties">,
+    changes: Pick<Changes, "resynced" | "changedInfoOnly" | "changedProperties" | "resyncedProperties">,
     found: Found,
     gather: Gather,
   ): Set<string> {
@@ -2291,9 +2303,13 @@ export class DrawList implements Disposable {
     // inventory of them, which reaches everything under the prim.
     const reached: [string, string[] | null][] = [];
     for (const prim of changes.changedInfoOnly) {
-      if (stageMetadata(prim)) continue;
-      const inventory = changes.properties.find((changed) => changed.prim === prim);
-      reached.push([prim, inventory === undefined ? null : inventory.fields.map((field) => field.property)]);
+      if (!stageMetadata(prim)) reached.push([prim, null]);
+    }
+    for (const changed of changes.changedProperties) {
+      const [prim, name] = split(changed.property);
+      const last = reached.at(-1);
+      if (last !== undefined && last[0] === prim && last[1] !== null) last[1].push(name);
+      else reached.push([prim, [name]]);
     }
     for (const property of changes.resyncedProperties) {
       const dot = property.lastIndexOf(".");
@@ -2369,7 +2385,7 @@ export class DrawList implements Disposable {
    */
   #applyToLinks(
     pass: {
-      changes: Pick<Changes, "changedInfoOnly" | "properties" | "resyncedProperties"> | null;
+      changes: Pick<Changes, "changedInfoOnly" | "changedProperties" | "resyncedProperties"> | null;
       roots: readonly string[];
       relink: ReadonlySet<string>;
       reclassify: ReadonlySet<number>;

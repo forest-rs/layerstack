@@ -361,6 +361,10 @@ describe("edit kinds", () => {
     assert.match(text(), /metersPerUnit = 0\.01/);
     // Stage metadata composes nothing: `/` changes info-only.
     assert.deepEqual([heard[0]?.resynced, heard[0]?.changedInfoOnly], [[], ["/"]]);
+    assert.deepEqual(heard[0]?.primFields, [
+      { prim: "/", field: "documentation" },
+      { prim: "/", field: "metersPerUnit" },
+    ]);
     receipt.undo().release();
     assert.doesNotMatch(text(), /moss on every rock|metersPerUnit/);
     stage.apply([{ type: "setLayerMetadata", key: "documentation", value: { type: "string", value: "kept" } }], stage.root).release();
@@ -450,11 +454,11 @@ describe("applying", () => {
     assert.equal(first.target.layer, stage.root);
     assert.equal(first.target, stage.editTargetForLayer(stage.root), "the receipt names the target, interned");
     assert.deepEqual(first.layers, [stage.root]);
-    assert.deepEqual(first.changes.changedInfoOnly, ["/World"]);
+    assert.deepEqual(first.changes.changedInfoOnly, [], "nothing of the prim's own");
     assert.deepEqual(
-      first.changes.properties,
-      [{ prim: "/World", fields: [{ property: "size", field: "default", metadata: null }] }],
-      "the inventory of what changed on the prim",
+      first.changes.changedProperties,
+      [{ property: "/World.size", field: "default", metadata: null }],
+      "the property field that changed",
     );
     assert.equal(failure(() => other.undo(first)).code, "receipt.affinity");
     using later = stage.apply([{ type: "setValue", path: "/World.size", value: { type: "double", value: 4 } }], stage.root);

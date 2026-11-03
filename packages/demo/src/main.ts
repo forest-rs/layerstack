@@ -779,6 +779,7 @@ function renderChanges(editor: Editor): void {
       list("removed", entry.changes.removed),
       list("resynced", [...entry.changes.resynced, ...entry.changes.resyncedProperties]),
       list("info", entry.changes.changedInfoOnly),
+      list("changed", [...new Set(entry.changes.changedProperties.map((change) => change.property))]),
       list("muted", entry.changes.mutedIdentifiers),
       list("unmuted", entry.changes.unmutedIdentifiers),
     ),

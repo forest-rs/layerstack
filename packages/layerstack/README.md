@@ -23,7 +23,7 @@ size?.explain(); // { value, source: "default", opinions: [{ layer, specPath: "/
 stage.status();  // { prims, compositionErrors, unavailable, unresolved, complete }
 
 // Edits are plain data, applied atomically to one layer.
-const stop = stage.onChange((changes) => console.log(changes.changedInfoOnly));
+const stop = stage.onChange((changes) => console.log(changes.changedProperties));
 const receipt = stage.apply([
   { type: "definePrim", path: "/World/Moss", typeName: "Cube" },
   { type: "setValue", path: "/World/Rock.size", value: { type: "double", value: 3 } },
@@ -331,9 +331,11 @@ await stage.resolve(source);
   fails with `namespace.unmappable`. A receipt names its `target` and the
   `layers` it wrote.
 - **Changes are heard synchronously.** `stage.onChange(listener)` hears
-  `{ created, removed, resynced, changedInfoOnly }` (prim paths) and
+  `{ created, removed, resynced, changedInfoOnly }` (prim paths),
   `resyncedProperties` (property paths a spec was added to or removed from,
-  as OpenUSD resyncs them) for every
+  as OpenUSD resyncs them), and, as OpenUSD's `GetChangedFields` names
+  them, the fields of the info-only prims' own information (`primFields`)
+  and of the properties changed info-only (`changedProperties`) for every
   recomposition, in order, before the call that caused it (`apply`, `undo`,
   `muteLayer`, `loadSupplied`, `resolve` once its rounds are read) returns, with the
   `mutedLayers` and `unmutedLayers` whose muting changed, and their

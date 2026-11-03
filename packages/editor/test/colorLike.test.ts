@@ -130,13 +130,14 @@ describe("colour-like inputs", () => {
   });
 
   it("are read once per revision of the network", () => {
-    const changeLog: { cause: string; changes: Record<string, readonly string[]> }[] = [];
+    const changeLog: { cause: string; changes: Record<string, readonly unknown[]> }[] = [];
     const session = { stage, changeLog } as unknown as Parameters<typeof colorLike>[0];
     assert.equal(colorLike(session, "/Looks/Direct.inputs:unused"), null);
     stage.apply([{ type: "connectToSource", path: "/Looks/Direct/Texture.inputs:fallback", source: "/Looks/Direct.inputs:unused" }]);
     assert.equal(colorLike(session, "/Looks/Direct.inputs:unused"), null, "kept until a recomposition reaches the material");
-    const none = { created: [], removed: [], resynced: [], changedInfoOnly: [], properties: [], resyncedProperties: [], mutedLayers: [], unmutedLayers: [], mutedIdentifiers: [], unmutedIdentifiers: [] };
-    changeLog.push({ cause: "connect", changes: { ...none, changedInfoOnly: ["/Looks/Direct/Texture.inputs:fallback"] } });
+    const none = { created: [], removed: [], resynced: [], changedInfoOnly: [], primFields: [], changedProperties: [], resyncedProperties: [], mutedLayers: [], unmutedLayers: [], mutedIdentifiers: [], unmutedIdentifiers: [] };
+    const connected = { property: "/Looks/Direct/Texture.inputs:fallback", field: "targets", metadata: null };
+    changeLog.push({ cause: "connect", changes: { ...none, changedProperties: [connected] } });
     assert.equal(colorLike(session, "/Looks/Direct.inputs:unused")?.input, "/Looks/Direct/Texture.inputs:fallback");
   });
 });

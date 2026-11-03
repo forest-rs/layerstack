@@ -2171,8 +2171,14 @@ def "Spare" (
             Wire::List(vec![Wire::text("/Garden")]),
             "created"
         );
+        // The value edit is a property change: `/World.size`'s default.
+        let size = Wire::List(vec![
+            Wire::text("/World.size"),
+            Wire::text("default"),
+            Wire::Null,
+        ]);
         assert!(
-            fields[3].as_list().unwrap().contains(&Wire::text("/World"))
+            fields[6].as_list().unwrap().contains(&size)
                 || fields[2].as_list().unwrap().contains(&Wire::text("/World")),
             "{fields:?}"
         );

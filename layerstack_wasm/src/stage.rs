@@ -1812,7 +1812,7 @@ impl Stage {
     /// Either every edit applies or none does. The receipt holds the
     /// inverse, and its record is `[target, changes, loaded, failures,
     /// unavailable]`: the target layer's id, the composed changes of the
-    /// transaction (`[created, removed, resynced, changedInfoOnly, properties, resyncedProperties]`), the
+    /// transaction (`[created, removed, resynced, resyncedProperties, changedInfoOnly, primFields, changedProperties]`), the
     /// ids of the layers loaded for it, each asset that failed to load as
     /// `[asset, anchor, code, message]`, and the assets it asks for that
     /// the host has not supplied, as `unavailable` rows.
@@ -2114,7 +2114,7 @@ impl Stage {
     /// `[batches, mutedLayers, unmutedLayers]`.
     ///
     /// `batches` holds one batch per recomposition, oldest first, each a
-    /// `[created, removed, resynced, changedInfoOnly, properties, resyncedProperties]` record
+    /// `[created, removed, resynced, resyncedProperties, changedInfoOnly, primFields, changedProperties]` record
     /// (`changes_record`): an empty list when nothing changed, and `null`
     /// when the history the cursor needs was evicted (more than the
     /// history budget changed in one call), which the wrapper reports as a
@@ -3640,54 +3640,51 @@ impl Stage {
     }
 }
 
-/// `[created, removed, resynced, changedInfoOnly, properties,
-/// resyncedProperties]`: the prim paths of `changes` as text, the prims
-/// with an info-only change of their own or of their properties
-/// ([`Changes::info_only_prims`]), the property-field inventories of
-/// those whose own information did not change
-/// ([`Changes::changed_properties`]) as `[prim, fields]`, each field
-/// `[property, field, metadata]` (`field` `default`, `animation`,
-/// `timeSamples`, `targets`, `metadata` with the metadata field's name, or
-/// `other`), and the property paths of its property resyncs
-/// ([`Changes::resynced_properties`]) as text.
+/// `[created, removed, resynced, resyncedProperties, changedInfoOnly,
+/// primFields, changedProperties]`: the paths of `changes` as text, the
+/// fields of its info-only prims ([`Changes::prim_fields`]) as
+/// `[prim, field]`, `field` OpenUSD's name of it
+/// ([`layerstack::PrimInfoField::name`]), and its info-only property changes
+/// ([`Changes::changed_properties`]) as `[property, field, metadata]`
+/// (`field` `default`, `animation`, `timeSamples`, `targets`, `metadata`
+/// with the metadata field's name, or `other`).
 fn changes_record(changes: &Changes, store: &InMemoryStore) -> Wire {
     let tokens = store.tokens();
     let path = |id: PathId| Wire::Text(store.paths().display(id, tokens));
     let paths = |ids: &[PathId]| Wire::List(ids.iter().map(|&id| path(id)).collect());
-    let mut properties: Vec<(PathId, Vec<Wire>)> = Vec::new();
-    for change in &changes.changed_properties {
-        let prim = change.property.prim_path();
-        if changes.prim_info_changed(prim) {
-            continue;
-        }
-        let (field, metadata) = match change.field {
-            PropertyField::Default => ("default", None),
-            PropertyField::Animation => ("animation", None),
-            PropertyField::TimeSamples => ("timeSamples", None),
-            PropertyField::Targets => ("targets", None),
-            PropertyField::Metadata(key) => ("metadata", Some(key)),
-            _ => ("other", None),
-        };
-        let field = Wire::List(vec![
-            Wire::text(tokens.resolve(change.property.property())),
-            Wire::text(field),
-            metadata.map_or(Wire::Null, |key| Wire::text(tokens.resolve(key))),
-        ]);
-        match properties.last_mut() {
-            Some((last, fields)) if *last == prim => fields.push(field),
-            _ => properties.push((prim, vec![field])),
-        }
-    }
-    let properties = properties
-        .into_iter()
-        .map(|(prim, fields)| Wire::List(vec![path(prim), Wire::List(fields)]))
+    let prim_fields = changes
+        .prim_fields
+        .iter()
+        .map(|change| {
+            Wire::List(vec![
+                path(change.prim),
+                Wire::text(change.field.name(tokens)),
+            ])
+        })
+        .collect();
+    let properties = changes
+        .changed_properties
+        .iter()
+        .map(|change| {
+            let (field, metadata) = match change.field {
+                PropertyField::Default => ("default", None),
+                PropertyField::Animation => ("animation", None),
+                PropertyField::TimeSamples => ("timeSamples", None),
+                PropertyField::Targets => ("targets", None),
+                PropertyField::Metadata(key) => ("metadata", Some(key)),
+                _ => ("other", None),
+            };
+            Wire::List(vec![
+                Wire::Text(change.property.display(store.paths(), tokens)),
+                Wire::text(field),
+                metadata.map_or(Wire::Null, |key| Wire::text(tokens.resolve(key))),
+            ])
+        })
         .collect();
     Wire::List(vec![
         paths(&changes.created),
         paths(&changes.removed),
         paths(&changes.resynced),
-        paths(&changes.info_only_prims(store.paths(), tokens)),
-        Wire::List(properties),
         Wire::List(
             changes
                 .resynced_properties
@@ -3695,6 +3692,9 @@ fn changes_record(changes: &Changes, store: &InMemoryStore) -> Wire {
                 .map(|property| Wire::Text(property.display(store.paths(), tokens)))
                 .collect(),
         ),
+        paths(&changes.changed_info_only),
+        Wire::List(prim_fields),
+        Wire::List(properties),
     ])
 }
 

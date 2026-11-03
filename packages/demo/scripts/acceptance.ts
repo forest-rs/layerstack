@@ -416,6 +416,7 @@ const checks: ((session: Session) => void)[] = [
     assert.equal(change?.cause, "document the stage");
     const changes = change?.changes;
     assert.deepEqual([changes?.resynced, changes?.resyncedProperties, changes?.changedInfoOnly], [[], [], ["/"]]);
+    assert.deepEqual(changes?.primFields, [{ prim: "/", field: "documentation" }], "with the field it changed");
     assert.deepEqual(current.undoStack.map((entry) => entry.label), ["document the stage"], "the reopened stage's first edit");
     assert.deepEqual(current.dirtyLayers().map((layer) => layer.identifier), [sample.root]);
     assert.match(

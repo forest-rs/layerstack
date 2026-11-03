@@ -475,6 +475,7 @@ export class ViewportModel {
         // `/` changed info-only is the stage's metadata, which no color reads.
         touched.push(...changes.resynced, ...changes.changedInfoOnly.filter((path) => path !== "/"));
         touched.push(...changes.resyncedProperties.map((property) => property.slice(0, property.lastIndexOf("."))));
+        touched.push(...changes.changedProperties.map(({ property }) => property.slice(0, property.lastIndexOf("."))));
         records++;
       }
       this.#seen = session.changeLog.length;

@@ -775,14 +775,22 @@ export interface VariantSet {
 }
 
 /**
- * What one recomposition changed, as prim paths, and the layers whose
- * muting changed. A listener registered with {@link Stage.onChange}
- * receives one per recomposition, in order.
+ * What one recomposition changed, as paths, and the layers whose muting
+ * changed. A listener registered with {@link Stage.onChange} receives one
+ * per recomposition, in order. As OpenUSD's `UsdNotice::ObjectsChanged`,
+ * it tells prims from properties and resyncs from info-only changes, with
+ * the fields an info-only change names, so a listener can tell "this
+ * prim's own metadata changed, and these of its properties" apart from
+ * "only these properties changed".
  *
  * Re-read what a path covers: a `resynced` path's whole subtree may have
- * changed; a `changedInfoOnly` prim kept its children, but its fields and
- * properties may have changed; a `resyncedProperties` property may have
- * been added or removed, and nothing else of its prim changed for it.
+ * changed; a `resyncedProperties` property may have been added or
+ * removed, and nothing else of its prim changed for it; a
+ * `changedInfoOnly` prim's own information changed (the fields in
+ * `primFields`), not its children or properties; a `changedProperties`
+ * entry names one field of one property, and its prim's own information
+ * and other properties did not change for it. Info-only paths never lie
+ * beneath a resync.
  *
  * A prim created or removed is resynced alone: its parent, whose child
  * list gained or lost it, is not reported unless its own opinions changed
@@ -794,26 +802,30 @@ export interface VariantSet {
  *
  * An inert spec (an `over` with no opinions of its own) added or removed
  * for a prim that exists before and after changes that prim, and each
- * prim composing from it through an arc, info-only, as OpenUSD reports
- * it; a property spec in it is in `resyncedProperties`. A change to stage
- * metadata that composes nothing (`documentation`, `startTimeCode`,
- * `metersPerUnit` and the like) reports `/` info-only.
+ * prim composing from it through an arc, info-only with no field, as
+ * OpenUSD reports it; a property spec in it is in `resyncedProperties`. A
+ * change to stage metadata that composes nothing (`documentation`,
+ * `startTimeCode`, `metersPerUnit` and the like) reports `/` info-only
+ * with that field. A layer read again ({@link Stage.reload}) reports `/`,
+ * for a layer of the stage's own layer stack, or the prims composing the
+ * layer's root prims, info-only with no field, beside what it changed.
  *
  * A sublayer inserted or removed reports the specs it brings or takes, in
  * whichever layer stack it joins or leaves: the prims it defines, or whose
  * arcs it changes, are resynced; those it only overrides are info-only,
  * with the properties it holds for them in `resyncedProperties`; `/` is
- * info-only when the stage's own layer stack changed. Reordering a layer's
- * sublayers counts as removing and inserting every one of them, as
- * OpenUSD announces it. Three differences from OpenUSD are deliberate: a
- * sublayer that moves a child among its siblings resyncs that child, where
- * OpenUSD reports it info-only and keeps a stale child order (OpenUSD bug
- * B037); inserting a muted sublayer reports `/` alone, where OpenUSD
- * resyncs the prims it defines, which compose neither before nor after
- * (OpenUSD bug B038); and for a layer a reference reaches that is a sublayer
- * too, a reorder of its sublayer list resyncs the referencing prims as
- * well, and its removal does not resync them, where OpenUSD does though
- * they compose the same.
+ * info-only, with `subLayers` and `subLayerOffsets`, when the stage's own
+ * layer stack changed. Reordering a layer's sublayers counts as removing
+ * and inserting every one of them, as OpenUSD announces it. Three
+ * differences from OpenUSD are deliberate: a sublayer that moves a child
+ * among its siblings resyncs that child, where OpenUSD reports it
+ * info-only and keeps a stale child order (OpenUSD bug B037); inserting a
+ * muted sublayer reports `/` alone, where OpenUSD resyncs the prims it
+ * defines, which compose neither before nor after (OpenUSD bug B038); and
+ * for a layer a reference reaches that is a sublayer too, a reorder of
+ * its sublayer list resyncs the referencing prims as well, and its
+ * removal does not resync them, where OpenUSD does though they compose
+ * the same.
  */
 export interface Changes {
   /** Prims that exist now and did not before. */
@@ -822,25 +834,33 @@ export interface Changes {
   readonly removed: readonly string[];
   /** Roots of subtrees whose composed structure may have changed. `/` when the history was lost: re-read everything. */
   readonly resynced: readonly string[];
-  /** Surviving prims whose opinions changed without a resync of their subtree. */
-  readonly changedInfoOnly: readonly string[];
-  /**
-   * For some `changedInfoOnly` prims, every property field that may have
-   * changed: a listener whose dependencies are outside them can skip the
-   * prim. A `changedInfoOnly` prim not listed here may have changed in any
-   * field: re-read it.
-   */
-  readonly properties: readonly PrimPropertyChanges[];
   /**
    * Properties (`/Rock.visibility`) a property spec was added to or
    * removed from, on prims not in `resynced`: everything about such a
    * property may have changed, its existence included, and its prim's
-   * other properties did not. Its prim is in `changedInfoOnly` only when
-   * something else of it changed too. A listener caching a prim's
-   * properties, or its property names, must read these too. As OpenUSD's
+   * other properties did not. A listener caching a prim's properties, or
+   * its property names, must read these too. As OpenUSD's
    * `UsdNotice::ObjectsChanged::GetResyncedPaths` lists property paths.
    */
   readonly resyncedProperties: readonly string[];
+  /**
+   * Surviving prims whose own information changed without a resync: their
+   * metadata, or their spec stacks. As the prim paths of OpenUSD's
+   * `UsdNotice::ObjectsChanged::GetChangedInfoOnlyPaths`.
+   */
+  readonly changedInfoOnly: readonly string[];
+  /**
+   * The fields changed of the `changedInfoOnly` prims, by prim, then
+   * field, as OpenUSD's `GetChangedFields` names them. A prim listed with
+   * none changed its spec stack, or was read again.
+   */
+  readonly primFields: readonly PrimFieldChange[];
+  /**
+   * Properties changed info-only, one entry per property and field, by
+   * prim, then property name, then field. As the property paths of
+   * OpenUSD's `GetChangedInfoOnlyPaths`, with their `GetChangedFields`.
+   */
+  readonly changedProperties: readonly PropertyFieldChange[];
   /**
    * Layers muted since the changes heard before
    * ({@link Stage.muteLayer}, or natively through {@link Stage.withNative}),
@@ -865,17 +885,17 @@ export interface Changes {
   readonly unmutedIdentifiers: readonly string[];
 }
 
-/** The property fields that may have changed on one `changedInfoOnly` prim, ordered by property, then field. */
-export interface PrimPropertyChanges {
+/** One changed field of a prim's own information. */
+export interface PrimFieldChange {
   /** The prim's path. */
   readonly prim: string;
-  /** Its changed fields. */
-  readonly fields: readonly PropertyChange[];
+  /** The field, as OpenUSD names it: `documentation`, `subLayers`, a metadata field's name. */
+  readonly field: string;
 }
 
 /** One property field an edit may have changed. */
-export interface PropertyChange {
-  /** The property's name. */
+export interface PropertyFieldChange {
+  /** The property's path (`/Rock.size`). */
   readonly property: string;
   /**
    * The field: its default value, its animation (time samples and spline

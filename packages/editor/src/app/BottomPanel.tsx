@@ -156,6 +156,7 @@ function ChangesView({ store }: { store: EditorStore }) {
             ["removed", changes.removed],
             ["resynced", changes.resynced],
             ["info changed", changes.changedInfoOnly],
+            ["properties changed", [...new Set(changes.changedProperties.map((change) => change.property))]],
             ["properties resynced", changes.resyncedProperties],
             ["muted", changes.mutedIdentifiers],
             ["unmuted", changes.unmutedIdentifiers],

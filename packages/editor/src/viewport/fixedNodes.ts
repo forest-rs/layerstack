@@ -18,9 +18,11 @@
 // behind three.js's back: a draw's light set (`lightsNode`, a `LightsNode`
 // of fixed lights whose uniforms are the render's, shared), a clustered
 // draw's context (`contextNode`, reads of storage buffers the GPU writes),
-// and a card stand-in's color and roughness (`colorNode`, `roughnessNode`,
+// a card stand-in's color and roughness (`colorNode`, `roughnessNode`,
 // shared by every card material and reading its own textures by
-// reference, `standins.ts`).
+// reference, `standins.ts`), and a surface's texture lookups (its input
+// nodes, shared by every material reading the same maps and reading each
+// one's texture, scale and bias by reference, `channels.ts`).
 // Each is replaced, never changed, and replacing one is a material change
 // (`needsUpdate`) that builds the material's shader again. So they are set
 // as own properties that are not enumerable: three.js still builds them
@@ -35,7 +37,37 @@
 import type { Material, Node } from "three/webgpu";
 
 /** The node properties of a material the viewport sets as fixed. */
-export type FixedNodeProperty = "lightsNode" | "contextNode" | "colorNode" | "roughnessNode";
+export type FixedNodeProperty =
+  | "lightsNode"
+  | "contextNode"
+  | "colorNode"
+  | "emissiveNode"
+  | "specularColorNode"
+  | "metalnessNode"
+  | "roughnessNode"
+  | "aoNode"
+  | "opacityNode"
+  | "clearcoatNode"
+  | "clearcoatRoughnessNode"
+  | "normalNode"
+  | "positionNode";
+
+/** Every {@link FixedNodeProperty}. */
+const FIXED_NODE_PROPERTIES: readonly FixedNodeProperty[] = [
+  "lightsNode",
+  "contextNode",
+  "colorNode",
+  "emissiveNode",
+  "specularColorNode",
+  "metalnessNode",
+  "roughnessNode",
+  "aoNode",
+  "opacityNode",
+  "clearcoatNode",
+  "clearcoatRoughnessNode",
+  "normalNode",
+  "positionNode",
+];
 
 /**
  * Sets `material`'s node property `property` to `node` (or `null`), as a
@@ -47,9 +79,10 @@ export function setFixedNode(material: Material, property: FixedNodeProperty, no
   Object.defineProperty(material, property, { value: node, writable: true, enumerable: false, configurable: true });
 }
 
-/** Makes `material`'s light set and context, as they are, fixed ({@link setFixedNode}): for a copy of a material that had them. */
+/** Makes `material`'s fixed node properties, as they are, fixed ({@link setFixedNode}): for a copy of a material that had them. */
 export function fixNodes(material: Material): void {
-  for (const property of ["lightsNode", "contextNode"] as const) {
-    if (property in material) setFixedNode(material, property, (material as unknown as Record<FixedNodeProperty, Node | null>)[property]);
+  for (const property of FIXED_NODE_PROPERTIES) {
+    const node = (material as unknown as Partial<Record<FixedNodeProperty, Node | null>>)[property];
+    if (node !== undefined && node !== null) setFixedNode(material, property, node);
   }
 }

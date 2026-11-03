@@ -13,7 +13,10 @@
 //   applied API schemas (`MaterialBindingAPI`, `CollectionAPI:parts`,
 //   then `CollectionAPI`), then `Prim`. A value's are its value type
 //   (`color3f[]`), its role (`color[]`), its shape (`array`) and `value`;
-//   a token the schema restricts is `allowedToken` before `token`. Paths
+//   a token the schema restricts is `allowedToken` before `token`, and a
+//   three- or four-channel float tuple without a role is `colorLike`
+//   before its type (a presentation that applies when what the value is
+//   for makes it a colour). Paths
 //   are `primPath` or `propertyPath`, then `path`; a layer is `layer`.
 // - **Views.** A registration presents one type in the views it can do:
 //   `inline` (one line: property rows, tables, the explain and changes
@@ -188,7 +191,10 @@ export function valueRole(typeName: string): string | null {
 
 /**
  * A value's presentation types, most specific first: `allowedToken` for
- * a token the schema restricts, its value type (`color3f[]`), its role
+ * a token the schema restricts, `colorLike` for a `float3`, `float4`
+ * (`double`, `half`) without a role, whose presentation applies when the
+ * input it is, or what it feeds, takes a colour (`model/colorLike.ts`),
+ * its value type (`color3f[]`), its role
  * (`color[]`, see {@link valueRole}), its kind of type (`token`, `asset`,
  * `bool`, `number`, `string`), its shape (`array`, `tuple`), then `value`.
  */
@@ -199,6 +205,7 @@ export function valueTypes(typeName: string, options: { readonly allowedTokens?:
   // A token the schema restricts is more specific than its type.
   const types = scalar === "token" && options.allowedTokens === true && !array ? ["allowedToken", typeName] : [typeName];
   const role = valueRole(typeName);
+  if (!array && role === null && /^(float|double|half)[34]$/.test(scalar)) types.unshift("colorLike");
   if (role !== null) types.push(`${role}${suffix}`);
   if (scalar === "token" || scalar === "asset" || scalar === "string" || scalar === "bool") {
     if (array) types.push(`${scalar}[]`);

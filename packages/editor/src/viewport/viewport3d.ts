@@ -56,9 +56,9 @@
 //   of the light's angular size, radiance × π sin²(angle / 2) (the
 //   `sizeFactor` `UsdLux` normalizes by, so a normalized light's intensity
 //   is its illuminance in lux), or the radiance itself at angle 0.
-// - `DomeLight` → `HemisphereLight` of one color: a uniform dome of
-//   luminance L gives an upward surface π L of irradiance (its texture is
-//   not loaded).
+// - `DomeLight` → `HemisphereLight`: a uniform dome of luminance L gives
+//   a surface facing its pole π L of irradiance; a `latlong` texture's
+//   upper and lower halves color its sky and ground (`domeLights.ts`).
 // - `PortalLight`: not drawn; it only guides a dome's light.
 // - Mesh lights and `GeometryLight`s: not drawn as three.js lights, which
 //   have no mesh shape.
@@ -242,6 +242,7 @@ import { type Box, clipRange, frameBox, orbitFrom, reachFrom, sphereOf, vertical
 import { followCamera, followMatrices, makeViewCamera } from "./viewCamera.ts";
 import { SkinnedDraw, withSkinning } from "./skinning.ts";
 import { TextureStore, surfaceMaterial, uvChannels } from "./surfaces.ts";
+import { DomeTints } from "./domeLights.ts";
 import { standinGeometry, standinMaterials } from "./standins.ts";
 import { ClusterScene, MAX_CLUSTER_TRIANGLES, clusterable, packVertices } from "./clusters.ts";
 import type { PackedVertices } from "./clusters.ts";
@@ -329,6 +330,8 @@ export class Viewport {
   #sceneBounds: Box | null = null;
   /** The textures the materials read. */
   readonly #textures: TextureStore;
+  /** The domes' lights, colored by their textures (`domeLights.ts`). */
+  readonly #domes: DomeTints;
   /** Whether a restyle for arrived images is scheduled. */
   #restyling = false;
   /** The scene last applied, to restyle textured draws when their images arrive. */
@@ -381,6 +384,7 @@ export class Viewport {
     // Images arrive one by one: the draws are restyled once per batch of them.
     this.#textures = new TextureStore(read, exists, () => {
       this.onImages?.();
+      this.#domes.arrived();
       if (this.#restyling) return;
       this.#restyling = true;
       setTimeout(() => {
@@ -388,6 +392,7 @@ export class Viewport {
         this.#restyleTextured();
       }, 100);
     });
+    this.#domes = new DomeTints(this.#textures, () => this.#draw());
     this.#canvas = canvas;
     this.#renderer = renderer;
     this.#target = new CanvasTarget(canvas);
@@ -1236,6 +1241,7 @@ export class Viewport {
   #addLight(light: LightItem): void {
     const objects = threeLights(light);
     for (const object of objects) {
+      if (object instanceof HemisphereLight) this.#domes.tint(object, light);
       this.#scene.add(object);
       this.#lightKeys.set(object, light.key);
     }
@@ -1295,6 +1301,7 @@ export class Viewport {
 
   #dropLight(path: string): void {
     for (const object of this.#lights.get(path) ?? []) {
+      if (object instanceof HemisphereLight) this.#domes.drop(object);
       this.#lightKeys.delete(object);
       this.#scene.remove(object);
       if ("dispose" in object && typeof object.dispose === "function") object.dispose();
@@ -2254,8 +2261,13 @@ function threeLights(light: LightItem): Object3D[] {
       sun.position.copy(position).sub(direction);
       return aimed(sun);
     }
-    case "dome":
-      return [new HemisphereLight(color, color, Math.PI * peak)];
+    case "dome": {
+      // Its sky toward the dome's pole (`DomeLight_1`'s `poleAxis` Z, else its +Y), colored by its texture once loaded (`domeLights.ts`).
+      const dome = new HemisphereLight(color, color, Math.PI * peak);
+      const pole = (light.geometry.poleAxis === "Z" ? new Vector3(0, 0, 1) : new Vector3(0, 1, 0)).transformDirection(new Matrix4().fromArray(light.matrix));
+      if (Number.isFinite(pole.x + pole.y + pole.z) && pole.lengthSq() > 0) dome.position.copy(pole);
+      return [dome];
+    }
     // A portal only guides a dome's light; three.js has no light of a
     // mesh's shape, so a mesh or geometry light is not drawn as one.
     case "portal":

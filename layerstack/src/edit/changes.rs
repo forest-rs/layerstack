@@ -70,7 +70,10 @@ use crate::{
 /// stack, and that of each prim composing from it through an arc: they
 /// are listed info-only with no field, as OpenUSD lists them. So is a prim
 /// whose new `over` holds only property specs, which are resynced, or
-/// metadata that composes nothing. A layer read again from its source
+/// metadata that composes nothing, which is listed as its fields, whether
+/// the `over` is authored a field at a time or written whole, as a reload
+/// or [`Transaction::transfer_content`](crate::Transaction::transfer_content)
+/// writes it. A layer read again from its source
 /// ([`Transaction::mark_reloaded`](crate::Transaction::mark_reloaded))
 /// lists the prims composing a spec at a child of its pseudo-root (the
 /// pseudo-root for a layer of the stage's own layer stack) info-only with

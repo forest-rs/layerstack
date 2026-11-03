@@ -715,6 +715,763 @@
    ]
   },
   {
+   "name": "over_added",
+   "steps": [
+    {
+     "heard": [],
+     "layers": {
+      "asset.usda": {
+       "dirty": false,
+       "resolved": "second/asset.usda"
+      },
+      "ref.usda": {
+       "dirty": false,
+       "resolved": "ref.usda"
+      },
+      "root.usda": {
+       "dirty": false,
+       "resolved": "root.usda"
+      },
+      "sub.usda": {
+       "dirty": false,
+       "resolved": "sub.usda"
+      }
+     },
+     "prims": [
+      "/A",
+      "/B",
+      "/M",
+      "/Q",
+      "/R",
+      "/S"
+     ],
+     "raised": false,
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.e": null,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/M.m": null,
+      "/Q.q": 1.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/S2.z": null,
+      "/T.w": null,
+      "/Z.z": null
+     }
+    },
+    {
+     "heard": [],
+     "layers": {
+      "asset.usda": {
+       "dirty": false,
+       "resolved": "second/asset.usda"
+      },
+      "ref.usda": {
+       "dirty": false,
+       "resolved": "ref.usda"
+      },
+      "root.usda": {
+       "dirty": false,
+       "resolved": "root.usda"
+      },
+      "sub.usda": {
+       "dirty": false,
+       "resolved": "sub.usda"
+      }
+     },
+     "prims": [
+      "/A",
+      "/B",
+      "/M",
+      "/Q",
+      "/R",
+      "/S"
+     ],
+     "raised": false,
+     "step": [
+      "rewrite",
+      "sub.usda",
+      "sub_over"
+     ],
+     "values": {
+      "/A.e": null,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/M.m": null,
+      "/Q.q": 1.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/S2.z": null,
+      "/T.w": null,
+      "/Z.z": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "fields": {
+        "/": [],
+        "/A": []
+       },
+       "info": [
+        "/",
+        "/A"
+       ],
+       "resynced": [
+        "/A.e"
+       ]
+      }
+     ],
+     "layers": {
+      "asset.usda": {
+       "dirty": false,
+       "resolved": "second/asset.usda"
+      },
+      "ref.usda": {
+       "dirty": false,
+       "resolved": "ref.usda"
+      },
+      "root.usda": {
+       "dirty": false,
+       "resolved": "root.usda"
+      },
+      "sub.usda": {
+       "dirty": false,
+       "resolved": "sub.usda"
+      }
+     },
+     "prims": [
+      "/A",
+      "/B",
+      "/M",
+      "/Q",
+      "/R",
+      "/S"
+     ],
+     "raised": false,
+     "step": [
+      "reload"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/M.m": null,
+      "/Q.q": 1.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/S2.z": null,
+      "/T.w": null,
+      "/Z.z": null
+     }
+    },
+    {
+     "heard": [],
+     "layers": {
+      "asset.usda": {
+       "dirty": false,
+       "resolved": "second/asset.usda"
+      },
+      "ref.usda": {
+       "dirty": false,
+       "resolved": "ref.usda"
+      },
+      "root.usda": {
+       "dirty": false,
+       "resolved": "root.usda"
+      },
+      "sub.usda": {
+       "dirty": false,
+       "resolved": "sub.usda"
+      }
+     },
+     "prims": [
+      "/A",
+      "/B",
+      "/M",
+      "/Q",
+      "/R",
+      "/S"
+     ],
+     "raised": false,
+     "step": [
+      "rewrite",
+      "sub.usda",
+      "sub_over_documented"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/M.m": null,
+      "/Q.q": 1.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/S2.z": null,
+      "/T.w": null,
+      "/Z.z": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "fields": {
+        "/": [],
+        "/A": [
+         "documentation"
+        ]
+       },
+       "info": [
+        "/",
+        "/A"
+       ],
+       "resynced": []
+      }
+     ],
+     "layers": {
+      "asset.usda": {
+       "dirty": false,
+       "resolved": "second/asset.usda"
+      },
+      "ref.usda": {
+       "dirty": false,
+       "resolved": "ref.usda"
+      },
+      "root.usda": {
+       "dirty": false,
+       "resolved": "root.usda"
+      },
+      "sub.usda": {
+       "dirty": false,
+       "resolved": "sub.usda"
+      }
+     },
+     "prims": [
+      "/A",
+      "/B",
+      "/M",
+      "/Q",
+      "/R",
+      "/S"
+     ],
+     "raised": false,
+     "step": [
+      "reload"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/M.m": null,
+      "/Q.q": 1.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/S2.z": null,
+      "/T.w": null,
+      "/Z.z": null
+     }
+    },
+    {
+     "heard": [],
+     "layers": {
+      "asset.usda": {
+       "dirty": false,
+       "resolved": "second/asset.usda"
+      },
+      "ref.usda": {
+       "dirty": false,
+       "resolved": "ref.usda"
+      },
+      "root.usda": {
+       "dirty": false,
+       "resolved": "root.usda"
+      },
+      "sub.usda": {
+       "dirty": false,
+       "resolved": "sub.usda"
+      }
+     },
+     "prims": [
+      "/A",
+      "/B",
+      "/M",
+      "/Q",
+      "/R",
+      "/S"
+     ],
+     "raised": false,
+     "step": [
+      "rewrite",
+      "sub.usda",
+      "sub_original"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/M.m": null,
+      "/Q.q": 1.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/S2.z": null,
+      "/T.w": null,
+      "/Z.z": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "fields": {
+        "/": [],
+        "/A": [
+         "documentation"
+        ]
+       },
+       "info": [
+        "/",
+        "/A"
+       ],
+       "resynced": [
+        "/A.e"
+       ]
+      }
+     ],
+     "layers": {
+      "asset.usda": {
+       "dirty": false,
+       "resolved": "second/asset.usda"
+      },
+      "ref.usda": {
+       "dirty": false,
+       "resolved": "ref.usda"
+      },
+      "root.usda": {
+       "dirty": false,
+       "resolved": "root.usda"
+      },
+      "sub.usda": {
+       "dirty": false,
+       "resolved": "sub.usda"
+      }
+     },
+     "prims": [
+      "/A",
+      "/B",
+      "/M",
+      "/Q",
+      "/R",
+      "/S"
+     ],
+     "raised": false,
+     "step": [
+      "reload"
+     ],
+     "values": {
+      "/A.e": null,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/M.m": null,
+      "/Q.q": 1.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/S2.z": null,
+      "/T.w": null,
+      "/Z.z": null
+     }
+    }
+   ]
+  },
+  {
+   "name": "over_documented_added",
+   "steps": [
+    {
+     "heard": [],
+     "layers": {
+      "asset.usda": {
+       "dirty": false,
+       "resolved": "second/asset.usda"
+      },
+      "ref.usda": {
+       "dirty": false,
+       "resolved": "ref.usda"
+      },
+      "root.usda": {
+       "dirty": false,
+       "resolved": "root.usda"
+      },
+      "sub.usda": {
+       "dirty": false,
+       "resolved": "sub.usda"
+      }
+     },
+     "prims": [
+      "/A",
+      "/B",
+      "/M",
+      "/Q",
+      "/R",
+      "/S"
+     ],
+     "raised": false,
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.e": null,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/M.m": null,
+      "/Q.q": 1.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/S2.z": null,
+      "/T.w": null,
+      "/Z.z": null
+     }
+    },
+    {
+     "heard": [],
+     "layers": {
+      "asset.usda": {
+       "dirty": false,
+       "resolved": "second/asset.usda"
+      },
+      "ref.usda": {
+       "dirty": false,
+       "resolved": "ref.usda"
+      },
+      "root.usda": {
+       "dirty": false,
+       "resolved": "root.usda"
+      },
+      "sub.usda": {
+       "dirty": false,
+       "resolved": "sub.usda"
+      }
+     },
+     "prims": [
+      "/A",
+      "/B",
+      "/M",
+      "/Q",
+      "/R",
+      "/S"
+     ],
+     "raised": false,
+     "step": [
+      "rewrite",
+      "sub.usda",
+      "sub_over_documented"
+     ],
+     "values": {
+      "/A.e": null,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/M.m": null,
+      "/Q.q": 1.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/S2.z": null,
+      "/T.w": null,
+      "/Z.z": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "fields": {
+        "/": [],
+        "/A": [
+         "documentation"
+        ]
+       },
+       "info": [
+        "/",
+        "/A"
+       ],
+       "resynced": [
+        "/A.e"
+       ]
+      }
+     ],
+     "layers": {
+      "asset.usda": {
+       "dirty": false,
+       "resolved": "second/asset.usda"
+      },
+      "ref.usda": {
+       "dirty": false,
+       "resolved": "ref.usda"
+      },
+      "root.usda": {
+       "dirty": false,
+       "resolved": "root.usda"
+      },
+      "sub.usda": {
+       "dirty": false,
+       "resolved": "sub.usda"
+      }
+     },
+     "prims": [
+      "/A",
+      "/B",
+      "/M",
+      "/Q",
+      "/R",
+      "/S"
+     ],
+     "raised": false,
+     "step": [
+      "reload"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/M.m": null,
+      "/Q.q": 1.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/S2.z": null,
+      "/T.w": null,
+      "/Z.z": null
+     }
+    }
+   ]
+  },
+  {
+   "name": "over_transferred",
+   "steps": [
+    {
+     "heard": [],
+     "layers": {
+      "asset.usda": {
+       "dirty": false,
+       "resolved": "second/asset.usda"
+      },
+      "ref.usda": {
+       "dirty": false,
+       "resolved": "ref.usda"
+      },
+      "root.usda": {
+       "dirty": false,
+       "resolved": "root.usda"
+      },
+      "sub.usda": {
+       "dirty": false,
+       "resolved": "sub.usda"
+      }
+     },
+     "prims": [
+      "/A",
+      "/B",
+      "/M",
+      "/Q",
+      "/R",
+      "/S"
+     ],
+     "raised": false,
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.e": null,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/M.m": null,
+      "/Q.q": 1.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/S2.z": null,
+      "/T.w": null,
+      "/Z.z": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "fields": {
+        "/A": []
+       },
+       "info": [
+        "/A"
+       ],
+       "resynced": [
+        "/A.e"
+       ]
+      }
+     ],
+     "layers": {
+      "asset.usda": {
+       "dirty": false,
+       "resolved": "second/asset.usda"
+      },
+      "ref.usda": {
+       "dirty": false,
+       "resolved": "ref.usda"
+      },
+      "root.usda": {
+       "dirty": false,
+       "resolved": "root.usda"
+      },
+      "sub.usda": {
+       "dirty": true,
+       "resolved": "sub.usda"
+      }
+     },
+     "prims": [
+      "/A",
+      "/B",
+      "/M",
+      "/Q",
+      "/R",
+      "/S"
+     ],
+     "raised": false,
+     "step": [
+      "transfer",
+      "sub.usda",
+      "sub_over"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/M.m": null,
+      "/Q.q": 1.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/S2.z": null,
+      "/T.w": null,
+      "/Z.z": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "fields": {
+        "/A": [
+         "documentation"
+        ]
+       },
+       "info": [
+        "/A"
+       ],
+       "resynced": []
+      }
+     ],
+     "layers": {
+      "asset.usda": {
+       "dirty": false,
+       "resolved": "second/asset.usda"
+      },
+      "ref.usda": {
+       "dirty": false,
+       "resolved": "ref.usda"
+      },
+      "root.usda": {
+       "dirty": false,
+       "resolved": "root.usda"
+      },
+      "sub.usda": {
+       "dirty": true,
+       "resolved": "sub.usda"
+      }
+     },
+     "prims": [
+      "/A",
+      "/B",
+      "/M",
+      "/Q",
+      "/R",
+      "/S"
+     ],
+     "raised": false,
+     "step": [
+      "transfer",
+      "sub.usda",
+      "sub_over_documented"
+     ],
+     "values": {
+      "/A.e": 7.0,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/M.m": null,
+      "/Q.q": 1.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/S2.z": null,
+      "/T.w": null,
+      "/Z.z": null
+     }
+    },
+    {
+     "heard": [
+      {
+       "fields": {
+        "/A": [
+         "documentation"
+        ]
+       },
+       "info": [
+        "/A"
+       ],
+       "resynced": [
+        "/A.e"
+       ]
+      }
+     ],
+     "layers": {
+      "asset.usda": {
+       "dirty": false,
+       "resolved": "second/asset.usda"
+      },
+      "ref.usda": {
+       "dirty": false,
+       "resolved": "ref.usda"
+      },
+      "root.usda": {
+       "dirty": false,
+       "resolved": "root.usda"
+      },
+      "sub.usda": {
+       "dirty": true,
+       "resolved": "sub.usda"
+      }
+     },
+     "prims": [
+      "/A",
+      "/B",
+      "/M",
+      "/Q",
+      "/R",
+      "/S"
+     ],
+     "raised": false,
+     "step": [
+      "transfer",
+      "sub.usda",
+      "sub_original"
+     ],
+     "values": {
+      "/A.e": null,
+      "/A.x": 1.0,
+      "/B.y": 2.0,
+      "/M.m": null,
+      "/Q.q": 1.0,
+      "/R.r": 6.0,
+      "/S.z": 3.0,
+      "/S2.z": null,
+      "/T.w": null,
+      "/Z.z": null
+     }
+    }
+   ]
+  },
+  {
    "name": "sublayer_added",
    "steps": [
     {
@@ -3395,6 +4152,9 @@
   "sub_added": "#usda 1.0\n\ndef \"B\"\n{\n    double y = 2\n}\n\ndef \"S\"\n{\n    double z = 3\n}\n\ndef \"T\"\n{\n    double w = 8\n}\n",
   "sub_broken": "#usda 1.0\n\ndef \"B\"\n{\n    double y = \n",
   "sub_changed": "#usda 1.0\n\ndef \"B\"\n{\n    double y = 20\n}\n\ndef \"S\"\n{\n    double z = 3\n}\n\ndef \"T\"\n{\n    double w = 8\n}\n",
+  "sub_original": "#usda 1.0\n\ndef \"B\"\n{\n    double y = 2\n}\n\ndef \"S\"\n{\n    double z = 3\n}\n",
+  "sub_over": "#usda 1.0\n\ndef \"B\"\n{\n    double y = 2\n}\n\ndef \"S\"\n{\n    double z = 3\n}\n\nover \"A\"\n{\n    double e = 7\n}\n",
+  "sub_over_documented": "#usda 1.0\n\ndef \"B\"\n{\n    double y = 2\n}\n\ndef \"S\"\n{\n    double z = 3\n}\n\nover \"A\" (\n    doc = \"noted\"\n)\n{\n    double e = 7\n}\n",
   "sub_removed": "#usda 1.0\n\ndef \"B\"\n{\n    double y = 2\n}\n",
   "sub_renamed": "#usda 1.0\n\ndef \"B\"\n{\n    double y = 2\n}\n\ndef \"S2\"\n{\n    double z = 3\n}\n",
   "sub_value": "#usda 1.0\n\ndef \"B\"\n{\n    double y = 20\n}\n\ndef \"S\"\n{\n    double z = 3\n}\n"

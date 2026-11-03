@@ -915,4 +915,75 @@ mod tests {
         let undone = live.apply(&mut store, &applied.inverse).unwrap();
         assert_eq!(undone.changes.created, [s]);
     }
+
+    /// An `over` written whole, with an attribute, for a prim another
+    /// layer defines changes that prim's spec stack alone: the prim is
+    /// changed info-only, with the metadata the spec brings or takes, and
+    /// the attribute resynced, as OpenUSD reports `SdfLayer::TransferContent`
+    /// (`layer_reload` replays the same against its records).
+    ///
+    /// Spec: AOUSD Core §10 (namespace composition: the prim exists either
+    /// way). OpenUSD: `didAddInertPrim` and `didAddProperty` entries of
+    /// `SdfChangeList`.
+    #[test]
+    fn an_over_written_whole_changes_its_prim_info_only() {
+        use crate::{FieldValue, PrimInfoField, SublayerEntry};
+        let mut store = InMemoryStore::default();
+        let mut root = scene(&store, 1.0, true);
+        root.sublayers = alloc::vec![SublayerEntry::new(LayerId(2))];
+        store.insert_layer(root);
+        store.insert_layer(Layer::new(LayerId(2)));
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let a = store.path("/A");
+        let e = store.tokens().intern("e");
+        let documentation = store.tokens().intern("documentation");
+        let content = |documented: bool, store: &InMemoryStore| {
+            let mut layer = Layer::new(LayerId(2));
+            let mut over = PrimSpec::over().with_property(
+                e,
+                PropertySpec::attribute().with_default(Value::Double(7.0)),
+            );
+            if documented {
+                over = over.with_field(documentation, FieldValue::Value(Value::string("noted")));
+            }
+            layer.insert_prim(a, over);
+            let root = store.path("/");
+            let pseudo = PrimSpec {
+                authored_children: alloc::vec![store.tokens().intern("A")],
+                ..PrimSpec::default()
+            };
+            layer.insert_prim(root, pseudo);
+            layer
+        };
+        let steps = [
+            (content(false, &store), alloc::vec![e], alloc::vec![]),
+            (
+                content(true, &store),
+                alloc::vec![],
+                alloc::vec![documentation],
+            ),
+            (
+                Layer::new(LayerId(2)),
+                alloc::vec![e],
+                alloc::vec![documentation],
+            ),
+        ];
+        for (at, (layer, resynced, fields)) in steps.into_iter().enumerate() {
+            let edit = Transaction::transfer_content(&store, LayerId(2), &layer).unwrap();
+            let changes = live.apply(&mut store, &edit).unwrap().changes;
+            assert_eq!(changes.resynced, [], "step {at}");
+            let resynced: alloc::vec::Vec<_> = resynced
+                .into_iter()
+                .map(|name| PropertyPath::new(a, name))
+                .collect();
+            assert_eq!(changes.resynced_properties, resynced, "step {at}");
+            assert_eq!(changes.changed_info_only, [a], "step {at}");
+            let found: alloc::vec::Vec<_> = changes
+                .fields_of_prim(a, store.paths(), store.tokens())
+                .collect();
+            let fields: alloc::vec::Vec<_> =
+                fields.into_iter().map(PrimInfoField::Metadata).collect();
+            assert_eq!(found, fields, "step {at}");
+        }
+    }
 }

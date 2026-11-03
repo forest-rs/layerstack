@@ -14,7 +14,7 @@ import type { BudgetReport, BufferCost, DrawCost, DrawScope, Stagehand } from "@
 import { type AssetFocus, assetFocus, type BudgetChoice, budgetFor, type DrawScopeChoice, rememberBudget, rememberedBudget, scopeFor } from "./model/assetView.ts";
 import { ViewportModel, type ViewportScene, type ViewportUpdate } from "./model/draws.ts";
 import { primRevision } from "./model/revisions.ts";
-import { boxCorners, indexOfId, instanceMatrix, type InstancerColumns, invert, multiply, readColumns } from "./model/instancer.ts";
+import { boxCorners, indexOfId, instanceMatrix, type InstancerColumns, invert, multiply, readColumns, toggled } from "./model/instancer.ts";
 import { type LoadBudget, type OpenPhase, OverBudget, Session } from "./model/session.ts";
 import type { SceneSource } from "./model/sources.ts";
 import { DEFAULT_LIGHT_SETTINGS, type LightSettings } from "./viewport/defaultLights.ts";
@@ -379,6 +379,37 @@ export class EditorStore {
     this.#viewport?.setMarker(corners);
     if (frame && corners !== null) this.#frameBox(cornersBox(corners));
     this.#bump();
+  }
+
+  /**
+   * Hides instance `id` of the point instancer at `instancer` (adds it to
+   * `invisibleIds`, at the current time when that attribute is animated,
+   * `UsdGeomPointInstancer::InvisibleIds`) or shows it again, as one edit
+   * where edits go. Nothing when it already is.
+   */
+  setInstanceVisible(instancer: string, id: bigint, visible: boolean): void {
+    const stage = this.session?.stage;
+    const columns = this.instancerColumns(instancer);
+    if (stage === undefined || columns === null || columns.invisibleIds.includes(id) !== visible) return;
+    const attribute = stage.attribute(`${instancer}.invisibleIds`);
+    const at = attribute?.mightBeTimeVarying() === true ? (this.time ?? null) : null;
+    const value = { type: "int64[]", value: BigInt64Array.from(toggled(columns.invisibleIds, id)) } as const;
+    this.apply(`${visible ? "show" : "hide"} instance ${id} of ${instancer}`, [
+      { type: "setValue", path: `${instancer}.invisibleIds`, value, ...(at === null ? {} : { time: at }) },
+    ]);
+  }
+
+  /**
+   * Deactivates instance `id` of the point instancer at `instancer` (adds
+   * it to the `inactiveIds` list op metadata, `UsdGeomPointInstancer::
+   * DeactivateId`) or activates it again, as one edit where edits go.
+   * Nothing when it already is.
+   */
+  setInstanceActive(instancer: string, id: bigint, active: boolean): void {
+    const columns = this.instancerColumns(instancer);
+    if (columns === null || columns.inactiveIds.includes(id) !== active) return;
+    const value = { type: "int64[]", value: BigInt64Array.from(toggled(columns.inactiveIds, id)) } as const;
+    this.apply(`${active ? "activate" : "deactivate"} instance ${id} of ${instancer}`, [{ type: "setMetadata", path: instancer, key: "inactiveIds", value }]);
   }
 
   /** Selects the instance with `id` of the point instancer at `instancer` (a pick's), by its index. */

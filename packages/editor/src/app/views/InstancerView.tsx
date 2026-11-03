@@ -11,16 +11,19 @@
 // outlines (double-click frames it); picking an instance in the viewport
 // chooses its row. Each row hides or deactivates its instance, an edit of
 // `invisibleIds` or of the `inactiveIds` metadata where edits go, undone as
-// any.
+// any. Each row, and the chosen instance below the table, is a live
+// presentation of its instance (`presentations/instances.tsx`): a context
+// menu on it (or Shift+F10 on its index) offers the instance's commands.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { PowerIcon, ViewIcon, ViewOffIcon } from "@hugeicons/core-free-icons";
 import { cn } from "@/lib/utils";
-import { histogram, instanceId, type InstanceColumn, type InstancerColumns, ranges, sortOrder, toggled } from "../../model/instancer.ts";
+import { histogram, instanceId, type InstanceColumn, type InstancerColumns, ranges, sortOrder } from "../../model/instancer.ts";
 import { formatNumber } from "../../model/values.ts";
-import type { PresentProps } from "../../presentations/registry.ts";
+import type { PresentationContext, PresentProps } from "../../presentations/registry.ts";
 import type { EditorStore } from "../../store.ts";
-import { Present } from "../presentations/Present.tsx";
+import { presentedInstance } from "../presentations/instances.tsx";
+import { CommandMenu, Live, Present } from "../presentations/Present.tsx";
 import { Section } from "../Section.tsx";
 
 /** A table row's height in pixels, and the table's. */
@@ -66,15 +69,11 @@ function Instances({ store, path, columns, context }: { store: EditorStore; path
 
   const toggleInvisible = (index: number) => {
     const id = instanceId(columns, index);
-    const attribute = context.stage.attribute(`${path}.invisibleIds`);
-    const at = attribute?.mightBeTimeVarying() === true ? (store.time ?? null) : null;
-    const value = { type: "int64[]", value: BigInt64Array.from(toggled(columns.invisibleIds, id)) } as const;
-    store.apply(`${invisible.has(id) ? "show" : "hide"} instance ${id} of ${path}`, [{ type: "setValue", path: `${path}.invisibleIds`, value, ...(at === null ? {} : { time: at }) }]);
+    store.setInstanceVisible(path, id, invisible.has(id));
   };
   const toggleInactive = (index: number) => {
     const id = instanceId(columns, index);
-    const label = `${inactive.has(id) ? "activate" : "deactivate"} instance ${id} of ${path}`;
-    store.apply(label, [{ type: "setMetadata", path, key: "inactiveIds", value: { type: "int64[]", value: BigInt64Array.from(toggled(columns.inactiveIds, id)) } }]);
+    store.setInstanceActive(path, id, inactive.has(id));
   };
 
   return (
@@ -120,6 +119,7 @@ function Instances({ store, path, columns, context }: { store: EditorStore; path
       )}
       <Table
         store={store}
+        context={context}
         path={path}
         columns={columns}
         order={order}
@@ -131,20 +131,20 @@ function Instances({ store, path, columns, context }: { store: EditorStore; path
         toggleInvisible={toggleInvisible}
         toggleInactive={toggleInactive}
       />
-      {selected !== null && selected < columns.count && <Chosen store={store} path={path} columns={columns} index={selected} />}
+      {selected !== null && selected < columns.count && <Chosen store={store} context={context} path={path} columns={columns} index={selected} />}
     </Section>
   );
 }
 
 /** The chosen instance in full: its id, prototype, position, orientation and scale, and framing it. */
-function Chosen({ store, path, columns, index }: { store: EditorStore; path: string; columns: InstancerColumns; index: number }) {
+function Chosen({ store, context, path, columns, index }: { store: EditorStore; context: PresentationContext; path: string; columns: InstancerColumns; index: number }) {
   const triple = (values: Float32Array | null, fallback: string) => (values === null ? fallback : `(${[0, 1, 2].map((c) => cell(values[index * 3 + c])).join(", ")})`);
   const q = columns.orientations;
   return (
     <div className="mt-1.5 grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-[11px]">
       <span className="text-muted-foreground">instance</span>
-      <span className="flex items-center gap-2 font-mono">
-        #{index} · id {String(instanceId(columns, index))} · {columns.prototypes[columns.protoIndices[index]!]?.split("/").at(-1) ?? "no prototype"}
+      <span className="flex min-w-0 items-center gap-2 font-mono">
+        <Present object={presentedInstance(path, columns, index)} context={context} />
         <button type="button" className="ml-auto font-sans text-sky-600 hover:underline dark:text-sky-400" onClick={() => store.selectInstance(path, index, true)}>
           Frame
         </button>
@@ -161,6 +161,7 @@ function Chosen({ store, path, columns, index }: { store: EditorStore; path: str
 
 function Table({
   store,
+  context,
   path,
   columns,
   order,
@@ -173,6 +174,7 @@ function Table({
   toggleInactive,
 }: {
   store: EditorStore;
+  context: PresentationContext;
   path: string;
   columns: InstancerColumns;
   order: Uint32Array;
@@ -186,6 +188,9 @@ function Table({
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState(0);
+  // The row a context menu is open on, and the element it opened at.
+  const [menu, setMenu] = useState<number | null>(null);
+  const menuAt = useRef<Element | null>(null);
   const frame = useRef(0);
   // A selection made elsewhere (a pick) scrolls its row into view.
   useEffect(() => {
@@ -215,6 +220,11 @@ function Table({
         aria-selected={selected === index}
         onClick={() => store.selectInstance(path, index)}
         onDoubleClick={() => store.selectInstance(path, index, true)}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          menuAt.current = event.currentTarget;
+          setMenu(index);
+        }}
         className={cn(
           "absolute inset-x-0 grid cursor-default items-center select-none gap-x-1 px-1 font-mono text-[11px] tabular-nums hover:bg-muted",
           selected === index && "bg-accent text-accent-foreground",
@@ -222,7 +232,9 @@ function Table({
         )}
         style={{ ...GRID, top: position * ROW, height: ROW }}
       >
-        <span className="text-right">{index}</span>
+        <Live object={presentedInstance(path, columns, index)} context={context} className="text-right text-inherit hover:no-underline dark:text-inherit">
+          {index}
+        </Live>
         <span className="text-right">{String(id)}</span>
         <span className="truncate font-sans" title={prototype}>
           {prototype === undefined ? "none" : prototype.slice(prototype.lastIndexOf("/") + 1)}
@@ -302,6 +314,9 @@ function Table({
           {rows}
         </div>
       </div>
+      {menu !== null && menu < columns.count && (
+        <CommandMenu key={menu} object={presentedInstance(path, columns, menu)} context={context} triggerRef={menuAt} onClose={() => setMenu(null)} />
+      )}
     </div>
   );
 }

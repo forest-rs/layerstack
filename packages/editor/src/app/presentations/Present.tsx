@@ -65,6 +65,8 @@ function fallbackText(object: Presented): string {
       return object.path;
     case "layer":
       return object.layer.identifier ?? "anonymous layer";
+    case "instance":
+      return `${object.instancer} #${object.index}`;
   }
 }
 

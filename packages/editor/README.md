@@ -280,8 +280,9 @@ nothing more.
 ## Presentations
 
 What the editor shows is chosen by what it shows, after CLIM's
-presentations (`src/presentations/registry.ts`): every prim, value, path
-and layer is presented as an object of a **presentation type**, and a
+presentations (`src/presentations/registry.ts`): every prim, value, path,
+layer and point instancer instance is presented as an object of a
+**presentation type**, and a
 registration presents one type in the **views** it can do: `inline` (one
 line: a property row, a table cell, the explain and changes panels),
 `accept` (an inline editor), `panel` (an inspector section) and
@@ -294,7 +295,8 @@ line: a property row, a table cell, the explain and changes panels),
   its value type (`color3f[]`), its role (`color[]`), its kind (`token`,
   `asset`, `number`) and shape (`array`, `tuple`), then `value`; a token
   the schema restricts is `allowedToken` first. Paths are `primPath` or
-  `propertyPath`, then `path`; a layer is `layer`.
+  `propertyPath`, then `path`; a layer is `layer`; an instance of a point
+  instancer (its instancer, index, id and prototype) is `instance`.
 - For `inline`, `accept` and `tooltip`, the registration of the most
   specific type that has the view wins (priority breaks a tie). Every
   `panel` that applies is shown, larger `priority` first: the built-ins
@@ -308,7 +310,11 @@ line: a property row, a table cell, the explain and changes panels),
   running the first that applies and a context menu (or Shift+F10)
   listing them: a prim path selects, frames, draws alone or selects its
   material; a property path explains; a layer takes edits or is muted; an
-  asset is shown in the asset view. The prim tree's rows offer the same
+  asset is shown in the asset view; an instance (a row of its instancer's
+  table, the chosen instance below it, which a viewport pick chooses) is
+  selected and outlined, framed, hidden or deactivated (`invisibleIds`,
+  `inactiveIds`), has its prototype selected or drawn alone, or its id,
+  index or position copied. The prim tree's rows offer the same
   commands on their paths. Hovering a live object shows its `tooltip`
   presentation where its type has one: a prim path's says what is there
   (type, specifier, instance, children), a layer's whether it is muted,

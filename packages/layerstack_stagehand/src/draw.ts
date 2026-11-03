@@ -702,20 +702,6 @@ function shadingProperty(name: string): boolean {
   return name.startsWith("inputs:") || name.startsWith("outputs:") || name.startsWith("info:");
 }
 
-/**
- * Whether an info-only change of `prim` reaches nothing a draw list reads:
- * the pseudo-root's, whose fields are the stage's metadata
- * (`documentation`, `customLayerData`, the start and end time codes,
- * `metersPerUnit`, `upAxis`, or a sublayer's `subLayers`, whose prims are
- * listed on their own). No buffer, matrix, camera, light or material reads
- * them; a renderer that scales or orients the scene by `metersPerUnit` or
- * `upAxis` reads them off the stage again. As `layerstack_stagehand`
- * decides it.
- */
-function stageMetadata(prim: string): boolean {
-  return prim === "/";
-}
-
 /** A property path's prim path and property name. */
 function split(property: string): [string, string] {
   const dot = property.lastIndexOf(".");
@@ -726,8 +712,6 @@ function split(property: string): [string, string] {
 function shadingTouched(changes: Pick<Changes, "changedInfoOnly" | "changedProperties" | "resyncedProperties">, roots: readonly string[], prim: string): boolean {
   return (
     roots.some((root) => under(prim, root)) ||
-    // A prim's own information, conservatively, reaches beneath it.
-    changes.changedInfoOnly.some((changed) => !stageMetadata(changed) && under(prim, changed)) ||
     changes.changedProperties.some((changed) => {
       const [owner, name] = split(changed.property);
       return owner === prim && shadingProperty(name);
@@ -1861,11 +1845,9 @@ export class DrawList implements Disposable {
       reachWithheld((depends) => depends.some((path) => under(path, root)));
     }
     const reached: [string, Dirty][] = [];
-    // A prim's own information changed: conservatively, all of it.
-    for (const prim of changes.changedInfoOnly) {
-      if (!stageMetadata(prim)) reached.push([prim, all()]);
-    }
-    // Properties: what each one's name reaches, a prim's run merged.
+    // Properties: what each one's name reaches, a prim's run merged. A
+    // prim's own information reaches nothing, as `layerstack_stagehand`
+    // decides it: what a draw reads of it resyncs it when it changes.
     for (const changed of changes.changedProperties) {
       const [prim, name] = split(changed.property);
       const last = reached.at(-1);
@@ -2289,8 +2271,7 @@ export class DrawList implements Disposable {
    * what discovery found, as `layerstack_stagehand` does: new ones are
    * added, those a resync covers but did not find removed, and those a
    * change reaches read again (an input it reads, its transform or
-   * visibility or one above it, an unlisted change of it or above it, a
-   * resync over it).
+   * visibility or one above it, a resync over it).
    */
   #applyToViews(
     changes: Pick<Changes, "resynced" | "changedInfoOnly" | "changedProperties" | "resyncedProperties">,
@@ -2299,16 +2280,13 @@ export class DrawList implements Disposable {
   ): Set<string> {
     const roots = found.scopes.flatMap((scope) => (scope.kind === "resync" ? [scope.root] : []));
     const resynced = (path: string) => roots.some((root) => under(path, root));
-    // The properties changed on each prim; `null` when the record has no
-    // inventory of them, which reaches everything under the prim.
-    const reached: [string, string[] | null][] = [];
-    for (const prim of changes.changedInfoOnly) {
-      if (!stageMetadata(prim)) reached.push([prim, null]);
-    }
+    // The properties changed on each prim, its own information aside,
+    // which reaches nothing.
+    const reached: [string, string[]][] = [];
     for (const changed of changes.changedProperties) {
       const [prim, name] = split(changed.property);
       const last = reached.at(-1);
-      if (last !== undefined && last[0] === prim && last[1] !== null) last[1].push(name);
+      if (last !== undefined && last[0] === prim) last[1].push(name);
       else reached.push([prim, [name]]);
     }
     for (const property of changes.resyncedProperties) {
@@ -2324,11 +2302,7 @@ export class DrawList implements Disposable {
     const reaches = (path: string, inputs: readonly string[]) =>
       resynced(path) ||
       reached.some(([prim, names]) =>
-        names === null
-          ? under(path, prim)
-          : prim === path
-            ? names.some((name) => placement(name) || reads(inputs, name))
-            : under(path, prim) && names.some(placement),
+        prim === path ? names.some((name) => placement(name) || reads(inputs, name)) : under(path, prim) && names.some(placement),
       );
 
     const cameras = new Set(found.cameras);
@@ -2356,8 +2330,8 @@ export class DrawList implements Disposable {
       if (touched && !lights.has(key)) lights.set(key, { path: held.item.path, instance: held.item.instance, kind: held.item.kind });
     }
     // The light links whose collections a change reached: a light's
-    // `collection:lightLink:*` or `collection:shadowLink:*`, both for an
-    // unlisted change of it or above it, or a resync over it.
+    // `collection:lightLink:*` or `collection:shadowLink:*`, both for a
+    // resync over it.
     const relink = new Set<string>();
     for (const [key, light] of lights) {
       for (const [kind, prefix] of [
@@ -2366,7 +2340,7 @@ export class DrawList implements Disposable {
       ] as const) {
         const reach =
           resynced(light.path) ||
-          reached.some(([prim, names]) => (names === null ? under(light.path, prim) : prim === light.path && names.some((name) => name.startsWith(prefix))));
+          reached.some(([prim, names]) => prim === light.path && names.some((name) => name.startsWith(prefix)));
         if (reach) relink.add(linkKey(key, kind));
       }
     }

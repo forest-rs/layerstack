@@ -34,7 +34,7 @@ use layerstack_schemas::{
     ExpansionRule, MembershipProblem, MembershipQuery, MembershipRule, Scene,
 };
 
-use crate::draw::{ItemId, stage_metadata, under};
+use crate::draw::{ItemId, under};
 use crate::light::LightId;
 
 /// Which of a light's two linking collections (`UsdLuxLightAPI`).
@@ -162,7 +162,7 @@ pub(crate) struct LinkInputs<'c> {
     pub roots: &'c [PathId],
     /// Light links whose own collection properties a change reached.
     pub relink: BTreeSet<(LightId, LinkKind)>,
-    /// Items read again entirely (resynced, or an unlisted change): their
+    /// Items read again entirely (resynced): their
     /// targets are classified again, as an expression's predicates may
     /// read what changed.
     pub reclassify: BTreeSet<ItemId>,
@@ -194,8 +194,8 @@ fn of_collection(collection: &str, name: Option<&str>) -> bool {
 }
 
 /// Whether `changes` reach the collection at `collection`: a resync over
-/// its prim, a change of one of its properties, or an unlisted change of
-/// its prim or one above it.
+/// its prim, or a change of one of its properties. A prim's own
+/// information is no collection's (see `DrawList::apply_changes`).
 fn collection_touched(
     scene: &Scene<'_>,
     changes: &Changes,
@@ -206,14 +206,10 @@ fn collection_touched(
     let prim = collection.prim_path();
     let name = tokens.resolve(collection.property());
     roots.iter().any(|&root| under(scene, prim, root))
-        // A prim's own information, conservatively, reaches beneath it.
         || changes
-            .changed_info_only
+            .properties_of(prim)
             .iter()
-            .any(|&changed| !stage_metadata(scene, changed) && under(scene, prim, changed))
-        || changes.properties_of(prim).iter().any(|changed| {
-            of_collection(name, Some(tokens.resolve(changed.property.property())))
-        })
+            .any(|changed| of_collection(name, Some(tokens.resolve(changed.property.property()))))
         || changes.resynced_properties.iter().any(|property| {
             property.prim_path() == prim
                 && of_collection(name, Some(tokens.resolve(property.property())))
@@ -225,10 +221,6 @@ fn collection_touched(
 fn any_collection_touched(scene: &Scene<'_>, changes: &Changes, roots: &[PathId]) -> bool {
     let tokens = scene.store().tokens();
     !roots.is_empty()
-        || changes
-            .changed_info_only
-            .iter()
-            .any(|&changed| !stage_metadata(scene, changed))
         || changes.changed_properties.iter().any(|changed| {
             tokens
                 .resolve(changed.property.property())

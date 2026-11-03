@@ -145,6 +145,21 @@ describe("draw lists", () => {
     }
   });
 
+  it("read nothing for a prim's own metadata", () => {
+    const { stage, list, edit } = fixture();
+    try {
+      for (const path of ["/World/Rocks", "/World/Rocks/Rock"]) {
+        const diff = edit([{ type: "setMetadata", path, key: "documentation", value: { type: "string", value: "granite" } }]);
+        assert.deepEqual([diff.added, diff.removed, diff.matrices, diff.refilled, diff.rebuilt], [[], [], [], [], []], path);
+        assert.equal(diff.work.itemsRead, 0, path);
+        assert.equal(diff.work.primsTraversed, 0, path);
+      }
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+  });
+
   it("touch only the item a property edit reaches", () => {
     const { stage, list, edit } = fixture();
     try {

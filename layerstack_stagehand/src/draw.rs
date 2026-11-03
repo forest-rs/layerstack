@@ -555,24 +555,6 @@ fn reads(inputs: &[&str], name: &str) -> bool {
         || name.starts_with("collection:shadowLink:")
 }
 
-/// Whether an info-only change of `prim` reaches nothing a draw list reads:
-/// the pseudo-root's. It holds no properties, so its own fields are the
-/// stage's metadata: a layer field of the stage's own layer stack that
-/// composes nothing (`documentation`, `customLayerData`, `startTimeCode`,
-/// `endTimeCode`, `metersPerUnit`, `upAxis` and the like), or the
-/// `subLayers` of a sublayer inserted or removed, whose prims are listed on
-/// their own (`layerstack::Changes::changed_info_only`). No buffer, matrix,
-/// camera, light or material reads them: the time codes bound what a
-/// caller animates, not a value read at a time; `metersPerUnit` and
-/// `upAxis` scale and orient a whole scene for a renderer (a
-/// `DomeLight_1`'s `poleAxis = "scene"` follows `upAxis`), which reads them
-/// off the stage again when the pseudo-root changes. OpenUSD reports these
-/// edits as an info change of the pseudo-root
-/// (`UsdStage::_HandleLayersDidChange`).
-pub(crate) fn stage_metadata(scene: &Scene<'_>, prim: PathId) -> bool {
-    parent(scene, prim).is_none()
-}
-
 /// What a property's change may change of the items under its prim.
 fn property_dirt(name: &str) -> Dirty {
     let mut dirty = Dirty::default();
@@ -716,16 +698,11 @@ fn shading_property(name: &str) -> bool {
 }
 
 /// Whether `changes` reach the shading properties of the prim at `prim`:
-/// a resync over it (one of `roots`), a shading property of it changed or
-/// resynced, or an unlisted change of it or above it.
+/// a resync over it (one of `roots`), or a shading property of it changed
+/// or resynced.
 fn shading_touched(scene: &Scene<'_>, changes: &Changes, roots: &[PathId], prim: PathId) -> bool {
     let tokens = scene.store().tokens();
     roots.iter().any(|&root| under(scene, prim, root))
-        // A prim's own information, conservatively, reaches beneath it.
-        || changes
-            .changed_info_only
-            .iter()
-            .any(|&changed| !stage_metadata(scene, changed) && under(scene, prim, changed))
         || changes
             .properties_of(prim)
             .iter()
@@ -915,8 +892,9 @@ struct Instancer {
 ///
 /// - a resynced path: every item under it is read again, and items are
 ///   discovered under it or dropped;
-/// - a property changed info-only, or resynced: by property name, `xformOp:*` and `xformOpOrder` recompute
-///   the matrices of the items under the prim; `visibility`, `purpose` and
+/// - a property changed info-only, or resynced: by property name,
+///   `xformOp:*` and `xformOpOrder` recompute the matrices of the items
+///   under the prim; `visibility`, `purpose` and
 ///   the purpose visibilities their visibility; `material:binding*` their
 ///   materials; `points`, `normals`, the topology, the drawn primvars
 ///   (`primvars:normals`, `primvars:st`, `primvars:displayColor`, and the
@@ -925,11 +903,21 @@ struct Instancer {
 ///   of the items they belong to (a refill when the plan still fits, a new
 ///   plan when not). A point instancer's properties recompute its items'
 ///   instances. Other properties draw nothing and are ignored;
-/// - an info-only prim without an inventory: every input of the items
-///   under it is read again, and compared; but the pseudo-root's change
-///   is the stage's metadata (`documentation`, `metersPerUnit`, `upAxis`,
-///   the start and end time codes, or a sublayer's `subLayers`), which
-///   nothing in the list reads: it reads nothing.
+/// - a prim's own information changed info-only
+///   (`layerstack::Changes::changed_info_only`): nothing is read. The prim
+///   fields a draw list reads (`typeName`, `active`, `instanceable`,
+///   `kind`, `apiSchemas`, variant selections and arcs) resync the prim
+///   when they change; a prim listed with no field changed its spec stack
+///   (an inert spec came or went, or a layer was read again), which
+///   changes no value, the properties it changed being listed on their
+///   own; and the rest compose nothing a draw reads (`documentation`,
+///   `customData`, `hidden`). The pseudo-root's own fields are the stage's
+///   metadata (`metersPerUnit`, `upAxis`, the start and end time codes, or
+///   a sublayer's `subLayers`): no buffer, matrix, camera, light or
+///   material reads them; the time codes bound what a caller animates, and
+///   `metersPerUnit` and `upAxis` scale and orient a whole scene for a
+///   renderer (a `DomeLight_1`'s `poleAxis = "scene"` follows `upAxis`),
+///   which reads them off the stage again when the pseudo-root changes.
 ///
 /// Cameras ([`CameraItem`]) and lights ([`LightItem`]) are listed beside
 /// the items, by path (an instance proxy's inside a native instance, one
@@ -1355,15 +1343,10 @@ impl DrawList {
         }
         // Prims and properties: what their names reach, under the prim.
         let mut reached: Vec<(PathId, Dirty)> = Vec::new();
-        // A prim's own information changed: conservatively, all of it.
-        for &prim in &changes.changed_info_only {
-            if !stage_metadata(scene, prim) {
-                reached.push((prim, Dirty::ALL));
-            }
-        }
         // Properties: what each one's name reaches, a prim's run merged. A
         // prim whose changed properties the draw list reads none of
-        // reaches nothing.
+        // reaches nothing, nor does a prim's own information (see
+        // `DrawList::apply_changes`).
         for changed in &changes.changed_properties {
             let prim = changed.property.prim_path();
             let what = self.property_dirt(tokens.resolve(changed.property.property()));
@@ -1684,13 +1667,11 @@ impl DrawList {
     /// what discovery found: new ones are added and read, those a resync
     /// covers but did not find removed, and those a change reaches read
     /// again: a change of an input it reads, of its transform or
-    /// visibility or those above it, an unlisted change of it or above it,
-    /// or a resync over it.
+    /// visibility or those above it, or a resync over it.
     ///
     /// Returns the light links whose collections a change reached: a
     /// light's `collection:lightLink:*` or `collection:shadowLink:*`
-    /// properties, or both for an unlisted change of it or above it, or a
-    /// resync over it.
+    /// properties, or both for a resync over it.
     fn apply_to_views(
         &mut self,
         scene: &Scene<'_>,
@@ -1708,26 +1689,21 @@ impl DrawList {
             })
             .collect();
         let resynced = |path: PathId| roots.iter().any(|&root| under(scene, path, root));
-        // The properties changed on each prim; `None` when the record has no
-        // inventory of them, which reaches everything under the prim.
-        let mut reached: Vec<(PathId, Option<Vec<&str>>)> = Vec::new();
-        for &prim in &changes.changed_info_only {
-            if !stage_metadata(scene, prim) {
-                reached.push((prim, None));
-            }
-        }
+        // The properties changed on each prim, its own information aside,
+        // which reaches nothing (see `DrawList::apply_changes`).
+        let mut reached: Vec<(PathId, Vec<&str>)> = Vec::new();
         for changed in &changes.changed_properties {
             let prim = changed.property.prim_path();
             let name = tokens.resolve(changed.property.property());
             match reached.last_mut() {
-                Some((last, Some(names))) if *last == prim => names.push(name),
-                _ => reached.push((prim, Some(alloc::vec![name]))),
+                Some((last, names)) if *last == prim => names.push(name),
+                _ => reached.push((prim, alloc::vec![name])),
             }
         }
         for property in &changes.resynced_properties {
             reached.push((
                 property.prim_path(),
-                Some(alloc::vec![tokens.resolve(property.property())]),
+                alloc::vec![tokens.resolve(property.property())],
             ));
         }
         // A camera or light reads its own inputs, and the transform and
@@ -1739,12 +1715,12 @@ impl DrawList {
                         let dirt = property_dirt(name);
                         dirt.transform || dirt.visibility
                     };
-                    match names {
-                        None => under(scene, path, *prim),
-                        Some(names) if *prim == path => names
+                    if *prim == path {
+                        names
                             .iter()
-                            .any(|name| placement(name) || reads(inputs, name)),
-                        Some(names) => under(scene, path, *prim) && names.iter().any(placement),
+                            .any(|name| placement(name) || reads(inputs, name))
+                    } else {
+                        under(scene, path, *prim) && names.iter().any(placement)
                     }
                 })
         };
@@ -1814,11 +1790,8 @@ impl DrawList {
                 LinkKind::Shadow => "collection:shadowLink:",
             };
             resynced(path)
-                || reached.iter().any(|(prim, names)| match names {
-                    None => under(scene, path, *prim),
-                    Some(names) => {
-                        *prim == path && names.iter().any(|name| name.starts_with(prefix))
-                    }
+                || reached.iter().any(|(prim, names)| {
+                    *prim == path && names.iter().any(|name| name.starts_with(prefix))
                 })
         };
         let relink: BTreeSet<(LightId, LinkKind)> = read
@@ -1888,8 +1861,7 @@ impl DrawList {
     /// are: a material no item binds any more is dropped, a newly bound one
     /// read, and a held one read again when a change reaches it: a
     /// shading property (`inputs:*`, `outputs:*`, `info:*`) of it or of a
-    /// shader or node graph it reads, an unlisted change of one of them, or
-    /// a resync over one.
+    /// shader or node graph it reads, or a resync over one.
     fn apply_to_materials(
         &mut self,
         scene: &Scene<'_>,
@@ -3843,6 +3815,31 @@ def Xform "Lab" {
             list.buffers(lamp.buffer).unwrap().shape,
             Some(crate::shapes::Shape::Sphere { radius: 0.25 })
         );
+    }
+
+    /// A prim's own metadata changes the prim info-only, apart from its
+    /// properties, and nothing the list holds reads it: nothing is read,
+    /// though the prim, and the rock beneath it, are drawn.
+    #[test]
+    fn prim_metadata_reads_nothing() {
+        let (mut fixture, _) = Fixture::new();
+        for path in ["/World/Rocks", "/World/Rocks/Rock"] {
+            let prim = fixture.path(path);
+            let mut edit = Transaction::new();
+            edit.set_metadata(
+                EditTarget::for_layer(LayerId(1)).prim(prim),
+                fixture.store.tokens().intern("documentation"),
+                layerstack::FieldValue::Value(Value::string("granite")),
+            );
+            let applied = fixture.live.apply(&mut fixture.store, &edit).unwrap();
+            assert_eq!(applied.changes.changed_info_only, [prim], "{path}");
+            assert!(applied.changes.changed_properties.is_empty(), "{path}");
+            let scene = Scene::new(fixture.live.stage(), &fixture.store);
+            let diff = fixture.list.apply_changes(&scene, &applied.changes);
+            assert!(diff.is_empty(), "{path}: {diff:?}");
+            assert_eq!(diff.work.items_read, 0, "{path}");
+            assert_eq!(diff.work.prims_traversed, 0, "{path}");
+        }
     }
 
     /// Stage metadata (the root layer's `documentation`, `metersPerUnit`,

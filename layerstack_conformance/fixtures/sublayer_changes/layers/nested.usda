@@ -1,0 +1,11 @@
+#usda 1.0
+(
+    subLayers = [
+        @prims.usda@
+    ]
+)
+
+over "W"
+{
+    double w = 6
+}

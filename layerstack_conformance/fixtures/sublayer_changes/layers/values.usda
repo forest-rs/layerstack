@@ -1,0 +1,6 @@
+#usda 1.0
+
+over "W"
+{
+    double w = 5
+}

@@ -1,0 +1,11 @@
+#usda 1.0
+
+over "Asset"
+{
+    double a = 4
+    double b = 2
+
+    def "Extra"
+    {
+    }
+}

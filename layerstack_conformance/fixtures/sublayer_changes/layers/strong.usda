@@ -1,0 +1,11 @@
+#usda 1.0
+
+over "A"
+{
+    double y = 2
+}
+
+def "S"
+{
+    double s = 1
+}

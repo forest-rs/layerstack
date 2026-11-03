@@ -20,7 +20,7 @@ it, and leave its file as it is. After each step it records the composed
 values of the attributes the layers author (`null` for none), whether each
 layer is open (`SdfLayer::Find`, after a garbage collection) and whether
 open layers are dirty, and the `UsdNotice::ObjectsChanged` paths the step
-sent.
+sent, with `GetChangedFields` of the info-only ones.
 
 What it shows, with the 26.11 code that does it: a stage holds its layer
 stacks through its prim indexes (`pxr/usd/pcp/primIndex_Graph.h`), a layer
@@ -162,16 +162,20 @@ CASES = [
 
 
 class Listener:
-    """The paths of the `ObjectsChanged` notices a stage sends."""
+    """The paths of the `ObjectsChanged` notices a stage sends, with the
+    changed fields of the info-only ones."""
 
     def __init__(self, stage):
         self.heard = []
         self.key = Tf.Notice.Register(Usd.Notice.ObjectsChanged, self.on, stage)
 
     def on(self, notice, sender):
+        info = sorted(str(p) for p in notice.GetChangedInfoOnlyPaths())
         self.heard.append({
             "resynced": sorted(str(p) for p in notice.GetResyncedPaths()),
-            "info": sorted(str(p) for p in notice.GetChangedInfoOnlyPaths()),
+            "info": info,
+            # `GetChangedFields` of each info-only path.
+            "fields": {p: sorted(notice.GetChangedFields(p)) for p in info},
         })
 
     def take(self):

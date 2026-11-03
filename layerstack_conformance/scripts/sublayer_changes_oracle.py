@@ -18,7 +18,7 @@ Each case copies the layers into a directory of its own, opens a stage on
 step it records the composed values of the attributes the layers author
 (`null` for none; `/W.t` at time 5, the rest at the default time), the
 stage's prims, its layer stack, and the `UsdNotice::ObjectsChanged` paths
-the step sent.
+the step sent, with `GetChangedFields` of the info-only ones.
 
 What it shows, with the 26.11 code that does it:
 `Sdf_ChangeManager::DidChangeField` (`pxr/usd/sdf/changeManager.cpp`)
@@ -220,16 +220,20 @@ CASES = [
 
 
 class Listener:
-    """The paths of the `ObjectsChanged` notices a stage sends."""
+    """The paths of the `ObjectsChanged` notices a stage sends, with the
+    changed fields of the info-only ones."""
 
     def __init__(self, stage):
         self.heard = []
         self.key = Tf.Notice.Register(Usd.Notice.ObjectsChanged, self.on, stage)
 
     def on(self, notice, sender):
+        info = sorted(str(p) for p in notice.GetChangedInfoOnlyPaths())
         self.heard.append({
             "resynced": sorted(str(p) for p in notice.GetResyncedPaths()),
-            "info": sorted(str(p) for p in notice.GetChangedInfoOnlyPaths()),
+            "info": info,
+            # `GetChangedFields` of each info-only path.
+            "fields": {p: sorted(notice.GetChangedFields(p)) for p in info},
         })
 
     def take(self):

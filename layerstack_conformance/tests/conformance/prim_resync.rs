@@ -131,8 +131,8 @@ fn expected(record: &Json) -> Report {
     Report { resynced, info }
 }
 
-/// What `changes` reports, in the oracle's terms. An info-only prim's
-/// fields are not compared: a prim spec edit reports none here.
+/// What `changes` reports, in the oracle's terms, info-only prims and
+/// properties with their fields.
 fn actual(changes: &Changes, loaded: &LoadedStage) -> Report {
     let paths = loaded.store.paths();
     let tokens = loaded.store.tokens();
@@ -149,7 +149,11 @@ fn actual(changes: &Changes, loaded: &LoadedStage) -> Report {
     // Prims and properties with their fields, as OpenUSD reports them.
     let mut info = BTreeMap::new();
     for &path in &changes.changed_info_only {
-        info.insert(prim(path), Vec::new());
+        let fields = changes
+            .fields_of_prim(path)
+            .map(|field| field.name(tokens).to_string())
+            .collect();
+        info.insert(prim(path), fields);
     }
     for change in &changes.changed_properties {
         let field = match change.field {
@@ -497,15 +501,7 @@ fn prim_spec_edits_resync_only_the_prim() {
             live.apply(&mut loaded.store, &txn).expect(name).changes
         };
         let found = actual(&changes, &loaded);
-        let mut want = corrected(name, expected(record));
-        // Fields are compared for info-only properties: a prim spec edit
-        // reports none for its prim, and an info-only prim here has no
-        // inventory.
-        for (path, fields) in want.info.iter_mut() {
-            if !path.contains('.') {
-                fields.clear();
-            }
-        }
+        let want = corrected(name, expected(record));
         if found != want {
             failures.push(format!("{name}:\n  want {want:?}\n  got  {found:?}"));
         }

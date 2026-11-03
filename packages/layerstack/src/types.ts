@@ -815,7 +815,8 @@ export interface VariantSet {
  * arcs it changes, are resynced; those it only overrides are info-only,
  * with the properties it holds for them in `resyncedProperties`; `/` is
  * info-only, with `subLayers` and `subLayerOffsets`, when the stage's own
- * layer stack changed. Reordering a layer's sublayers counts as removing
+ * layer stack changed, and otherwise each prim composing from the edited
+ * layer's layer stack, with those fields. Reordering a layer's sublayers counts as removing
  * and inserting every one of them, as OpenUSD announces it. Three
  * differences from OpenUSD are deliberate: a sublayer that moves a child
  * among its siblings resyncs that child, where OpenUSD reports it

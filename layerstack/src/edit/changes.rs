@@ -77,11 +77,12 @@ use crate::{
 /// no field, beside the specs it changed, as OpenUSD announces the reload
 /// (`SdfChangeList::DidReloadLayerContent`). A sublayer inserted or
 /// removed lists the pseudo-root, with the `subLayers` and
-/// `subLayerOffsets` fields (when the stage's own layer stack holds the
-/// edited layer), and the prims whose spec stacks gained or lost only
-/// inert specs (`over`s, properties aside), in whichever layer stack it
-/// joins or leaves; the prims it defines, or whose arcs it changes, are
-/// resynced. Reordering a layer's sublayers counts as removing and
+/// `subLayerOffsets` fields, when the stage's own layer stack holds the
+/// edited layer, or else each prim composing from the edited layer's layer
+/// stack, with those fields, as any change of a layer's own fields lists
+/// them; and the prims whose spec stacks gained or lost only inert specs
+/// (`over`s, properties aside), in whichever layer stack it joins or
+/// leaves; the prims it defines, or whose arcs it changes, are resynced. Reordering a layer's sublayers counts as removing and
 /// inserting every one of them, as OpenUSD announces it. A change to stage
 /// metadata that composes nothing (`documentation`, `startTimeCode`,
 /// `metersPerUnit` and the like) lists the pseudo-root with that field.

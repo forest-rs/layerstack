@@ -193,6 +193,12 @@
     {
      "heard": [
       {
+       "fields": {
+        "/": [],
+        "/B.y": [
+         "default"
+        ]
+       },
        "info": [
         "/",
         "/B.y"
@@ -343,6 +349,9 @@
     {
      "heard": [
       {
+       "fields": {
+        "/": []
+       },
        "info": [
         "/"
        ],
@@ -495,6 +504,9 @@
     {
      "heard": [
       {
+       "fields": {
+        "/": []
+       },
        "info": [
         "/"
        ],
@@ -645,6 +657,9 @@
     {
      "heard": [
       {
+       "fields": {
+        "/": []
+       },
        "info": [
         "/"
        ],
@@ -797,6 +812,13 @@
     {
      "heard": [
       {
+       "fields": {
+        "/": [
+         "subLayerOffsets",
+         "subLayers"
+        ],
+        "/A": []
+       },
        "info": [
         "/",
         "/A"
@@ -953,6 +975,12 @@
     {
      "heard": [
       {
+       "fields": {
+        "/": [
+         "subLayerOffsets",
+         "subLayers"
+        ]
+       },
        "info": [
         "/"
        ],
@@ -1099,6 +1127,9 @@
     {
      "heard": [
       {
+       "fields": {
+        "/": []
+       },
        "info": [
         "/"
        ],
@@ -1250,6 +1281,12 @@
     {
      "heard": [
       {
+       "fields": {
+        "/R": [],
+        "/R.r": [
+         "default"
+        ]
+       },
        "info": [
         "/R",
         "/R.r"
@@ -1400,6 +1437,7 @@
     {
      "heard": [
       {
+       "fields": {},
        "info": [],
        "resynced": [
         "/M"
@@ -1506,6 +1544,11 @@
     {
      "heard": [
       {
+       "fields": {
+        "/A.x": [
+         "default"
+        ]
+       },
        "info": [
         "/A.x"
        ],
@@ -1561,6 +1604,12 @@
     {
      "heard": [
       {
+       "fields": {
+        "/": [],
+        "/A.x": [
+         "default"
+        ]
+       },
        "info": [
         "/",
         "/A.x"
@@ -1664,6 +1713,11 @@
     {
      "heard": [
       {
+       "fields": {
+        "/A.x": [
+         "default"
+        ]
+       },
        "info": [
         "/A.x"
        ],
@@ -1719,6 +1773,12 @@
     {
      "heard": [
       {
+       "fields": {
+        "/": [],
+        "/A.x": [
+         "default"
+        ]
+       },
        "info": [
         "/",
         "/A.x"
@@ -1824,6 +1884,11 @@
     {
      "heard": [
       {
+       "fields": {
+        "/A.x": [
+         "default"
+        ]
+       },
        "info": [
         "/A.x"
        ],
@@ -1879,6 +1944,12 @@
     {
      "heard": [
       {
+       "fields": {
+        "/": [],
+        "/A.x": [
+         "default"
+        ]
+       },
        "info": [
         "/",
         "/A.x"
@@ -2031,6 +2102,9 @@
     {
      "heard": [
       {
+       "fields": {
+        "/": []
+       },
        "info": [
         "/"
        ],
@@ -2182,6 +2256,12 @@
     {
      "heard": [
       {
+       "fields": {
+        "/": [],
+        "/B.y": [
+         "default"
+        ]
+       },
        "info": [
         "/",
         "/B.y"
@@ -2381,6 +2461,12 @@
     {
      "heard": [
       {
+       "fields": {
+        "/R": [],
+        "/R.r": [
+         "default"
+        ]
+       },
        "info": [
         "/R",
         "/R.r"
@@ -2481,6 +2567,12 @@
     {
      "heard": [
       {
+       "fields": {
+        "/": [],
+        "/B.y": [
+         "default"
+        ]
+       },
        "info": [
         "/",
         "/B.y"
@@ -2632,6 +2724,12 @@
     {
      "heard": [
       {
+       "fields": {
+        "/Q": [],
+        "/Q.q": [
+         "default"
+        ]
+       },
        "info": [
         "/Q",
         "/Q.q"
@@ -2783,6 +2881,12 @@
     {
      "heard": [
       {
+       "fields": {
+        "/Q": [],
+        "/Q.q": [
+         "default"
+        ]
+       },
        "info": [
         "/Q",
         "/Q.q"
@@ -2888,6 +2992,7 @@
     {
      "heard": [
       {
+       "fields": {},
        "info": [],
        "resynced": [
         "/B",
@@ -3016,6 +3121,7 @@
     {
      "heard": [
       {
+       "fields": {},
        "info": [],
        "resynced": [
         "/B",
@@ -3230,6 +3336,12 @@
     {
      "heard": [
       {
+       "fields": {
+        "/": [],
+        "/Z.z": [
+         "default"
+        ]
+       },
        "info": [
         "/",
         "/Z.z"

@@ -1276,10 +1276,15 @@ impl LiveStage {
         outcome: &crate::edit::Outcome,
         attributable: bool,
     ) {
+        let pseudo_root = store.paths().intern(crate::Path::root());
+        let dependents = if attributable {
+            self.list_layer_dependents(store, changes, outcome, pseudo_root)
+        } else {
+            HashMap::new()
+        };
         if changes.changed_info_only.is_empty() {
             return;
         }
-        let pseudo_root = store.paths().intern(crate::Path::root());
         if !attributable {
             let (root, others): (Vec<PathId>, Vec<PathId>) =
                 core::mem::take(&mut changes.changed_info_only)
@@ -1295,13 +1300,15 @@ impl LiveStage {
         let listed: HashSet<PathId> = changes.changed_info_only.iter().copied().collect();
         let mut own: HashMap<PathId, Vec<crate::PrimInfoField>> = HashMap::new();
         for &(layer, path, field) in &outcome.prim_info {
-            let prims = if path == pseudo_root {
-                if !self.stage.layer_stack().contains(&layer) {
-                    continue;
-                }
+            // A layer's own fields are at its pseudo-root: the stage's, for
+            // a layer of its own layer stack, otherwise the prims composing
+            // from its layer stack ([`Self::list_layer_dependents`]).
+            let prims = if path != pseudo_root {
+                self.source_prims(store, layer, path)
+            } else if self.stage.layer_stack().contains(&layer) {
                 alloc::vec![pseudo_root]
             } else {
-                self.source_prims(store, layer, path)
+                dependents.get(&layer).cloned().unwrap_or_default()
             };
             for prim in prims {
                 if listed.contains(&prim) {
@@ -1337,6 +1344,62 @@ impl LiveStage {
             );
         }
         changes.sort(store.paths(), store.tokens());
+    }
+
+    /// Lists info-only the prims composing from the layer stack of each
+    /// layer, not of the stage's own layer stack, whose own fields
+    /// `outcome` changed (its sublayers, say), unless resynced, and
+    /// returns them by layer: a prim's own information changed with them,
+    /// whether or not its spec stack did.
+    ///
+    /// OpenUSD: `UsdStage::_HandleLayersDidChange` maps an info change at
+    /// a layer's pseudo-root to every prim depending on a site in that
+    /// layer's layer stack (`PcpCache::FindSiteDependencies`, recursing on
+    /// the site).
+    fn list_layer_dependents(
+        &self,
+        store: &dyn LayerStore,
+        changes: &mut Changes,
+        outcome: &crate::edit::Outcome,
+        pseudo_root: PathId,
+    ) -> HashMap<LayerId, Vec<PathId>> {
+        let mut found: HashMap<LayerId, Vec<PathId>> = HashMap::new();
+        for &(layer, path, _) in &outcome.prim_info {
+            if path != pseudo_root
+                || self.stage.layer_stack().contains(&layer)
+                || found.contains_key(&layer)
+            {
+                continue;
+            }
+            // The layer and its sublayers, transitively.
+            let mut stack = alloc::vec![layer];
+            let mut at = 0;
+            while let Some(&next) = stack.get(at) {
+                at += 1;
+                for entry in store.layer(next).map(|l| l.sublayers()).unwrap_or_default() {
+                    if !stack.contains(&entry.layer) {
+                        stack.push(entry.layer);
+                    }
+                }
+            }
+            let resynced: HashSet<PathId> = changes.resynced.iter().copied().collect();
+            let mut prims: Vec<PathId> = self
+                .prim_to_layers
+                .iter()
+                .filter(|(prim, layers)| {
+                    layers.iter().any(|l| stack.contains(l))
+                        && self.stage.has_prim(**prim)
+                        && !is_beneath_set(store, **prim, &resynced)
+                })
+                .map(|(prim, _)| *prim)
+                .collect();
+            sort::sort_unstable(&mut prims);
+            for &prim in &prims {
+                changes.add_prim_info(prim, []);
+            }
+            found.insert(layer, prims);
+        }
+        found
     }
 
     /// Lists, info-only, where the layers `reloaded` compose

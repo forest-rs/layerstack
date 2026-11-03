@@ -35,6 +35,8 @@ use layerstack::{
 use layerstack_io::{IoError, IoErrorKind, ReleasedLayers, ReloadPolicy, StageDocument, Storage};
 use serde_json::{Value as Json, json};
 
+use crate::support::notices;
+
 const ORACLE: &str = include_str!("../../fixtures/layer_release/oracle.json");
 
 /// The fixture's layers, as the oracle wrote them.
@@ -122,35 +124,13 @@ impl Case {
         let (_, live) = doc.parts_mut();
         live.subscribe_changes(move |notice| {
             let (paths, tokens) = (notice.store.paths(), notice.store.tokens());
-            let mut resynced: Vec<String> = notice
-                .changes
-                .resynced
-                .iter()
-                .map(|p| paths.display(*p, tokens))
-                .chain(
-                    notice
-                        .changes
-                        .resynced_properties
-                        .iter()
-                        .map(|p| p.display(paths, tokens)),
-                )
-                .collect();
-            resynced.sort();
-            let mut info: Vec<String> = notice
-                .changes
-                .changed_info_only
-                .iter()
-                .map(|p| paths.display(*p, tokens))
-                .collect();
-            for change in &notice.changes.changed_properties {
-                info.push(change.property.display(paths, tokens));
-            }
-            info.sort();
-            info.dedup();
+            let resynced = notices::resynced_paths(notice.changes, paths, tokens);
+            let fields = notices::notice_info_fields(&notice);
+            let info: Vec<&String> = fields.keys().collect();
             if !resynced.is_empty() || !info.is_empty() {
                 sink.lock()
                     .unwrap()
-                    .push(json!({"resynced": resynced, "info": info}));
+                    .push(json!({"resynced": resynced, "info": info, "fields": fields}));
             }
         });
         Self { doc, heard }

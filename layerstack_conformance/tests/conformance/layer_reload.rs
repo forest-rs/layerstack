@@ -22,7 +22,8 @@
 //! `StageDocument::reload` with `ReloadPolicy::DiscardDirty`, OpenUSD's
 //! only behaviour; `SdfLayer::Reload` is `reload_layers`, forced
 //! `force_reload_layers`. A layer reload "returns true" when it read the
-//! layer ([`LoadReport::layers`]).
+//! layer ([`LoadReport::layers`]). `SdfLayer::TransferContent` from a layer
+//! read from text is `Transaction::transfer_content` of the same layer.
 //!
 //! Notices map as `property_resync.rs` maps them: resynced prims and
 //! properties are resynced paths, and info-only prims and properties
@@ -44,10 +45,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
-use layerstack::{EditTarget, LayerId, Transaction, Value};
+use layerstack::{EditTarget, LayerId, NoAssets, Transaction, Value};
 use layerstack_io::{
     IoError, IoErrorKind, LoadReport, ReloadPolicy, SourceVersion, StageDocument, Storage,
 };
+use layerstack_usda::read_usda;
 use serde_json::{Value as Json, json};
 
 use crate::support::notices;
@@ -321,6 +323,16 @@ impl Case {
                     .force_reload_layers(&[layer], ReloadPolicy::DiscardDirty)
                     .unwrap();
                 return (Some(reloaded(&report, layer)), false);
+            }
+            ["transfer", name, key] => {
+                let layer = self.layer(name);
+                let text = rewrites[key].as_str().unwrap();
+                let store = self.doc.store();
+                let content = read_usda(text, layer, store.tokens(), store.paths(), &mut NoAssets)
+                    .emitted
+                    .layer;
+                let edit = Transaction::transfer_content(store, layer, &content).unwrap();
+                self.doc.apply(&edit).unwrap();
             }
             ["mute", name] => {
                 let layer = self.doc.layer_named(name).unwrap();

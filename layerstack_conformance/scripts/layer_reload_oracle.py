@@ -21,6 +21,8 @@ the layers author (`null` for none), the stage's prims, each file layer
 the stage uses with whether it is dirty and where it resolves (relative to
 the case's directory), the `UsdNotice::ObjectsChanged` paths the step
 sent (with `GetChangedFields` of the info-only ones), whether OpenUSD raised an error, and what a layer reload returned.
+A step may also replace a layer's content with `SdfLayer::TransferContent`
+from a layer read from the text of a rewrite.
 
 What it shows, with the 26.11 code that does it:
 
@@ -42,6 +44,14 @@ What it shows, with the 26.11 code that does it:
 - A layer that fails to parse keeps its old content while the others
   reload in the same call; `SdfLayer::ReloadLayers` warns and the parse
   error is raised after the stage has processed the rest.
+- An `over` holding an attribute, written whole into a sublayer for a
+  prim the root layer defines (by a reload or `TransferContent`), changes
+  the prim's spec stack: `SdfLayer::_SetData` records the spec as an
+  inert prim added (`didAddInertPrim`) with an info entry per metadata
+  field it holds, and the property as added, so the stage reports the prim
+  info-only, with `documentation` when the `over` holds it, and resyncs
+  the attribute. Removing it reports the same, and adding `documentation`
+  to it changes the prim info-only with that field alone.
 - A file that appears where an arc failed to open resyncs the arc's prim.
 - `SdfLayer::_Reload` re-resolves the root layer's identifier too: a root
   opened by a search-path identifier moves to the directory that now holds
@@ -172,6 +182,24 @@ def "B"
 }
 ''',
     "sub_renamed": SUB.replace('def "S"', 'def "S2"'),
+    # An `over` of `/A`, which the root layer defines, with an attribute;
+    # last, so that the pseudo-root's children keep their order.
+    "sub_over": SUB + '''
+over "A"
+{
+    double e = 7
+}
+''',
+    # The same, with `documentation`.
+    "sub_over_documented": SUB + '''
+over "A" (
+    doc = "noted"
+)
+{
+    double e = 7
+}
+''',
+    "sub_original": SUB,
     "sub_changed": '''#usda 1.0
 
 def "B"
@@ -235,6 +263,13 @@ CASES = [
     ("prim_added", [["rewrite", "sub.usda", "sub_added"], ["reload"]]),
     ("prim_removed", [["rewrite", "sub.usda", "sub_removed"], ["reload"]]),
     ("prim_renamed", [["rewrite", "sub.usda", "sub_renamed"], ["reload"]]),
+    ("over_added", [["rewrite", "sub.usda", "sub_over"], ["reload"],
+                    ["rewrite", "sub.usda", "sub_over_documented"], ["reload"],
+                    ["rewrite", "sub.usda", "sub_original"], ["reload"]]),
+    ("over_documented_added", [["rewrite", "sub.usda", "sub_over_documented"], ["reload"]]),
+    ("over_transferred", [["transfer", "sub.usda", "sub_over"],
+                          ["transfer", "sub.usda", "sub_over_documented"],
+                          ["transfer", "sub.usda", "sub_original"]]),
     ("sublayer_added", [["rewrite", "root.usda", "root_sublayer_added"], ["reload"]]),
     ("sublayer_removed", [["rewrite", "root.usda", "root_sublayer_removed"], ["reload"]]),
     ("reference_target", [["rewrite", "root.usda", "root_reference_target"], ["reload"]]),
@@ -352,6 +387,10 @@ def take_step(stage, directory, step):
             returned = find_layer(stage, directory, step[1]).Reload()
         elif kind == "layer_reload_force":
             returned = find_layer(stage, directory, step[1]).Reload(True)
+        elif kind == "transfer":
+            source = Sdf.Layer.CreateAnonymous(".usda")
+            assert source.ImportFromString(REWRITES[step[2]])
+            find_layer(stage, directory, step[1]).TransferContent(source)
         elif kind == "set":
             layer = find_layer(stage, directory, step[1])
             layer.GetAttributeAtPath(step[2]).default = step[3]

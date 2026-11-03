@@ -793,7 +793,6 @@ fn property_field(raw: &Raw) -> Option<Option<(LayerId, PathId, super::PropertyC
 /// (`didAddProperty`, `didRemoveProperty`, or an info change of the
 /// field), not of the prim's.
 fn slot_property_changes(guarded: &Guarded) -> Option<(Vec<TokenId>, Vec<super::PropertyChange>)> {
-    use super::{PropertyChange, PropertyField};
     let (
         Raw::PrimSlots {
             main: Some(after),
@@ -821,19 +820,93 @@ fn slot_property_changes(guarded: &Guarded) -> Option<(Vec<TokenId>, Vec<super::
     if !bare(after).same(&bare(before)) {
         return None;
     }
-    let find = |spec: &PrimSpec, name| {
-        spec.properties
+    Some(property_diff(&after.properties, &before.properties))
+}
+
+/// The property changes of `guarded` when it is a [`Raw::PrimSlots`] step
+/// that writes, removes or rewrites a prim spec composing nothing but its
+/// spec stack ([`stack_only`]) on both sides: an `over` holding
+/// properties, children and metadata that resyncs nothing, as a reload or
+/// [`Transaction::transfer_content`](super::Transaction::transfer_content)
+/// writes one whole. Every property of a spec that came or went is added
+/// or removed.
+///
+/// OpenUSD: `SdfLayer::_SetData` records each property spec it adds or
+/// removes at the property's path (`didAddProperty`,
+/// `didRemoveProperty`), beside the inert prim spec's own entry.
+fn stack_only_property_changes(
+    guarded: &Guarded,
+    store: &dyn LayerStore,
+) -> Option<(Vec<TokenId>, Vec<super::PropertyChange>)> {
+    let (
+        Raw::PrimSlots {
+            main: after,
+            branches,
+            ..
+        },
+        Raw::PrimSlots {
+            main: before,
+            branches: before_branches,
+            ..
+        },
+    ) = (&guarded.written, &guarded.step)
+    else {
+        return None;
+    };
+    if !branches.as_ref().is_none_or(|b| b.is_empty())
+        || !before_branches.as_ref().is_none_or(|b| b.is_empty())
+    {
+        return None;
+    }
+    let spec_only = |spec: &Option<PrimSpec>| spec.as_ref().is_none_or(|s| stack_only(s, store));
+    if !spec_only(after) || !spec_only(before) || (after.is_none() && before.is_none()) {
+        return None;
+    }
+    fn properties(spec: &Option<PrimSpec>) -> &[PropertyEntry] {
+        spec.as_ref()
+            .map_or(&[][..], |spec| spec.properties.as_slice())
+    }
+    Some(property_diff(properties(after), properties(before)))
+}
+
+/// Whether `spec` composes nothing but its prim's spec stack: an `over`
+/// (or no specifier) holding properties, child specs and metadata that
+/// resyncs nothing ([`resyncs_prim`]), and no other field. Its metadata is
+/// its prim's own information. Callers check the spec's variant branches,
+/// which it does not hold.
+///
+/// OpenUSD: such a spec added or removed changes the prim's spec stack
+/// (`PcpChanges::DidChangeSpecs`, `didAddInertPrim` aside the infos it
+/// holds), which `UsdStage::_HandleLayersDidChange` reports info-only.
+fn stack_only(spec: &PrimSpec, store: &dyn LayerStore) -> bool {
+    let mut bare = spec.clone();
+    bare.authored_children.clear();
+    bare.properties.clear();
+    bare.fields
+        .retain(|field| resyncs_prim(store.tokens().resolve(field.name)));
+    if bare.specifier == Some(Specifier::Over) {
+        bare.specifier = None;
+    }
+    bare == PrimSpec::default()
+}
+
+/// The properties `after` and `before` hold differently: the names of
+/// those added, removed or redeclared, whose spec stacks change, and the
+/// fields changed of the others.
+fn property_diff(
+    after: &[PropertyEntry],
+    before: &[PropertyEntry],
+) -> (Vec<TokenId>, Vec<super::PropertyChange>) {
+    use super::{PropertyChange, PropertyField};
+    let find = |properties: &[PropertyEntry], name| {
+        properties
             .iter()
             .find(|entry| entry.name == name)
             .map(|entry| entry.spec.clone())
     };
     let mut specs = Vec::new();
     let mut fields = Vec::new();
-    let names = after
-        .properties
-        .iter()
-        .chain(&before.properties)
-        .map(|entry| entry.name);
+    let names = after.iter().chain(before).map(|entry| entry.name);
     for name in names {
         if specs.contains(&name) || fields.iter().any(|f: &PropertyChange| f.name == name) {
             continue;
@@ -876,7 +949,7 @@ fn slot_property_changes(guarded: &Guarded) -> Option<(Vec<TokenId>, Vec<super::
             field(value(&a) != value(&b), PropertyField::Metadata(key));
         }
     }
-    Some((specs, fields))
+    (specs, fields)
 }
 
 /// The changes of prims' own information `guarded` makes, as
@@ -884,8 +957,10 @@ fn slot_property_changes(guarded: &Guarded) -> Option<(Vec<TokenId>, Vec<super::
 /// kept in a dedicated member, or a layer field (at the layer's
 /// pseudo-root, `root`); for a prim spec written whole, each field it
 /// changed, nothing when it changed only its properties or the child
-/// names it lists, and `None` when the spec came, went, or changed in a
-/// way no field names (its variant branches, say).
+/// names it lists, the metadata of a spec composing nothing but its spec
+/// stack ([`stack_only`]) that came or went, and `None` when another spec
+/// came or went, or one changed in a way no field names (its variant
+/// branches, say).
 ///
 /// OpenUSD: the `infoChanged` fields of the `SdfChangeList` entry at the
 /// prim's path, which `UsdNotice::ObjectsChanged::GetChangedFields`
@@ -995,7 +1070,26 @@ fn prim_info_changes(
                 return Vec::new();
             }
             let (Some(after), Some(before)) = (main, before) else {
-                return alloc::vec![(*layer, *path, None)];
+                // A spec composing nothing but its spec stack came or
+                // went with its metadata: those fields changed.
+                let spec = main.as_ref().or(before.as_ref());
+                let fields: Vec<_> = spec
+                    .filter(|spec| {
+                        branches.as_ref().is_none_or(|b| b.is_empty())
+                            && before_branches.as_ref().is_none_or(|b| b.is_empty())
+                            && stack_only(spec, store)
+                    })
+                    .map(|spec| {
+                        spec.fields
+                            .iter()
+                            .map(|field| (*layer, *path, Some(PrimInfoField::Metadata(field.name))))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if fields.is_empty() {
+                    return alloc::vec![(*layer, *path, None)];
+                }
+                return fields;
             };
             if !branches.same(before_branches) {
                 return alloc::vec![(*layer, *path, None)];
@@ -1504,6 +1598,7 @@ pub(crate) fn apply(
     for guarded in &steps {
         if let Raw::PrimSlots { layer, path, .. } = &guarded.written
             && let Some((specs, fields)) = slot_property_changes(guarded)
+                .or_else(|| stack_only_property_changes(guarded, store))
         {
             property_specs.extend(specs.into_iter().map(|name| (*layer, *path, name)));
             property_fields.extend(fields.into_iter().map(|field| (*layer, *path, field)));
@@ -1689,7 +1784,14 @@ fn inert_prims(
     root: Option<PathId>,
     opinions: bool,
 ) -> (Vec<PathId>, HashMap<PathId, Vec<usize>>) {
+    // With opinions, a spec written whole holding properties and metadata
+    // that resyncs nothing is inert too: its properties are reported on
+    // their own (`stack_only_property_changes`), its metadata as its
+    // prim's own information (`prim_info_changes`).
     let inert = |spec: &PrimSpec| {
+        if opinions {
+            return stack_only(spec, store);
+        }
         let mut spec = spec.clone();
         spec.authored_children.clear();
         if spec.specifier == Some(Specifier::Over) {

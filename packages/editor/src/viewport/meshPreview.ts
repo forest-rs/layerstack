@@ -10,7 +10,11 @@
 // alone. Its modes: shaded (with `displayColor` when the buffers carry it),
 // a checker on `st`, a face subset's triangles highlighted (its draw
 // range; the rest ghosted), and, from buffers held on the CPU, wireframe
-// edges and vertex normals.
+// edges and vertex normals. It stands as the mesh does in the scene: it
+// orbits about the stage's up axis and looks from the viewport's direction,
+// both taken into the mesh's own space (`framing.ts`'s `localView`), since
+// what it draws is the mesh's untransformed geometry: a Z-up asset turned
+// upright in a Y-up stage is shown upright, not lying on its back.
 import {
   BufferAttribute,
   BufferGeometry,
@@ -27,13 +31,13 @@ import {
   MeshStandardNodeMaterial,
   PerspectiveCamera,
   Scene,
-  Vector3,
   WireframeGeometry,
 } from "three/webgpu";
 import type { WebGPURenderer } from "three/webgpu";
 import { checker, mix, uv, vec3 } from "three/tsl";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { onRendererLost, sharedRenderer } from "./gpu.ts";
+import { clipRange, frameBox, type ViewOrientation } from "./framing.ts";
 
 /** A mesh's buffers held on the CPU: stagehand's, built for the preview. */
 export interface CpuMesh {
@@ -52,6 +56,8 @@ export interface MeshPreviewSource {
   readonly cpu: CpuMesh | null;
   /** The mesh's extent, `[minX, minY, minZ, maxX, maxY, maxZ]`, to frame. */
   readonly bounds: readonly number[];
+  /** The stage's up and the viewport's view direction in the mesh's own space ({@link localView}). */
+  readonly orientation: ViewOrientation;
 }
 
 /** How the preview draws. */
@@ -73,7 +79,7 @@ export class MeshPreview {
   readonly #target: CanvasTarget;
   readonly #scene = new Scene();
   readonly #camera = new PerspectiveCamera(35, 1, 0.01, 1000);
-  readonly #controls: OrbitControls;
+  #controls: OrbitControls;
   readonly #resizer: ResizeObserver;
   readonly #unlisten: () => void;
   /** What is drawn now; replaced by each {@link show}. */
@@ -81,6 +87,8 @@ export class MeshPreview {
   #ownGeometry: BufferGeometry | null = null;
   #ownFrom: CpuMesh | null = null;
   #framed: string | null = null;
+  /** The radius framed: the far plane stays past it. */
+  #radius = 1;
   #frame = 0;
 
   constructor(canvas: HTMLCanvasElement, renderer: WebGPURenderer) {
@@ -92,9 +100,7 @@ export class MeshPreview {
     key.position.set(-1, 2, 3);
     this.#camera.add(key);
     this.#scene.add(this.#camera);
-    this.#controls = new OrbitControls(this.#camera, canvas);
-    this.#controls.enableDamping = false;
-    this.#controls.addEventListener("change", () => this.#draw());
+    this.#controls = this.#makeControls();
     this.#resizer = new ResizeObserver(() => this.#draw());
     this.#resizer.observe(canvas);
     this.#unlisten = onRendererLost(() => {
@@ -154,10 +160,12 @@ export class MeshPreview {
         this.#add(new LineSegments(lines, new LineBasicNodeMaterial({ color: new Color(0.2, 0.55, 1) })), lines, null);
       }
     }
-    const key = source.bounds.join(",");
+    const { up, direction } = source.orientation;
+    const key = `${source.bounds.join(",")}|${up.join(",")}|${direction.join(",")}`;
     if (key !== this.#framed) {
       this.#framed = key;
-      this.#frameOn(source.bounds);
+      this.#orient(source.orientation);
+      this.#frameOn(source.bounds, direction);
     }
     this.#draw();
   }
@@ -208,15 +216,42 @@ export class MeshPreview {
     this.#drawn.length = 0;
   }
 
-  #frameOn(bounds: readonly number[]): void {
-    const [x0 = -1, y0 = -1, z0 = -1, x1 = 1, y1 = 1, z1 = 1] = bounds;
-    const center = new Vector3((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
-    const radius = Math.max(1e-6, Math.hypot(x1 - x0, y1 - y0, z1 - z0) / 2);
-    const distance = radius / Math.sin((this.#camera.fov * Math.PI) / 360);
-    this.#camera.near = distance / 100;
-    this.#camera.far = distance * 100;
-    this.#camera.position.copy(center).add(new Vector3(0.6, 0.45, 0.65).normalize().multiplyScalar(distance));
-    this.#controls.target.copy(center);
+  #makeControls(): OrbitControls {
+    const controls = new OrbitControls(this.#camera, this.#canvas);
+    controls.enableDamping = false;
+    controls.addEventListener("change", () => {
+      // The clipping range follows the zoom, past the mesh's far side.
+      const distance = this.#camera.position.distanceTo(controls.target);
+      const range = clipRange(distance, distance + this.#radius);
+      if (range !== null) {
+        this.#camera.near = range.near;
+        this.#camera.far = range.far;
+        this.#camera.updateProjectionMatrix();
+      }
+      this.#draw();
+    });
+    return controls;
+  }
+
+  /** Orbits about `orientation.up`: the orbit controls take the camera's up when they are made. */
+  #orient(orientation: ViewOrientation): void {
+    const [x, y, z] = orientation.up;
+    if (this.#camera.up.x === x && this.#camera.up.y === y && this.#camera.up.z === z) return;
+    this.#camera.up.set(x, y, z);
+    const target = this.#controls.target.clone();
+    this.#controls.dispose();
+    this.#controls = this.#makeControls();
+    this.#controls.target.copy(target);
+  }
+
+  /** Frames `bounds` from `direction` ({@link frameBox}); a mesh without an extent at the unit box. */
+  #frameOn(bounds: readonly number[], direction: ViewOrientation["direction"]): void {
+    const framing = frameBox(bounds, { fov: this.#camera.fov, direction }) ?? frameBox([-1, -1, -1, 1, 1, 1], { fov: this.#camera.fov, direction })!;
+    this.#radius = framing.radius;
+    this.#camera.near = framing.near;
+    this.#camera.far = framing.far;
+    this.#camera.position.set(...framing.position);
+    this.#controls.target.set(...framing.center);
     this.#camera.updateProjectionMatrix();
     this.#controls.update();
   }

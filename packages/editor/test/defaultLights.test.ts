@@ -19,6 +19,13 @@ test("the camera light is on by default, as usdview's is", () => {
   assert.equal(defaultLights(DEFAULT_LIGHT_SETTINGS).cameraLight, CAMERA_LIGHT_INTENSITY);
 });
 
+test("the camera light lights a white surface head on white, as Storm's simple light does", () => {
+  // Storm: light diffuse (1, scaled by π for a simple light) × albedo / π × NdotL.
+  // three.js: a decay-0 point light's intensity × albedo / π × NdotL.
+  const storm = (Math.PI * 1) / Math.PI;
+  assert.ok(Math.abs(CAMERA_LIGHT_INTENSITY / Math.PI - storm) < 1e-12);
+});
+
 test("switching the camera light off zeroes it and keeps the ambient", () => {
   const lights = defaultLights({ cameraLight: false });
   assert.equal(lights.cameraLight, 0);

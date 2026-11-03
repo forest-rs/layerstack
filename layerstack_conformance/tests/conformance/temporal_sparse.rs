@@ -55,6 +55,13 @@ const DIVERGENCES: &[(&str, &str)] = &[
     // A default block resolves the schema fallback at the default time too
     // (AOUSD Core 12.3.6, 16.2.16.2).
     ("default-time-block-hides-fallback", "0.26.11"),
+    // Edits over a default block compose over the empty array at the
+    // default time too (AOUSD Core 12.3.6; OpenUSD bug B039).
+    ("default-time-edits-over-block", "0.26.11"),
+    // A value of another type ends the fold at the default time too, and
+    // edits compose over the empty array (sparse-array-edits proposal,
+    // "Value Resolution"; OpenUSD bug B039).
+    ("default-time-edits-over-other-type", "0.26.11"),
 ];
 
 /// The attribute fallbacks of the schemas the cases use, as `layerstack`

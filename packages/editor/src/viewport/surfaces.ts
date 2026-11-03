@@ -42,9 +42,13 @@
 // same use shares the texture, so an image is uploaded once per use), with:
 //
 // - `sourceColorSpace` `sRGB` → `SRGBColorSpace`, `raw` →
-//   `NoColorSpace`; `auto` → sRGB for a color input (`diffuseColor`,
-//   `emissiveColor`, `specularColor`), raw otherwise, as Hydra reads an
-//   8-bit texture.
+//   `NoColorSpace`; `auto` as the file says (`autoColorSpace`): sRGB for
+//   an 8-bit image of three or four channels, raw for one or two channels
+//   or more bits, whatever input reads it, as `UsdUVTexture` defines
+//   `auto` and Storm reads it (`Hio_StbImage::IsColorSpaceSRGB`); a PNG's
+//   `gAMA` chunk decides first. A file whose header it cannot read (not a
+//   PNG or JPEG) is sRGB for a color input (`diffuseColor`,
+//   `emissiveColor`, `specularColor`) and raw otherwise.
 // - `wrapS`/`wrapT` `repeat` → `RepeatWrapping`, `mirror` →
 //   `MirroredRepeatWrapping`, `clamp` → `ClampToEdgeWrapping`; `black`
 //   (three.js has no border color) and `useMetadata` (a PNG has none) →
@@ -111,6 +115,8 @@ interface Image {
   /** Tile columns and rows of a UDIM atlas; 1 × 1 for one image. */
   readonly columns: number;
   readonly rows: number;
+  /** How `sourceColorSpace` `auto` reads it, from its file ({@link autoColorSpace}; an atlas's first tile's). */
+  readonly auto: AutoColorSpace;
 }
 
 /**
@@ -162,7 +168,7 @@ export class TextureStore {
     if (this.#ready.has(identifier)) return this.#ready.get(identifier);
     if (!this.#images.has(identifier)) {
       const anchor = texture.file.layer;
-      const loading = (texture.file.udim ? this.#atlas(texture) : this.#decode(identifier, anchor).then((image) => image && { texture: image, columns: 1, rows: 1 })).catch(
+      const loading = (texture.file.udim ? this.#atlas(texture) : this.#decode(identifier, anchor).then((image) => image && { texture: image.texture, columns: 1, rows: 1, auto: image.auto })).catch(
         (error: unknown) => {
           console.error(error);
           return null;
@@ -211,7 +217,7 @@ export class TextureStore {
    * data. `flip` turns it so `st`'s v runs up, as a texture of its own
    * wants; an atlas tile is drawn into a canvas unturned.
    */
-  async #decode(identifier: string, anchor: string | null, flip = true): Promise<Texture | null> {
+  async #decode(identifier: string, anchor: string | null, flip = true): Promise<{ texture: Texture; auto: AutoColorSpace } | null> {
     const bytes = await this.#read(identifier, anchor);
     if (bytes === null) return null;
     const options: ImageBitmapOptions = { imageOrientation: flip ? "flipY" : "from-image", premultiplyAlpha: "none", colorSpaceConversion: "none" };
@@ -235,7 +241,7 @@ export class TextureStore {
     // The bitmap is turned already: three.js cannot flip one on upload.
     texture.flipY = false;
     texture.needsUpdate = true;
-    return texture;
+    return { texture, auto: autoColorSpace(bytes) };
   }
 
   /** A UDIM set's tiles laid into one canvas, a column per tile's units digit, a row per ten. */
@@ -243,7 +249,8 @@ export class TextureStore {
     const anchor = texture.file.layer;
     const tiles = await udimTiles(texture.file, (identifier) => this.#exists(identifier, anchor));
     if (tiles.length === 0) return null;
-    const images = await Promise.all(tiles.map((tile) => this.#decode(tile.identifier, anchor, false)));
+    const decoded = await Promise.all(tiles.map((tile) => this.#decode(tile.identifier, anchor, false)));
+    const images = decoded.map((tile) => tile?.texture ?? null);
     const cell = Math.max(...images.map((image) => (image?.image as { width?: number } | undefined)?.width ?? 1));
     const columns = Math.max(...tiles.map((tile) => ((tile.tile - 1001) % 10) + 1));
     const rows = Math.max(...tiles.map((tile) => Math.floor((tile.tile - 1001) / 10) + 1));
@@ -259,7 +266,7 @@ export class TextureStore {
       // Canvas rows run down; `st`'s v runs up.
       context.drawImage(image, u * cell, (rows - 1 - v) * cell, cell, cell);
     });
-    return { texture: new CanvasTexture(canvas), columns, rows };
+    return { texture: new CanvasTexture(canvas), columns, rows, auto: decoded.find((tile) => tile !== null)?.auto ?? null };
   }
 
   /** Frees every image and its uses ({@link use}). */
@@ -274,6 +281,60 @@ export class TextureStore {
     this.#images.clear();
     this.#arrived.clear();
   }
+}
+
+/** How `sourceColorSpace` `auto` reads an image: `null` when its header does not say. */
+export type AutoColorSpace = "sRGB" | "raw" | null;
+
+/**
+ * How `sourceColorSpace` `auto` reads the PNG or JPEG `bytes`, as the
+ * `UsdUVTexture` specification defines it and Storm reads it
+ * (`Hio_StbImage::IsColorSpaceSRGB`): a PNG's `gAMA` chunk first (1/2.2,
+ * sRGB; 1, raw), else sRGB exactly for an image of 8-bit samples and three
+ * or four channels (an RGB or RGBA PNG, a palette PNG, which decodes to
+ * one, a three-component JPEG), raw for a gray image (with or without
+ * alpha) or 16-bit samples. `null` for any other format or a header it
+ * cannot read.
+ */
+export function autoColorSpace(bytes: Uint8Array): AutoColorSpace {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (bytes.length >= 26 && view.getUint32(0) === 0x89504e47 && view.getUint32(12) === 0x49484452) {
+    const depth = bytes[24]!;
+    const type = bytes[25]!;
+    // The chunks before the image data, for a `gAMA`.
+    let at = 8;
+    while (at + 12 <= bytes.length) {
+      const length = view.getUint32(at);
+      const kind = view.getUint32(at + 4);
+      if (kind === 0x49444154) break; // IDAT
+      if (kind === 0x67414d41 && length === 4 && at + 12 <= bytes.length) {
+        const gamma = view.getUint32(at + 8) / 100000;
+        if (Math.abs(gamma - 0.45455) < 0.1) return "sRGB";
+        if (Math.abs(gamma - 1) < 0.1) return "raw";
+      }
+      at += 12 + length;
+    }
+    const color = type === 2 || type === 6 || type === 3;
+    const eightBit = type === 3 || depth === 8;
+    return color && eightBit ? "sRGB" : "raw";
+  }
+  if (bytes.length < 4 || view.getUint16(0) !== 0xffd8) return null;
+  let at = 2;
+  while (at + 10 <= bytes.length) {
+    if (bytes[at] !== 0xff) return null;
+    const marker = bytes[at + 1]!;
+    if (marker === 0xff) {
+      at += 1;
+      continue;
+    }
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      const precision = bytes[at + 4]!;
+      const components = bytes[at + 9]!;
+      return precision === 8 && (components === 3 || components === 4) ? "sRGB" : "raw";
+    }
+    at += 2 + view.getUint16(at + 2);
+  }
+  return null;
 }
 
 /**
@@ -357,7 +418,7 @@ export function use(store: TextureStore, channels: UvChannels, texture: Material
     return fallback;
   }
   const channel = channelOf(texture, channels);
-  const srgb = texture.colorSpace === "sRGB" || (texture.colorSpace === "auto" && color);
+  const srgb = texture.colorSpace === "sRGB" || (texture.colorSpace === "auto" && (image.auto === null ? color : image.auto === "sRGB"));
   // `UsdTransform2d`, then a UDIM atlas's grid, for the maps three.js samples itself.
   const matrix = coordinateMatrix(texture.coordinates.transform, image.columns, image.rows);
   const key = [channel, srgb, texture.wrapS, texture.wrapT, ...matrix].join(" ");

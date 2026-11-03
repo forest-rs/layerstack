@@ -392,17 +392,17 @@ impl RetainedQueries {
                 }
             }
             for &prim in &changes.changed_info_only {
-                if let Some(fields) = changes.properties_for(prim) {
-                    for field in fields {
-                        if property_overlap(scene, held, prim, Some(field.name), &self.bounds) {
-                            held.mark(QueryCause::Property {
-                                path: PropertyPath::new(prim, field.name),
-                                field: field.field,
-                            });
-                        }
-                    }
-                } else if property_overlap(scene, held, prim, None, &self.bounds) {
+                if property_overlap(scene, held, prim, None, &self.bounds) {
                     held.mark(QueryCause::Prim(prim));
+                }
+            }
+            for change in &changes.changed_properties {
+                let (prim, name) = (change.property.prim_path(), change.property.property());
+                if property_overlap(scene, held, prim, Some(name), &self.bounds) {
+                    held.mark(QueryCause::Property {
+                        path: PropertyPath::new(prim, name),
+                        field: change.field,
+                    });
                 }
             }
             for &path in &changes.resynced_properties {

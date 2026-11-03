@@ -617,6 +617,11 @@ pub(crate) struct Outcome {
     /// The layers the transaction reports as read again from their
     /// sources ([`Transaction::mark_reloaded`]), in order, without repeats.
     pub(crate) reloaded: Vec<LayerId>,
+    /// `(layer, source prim path, field)` of every change of a prim spec's
+    /// own information ([`prim_info_changes`]): `None` for a spec created,
+    /// removed or changed in no field it names. A layer's own fields are
+    /// at its pseudo-root.
+    pub(crate) prim_info: Vec<(LayerId, PathId, Option<super::PrimInfoField>)>,
 }
 
 /// An edit of a prim metadata field or an attribute default, the inputs
@@ -872,6 +877,223 @@ fn slot_property_changes(guarded: &Guarded) -> Option<(Vec<TokenId>, Vec<super::
         }
     }
     Some((specs, fields))
+}
+
+/// The changes of prims' own information `guarded` makes, as
+/// `(layer, source prim path, field)`: a prim metadata field, a prim field
+/// kept in a dedicated member, or a layer field (at the layer's
+/// pseudo-root, `root`); for a prim spec written whole, each field it
+/// changed, nothing when it changed only its properties or the child
+/// names it lists, and `None` when the spec came, went, or changed in a
+/// way no field names (its variant branches, say).
+///
+/// OpenUSD: the `infoChanged` fields of the `SdfChangeList` entry at the
+/// prim's path, which `UsdNotice::ObjectsChanged::GetChangedFields`
+/// returns; a parent's `primChildren` records none
+/// (`SdfLayer::_PrimPushChild`), and an inert spec added or removed
+/// (`didAddInertPrim`, `didRemoveInertPrim`) none either.
+fn prim_info_changes(
+    guarded: &Guarded,
+    store: &dyn LayerStore,
+    root: Option<PathId>,
+) -> Vec<(LayerId, PathId, Option<super::PrimInfoField>)> {
+    use super::PrimInfoField;
+    let token = |name: &str| store.tokens().intern(name);
+    let at_root = |layer: LayerId, field: PrimInfoField| {
+        root.map(|root| (layer, root, Some(field)))
+            .into_iter()
+            .collect()
+    };
+    match (&guarded.written, &guarded.step) {
+        (
+            Raw::Field {
+                layer,
+                loc,
+                property: None,
+                key,
+                ..
+            },
+            _,
+        ) => alloc::vec![(*layer, loc.prim_path(), Some(PrimInfoField::Metadata(*key)))],
+        (Raw::PrimField { layer, loc, value }, _) => alloc::vec![(
+            *layer,
+            loc.prim_path(),
+            Some(PrimInfoField::Field(value.field()))
+        )],
+        (Raw::Selection { layer, loc, .. }, _) => alloc::vec![(
+            *layer,
+            loc.prim_path(),
+            Some(PrimInfoField::Metadata(token("variantSelection")))
+        )],
+        (Raw::LayerMetadata { layer, key, .. }, _) => {
+            at_root(*layer, PrimInfoField::Metadata(*key))
+        }
+        (Raw::LayerRelocates { layer, .. }, _) => {
+            at_root(*layer, PrimInfoField::Metadata(token("layerRelocates")))
+        }
+        (
+            Raw::Sublayers { layer, sublayers },
+            Raw::Sublayers {
+                sublayers: before, ..
+            },
+        ) => {
+            let mut fields = Vec::new();
+            let names = |list: &[crate::SublayerEntry]| {
+                list.iter()
+                    .map(|entry| (entry.layer, entry.asset.clone()))
+                    .collect::<Vec<_>>()
+            };
+            if names(sublayers) != names(before) {
+                fields.extend(at_root(*layer, PrimInfoField::Sublayers));
+            }
+            let offsets = |list: &[crate::SublayerEntry]| {
+                list.iter().map(|entry| entry.offset).collect::<Vec<_>>()
+            };
+            if sublayers.len() != before.len() || offsets(sublayers) != offsets(before) {
+                fields.extend(at_root(*layer, PrimInfoField::SublayerOffsets));
+            }
+            fields
+        }
+        (
+            Raw::LayerFields {
+                layer,
+                default_prim,
+                metadata,
+            },
+            Raw::LayerFields {
+                default_prim: before_default,
+                metadata: before,
+                ..
+            },
+        ) => {
+            let mut fields = Vec::new();
+            if default_prim != before_default {
+                fields.extend(at_root(
+                    *layer,
+                    PrimInfoField::Metadata(token("defaultPrim")),
+                ));
+            }
+            for key in changed_metadata(metadata, before) {
+                fields.extend(at_root(*layer, PrimInfoField::Metadata(key)));
+            }
+            fields
+        }
+        (
+            Raw::PrimSlots {
+                layer,
+                path,
+                main,
+                branches,
+            },
+            Raw::PrimSlots {
+                main: before,
+                branches: before_branches,
+                ..
+            },
+        ) => {
+            if lists_children_only(guarded, root).is_some() {
+                return Vec::new();
+            }
+            let (Some(after), Some(before)) = (main, before) else {
+                return alloc::vec![(*layer, *path, None)];
+            };
+            if !branches.same(before_branches) {
+                return alloc::vec![(*layer, *path, None)];
+            }
+            let fields = prim_spec_fields(after, before);
+            match fields {
+                Some(fields) => fields
+                    .into_iter()
+                    .map(|field| (*layer, *path, Some(field)))
+                    .collect(),
+                None => alloc::vec![(*layer, *path, None)],
+            }
+        }
+        (Raw::Variant { layer, host, .. } | Raw::VariantSet { layer, host, .. }, _) => {
+            alloc::vec![(*layer, host.prim_path(), None)]
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// The names of the metadata fields `after` and `before` hold differently.
+fn changed_metadata(after: &[FieldEntry], before: &[FieldEntry]) -> Vec<TokenId> {
+    let value = |list: &[FieldEntry], key: TokenId| {
+        list.iter().find(|f| f.name == key).map(|f| f.value.clone())
+    };
+    let mut keys: Vec<TokenId> = Vec::new();
+    for key in after.iter().chain(before).map(|f| f.name) {
+        if !keys.contains(&key) && !value(after, key).same(&value(before, key)) {
+            keys.push(key);
+        }
+    }
+    keys
+}
+
+/// The fields of its own that a prim spec rewritten from `before` to
+/// `after` changed, its properties and the child names it lists aside:
+/// `None` when it changed in a way no field names.
+fn prim_spec_fields(after: &PrimSpec, before: &PrimSpec) -> Option<Vec<super::PrimInfoField>> {
+    use super::{PrimField, PrimInfoField};
+    let bare = |spec: &PrimSpec| {
+        let mut spec = spec.clone();
+        spec.authored_children.clear();
+        spec.properties.clear();
+        spec
+    };
+    let (a, b) = (bare(after), bare(before));
+    if a.same(&b) {
+        return Some(Vec::new());
+    }
+    let mut fields = Vec::new();
+    let mut field = |changed: bool, field: PrimField| {
+        if changed {
+            fields.push(PrimInfoField::Field(field));
+        }
+    };
+    field(a.specifier != b.specifier, PrimField::Specifier);
+    field(a.type_name != b.type_name, PrimField::TypeName);
+    field(a.active != b.active, PrimField::Active);
+    field(a.instanceable != b.instanceable, PrimField::Instanceable);
+    field(a.references != b.references, PrimField::References);
+    field(a.payloads != b.payloads, PrimField::Payloads);
+    field(a.inherits() != b.inherits(), PrimField::Inherits);
+    field(a.specializes() != b.specializes(), PrimField::Specializes);
+    field(
+        a.variant_set_names() != b.variant_set_names(),
+        PrimField::VariantSetNames,
+    );
+    field(a.prim_order() != b.prim_order(), PrimField::PrimOrder);
+    field(
+        a.property_order() != b.property_order(),
+        PrimField::PropertyOrder,
+    );
+    fields.extend(
+        changed_metadata(&a.fields, &b.fields)
+            .into_iter()
+            .map(PrimInfoField::Metadata),
+    );
+    let named = |spec: &PrimSpec| {
+        let mut spec = spec.clone();
+        spec.specifier = None;
+        spec.type_name = None;
+        spec.active = None;
+        spec.instanceable = None;
+        spec.references = crate::listop::SparseListOp::default();
+        spec.payloads = crate::listop::SparseListOp::default();
+        spec.fields.clear();
+        if let Some(rare) = spec.authored_rare_mut() {
+            rare.inherits = crate::listop::SparseListOp::default();
+            rare.specializes = crate::listop::SparseListOp::default();
+            rare.variant_set_names = crate::listop::SparseListOp::default();
+            rare.prim_order = None;
+            rare.property_order = None;
+        }
+        spec
+    };
+    // A change no field names, such as a variant selection written with
+    // the spec, has no field to report.
+    named(&a).same(&named(&b)).then_some(fields)
 }
 
 fn property_edits(steps: &[Guarded]) -> Option<Vec<(LayerId, PathId, super::PropertyChange)>> {
@@ -1289,6 +1511,10 @@ pub(crate) fn apply(
     }
     sort::sort_unstable(&mut property_specs);
     property_specs.dedup();
+    let prim_info = steps
+        .iter()
+        .flat_map(|guarded| prim_info_changes(guarded, store, root))
+        .collect();
     let values = value_edits(&steps, store);
     let properties = property_edits(&steps);
     steps.reverse();
@@ -1307,6 +1533,7 @@ pub(crate) fn apply(
         property_fields,
         layer_info,
         reloaded,
+        prim_info,
         inverse: Transaction {
             preconditions: Vec::new(),
             ops: steps.into_iter().map(|g| Op::Raw(Box::new(g))).collect(),

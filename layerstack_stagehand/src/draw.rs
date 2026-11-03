@@ -721,25 +721,15 @@ fn shading_property(name: &str) -> bool {
 fn shading_touched(scene: &Scene<'_>, changes: &Changes, roots: &[PathId], prim: PathId) -> bool {
     let tokens = scene.store().tokens();
     roots.iter().any(|&root| under(scene, prim, root))
-        || changes.changed_info_only.iter().any(|&changed| {
-            if stage_metadata(scene, changed) {
-                return false;
-            }
-            match changes
-                .property_changes
-                .iter()
-                .find(|properties| properties.prim == changed)
-            {
-                None => under(scene, prim, changed),
-                Some(properties) => {
-                    changed == prim
-                        && properties
-                            .fields
-                            .iter()
-                            .any(|field| shading_property(tokens.resolve(field.name)))
-                }
-            }
-        })
+        // A prim's own information, conservatively, reaches beneath it.
+        || changes
+            .changed_info_only
+            .iter()
+            .any(|&changed| !stage_metadata(scene, changed) && under(scene, prim, changed))
+        || changes
+            .properties_of(prim)
+            .iter()
+            .any(|changed| shading_property(tokens.resolve(changed.property.property())))
         || changes.resynced_properties.iter().any(|property| {
             property.prim_path() == prim && shading_property(tokens.resolve(property.property()))
         })
@@ -925,8 +915,7 @@ struct Instancer {
 ///
 /// - a resynced path: every item under it is read again, and items are
 ///   discovered under it or dropped;
-/// - an info-only prim with a property inventory, and a resynced
-///   property: by property name, `xformOp:*` and `xformOpOrder` recompute
+/// - a property changed info-only, or resynced: by property name, `xformOp:*` and `xformOpOrder` recompute
 ///   the matrices of the items under the prim; `visibility`, `purpose` and
 ///   the purpose visibilities their visibility; `material:binding*` their
 ///   materials; `points`, `normals`, the topology, the drawn primvars
@@ -1338,13 +1327,9 @@ impl DrawList {
         // drawn by a stand-in, is discovered again, as for a resync.
         let mut resyncs: Vec<PathId> = changes.resynced.clone();
         let mut draw_mode_roots: Vec<PathId> = Vec::new();
-        for changed in &changes.property_changes {
-            if changed
-                .fields
-                .iter()
-                .any(|field| DRAW_MODE_FIELDS.contains(&tokens.resolve(field.name)))
-            {
-                draw_mode_roots.push(changed.prim);
+        for changed in &changes.changed_properties {
+            if DRAW_MODE_FIELDS.contains(&tokens.resolve(changed.property.property())) {
+                draw_mode_roots.push(changed.property.prim_path());
             }
         }
         for property in &changes.resynced_properties {
@@ -1370,22 +1355,22 @@ impl DrawList {
         }
         // Prims and properties: what their names reach, under the prim.
         let mut reached: Vec<(PathId, Dirty)> = Vec::new();
+        // A prim's own information changed: conservatively, all of it.
         for &prim in &changes.changed_info_only {
-            if stage_metadata(scene, prim) {
-                continue;
+            if !stage_metadata(scene, prim) {
+                reached.push((prim, Dirty::ALL));
             }
-            let what = changes
-                .property_changes
-                .iter()
-                .find(|changed| changed.prim == prim)
-                .map_or(Dirty::ALL, |changed| {
-                    let mut what = Dirty::default();
-                    for field in &changed.fields {
-                        what.merge(self.property_dirt(tokens.resolve(field.name)));
-                    }
-                    what
-                });
-            reached.push((prim, what));
+        }
+        // Properties: what each one's name reaches, a prim's run merged. A
+        // prim whose changed properties the draw list reads none of
+        // reaches nothing.
+        for changed in &changes.changed_properties {
+            let prim = changed.property.prim_path();
+            let what = self.property_dirt(tokens.resolve(changed.property.property()));
+            match reached.last_mut() {
+                Some((last, merged)) if *last == prim => merged.merge(what),
+                _ => reached.push((prim, what)),
+            }
         }
         for property in &changes.resynced_properties {
             reached.push((
@@ -1727,21 +1712,17 @@ impl DrawList {
         // inventory of them, which reaches everything under the prim.
         let mut reached: Vec<(PathId, Option<Vec<&str>>)> = Vec::new();
         for &prim in &changes.changed_info_only {
-            if stage_metadata(scene, prim) {
-                continue;
+            if !stage_metadata(scene, prim) {
+                reached.push((prim, None));
             }
-            let names = changes
-                .property_changes
-                .iter()
-                .find(|changed| changed.prim == prim)
-                .map(|changed| {
-                    changed
-                        .fields
-                        .iter()
-                        .map(|field| tokens.resolve(field.name))
-                        .collect()
-                });
-            reached.push((prim, names));
+        }
+        for changed in &changes.changed_properties {
+            let prim = changed.property.prim_path();
+            let name = tokens.resolve(changed.property.property());
+            match reached.last_mut() {
+                Some((last, Some(names))) if *last == prim => names.push(name),
+                _ => reached.push((prim, Some(alloc::vec![name]))),
+            }
         }
         for property in &changes.resynced_properties {
             reached.push((

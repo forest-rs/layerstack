@@ -1042,9 +1042,9 @@ impl XformCache {
     /// For a sparse cache, traversal stops after a budget equal to its entry
     /// count and filters the remaining cache by namespace instead. Child lists
     /// are borrowed lazily, so wide scenes allocate no wide traversal frontier.
-    /// Info-only changes invalidate the local transform when transform fields
-    /// changed or the report lacks a complete property inventory, and
-    /// property resyncs when they resync a transform property;
+    /// Info-only changes invalidate the local transform when a transform
+    /// property changed or, conservatively, the prim's own information did,
+    /// and property resyncs when they resync a transform property;
     /// descendant worlds validate lazily. No namespace index is constructed.
     ///
     /// Spec: AOUSD Core §11 (population), §12 (composed changes).
@@ -1082,13 +1082,13 @@ impl XformCache {
             }
         }
         self.finish_retirement();
+        // A prim's own information changed: conservatively, its transform.
         for &path in &changes.changed_info_only {
-            if changes.properties_for(path).is_none_or(|fields| {
-                fields
-                    .iter()
-                    .any(|field| is_transform_property(scene.store().tokens().resolve(field.name)))
-            }) {
-                self.invalidate_transform(path);
+            self.invalidate_transform(path);
+        }
+        for change in &changes.changed_properties {
+            if is_transform_property(scene.store().tokens().resolve(change.property.property())) {
+                self.invalidate_transform(change.property.prim_path());
             }
         }
         // A transform property added or removed changes the local transform;
@@ -1495,9 +1495,9 @@ impl XformCache {
 /// Whether a property can affect a native local transform.
 ///
 /// Matches `xformOpOrder` and the entire `xformOp:` namespace conservatively,
-/// including currently unused operations. Consumers can filter a complete
-/// [`layerstack::Changes::properties_for`] inventory with this same rule used by
-/// [`XformCache`]. Missing inventories still require conservative invalidation.
+/// including currently unused operations. Consumers can filter
+/// [`layerstack::Changes::changed_properties`] with this same rule used by
+/// [`XformCache`].
 /// This classifies dependencies; it does not resolve, compose or evaluate them.
 ///
 /// OpenUSD: `UsdGeomXformable::GetOrderedXformOps` and `GetLocalTransformation`.

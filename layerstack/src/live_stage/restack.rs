@@ -759,9 +759,23 @@ mod tests {
                 })
                 .collect(),
             changes
-                .property_changes
+                .prim_fields
                 .iter()
-                .map(|change| format!("{change:?}"))
+                .map(|change| format!("{:?}", change.field))
+                .collect(),
+            changes
+                .changed_properties
+                .iter()
+                .map(|change| {
+                    format!(
+                        "{}.{} {:?}",
+                        store
+                            .paths()
+                            .display(change.property.prim_path(), store.tokens()),
+                        store.tokens().resolve(change.property.property()),
+                        change.field
+                    )
+                })
                 .collect(),
         ]
     }

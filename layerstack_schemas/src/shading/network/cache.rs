@@ -166,6 +166,7 @@ impl MaterialNetworkCache {
         for held in self.held.values_mut() {
             held.dirty |= held.network.dependencies.iter().any(|dep| {
                 changes.changed_info_only.contains(&dep.prim)
+                    || !changes.properties_of(dep.prim).is_empty()
                     || changes
                         .resynced_properties
                         .iter()

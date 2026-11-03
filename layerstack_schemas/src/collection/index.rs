@@ -321,13 +321,13 @@ impl MembershipIndex {
     ///
     /// What each part of the report invalidates:
     ///
-    /// - a prim in `removed`, `created` or `changed_info_only` without a
-    ///   property inventory, and every prim at or below a `resynced` root:
+    /// - a prim in `removed`, `created` or `changed_info_only` (its own
+    ///   information changed), and every prim at or below a `resynced` root:
     ///   its collections are found again (added, removed, or compiled
     ///   again), and so is every collection that read one of its
     ///   collections (included it, referenced it from an expression, or
     ///   failed to);
-    /// - a field of `collection:<name>:<base>` in a property inventory, or
+    /// - a field of `collection:<name>:<base>` in `changed_properties`, or
     ///   that property in `resynced_properties`, for
     ///   `<base>` one of `includes`, `excludes`, `expansionRule`,
     ///   `includeRoot`, `membershipExpression` and `mode`: that collection
@@ -367,13 +367,7 @@ impl MembershipIndex {
             .iter()
             .chain(&changes.removed)
             .copied()
-            .chain(
-                changes
-                    .changed_info_only
-                    .iter()
-                    .copied()
-                    .filter(|prim| changes.properties_for(*prim).is_none()),
-            )
+            .chain(changes.changed_info_only.iter().copied())
             .collect();
         let touched = |prim: PathId| {
             exact.contains(&prim) || {
@@ -390,14 +384,12 @@ impl MembershipIndex {
             }
         };
         let mut edited: Vec<CollectionIdentity> = Vec::new();
-        for inventory in &changes.property_changes {
-            for field in &inventory.fields {
-                if let Some(name) = field_owner(tokens.resolve(field.name)) {
-                    edited.push(CollectionIdentity {
-                        owner: inventory.prim,
-                        name: name.into(),
-                    });
-                }
+        for change in &changes.changed_properties {
+            if let Some(name) = field_owner(tokens.resolve(change.property.property())) {
+                edited.push(CollectionIdentity {
+                    owner: change.property.prim_path(),
+                    name: name.into(),
+                });
             }
         }
         // A collection property added or removed recompiles its collection

@@ -122,23 +122,17 @@ impl Case {
                         .map(|p| p.display(paths, tokens)),
                 )
                 .collect();
-            let mut info = BTreeSet::new();
-            for &prim in &changes.changed_info_only {
-                match changes.properties_for(prim) {
-                    Some(fields) if !fields.is_empty() => {
-                        for field in fields {
-                            info.insert(format!(
-                                "{}.{}",
-                                paths.display(prim, tokens),
-                                tokens.resolve(field.name)
-                            ));
-                        }
-                    }
-                    _ => {
-                        info.insert(paths.display(prim, tokens));
-                    }
-                }
-            }
+            let info: BTreeSet<String> = changes
+                .changed_info_only
+                .iter()
+                .map(|p| paths.display(*p, tokens))
+                .chain(
+                    changes
+                        .changed_properties
+                        .iter()
+                        .map(|c| c.property.display(paths, tokens)),
+                )
+                .collect();
             if !resynced.is_empty() || !info.is_empty() {
                 sink.lock().unwrap().push((resynced, info));
             }

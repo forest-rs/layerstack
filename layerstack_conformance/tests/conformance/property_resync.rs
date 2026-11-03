@@ -14,8 +14,8 @@
 //! resynced, and a path beneath a resync is not reported.
 //!
 //! A C++ property path maps to [`Changes::resynced_properties`] when
-//! resynced, and to its prim in [`Changes::changed_info_only`] with the
-//! property's fields in [`Changes::properties_for`] when info-only.
+//! resynced, and to [`Changes::changed_properties`], with its fields, when
+//! info-only.
 //!
 //! Differences, deliberate:
 //!
@@ -138,23 +138,18 @@ fn actual(changes: &Changes, live: &LiveStage, loaded: &LoadedStage) -> Report {
     let mut info = BTreeMap::new();
     let view = live.view(&loaded.store);
     for &path in &changes.changed_info_only {
-        match changes.properties_for(path) {
-            Some(fields) if !fields.is_empty() => {
-                for change in fields {
-                    let at = PropertyPath::new(path, change.name);
-                    let is_relationship = view
-                        .prim(path)
-                        .and_then(|p| p.relationship(change.name))
-                        .is_some();
-                    info.entry(property(at))
-                        .or_insert_with(Vec::new)
-                        .push(field_name(change.field, is_relationship, loaded));
-                }
-            }
-            _ => {
-                info.insert(prim(path), Vec::new());
-            }
-        }
+        let fields = changes
+            .fields_of_prim(path)
+            .map(|field| field.name(tokens).to_string())
+            .collect();
+        info.insert(prim(path), fields);
+    }
+    for change in &changes.changed_properties {
+        let (path, name) = (change.property.prim_path(), change.property.property());
+        let is_relationship = view.prim(path).and_then(|p| p.relationship(name)).is_some();
+        info.entry(property(change.property))
+            .or_insert_with(Vec::new)
+            .push(field_name(change.field, is_relationship, loaded));
     }
     for fields in info.values_mut() {
         fields.sort();

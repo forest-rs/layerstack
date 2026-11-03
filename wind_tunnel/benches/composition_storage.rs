@@ -215,7 +215,7 @@ fn check_default_edit(references: u32, samples: u32) {
     let applied = live.apply(&mut store, &transaction).unwrap();
     assert!(applied.changes.resynced.is_empty(), "value-only edit");
     assert_eq!(
-        applied.changes.changed_info_only.len(),
+        applied.changes.changed_properties.len(),
         references as usize + 1,
         "source and every placement receive the edit"
     );

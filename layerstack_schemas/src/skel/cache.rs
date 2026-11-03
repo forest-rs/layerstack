@@ -155,13 +155,14 @@ impl Dependencies {
     }
     pub(super) fn changed(&self, scene: &Scene<'_>, changes: &Changes) -> bool {
         self.resynced(scene, changes)
-            || changes.changed_info_only.iter().any(|&path| {
-                self.roots.contains(&path)
-                    && changes.properties_for(path).is_none_or(|fields| {
-                        fields
-                            .iter()
-                            .any(|changed| self.reads(scene, path, changed.name))
-                    })
+            // A root's own information, conservatively, or a property read.
+            || changes
+                .changed_info_only
+                .iter()
+                .any(|path| self.roots.contains(path))
+            || changes.changed_properties.iter().any(|changed| {
+                let path = changed.property.prim_path();
+                self.roots.contains(&path) && self.reads(scene, path, changed.property.property())
             })
             // A property added or removed changes what reading it gives.
             || changes.resynced_properties.iter().any(|property| {
@@ -1162,7 +1163,7 @@ impl SkelCache {
     /// Definition changes rebuild affected snapshots; pose/weight edits preserve
     /// inverse binds and independent geometry inputs. Forwarded relationships,
     /// external animation/shape definitions, removals and undo are dependencies.
-    /// Precise property inventories let unrelated fields retain their results.
+    /// Unrelated property field changes retain their results.
     pub fn apply_changes(&mut self, scene: &Scene<'_>, changes: &Changes) {
         let removed: HashSet<_> = self
             .rigs
@@ -1201,6 +1202,12 @@ impl SkelCache {
                     .iter()
                     .copied()
                     .chain(changes.resynced_properties.iter().map(|p| p.prim_path()))
+                    .chain(
+                        changes
+                            .changed_properties
+                            .iter()
+                            .map(|c| c.property.prim_path()),
+                    )
                     .any(|p| s.targets().contains(&p))
             });
             if removed.contains(&skel) || b.definitions.changed(scene, changes) || shape_changed {

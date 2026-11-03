@@ -146,28 +146,21 @@ fn actual(changes: &Changes, loaded: &LoadedStage) -> Report {
         )
     }));
     resynced.sort();
-    // A prim with a complete property inventory is reported at the
-    // properties it names, with their fields, as OpenUSD reports them.
+    // Prims and properties with their fields, as OpenUSD reports them.
     let mut info = BTreeMap::new();
     for &path in &changes.changed_info_only {
-        match changes.properties_for(path) {
-            Some(fields) if !fields.is_empty() => {
-                for change in fields {
-                    let field = match change.field {
-                        PropertyField::Targets => "targetPaths".to_string(),
-                        PropertyField::Default => "default".to_string(),
-                        PropertyField::Metadata(key) => tokens.resolve(key).to_string(),
-                        other => format!("{other:?}"),
-                    };
-                    info.entry(format!("{}.{}", prim(path), tokens.resolve(change.name)))
-                        .or_insert_with(Vec::new)
-                        .push(field);
-                }
-            }
-            _ => {
-                info.insert(prim(path), Vec::new());
-            }
-        }
+        info.insert(prim(path), Vec::new());
+    }
+    for change in &changes.changed_properties {
+        let field = match change.field {
+            PropertyField::Targets => "targetPaths".to_string(),
+            PropertyField::Default => "default".to_string(),
+            PropertyField::Metadata(key) => tokens.resolve(key).to_string(),
+            other => format!("{other:?}"),
+        };
+        info.entry(change.property.display(paths, tokens))
+            .or_insert_with(Vec::new)
+            .push(field);
     }
     Report { resynced, info }
 }

@@ -25,9 +25,9 @@
 //! layer ([`LoadReport::layers`]).
 //!
 //! Notices map as `property_resync.rs` maps them: resynced prims and
-//! properties are resynced paths; an info-only prim with a property
-//! inventory is its properties' paths, one without is its own path. The
-//! notices of one step are merged, as one `SdfChangeBlock` merges them:
+//! properties are resynced paths, and info-only prims and properties
+//! info-only paths. The notices of one step are merged, as one
+//! `SdfChangeBlock` merges them:
 //! layerstack publishes a reload in one notice, but a deferred arc whose
 //! missing asset now resolves in a second.
 //!
@@ -201,23 +201,17 @@ impl Case {
                         .map(|p| p.display(paths, tokens)),
                 )
                 .collect();
-            let mut info = BTreeSet::new();
-            for &prim in &changes.changed_info_only {
-                match changes.properties_for(prim) {
-                    Some(fields) if !fields.is_empty() => {
-                        for field in fields {
-                            info.insert(format!(
-                                "{}.{}",
-                                paths.display(prim, tokens),
-                                tokens.resolve(field.name)
-                            ));
-                        }
-                    }
-                    _ => {
-                        info.insert(paths.display(prim, tokens));
-                    }
-                }
-            }
+            let info: BTreeSet<String> = changes
+                .changed_info_only
+                .iter()
+                .map(|p| paths.display(*p, tokens))
+                .chain(
+                    changes
+                        .changed_properties
+                        .iter()
+                        .map(|c| c.property.display(paths, tokens)),
+                )
+                .collect();
             if !resynced.is_empty() || !info.is_empty() {
                 sink.lock().unwrap().push((resynced, info));
             }
@@ -248,7 +242,7 @@ impl Case {
             })
         };
         info.retain(|path| !beneath(path, &resynced));
-        json!([{"resynced": resynced, "info": covered(info)}])
+        json!([{"resynced": resynced, "info": info}])
     }
 
     fn value(&mut self, path: &str) -> Json {
@@ -370,20 +364,6 @@ impl Case {
     }
 }
 
-/// `info` without the properties of the prims it lists: a prim's
-/// info-only entry with no property inventory covers its properties. A
-/// prim composing a reloaded layer (`/R` for `ref.usda`) is such an entry
-/// here, where OpenUSD lists its changed properties beside it.
-fn covered(info: BTreeSet<String>) -> BTreeSet<String> {
-    info.iter()
-        .filter(|path| {
-            path.rsplit_once('.')
-                .is_none_or(|(prim, _)| prim.is_empty() || !info.contains(prim))
-        })
-        .cloned()
-        .collect()
-}
-
 /// The oracle's record of a step, in the shape [`Case`] records it: the
 /// layers by where they resolve, with whether each is dirty.
 fn expected(step: &Json) -> Json {
@@ -406,15 +386,7 @@ fn expected(step: &Json) -> Json {
             .as_array()
             .unwrap()
             .iter()
-            .map(|notice| {
-                let info: BTreeSet<String> = notice["info"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .map(|path| path.as_str().unwrap().to_owned())
-                    .collect();
-                json!({"resynced": notice["resynced"], "info": covered(info)})
-            })
+            .map(|notice| json!({"resynced": notice["resynced"], "info": notice["info"]}))
             .collect::<Vec<_>>(),
     });
     if let Some(returned) = step.get("returned") {
@@ -424,7 +396,7 @@ fn expected(step: &Json) -> Json {
 }
 
 /// What layerstack announces for a case's step where OpenUSD announces
-/// otherwise: each a deliberate difference.
+/// otherwise: a deliberate difference.
 ///
 /// `sublayer_added` (OpenUSD bug B037): the sublayer `extra.usda` holds an `over`
 /// of `/A`, which moves `/A` before `/B` and `/S` among the pseudo-root's
@@ -436,18 +408,9 @@ fn expected(step: &Json) -> Json {
 /// child it moved, as it reports any child order a change moves
 /// (`prim_resync.rs`, `override_reorders_children`).
 ///
-/// `search_path_root_layer_reload`, a deliberate coarser grain: the root
-/// layer, read again from where its search path now finds it, adds `/Y`
-/// and changes `/Z.z`. A transaction of the root layer that changes
-/// namespace takes the local structure path, which reports the other prims
-/// it changes info-only without a property inventory, so `/Z` stands for
-/// `/Z.z`, which OpenUSD lists alone: coarser, and covering it.
 fn deliberate(name: &str, call: &[&str]) -> Option<Json> {
     match (name, call) {
         ("sublayer_added", ["reload"]) => Some(json!([{"resynced": ["/A"], "info": ["/"]}])),
-        ("search_path_root_layer_reload", ["layer_reload", _]) => {
-            Some(json!([{"resynced": ["/Y"], "info": ["/", "/Z"]}]))
-        }
         _ => None,
     }
 }

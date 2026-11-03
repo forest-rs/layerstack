@@ -376,17 +376,16 @@ fn public_cpp_notices_and_computations_match_edit_sequence() {
         if let Some(txn) = txn {
             let applied = f.session.apply(&txn).unwrap();
             let mut actual = serde_json::Map::new();
-            for prim in &applied.changes.property_changes {
-                for field in &prim.fields {
-                    let path = PropertyPath::new(prim.prim, field.name)
-                        .display(f.session.store().paths(), f.session.store().tokens());
-                    let key = match field.field {
-                        layerstack::PropertyField::Default => "default",
-                        layerstack::PropertyField::Targets => "connectionPaths",
-                        _ => panic!("unexpected field in oracle"),
-                    };
-                    actual.insert(path, serde_json::json!([key]));
-                }
+            for change in &applied.changes.changed_properties {
+                let path = change
+                    .property
+                    .display(f.session.store().paths(), f.session.store().tokens());
+                let key = match change.field {
+                    layerstack::PropertyField::Default => "default",
+                    layerstack::PropertyField::Targets => "connectionPaths",
+                    _ => panic!("unexpected field in oracle"),
+                };
+                actual.insert(path, serde_json::json!([key]));
             }
             assert_eq!(
                 serde_json::Value::Object(actual),

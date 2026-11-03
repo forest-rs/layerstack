@@ -3,7 +3,10 @@
 
 use super::*;
 use crate::edit::{Address, Transaction};
-use crate::{InMemoryStore, Layer, LiveStage, PropertySpec, PropertyType, Specifier, Stage, Value};
+use crate::{
+    InMemoryStore, Layer, LiveStage, PropertyPath, PropertySpec, PropertyType, Specifier, Stage,
+    Value,
+};
 
 const ROOT: LayerId = LayerId(1);
 
@@ -77,7 +80,7 @@ fn matches_clean(store: &mut InMemoryStore, live: &LiveStage) {
                 live.stage().resolve_property_declaration(path, name),
                 fresh.resolve_property_declaration(path, name)
             );
-            let property = crate::PropertyPath::new(path, name);
+            let property = PropertyPath::new(path, name);
             assert_eq!(
                 live.stage().resolve_property_path(property),
                 fresh.resolve_property_path(property)
@@ -127,7 +130,18 @@ fn local_subtree_delete_undo_and_value_sequence_has_precise_reports() {
     let mut value = Transaction::new();
     value.set_default(address(&mut store, "/World/B.value"), Value::Double(4.0));
     let info = live.apply(&mut store, &value).unwrap();
-    assert_eq!(info.changes.changed_info_only, [b]);
+    // The property changed, and nothing of its prim's own.
+    assert_eq!(info.changes.changed_info_only, []);
+    assert_eq!(
+        info.changes.changed_properties,
+        [crate::PropertyFieldChange {
+            property: store.property_path("/World/B.value"),
+            field: crate::PropertyField::Default,
+        }]
+    );
+    assert!(!info.changes.affects_prim(a, store.paths()));
+    assert!(info.changes.affects_prim(b, store.paths()));
+    assert!(info.changes.affects_subtree(world, store.paths()));
     assert!(live.local_index(&store).unwrap().current(&store));
     let mut remove = Transaction::new();
     remove.remove_spec(address(&mut store, "/World/A"));
@@ -181,7 +195,11 @@ fn deleting_child_and_editing_parent_preserves_complete_child_list() {
     txn.remove_spec(address(&mut store, "/World/A"));
     txn.set_default(address(&mut store, "/World.value"), Value::Double(9.0));
     let report = live.apply(&mut store, &txn).unwrap();
-    assert_eq!(report.changes.changed_info_only, [store.path("/World")]);
+    // The structural path tells the value edit apart too.
+    assert_eq!(report.changes.changed_info_only, []);
+    let value = store.property_path("/World.value");
+    let fields: Vec<_> = report.changes.fields_of_property(value).collect();
+    assert_eq!(fields, [crate::PropertyField::Default]);
     matches_clean(&mut store, &live);
     live.apply(&mut store, &report.inverse).unwrap();
     matches_clean(&mut store, &live);
@@ -301,10 +319,10 @@ fn property_resyncs_leave_other_field_edits_info_only() {
     let applied = live.apply(&mut store, &txn).unwrap();
     assert!(applied.changes.resynced.is_empty());
     assert_eq!(applied.changes.resynced_properties, [property]);
-    assert_eq!(applied.changes.changed_info_only, [owner]);
-    let fields = applied.changes.properties_for(owner).unwrap();
+    assert_eq!(applied.changes.changed_info_only, []);
+    let fields = applied.changes.properties_of(owner);
     assert_eq!(fields.len(), 1);
-    assert_eq!(fields[0].name, value);
+    assert_eq!(fields[0].property, PropertyPath::new(owner, value));
     assert_eq!(fields[0].field, crate::PropertyField::Default);
     matches_clean(&mut store, &live);
 }

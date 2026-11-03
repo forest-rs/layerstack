@@ -493,13 +493,21 @@ impl BoundsCache {
             self.invalidate_prototypes(scene, path);
             self.invalidate_bounds(scene, path);
         }
+        // A prim's own information changed: conservatively, its bounds.
         for &path in &changes.changed_info_only {
             self.invalidate_extent_dependents(scene, path);
-            if changes.properties_for(path).is_none_or(|fields| {
-                fields
-                    .iter()
-                    .any(|field| bounds_property(scene.store().tokens().resolve(field.name)))
-            }) {
+            self.invalidate_prototypes(scene, path);
+            self.invalidate_bounds(scene, path);
+        }
+        let mut last = None;
+        for change in &changes.changed_properties {
+            let path = change.property.prim_path();
+            // The list runs by prim: each prim's dependents once.
+            if last != Some(path) {
+                self.invalidate_extent_dependents(scene, path);
+                last = Some(path);
+            }
+            if bounds_property(scene.store().tokens().resolve(change.property.property())) {
                 self.invalidate_prototypes(scene, path);
                 self.invalidate_bounds(scene, path);
             }

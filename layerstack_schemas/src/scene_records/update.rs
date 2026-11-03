@@ -550,26 +550,29 @@ fn route(
             let prototype = old
                 .and_then(|r| r.point_instances.as_ref())
                 .is_some_and(|p| p.prototypes.contains(&prim));
-            let Some(properties) = report.properties_for(prim) else {
-                if ancestor {
-                    dirty.transform = true;
-                    dirty.appearance = true;
-                    dirty.primvars = true;
-                    dirty.point_instances = true;
-                }
-                if prim == path {
-                    dirty.geometry = true;
-                    dirty.point_instances = true;
-                }
-                if prototype {
-                    dirty.point_instances = true;
-                }
-                continue;
-            };
-            for property in properties {
-                let name = scene.store().tokens().resolve(property.name);
-                route_property(&mut dirty, path, kind, prim, name, ancestor, prototype);
+            // A prim's own information changed: conservatively, all of it.
+            if ancestor {
+                dirty.transform = true;
+                dirty.appearance = true;
+                dirty.primvars = true;
+                dirty.point_instances = true;
             }
+            if prim == path {
+                dirty.geometry = true;
+                dirty.point_instances = true;
+            }
+            if prototype {
+                dirty.point_instances = true;
+            }
+        }
+        for change in &report.changed_properties {
+            let prim = change.property.prim_path();
+            let ancestor = paths.resolve(prim).is_prefix_of(paths.resolve(path));
+            let prototype = old
+                .and_then(|r| r.point_instances.as_ref())
+                .is_some_and(|p| p.prototypes.contains(&prim));
+            let name = scene.store().tokens().resolve(change.property.property());
+            route_property(&mut dirty, path, kind, prim, name, ancestor, prototype);
         }
         // A property added or removed routes as an edit of its fields does.
         for property in &report.resynced_properties {

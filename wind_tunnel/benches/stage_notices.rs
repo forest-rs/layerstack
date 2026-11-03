@@ -43,7 +43,7 @@ fn bench(c: &mut Criterion) {
             let subscriptions: Vec<_> = (0..listeners)
                 .map(|_| {
                     live.subscribe_changes(|notice| {
-                        black_box((notice.revision, notice.changes.changed_info_only.len()));
+                        black_box((notice.revision, notice.changes.changed_properties.len()));
                     })
                 })
                 .collect();

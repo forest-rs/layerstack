@@ -206,24 +206,13 @@ fn collection_touched(
     let prim = collection.prim_path();
     let name = tokens.resolve(collection.property());
     roots.iter().any(|&root| under(scene, prim, root))
-        || changes.changed_info_only.iter().any(|&changed| {
-            if stage_metadata(scene, changed) {
-                return false;
-            }
-            match changes
-                .property_changes
-                .iter()
-                .find(|properties| properties.prim == changed)
-            {
-                None => under(scene, prim, changed),
-                Some(properties) => {
-                    changed == prim
-                        && properties
-                            .fields
-                            .iter()
-                            .any(|field| of_collection(name, Some(tokens.resolve(field.name))))
-                }
-            }
+        // A prim's own information, conservatively, reaches beneath it.
+        || changes
+            .changed_info_only
+            .iter()
+            .any(|&changed| !stage_metadata(scene, changed) && under(scene, prim, changed))
+        || changes.properties_of(prim).iter().any(|changed| {
+            of_collection(name, Some(tokens.resolve(changed.property.property())))
         })
         || changes.resynced_properties.iter().any(|property| {
             property.prim_path() == prim
@@ -236,18 +225,14 @@ fn collection_touched(
 fn any_collection_touched(scene: &Scene<'_>, changes: &Changes, roots: &[PathId]) -> bool {
     let tokens = scene.store().tokens();
     !roots.is_empty()
-        || changes.changed_info_only.iter().any(|&changed| {
-            !stage_metadata(scene, changed)
-                && changes
-                    .property_changes
-                    .iter()
-                    .find(|properties| properties.prim == changed)
-                    .is_none_or(|properties| {
-                        properties
-                            .fields
-                            .iter()
-                            .any(|field| tokens.resolve(field.name).starts_with("collection:"))
-                    })
+        || changes
+            .changed_info_only
+            .iter()
+            .any(|&changed| !stage_metadata(scene, changed))
+        || changes.changed_properties.iter().any(|changed| {
+            tokens
+                .resolve(changed.property.property())
+                .starts_with("collection:")
         })
         || changes.resynced_properties.iter().any(|property| {
             tokens

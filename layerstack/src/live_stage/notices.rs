@@ -152,12 +152,7 @@ impl Journal {
     pub(super) fn publish(&mut self, changes: &mut Changes, stage: &Stage, store: &dyn LayerStore) {
         changes.sort(store.paths(), store.tokens());
         let changes = &*changes;
-        if changes.created.is_empty()
-            && changes.removed.is_empty()
-            && changes.resynced.is_empty()
-            && changes.resynced_properties.is_empty()
-            && changes.changed_info_only.is_empty()
-        {
+        if changes.is_empty() {
             return;
         }
         self.revision = self
@@ -211,12 +206,8 @@ impl crate::change_history::Record for (u64, Changes) {
             + self.1.resynced.len()
             + self.1.resynced_properties.len()
             + self.1.changed_info_only.len()
-            + self
-                .1
-                .property_changes
-                .iter()
-                .map(|p| p.fields.len())
-                .sum::<usize>()
+            + self.1.prim_fields.len()
+            + self.1.changed_properties.len()
     }
 }
 

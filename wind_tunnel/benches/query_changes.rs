@@ -4,8 +4,8 @@
 //! Cost of cache maintenance for a precise, unrelated property edit.
 use criterion::{Criterion, criterion_group, criterion_main};
 use layerstack::{
-    Changes, InMemoryStore, Layer, LayerId, PrimPropertyChanges, PrimSpec, PropertyChange,
-    PropertyField, Stage, StageOptions,
+    Changes, InMemoryStore, Layer, LayerId, PrimSpec, PropertyField, PropertyFieldChange,
+    PropertyPath, Stage, StageOptions,
 };
 use layerstack_schemas::{
     Scene, Time, XformCache,
@@ -40,13 +40,9 @@ fn bench(c: &mut Criterion) {
     }
     black_box(bounds.world_bound(&scene, root).unwrap());
     let mut changes = Changes::default();
-    changes.changed_info_only = vec![root];
-    changes.property_changes = vec![PrimPropertyChanges {
-        prim: root,
-        fields: vec![PropertyChange {
-            name: roughness,
-            field: PropertyField::Default,
-        }],
+    changes.changed_properties = vec![PropertyFieldChange {
+        property: PropertyPath::new(root, roughness),
+        field: PropertyField::Default,
     }];
     c.bench_function("unrelated_property/xform_leaf", |b| {
         b.iter(|| {

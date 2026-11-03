@@ -39,19 +39,19 @@ fn referenced_values_and_undo_report_composed_properties() {
         Value::Double(2.0),
     );
     let applied = live.apply(&mut store, &txn).unwrap();
+    // The property changed on each prim composing it, and nothing of the
+    // prims' own.
+    assert!(applied.changes.changed_info_only.is_empty());
     for path in [a, b] {
-        let fields = applied
-            .changes
-            .properties_for(path)
-            .expect("complete field inventory");
+        let fields = applied.changes.properties_of(path);
         assert_eq!(fields.len(), 1);
-        assert_eq!(fields[0].name, value);
+        assert_eq!(fields[0].property, PropertyPath::new(path, value));
         assert_eq!(fields[0].field, PropertyField::Default);
     }
     let undo = live.apply(&mut store, &applied.inverse).unwrap();
     assert_eq!(
-        undo.changes.property_changes,
-        applied.changes.property_changes
+        undo.changes.changed_properties,
+        applied.changes.changed_properties
     );
     store.layer_mut(LayerId(2)).unwrap().set_property(
         PropertyPath::new(source, value),
@@ -61,8 +61,8 @@ fn referenced_values_and_undo_report_composed_properties() {
     live.notify_changed_layers(&store);
     let external = live.recompose_changes(&mut store);
     assert!(
-        external.property_changes.is_empty(),
-        "unknown edits have no complete field inventory"
+        external.changed_properties.is_empty(),
+        "unknown edits have no field inventory"
     );
     assert_eq!(external.resynced, vec![a, b]);
     assert!(

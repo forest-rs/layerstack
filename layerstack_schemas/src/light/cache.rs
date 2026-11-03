@@ -309,16 +309,13 @@ impl LightCache {
         let structural = !changes.resynced.is_empty()
             || !changes.created.is_empty()
             || !changes.removed.is_empty();
-        let unknown = changes
-            .changed_info_only
-            .iter()
-            .any(|p| changes.properties_for(*p).is_none());
+        // A prim's own information changed: conservatively, anything of it.
+        let unknown = !changes.changed_info_only.is_empty();
         let cache_changed = changes
-            .property_changes
+            .changed_properties
             .iter()
-            .flat_map(|p| &p.fields)
             .any(|f| {
-                let name = scene.store().tokens().resolve(f.name);
+                let name = scene.store().tokens().resolve(f.property.property());
                 f.field == PropertyField::Targets || name == "lightList:cacheBehavior"
             })
             // A `lightList` relationship or its cache behavior added or removed.
@@ -359,25 +356,21 @@ impl LightCache {
                                 root.is_prefix_of(scene.store().paths().resolve(path))
                             })
                 });
-            let info = changes.changed_info_only.iter().any(|path| {
-                if let Some(fields) = changes.properties_for(*path) {
-                    fields.iter().any(|field| {
-                        let name = scene.store().tokens().resolve(field.name);
-                        (*path == light
-                            && (name.starts_with("inputs:") || name == "light:shaderId"))
-                            || h.inputs
-                                .dependencies
-                                .iter()
-                                .any(|d| d.prim == *path && d.property == name)
-                            || (h.inputs.ancestors.contains(path)
-                                && (name.starts_with("xformOp:")
-                                    || name == "xformOpOrder"
-                                    || name == "visibility"))
-                    })
-                } else {
-                    h.inputs.ancestors.contains(path)
-                        || h.inputs.dependencies.iter().any(|d| d.prim == *path)
-                }
+            let info = changes.changed_properties.iter().any(|field| {
+                let path = &field.property.prim_path();
+                let name = scene.store().tokens().resolve(field.property.property());
+                (*path == light && (name.starts_with("inputs:") || name == "light:shaderId"))
+                    || h.inputs
+                        .dependencies
+                        .iter()
+                        .any(|d| d.prim == *path && d.property == name)
+                    || (h.inputs.ancestors.contains(path)
+                        && (name.starts_with("xformOp:")
+                            || name == "xformOpOrder"
+                            || name == "visibility"))
+            }) || changes.changed_info_only.iter().any(|path| {
+                h.inputs.ancestors.contains(path)
+                    || h.inputs.dependencies.iter().any(|d| d.prim == *path)
             });
             // A property added or removed: as a field edit of it, and, as
             // the light may now read it or no longer can, any property of a

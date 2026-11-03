@@ -2016,7 +2016,14 @@ fn value_edits_in_one_variant_branch_refresh_without_recomposing_sibling_branche
     // `/Blue/Geom` composes the sibling branch's spec of the same prim in
     // the same layer; it keeps its slots rather than forcing composition.
     assert_eq!(applied.recomposed, [red.prim_path()]);
-    assert_eq!(applied.changes.changed_info_only, [red.prim_path()]);
+    assert_eq!(applied.changes.changed_info_only, []);
+    assert_eq!(
+        applied.changes.changed_properties,
+        [layerstack::PropertyFieldChange {
+            property: red,
+            field: layerstack::PropertyField::Default,
+        }]
+    );
     let resolved = |path| {
         doc.view()
             .attribute(path)

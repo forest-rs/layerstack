@@ -793,9 +793,14 @@ mod tests {
         let x = store.tokens().intern("x");
         assert_eq!(applied.changes.resynced, []);
         assert_eq!(applied.changes.resynced_properties, []);
-        assert_eq!(applied.changes.changed_info_only, [a]);
-        let fields = applied.changes.properties_for(a).unwrap();
-        assert!(fields.iter().all(|field| field.name == x));
+        assert_eq!(applied.changes.changed_info_only, []);
+        assert_eq!(
+            applied.changes.changed_properties,
+            [crate::PropertyFieldChange {
+                property: PropertyPath::new(a, x),
+                field: crate::PropertyField::Default,
+            }]
+        );
         assert_eq!(store.layer(LayerId(1)).unwrap(), &content);
         let value = live
             .view(&store)
@@ -813,8 +818,10 @@ mod tests {
         let applied = live.apply(&mut store, &edit).unwrap();
         let (root, a) = (store.path("/"), store.path("/A"));
         assert_eq!(applied.changes.resynced, []);
-        assert_eq!(applied.changes.changed_info_only, [root, a]);
-        assert!(applied.changes.properties_for(a).is_some());
+        // The pseudo-root, read again, and `/A.x`, whose value it changed.
+        assert_eq!(applied.changes.changed_info_only, [root]);
+        assert_eq!(applied.changes.prim_fields, []);
+        assert_eq!(applied.changes.properties_of(a).len(), 1);
         // Marked alone, it still is.
         let mut edit = Transaction::new();
         edit.mark_reloaded(LayerId(1));
@@ -841,6 +848,14 @@ mod tests {
         let applied = live.apply(&mut store, &edit).unwrap();
         assert_eq!(applied.changes.resynced, []);
         assert_eq!(applied.changes.changed_info_only, [a]);
+        assert_eq!(
+            applied.changes.prim_fields,
+            [crate::PrimFieldChange {
+                prim: a,
+                field: crate::PrimInfoField::Metadata(documentation),
+            }]
+        );
+        assert_eq!(applied.changes.changed_properties, []);
         assert_eq!(store.layer(LayerId(1)).unwrap(), &content);
     }
 

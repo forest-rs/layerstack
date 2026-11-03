@@ -7,7 +7,7 @@ use crate::Scene;
 use crate::diagnostic::{Describe, Names, with_store};
 use alloc::{collections::BTreeMap, string::String, vec, vec::Vec};
 use layerstack::sort;
-use layerstack::{Changes, PathId, PropertyPath, TargetPath};
+use layerstack::{Changes, PathId, TargetPath};
 
 /// A collection instance, scoped to its originating store.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -141,8 +141,8 @@ struct Held {
 ///
 /// Compiled query changes and decision changes have independent revisions.
 /// Recomputing unchanged content preserves its stamp. Namespace changes and
-/// info-only edits without a complete property inventory rebuild queries
-/// conservatively; precise unrelated property edits preserve them. Expressions
+/// changes of a prim's own information rebuild queries conservatively;
+/// unrelated property edits preserve them. Expressions
 /// additionally watch edits to candidate properties for object existence.
 /// AOUSD Core §15; OpenUSD `UsdCollectionMembershipQuery` and `ObjectsChanged`.
 #[derive(Debug, Default)]
@@ -312,11 +312,9 @@ impl MembershipCache {
         // A property added or removed can change a collection's own
         // declaration, or the properties a rule expands to or a predicate
         // matches.
-        let unknown = !changes.resynced_properties.is_empty()
-            || changes
-                .changed_info_only
-                .iter()
-                .any(|p| changes.properties_for(*p).is_none());
+        // A prim's own information changed: conservatively, anything of it.
+        let unknown =
+            !changes.resynced_properties.is_empty() || !changes.changed_info_only.is_empty();
         let tokens = scene.store().tokens();
         self.held.retain(|key, held| {
             self.stats.routed += 1;
@@ -328,33 +326,29 @@ impl MembershipCache {
                 held.query_dirty = true;
                 held.decisions_dirty = true;
             }
-            for inventory in &changes.property_changes {
-                for field in &inventory.fields {
-                    if let Some(name) = tokens
-                        .resolve(field.name)
-                        .strip_prefix("collection:")
-                        .and_then(|s| s.rsplit_once(':').map(|(name, _)| name))
+            for change in &changes.changed_properties {
+                let (prim, name) = (change.property.prim_path(), change.property.property());
+                if let Some(name) = tokens
+                    .resolve(name)
+                    .strip_prefix("collection:")
+                    .and_then(|s| s.rsplit_once(':').map(|(name, _)| name))
+                {
+                    let dependency = CollectionIdentity {
+                        owner: prim,
+                        name: name.into(),
+                    };
+                    if held.dependencies.all_collections
+                        || held.dependencies.collections.contains(&dependency)
                     {
-                        let dependency = CollectionIdentity {
-                            owner: inventory.prim,
-                            name: name.into(),
-                        };
-                        if held.dependencies.all_collections
-                            || held.dependencies.collections.contains(&dependency)
-                        {
-                            held.query_dirty = true;
-                        }
+                        held.query_dirty = true;
                     }
-                    if held.dependencies.scene_objects
-                        && held
-                            .targets
-                            .contains(&TargetPath::Property(PropertyPath::new(
-                                inventory.prim,
-                                field.name,
-                            )))
-                    {
-                        held.decisions_dirty = true;
-                    }
+                }
+                if held.dependencies.scene_objects
+                    && held
+                        .targets
+                        .contains(&TargetPath::Property(change.property))
+                {
+                    held.decisions_dirty = true;
                 }
             }
             if !was_dirty && (held.query_dirty || held.decisions_dirty) {

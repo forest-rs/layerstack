@@ -142,14 +142,8 @@ impl Case {
                 .iter()
                 .map(|p| paths.display(*p, tokens))
                 .collect();
-            for prim in &notice.changes.property_changes {
-                for field in &prim.fields {
-                    info.push(format!(
-                        "{}.{}",
-                        paths.display(prim.prim, tokens),
-                        tokens.resolve(field.name)
-                    ));
-                }
+            for change in &notice.changes.changed_properties {
+                info.push(change.property.display(paths, tokens));
             }
             info.sort();
             info.dedup();

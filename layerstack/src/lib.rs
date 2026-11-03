@@ -304,9 +304,9 @@ pub use dynamic_format::{
 };
 pub use edit::{
     Address, Applied, Changes, EditError, EditTarget, HistoryError, HistoryMark, HistoryStep,
-    ListPosition, NamespaceEdit, NamespaceError, PathField, PrimField, PrimPropertyChanges,
-    PropertyChange, PropertyField, Recorded, Rejection, Slot, Transaction, UndoHistory,
-    UnrepairedPath,
+    ListPosition, NamespaceEdit, NamespaceError, PathField, PrimField, PrimFieldChange,
+    PrimInfoField, PropertyField, PropertyFieldChange, Recorded, Rejection, Slot, Transaction,
+    UndoHistory, UnrepairedPath,
 };
 pub use interner::{TokenId, TokenInterner};
 pub use layer_stack::{LayerStack, LayerStackIdentifier};

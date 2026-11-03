@@ -14,13 +14,16 @@
 // mesh the viewport does not draw (under the budget, outside the draw
 // scope, or with Nothing drawn), and wireframe and normals (which read
 // vertices on the CPU, which the viewport released once uploaded), build
-// this mesh alone with stagehand, once per change.
+// this mesh alone with stagehand, once per change. The preview stands the
+// mesh as the scene does: about the stage's up axis, taken into the mesh's
+// own space (`usePreviewOrientation`).
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Prim } from "@forest-rs/layerstack";
 import { type DrawRange, type MeshReport, readMesh } from "@forest-rs/layerstack_stagehand";
 import { cn } from "@/lib/utils";
 import { releaseValue } from "../../model/values.ts";
 import type { PresentationContext, PresentProps } from "../../presentations/registry.ts";
+import { localView, type ViewOrientation } from "../../viewport/framing.ts";
 import type { CpuMesh, MeshPreview, MeshPreviewStyle } from "../../viewport/meshPreview.ts";
 import { Live, Present, usePrimRevision } from "../presentations/Present.tsx";
 import { Section } from "../Section.tsx";
@@ -48,6 +51,28 @@ function build(context: PresentationContext, path: string): Built | null {
   } finally {
     mesh.dispose();
   }
+}
+
+/**
+ * The stage's up and the viewport's view direction in the prim at
+ * `path`'s own space ({@link localView}): what a preview of its
+ * untransformed geometry orbits about and looks from, so a Z-up asset
+ * turned upright in a Y-up stage stands upright in it too. Read again when
+ * a change reaches the prim, the time moves or another stage opens.
+ */
+export function usePreviewOrientation(context: PresentationContext, path: string): ViewOrientation {
+  const revision = usePrimRevision(context.store, path);
+  const up = context.store.upAxis;
+  const { stage, time } = context;
+  return useMemo(() => {
+    let world: Float64Array | null = null;
+    try {
+      world = stage.worldTransforms([path], time === undefined ? {} : { time });
+    } catch {
+      // No prim there any more: the stage's own orientation.
+    }
+    return localView(up, world);
+  }, [stage, path, revision, time, up]);
 }
 
 /** A face subset of the mesh: its path, family and face count. */
@@ -94,6 +119,7 @@ export function MeshView({ object, context }: PresentProps<"prim">) {
     const box = context.stage.untransformedBounds([path], { purposes: ["default", "proxy", "render"], ...(time === undefined ? {} : { time }) }).alignedRanges;
     return box[0]! <= box[3]! ? Array.from(box.subarray(0, 6)) : [-1, -1, -1, 1, 1, 1];
   }, [path, revision, time]);
+  const previewOrientation = usePreviewOrientation(context, path);
   const report = buffers?.mesh.report ?? built?.report ?? null;
   const ranges = shared !== null ? buffers!.mesh.ranges : (built?.ranges ?? []);
   const rangeSubsets = shared !== null ? buffers!.subsets : (built?.subsets ?? []);
@@ -109,7 +135,7 @@ export function MeshView({ object, context }: PresentProps<"prim">) {
 
   return (
     <Section title="Mesh" aside={<span>{shared !== null ? "the viewport's buffers" : built !== null ? "built for this view" : "not readable"}</span>}>
-      <Preview source={{ shared, cpu: built?.cpu ?? null, bounds }} style={{ ...style, doubleSided, highlight }} />
+      <Preview source={{ shared, cpu: built?.cpu ?? null, bounds, orientation: previewOrientation }} style={{ ...style, doubleSided, highlight }} />
       <div role="group" aria-label="Preview" className="mt-1 mb-2 flex gap-1">
         {(
           [
@@ -239,8 +265,8 @@ export function Preview({ source, style }: { source: Parameters<MeshPreview["sho
       made?.dispose();
     };
   }, []);
-  const { shared, cpu, bounds } = source;
-  useEffect(() => preview?.show({ shared, cpu, bounds }, style), [preview, shared?.geometry, cpu, bounds, style.checker, style.wireframe, style.normals, style.doubleSided, style.highlight?.first, style.highlight?.count]);
+  const { shared, cpu, bounds, orientation } = source;
+  useEffect(() => preview?.show({ shared, cpu, bounds, orientation }, style), [preview, shared?.geometry, cpu, bounds, orientation, style.checker, style.wireframe, style.normals, style.doubleSided, style.highlight?.first, style.highlight?.count]);
   return (
     <>
       <canvas

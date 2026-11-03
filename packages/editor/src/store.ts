@@ -18,7 +18,7 @@ import { boxCorners, indexOfId, instanceMatrix, type InstancerColumns, invert, m
 import { type LoadBudget, type OpenPhase, OverBudget, Session } from "./model/session.ts";
 import type { SceneSource } from "./model/sources.ts";
 import { DEFAULT_LIGHT_SETTINGS, type LightSettings } from "./viewport/defaultLights.ts";
-import { isBox } from "./viewport/framing.ts";
+import { isBox, type UpAxis } from "./viewport/framing.ts";
 import type { Viewport } from "./viewport/viewport3d.ts";
 
 /** Where the editor is with its scene. */
@@ -130,6 +130,8 @@ export class EditorStore {
   playing = false;
   /** The stage camera the viewport looks through, by path; `null` for the free camera. */
   through: string | null = null;
+  /** The stage's up axis (its `upAxis` metadata, `Y` when it has none): what the viewport and the previews orbit about. */
+  upAxis: UpAxis = "Y";
   /** The default lights the viewport adds to the stage's, as usdview's View > Lights menu sets them: the camera light on. */
   lightSettings: LightSettings = DEFAULT_LIGHT_SETTINGS;
   /** The session being opened, while its assets are fetched. */
@@ -733,12 +735,13 @@ export class EditorStore {
     if (this.session === session) this.#sync();
   }
 
-  /** Orients the view to the stage's `upAxis`. */
+  /** Reads the stage's `upAxis`, and orients the view to it. */
   #orient(): void {
     const stage = this.session?.stage;
-    if (stage === undefined || this.#viewport === null) return;
+    if (stage === undefined) return;
     const up = stage.metadata("upAxis");
-    this.#viewport.setUpAxis(up?.kind === "scalar" && up.value === "Z" ? "Z" : "Y");
+    this.upAxis = up?.kind === "scalar" && up.value === "Z" ? "Z" : "Y";
+    this.#viewport?.setUpAxis(this.upAxis);
   }
 
   #report(action: string, error: unknown): void {

@@ -146,3 +146,49 @@ export function normalize(v: Vec3): Vec3 {
   const length = Math.hypot(v[0], v[1], v[2]);
   return length > 0 && Number.isFinite(length) ? [v[0] / length, v[1] / length, v[2] / length] : [0, 0, 1];
 }
+
+/** The stage's up and the free camera's view direction, in some space. */
+export interface ViewOrientation {
+  /** Up: the camera's up and what it orbits about. Unit length. */
+  readonly up: Vec3;
+  /** From what is framed toward the camera ({@link viewDirection}). Unit length. */
+  readonly direction: Vec3;
+}
+
+/**
+ * The viewport's orientation for a stage with `up` as its up axis
+ * ({@link upVector}, {@link viewDirection}) taken into a prim's own space,
+ * where `world` (16 numbers, row by row, row vectors: `Stage.worldTransforms`)
+ * takes it to world space: what a preview of the prim's untransformed
+ * geometry orbits about and looks from, so it stands as it does in the
+ * scene. A direction `d` in world space is `d * L⁻¹` in the prim's, `L`
+ * the matrix's upper 3×3. A singular or non-finite matrix leaves the
+ * world's orientation.
+ */
+export function localView(up: UpAxis, world: ArrayLike<number> | null): ViewOrientation {
+  const inWorld: ViewOrientation = { up: upVector(up), direction: viewDirection(up) };
+  if (world === null || world.length < 16) return inWorld;
+  // The upper 3×3, row by row, and its inverse by cofactors.
+  const [a, b, c, d, e, f, g, h, i] = [world[0]!, world[1]!, world[2]!, world[4]!, world[5]!, world[6]!, world[8]!, world[9]!, world[10]!];
+  const determinant = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+  if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-12) return inWorld;
+  const inverse = [
+    (e * i - f * h) / determinant,
+    (c * h - b * i) / determinant,
+    (b * f - c * e) / determinant,
+    (f * g - d * i) / determinant,
+    (a * i - c * g) / determinant,
+    (c * d - a * f) / determinant,
+    (d * h - e * g) / determinant,
+    (b * g - a * h) / determinant,
+    (a * e - b * d) / determinant,
+  ];
+  // A row vector times the inverse.
+  const local = (v: Vec3): Vec3 =>
+    normalize([
+      v[0] * inverse[0]! + v[1] * inverse[3]! + v[2] * inverse[6]!,
+      v[0] * inverse[1]! + v[1] * inverse[4]! + v[2] * inverse[7]!,
+      v[0] * inverse[2]! + v[1] * inverse[5]! + v[2] * inverse[8]!,
+    ]);
+  return { up: local(inWorld.up), direction: local(inWorld.direction) };
+}

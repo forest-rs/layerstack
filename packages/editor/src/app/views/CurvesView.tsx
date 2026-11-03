@@ -10,7 +10,7 @@ import type { ChannelState, CurvesReport, PointsReport } from "@forest-rs/layers
 import { formatNumber } from "../../model/values.ts";
 import type { PresentProps } from "../../presentations/registry.ts";
 import { Section } from "../Section.tsx";
-import { Fact, Preview } from "./MeshView.tsx";
+import { Fact, Preview, usePreviewOrientation } from "./MeshView.tsx";
 
 /** A channel's fate, as text: `vertex`, `constant, indexed`, `absent`, `dropped: why`. */
 function channel(state: ChannelState): string {
@@ -28,6 +28,7 @@ const NO_STYLE = { checker: false, wireframe: false, normals: false, doubleSided
 
 export function CurvesView(props: PresentProps<"prim">) {
   const { object, context } = props;
+  const orientation = usePreviewOrientation(context, object.prim.path);
   const view = context.store.scene.items.find((candidate) => candidate.item.prim === object.prim.path && candidate.buffers.curves !== null);
   const report: CurvesReport | null = view?.buffers.curves?.report ?? null;
   if (view === undefined || report === null) {
@@ -43,7 +44,7 @@ export function CurvesView(props: PresentProps<"prim">) {
   const segments = report.segments.reduce((sum, count) => sum + count, 0);
   return (
     <Section title="Curves" aside={<span>{view.kind === "tubes" ? "the viewport's buffers" : "drawn as lines"}</span>}>
-      {shared !== null && <Preview source={{ shared, cpu: null, bounds: extent(props) }} style={NO_STYLE} />}
+      {shared !== null && <Preview source={{ shared, cpu: null, bounds: extent(props), orientation }} style={NO_STYLE} />}
       <dl className="mt-2 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-[11px]">
         <Fact label="curves" value={`${report.curves.toLocaleString()}${report.drawnCurves !== report.curves ? ` (${report.drawnCurves.toLocaleString()} drawn)` : ""}`} />
         <Fact label="evaluated as" value={evaluation} />

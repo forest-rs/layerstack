@@ -7,7 +7,7 @@
 // same place, and nothing it returns is NaN.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { clipRange, frameBox, isBox, MAX_DEPTH_RATIO, reachFrom, viewDirection } from "../src/viewport/framing.ts";
+import { clipRange, frameBox, isBox, localView, MAX_DEPTH_RATIO, reachFrom, upVector, viewDirection } from "../src/viewport/framing.ts";
 
 const options = { fov: 45, aspect: 16 / 9, direction: viewDirection("Y") } as const;
 const finite = (values: readonly number[]) => values.every(Number.isFinite);
@@ -77,4 +77,25 @@ test("the view direction is the same view about either up axis", () => {
   // Z-up is Y-up rotated a quarter turn about x: (x, y, z) to (x, -z, y).
   assert.ok(Math.abs(zx - x) < 1e-12 && Math.abs(zy + z) < 1e-12 && Math.abs(zz - y) < 1e-12);
   assert.ok(Math.abs(Math.hypot(x, y, z) - 1) < 1e-12);
+});
+
+/** Whether two directions agree to within rounding. */
+const same = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((value, at) => Math.abs(value - b[at]!) < 1e-9);
+
+test("a prim's own space sees the stage's up as its transform turns it", () => {
+  const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  for (const up of ["Y", "Z"] as const) {
+    const view = localView(up, identity);
+    assert.ok(same(view.up, upVector(up)) && same(view.direction, viewDirection(up)), up);
+  }
+  assert.deepEqual(localView("Z", null), { up: upVector("Z"), direction: viewDirection("Z") });
+  // A Z-up asset turned to stand in a Y-up stage (rows: x to x, y to -z, z to y): its up is its own +z,
+  // and it is seen as an asset authored Z-up is in a Z-up stage.
+  const zUpInYUp = [1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 5, 6, 7, 1];
+  const view = localView("Y", zUpInYUp);
+  assert.ok(same(view.up, [0, 0, 1]), String(view.up));
+  assert.ok(same(view.direction, viewDirection("Z")), String(view.direction));
+  // Scale does not matter; a singular matrix leaves the world's view.
+  assert.ok(same(localView("Y", [2, 0, 0, 0, 0, 0, -2, 0, 0, 2, 0, 0, 0, 0, 0, 1]).up, [0, 0, 1]));
+  assert.deepEqual(localView("Y", new Array(16).fill(0)), { up: upVector("Y"), direction: viewDirection("Y") });
 });

@@ -82,7 +82,7 @@ function under(path: string, root: string): boolean {
 
 type Records = Pick<Changes, "changedInfoOnly" | "changedProperties" | "resyncedProperties">;
 
-/** Whether `changes` reach the collection at `collection` (`/World.collection:robots`): a resync over its prim, one of its properties, or an unlisted change of its prim or above it. */
+/** Whether `changes` reach the collection at `collection` (`/World.collection:robots`): a resync over its prim, or one of its properties. */
 function collectionTouched(changes: Records, roots: readonly string[], collection: string): boolean {
   const dot = collection.lastIndexOf(".");
   const prim = collection.slice(0, dot);
@@ -90,8 +90,6 @@ function collectionTouched(changes: Records, roots: readonly string[], collectio
   const ofCollection = (property: string) => property.startsWith(`${name}:`);
   return (
     roots.some((root) => under(prim, root)) ||
-    // A prim's own information, conservatively, reaches beneath it.
-    changes.changedInfoOnly.some((changed) => changed !== "/" && under(prim, changed)) ||
     changes.changedProperties.some((changed) => {
       const at = changed.property.lastIndexOf(".");
       return changed.property.slice(0, at) === prim && ofCollection(changed.property.slice(at + 1));
@@ -107,7 +105,6 @@ function collectionTouched(changes: Records, roots: readonly string[], collectio
 function anyCollectionTouched(changes: Records, roots: readonly string[]): boolean {
   return (
     roots.length > 0 ||
-    changes.changedInfoOnly.some((changed) => changed !== "/") ||
     changes.changedProperties.some((changed) => changed.property.slice(changed.property.lastIndexOf(".") + 1).startsWith("collection:")) ||
     changes.resyncedProperties.some((property) => property.slice(property.lastIndexOf(".") + 1).startsWith("collection:"))
   );

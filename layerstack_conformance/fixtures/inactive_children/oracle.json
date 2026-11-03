@@ -1,0 +1,4609 @@
+{
+ "cases": [
+  {
+   "name": "order_moves_inactive",
+   "steps": [
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [],
+     "step": [
+      "open"
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "D",
+        "A",
+        "B",
+        "C"
+       ],
+       "filtered": [
+        "W",
+        "D",
+        "A",
+        "B",
+        "C"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P": [
+         "primOrder"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P"
+       ]
+      }
+     ],
+     "step": [
+      "order",
+      "root.usda",
+      "/P",
+      [
+       "D",
+       "A",
+       "B",
+       "C"
+      ]
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "D",
+        "B",
+        "C"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "D",
+        "B",
+        "C"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P": [
+         "primOrder"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P"
+       ]
+      }
+     ],
+     "step": [
+      "order",
+      "root.usda",
+      "/P",
+      [
+       "D",
+       "B"
+      ]
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "C",
+        "A"
+       ],
+       "all": [
+        "W",
+        "C",
+        "D",
+        "B",
+        "A"
+       ],
+       "filtered": [
+        "W",
+        "C",
+        "D",
+        "B",
+        "A"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P": [
+         "primOrder"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P"
+       ]
+      }
+     ],
+     "step": [
+      "order",
+      "root.usda",
+      "/P",
+      [
+       "C",
+       "B",
+       "A"
+      ]
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P": [
+         "primOrder"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P"
+       ]
+      }
+     ],
+     "step": [
+      "order",
+      "root.usda",
+      "/P",
+      null
+     ]
+    }
+   ]
+  },
+  {
+   "name": "order_moves_weak_inactive",
+   "steps": [
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [],
+     "step": [
+      "open"
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "W"
+       ],
+       "filtered": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "W"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P": [
+         "primOrder"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P"
+       ]
+      }
+     ],
+     "step": [
+      "order",
+      "root.usda",
+      "/P",
+      [
+       "A",
+       "W"
+      ]
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "W"
+       ],
+       "filtered": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "W"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P": [
+         "primOrder"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P"
+       ]
+      }
+     ],
+     "step": [
+      "order",
+      "weak.usda",
+      "/P",
+      [
+       "W",
+       "A"
+      ]
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P": [
+         "primOrder"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P"
+       ]
+      }
+     ],
+     "step": [
+      "order",
+      "root.usda",
+      "/P",
+      null
+     ]
+    }
+   ]
+  },
+  {
+   "name": "add_remove_inactive",
+   "steps": [
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [],
+     "step": [
+      "open"
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D",
+        "E"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D",
+        "E"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P/E": [
+         "active",
+         "specifier"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P/E"
+       ]
+      }
+     ],
+     "step": [
+      "def",
+      "root.usda",
+      "/P/E",
+      false
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P/E": []
+       },
+       "info": [],
+       "resynced": [
+        "/P/E"
+       ]
+      }
+     ],
+     "step": [
+      "remove",
+      "root.usda",
+      "/P/E"
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "F",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "F",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P/F": [
+         "active",
+         "specifier"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P/F"
+       ]
+      }
+     ],
+     "step": [
+      "def",
+      "weak.usda",
+      "/P/F",
+      false
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "F",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "F",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P/W": []
+       },
+       "info": [],
+       "resynced": [
+        "/P/W"
+       ]
+      }
+     ],
+     "step": [
+      "remove",
+      "weak.usda",
+      "/P/W"
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P/F": []
+       },
+       "info": [],
+       "resynced": [
+        "/P/F"
+       ]
+      }
+     ],
+     "step": [
+      "remove",
+      "weak.usda",
+      "/P/F"
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "A",
+        "B",
+        "C"
+       ],
+       "filtered": [
+        "A",
+        "B",
+        "C"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P/D": []
+       },
+       "info": [],
+       "resynced": [
+        "/P/D"
+       ]
+      }
+     ],
+     "step": [
+      "remove",
+      "root.usda",
+      "/P/D"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "deactivate_activate",
+   "steps": [
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [],
+     "step": [
+      "open"
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P/C": [
+         "active"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P/C"
+       ]
+      }
+     ],
+     "step": [
+      "active",
+      "root.usda",
+      "/P/C",
+      false
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P/C": [
+         "active"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P/C"
+       ]
+      }
+     ],
+     "step": [
+      "active",
+      "root.usda",
+      "/P/C",
+      true
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "B",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [
+        "Inner"
+       ],
+       "all": [
+        "Inner"
+       ],
+       "filtered": [
+        "Inner"
+       ]
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P/B": [
+         "active"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P/B"
+       ]
+      }
+     ],
+     "step": [
+      "active",
+      "root.usda",
+      "/P/B",
+      true
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "B",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [
+        "Inner"
+       ],
+       "all": [
+        "Inner"
+       ],
+       "filtered": [
+        "Inner"
+       ]
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P/B": [
+         "active"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P/B"
+       ]
+      }
+     ],
+     "step": [
+      "active",
+      "root.usda",
+      "/P/B",
+      null
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "B",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [
+        "Inner"
+       ],
+       "all": [
+        "Inner"
+       ],
+       "filtered": [
+        "Inner"
+       ]
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P/A": [
+         "active"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P/A"
+       ]
+      }
+     ],
+     "step": [
+      "active",
+      "weak.usda",
+      "/P/A",
+      false
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "B",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [
+        "Inner"
+       ],
+       "all": [
+        "Inner"
+       ],
+       "filtered": [
+        "Inner"
+       ]
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P/A": [
+         "active"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P/A"
+       ]
+      }
+     ],
+     "step": [
+      "active",
+      "root.usda",
+      "/P/A",
+      true
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "B",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [
+        "Inner"
+       ],
+       "all": [
+        "Inner"
+       ],
+       "filtered": [
+        "Inner"
+       ]
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P/A": [
+         "active"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P/A"
+       ]
+      }
+     ],
+     "step": [
+      "active",
+      "root.usda",
+      "/P/A",
+      null
+     ]
+    }
+   ]
+  },
+  {
+   "name": "order_then_activate",
+   "steps": [
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [],
+     "step": [
+      "open"
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P/C": [
+         "active"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P/C"
+       ]
+      }
+     ],
+     "step": [
+      "active",
+      "root.usda",
+      "/P/C",
+      false
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A"
+       ],
+       "all": [
+        "W",
+        "C",
+        "D",
+        "A",
+        "B"
+       ],
+       "filtered": [
+        "W",
+        "C",
+        "D",
+        "A",
+        "B"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P": [
+         "primOrder"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P"
+       ]
+      }
+     ],
+     "step": [
+      "order",
+      "root.usda",
+      "/P",
+      [
+       "C",
+       "D",
+       "A"
+      ]
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "C",
+        "A"
+       ],
+       "all": [
+        "W",
+        "C",
+        "D",
+        "A",
+        "B"
+       ],
+       "filtered": [
+        "W",
+        "C",
+        "D",
+        "A",
+        "B"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P/C": [
+         "active"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P/C"
+       ]
+      }
+     ],
+     "step": [
+      "active",
+      "root.usda",
+      "/P/C",
+      null
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "C",
+        "D",
+        "A"
+       ],
+       "all": [
+        "W",
+        "C",
+        "D",
+        "A",
+        "B"
+       ],
+       "filtered": [
+        "W",
+        "C",
+        "D",
+        "A",
+        "B"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P/D": [
+         "active"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P/D"
+       ]
+      }
+     ],
+     "step": [
+      "active",
+      "root.usda",
+      "/P/D",
+      true
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "C",
+        "D"
+       ],
+       "all": [
+        "W",
+        "C",
+        "D",
+        "A",
+        "B"
+       ],
+       "filtered": [
+        "W",
+        "C",
+        "D",
+        "A",
+        "B"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P/A": [
+         "active"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P/A"
+       ]
+      }
+     ],
+     "step": [
+      "active",
+      "root.usda",
+      "/P/A",
+      false
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "C",
+        "D"
+       ],
+       "all": [
+        "W",
+        "B",
+        "C",
+        "A",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "B",
+        "C",
+        "A",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P": [
+         "primOrder"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/P"
+       ]
+      }
+     ],
+     "step": [
+      "order",
+      "root.usda",
+      "/P",
+      [
+       "B",
+       "A",
+       "D"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "through_reference",
+   "steps": [
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [],
+     "step": [
+      "open"
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "Z",
+        "Y",
+        "X"
+       ],
+       "filtered": [
+        "Z",
+        "Y",
+        "X"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/R": [
+         "primOrder"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/R"
+       ]
+      }
+     ],
+     "step": [
+      "order",
+      "root.usda",
+      "/R",
+      [
+       "Z",
+       "Y",
+       "X"
+      ]
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "Z",
+        "Y",
+        "X"
+       ],
+       "filtered": [
+        "Z",
+        "Y",
+        "X"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/R": [
+         "primOrder"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/R"
+       ]
+      }
+     ],
+     "step": [
+      "order",
+      "asset.usda",
+      "/Asset",
+      [
+       "Y",
+       "Z"
+      ]
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "Z",
+        "Q",
+        "Y",
+        "X"
+       ],
+       "filtered": [
+        "Z",
+        "Q",
+        "Y",
+        "X"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/R/Q": [
+         "active",
+         "specifier"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/R/Q"
+       ]
+      }
+     ],
+     "step": [
+      "def",
+      "asset.usda",
+      "/Asset/Q",
+      false
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [],
+       "all": [
+        "Z",
+        "Q",
+        "Y",
+        "X"
+       ],
+       "filtered": [
+        "Z",
+        "Q",
+        "Y",
+        "X"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/R/X": [
+         "active"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/R/X"
+       ]
+      }
+     ],
+     "step": [
+      "active",
+      "asset.usda",
+      "/Asset/X",
+      false
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "Z"
+       ],
+       "all": [
+        "Z",
+        "Q",
+        "Y",
+        "X"
+       ],
+       "filtered": [
+        "Z",
+        "Q",
+        "Y",
+        "X"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/R/Z": [
+         "active"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/R/Z"
+       ]
+      }
+     ],
+     "step": [
+      "active",
+      "root.usda",
+      "/R/Z",
+      true
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "Z"
+       ],
+       "all": [
+        "Z",
+        "Y",
+        "X"
+       ],
+       "filtered": [
+        "Z",
+        "Y",
+        "X"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/R/Q": []
+       },
+       "info": [],
+       "resynced": [
+        "/R/Q"
+       ]
+      }
+     ],
+     "step": [
+      "remove",
+      "asset.usda",
+      "/Asset/Q"
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "Z"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/R": [
+         "primOrder"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/R"
+       ]
+      }
+     ],
+     "step": [
+      "order",
+      "root.usda",
+      "/R",
+      null
+     ]
+    }
+   ]
+  },
+  {
+   "name": "in_variant",
+   "steps": [
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [],
+     "step": [
+      "open"
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "O",
+        "M"
+       ],
+       "all": [
+        "O",
+        "N",
+        "M"
+       ],
+       "filtered": [
+        "O",
+        "N",
+        "M"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/V": [
+         "primOrder"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/V"
+       ]
+      }
+     ],
+     "step": [
+      "order",
+      "root.usda",
+      "/V{look=one}",
+      [
+       "O",
+       "N",
+       "M"
+      ]
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "O",
+        "M"
+       ],
+       "all": [
+        "O",
+        "L",
+        "N",
+        "M"
+       ],
+       "filtered": [
+        "O",
+        "L",
+        "N",
+        "M"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/V/L": [
+         "active",
+         "specifier"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/V/L"
+       ]
+      }
+     ],
+     "step": [
+      "def",
+      "root.usda",
+      "/V{look=one}L",
+      false
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "O",
+        "N",
+        "M"
+       ],
+       "all": [
+        "O",
+        "L",
+        "N",
+        "M"
+       ],
+       "filtered": [
+        "O",
+        "L",
+        "N",
+        "M"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/V/N": [
+         "active"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/V/N"
+       ]
+      }
+     ],
+     "step": [
+      "active",
+      "root.usda",
+      "/V{look=one}N",
+      true
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "O",
+        "N"
+       ],
+       "all": [
+        "O",
+        "L",
+        "N",
+        "M"
+       ],
+       "filtered": [
+        "O",
+        "L",
+        "N",
+        "M"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/V/M": [
+         "active"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/V/M"
+       ]
+      }
+     ],
+     "step": [
+      "active",
+      "root.usda",
+      "/V{look=one}M",
+      false
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "N"
+       ],
+       "all": [
+        "N",
+        "M"
+       ],
+       "filtered": [
+        "N",
+        "M"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/V": [
+         "variantSelection"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/V"
+       ]
+      }
+     ],
+     "step": [
+      "select",
+      "root.usda",
+      "/V",
+      "look",
+      "two"
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "N"
+       ],
+       "all": [
+        "M",
+        "N"
+       ],
+       "filtered": [
+        "M",
+        "N"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/V": [
+         "primOrder"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/V"
+       ]
+      }
+     ],
+     "step": [
+      "order",
+      "root.usda",
+      "/V{look=two}",
+      [
+       "M",
+       "N"
+      ]
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "O",
+        "N"
+       ],
+       "all": [
+        "O",
+        "L",
+        "N",
+        "M"
+       ],
+       "filtered": [
+        "O",
+        "L",
+        "N",
+        "M"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/V": [
+         "variantSelection"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/V"
+       ]
+      }
+     ],
+     "step": [
+      "select",
+      "root.usda",
+      "/V",
+      "look",
+      "one"
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "O",
+        "N"
+       ],
+       "all": [
+        "O",
+        "N",
+        "M"
+       ],
+       "filtered": [
+        "O",
+        "N",
+        "M"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/V/L": []
+       },
+       "info": [],
+       "resynced": [
+        "/V/L"
+       ]
+      }
+     ],
+     "step": [
+      "remove",
+      "root.usda",
+      "/V{look=one}L"
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "N",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/V": [
+         "primOrder"
+        ]
+       },
+       "info": [],
+       "resynced": [
+        "/V"
+       ]
+      }
+     ],
+     "step": [
+      "order",
+      "root.usda",
+      "/V{look=one}",
+      null
+     ]
+    }
+   ]
+  },
+  {
+   "name": "metadata_beside_inactive",
+   "steps": [
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [],
+     "step": [
+      "open"
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P": [
+         "documentation"
+        ]
+       },
+       "info": [
+        "/P"
+       ],
+       "resynced": []
+      }
+     ],
+     "step": [
+      "doc",
+      "root.usda",
+      "/P",
+      "parent"
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P": [
+         "documentation"
+        ]
+       },
+       "info": [
+        "/P"
+       ],
+       "resynced": []
+      }
+     ],
+     "step": [
+      "doc",
+      "weak.usda",
+      "/P",
+      "weaker"
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/R": [
+         "documentation"
+        ]
+       },
+       "info": [
+        "/R"
+       ],
+       "resynced": []
+      }
+     ],
+     "step": [
+      "doc",
+      "asset.usda",
+      "/Asset",
+      "asset"
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/V": [
+         "documentation"
+        ]
+       },
+       "info": [
+        "/V"
+       ],
+       "resynced": []
+      }
+     ],
+     "step": [
+      "doc",
+      "root.usda",
+      "/V{look=one}",
+      "variant"
+     ]
+    },
+    {
+     "children": {
+      "/P": {
+       "active": [
+        "A",
+        "C"
+       ],
+       "all": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ],
+       "filtered": [
+        "W",
+        "A",
+        "B",
+        "C",
+        "D"
+       ]
+      },
+      "/P/B": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/P/C": {
+       "active": [],
+       "all": [],
+       "filtered": []
+      },
+      "/R": {
+       "active": [
+        "X"
+       ],
+       "all": [
+        "X",
+        "Y",
+        "Z"
+       ],
+       "filtered": [
+        "X",
+        "Y",
+        "Z"
+       ]
+      },
+      "/V": {
+       "active": [
+        "M",
+        "O"
+       ],
+       "all": [
+        "M",
+        "N",
+        "O"
+       ],
+       "filtered": [
+        "M",
+        "N",
+        "O"
+       ]
+      }
+     },
+     "heard": [
+      {
+       "fields": {
+        "/P/B": [
+         "documentation"
+        ]
+       },
+       "info": [
+        "/P/B"
+       ],
+       "resynced": []
+      }
+     ],
+     "step": [
+      "doc",
+      "root.usda",
+      "/P/B",
+      "inactive"
+     ]
+    }
+   ]
+  }
+ ],
+ "openusd_version": "26.11"
+}

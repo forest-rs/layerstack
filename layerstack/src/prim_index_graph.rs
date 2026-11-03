@@ -1032,6 +1032,61 @@ impl PrimIndexGraph {
         }
     }
 
+    /// The layer stack of node `node` and its resident layers, strongest
+    /// first, with their offsets, as composition gathered them.
+    pub(crate) fn stack_of(&self, node: NodeId) -> Option<(LayerStackIdentifier, &StackOffsets)> {
+        let shape = self.shape.get(node.index())?;
+        Some((shape.layer_stack, &shape.stack_offsets))
+    }
+
+    /// The layer stacks of this graph's nodes, each with its layers as
+    /// composition gathered them, in node order, each node's.
+    pub(crate) fn stacks(&self) -> impl Iterator<Item = (LayerStackIdentifier, &StackOffsets)> {
+        self.shape
+            .iter()
+            .map(|shape| (shape.layer_stack, &shape.stack_offsets))
+    }
+
+    /// Replaces the layers of each node's layer stack that `restack` gives
+    /// new layers for, keeping sites and all else; returns whether it gave
+    /// any.
+    ///
+    /// `shapes` holds, by the address of each shape met so far, that shape
+    /// and its replacement (`None` when it keeps its layers), so graphs
+    /// sharing a shape share its replacement. It holds each shape it maps,
+    /// so no address it is keyed by is freed and used again while it is.
+    pub(crate) fn restack(
+        &mut self,
+        shapes: &mut hashbrown::HashMap<usize, (Arc<GraphShape>, Option<Arc<GraphShape>>)>,
+        restack: impl Fn(LayerStackIdentifier) -> Option<StackOffsets>,
+    ) -> bool {
+        let key = Arc::as_ptr(&self.shape) as usize;
+        let (_, replaced) = shapes.entry(key).or_insert_with(|| {
+            let mut changed = false;
+            let nodes: alloc::boxed::Box<[NodeShape]> = self
+                .shape
+                .iter()
+                .map(|node| {
+                    let mut node = node.clone();
+                    if let Some(offsets) = restack(node.layer_stack) {
+                        changed = true;
+                        node.stack_offsets = offsets;
+                    }
+                    node
+                })
+                .collect();
+            let replaced = changed.then(|| Arc::new(GraphShape { nodes }));
+            (Arc::clone(&self.shape), replaced)
+        });
+        match replaced {
+            Some(shape) => {
+                self.shape = Arc::clone(shape);
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Sorts `keys` strongest first, as [`Self::cmp_keys`] orders them.
     pub(crate) fn sort_keys(&self, keys: &mut [OpinionKey]) {
         sort::sort_by(keys, |a, b| self.cmp_keys(a, b));

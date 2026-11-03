@@ -7,7 +7,7 @@
 // same place, and nothing it returns is NaN.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { clipRange, frameBox, isBox, localView, MAX_DEPTH_RATIO, reachFrom, upVector, viewDirection } from "../src/viewport/framing.ts";
+import { clipRange, frameBox, isBox, localView, MAX_DEPTH_RATIO, orbitFrom, reachFrom, upVector, verticalFov, viewDirection } from "../src/viewport/framing.ts";
 
 const options = { fov: 45, aspect: 16 / 9, direction: viewDirection("Y") } as const;
 const finite = (values: readonly number[]) => values.every(Number.isFinite);
@@ -98,4 +98,31 @@ test("a prim's own space sees the stage's up as its transform turns it", () => {
   // Scale does not matter; a singular matrix leaves the world's view.
   assert.ok(same(localView("Y", [2, 0, 0, 0, 0, 0, -2, 0, 0, 2, 0, 0, 0, 0, 0, 1]).up, [0, 0, 1]));
   assert.deepEqual(localView("Y", new Array(16).fill(0)), { up: upVector("Y"), direction: viewDirection("Y") });
+});
+
+test("taking over from a stage camera orbits a point on its view axis", () => {
+  const scene = [-10, -10, -10, 10, 10, 10];
+  // Looking down -z from z = 30 at the scene: its center, 30 ahead.
+  const ahead = orbitFrom([0, 0, 30], [0, 0, -1], 0, scene)!;
+  assert.ok(same(ahead.target, [0, 0, 0]));
+  assert.equal(ahead.distance, 30);
+  assert.ok(ahead.far >= reachFrom([0, 0, 30], scene));
+  // Off to the side, the center's projection on the axis.
+  assert.ok(same(orbitFrom([5, 0, 30], [0, 0, -2], 0, scene)!.target, [5, 0, 0]));
+  // An authored focus distance wins.
+  assert.equal(orbitFrom([0, 0, 30], [0, 0, -1], 12, scene)!.distance, 12);
+  // Facing away from the scene: half its radius ahead; with no scene, one unit.
+  assert.ok(Math.abs(orbitFrom([0, 0, 30], [0, 0, 1], 0, scene)!.distance - Math.sqrt(300) / 2) < 1e-12);
+  assert.equal(orbitFrom([0, 0, 30], [0, 0, 1], 0, null)!.distance, 1);
+  assert.equal(orbitFrom([Number.NaN, 0, 0], [0, 0, 1], 0, scene), null);
+  assert.equal(orbitFrom([0, 0, 0], [0, 0, 0], 0, scene), null);
+});
+
+test("a stage camera's window gives its vertical field of view", () => {
+  // 24 mm focal length, 20.25 mm vertical aperture: a half height of 10.125 / 24 at depth 1.
+  const half = 10.125 / 24;
+  assert.ok(Math.abs(verticalFov([-0.75, -half, 0.75, half])! - (2 * Math.atan(half) * 180) / Math.PI) < 1e-9);
+  // An offset window spans the same angle between its edges.
+  assert.ok(Math.abs(verticalFov([-1, 0, 1, 1])! - 45) < 1e-9);
+  assert.equal(verticalFov([-1, 0, 1, 0]), null);
 });

@@ -23,6 +23,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -68,6 +69,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": 1.0,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -109,6 +111,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -144,6 +147,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -188,6 +192,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -230,6 +235,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -265,6 +271,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -308,6 +315,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": 1.0,
       "/Other.v": 1.0,
@@ -349,6 +357,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -384,6 +393,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -432,6 +442,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": 1.0,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -475,6 +486,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -510,6 +522,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -551,6 +564,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -590,6 +604,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -625,6 +640,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -666,6 +682,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -705,6 +722,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": null,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -740,6 +758,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -787,6 +806,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 3.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -822,6 +842,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -863,6 +884,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -904,6 +926,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -945,6 +968,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -980,6 +1004,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -1025,6 +1050,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": 1.0,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -1066,6 +1092,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -1101,6 +1128,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -1146,6 +1174,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -1189,6 +1218,183 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    }
+   ]
+  },
+  {
+   "name": "referenced_as_sublayer",
+   "steps": [
+    {
+     "heard": [],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "open"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/Asset.a": null,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/"
+       ],
+       "resynced": [
+        "/Asset"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "asset.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Asset",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "insert",
+      "root.usda",
+      0,
+      "asset.usda"
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/Asset.a": 1.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/",
+        "/A"
+       ],
+       "resynced": [
+        "/A.y",
+        "/Asset",
+        "/S",
+        "/W"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "asset.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Asset",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "reorder",
+      "root.usda",
+      [
+       1,
+       0,
+       2
+      ]
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/Asset.a": 1.0,
+      "/N.n": null,
+      "/Other.a": null,
+      "/Other.v": 1.0,
+      "/R.a": 1.0,
+      "/R.b": null,
+      "/S.s": 1.0,
+      "/W.t": 5.0,
+      "/W.w": 1.0
+     }
+    },
+    {
+     "heard": [
+      {
+       "info": [
+        "/"
+       ],
+       "resynced": [
+        "/Asset",
+        "/R"
+       ]
+      }
+     ],
+     "layer_stack": [
+      "root.usda",
+      "strong.usda",
+      "weak.usda"
+     ],
+     "prims": [
+      "/A",
+      "/Other",
+      "/R",
+      "/S",
+      "/W"
+     ],
+     "step": [
+      "remove",
+      "root.usda",
+      1
+     ],
+     "values": {
+      "/A.x": 1.0,
+      "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -1224,6 +1430,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -1260,6 +1467,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -1302,6 +1510,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -1343,6 +1552,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": 1.0,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -1381,6 +1591,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -1420,6 +1631,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -1455,6 +1667,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -1494,6 +1707,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -1531,6 +1745,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,
@@ -1565,6 +1780,7 @@
      "values": {
       "/A.x": 1.0,
       "/A.y": 2.0,
+      "/Asset.a": null,
       "/N.n": null,
       "/Other.a": null,
       "/Other.v": 1.0,

@@ -163,8 +163,15 @@
 // lights change, and a draw with new materials is drawn directly until
 // they compile. Transparent and transmissive draws stay direct (three.js
 // sorts them each frame, and transmission reads the frame drawn so far),
-// as does a draw that moves as time plays. Bundled draws are not culled
-// against the view, as direct ones are: a replay draws them all. Picking
+// as does a draw that moves as time plays. three.js replays a pass's
+// bundles at the end of the pass, after every direct draw
+// (`WebGPUBackend.finishRender`), so a translucent draw, which writes no
+// depth, would be drawn over by every bundled draw behind it, and a
+// transmissive one would not see them: when there is one, the scene is
+// drawn in two passes, the bundles and the opaque direct draws first,
+// then the translucent ones over them (`#renderInTwoPasses`). Bundled
+// draws are not culled against the view, as direct ones are: a replay
+// draws them all. Picking
 // draws its own bundles with the pick materials, recorded again when the
 // view's are.
 //
@@ -1519,7 +1526,8 @@ export class Viewport {
     this.#setState();
     // The clustered draws' cut for this camera, on the GPU, before the draws read it.
     this.#clusters.prepare(this.#renderer, camera, this.#canvas.width, this.#canvas.height);
-    this.#renderer.render(this.#scene, camera);
+    if (this.#scene.children.some(translucent)) this.#renderInTwoPasses(camera);
+    else this.#renderer.render(this.#scene, camera);
     // The outline over everything drawn, bundled draws included: a pass of its own.
     if (this.#markerShown) {
       const clear = this.#renderer.autoClear;
@@ -1528,6 +1536,37 @@ export class Viewport {
       this.#renderer.autoClear = clear;
     }
     this.#releaseUploaded();
+  }
+
+  /**
+   * Draws the scene in two passes, as the header says: the bundles and the
+   * opaque direct draws, then, over them and testing against their depth,
+   * the translucent direct draws (transmissive ones reading the frame the
+   * first pass drew), with the bundles and the opaque draws hidden so they
+   * are not drawn again. Hidden rather than skipped with the renderer's
+   * `opaque` switch, which would skip the output pass's quad too.
+   */
+  #renderInTwoPasses(camera: Camera): void {
+    const renderer = this.#renderer;
+    const clear = renderer.autoClear;
+    const hidden: Object3D[] = [];
+    try {
+      renderer.transparent = false;
+      renderer.render(this.#scene, camera);
+      renderer.transparent = true;
+      renderer.autoClear = false;
+      for (const object of this.#scene.children) {
+        if (object.visible && ((object as BundleGroup).isBundleGroup === true || (drawsSurface(object) && !hasTranslucentMaterial(object)))) {
+          object.visible = false;
+          hidden.push(object);
+        }
+      }
+      renderer.render(this.#scene, camera);
+    } finally {
+      for (const object of hidden) object.visible = true;
+      renderer.transparent = true;
+      renderer.autoClear = clear;
+    }
   }
 
   /**
@@ -1878,10 +1917,28 @@ const RESTYLE_BUDGET_MS = 8;
  * recording can do.
  */
 function bundleable(object: Drawn): boolean {
-  for (const material of [object.material].flat()) {
-    if (material.transparent || ((material as { transmission?: number }).transmission ?? 0) > 0) return false;
-  }
-  return true;
+  return !hasTranslucentMaterial(object);
+}
+
+/** Whether `object` draws with materials: a mesh, line or point set (not a light or a group). */
+function drawsSurface(object: Object3D): boolean {
+  return (object as { material?: unknown }).material !== undefined;
+}
+
+/** Whether `object` has a transparent or transmissive material. */
+function hasTranslucentMaterial(object: Object3D): boolean {
+  const material = (object as { material?: Material | Material[] }).material;
+  if (material === undefined) return false;
+  return [material].flat().some((m) => m.transparent || ((m as { transmission?: number }).transmission ?? 0) > 0);
+}
+
+/**
+ * Whether `object` is shown with a transparent or transmissive material:
+ * three.js draws it after the opaque draws, sorted, and the viewport after
+ * its bundles (see the header).
+ */
+function translucent(object: Object3D): boolean {
+  return object.visible && hasTranslucentMaterial(object);
 }
 
 /** Whether `object` draws a point set. */

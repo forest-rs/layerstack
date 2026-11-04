@@ -44,7 +44,7 @@ export function CurvesView(props: PresentProps<"prim">) {
   const segments = report.segments.reduce((sum, count) => sum + count, 0);
   return (
     <Section title="Curves" aside={<span>{view.kind === "tubes" ? "the viewport's buffers" : "drawn as lines"}</span>}>
-      {shared !== null && <Preview source={{ shared, cpu: null, bounds: extent(props), orientation }} style={NO_STYLE} />}
+      {shared !== null && <Preview source={{ shared, cpu: null, bounds: extent(props), orientation }} style={NO_STYLE} toneMap={context.store.toneMap} />}
       <dl className="mt-2 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-[11px]">
         <Fact label="curves" value={`${report.curves.toLocaleString()}${report.drawnCurves !== report.curves ? ` (${report.drawnCurves.toLocaleString()} drawn)` : ""}`} />
         <Fact label="evaluated as" value={evaluation} />

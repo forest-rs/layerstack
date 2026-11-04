@@ -18,6 +18,7 @@ import { boxCorners, indexOfId, instanceMatrix, type InstancerColumns, invert, m
 import { type LoadBudget, type OpenPhase, OverBudget, Session } from "./model/session.ts";
 import type { SceneSource } from "./model/sources.ts";
 import { DEFAULT_LIGHT_SETTINGS, type LightSettings } from "./viewport/defaultLights.ts";
+import { rememberToneMap, rememberedToneMap, type ToneMapChoice } from "./viewport/toneMap.ts";
 import { isBox, type UpAxis } from "./viewport/framing.ts";
 import type { Viewport } from "./viewport/viewport3d.ts";
 
@@ -145,6 +146,8 @@ export class EditorStore {
   upAxis: UpAxis = "Y";
   /** The default lights the viewport adds to the stage's, as usdview's View > Lights menu sets them: the camera light on. */
   lightSettings: LightSettings = DEFAULT_LIGHT_SETTINGS;
+  /** How the viewport and the previews are shown on the display: usdview's sRGB by default, or AgX; remembered for this viewer. */
+  toneMap: ToneMapChoice = rememberedToneMap();
   /** The session being opened, while its assets are fetched. */
   opening: Session | null = null;
   /** How the next scene opens its payloads ({@link PayloadChoice}). */
@@ -243,6 +246,7 @@ export class EditorStore {
     };
     viewport.lookThrough(this.through);
     viewport.setLightSettings(this.lightSettings);
+    viewport.setToneMap(this.toneMap);
     this.#orient();
     const update = this.session === null ? null : this.#draws.sync(this.session, this.time, this.#scope(this.session));
     if (update !== null) {
@@ -533,6 +537,14 @@ export class EditorStore {
   setLightSettings(settings: LightSettings): void {
     this.lightSettings = settings;
     this.#viewport?.setLightSettings(settings);
+    this.#bump();
+  }
+
+  /** Shows the viewport and the previews sRGB-encoded as usdview does, or through AgX, and remembers the choice. */
+  setToneMap(choice: ToneMapChoice): void {
+    this.toneMap = choice;
+    rememberToneMap(choice);
+    this.#viewport?.setToneMap(choice);
     this.#bump();
   }
 

@@ -40,7 +40,6 @@
 // pole to pole: a square texture tile stays square, and a tile of about a
 // metre is drawn about life size on a sphere of a metre's radius.
 import {
-  AgXToneMapping,
   CanvasTarget,
   CircleGeometry,
   Color,
@@ -61,7 +60,8 @@ import type { Texture, WebGPURenderer } from "three/webgpu";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import type { MaterialItem } from "@forest-rs/layerstack_stagehand";
 import type { OpenPbrSurface } from "../model/openpbr.ts";
-import { onRendererLost, sharedRenderer } from "./gpu.ts";
+import { applyToneMap, onRendererLost, sharedRenderer } from "./gpu.ts";
+import { DEFAULT_TONE_MAP, type ToneMapChoice } from "./toneMap.ts";
 import { type AssetExists, type AssetReader, surfaceMaterial, TextureStore, use } from "./surfaces.ts";
 
 /** What the preview draws: a `UsdPreviewSurface` record, or an OpenPBR surface. */
@@ -130,6 +130,8 @@ export class MaterialPreview {
   readonly #canvas: HTMLCanvasElement;
   #source: PreviewSource | null = null;
   #frame = 0;
+  /** How the preview is shown on the display, as the viewport is (`setToneMap`). */
+  #toneMap: ToneMapChoice = DEFAULT_TONE_MAP;
 
   /**
    * A preview drawing into `canvas` with `renderer`, the shared one
@@ -176,6 +178,13 @@ export class MaterialPreview {
   show(source: PreviewSource | null): void {
     this.#source = source;
     this.#rebuild();
+  }
+
+  /** Shows the preview sRGB-encoded as usdview does, or through AgX, as the viewport (`toneMap.ts`). */
+  setToneMap(choice: ToneMapChoice): void {
+    if (choice === this.#toneMap) return;
+    this.#toneMap = choice;
+    this.#draw();
   }
 
   /** Turns the model by a drag's pixels: a sphere any way, a shader ball about its upright only. */
@@ -236,8 +245,7 @@ export class MaterialPreview {
       // The shared renderer, pointed at this canvas: transparent over the page's gradient.
       renderer.setCanvasTarget(this.#target);
       renderer.setRenderTarget(null);
-      renderer.toneMapping = AgXToneMapping;
-      renderer.toneMappingExposure = 1;
+      applyToneMap(renderer, this.#toneMap);
       renderer.setClearColor(0x000000, 0);
       renderer.render(this.#scene, this.#camera);
     });

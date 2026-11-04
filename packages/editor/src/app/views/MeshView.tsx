@@ -25,6 +25,7 @@ import { releaseValue } from "../../model/values.ts";
 import type { PresentationContext, PresentProps } from "../../presentations/registry.ts";
 import { localView, type ViewOrientation } from "../../viewport/framing.ts";
 import type { CpuMesh, MeshPreview, MeshPreviewStyle } from "../../viewport/meshPreview.ts";
+import type { ToneMapChoice } from "../../viewport/toneMap.ts";
 import { Live, Present, usePrimRevision } from "../presentations/Present.tsx";
 import { Section } from "../Section.tsx";
 
@@ -135,7 +136,7 @@ export function MeshView({ object, context }: PresentProps<"prim">) {
 
   return (
     <Section title="Mesh" aside={<span>{shared !== null ? "the viewport's buffers" : built !== null ? "built for this view" : "not readable"}</span>}>
-      <Preview source={{ shared, cpu: built?.cpu ?? null, bounds, orientation: previewOrientation }} style={{ ...style, doubleSided, highlight }} />
+      <Preview source={{ shared, cpu: built?.cpu ?? null, bounds, orientation: previewOrientation }} style={{ ...style, doubleSided, highlight }} toneMap={store.toneMap} />
       <div role="group" aria-label="Preview" className="mt-1 mb-2 flex gap-1">
         {(
           [
@@ -245,7 +246,7 @@ export function Fact({ label, value, title }: { label: string; value: string; ti
 }
 
 /** The preview canvas: a {@link MeshPreview} on the shared renderer, loaded with three.js after the editor. */
-export function Preview({ source, style }: { source: Parameters<MeshPreview["show"]>[0]; style: MeshPreviewStyle }) {
+export function Preview({ source, style, toneMap }: { source: Parameters<MeshPreview["show"]>[0]; style: MeshPreviewStyle; toneMap: ToneMapChoice }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [preview, setPreview] = useState<MeshPreview | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -265,6 +266,7 @@ export function Preview({ source, style }: { source: Parameters<MeshPreview["sho
       made?.dispose();
     };
   }, []);
+  useEffect(() => preview?.setToneMap(toneMap), [preview, toneMap]);
   const { shared, cpu, bounds, orientation } = source;
   useEffect(() => preview?.show({ shared, cpu, bounds, orientation }, style), [preview, shared?.geometry, cpu, bounds, orientation, style.checker, style.wireframe, style.normals, style.doubleSided, style.highlight?.first, style.highlight?.count]);
   return (

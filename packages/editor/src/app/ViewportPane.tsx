@@ -18,6 +18,7 @@ import { MaterialPreview } from "./MaterialPreview.tsx";
 import { Timeline } from "./Timeline.tsx";
 import type { Viewport } from "../viewport/viewport3d.ts";
 import type { TextureStats } from "../viewport/surfaces.ts";
+import { TONE_MAP_CHOICES } from "../viewport/toneMap.ts";
 
 /**
  * The viewport's texture counts, re-rendering the pane once a frame at
@@ -168,6 +169,24 @@ export function ViewportPane() {
           >
             Camera light: {store.lightSettings.cameraLight ? "on" : "off"}
           </button>
+        )}
+        {/* usdview's sRGB colour correction by default; AgX for scenes whose highlights it clips. Previews follow it too. */}
+        {store.session !== null && texture === null && (
+          <div role="group" aria-label="Tone mapping" className="flex items-center rounded-md bg-black/40 p-0.5 text-[11px] backdrop-blur-sm">
+            <span className="px-1.5 text-white/70">Tone mapping:</span>
+            {TONE_MAP_CHOICES.map(([choice, label]) => (
+              <button
+                key={choice}
+                type="button"
+                aria-pressed={store.toneMap === choice}
+                title={choice === "srgb" ? "Light encoded as sRGB with no tone curve, as usdview shows it by default: past white clips" : "AgX's tone curve: highlights roll off instead of clipping"}
+                onClick={() => store.setToneMap(choice)}
+                className={cn("rounded px-2 py-0.5 text-white/70 hover:text-white", store.toneMap === choice && "bg-white/15 text-white")}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         )}
       </div>
       <LoadingOverlay />

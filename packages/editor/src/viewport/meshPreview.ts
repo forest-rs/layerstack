@@ -36,7 +36,8 @@ import {
 import type { WebGPURenderer } from "three/webgpu";
 import { checker, mix, uv, vec3 } from "three/tsl";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { onRendererLost, sharedRenderer } from "./gpu.ts";
+import { applyToneMap, onRendererLost, sharedRenderer } from "./gpu.ts";
+import { DEFAULT_TONE_MAP, type ToneMapChoice } from "./toneMap.ts";
 import { clipRange, frameBox, type ViewOrientation } from "./framing.ts";
 
 /** A mesh's buffers held on the CPU: stagehand's, built for the preview. */
@@ -90,6 +91,8 @@ export class MeshPreview {
   /** The radius framed: the far plane stays past it. */
   #radius = 1;
   #frame = 0;
+  /** How the preview is shown on the display, as the viewport is (`setToneMap`). */
+  #toneMap: ToneMapChoice = DEFAULT_TONE_MAP;
 
   constructor(canvas: HTMLCanvasElement, renderer: WebGPURenderer) {
     this.#canvas = canvas;
@@ -110,6 +113,13 @@ export class MeshPreview {
         this.#draw();
       });
     });
+  }
+
+  /** Shows the preview sRGB-encoded as usdview does, or through AgX, as the viewport (`toneMap.ts`). */
+  setToneMap(choice: ToneMapChoice): void {
+    if (choice === this.#toneMap) return;
+    this.#toneMap = choice;
+    this.#draw();
   }
 
   /** Draws `source` in `style`, framing it when its extent is new. */
@@ -272,6 +282,7 @@ export class MeshPreview {
       this.#camera.updateProjectionMatrix();
       renderer.setCanvasTarget(this.#target);
       renderer.setRenderTarget(null);
+      applyToneMap(renderer, this.#toneMap);
       renderer.setClearColor(0x000000, 0);
       renderer.render(this.#scene, this.#camera);
     });

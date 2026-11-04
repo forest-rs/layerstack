@@ -53,6 +53,7 @@ function view(framed: (readonly number[])[]): Viewport {
   const stub = {
     lookThrough() {},
     setLightSettings() {},
+    setToneMap() {},
     setUpAxis() {},
     setMarker() {},
     update() {},

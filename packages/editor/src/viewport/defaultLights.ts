@@ -65,12 +65,13 @@
 //   material; the closest one light does is that term on a white surface:
 //   {@link AMBIENT_INTENSITY} = π × 0.01 × 0.2. It is a twentieth of a
 //   percent of white: kept for fidelity, not visible.
-// - The viewport's AgX tone mapping is left as it is (usdview's default is
-//   sRGB without one). Lit head on by the camera light alone, a gray of
-//   albedo 0.1, 0.2, 0.4, 0.6 and 0.8 displays 100, 133, 165, 182 and 194
-//   (of 255) where Storm's sRGB is 89, 124, 170, 203 and 231: darks a
-//   little brighter, lights compressed; saturated colors desaturate a
-//   little.
+// - The display shows the light as usdview does by default: sRGB-encoded,
+//   no tone curve (`toneMap.ts`). Lit head on by the camera light alone, a
+//   gray of albedo 0.1, 0.2, 0.4, 0.6 and 0.8 displays 89, 124, 170, 204
+//   and 231 (of 255), Storm's 89, 124, 170, 203 and 231 to within one. The
+//   viewport's AgX choice shows them 100, 133, 165, 182 and 194: darks a
+//   little brighter, lights compressed, saturated colors a little
+//   desaturated.
 // - The default material's highlight is not matched: a draw without a
 //   material is a `MeshStandardMaterial` of roughness 0.7, as before.
 

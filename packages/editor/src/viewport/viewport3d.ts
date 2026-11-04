@@ -61,10 +61,13 @@
 // makes 1 for a 1-nit light seen directly at exposure 0: the renderer's
 // `toneMappingExposure` is the stage camera's
 // `UsdGeomCamera::ComputeLinearExposureScale` (1 with the free camera), and
-// AgX tone mapping fits the highlights into the display's range. WebGPU's
-// renderer tone-maps and encodes sRGB in a pass of its own once the scene
-// is drawn (and blended, and its 4× multisampling resolved); the canvas is
-// cleared transparent, so the page's background is the viewport's.
+// the display shows it as usdview does by default, sRGB-encoded with no
+// tone curve (light past 1 clips to white), or, when the viewer chooses
+// AgX (`setToneMap`), with AgX's curve fitting the highlights into the
+// display's range (`toneMap.ts`, which cites Storm). WebGPU's renderer
+// tone-maps and encodes sRGB in a pass of its own once the scene is drawn
+// (and blended, and its 4× multisampling resolved); the canvas is cleared
+// transparent, so the page's background is the viewport's.
 //
 // Default lights (`defaultLights.ts`): usdview's. A point light at the
 // camera, moved to it on each draw, and a faint ambient light, added to
@@ -173,7 +176,6 @@
 // decides; a line or point within three pixels of it is picked when the
 // center shows nothing, as the ray's threshold let a thin line be.
 import {
-  AgXToneMapping,
   AmbientLight,
   Bone,
   BufferAttribute,
@@ -218,11 +220,12 @@ import { conformCamera, vertexPositions } from "@forest-rs/layerstack_stagehand"
 import type { BufferCost, CameraItem, LightItem, MaterialItem, MeshVertices, VertexAttribute } from "@forest-rs/layerstack_stagehand";
 import { PickIds, pickOrder, pickWindow, readIndex, unpackPickId } from "./picking.ts";
 import { DEFAULT_LIGHT_SETTINGS, defaultLights, type LightSettings } from "./defaultLights.ts";
+import { DEFAULT_TONE_MAP, type ToneMapChoice } from "./toneMap.ts";
 import { DrawBundles, type BundleCounts } from "./bundles.ts";
 import { lightSetKey, linkedLights } from "./lightLinks.ts";
 import { stormLight } from "./sceneLights.ts";
 import { fixNodes, setFixedNode } from "./fixedNodes.ts";
-import { onRendererLost, sharedRenderer } from "./gpu.ts";
+import { applyToneMap, onRendererLost, sharedRenderer } from "./gpu.ts";
 import { type Box, clipRange, frameBox, orbitFrom, reachFrom, sphereOf, verticalFov, viewDirection } from "./framing.ts";
 import { followCamera, followMatrices, makeViewCamera } from "./viewCamera.ts";
 import { SkinnedDraw, withSkinning } from "./skinning.ts";
@@ -292,6 +295,8 @@ export class Viewport {
   /** The `UsdLux` light each three.js light draws, by object. */
   readonly #lightKeys = new Map<Object3D, string>();
   /** usdview's default camera light: a point light without falloff, put at the camera on each draw. */
+  /** How the view is shown on the display (`setToneMap`). */
+  #toneMap: ToneMapChoice = DEFAULT_TONE_MAP;
   readonly #cameraLight = new PointLight(0xffffff, defaultLights(DEFAULT_LIGHT_SETTINGS).cameraLight, 0, 0);
   /** usdview's scene ambient. */
   readonly #ambient = new AmbientLight(0xffffff, defaultLights(DEFAULT_LIGHT_SETTINGS).ambient);
@@ -571,6 +576,17 @@ export class Viewport {
     const lights = defaultLights(settings);
     this.#cameraLight.intensity = lights.cameraLight;
     this.#ambient.intensity = lights.ambient;
+    this.#draw();
+  }
+
+  /**
+   * Shows the view sRGB-encoded as usdview does by default, or through
+   * AgX (`toneMap.ts`). Only the renderer's output pass changes: the
+   * scene's own pipelines draw into its half-float target either way.
+   */
+  setToneMap(choice: ToneMapChoice): void {
+    if (choice === this.#toneMap) return;
+    this.#toneMap = choice;
     this.#draw();
   }
 
@@ -1566,16 +1582,16 @@ export class Viewport {
   }
 
   /**
-   * Points the shared renderer at this canvas with the view's output: AgX
-   * at the camera's exposure, cleared transparent (the page behind is the
-   * viewport's background). Before each render and compile here, since the
-   * material previews draw with the same renderer.
+   * Points the shared renderer at this canvas with the view's output: the
+   * chosen tone mapping at the camera's exposure (`toneMap.ts`), cleared
+   * transparent (the page behind is the viewport's background). Before
+   * each render and compile here, since the material previews draw with
+   * the same renderer.
    */
   #setState(): void {
     const renderer = this.#renderer;
     renderer.setCanvasTarget(this.#target);
-    renderer.toneMapping = AgXToneMapping;
-    renderer.toneMappingExposure = this.#looking()?.camera?.linearExposureScale ?? 1;
+    applyToneMap(renderer, this.#toneMap, this.#looking()?.camera?.linearExposureScale ?? 1);
     renderer.setClearColor(0x000000, 0);
   }
 

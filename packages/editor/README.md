@@ -118,6 +118,15 @@ nothing more.
   `WebGPURenderer`; the stage's `upAxis` orients the
   free camera and the grid. Click to pick, drag to orbit, scroll to zoom,
   **F** to frame the selection, **Esc** to clear it.
+- **Look.** A stage looks as usdview shows it by default: lit by
+  usdview's default camera light (the **Camera light** switch, as View >
+  Lights) and the stage's own lights as Storm approximates them, at the
+  camera's exposure, and encoded as sRGB with no tone curve, so light past
+  white clips (usdview's default `sRGB` colour correction). **Tone mapping:
+  sRGB (usdview) | AgX** shows the viewport and the material and mesh
+  previews through AgX instead, whose curve rolls highlights off, for
+  scenes lit brighter than white; the choice is remembered in this
+  browser, and switching rebuilds only the renderer's output pass.
 - **Timeline.** The stage's `startTimeCode` to `endTimeCode`: scrub, step
   a frame (← →), play at `timeCodesPerSecond` (Space). The draw list moves
   to the time, rereading only what varies; the inspector and the explain

@@ -14,7 +14,8 @@
 // with it is gone: the next `sharedRenderer` makes a new one, and each
 // user, told by `onRendererLost`, makes again what it drew from the CPU
 // copies it keeps (the viewport fills its released buffers again first).
-import { WebGPURenderer } from "three/webgpu";
+import { AgXToneMapping, LinearToneMapping, WebGPURenderer } from "three/webgpu";
+import { type ToneMapChoice, toneMapOutput } from "./toneMap.ts";
 
 let current: Promise<WebGPURenderer> | null = null;
 const lostListeners = new Set<() => void>();
@@ -67,4 +68,15 @@ async function start(): Promise<WebGPURenderer> {
     for (const listener of lostListeners) listener();
   };
   return renderer;
+}
+
+/**
+ * Sets the shared renderer's output for the next render: `choice`'s tone
+ * mapping at a camera's `linearExposureScale` (`toneMap.ts`). Each canvas
+ * sets it before it draws, as it sets its target.
+ */
+export function applyToneMap(renderer: WebGPURenderer, choice: ToneMapChoice, linearExposureScale = 1): void {
+  const output = toneMapOutput(choice, linearExposureScale);
+  renderer.toneMapping = output.operator === "agx" ? AgXToneMapping : LinearToneMapping;
+  renderer.toneMappingExposure = output.exposure;
 }

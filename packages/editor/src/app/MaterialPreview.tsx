@@ -100,6 +100,7 @@ export function MaterialPreview({
   }, [store, shape]);
 
   useEffect(() => preview?.show(reading.source), [preview, reading]);
+  useEffect(() => preview?.setToneMap(store.toneMap), [preview, store.toneMap]);
 
   const drag = useRef<{ x: number; y: number } | null>(null);
   const ball = shape === "shaderBall";

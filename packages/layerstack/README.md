@@ -236,12 +236,15 @@ await stage.resolve(source);
   `status().compositionErrors` lists them with `composition.*` codes.
 - **Edits are plain data.** `stage.apply(edits, target?)` applies an `Edit[]`
   (`definePrim`, `removePrim`, `removeProperty`, `createAttribute`,
-  `setValue`, `clearValue`, `blockValue`, `setTargets`, `addReference`,
+  `setValue`, `clearValue`, `blockValue`, `setTargets`, `addTarget`,
+  `removeTarget`, `clearTargets`, `addConnection`, `removeConnection`,
+  `clearConnections`, `copySpec`, `addReference`,
   `addPayload`, `removeReference`, `removePayload`, `setVariantSelection`,
   `setActive`, `setInstanceable`, `setKind`, `setMetadata`, `clearMetadata`,
   the target layer's `setLayerMetadata` and `clearLayerMetadata`
-  (`documentation`, `metersPerUnit`, `startTimeCode`, ...), and the
-  schema-shaped `bindMaterial`, `unbindMaterial`, `setShaderInput`,
+  (`documentation`, `metersPerUnit`, `startTimeCode`, ...) and its
+  sublayers' `insertSublayer`, `removeSublayer`, `setSublayerOffset` and
+  `setSublayers`, and the schema-shaped `applyAPI`, `removeAPI`, `bindMaterial`, `unbindMaterial`, `setShaderInput`,
   `connectToSource`, `disconnectSource`, `setBaseMaterial`,
   `createGeomSubset`, `createMaterialSubset`, `setSubsetFamilyType`,
   `bindCoordSys`, `blockCoordSys`, `clearCoordSys`, `setSdrMetadata`)
@@ -251,7 +254,14 @@ await stage.resolve(source);
   names the edit (`error.edit`, its index) and changes nothing. A schema-shaped
   edit sees the prims, types and API schemas earlier edits of the same
   `apply` define and apply, so a material, its shaders, their connections
-  and its bindings can be one undoable step.
+  and its bindings can be one undoable step. `addTarget` and
+  `addConnection` edit the target layer's list op, so a layer adds to
+  what weaker layers author where `setTargets` replaces it. `copySpec`
+  duplicates a prim (or property) spec within the target layer, to a
+  new path. Sublayer edits name a place in `stage.sublayers(layer)`
+  (strongest first); an inserted sublayer the stage has not read is
+  unavailable until supplied, as an added reference's asset is: `await
+  stage.resolve(source)` after.
 - **Values to author say their type.** A `ValueInput` is `{ type, value }`
   in the layout values are read in (`{ type: "color3f", value: [1, 0, 0] }`,
   `{ type: "point3f[]", value: new Float32Array(...) }`, a `bigint` for an

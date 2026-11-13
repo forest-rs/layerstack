@@ -909,6 +909,17 @@ export interface PropertyFieldChange {
   readonly metadata: string | null;
 }
 
+/**
+ * A sublayer a layer authors ({@link Stage.sublayers}): its asset path
+ * as authored, and the offset its layer is read at. AOUSD Core §7.6.1
+ * (`subLayers`), §12.3.2.1 (layer offsets).
+ */
+export interface Sublayer {
+  /** The asset path as authored (`./shot.usda`), anchored at the authoring layer. */
+  readonly asset: string;
+  readonly layerOffset: { readonly offset: number; readonly scale: number };
+}
+
 /** A listener of {@link Stage.onChange}. */
 export type ChangeListener = (changes: Changes) => void;
 
@@ -1085,6 +1096,186 @@ export interface SetTargetsEdit {
 }
 
 /**
+ * `UsdRelationship::AddTarget`: adds `target` to the relationship's
+ * target list op in the target layer at `position` (`backOfPrepend` by
+ * default, as OpenUSD's), so the layer adds to what weaker layers
+ * author where {@link SetTargetsEdit} replaces it. An explicit list takes
+ * it whatever the position, and a target already in the chosen list
+ * moves. A relationship nothing declares is created `custom`, as
+ * {@link SetTargetsEdit} creates one. AOUSD Core §7.6.5.1.1
+ * (`targetPaths`), §12.4 (list ops).
+ */
+export interface AddTargetEdit {
+  readonly type: "addTarget";
+  /** The relationship's property path. */
+  readonly path: string;
+  /** A prim or property path. */
+  readonly target: string;
+  readonly position?: ListPosition;
+}
+
+/**
+ * `UsdRelationship::RemoveTarget`: removes `target` from the target
+ * layer's explicit list, or else from its prepended and appended
+ * targets, adding it to the deleted ones, which removes it from weaker
+ * layers too.
+ */
+export interface RemoveTargetEdit {
+  readonly type: "removeTarget";
+  readonly path: string;
+  readonly target: string;
+}
+
+/** `UsdRelationship::ClearTargets`: removes the targets the target layer authors, keeping its spec; weaker layers' targets show again. */
+export interface ClearTargetsEdit {
+  readonly type: "clearTargets";
+  readonly path: string;
+}
+
+/**
+ * `UsdAttribute::AddConnection`: adds the connection `source` to the
+ * attribute's connection list op in the target layer, as
+ * {@link AddTargetEdit} adds a target. The attribute needs a type:
+ * refused with `edit.rejected.undeclared_type` when nothing declares it
+ * (create it first, in the same edits if need be, with
+ * {@link CreateAttributeEdit}), and `edit.rejected.not_an_attribute` for
+ * a relationship. A shading port has {@link ConnectToSourceEdit} too.
+ * AOUSD Core §7.6.4.2.3 (`connectionPaths`), §12.4.
+ */
+export interface AddConnectionEdit {
+  readonly type: "addConnection";
+  /** The attribute's property path. */
+  readonly path: string;
+  /** The connected property's path (`/Looks/Stone/Texture.outputs:rgb`). */
+  readonly source: string;
+  /** `backOfPrepend` by default, as OpenUSD's. */
+  readonly position?: ListPosition;
+}
+
+/** `UsdAttribute::RemoveConnection`: removes `source` as {@link RemoveTargetEdit} removes a target; refused as {@link AddConnectionEdit} is. */
+export interface RemoveConnectionEdit {
+  readonly type: "removeConnection";
+  readonly path: string;
+  readonly source: string;
+}
+
+/** `UsdAttribute::ClearConnections`: removes the connections the target layer authors, keeping its spec; `edit.rejected.not_an_attribute` for a relationship. */
+export interface ClearConnectionsEdit {
+  readonly type: "clearConnections";
+  readonly path: string;
+}
+
+/**
+ * `UsdPrim::ApplyAPI`: adds the applied API schema `schema` (with
+ * `instance` for a multiple-apply schema, such as `CollectionAPI` and
+ * `"lights"`) to the prim's `apiSchemas` in the target layer, unless the
+ * layer applies it already. Later edits of the same `apply` see the
+ * schema's properties ({@link SetValueEdit} of one of its attributes).
+ * Refused with `schema.cannot_apply` for a schema that is not a
+ * registered applied schema ({@link Stage.schemas}), an instance name
+ * missing, unexpected or not allowed, or a prim the schema cannot apply
+ * to; `prim.not_found` when no prim is at `path`; `schema.cannot_edit`
+ * beneath an instance. AOUSD Core §13.2.1.2 (`apiSchemas`), §13.3.2.
+ */
+export interface ApplyAPIEdit {
+  readonly type: "applyAPI";
+  readonly path: string;
+  readonly schema: string;
+  readonly instance?: string;
+}
+
+/**
+ * `UsdPrim::RemoveAppliedSchema` of `schema` (`schema:instance` with an
+ * `instance`): removes it from the target layer's explicit `apiSchemas`,
+ * or else from its prepended and appended items, adding it to the
+ * deleted ones, which removes weaker layers' applications too. Any name
+ * is removed, registered or not, so a schema from a plugin the stage
+ * lacks can be taken off. `prim.not_found` when no prim is at `path`.
+ * AOUSD Core §13.2.1.2, §12.4.
+ */
+export interface RemoveAPIEdit {
+  readonly type: "removeAPI";
+  readonly path: string;
+  readonly schema: string;
+  readonly instance?: string;
+}
+
+/**
+ * `SdfCopySpec` in the target layer: copies the prim spec at `path`, with
+ * every spec beneath it, or the property spec at `path`, to `to`,
+ * replacing whatever `to` holds there; missing ancestors of `to` are
+ * created as `over`s. Duplicating `/World/Rock` to `/World/Pebble` is
+ * one. Paths the copy authors that point into the copied prim follow it
+ * to `to` (relationship targets, connections, inherits, specializes,
+ * internal arcs), where OpenUSD leaves them pointing at the source.
+ *
+ * Both paths are stage paths the edit target maps into its one layer: a
+ * copy reads and writes that layer only, so a spec another layer
+ * authors is not copied (`edit.rejected.no_such_spec` when the target
+ * layer has none at `path`). Refused with
+ * `edit.rejected.copy_between_kinds` for a prim to a property or back,
+ * and `edit.rejected.copy_into_source` onto, into or around its source.
+ * AOUSD Core §7 (scene description), §8 (paths).
+ */
+export interface CopySpecEdit {
+  readonly type: "copySpec";
+  /** The prim or property path to copy. */
+  readonly path: string;
+  /** The path of the copy, of the same kind. */
+  readonly to: string;
+}
+
+/** A layer offset: time offset and scale; identity by default. AOUSD Core §12.3.2.1. */
+export interface LayerOffsetInput {
+  readonly offset?: number;
+  /** Finite and positive. */
+  readonly scale?: number;
+}
+
+/**
+ * `SdfLayer::InsertSubLayerPath` of the edit target's layer: the asset
+ * at `asset`, anchored at that layer, as its sublayer at `index` (`0` is
+ * the strongest; at the end, the weakest, without one), read through
+ * `layerOffset`. An asset the stage has not read is unavailable
+ * ({@link EditReceipt.unavailable}) until supplied, as an added
+ * reference's is: run {@link Stage.resolve}. Refused with
+ * `edit.rejected.no_such_sublayer` for an index past the end and
+ * `edit.rejected.duplicate_sublayer` for an asset path listed already.
+ * AOUSD Core §7.6.1 (`subLayers`), §10.3.1 (layer stacks).
+ */
+export interface InsertSublayerEdit {
+  readonly type: "insertSublayer";
+  readonly asset: string;
+  readonly index?: number;
+  readonly layerOffset?: LayerOffsetInput;
+}
+
+/** `SdfLayer::RemoveSubLayerPath`: removes the edit target's layer's sublayer at `index` ({@link Stage.sublayers}), with its offset. `edit.rejected.no_such_sublayer` past the end. */
+export interface RemoveSublayerEdit {
+  readonly type: "removeSublayer";
+  readonly index: number;
+}
+
+/** `SdfLayer::SetSubLayerOffset`: the layer offset of the edit target's layer's sublayer at `index`. AOUSD Core §12.3.2.1. */
+export interface SetSublayerOffsetEdit {
+  readonly type: "setSublayerOffset";
+  readonly index: number;
+  readonly layerOffset: LayerOffsetInput;
+}
+
+/**
+ * `SdfLayer::SetSubLayerPaths` with its offsets: replaces the edit
+ * target's layer's sublayers, strongest first, which reorders them. An
+ * asset path the layer lists already keeps the layer it reads; a new
+ * one is asked for as {@link InsertSublayerEdit} asks. Refused as that
+ * edit is.
+ */
+export interface SetSublayersEdit {
+  readonly type: "setSublayers";
+  readonly sublayers: readonly { readonly asset: string; readonly layerOffset?: LayerOffsetInput }[];
+}
+
+/**
  * `UsdReferences::AddReference` / `UsdPayloads::AddPayload`. With `asset`
  * an external arc (resolved against the target layer, as authored), whose
  * `primPath` names a prim in that asset; without one an internal arc, whose
@@ -1103,7 +1294,7 @@ export interface AddArcEdit {
   /** `backOfPrepend` by default, as OpenUSD's. */
   readonly position?: ListPosition;
   /** Time offset and scale across the arc; identity by default. */
-  readonly layerOffset?: { readonly offset?: number; readonly scale?: number };
+  readonly layerOffset?: LayerOffsetInput;
 }
 
 /**
@@ -1176,8 +1367,8 @@ export interface ClearMetadataEdit {
  * Sets the metadata field `key` of the edit target's layer (`SdfLayer`'s
  * pseudo-root spec, which `UsdStage::SetMetadata` writes): `documentation`,
  * `customLayerData`, `startTimeCode`, `metersPerUnit`, `upAxis` and the
- * like. Sublayers and relocates have edits of their own and are refused
- * here. A field that composes nothing, set on a layer of the stage's own
+ * like. Sublayers have edits of their own ({@link InsertSublayerEdit} and
+ * its siblings), and are refused here with relocates. A field that composes nothing, set on a layer of the stage's own
  * layer stack, changes `/` info-only ({@link Changes}).
  */
 export interface SetLayerMetadataEdit {
@@ -1207,6 +1398,13 @@ export type Edit =
   | ClearValueEdit
   | BlockValueEdit
   | SetTargetsEdit
+  | AddTargetEdit
+  | RemoveTargetEdit
+  | ClearTargetsEdit
+  | AddConnectionEdit
+  | RemoveConnectionEdit
+  | ClearConnectionsEdit
+  | CopySpecEdit
   | AddArcEdit
   | RemoveArcEdit
   | SetVariantSelectionEdit
@@ -1217,6 +1415,12 @@ export type Edit =
   | ClearMetadataEdit
   | SetLayerMetadataEdit
   | ClearLayerMetadataEdit
+  | InsertSublayerEdit
+  | RemoveSublayerEdit
+  | SetSublayerOffsetEdit
+  | SetSublayersEdit
+  | ApplyAPIEdit
+  | RemoveAPIEdit
   | BindMaterialEdit
   | UnbindMaterialEdit
   | SetShaderInputEdit

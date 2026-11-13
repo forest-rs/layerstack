@@ -1,7 +1,7 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Schema-shaped edits: material bindings, shader inputs and connections,
+//! Schema-shaped edits: applied API schemas, material bindings, shader inputs and connections,
 //! base materials, geometry subsets, coordinate systems, `sdrMetadata` and
 //! common transforms, lowered through `layerstack_schemas`' edit handles into
 //! the batch's one [`layerstack::Transaction`].
@@ -27,7 +27,8 @@ use alloc::{
 };
 
 use layerstack::{
-    InMemoryStore, PathId, PropertyPath, PropertyType, TargetPath, Value, schema::CannotApply,
+    InMemoryStore, PathId, PropertyPath, PropertyType, TargetPath, Transaction, Value,
+    schema::CannotApply,
 };
 use layerstack_schemas::{
     ApplySchemaError, BindingStrength, CannotEdit, ClassPrimError, CommonComponent,
@@ -45,6 +46,18 @@ use crate::{error::Error, schemas::element_type, value::ValueInput};
 /// One schema-shaped edit, as the wrapper sent it.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum SchemaInput {
+    /// `UsdPrim::ApplyAPI(schema, instance)`.
+    ApplyApi {
+        path: String,
+        schema: String,
+        instance: Option<String>,
+    },
+    /// `UsdPrim::RemoveAppliedSchema` of `schema`, or `schema:instance`.
+    RemoveApi {
+        path: String,
+        schema: String,
+        instance: Option<String>,
+    },
     /// `UsdShadeMaterialBindingAPI::Apply(prim).Bind(material, strength,
     /// purpose)`, or its collection binding with `collection`.
     BindMaterial {
@@ -140,7 +153,9 @@ impl SchemaInput {
     /// The prim or property path the edit is about.
     pub(crate) fn path(&self) -> &str {
         match self {
-            Self::BindMaterial { path, .. }
+            Self::ApplyApi { path, .. }
+            | Self::RemoveApi { path, .. }
+            | Self::BindMaterial { path, .. }
             | Self::UnbindMaterial { path, .. }
             | Self::SetShaderInput { path, .. }
             | Self::ConnectToSource { path, .. }
@@ -160,6 +175,15 @@ impl SchemaInput {
 /// A schema edit checked against the store, its paths interned.
 #[derive(Clone, Debug)]
 pub(crate) enum Prepared {
+    ApplyApi {
+        prim: PathId,
+        schema: String,
+        instance: Option<String>,
+    },
+    RemoveApi {
+        prim: PathId,
+        name: String,
+    },
     BindMaterial {
         prim: PathId,
         material: PathId,
@@ -415,6 +439,26 @@ fn family_type(name: &str) -> Result<SubsetFamilyType, Error> {
 pub(crate) fn prepare(input: &SchemaInput, inputs: &Inputs<'_>) -> Result<Prepared, Error> {
     let store = inputs.store;
     Ok(match input {
+        SchemaInput::ApplyApi {
+            path,
+            schema,
+            instance,
+        } => Prepared::ApplyApi {
+            prim: inputs.prim(path)?,
+            schema: schema.clone(),
+            instance: instance.clone(),
+        },
+        SchemaInput::RemoveApi {
+            path,
+            schema,
+            instance,
+        } => Prepared::RemoveApi {
+            prim: inputs.prim(path)?,
+            name: match instance {
+                None => schema.clone(),
+                Some(instance) => format!("{schema}:{instance}"),
+            },
+        },
         SchemaInput::BindMaterial {
             path,
             material,
@@ -763,6 +807,24 @@ fn source_of(edit: &mut SchemaEdit<'_>, path: PropertyPath) -> ConnectionSource 
 /// The handle's [`Refusal`]; nothing of the edit is collected then.
 pub(crate) fn author(edit: &mut SchemaEdit<'_>, prepared: Prepared) -> Result<(), Refusal> {
     match prepared {
+        Prepared::ApplyApi {
+            prim,
+            schema,
+            instance,
+        } => edit
+            .apply_api(prim, &schema, instance.as_deref())
+            .map(|_| ())
+            .map_err(Refusal::Apply),
+        Prepared::RemoveApi { prim, name } => {
+            // The name as authored, registered or not, as
+            // `UsdPrim::RemoveAppliedSchema` removes it.
+            PrimEdit::new(edit, prim)?.ok_or(Refusal::NoPrim(prim))?;
+            let name = edit.tokens().intern(&name);
+            let mut txn = Transaction::new();
+            txn.remove_applied_schema(edit.target().prim(prim), name);
+            edit.append(txn);
+            Ok(())
+        }
         Prepared::BindMaterial {
             prim,
             material,

@@ -757,6 +757,43 @@ impl Stage {
         Ok(self.document.is_dirty(layer))
     }
 
+    /// The sublayers layer `id` authors, strongest first, each `[asset,
+    /// offset, scale]`: its asset path as authored (`subLayers`), and its
+    /// layer offset (`subLayerOffsets`). The index of an entry is the one
+    /// the sublayer edits name.
+    ///
+    /// OpenUSD: `SdfLayer::GetSubLayerPaths`, `GetSubLayerOffsets`.
+    ///
+    /// Spec: AOUSD Core §7.6.1 (`subLayers`), §12.3.2.1 (layer offsets).
+    ///
+    /// # Errors
+    ///
+    /// `layer.unknown` when the document has no such layer.
+    pub(crate) fn layer_sublayers(&self, id: u64) -> Result<Wire, Error> {
+        let layer = LayerId(id);
+        self.check_layer(layer)?;
+        let store = self.document.store();
+        let entries = store.layer(layer).map(Layer::sublayers).unwrap_or_default();
+        Ok(Wire::List(
+            entries
+                .iter()
+                .map(|entry| {
+                    // An entry built natively may hold its layer alone.
+                    let asset = entry
+                        .asset
+                        .as_deref()
+                        .or_else(|| self.document.identifier(entry.layer))
+                        .unwrap_or_default();
+                    Wire::List(vec![
+                        Wire::text(asset),
+                        Wire::Number(entry.offset.offset),
+                        Wire::Number(entry.offset.scale),
+                    ])
+                })
+                .collect(),
+        ))
+    }
+
     /// Mutes layer `id` (`muted` true) or unmutes it, and recomposes:
     /// whether its muting changed ([`Self::mute_and_unmute_layers`] with
     /// the one layer).
@@ -3053,6 +3090,12 @@ impl Stage {
     #[wasm_bindgen(js_name = layerDirty)]
     pub fn js_layer_dirty(&self, id: u64) -> Result<bool, JsValue> {
         Ok(self.layer_dirty(id)?)
+    }
+
+    /// The record `layer_sublayers` builds, as documented in `stage.rs`.
+    #[wasm_bindgen(js_name = layerSublayers)]
+    pub fn js_layer_sublayers(&self, id: u64) -> Result<JsValue, JsValue> {
+        Ok(self.layer_sublayers(id)?.into())
     }
 
     /// Mutes or unmutes a layer (`set_layer_muted`, as documented in `stage.rs`).

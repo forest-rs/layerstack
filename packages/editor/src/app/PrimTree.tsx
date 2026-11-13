@@ -38,7 +38,7 @@ import { useEditorStore, useRevision, useStoreSelector } from "./context.ts";
 import { primIcon } from "./icons.ts";
 import { PrimActions } from "./PrimActions.tsx";
 import { askPrim } from "./primDialogRequests.ts";
-import { rowAction, TYPEAHEAD_MS } from "./treeKeys.ts";
+import { rowAction, rowAfterRemoval, TYPEAHEAD_MS } from "./treeKeys.ts";
 import { CommandMenu, presentationContext } from "./presentations/Present.tsx";
 import { countRender } from "./renders.ts";
 
@@ -123,6 +123,8 @@ export function PrimTree() {
       const moved = [...open].map((key) => (key === from || String(key).startsWith(`${from}/`) ? `${to}${String(key).slice(from.length)}` : key));
       return moved.every((key, at) => key === [...open][at]) ? open : new Set(moved);
     });
+    // The row that had the focus went with the old path: the prim's new row takes it.
+    return focusRow(to);
   }, [renamed]);
   // A selection made elsewhere (the viewport) opens its ancestors.
   const selection = useStoreSelector(store, ["selection"], (at) => at.selection);
@@ -232,9 +234,16 @@ export function PrimTree() {
             event.preventDefault();
             event.stopPropagation();
             if (action === "frame") store.frameSelection();
-            else if (stage.prim(path)?.instanceProxy === true) return;
-            else if (action === "delete") store.delete(path);
-            else askPrim({ kind: "rename", path });
+            else if (action === "deselect") store.select(null);
+            else if (action === "menu") {
+              menuAnchor.current = event.target as HTMLElement;
+              setMenu(path);
+            } else if (stage.prim(path)?.instanceProxy === true) return;
+            else if (action === "delete") {
+              // The focused row goes with its prim: the row after it takes the focus, so the keys go on working.
+              const next = rowAfterRemoval(paths, path);
+              if (store.delete(path) === undefined && next !== null) focusRow(next);
+            } else askPrim({ kind: "rename", path });
           }}
           onContextMenu={(event) => {
             const row = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>("[data-path]") : null;
@@ -249,6 +258,8 @@ export function PrimTree() {
             aria-label="Prims"
             items={items}
             selectionMode="single"
+            // A click on the selected row keeps it selected (Esc clears the selection).
+            disallowEmptySelection
             selectedKeys={selection === null ? [] : [selection]}
             onSelectionChange={(keys) => {
               const [first] = keys === "all" ? [] : [...keys];
@@ -284,6 +295,22 @@ export function PrimTree() {
       {menu !== null && context !== null && <CommandMenu object={{ kind: "primPath", path: menu }} context={context} triggerRef={menuAnchor} onClose={() => setMenu(null)} />}
     </div>
   );
+}
+
+/**
+ * Gives the focus to the tree's row at `path` once the rows are drawn
+ * again and a closing dialog has given the focus back, when the focus was
+ * left on nothing or on the tree (the row that had it is gone). Returns
+ * the call that cancels it.
+ */
+function focusRow(path: string): () => void {
+  const timer = window.setTimeout(() => {
+    // Nothing, or the tree itself, which takes the focus of a row that goes.
+    const active = document.activeElement;
+    if (active !== null && active !== document.body && active.getAttribute("role") !== "treegrid") return;
+    document.querySelector<HTMLElement>(`[role="row"][data-path="${CSS.escape(path)}"]`)?.focus();
+  }, 60);
+  return () => window.clearTimeout(timer);
 }
 
 /** The drag type of a prim dragged within the tree: its path. */

@@ -544,6 +544,7 @@ test("cancelling a payload load stops its fetches and leaves the payloads as the
   await h.until(() => source.askedFor("assets/robot.usda") > 0, "the load's fetch");
   assert.equal(store.status.kind, "loading");
   assert.equal(store.running, "load /World");
+  assert.equal(store.cancellable, true);
   store.cancel();
   await h.settle(loading);
   release();
@@ -573,13 +574,19 @@ test("an edit asked for while an action fetches runs after it, and a refusal is 
   const variant = store.selectVariant("/World/Robot", "finish", "chrome");
   await h.until(() => source.askedFor("assets/chrome.usda") > 0, "the variant's fetch");
   assert.equal(store.running, "select finish=chrome");
+  assert.equal(store.queued, 0);
+  assert.equal(store.cancellable, false, "a variant's fetch is not taken back");
+  const status = store.signals.revision("status");
   assert.equal(store.setValue("/World/Top.size", { type: "double", value: 3 }), undefined);
   assert.equal(store.setValue("/World/Top.size", { type: "token", value: "large" }), undefined, "not refused yet: it has not run");
+  assert.equal(store.queued, 2, "what the toolbar counts behind it");
+  assert.ok(store.signals.revision("status") > status, "the toolbar hears what queues");
   assert.equal(valueOf(store.session!.stage, "/World/Top.size"), 0.6, "the edit waits its turn");
   release();
   await h.settle(variant);
   await h.until(() => store.running === null && store.notices.length > 0, "the edits behind the variant");
   assert.equal(store.running, null);
+  assert.equal(store.queued, 0);
   assert.equal(valueOf(store.session!.stage, "/World/Top.size"), 3);
   assert.equal(store.notices.length, 1);
   // Each recomposition is logged under the action that caused it.

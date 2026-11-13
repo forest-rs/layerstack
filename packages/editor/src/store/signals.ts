@@ -12,8 +12,8 @@
  * The store's concerns, each with its own revision:
  *
  * - `status`: where the editor is with its scene (`status`, `opening`,
- *   `openingPhase`, `source`, `payloads`, `payloadNote`, and `running`:
- *   the action waiting on its assets).
+ *   `openingPhase`, `source`, `payloads`, `payloadNote`, `running`: the
+ *   action waiting on its assets, and `queued` behind it).
  * - `composition`: the stage. Bumped when the session is another one and
  *   whenever the stage reports a change (an edit, an undo, a variant, a
  *   mute, a payload); `range`, `upAxis` and `renamed` follow it. A prim's

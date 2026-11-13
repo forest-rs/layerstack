@@ -31,7 +31,7 @@ export class ActionQueue {
   #idle: (() => void)[] = [];
   readonly #changed: () => void;
 
-  /** `changed` is called when an action starts or stops waiting on the host ({@link ActionQueue.running} changed). */
+  /** `changed` is called when an action starts or stops waiting on the host, or one queues behind it ({@link ActionQueue.running} or {@link ActionQueue.waiting} changed). */
   constructor(changed: () => void) {
     this.#changed = changed;
   }
@@ -57,6 +57,8 @@ export class ActionQueue {
     return new Promise((done) => {
       this.#waiting.push({ label, job, done });
       this.#drain();
+      // Queued behind the action waiting on the host.
+      if (this.#waiting.length > 0) this.#changed();
     });
   }
 
@@ -100,8 +102,9 @@ export class ActionQueue {
       const finish = () => {
         this.#running = null;
         next.done();
-        this.#changed();
         this.#drain();
+        // After the drain, so what it ran of the queue is counted.
+        this.#changed();
       };
       waits.then(finish, finish);
       return;

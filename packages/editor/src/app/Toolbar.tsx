@@ -35,6 +35,44 @@ interface Choice {
   readonly open: (root: string) => SceneSource;
 }
 
+/** How long an action waits on the host before the toolbar says so: a quick one never shows. */
+const RUNNING_DELAY_MS = 400;
+
+/**
+ * The action waiting on the host (an undo fetching what it brings back, a
+ * variant's layers), with how many wait behind it, shown once it has
+ * waited {@link RUNNING_DELAY_MS}; Cancel when it can be taken back.
+ */
+function RunningAction({ store }: { store: EditorStore }) {
+  const running = useStoreSelector(store, ["status"], (at) => at.running);
+  const queued = useStoreSelector(store, ["status"], (at) => at.queued);
+  const cancellable = useStoreSelector(store, ["status"], (at) => at.cancellable);
+  const [shown, setShown] = useState<string | null>(null);
+  useEffect(() => {
+    if (running === null) {
+      setShown(null);
+      return;
+    }
+    const timer = setTimeout(() => setShown(running), RUNNING_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [running]);
+  if (shown === null || running === null) return null;
+  return (
+    <span role="status" className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+      <Spinner className="size-3.5" />
+      <span className="max-w-64 truncate" title={running}>
+        {running}
+      </span>
+      {queued > 0 && <span className="shrink-0 tabular-nums">+{queued} queued</span>}
+      {cancellable && (
+        <Button variant="ghost" size="xs" onPress={() => store.cancel()}>
+          Cancel
+        </Button>
+      )}
+    </span>
+  );
+}
+
 /** How many draws are shown. */
 const drawnCount = (store: EditorStore) => store.scene.items.reduce((count, view) => count + (view.item.hidden ? 0 : 1), 0);
 
@@ -141,6 +179,7 @@ export function Toolbar() {
         </span>
       </div>
       <div className="ml-auto flex items-center gap-1">
+        <RunningAction store={store} />
         <TargetPicker />
         <TooltipTrigger>
           <Button variant="ghost" size="icon-sm" isDisabled={history?.nextUndo == null} onPress={() => void store.undo()} aria-label="Undo">

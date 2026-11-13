@@ -8,7 +8,7 @@
 // free sibling name for a duplicate, a reparent's destination and why it
 // cannot be made, a sibling order with one child moved, and where a
 // prim's opinions are when the edit target has none to copy.
-import type { ArcKind, EditTarget, Layer, Prim, SchemaInfo, Stage, UnrepairedPath } from "@forest-rs/layerstack";
+import type { ArcKind, EditTarget, Layer, Prim, SchemaInfo, Stage } from "@forest-rs/layerstack";
 import { releaseValue } from "./values.ts";
 
 /** A prim name as USD takes it: an identifier. */
@@ -392,9 +392,8 @@ export function specStagePath(spec: string): string {
   return spec.replace(/\{[^}]*\}/g, "");
 }
 
-/** The notice a move or delete gives about the paths it left naming the old place. */
-export function unrepairedMessage(action: "move" | "delete", unrepaired: readonly UnrepairedPath[]): string {
-  const count = unrepaired.length;
+/** The notice a move or delete gives about the `count` paths it left naming the old place, which the Health tab lists. */
+export function unrepairedMessage(action: "move" | "delete", count: number): string {
   const what = action === "move" ? "moved" : "deleted";
-  return `${count} path${count === 1 ? "" : "s"} still name${count === 1 ? "s" : ""} what was ${what}: ${count === 1 ? "it is" : "they are"} in specs no composed prim uses (a variant not selected), which OpenUSD does not repair.`;
+  return `${count} path${count === 1 ? "" : "s"} still name${count === 1 ? "s" : ""} what was ${what}, in specs no composed prim uses: see Health.`;
 }

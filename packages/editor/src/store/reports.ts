@@ -103,7 +103,7 @@ function readHealth(session: Session): HealthReport<Layer> {
         ? null
         : {
             label: last.label,
-            unrepaired: last.receipt.unrepaired.map(({ layer, spec, field, path }) => ({ layer, spec, field, path })),
+            unrepaired: last.receipt.unrepaired.map(({ layer, spec, field, path, metadata }) => ({ layer, spec, field, path, metadata })),
           },
     layers: stage.layers().length,
   });

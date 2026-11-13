@@ -1310,6 +1310,82 @@ export interface RemoveArcEdit {
 }
 
 /**
+ * `UsdInherits::AddInherit` / `UsdSpecializes::AddSpecialize`: the prim
+ * at `path` inherits or specializes the prim at `primPath`, added to the
+ * target layer's list op at `position` (`backOfPrepend` by default, as
+ * OpenUSD's). `primPath` is a stage path the edit target maps into its
+ * layer, except a root prim path (`/Base`), which is authored as given;
+ * one the target does not map rejects the edit, as an internal
+ * reference's does ({@link AddArcEdit}). AOUSD Core
+ * §10 (inherits, specializes), §12.4 (list ops).
+ */
+export interface AddClassArcEdit {
+  readonly type: "addInherit" | "addSpecialize";
+  /** The prim path. */
+  readonly path: string;
+  /** The prim it inherits or specializes. */
+  readonly primPath: string;
+  readonly position?: ListPosition;
+}
+
+/**
+ * `UsdInherits::RemoveInherit` / `UsdSpecializes::RemoveSpecialize`:
+ * removes the arc to `primPath` from the target layer's lists, and adds
+ * it to the deleted items, which removes it from weaker layers too.
+ */
+export interface RemoveClassArcEdit {
+  readonly type: "removeInherit" | "removeSpecialize";
+  readonly path: string;
+  readonly primPath: string;
+}
+
+/**
+ * `UsdVariantSets::AddVariantSet`: the variant set `set` on the prim, in
+ * the target layer: its spec, created unless the layer holds one, and
+ * its name in the prim's `variantSetNames` at `position`
+ * (`backOfPrepend` by default). Refused with
+ * `edit.rejected.invalid_variant_set_name` for a name that is not an
+ * identifier. Author inside a variant through
+ * {@link Prim.variantEditTarget}. AOUSD Core §7.3.6 (variant set specs),
+ * §7.6.2.3.5 (`variantSetNames`), §12.4.
+ */
+export interface AddVariantSetEdit {
+  readonly type: "addVariantSet";
+  readonly path: string;
+  readonly set: string;
+  readonly position?: ListPosition;
+}
+
+/**
+ * `UsdVariantSet::AddVariant`: the variant `variant` of the set `set`,
+ * which is added as {@link AddVariantSetEdit} adds it; a variant the
+ * target layer holds already is left as it is. A variant name is
+ * letters, digits, `_`, `|` and `-`, after an optional `.`
+ * (`path.invalid` otherwise). AOUSD Core §7.3.6.
+ */
+export interface AddVariantEdit {
+  readonly type: "addVariant";
+  readonly path: string;
+  readonly set: string;
+  readonly variant: string;
+  /** Where the set's name goes in `variantSetNames`; `backOfPrepend` by default. */
+  readonly position?: ListPosition;
+}
+
+/**
+ * `SdfPrimSpec::RemoveVariantSet`: removes the target layer's spec of
+ * the variant set `set`, with its variants and everything authored in
+ * them. As in OpenUSD, the prim's `variantSetNames` keeps the name, so
+ * the set stays listed, with no opinions in this layer; removing a set
+ * the layer does not hold does nothing. AOUSD Core §7.3.6, §7.6.2.3.5.
+ */
+export interface RemoveVariantSetEdit {
+  readonly type: "removeVariantSet";
+  readonly path: string;
+  readonly set: string;
+}
+
+/**
  * `UsdVariantSet::SetVariantSelection`; `null` (or `""`) clears it. Assets
  * the selected variant needs that the stage has not read are unavailable
  * ({@link EditReceipt.unavailable}).
@@ -1321,18 +1397,45 @@ export interface SetVariantSelectionEdit {
   readonly variant: string | null;
 }
 
-/** `UsdPrim::SetActive`. */
+/**
+ * `UsdPrim::SetActive`; `null` clears the target layer's opinion
+ * (`ClearActive`), so weaker layers' show again. AOUSD Core §7.6
+ * (`active`), §11 (stage population).
+ */
 export interface SetActiveEdit {
   readonly type: "setActive";
   readonly path: string;
-  readonly active: boolean;
+  readonly active: boolean | null;
 }
 
-/** `UsdPrim::SetInstanceable`. */
+/** `UsdPrim::SetInstanceable`; `null` clears the target layer's opinion (`ClearInstanceable`). AOUSD Core §11.3.3. */
 export interface SetInstanceableEdit {
   readonly type: "setInstanceable";
   readonly path: string;
-  readonly instanceable: boolean;
+  readonly instanceable: boolean | null;
+}
+
+/**
+ * `UsdPrim::SetSpecifier`: the specifier of the prim's spec in the target
+ * layer, created if need be. Unlike {@link DefinePrimEdit}, it authors
+ * exactly this spec, whatever the prim's ancestors or other layers say.
+ * AOUSD Core §7.6 (specifier), §12.2.1 (specifier resolution).
+ */
+export interface SetSpecifierEdit {
+  readonly type: "setSpecifier";
+  readonly path: string;
+  readonly specifier: "def" | "over" | "class";
+}
+
+/**
+ * `UsdPrim::SetTypeName` (`Xform`, `Sphere`) on the prim's spec in the
+ * target layer, created as an `over` if need be; `null` clears it
+ * (`ClearTypeName`). AOUSD Core §7.6 (`typeName`), §12.2.3.
+ */
+export interface SetTypeNameEdit {
+  readonly type: "setTypeName";
+  readonly path: string;
+  readonly typeName: string | null;
 }
 
 /** `UsdModelAPI::SetKind`: the `kind` metadata token (`component`, `assembly`, `group`). */
@@ -1407,9 +1510,16 @@ export type Edit =
   | CopySpecEdit
   | AddArcEdit
   | RemoveArcEdit
+  | AddClassArcEdit
+  | RemoveClassArcEdit
+  | AddVariantSetEdit
+  | AddVariantEdit
+  | RemoveVariantSetEdit
   | SetVariantSelectionEdit
   | SetActiveEdit
   | SetInstanceableEdit
+  | SetSpecifierEdit
+  | SetTypeNameEdit
   | SetKindEdit
   | SetMetadataEdit
   | ClearMetadataEdit

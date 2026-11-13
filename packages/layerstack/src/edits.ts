@@ -51,7 +51,16 @@ export interface NativeEditBatch extends Disposable {
   removeArc(payload: boolean, path: string, asset?: string | null, primPath?: string | null): void;
   setVariantSelection(path: string, set: string, variant?: string | null): void;
   setActive(path: string, active: boolean): void;
+  clearActive(path: string): void;
   setInstanceable(path: string, instanceable: boolean): void;
+  clearInstanceable(path: string): void;
+  addClassArc(specialize: boolean, path: string, primPath: string, position: string): void;
+  removeClassArc(specialize: boolean, path: string, primPath: string): void;
+  addVariantSet(path: string, set: string, position: string): void;
+  removeVariantSet(path: string, set: string): void;
+  addVariant(path: string, set: string, variant: string, position: string): void;
+  setSpecifier(path: string, specifier: string): void;
+  setTypeName(path: string, typeName: string | null): void;
   setKind(path: string, kind: string): void;
   setMetadata(path: string, key: string, value: number): void;
   clearMetadata(path: string, key: string): void;
@@ -266,11 +275,37 @@ function lowerEdit(batch: NativeEditBatch, edit: Edit, host: ArrayHost): void {
         edit.variant === null ? null : text(edit.variant, "variant"),
       );
       return;
+    case "addInherit":
+    case "addSpecialize":
+      batch.addClassArc(edit.type === "addSpecialize", path, text(edit.primPath, "primPath"), listPosition(edit.position));
+      return;
+    case "removeInherit":
+    case "removeSpecialize":
+      batch.removeClassArc(edit.type === "removeSpecialize", path, text(edit.primPath, "primPath"));
+      return;
+    case "addVariantSet":
+      batch.addVariantSet(path, text(edit.set, "set"), listPosition(edit.position));
+      return;
+    case "addVariant":
+      batch.addVariant(path, text(edit.set, "set"), text(edit.variant, "variant"), listPosition(edit.position));
+      return;
+    case "removeVariantSet":
+      batch.removeVariantSet(path, text(edit.set, "set"));
+      return;
     case "setActive":
-      batch.setActive(path, flag(edit.active, "active"));
+      if (edit.active === null) batch.clearActive(path);
+      else batch.setActive(path, flag(edit.active, "active"));
       return;
     case "setInstanceable":
-      batch.setInstanceable(path, flag(edit.instanceable, "instanceable"));
+      if (edit.instanceable === null) batch.clearInstanceable(path);
+      else batch.setInstanceable(path, flag(edit.instanceable, "instanceable"));
+      return;
+    case "setSpecifier":
+      batch.setSpecifier(path, oneOf(edit.specifier, "specifier", ["def", "over", "class"]));
+      return;
+    case "setTypeName":
+      if (edit.typeName === undefined) fail("`typeName` must be a type name, or null to clear it");
+      batch.setTypeName(path, optionalText(edit.typeName, "typeName"));
       return;
     case "setKind":
       batch.setKind(path, text(edit.kind, "kind"));

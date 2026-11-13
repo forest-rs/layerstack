@@ -4,7 +4,7 @@
 // The editor's model, with no DOM: a stage, the host's fetch, the
 // stage's undo history, where edits go, and logs of what crossed the
 // boundary. The React app (`../app`) drives it through `../store.ts`.
-import { EditTarget, UndoHistory } from "@forest-rs/layerstack";
+import { EditTarget, LayerstackError, UndoHistory } from "@forest-rs/layerstack";
 import type {
   Changes,
   Edit,
@@ -738,7 +738,13 @@ export class Session implements Disposable {
    * dirty layer counts.
    */
   isEdited(layer: Layer): boolean {
-    if (!this.stage.isDirty(layer)) return false;
+    try {
+      if (!this.stage.isDirty(layer)) return false;
+    } catch (error) {
+      // A layer the stage released (muted, or unloaded with its payload) has no edits to save; what still holds it may ask.
+      if (error instanceof LayerstackError && error.code === "layer.unknown") return false;
+      throw error;
+    }
     if (this.history.groupDepth > 0) return true;
     const saved = this.#savedAt.get(layer.id) ?? this.#opened;
     if (this.history.isAt(saved.mark)) return false;

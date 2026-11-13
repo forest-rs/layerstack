@@ -73,6 +73,30 @@ function RunningAction({ store }: { store: EditorStore }) {
   );
 }
 
+/** How often the module's memory figure is read again while nothing else changes. */
+const MEMORY_REFRESH_MS = 3000;
+
+/** The module's memory, in bytes. */
+const memoryBytes = (store: EditorStore) => store.layerstack.transfer().memoryBytes;
+
+/**
+ * The module's memory, read again after each recomposition and every
+ * {@link MEMORY_REFRESH_MS} (a cache grown, layers released): only this
+ * figure renders again, and only when the number changed; never the
+ * toolbar, and never per frame.
+ */
+function MemoryFigure({ store }: { store: EditorStore }) {
+  countRender("MemoryFigure");
+  const composed = useStoreSelector(store, ["composition"], memoryBytes);
+  // Polled into state, so a read that finds the same number renders nothing.
+  const [, setPolled] = useState(composed);
+  useEffect(() => {
+    const timer = setInterval(() => setPolled(memoryBytes(store)), MEMORY_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [store]);
+  return <>{formatBytes(memoryBytes(store))} memory</>;
+}
+
 /** How many draws are shown. */
 const drawnCount = (store: EditorStore) => store.scene.items.reduce((count, view) => count + (view.item.hidden ? 0 : 1), 0);
 
@@ -196,7 +220,7 @@ export function Toolbar() {
         {session !== null && (
           <span className="ml-2 font-mono text-[11px] text-muted-foreground tabular-nums">
             {session.stage.layers().length} layers · {draws} draws · {formatBytes(session.fetched.bytes)} fetched ·{" "}
-            {formatBytes(store.layerstack.transfer().memoryBytes)} memory
+            <MemoryFigure store={store} />
             {session.released.layers > 0 && ` · ${formatBytes(session.released.bytes)} released`}
           </span>
         )}

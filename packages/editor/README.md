@@ -45,9 +45,35 @@ nothing more.
   transforms, geometry, lights, cameras, shading, physics), renames
   (`Stage.move`, which repairs the paths that name it) or deletes, each one
   undoable action where edits go.
+- **Saving and exporting.** The **File** menu counts the layers with
+  unsaved edits, and the page asks before it is left while there are any.
+  **Save** (⌘S) lists every edited layer and what a save does with it,
+  then, on one confirmation, writes each to the identifier it was read
+  from (`Stage.save`): back into the folder it was opened from when the
+  person allows the page to write there (asked at that moment), else as
+  downloads. A layer exports as `.usda` or `.usdc` (`Stage.exportLayer`;
+  also its own commands, wherever a layer is shown), the composed stage
+  as one flattened layer (`Stage.exportFlattened`; a flatten that loses
+  something lists what before it is downloaded), or as a `.usdz` package
+  (`Stage.exportPackage`), for which the editor fetches what the stage
+  never read (a variant's layers, textures, every tile of a UDIM set) and
+  lists what it still could not. The **Open** menu can put the next
+  scene's edits in a session layer in front of its root; a `.usdz` root,
+  which is read-only, is always edited so, and the edit target says why.
+  A save leaves the session layer, which is never part of the root: it is
+  kept by exporting it, and a package lists it as left out.
 - **Layers.** Every layer the stage holds, edited ones marked, the root
-  stack's marked; a switch mutes or unmutes each (the stage's state, not an
-  edit).
+  stack's and the session layer marked; a switch mutes or unmutes each
+  (the stage's state, not an edit). Each is live, as a layer is anywhere:
+  a click shows its text, a context menu offers the rest.
+- **Text.** A layer as USDA, as `Stage.exportLayer` writes it with its
+  unsaved edits ("Show text" on any layer, or the edit layer from the
+  File menu), read again after each edit, undo and redo. The lines the
+  last change added or changed are marked, where lines went is marked,
+  and the view scrolls to the change, so the opinion an edit authored is
+  there to read. Lines are drawn as they scroll into view; a layer over
+  4 MB of text shows its first 4 MB and says so, and one whose read is
+  slow is read again on **Refresh** rather than after every edit.
 - **Cameras.** The free camera and the stage's own; choosing one looks
   through it, its view and projection as `GfFrustum` computes them.
 - **Opening.** While a scene opens, the viewport says what the open is
@@ -340,8 +366,8 @@ line: a property row, a table cell, the explain and changes panels),
   running the first that applies and a context menu (or Shift+F10)
   listing them: a prim path selects, frames, draws alone or selects its
   material; a property path explains (bringing the Explain tab forward);
-  a layer is shown in the Layers tab, has its identifier copied, takes
-  edits or is muted; an
+  a layer is shown in the Layers tab, shows its text, is exported, has
+  its identifier copied, takes edits or is muted; an
   asset is shown in the asset view; an instance (a row of its instancer's
   table, the chosen instance below it, which a viewport pick chooses) is
   selected and outlined, framed, hidden or deactivated (`invisibleIds`,
@@ -444,7 +470,9 @@ materials, 3.7 M triangles) draws 0.6 to 1.1 M.
   history, where edits go, and logs of the asset loop and recompositions),
   `timeline.ts` (the asset loop's timings, run by run),
   `draws.ts` (the stagehand draw list kept from the change log), `sources.ts`
-  (HTTP, a picked directory, dropped files).
+  (HTTP, a picked directory, dropped files), `files.ts` (what a save writes,
+  file names, what a package asks the host for), `layerText.ts` (a layer
+  as text and the lines a change touched).
 - `src/store.ts`: the editor's state outside React, as the panels read it
   and act through it (`EditorStore`). What it does is in `src/store/`, a
   concern a module: `opening.ts` (opening a scene, its phases, the payload
@@ -453,7 +481,9 @@ materials, 3.7 M triangles) draws 0.6 to 1.1 M.
   instance's box), `view.ts` (the draw scope and budget, the camera, the
   lights and tone mapping, remembered for the viewer), `drawing.ts` (the
   draw list, its costs, and the viewport it is applied to), `notices.ts`
-  (what actions reported, and the frame note), `status.ts`, `actions.ts`
+  (what actions reported, and the frame note), `files.ts` (the layer the
+  Text tab shows, the texts read, where the next scene's edits go),
+  `status.ts`, `actions.ts`
   (the queue the actions run in). The store holds the session and runs
   the actions on the stage, one at a time in the order asked: an action
   that fetches (an undo that brings back a reference, a variant, a

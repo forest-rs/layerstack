@@ -1470,14 +1470,61 @@ export interface ClearMetadataEdit {
  * Sets the metadata field `key` of the edit target's layer (`SdfLayer`'s
  * pseudo-root spec, which `UsdStage::SetMetadata` writes): `documentation`,
  * `customLayerData`, `startTimeCode`, `metersPerUnit`, `upAxis` and the
- * like. Sublayers have edits of their own ({@link InsertSublayerEdit} and
- * its siblings), and are refused here with relocates. A field that composes nothing, set on a layer of the stage's own
+ * like. Sublayers ({@link InsertSublayerEdit} and its siblings) and
+ * relocates ({@link SetRelocatesEdit}) have edits of their own and are
+ * refused here. A field that composes nothing, set on a layer of the stage's own
  * layer stack, changes `/` info-only ({@link Changes}).
  */
 export interface SetLayerMetadataEdit {
   readonly type: "setLayerMetadata";
   readonly key: string;
   readonly value: ValueInput;
+}
+
+/**
+ * `UsdPrim::SetChildrenReorder`: the order the prim's children take
+ * (`reorder nameChildren`) in the target layer; on `/`, the layer's root
+ * prim order (`SdfLayer::SetRootPrimOrder`). Names are authored as given
+ * and applied as OpenUSD's `SdfApplyListOrdering` applies them: a name
+ * with no child is ignored. `null` clears it (`ClearChildrenReorder`).
+ * AOUSD Core §7.6.2 (prim spec fields), §11 (child order).
+ */
+export interface SetChildrenReorderEdit {
+  readonly type: "setChildrenReorder";
+  readonly path: string;
+  /** Child names (`Rock`), not paths. */
+  readonly order: readonly string[] | null;
+}
+
+/**
+ * `UsdPrim::SetPropertyOrder`: the order the prim's properties take
+ * (`reorder properties`) in the target layer, names authored as given;
+ * `null` clears it (`ClearPropertyOrder`). AOUSD Core §7.6.2.
+ */
+export interface SetPropertyOrderEdit {
+  readonly type: "setPropertyOrder";
+  readonly path: string;
+  /** Property names (`size`), not paths. */
+  readonly order: readonly string[] | null;
+}
+
+/**
+ * `SdfLayer::SetRelocates`: replaces the edit target's layer's
+ * `relocates`, each moving what arcs bring to `source` (a prim the layer
+ * stack reaches through a reference, payload or other arc) to `target`,
+ * or with `target` `null` removing it from namespace (`<>`). A prim
+ * defined in the layer stack itself is not moved by it. `null` clears
+ * the field (`SdfLayer::ClearRelocates`), where `[]` authors an empty
+ * one. Paths are in the layer's own namespace, authored as given, not
+ * mapped through the edit target. Refused with
+ * `edit.rejected.invalid_relocate` for a root prim source or a target
+ * that is the source, an ancestor or a descendant of it, and
+ * `edit.rejected.duplicate_relocate_source` for a source named twice.
+ * AOUSD Core §10.3.2.6 (relocates).
+ */
+export interface SetRelocatesEdit {
+  readonly type: "setRelocates";
+  readonly relocates: readonly { readonly source: string; readonly target: string | null }[] | null;
 }
 
 /** Clears the metadata field `key` of the edit target's layer, as {@link SetLayerMetadataEdit} sets it. */
@@ -1520,6 +1567,8 @@ export type Edit =
   | SetInstanceableEdit
   | SetSpecifierEdit
   | SetTypeNameEdit
+  | SetChildrenReorderEdit
+  | SetPropertyOrderEdit
   | SetKindEdit
   | SetMetadataEdit
   | ClearMetadataEdit
@@ -1529,6 +1578,7 @@ export type Edit =
   | RemoveSublayerEdit
   | SetSublayerOffsetEdit
   | SetSublayersEdit
+  | SetRelocatesEdit
   | ApplyAPIEdit
   | RemoveAPIEdit
   | BindMaterialEdit

@@ -243,11 +243,12 @@ await stage.resolve(source);
   `removeInherit`, `addSpecialize`, `removeSpecialize`, `addVariantSet`,
   `addVariant`, `removeVariantSet`, `setVariantSelection`, `setActive`,
   `setInstanceable` (`null` clears either), `setSpecifier`, `setTypeName`,
-  `setKind`, `setMetadata`, `clearMetadata`,
+  `setChildrenReorder`, `setPropertyOrder`, `setKind`, `setMetadata`,
+  `clearMetadata`,
   the target layer's `setLayerMetadata` and `clearLayerMetadata`
   (`documentation`, `metersPerUnit`, `startTimeCode`, ...) and its
   sublayers' `insertSublayer`, `removeSublayer`, `setSublayerOffset` and
-  `setSublayers`, and the schema-shaped `applyAPI`, `removeAPI`, `bindMaterial`, `unbindMaterial`, `setShaderInput`,
+  `setSublayers` and its `setRelocates`, and the schema-shaped `applyAPI`, `removeAPI`, `bindMaterial`, `unbindMaterial`, `setShaderInput`,
   `connectToSource`, `disconnectSource`, `setBaseMaterial`,
   `createGeomSubset`, `createMaterialSubset`, `setSubsetFamilyType`,
   `bindCoordSys`, `blockCoordSys`, `clearCoordSys`, `setSdrMetadata`)

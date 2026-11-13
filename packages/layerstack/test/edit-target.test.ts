@@ -227,6 +227,38 @@ describe("edit targets", () => {
     assert.equal(outside.edit, 0);
   });
 
+  it("relocate what a reference brings with setRelocates on the target's layer", async () => {
+    using stage = await openScene();
+    const before = new TextDecoder().decode(stage.exportLayer(stage.root, "usda"));
+    const moved = stage.apply(
+      [{ type: "setRelocates", relocates: [{ source: "/World/Robot/Head", target: "/World/Robot/Face" }] }],
+      stage.root,
+    );
+    assert.deepEqual(stage.children("/World/Robot"), ["/World/Robot/Face"]);
+    assert.equal(stage.prim("/World/Robot/Face")?.typeName, "Sphere");
+    const removed = stage.apply([{ type: "setRelocates", relocates: [{ source: "/World/Robot/Head", target: null }] }], stage.root);
+    assert.deepEqual(stage.children("/World/Robot"), [], "`<>` removes the source");
+    const cleared = stage.apply([{ type: "setRelocates", relocates: null }], stage.root);
+    assert.deepEqual(stage.children("/World/Robot"), ["/World/Robot/Head"]);
+    stage.undo([moved, removed, cleared]).release();
+    assert.equal(new TextDecoder().decode(stage.exportLayer(stage.root, "usda")), before);
+    const refused = [
+      [[{ source: "/World", target: "/Elsewhere" }], "edit.rejected.invalid_relocate"],
+      [
+        [
+          { source: "/World/Robot/Head", target: "/World/Robot/Face" },
+          { source: "/World/Robot/Head", target: "/World/Robot/Eye" },
+        ],
+        "edit.rejected.duplicate_relocate_source",
+      ],
+      [[{ source: "/World/Robot/Head", target: "" }], "argument.invalid"],
+    ] as const;
+    for (const [relocates, code] of refused) {
+      const error = failure(() => stage.apply([{ type: "setRelocates", relocates }], stage.root));
+      assert.deepEqual([error.code, error.edit], [code, 0], JSON.stringify(relocates));
+    }
+  });
+
   it("reject what the target does not map, naming the edit", async () => {
     using stage = await openScene();
     const height = opinionTarget(stage, "/World/Robot.height", "robot.usda");

@@ -61,7 +61,8 @@ export function Toolbar() {
       window.removeEventListener("dragover", over);
       window.removeEventListener("drop", drop);
     };
-  });
+    // `offer` reads only the store and a state setter, so the listeners are made once per store.
+  }, [store]);
   const pickFolder = async () => {
     if (!("showDirectoryPicker" in window)) return;
     const directory = await window.showDirectoryPicker({ mode: "read" }).catch(() => null);

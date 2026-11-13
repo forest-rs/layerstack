@@ -309,8 +309,9 @@ nothing more.
   **Edit there**, which makes that opinion's edit target where edits go;
   a field shows what the stage reads once its edit is made, not what was
   typed. **Add** in the Properties header adds an attribute (a name in
-  namespaces; a value type from the runtime's registry, grouped, scalar
-  or array; varying or uniform), created with a starting value of its
+  namespaces; a value type from the runtime's registry, grouped by shape
+  and role with the legacy types left out, scalar or array; varying or
+  uniform), created with a starting value of its
   type so it is shown ready to edit, or a relationship and its targets;
   the dialog shows what will be authored, in USDA, and offers the names
   the prim's schemas define that no layer authors yet, with their type

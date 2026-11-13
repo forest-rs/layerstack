@@ -163,6 +163,13 @@ export function registerObjectPresentations(): void {
   // The first command is what a click does, so it is the harmless one;
   // changing where edits go is a deliberate choice from the menu.
   registerCommand({
+    id: "builtin.layer.reveal",
+    kind: "layer",
+    type: "layer",
+    title: "Show in the Layers tab",
+    run: (_object, { store }) => store.showSceneTab("layers"),
+  });
+  registerCommand({
     id: "builtin.layer.copy",
     kind: "layer",
     type: "layer",

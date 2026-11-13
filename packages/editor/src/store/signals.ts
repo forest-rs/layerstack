@@ -24,7 +24,8 @@
  *   sync changed more than where things are: a time change that only
  *   moves draws bumps `time` alone.
  * - `view`: how the viewport shows the scene (`drawScope`, `budgetChoice`,
- *   `through`, `lightSettings`, `toneMap`, `frameNote`, `viewport`).
+ *   `through`, `lightSettings`, `toneMap`, `frameNote`, `viewport`) and
+ *   which tabs are in front (`sceneTab`, `bottomTab`).
  * - `history`: the session's undo and redo stacks.
  * - `target`: where edits go (`session.target`).
  * - `notices`: `notices`.

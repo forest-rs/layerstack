@@ -326,7 +326,9 @@ line: a property row, a table cell, the explain and changes panels),
   (`registerCommand`) is offered on every presented object of it, a click
   running the first that applies and a context menu (or Shift+F10)
   listing them: a prim path selects, frames, draws alone or selects its
-  material; a property path explains; a layer takes edits or is muted; an
+  material; a property path explains (bringing the Explain tab forward);
+  a layer is shown in the Layers tab, has its identifier copied, takes
+  edits or is muted; an
   asset is shown in the asset view; an instance (a row of its instancer's
   table, the chosen instance below it, which a viewport pick chooses) is
   selected and outlined, framed, hidden or deactivated (`invisibleIds`,

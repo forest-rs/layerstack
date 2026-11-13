@@ -33,7 +33,7 @@ import { Playback, type TimeRange, timeRange } from "./store/playback.ts";
 import { cornersBox, instanceCorners, type InstanceSelection, Selection } from "./store/selection.ts";
 import { type Channel, Signals } from "./store/signals.ts";
 import { type EditorStatus, moduleTrap } from "./store/status.ts";
-import { ViewSettings } from "./store/view.ts";
+import { type BottomTab, type SceneTab, ViewSettings } from "./store/view.ts";
 import type { LightSettings } from "./viewport/defaultLights.ts";
 import { isBox, type UpAxis } from "./viewport/framing.ts";
 import type { ToneMapChoice } from "./viewport/toneMap.ts";
@@ -204,6 +204,16 @@ export class EditorStore {
    */
   get running(): string | null {
     return this.#actions.running;
+  }
+
+  /** The scene browser's tab in front (prims, layers, cameras). */
+  get sceneTab(): SceneTab {
+    return this.#view.sceneTab;
+  }
+
+  /** The bottom panel's tab in front. */
+  get bottomTab(): BottomTab {
+    return this.#view.bottomTab;
   }
 
   /** The session being opened, while its assets are fetched. */
@@ -404,9 +414,15 @@ export class EditorStore {
     return instanceCorners(stage, instancer, this.instancerColumns(instancer), index, this.time, { drawScope: this.drawScope, focus: this.focus });
   }
 
-  /** Shows `path`'s value and opinions in the explain panel (and, drawing the selection, an image it names). */
-  explain(path: string | null): void {
+  /**
+   * Shows `path`'s value and opinions in the explain panel (and, drawing
+   * the selection, an image it names), bringing that panel's tab forward
+   * unless `reveal` is `false` (asked from another tab of the same panel,
+   * which would be hidden by it).
+   */
+  explain(path: string | null, reveal = true): void {
     this.#selection.property = path;
+    if (path !== null && reveal) this.#view.showBottomTab("explain");
     if (this.drawScope === "selection") this.#sync("selection");
     else this.signals.bump("selection");
   }
@@ -421,6 +437,16 @@ export class EditorStore {
   /** Draws under the budget `choice` from now on, and remembers it for this viewer. */
   setBudgetChoice(choice: BudgetChoice): void {
     this.#view.setBudgetChoice(choice);
+  }
+
+  /** Brings `tab` of the scene browser (prims, layers, cameras) to the front. */
+  showSceneTab(tab: SceneTab): void {
+    this.#view.showSceneTab(tab);
+  }
+
+  /** Brings `tab` of the bottom panel to the front. */
+  showBottomTab(tab: BottomTab): void {
+    this.#view.showBottomTab(tab);
   }
 
   /** Looks through the stage camera at `path`, or the free camera with `null`. */

@@ -7,6 +7,7 @@ import { registerInstancePresentations } from "./instances.tsx";
 import { registerObjectPresentations } from "./objects.tsx";
 import { registerPrimPresentations } from "./prims.tsx";
 import { registerPropertyCommands } from "./properties.ts";
+import { registerShadingCommands } from "./shading.ts";
 import { registerValuePresentations } from "./values.tsx";
 
 /** Registers every built-in presentation and command; called once, before the editor renders. */
@@ -16,4 +17,5 @@ export function registerBuiltInPresentations(): void {
   registerPropertyCommands();
   registerPrimPresentations();
   registerInstancePresentations();
+  registerShadingCommands();
 }

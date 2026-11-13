@@ -55,7 +55,9 @@ nothing more.
   the asset loop fetching its assets and composing them. Each phase is
   painted before work that holds the page begins, so a large root layer's
   read is announced, not a frozen page. Below that are what has arrived
-  and the time taken, and **Cancel** keeps the scene the editor had. Once
+  and the time taken, and **Cancel** stops it: the fetches in flight are
+  aborted, nothing more is fetched or read, what the open had made is
+  freed, and the editor keeps the scene it had. Once
   the scene is drawn, a corner note counts the textures still loading and
   the decodes in flight. Textures are decoded and scaled in a few workers,
   off the page's thread, and the draws waiting on them are restyled a
@@ -103,7 +105,9 @@ nothing more.
   or unloads them, as usdview's tree does, and the **⋯** menu of any prim
   loads its payloads (with or without those beneath) or unloads them. A
   load runs the asset loop for what it newly wants, with the opening
-  overlay showing its rounds, then draws what it brought within the draw
+  overlay showing its rounds (its **Cancel** aborts the fetches, puts the
+  payloads back as they were loaded and releases the layers it read),
+  then draws what it brought within the draw
   scope: the scope is decided from the estimate of what the open left
   loaded, so a scene opened with its payloads unloaded draws the scene,
   and drawing the selection draws a loaded prim's subtree alone.
@@ -434,8 +438,12 @@ materials, 3.7 M triangles) draws 0.6 to 1.1 M.
   instance's box), `view.ts` (the draw scope and budget, the camera, the
   lights and tone mapping, remembered for the viewer), `drawing.ts` (the
   draw list, its costs, and the viewport it is applied to), `notices.ts`
-  (what actions reported, and the frame note), `status.ts`. The store
-  holds the session and runs the actions on the stage: each one runs,
+  (what actions reported, and the frame note), `status.ts`, `actions.ts`
+  (the queue the actions run in). The store holds the session and runs
+  the actions on the stage, one at a time in the order asked: an action
+  that fetches (an undo that brings back a reference, a variant, a
+  payload) waits on the host, and one asked for meanwhile runs after it
+  rather than into it. Each one runs,
   syncs the draw list, and bumps the signals of the concerns it changed
   (`src/store/signals.ts`: status, composition, selection, time, draws,
   view, history, target, notices, loop). A panel listens to the concerns

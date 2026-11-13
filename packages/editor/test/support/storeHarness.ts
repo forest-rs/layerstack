@@ -265,3 +265,36 @@ def Xform "World"
     }
 }
 `;
+
+/**
+ * A root that references a layer that references the sample's robot: an
+ * open that takes two rounds of the asset loop, for the tests of stopping
+ * between them.
+ */
+export const NESTED_LAYERS: Readonly<Record<string, string>> = {
+  "nested.usda": `#usda 1.0
+(
+    defaultPrim = "World"
+)
+
+def Xform "World" (
+    prepend references = @./middle.usda@
+)
+{
+}
+`,
+  "middle.usda": `#usda 1.0
+(
+    defaultPrim = "Middle"
+)
+
+def Xform "Middle"
+{
+    def Xform "Robot" (
+        prepend references = @./assets/robot.usda@
+    )
+    {
+    }
+}
+`,
+};

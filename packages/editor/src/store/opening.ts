@@ -3,9 +3,10 @@
 
 // Opening a scene: the session made and resolved while the editor keeps
 // the scene it has, each phase shown before its work holds the page, the
-// payloads loaded within a budget, and a way to stop waiting. The store
-// is handed the session once it is whole; until then nothing of the open
-// scene changes.
+// payloads loaded within a budget, and a way to stop: cancelling aborts
+// the open's fetches and its asset loop, and frees what it had made. The
+// store is handed the session once it is whole; until then nothing of
+// the open scene changes.
 import type { Layerstack } from "@forest-rs/layerstack";
 import { type LoadBudget, type OpenPhase, OverBudget, Session } from "../model/session.ts";
 import type { SceneSource } from "../model/sources.ts";
@@ -43,6 +44,12 @@ export interface OpenHost {
   readonly hasSession: boolean;
   /** Shows where the editor is with its scene. */
   setStatus(status: EditorStatus): void;
+  /**
+   * Ends what is running on the scene the editor has (an action waiting
+   * on its assets is aborted, those behind it dropped) and resolves once
+   * nothing is: the scene can then be let go.
+   */
+  settle(): Promise<void>;
   /** Takes the opened session as the scene, freeing the one it had; `note` says why its payloads were left unloaded. */
   commit(session: Session, source: SceneSource, note: string | null): void;
   /** Stops the editor if `error` is a module's trap; whether it was one. */
@@ -60,8 +67,10 @@ export class OpenController {
   readonly #layerstack: Layerstack;
   readonly #signals: Signals;
   readonly #host: OpenHost;
-  /** The open in flight: one that is no longer it is dropped when it comes back. */
-  #serial = 0;
+  /** The open in flight, by what aborts it; `null` when none is. */
+  #inFlight: AbortController | null = null;
+  /** The open that made the scene the editor has: its session reports the phases of later loads through the same callbacks. */
+  #committed: AbortController | null = null;
   /** When the open, or the payload load, the overlay shows began. */
   #started = 0;
   #frame = 0;
@@ -72,19 +81,28 @@ export class OpenController {
     this.#host = host;
   }
 
-  /** The source's root, opened and resolved: everything it depends on is fetched first. */
+  /**
+   * The source's root, opened and resolved: everything it depends on is
+   * fetched first. An open in flight is aborted: this one supersedes it.
+   */
   async open(source: SceneSource): Promise<void> {
-    const serial = ++this.#serial;
-    const current = () => serial === this.#serial;
+    this.#inFlight?.abort(new DOMException("another scene is being opened", "AbortError"));
+    const abort = new AbortController();
+    this.#inFlight = abort;
+    const signal = abort.signal;
+    // The session's callbacks are heard while it is the one opening, or the scene.
+    const heard = () => this.#inFlight === abort || this.#committed === abort;
+    this.begin();
     this.#host.setStatus({ kind: "opening", label: source.label });
+    let session: Session | null = null;
     try {
-      this.begin();
       const choice = this.payloads;
-      const session = await Session.open(this.#layerstack, source.root, source.fetch, {
+      session = await Session.open(this.#layerstack, source.root, source.fetch, {
         open: { load: choice === "all" ? "all" : "none" },
+        signal,
         progress: (pending) => {
-          if (!current()) return;
-          if (this.opening !== pending) {
+          if (!heard()) return;
+          if (this.#inFlight === abort && this.opening !== pending) {
             this.opening = pending;
             this.#signals.bump("status");
           }
@@ -93,44 +111,60 @@ export class OpenController {
         // Each phase is shown before its work holds the thread: two frames
         // let the page render and paint it.
         phase: async (phase) => {
-          if (!current()) return;
+          if (!heard()) return;
           this.phase = { phase, since: performance.now(), started: this.#started };
           this.#signals.bump("status", "loop");
           await nextFrame();
           await nextFrame();
         },
       });
-      if (!current()) {
-        session.free();
-        return;
-      }
-      const note = choice === "auto" ? await loadWithin(session, source) : null;
-      if (!current()) {
-        session.free();
-        return;
-      }
+      const note = choice === "auto" ? await loadWithin(session, source, signal) : null;
+      signal.throwIfAborted();
+      // Nothing may wait on the scene that is about to be freed.
+      await this.#host.settle();
+      signal.throwIfAborted();
+      this.#inFlight = null;
+      this.#committed = abort;
       this.opening = null;
       this.phase = null;
-      this.#host.commit(session, source, note);
+      // The scene's from here on: not this open's to free.
+      const made = session;
+      session = null;
+      this.#host.commit(made, source, note);
     } catch (error) {
-      if (!current()) return;
+      // An open that made its session and was then stopped lets it go.
+      try {
+        session?.free();
+      } catch (freeing) {
+        this.#host.lose(freeing, source.label);
+      }
+      // A trap is the module's end whether or not anyone still waits for this open.
+      if (this.#host.lose(error, source.label)) return;
+      // Cancelled or superseded: whoever did it said where the editor is now.
+      if (this.#inFlight !== abort) return;
+      this.#inFlight = null;
       this.opening = null;
       this.phase = null;
-      if (this.#host.lose(error, source.label)) return;
       this.#host.setStatus({ kind: "failed", label: source.label, message: error instanceof Error ? error.message : String(error) });
     }
   }
 
   /**
-   * Stops waiting for the scene being opened: the editor keeps the scene
-   * it had. Work already holding the thread finishes, and its result is
-   * dropped.
+   * Stops the scene being opened: its fetches are aborted, its asset loop
+   * stops where it waits, and what it made is freed; the editor keeps the
+   * scene it had. Work already holding the thread finishes first.
    */
   cancel(): void {
-    this.#serial += 1;
+    this.abort();
+    this.#host.setStatus(this.#host.hasSession ? { kind: "ready" } : { kind: "empty" });
+  }
+
+  /** Aborts the open in flight, if any, saying nothing of where the editor is: the module is lost. */
+  abort(): void {
+    this.#inFlight?.abort(new DOMException("the open was cancelled", "AbortError"));
+    this.#inFlight = null;
     this.opening = null;
     this.phase = null;
-    this.#host.setStatus(this.#host.hasSession ? { kind: "ready" } : { kind: "empty" });
   }
 
   /**
@@ -170,12 +204,17 @@ export class OpenController {
  * read more than {@link PAYLOAD_BUDGET} of layers (weighed before each
  * round is fetched, from the source's sizes); then they are unloaded
  * again. Returns the note that says why, or `null` when they loaded.
+ * `signal` aborts the loading, which then rejects.
  */
-async function loadWithin(session: Session, source: SceneSource): Promise<string | null> {
-  if (session.stage.findLoadable().length === 0) return null;
+async function loadWithin(session: Session, source: SceneSource, signal: AbortSignal): Promise<string | null> {
+  if (session.stage.findLoadable().length === 0) {
+    // Nothing to weigh: the rules say so, as a scene opened loading all has them. Rules of none refuse a rename.
+    session.stage.setLoadRules("all");
+    return null;
+  }
   const budget: LoadBudget = { bytes: PAYLOAD_BUDGET, size: (identifier) => source.size(identifier) };
   try {
-    await session.loadPayloads(["/"], [], "withDescendants", budget);
+    await session.loadPayloads(["/"], [], "withDescendants", budget, signal);
     return null;
   } catch (error) {
     if (!(error instanceof OverBudget)) throw error;

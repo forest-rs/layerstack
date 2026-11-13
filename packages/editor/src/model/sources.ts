@@ -50,8 +50,8 @@ function segments(identifier: string): string[] | null {
  */
 export function httpSource(label: string, base: URL, root: string): SceneSource {
   const listings = new Map<string, Promise<readonly string[] | null>>();
-  const fetcher: Fetcher = async (identifier) => {
-    const response = await fetch(new URL(identifier, base));
+  const fetcher: Fetcher = async (identifier, signal) => {
+    const response = await fetch(new URL(identifier, base), signal === undefined ? {} : { signal });
     if (response.status === 404) return null;
     if (!response.ok) throw new Error(`${identifier}: HTTP ${response.status}`);
     return new Uint8Array(await response.arrayBuffer());
@@ -104,8 +104,10 @@ export function directorySource(directory: FileSystemDirectoryHandle, root: stri
   return {
     label: `${directory.name}/${root}`,
     root,
-    async fetch(identifier) {
+    async fetch(identifier, signal) {
       const found = await file(identifier);
+      // A file's read cannot be stopped; one not begun is not begun.
+      signal?.throwIfAborted();
       return found === null ? null : new Uint8Array(await found.arrayBuffer());
     },
     async exists(identifier) {
@@ -129,8 +131,9 @@ export function filesSource(label: string, files: ReadonlyMap<string, File>, roo
   return {
     label,
     root,
-    async fetch(identifier) {
+    async fetch(identifier, signal) {
       const found = file(identifier);
+      signal?.throwIfAborted();
       return found === undefined ? null : new Uint8Array(await found.arrayBuffer());
     },
     async exists(identifier) {

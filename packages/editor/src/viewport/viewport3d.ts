@@ -312,6 +312,8 @@ export class Viewport {
   readonly #draws: DrawBundles<Drawn>;
   /** Whether an update was applied yet. */
   #synced = false;
+  /** Whether {@link dispose} ran: what was still on its way (a timer, a compile, a fetch) then does nothing. */
+  #disposed = false;
   /** The selection the materials were last made for. */
   #selected: string | null = null;
   /** The bounds the camera was last framed on, to frame again only when they change. */
@@ -381,6 +383,7 @@ export class Viewport {
       this.#restyling = true;
       setTimeout(() => {
         this.#restyling = false;
+        if (this.#disposed) return;
         this.#restyleTextured();
       }, 100);
     });
@@ -426,7 +429,9 @@ export class Viewport {
     fetch(new URL("/@clusters/manifests.json", window.location.href)).then(
       async (response) => {
         if (!response.ok || !(response.headers.get("content-type") ?? "").includes("json")) return;
-        this.#manifest = new ClusterManifest((await response.json()) as { meshes: ManifestMesh[] }[]);
+        const manifest = (await response.json()) as { meshes: ManifestMesh[] }[];
+        if (this.#disposed) return;
+        this.#manifest = new ClusterManifest(manifest);
         this.#reportResident();
       },
       () => undefined,
@@ -435,6 +440,7 @@ export class Viewport {
 
   /** The server's sets listed: the buffers looked up meanwhile fetched when it has theirs. */
   #listed(keys: Set<string>): void {
+    if (this.#disposed) return;
     this.#clusterKeys = keys;
     const waiting = this.#clusterWaiting;
     this.#clusterWaiting = [];
@@ -770,6 +776,8 @@ export class Viewport {
 
   /** Releases the canvas target, geometries, materials and textures; the shared renderer stays. */
   dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
     this.#unlisten();
     cancelAnimationFrame(this.#restyleFrame);
     this.#restyleQueue.clear();
@@ -785,6 +793,10 @@ export class Viewport {
     this.#clusters.dispose();
     this.#textures.dispose();
     this.#domes.clear();
+    this.#clusterLoads.clear();
+    this.#scene.remove(this.#grid);
+    this.#grid.dispose();
+    this.#overlay.clear();
     this.#marker.geometry.dispose();
     (this.#marker.material as LineBasicNodeMaterial).dispose();
     this.#target.dispose();
@@ -1146,7 +1158,10 @@ export class Viewport {
     fetch(new URL(`/@clusters/${key}.lsclust`, window.location.href))
       .then(async (response) => {
         if (!response.ok) throw new Error(`cluster set ${key}: ${response.status}`);
-        const set = readClusterFile(await response.arrayBuffer());
+        const bytes = await response.arrayBuffer();
+        // Disposed meanwhile: the set has nowhere to go.
+        if (this.#disposed) return;
+        const set = readClusterFile(bytes);
         // A draw instance runs the vertices of the largest cluster the scene draws: a larger one would be cut short.
         if (set.clusters.triangleCount.some((triangles) => triangles > MAX_CLUSTER_TRIANGLES)) throw new Error(`cluster set ${key}: clusters over ${MAX_CLUSTER_TRIANGLES} triangles`);
         // The buffer was rebuilt or freed meanwhile: the set is not its.
@@ -1159,6 +1174,7 @@ export class Viewport {
         this.#convertArrived();
       })
       .catch((error: unknown) => {
+        if (this.#disposed) return;
         if (this.#clusterLoads.get(buffer) === geometry) {
           // Drawn as any other mesh instead.
           delete geometry.userData.awaitingSet;
@@ -1545,7 +1561,7 @@ export class Viewport {
   }
 
   #render(): void {
-    if (this.#deviceLost) return;
+    if (this.#deviceLost || this.#disposed) return;
     const camera = this.#prepareCamera();
     this.#cameraLight.position.setFromMatrixPosition(camera.matrixWorld);
     this.#setState();
@@ -1614,7 +1630,7 @@ export class Viewport {
    * waiting for it (see the header).
    */
   #compile(): void {
-    if (this.#deviceLost) return;
+    if (this.#deviceLost || this.#disposed) return;
     const camera = this.#prepareCamera();
     this.#setState();
     const started = performance.now();
@@ -1622,6 +1638,7 @@ export class Viewport {
     const met = this.#draws.compiling();
     this.#renderer.compileAsync(this.#scene, camera).then(
       () => {
+        if (this.#disposed) return;
         this.lastCompileMs = performance.now() - started;
         this.#draws.settle(met, bundleable);
         this.#draw();

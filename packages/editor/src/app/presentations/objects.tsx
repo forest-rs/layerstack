@@ -7,7 +7,10 @@
 // a click selects the prim (which opens its ancestors in the tree), and
 // its context menu frames it, draws it alone, selects its material or
 // copies the path. A property path explains its value; a layer's click
-// copies its identifier, and its menu sets where edits go, or mutes it.
+// shows it in the Layers tab (its text, from there), and its menu shows
+// its text, exports it, copies its identifier, sets where edits go, or
+// mutes it.
+import { exportLayerFile } from "../download.ts";
 import { layerName } from "../format.ts";
 import { type PresentProps, registerCommand, registerPresentation } from "../../presentations/registry.ts";
 import { Live } from "./Present.tsx";
@@ -37,7 +40,7 @@ function PropertyPathInline({ object, context }: PresentProps<"propertyPath">) {
 function LayerInline({ object, context }: PresentProps<"layer">) {
   const name = layerName(object.layer.identifier);
   return (
-    <Live object={object} context={context} className="text-foreground" title={`${object.layer.identifier ?? "anonymous layer"}: right-click for what to do with it`}>
+    <Live object={object} context={context} className="text-foreground" title={`${object.layer.identifier ?? "the session layer"}: right-click for what to do with it`}>
       {name}
     </Live>
   );
@@ -76,12 +79,13 @@ function PrimPathTooltip({ object, context }: PresentProps<"primPath">) {
 /** A layer's tooltip: its identifier, whether it is muted, edited or read-only, and what a right-click offers. */
 function LayerTooltip({ object, context }: PresentProps<"layer">) {
   const { layer } = object;
-  const facts = [layer.format, layer.readOnly ? "read-only" : null, context.stage.isMuted(layer) ? "muted" : null, context.stage.isDirty(layer) ? "edited" : null].filter((fact) => fact !== null);
+  const facts = [layer.format, layer.readOnly ? "read-only" : null, context.stage.isMuted(layer) ? "muted" : null, context.store.isEdited(layer) ? "edited" : null].filter((fact) => fact !== null);
   return (
     <div className="flex flex-col gap-0.5 text-left">
-      <div className="font-mono break-all">{layer.identifier ?? "anonymous layer"}</div>
+      <div className="font-mono break-all">{layer.identifier ?? "the session layer"}</div>
       <div className="opacity-70">{facts.join(" · ")}</div>
-      <div className="opacity-70">Right-click to edit in it, mute it or copy its identifier.</div>
+      {layer.anonymous && <div className="opacity-70">In front of the root, never saved into it: export it to keep its edits.</div>}
+      <div className="opacity-70">Right-click to show its text, export it, edit in it, and more.</div>
     </div>
   );
 }
@@ -161,13 +165,37 @@ export function registerObjectPresentations(): void {
   registerCommand({ id: "builtin.property-path.copy", kind: "propertyPath", type: "propertyPath", title: "Copy the path", run: (object) => copy(object.path) });
 
   // The first command is what a click does, so it is the harmless one;
-  // changing where edits go is a deliberate choice from the menu.
+  // changing where edits go is a deliberate choice from the menu. With
+  // the Layers tab in front, revealing it would do nothing, so a click
+  // shows the layer's text instead.
   registerCommand({
     id: "builtin.layer.reveal",
     kind: "layer",
     type: "layer",
     title: "Show in the Layers tab",
+    applies: (_object, { store }) => store.sceneTab !== "layers",
     run: (_object, { store }) => store.showSceneTab("layers"),
+  });
+  registerCommand({
+    id: "builtin.layer.text",
+    kind: "layer",
+    type: "layer",
+    title: "Show text",
+    run: (object, { store }) => store.showLayerText(object.layer),
+  });
+  registerCommand({
+    id: "builtin.layer.export-usda",
+    kind: "layer",
+    type: "layer",
+    title: "Export as .usda",
+    run: (object, { store }) => exportLayerFile(store, object.layer, "usda"),
+  });
+  registerCommand({
+    id: "builtin.layer.export-usdc",
+    kind: "layer",
+    type: "layer",
+    title: "Export as .usdc",
+    run: (object, { store }) => exportLayerFile(store, object.layer, "usdc"),
   });
   registerCommand({
     id: "builtin.layer.copy",
@@ -191,7 +219,8 @@ export function registerObjectPresentations(): void {
     kind: "layer",
     type: "layer",
     title: "Mute",
-    applies: (object, { stage }) => object.layer !== stage.root && !stage.isMuted(object.layer),
+    // The root and the session layer are the stage itself: neither is muted.
+    applies: (object, { stage }) => object.layer !== stage.root && !object.layer.anonymous && !stage.isMuted(object.layer),
     run: (object, { store }) => void store.setMuted(object.layer, true),
   });
   registerCommand({

@@ -20,6 +20,7 @@ import { CostView } from "./CostView.tsx";
 import { useEditorStore, useRevision, useStoreSelector, useTime } from "./context.ts";
 import { shown } from "./fields.tsx";
 import { formatTime, layerName } from "./format.ts";
+import { LayerTextView } from "./LayerTextView.tsx";
 import { Present, presentationContext } from "./presentations/Present.tsx";
 import { ShadingView } from "./ShadingView.tsx";
 import { targetText } from "./TargetPicker.tsx";
@@ -51,6 +52,7 @@ export function BottomPanel({ onTab }: { onTab?: (tab: string) => void }) {
         <TabsTrigger className="flex-none px-2.5" id="explain">Explain</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="changes">Changes</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="history">History</TabsTrigger>
+        <TabsTrigger className="flex-none px-2.5" id="text">Text</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="assets">Asset loop</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="shading">Shading</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="cost">Draw cost</TabsTrigger>
@@ -67,6 +69,9 @@ export function BottomPanel({ onTab }: { onTab?: (tab: string) => void }) {
       </TabsContent>
       <TabsContent id="history" className="min-h-0 overflow-y-auto">
         <HistoryView store={store} />
+      </TabsContent>
+      <TabsContent id="text" className="min-h-0">
+        <LayerTextView store={store} />
       </TabsContent>
       <TabsContent id="assets" className="min-h-0">
         <AssetLoopView store={store} />

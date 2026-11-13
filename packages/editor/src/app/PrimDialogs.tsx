@@ -9,7 +9,7 @@
 // authors and in which layer, and each edit is one undoable action
 // through the store; a refusal is said in the dialog and kept as a
 // notice.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Header, ListBox, ListBoxItem, ListBoxSection } from "react-aria-components";
 import type { BindingStrength, EditTarget, Layer, SchemaInfo, Stage } from "@forest-rs/layerstack";
 import { Badge } from "@/components/ui/badge";
@@ -40,14 +40,17 @@ import { typeCount, typeItemClass, TypeList } from "./TypeList.tsx";
 /** The dialog asked for, over the open stage; nothing when none is, or no stage is open. */
 export function PrimDialogHost() {
   const store = useEditorStore();
-  useRevision(store, "status");
+  // A new stage, or a change that takes the prim away (an undo), closes what is open on it.
+  useRevision(store, "status", "composition");
   const request = usePrimDialog();
   const stage = store.session?.stage;
-  if (request === null || stage === undefined) return null;
+  const path = request === null ? null : request.kind === "add" ? request.parent : request.path;
+  const gone = stage === undefined || (path !== null && path !== "/" && stage.prim(path) === null);
+  useEffect(() => {
+    if (request !== null && gone) askPrim(null);
+  }, [request, gone]);
+  if (request === null || path === null || stage === undefined || gone) return null;
   const close = () => askPrim(null);
-  // A prim gone since the dialog was asked for (an undo) closes it.
-  const path = request.kind === "add" ? request.parent : request.path;
-  if (path !== "/" && stage.prim(path) === null) return null;
   switch (request.kind) {
     case "add":
       return <AddPrimDialog key={path} store={store} stage={stage} parent={path} onClose={close} />;

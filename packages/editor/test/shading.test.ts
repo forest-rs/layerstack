@@ -128,7 +128,7 @@ test("an OpenPBR surface reads its image through the interface", () => {
 
 /** A chain `a → b → out` with an unconnected port on each shader, placed by hand. */
 function chain(positions: ReadonlyMap<string, readonly [number, number]>): ShadingNetwork {
-  const port = (path: string, kind: "input" | "output", connections: string[] = []) => ({ path, name: path.split(":").pop()!, kind, typeName: "float", connections });
+  const port = (path: string, kind: "input" | "output", connections: string[] = []) => ({ path, name: path.split(":").pop()!, kind, typeName: "float", connections, invalid: [], authored: true });
   return {
     root: "/M",
     nodes: [

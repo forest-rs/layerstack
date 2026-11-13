@@ -215,8 +215,8 @@ nothing more.
   section is a panel presentation of one of the prim's types
   ([Presentations](#presentations)), and each editor is the value's
   `accept` presentation, chosen by what the stage knows of the property
-  (an animated one, marked with a key, is edited by a sample at the
-  current time): a token the schema gives `allowedTokens` is a picker of
+  (one with time samples, marked with a key, hollow for a single sample,
+  is edited by a sample at the current time): a token the schema gives `allowedTokens` is a picker of
   them, a `bool` a switch, a number or tuple fields that commit on Enter,
   a colour (`color3f`, `color4d`, and their arrays) a swatch painted in
   sRGB from its linear value, with a picker. A colour array is a strip of
@@ -228,6 +228,31 @@ nothing more.
   layers (the explain and history panels) are live: a click selects or
   explains, a context menu offers what else applies. Nothing has to be
   typed that the stage already knows.
+- **Authoring properties.** Each property's name in the inspector is
+  its path, live: a click explains it, and its context menu (or its
+  "⋯", or Shift+F10), there and wherever the path is shown (the explain
+  and changes panels), offers what would change something where edits
+  go, each saying in which layer: clear its value (`ClearAtTime` of its
+  default, and of the samples the stage reads when they are the edit
+  target's, so weaker opinions show), block it (`UsdAttribute::Block`),
+  key it at the current frame or delete the key there, or remove its
+  spec. An edit a stronger opinion hides (or one through a variant not
+  selected) is said under its field, the winning layer live, with
+  **Edit there**, which makes that opinion's edit target where edits go;
+  a field shows what the stage reads once its edit is made, not what was
+  typed. **Add** in the Properties header adds an attribute (a name in
+  namespaces; a value type from the runtime's registry, grouped, scalar
+  or array; varying or uniform), created with a starting value of its
+  type so it is shown ready to edit, or a relationship and its targets;
+  the dialog shows what will be authored, in USDA, and offers the names
+  the prim's schemas define that no layer authors yet, with their type
+  and fallback. A relationship's targets are edited in place: each one
+  moved earlier or later or removed, and one added from the prim picker
+  (a Find field over the stage's prims, narrowed to a schema where the
+  caller wants one, and a chosen prim's properties), each change one
+  `SetTargets` edit. Each operation is one undoable step where edits go,
+  in Changes and History; one that would change nothing is refused, and
+  says why.
 - **Meshes.** The inspector's view of a `Mesh`: the mesh alone in a
   preview (drag to orbit, scroll to zoom, framed on its extent), what
   stagehand made of it (faces, points, triangles, vertices, concave faces
@@ -365,7 +390,8 @@ line: a property row, a table cell, the explain and changes panels),
   (`registerCommand`) is offered on every presented object of it, a click
   running the first that applies and a context menu (or Shift+F10)
   listing them: a prim path selects, frames, draws alone or selects its
-  material; a property path explains (bringing the Explain tab forward);
+  material; a property path explains (bringing the Explain tab forward), or
+  clears, blocks, keys or removes it where edits go;
   a layer is shown in the Layers tab, shows its text, is exported, has
   its identifier copied, takes edits or is muted; an
   asset is shown in the asset view; an instance (a row of its instancer's

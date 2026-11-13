@@ -9,7 +9,7 @@
 // starts with, and a relationship's target list edited one target at a
 // time. The store's property operations and the inspector's commands
 // decide from these what applies.
-import type { Attribute, EditTarget, Explanation, Layer, Opinion, Stage, ValueInput } from "@forest-rs/layerstack";
+import type { Attribute, EditTarget, Explanation, Layer, Opinion, Stage, ValueInput, ValueTypeInfo } from "@forest-rs/layerstack";
 import { releaseValue } from "./values.ts";
 
 /** Where edits go, as the session holds it: a layer of the stage's stack, an edit target, or `undefined` for the stage's edit layer. */
@@ -219,25 +219,50 @@ export function propertyNameProblem(name: string, taken: ReadonlySet<string>): s
   return null;
 }
 
+/** A group of value types the Add property dialog offers: their scalar forms, each with its array form ({@link ValueTypeInfo.arrayType}). */
+export interface ValueTypeGroup {
+  readonly group: string;
+  readonly types: readonly ValueTypeInfo[];
+}
+
+/** The group a scalar value type is offered in, by its shape and role (AOUSD Core §6.2, §6.3, §6.5). */
+function valueTypeGroup(type: ValueTypeInfo): string {
+  switch (type.role) {
+    case "Color":
+      return "Colors";
+    case "Point":
+    case "Vector":
+    case "Normal":
+      return "Points, vectors and normals";
+    case "TextureCoordinate":
+      return "Texture coordinates";
+    case "Frame":
+      return "Matrices";
+    default:
+      return type.dimensions.length === 0 ? "Single values" : type.dimensions.length === 1 ? "Tuples and quaternions" : "Matrices";
+  }
+}
+
 /**
  * The value types a new attribute may declare, grouped as the inspector
- * offers them: OpenUSD's value type registry (`Sdf_ValueTypeRegistry`,
- * AOUSD Core §6.2 scalar types, §6.3 dimensioned types, §6.5 roles) as
- * the runtime's own table (`layerstack/src/value_type.rs`, `ValueType`)
- * lists it, less `opaque` and `group`, which hold no value, and the
- * legacy role names. The stage does not list its value types, so they are
- * written out here; a test authors each one, so a name the runtime does
- * not take fails there. Each has an array form, its name and `[]`.
+ * offers them, from the runtime's registry (`Layerstack.valueTypes`,
+ * OpenUSD's `Sdf.ValueTypeNames`), in its order: each scalar type, whose
+ * array form the dialog's Array switch picks. Left out: `opaque` and
+ * `group`, which hold no value and have no array form, and the legacy
+ * types (`Transform`, `PointIndex`, ...), which OpenUSD still reads but
+ * new scene description does not declare.
  */
-export const VALUE_TYPE_GROUPS: readonly { readonly group: string; readonly types: readonly string[] }[] = [
-  { group: "Numbers", types: ["bool", "int", "uint", "int64", "uint64", "uchar", "half", "float", "double", "timecode"] },
-  { group: "Text", types: ["token", "string", "asset"] },
-  { group: "Tuples", types: ["int2", "int3", "int4", "half2", "half3", "half4", "float2", "float3", "float4", "double2", "double3", "double4"] },
-  { group: "Colors", types: ["color3h", "color3f", "color3d", "color4h", "color4f", "color4d"] },
-  { group: "Points, vectors and normals", types: ["point3h", "point3f", "point3d", "vector3h", "vector3f", "vector3d", "normal3h", "normal3f", "normal3d"] },
-  { group: "Texture coordinates", types: ["texCoord2h", "texCoord2f", "texCoord2d", "texCoord3h", "texCoord3f", "texCoord3d"] },
-  { group: "Matrices and rotations", types: ["matrix2d", "matrix3d", "matrix4d", "frame4d", "quath", "quatf", "quatd"] },
-];
+export function valueTypeGroups(types: readonly ValueTypeInfo[]): ValueTypeGroup[] {
+  const groups = new Map<string, ValueTypeInfo[]>();
+  for (const type of types) {
+    if (type.isArray || type.arrayType === null || type.legacy) continue;
+    const group = valueTypeGroup(type);
+    const members = groups.get(group);
+    if (members === undefined) groups.set(group, [type]);
+    else members.push(type);
+  }
+  return [...groups].map(([group, members]) => ({ group, types: members }));
+}
 
 /**
  * The value a new attribute of `typeName` starts with, so it is shown
@@ -249,14 +274,14 @@ export function initialValue(typeName: string): ValueInput | null {
   if (typeName.endsWith("[]")) {
     // An empty array of the type's scalars: a plain `[]` would read as text.
     const scalar = typeName.slice(0, -2);
-    if (scalar === "token" || scalar === "string" || scalar === "asset") return { type: typeName, value: [] };
+    if (scalar === "token" || scalar === "string" || scalar === "asset" || scalar === "pathExpression") return { type: typeName, value: [] };
     if (scalar === "int64") return { type: typeName, value: new BigInt64Array(0) };
     if (scalar === "uint64") return { type: typeName, value: new BigUint64Array(0) };
     return { type: typeName, value: new Float64Array(0) };
   }
   if (typeName === "bool") return { type: typeName, value: false };
-  if (typeName === "token" || typeName === "string" || typeName === "asset") return { type: typeName, value: "" };
-  if (/^(u?int|u?int64|uchar|half|float|double|timecode)$/.test(typeName)) return { type: typeName, value: 0 };
+  if (typeName === "token" || typeName === "string" || typeName === "asset" || typeName === "pathExpression") return { type: typeName, value: "" };
+  if (/^(u?int|u?int64|uchar|half|float|double|timecode|duration)$/.test(typeName)) return { type: typeName, value: 0 };
   const matrix = /^(?:matrix|frame)([234])d$/.exec(typeName);
   if (matrix !== null) {
     const size = Number(matrix[1]);

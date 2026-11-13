@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Stage } from "@forest-rs/layerstack";
 import { searchPrims } from "../src/model/primSearch.ts";
-import { initialValue, movedTarget, propertyActions, propertyNameProblem, targetOpinion, VALUE_TYPE_GROUPS, withoutTarget, withTarget } from "../src/model/propertyOps.ts";
+import { initialValue, movedTarget, propertyActions, propertyNameProblem, targetOpinion, valueTypeGroups, withoutTarget, withTarget } from "../src/model/propertyOps.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
 /** The scalar value of the attribute at `path`; `null` when it has none. */
@@ -182,10 +182,15 @@ test("an edit through a variant not selected is said to go where the stage does 
 });
 
 test("every value type offered can be created with its starting value, scalar and array", async () => {
-  const { stage } = await opened();
-  for (const { types } of VALUE_TYPE_GROUPS) {
+  const { store, stage } = await opened();
+  const groups = valueTypeGroups(store.layerstack.valueTypes());
+  const offered = groups.flatMap(({ types }) => types.map((type) => type.name));
+  assert.ok(offered.includes("color3f") && offered.includes("pathExpression") && offered.includes("frame4d"));
+  assert.ok(!offered.some((name) => name.endsWith("[]") || name === "opaque" || name === "group" || name === "Transform"), "scalars, holding a value, not legacy");
+  assert.deepEqual(groups.find(({ group }) => group === "Colors")?.types.map((type) => type.name), ["color3h", "color3f", "color3d", "color4h", "color4f", "color4d"]);
+  for (const { types } of groups) {
     for (const scalar of types) {
-      for (const typeName of [scalar, `${scalar}[]`]) {
+      for (const typeName of [scalar.name, scalar.arrayType!]) {
         const name = typeName.replace("[]", "Array");
         const value = initialValue(typeName);
         assert.notEqual(value, null, typeName);

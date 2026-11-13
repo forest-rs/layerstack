@@ -18,7 +18,7 @@ import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } fr
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { initialValue, propertyNameProblem, VALUE_TYPE_GROUPS, withoutTarget, withTarget } from "../model/propertyOps.ts";
+import { initialValue, propertyNameProblem, valueTypeGroups, withoutTarget, withTarget } from "../model/propertyOps.ts";
 import { formatNumber } from "../model/values.ts";
 import type { EditorStore } from "../store.ts";
 import { PrimPicker } from "./PrimPicker.tsx";
@@ -80,13 +80,18 @@ export function AddPropertyDialog({ store, prim, onClose }: { store: EditorStore
       definedRelationships: relationships.filter((each) => !usedRelationship(each)).map((each) => each.name),
     };
   }, [prim]);
+  // The runtime's registry, the same for every stage.
+  const valueTypes = useMemo(() => valueTypeGroups(store.layerstack.valueTypes()), [store]);
+  const scalarType = valueTypes.flatMap(({ types }) => types).find((type) => type.name === scalar);
   const defined = kind === "attribute" ? definedAttributes.get(name) : undefined;
-  const typeName = defined?.typeName ?? `${scalar}${array ? "[]" : ""}`;
+  const typeName = defined?.typeName ?? (array ? (scalarType?.arrayType ?? `${scalar}[]`) : scalar);
   const variability = defined?.variability ?? (uniform ? "uniform" : "varying");
   const value = defined === undefined ? initialValue(typeName) : fallbackOf(defined);
   const problem = propertyNameProblem(name, taken[kind]);
   const picks = (kind === "attribute" ? [...definedAttributes.keys()] : definedRelationships).filter((each) => each !== name && each.toLowerCase().includes(name.toLowerCase())).sort();
-  const groups = VALUE_TYPE_GROUPS.map(({ group, types }) => ({ group, types: types.filter((type) => type.toLowerCase().includes(filter.toLowerCase())) })).filter(({ types }) => types.length > 0);
+  const groups = valueTypes
+    .map(({ group, types }) => ({ group, types: types.map((type) => type.name).filter((type) => type.toLowerCase().includes(filter.toLowerCase())) }))
+    .filter(({ types }) => types.length > 0);
   const session = store.session;
   const destination = session?.target ?? stage.editLayer;
   const where = destination === null ? "the edit layer" : targetText(destination);
@@ -197,7 +202,7 @@ export function AddPropertyDialog({ store, prim, onClose }: { store: EditorStore
               <span>Array</span>
               <span className="flex items-center gap-2">
                 <Switch size="sm" aria-label="Array" isSelected={array} onChange={setArray} />
-                <span className="text-[11px] text-muted-foreground">{array ? `${scalar}[]: any number of ${scalar} values` : `one ${scalar}`}</span>
+                <span className="text-[11px] text-muted-foreground">{array ? `${typeName}: any number of ${scalar} values` : `one ${scalar}`}</span>
               </span>
               <span>Variability</span>
               <span className="flex items-center gap-2">

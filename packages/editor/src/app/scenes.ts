@@ -15,11 +15,34 @@ export interface SceneEntry {
   readonly source: () => SceneSource;
 }
 
+/** The sample's layers: a static host cannot list a folder, so the sample says what it ships. */
+const SAMPLE_LAYERS = ["assets/beacon.usda", "assets/chrome.usda", "assets/robot.usda", "library.usda", "scene.usda"] as const;
+
 /** The sample scene the editor ships (`public/scene`). */
 export const SAMPLE: SceneEntry = {
   label: "Sample",
-  source: () => httpSource("Sample", new URL("scene/", document.baseURI), "scene.usda"),
+  source: () => httpSource("Sample", new URL("scene/", document.baseURI), "scene.usda", async () => SAMPLE_LAYERS),
 };
+
+/** A folder's folders and layers, as the dev server's `/@scenes/list.json?dir=` lists them. */
+interface LocalListing {
+  readonly folders: readonly string[];
+  readonly layers: readonly string[];
+}
+
+/** The layers in the local scene directory's folder `directory` (`assets/set/`) and two levels of folders beneath it. */
+async function localLayers(directory: string): Promise<string[]> {
+  const found: string[] = [];
+  const walk = async (folder: string, depth: number) => {
+    const response = await fetch(`/@scenes/list.json?dir=${encodeURIComponent(folder)}`);
+    if (!response.ok) return;
+    const listing = (await response.json()) as LocalListing;
+    for (const layer of listing.layers) found.push(`${folder}${layer}`);
+    if (depth > 0) for (const child of listing.folders) await walk(`${folder}${child}/`, depth - 1);
+  };
+  await walk(directory, 2);
+  return found.sort();
+}
 
 /** One root the dev server's scene directory has, as `/@scenes/index.json` lists it. */
 interface LocalScene {
@@ -33,7 +56,7 @@ interface LocalScene {
  * still resolves.
  */
 export function localScene(path: string): SceneSource {
-  return httpSource(path, new URL("/@scenes/", document.baseURI), path);
+  return httpSource(path, new URL("/@scenes/", document.baseURI), path, () => localLayers(path.slice(0, path.lastIndexOf("/") + 1)));
 }
 
 /** The scenes the dev server serves from the local scene directory; none in a build. */

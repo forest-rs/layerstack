@@ -27,7 +27,16 @@ export interface SceneSource {
   readonly size: (identifier: string) => Promise<number | null>;
   /** Writing layers back where they were read from, when the source can (a picked folder); absent when it cannot. */
   readonly writable?: WritableSource;
+  /**
+   * The layers the source holds, by identifier, sorted: what a picker of
+   * layers offers (a sublayer to add), so nothing has to be typed that the
+   * source can list. Absent when it cannot list them (a static host).
+   */
+  readonly layers?: () => Promise<readonly string[]>;
 }
+
+/** The most layers a source lists for a picker. */
+export const MAX_LISTED_LAYERS = 2000;
 
 /**
  * A source that layers can be written back into: a folder on this
@@ -67,7 +76,7 @@ function segments(identifier: string): string[] | null {
  * `listing.json` (an array of file names) when it has one, and asks with
  * `HEAD` otherwise.
  */
-export function httpSource(label: string, base: URL, root: string): SceneSource {
+export function httpSource(label: string, base: URL, root: string, layers?: () => Promise<readonly string[]>): SceneSource {
   const listings = new Map<string, Promise<readonly string[] | null>>();
   const fetcher: Fetcher = async (identifier, signal) => {
     const response = await fetch(new URL(identifier, base), signal === undefined ? {} : { signal });
@@ -99,6 +108,7 @@ export function httpSource(label: string, base: URL, root: string): SceneSource 
       const length = response.ok ? response.headers.get("content-length") : null;
       return length === null ? null : Number(length);
     },
+    ...(layers === undefined ? {} : { layers }),
   };
 }
 
@@ -134,6 +144,19 @@ export function directorySource(directory: FileSystemDirectoryHandle, root: stri
     },
     async size(identifier) {
       return (await file(identifier))?.size ?? null;
+    },
+    async layers() {
+      // Three levels deep from the folder's top, hidden folders left out.
+      const found: string[] = [];
+      const walk = async (handle: FileSystemDirectoryHandle, prefix: string, depth: number) => {
+        for await (const [name, entry] of handle.entries()) {
+          if (found.length >= MAX_LISTED_LAYERS) return;
+          if (entry.kind === "file" && isLayer(name)) found.push(`${prefix}${name}`);
+          else if (entry.kind === "directory" && depth > 0 && !name.startsWith(".")) await walk(entry as FileSystemDirectoryHandle, `${prefix}${name}/`, depth - 1);
+        }
+      };
+      await walk(directory, "", 2);
+      return found.sort();
     },
     writable: {
       where: directory.name,
@@ -182,6 +205,9 @@ export function filesSource(label: string, files: ReadonlyMap<string, File>, roo
     },
     async size(identifier) {
       return file(identifier)?.size ?? null;
+    },
+    async layers() {
+      return [...files.keys()].filter(isLayer).sort().slice(0, MAX_LISTED_LAYERS);
     },
   };
 }

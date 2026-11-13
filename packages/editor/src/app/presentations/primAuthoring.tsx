@@ -4,8 +4,8 @@
 // The built-in presentations that author a prim: the inspector's State,
 // Material, Applied schemas and Metadata sections, and the commands on a
 // prim path wherever one is shown (the tree's context menu, a target, a
-// binding's material, the changes panel): bind a material, duplicate, and
-// move under another prim. Priorities as `prims.tsx` places them: 100 the
+// binding's material, the changes panel): bind a material, duplicate,
+// move under another prim, add a child, rename and delete. Priorities as `prims.tsx` places them: 100 the
 // prim's state, -8 its applied schemas (after its properties and their
 // ops), -10 its material, -30 its metadata (after its composition).
 import { namespaceRefusal } from "../../model/composition.ts";
@@ -99,5 +99,30 @@ export function registerPrimAuthoringPresentations(): void {
     // A move edits the stage's own layer stack: not offered while edits go through an arc or variant.
     applies: (object, context) => editable(object.path, context) && namespaceRefusal(context.store.session?.target, "rename", object.path) === null,
     run: (object) => askPrim({ kind: "moveTo", path: object.path }),
+  });
+  // What the "⋯" menu of a prim also offers, so a context menu on its path lacks none of it.
+  registerCommand({
+    id: "builtin.prim-path.add-child",
+    kind: "primPath",
+    type: "primPath",
+    title: "Add a child prim…",
+    applies: (object, context) => editable(object.path, context),
+    run: (object) => askPrim({ kind: "add", parent: object.path }),
+  });
+  registerCommand({
+    id: "builtin.prim-path.rename",
+    kind: "primPath",
+    type: "primPath",
+    title: "Rename…",
+    applies: (object, context) => editable(object.path, context) && namespaceRefusal(context.store.session?.target, "rename", object.path) === null,
+    run: (object) => askPrim({ kind: "rename", path: object.path }),
+  });
+  registerCommand({
+    id: "builtin.prim-path.delete",
+    kind: "primPath",
+    type: "primPath",
+    title: "Delete",
+    applies: (object, context) => editable(object.path, context) && namespaceRefusal(context.store.session?.target, "rename", object.path) === null,
+    run: (object, { store }) => void store.delete(object.path),
   });
 }

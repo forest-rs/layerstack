@@ -63,6 +63,8 @@ export interface TestSource extends SceneSource {
   readonly signals: Map<string, AbortSignal>;
   /** Holds every fetch of `identifier` from now on until the returned function is called. */
   hold(identifier: string): () => void;
+  /** How many times `identifier` was asked for. */
+  askedFor(identifier: string): number;
   /** Makes every fetch of `identifier` from now on throw `error`. */
   fail(identifier: string, error: Error): void;
 }
@@ -118,6 +120,9 @@ export function sampleSource(root = "scene.usda", extra: Readonly<Record<string,
         held.delete(identifier);
         release();
       };
+    },
+    askedFor(identifier) {
+      return asked.filter((each) => each === identifier).length;
     },
     fail(identifier, error) {
       failing.set(identifier, error);
@@ -183,14 +188,33 @@ export interface Harness {
   /**
    * Runs frames and lets the event loop turn until `work` settles (an open
    * waits two frames a phase, and on its fetches), then returns its
-   * result. Throws if it has not settled after `turns`.
+   * result. Throws if it has not settled after {@link WAIT_MS}.
    */
-  settle<T>(work: Promise<T>, turns?: number): Promise<T>;
-  /** Lets the event loop turn `turns` times, running the frames requested: for work a test does not hold a promise of. */
+  settle<T>(work: Promise<T>): Promise<T>;
+  /**
+   * Lets the event loop turn `turns` times, running the frames requested:
+   * for showing that nothing more happens. Never for waiting until
+   * something has: how many turns a file's read takes is the machine's
+   * to say ({@link Harness.until}).
+   */
   turn(turns?: number): Promise<void>;
+  /**
+   * Runs frames and lets the event loop turn until `reached()` (work a
+   * test holds no promise of got where the test needs it: a held fetch
+   * was asked for). Throws, naming `what`, if it has not after
+   * {@link WAIT_MS}.
+   */
+  until(reached: () => boolean, what: string): Promise<void>;
   /** Opens `source` and waits for it; the store is then `ready`, or the test fails. */
   open(source: SceneSource): Promise<void>;
 }
+
+/**
+ * How long a wait may take before the test fails, by the wall clock: a
+ * bound on real time, not on turns of the event loop, because how many
+ * turns pass while a file is read differs from one machine to the next.
+ */
+const WAIT_MS = 30_000;
 
 /** One event-loop turn: every settled promise's reactions and a round of I/O callbacks. */
 const immediate = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -209,16 +233,21 @@ export async function harness(): Promise<Harness> {
       await immediate();
     }
   };
-  const settle = async <T>(work: Promise<T>, turns = 2000): Promise<T> => {
+  const until = async (reached: () => boolean, what: string): Promise<void> => {
+    // The wall clock, which the frames do not move: a turn is as long as the machine makes it.
+    const deadline = Date.now() + WAIT_MS;
+    while (!reached()) {
+      if (Date.now() > deadline) throw new Error(`${what} had not happened after ${WAIT_MS / 1000} s`);
+      await turn(1);
+    }
+  };
+  const settle = async <T>(work: Promise<T>): Promise<T> => {
     let settled = false;
     const mark = () => {
       settled = true;
     };
     work.then(mark, mark);
-    for (let at = 0; !settled; at++) {
-      if (at >= turns) throw new Error(`the work had not settled after ${turns} turns`);
-      await turn(1);
-    }
+    await until(() => settled, "the work settling");
     return work;
   };
   return {
@@ -227,6 +256,7 @@ export async function harness(): Promise<Harness> {
     view: record,
     settle,
     turn,
+    until,
     async open(source) {
       await settle(store.open(source));
       if (store.status.kind !== "ready") throw new Error(`the open ended ${JSON.stringify(store.status)}`);

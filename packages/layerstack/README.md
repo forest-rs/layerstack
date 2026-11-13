@@ -143,6 +143,37 @@ await stage.resolve(source);
   `float3`), one value's `dimensions` (`[3]`, `[4, 4]`) and whether it is
   one of the `legacy` types (`Transform`, `PointIndex`, `EdgeIndex`,
   `FaceIndex`) an "add attribute" picker may leave out.
+- **A layer says what it authors.** The reads above are composed;
+  `stage.layerSpec(layer, path)` is one layer's own spec at a path, as
+  OpenUSD's `SdfLayer::GetPrimAtPath`, `GetPropertyAtPath` and
+  `GetPseudoRoot` find it, or `null` when the layer authors none there. It
+  says which layer holds an opinion: whether the layer edits go to authors
+  the `active` a Clear would remove, which layer's list holds a reference,
+  where `upAxis` is authored. A `LayerSpec` is plain data, a union on
+  `type`: `pseudoRoot` (`/`: `defaultPrim`, `documentation`, `sublayers`,
+  root prim names), `prim` or `variant` (`specifier`, `typeName`, `kind`,
+  `active`, `instanceable`, `documentation`, the list ops `references`,
+  `payloads`, `inherits`, `specializes`, `apiSchemas`, `variantSetNames`
+  with each of their lists apart, `variantSelections`, the `variantSets`
+  it holds with their variants, child prim and property names),
+  `attribute` (`typeName`, `custom`, `variability`, whether its `default`
+  is a value or a block, its `timeSamples` times in layer time,
+  `connections`) and `relationship` (`targets`). Every kind lists the
+  `fields` it authors by their OpenUSD keys, the names `primFields` uses.
+  Values are not read, so nothing is decoded; nothing is composed or
+  exported either. The path is in the layer's namespace: a stage path for
+  a layer of the stage's own stack, else mapped through the target that
+  writes there (`target.mapPath(path)`), which spells a path inside a
+  variant with its selection (`/World/Robot{finish=painted}Decal`).
+
+  ```ts
+  const target = stage.prim("/World/Robot")!.compositionArcs()[1]!.editTarget(); // robot.usda, through the reference
+  const height = stage.layerSpec(target.layer, target.mapPath("/World/Robot.height")!);
+  height?.type === "attribute" && height.default; // "value": robot.usda authors it, so Clear there removes it
+  const robot = stage.layerSpec(stage.root, "/World/Robot");
+  robot?.type === "prim" && robot.references?.prepended; // [{ asset: "./robot.usda", primPath: null, layerOffset: { offset: 0, scale: 1 } }]
+  stage.layerSpec(stage.root, "/").fields; // ["defaultPrim", "upAxis"]: the root authors these
+  ```
 - **Paths are text**: `/World/Rock` for prims, `/World/Rock.size` for
   properties.
 - **Values say their shape.** `Value` is a union on `kind`: `scalar`

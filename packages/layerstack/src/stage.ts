@@ -62,8 +62,12 @@ import type {
   FlattenResult,
   GeomSubset,
   Issue,
+  AuthoredReference,
   LayerFormat,
+  LayerSpec,
+  ListOp,
   LoadResult,
+  PseudoRootSpec,
   LoadOutcome,
   LoadPolicy,
   LoadRule,
@@ -146,6 +150,7 @@ export interface NativeStage extends Disposable {
   layers(): unknown;
   layerDirty(id: bigint): boolean;
   layerSublayers(id: bigint): [string, number, number][];
+  layerSpec(id: bigint, path: string): unknown;
   setLayerMuted(id: bigint, muted: boolean): boolean;
   muteAndUnmuteLayers(
     muteIds: BigUint64Array,
@@ -1413,6 +1418,65 @@ export class Stage implements Disposable {
     this.#own("sublayers", layer);
     const rows = this.#call("sublayers", (native) => native.layerSublayers(layer.id));
     return rows.map(([asset, offset, scale]) => ({ asset, layerOffset: { offset, scale } }));
+  }
+
+  /**
+   * What `layer` itself authors at `path`: the spec there, or `null` when
+   * the layer holds none, as OpenUSD's `SdfLayer::GetPseudoRoot` (`/`),
+   * `GetPrimAtPath` and `GetPropertyAtPath` find it. Where the stage's
+   * reads say what composes ({@link Prim.compositionArcs},
+   * {@link Stage.metadata}, {@link Prim.appliedSchemas}), this says which
+   * layer holds an opinion: whether the layer edits go to authors the
+   * `active` a Clear would remove, which layer's list holds a reference to
+   * remove, where `upAxis` is authored. See {@link LayerSpec} for what each
+   * kind of spec gives.
+   *
+   * `path` is in the layer's own namespace: the pseudo-root `/`, a prim
+   * path, a property path, or a path inside variants, a selection written
+   * after its prim (`/World/Robot{finish=painted}` is the variant spec,
+   * `/World/Robot{finish=painted}Decal` a prim spec inside it,
+   * `/World/Robot{finish=painted}.color` a property spec of the variant),
+   * the spelling {@link EditTarget.mapPath}, {@link EditTarget.site} and
+   * {@link Opinion.specPath} use. For a layer of the stage's own layer stack
+   * a stage path is the layer's path; for any other layer, or inside a
+   * variant, map the stage path through the edit target that writes there:
+   * `stage.layerSpec(target.layer, target.mapPath(path))`, when `mapPath`
+   * gives a path. A variant set spec (`/World/Robot{finish=}`) is not a
+   * path here: its variants are in its prim spec's
+   * {@link PrimSpec.variantSets}.
+   *
+   * The read looks the one spec up and reads its fields; it composes,
+   * exports and walks nothing, and decodes no value, so a large or lazily
+   * read value stays as it is. A muted layer's specs are read as they are.
+   * The result is a snapshot: read again after an edit or an undo.
+   *
+   * Throws `layer.affinity` for another stage's layer, `argument.invalid`
+   * when `path` is not a string, and `path.invalid` when it is not a spec
+   * path.
+   *
+   * AOUSD Core §7.3 (specs and their paths), §7.6 (spec fields), §12.4
+   * (list ops). OpenUSD: `SdfLayer::GetPseudoRoot`, `GetPrimAtPath`,
+   * `GetPropertyAtPath`, `SdfSpec::ListFields`,
+   * `SdfLayer::ListTimeSamplesForPath`.
+   *
+   * ```ts
+   * const spec = stage.layerSpec(stage.editLayer!, "/World/Robot");
+   * if (spec?.type === "prim" && spec.active !== null) {
+   *   // the layer edits go to authors `active`: offer Clear
+   * }
+   * spec?.type === "prim" && spec.references?.prepended; // [{ asset: "./robot.usda", primPath: null, layerOffset: { offset: 0, scale: 1 } }]
+   * stage.layerSpec(stage.root, "/").fields; // ["defaultPrim", "upAxis"]
+   * ```
+   */
+  layerSpec(layer: Layer, path: "/"): PseudoRootSpec;
+  layerSpec(layer: Layer, path: string): LayerSpec | null;
+  layerSpec(layer: Layer, path: string): LayerSpec | null {
+    this.#own("layerSpec", layer);
+    if (typeof path !== "string") {
+      throw new LayerstackError("argument.invalid", "layerSpec", "expected a path string");
+    }
+    const record = this.#call("layerSpec", (native) => native.layerSpec(layer.id, path)) as Row | null;
+    return record === null ? null : decodeLayerSpec(record);
   }
 
   /**
@@ -3600,6 +3664,136 @@ function report(error: LayerstackError): void {
   const host = globalThis as { reportError?: (error: unknown) => void };
   if (typeof host.reportError === "function") host.reportError(error);
   else console.error(error);
+}
+
+/** A list op record: `[explicit, prepended, appended, deleted, added, ordered]`. */
+type ListOpRow<T> = [T[] | null, T[], T[], T[], T[], T[]];
+
+/** The list op a record (`layer_spec.rs`) holds, its items decoded by `item`; `null` for none. */
+function decodeListOp<R, T>(row: ListOpRow<R> | null, item: (row: R) => T): ListOp<T> | null {
+  if (row === null) return null;
+  const [explicit, prepended, appended, deleted, added, ordered] = row;
+  return {
+    explicit: explicit === null ? null : explicit.map(item),
+    prepended: prepended.map(item),
+    appended: appended.map(item),
+    deleted: deleted.map(item),
+    added: added.map(item),
+    ordered: ordered.map(item),
+  };
+}
+
+function same<T>(value: T): T {
+  return value;
+}
+
+function decodeReference([asset, primPath, offset, scale]: [string | null, string | null, number, number]): AuthoredReference {
+  return { asset, primPath, layerOffset: { offset, scale } };
+}
+
+/** The spec a `layerSpec` record describes (`layer_spec.rs`). */
+function decodeLayerSpec(record: Row): LayerSpec {
+  const [type, path, fields] = record as [LayerSpec["type"], string, string[]];
+  const rest = record.slice(3);
+  switch (type) {
+    case "pseudoRoot": {
+      const [defaultPrim, documentation, sublayers, primChildren] = rest as [string | null, string | null, [string, number, number][], string[]];
+      return {
+        type,
+        path,
+        fields,
+        defaultPrim,
+        documentation,
+        sublayers: sublayers.map(([asset, offset, scale]) => ({ asset, layerOffset: { offset, scale } })),
+        primChildren,
+      };
+    }
+    case "prim":
+    case "variant": {
+      type References = ListOpRow<[string | null, string | null, number, number]> | null;
+      const [
+        specifier,
+        typeName,
+        kind,
+        active,
+        instanceable,
+        documentation,
+        references,
+        payloads,
+        inherits,
+        specializes,
+        apiSchemas,
+        variantSetNames,
+        selections,
+        variantSets,
+        primChildren,
+        properties,
+      ] = rest as [
+        "def" | "over" | "class" | null,
+        string | null,
+        string | null,
+        boolean | null,
+        boolean | null,
+        string | null,
+        References,
+        References,
+        ListOpRow<string> | null,
+        ListOpRow<string> | null,
+        ListOpRow<string> | null,
+        ListOpRow<string> | null,
+        [string, string][] | null,
+        [string, string[]][],
+        string[],
+        string[],
+      ];
+      return {
+        type,
+        path,
+        fields,
+        specifier,
+        typeName,
+        kind,
+        active,
+        instanceable,
+        documentation,
+        references: decodeListOp(references, decodeReference),
+        payloads: decodeListOp(payloads, decodeReference),
+        inherits: decodeListOp(inherits, same),
+        specializes: decodeListOp(specializes, same),
+        apiSchemas: decodeListOp(apiSchemas, same),
+        variantSetNames: decodeListOp(variantSetNames, same),
+        variantSelections: selections === null ? null : new Map(selections),
+        variantSets: variantSets.map(([name, variants]) => ({ name, variants })),
+        primChildren,
+        properties,
+      };
+    }
+    case "attribute": {
+      const [typeName, custom, variability, defaultValue, times, connections] = rest as [
+        string | null,
+        boolean,
+        "varying" | "uniform",
+        "value" | "block" | "animationBlock" | null,
+        Float64Array | null,
+        ListOpRow<string> | null,
+      ];
+      return {
+        type,
+        path,
+        fields,
+        typeName,
+        custom,
+        variability,
+        default: defaultValue,
+        timeSamples: times === null ? null : Array.from(times),
+        connections: decodeListOp(connections, same),
+      };
+    }
+    case "relationship": {
+      const [custom, targets] = rest as [boolean, ListOpRow<string> | null];
+      return { type, path, fields, custom, targets: decodeListOp(targets, same) };
+    }
+  }
 }
 
 /** @internal A value record. */

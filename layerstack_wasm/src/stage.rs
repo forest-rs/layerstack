@@ -773,9 +773,16 @@ impl Stage {
         let layer = LayerId(id);
         self.check_layer(layer)?;
         let store = self.document.store();
-        let entries = store.layer(layer).map(Layer::sublayers).unwrap_or_default();
-        Ok(Wire::List(
-            entries
+        Ok(store
+            .layer(layer)
+            .map_or(Wire::List(Vec::new()), |layer| self.sublayer_rows(layer)))
+    }
+
+    /// The rows of [`Self::layer_sublayers`] for `layer`.
+    pub(crate) fn sublayer_rows(&self, layer: &Layer) -> Wire {
+        Wire::List(
+            layer
+                .sublayers()
                 .iter()
                 .map(|entry| {
                     // An entry built natively may hold its layer alone.
@@ -791,7 +798,7 @@ impl Stage {
                     ])
                 })
                 .collect(),
-        ))
+        )
     }
 
     /// Mutes layer `id` (`muted` true) or unmutes it, and recomposes:
@@ -3096,6 +3103,12 @@ impl Stage {
     #[wasm_bindgen(js_name = layerSublayers)]
     pub fn js_layer_sublayers(&self, id: u64) -> Result<JsValue, JsValue> {
         Ok(self.layer_sublayers(id)?.into())
+    }
+
+    /// The record `layer_spec` builds, as documented in `layer_spec.rs`.
+    #[wasm_bindgen(js_name = layerSpec)]
+    pub fn js_layer_spec(&self, id: u64, path: &str) -> Result<JsValue, JsValue> {
+        Ok(self.layer_spec(id, path)?.into())
     }
 
     /// Mutes or unmutes a layer (`set_layer_muted`, as documented in `stage.rs`).

@@ -12,8 +12,9 @@
 //! stage reads them (`loadSupplied`), until none is unavailable; a host
 //! that only wants the finished stage reads each round without composing
 //! (`readSupplied`) and composes once. A USDZ package is one supplied source. The stage then
-//! answers prim, child, attribute and value queries and explains where a
-//! value comes from (`explain`).
+//! answers prim, child, attribute and value queries, explains where a
+//! value comes from (`explain`), and reads what one layer itself authors
+//! at a path (`layerSpec`).
 //!
 //! Edits are authored through [`Stage::apply`]: the wrapper fills an
 //! [`EditBatch`] from its plain-data edits, and the batch is lowered to one
@@ -96,6 +97,7 @@ mod clock;
 mod edit;
 mod error;
 mod geom;
+mod layer_spec;
 mod receipt;
 mod schema_edit;
 mod schemas;

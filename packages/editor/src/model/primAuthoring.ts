@@ -274,6 +274,58 @@ export function siblingOrder(names: readonly string[], name: string, direction: 
   return order;
 }
 
+/** What dropping a dragged prim on the tree does: move it under another prim, or reorder it among its siblings. */
+export type TreeDrop = { readonly kind: "move"; readonly parent: string } | { readonly kind: "reorder"; readonly parent: string; readonly order: readonly string[] };
+
+/**
+ * What dropping the prim at `path` `position` (`on`, `before`, `after`)
+ * the row at `target` does: on a row, a move beneath it; between two
+ * siblings of its own, the order its parent's children take
+ * (`siblings`, the names of `target`'s parent's children in order).
+ * `null` when the drop does nothing (on itself, its subtree or its own
+ * parent; between rows of another parent, which would be a move and a
+ * reorder at once).
+ */
+export function treeDrop(path: string, target: string, position: "on" | "before" | "after", siblings: readonly string[]): TreeDrop | null {
+  if (path === "/" || target === path || target.startsWith(`${path}/`)) return null;
+  if (position === "on") return parentOf(path) === target ? null : { kind: "move", parent: target };
+  const parent = parentOf(target);
+  if (parent !== parentOf(path)) return null;
+  const name = nameOf(path);
+  const order = siblings.filter((each) => each !== name);
+  const at = order.indexOf(nameOf(target));
+  if (at < 0) return null;
+  order.splice(position === "before" ? at : at + 1, 0, name);
+  return order.every((each, index) => each === siblings[index]) ? null : { kind: "reorder", parent, order };
+}
+
+/**
+ * The computed visibility of each row shown (`Stage.visibilities`, `null`
+ * when not `Imageable`), told apart: `invisible` where the prim's own
+ * opinion (or a weaker layer's) hides it, `hidden` where an ancestor
+ * does, and `visible`. Read from the parents' computed visibility, which
+ * the rows have, so telling them apart costs no read.
+ */
+export type RowVisibility = "visible" | "invisible" | "hidden";
+
+/** Each of `paths` (a tree's rows, parents before children)'s {@link RowVisibility} from its computed visibility (`computed`, in order). */
+export function rowVisibilities(paths: readonly string[], computed: readonly (string | null)[]): Map<string, RowVisibility> {
+  const out = new Map<string, RowVisibility>();
+  paths.forEach((path, index) => {
+    const visibility = computed[index];
+    if (visibility === null || visibility === undefined) return;
+    if (visibility !== "invisible") out.set(path, "visible");
+    else out.set(path, out.get(parentOf(path)) === "invisible" || out.get(parentOf(path)) === "hidden" ? "hidden" : "invisible");
+  });
+  return out;
+}
+
+/** The nearest ancestor of `path` whose own visibility hides it (`invisible` in `rows`); `null` when none is shown. */
+export function hiddenBy(path: string, rows: ReadonlyMap<string, RowVisibility>): string | null {
+  for (let at = parentOf(path); at !== "/"; at = parentOf(at)) if (rows.get(at) === "invisible") return at;
+  return null;
+}
+
 /** A layer or an edit target through an arc, where a prim has opinions. */
 export interface OpinionSite {
   readonly layer: Layer;

@@ -13,6 +13,7 @@ import { useEditorStore, useStoreSelector } from "./context.ts";
 import { widgetKeeps } from "./keys.ts";
 import { Inspector } from "./Inspector.tsx";
 import { ModuleLost } from "./ModuleLost.tsx";
+import { PrimDialogHost } from "./PrimDialogs.tsx";
 import { ScenePanel } from "./ScenePanel.tsx";
 import { Toolbar } from "./Toolbar.tsx";
 import { ViewportPane } from "./ViewportPane.tsx";
@@ -87,6 +88,7 @@ export function App() {
           <BottomPanel onTab={onTab} />
         </ResizablePanel>
       </ResizablePanelGroup>
+      <PrimDialogHost />
     </div>
   );
 }

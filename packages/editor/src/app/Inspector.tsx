@@ -13,6 +13,7 @@
 // a panel that throws is replaced by a line saying so, and the rest still
 // show. Every editor authors through the store.
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Button as AriaButton } from "react-aria-components";
 import type { Prim } from "@forest-rs/layerstack";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { FocusPointIcon } from "@hugeicons/core-free-icons";
@@ -24,6 +25,7 @@ import type { EditorStore } from "../store.ts";
 import { useEditorStore, useRevision } from "./context.ts";
 import { primIcon } from "./icons.ts";
 import { PrimActions } from "./PrimActions.tsx";
+import { askPrim } from "./primDialogRequests.ts";
 import { presentationContext } from "./presentations/Present.tsx";
 import { countRender } from "./renders.ts";
 
@@ -98,7 +100,16 @@ function Header({ store, prim }: { store: EditorStore; prim: Prim }) {
         {prim.path}
       </div>
       <div className="mt-1.5 flex flex-wrap gap-1">
-        <Badge variant="secondary">{prim.typeName ?? "typeless"}</Badge>
+        <span title="Retype it: author its typeName where edits go" className="flex">
+          <AriaButton
+            aria-label={`Type ${prim.typeName ?? "none"}: retype`}
+            isDisabled={prim.instanceProxy || prim.path === "/"}
+            onPress={() => askPrim({ kind: "retype", path: prim.path })}
+            className="rounded-sm outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-default"
+          >
+            <Badge variant="secondary">{prim.typeName ?? "typeless"}</Badge>
+          </AriaButton>
+        </span>
         <Badge variant="outline">{prim.specifier}</Badge>
         {kind?.kind === "scalar" && <Badge variant="outline">kind {String(kind.value)}</Badge>}
         {prim.instance && <Badge variant="outline">instance</Badge>}

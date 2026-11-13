@@ -63,10 +63,10 @@ export function PrimActions({ store, path, className }: { store: EditorStore; pa
   if (stage === undefined) return null;
   const prim = stage.prim(path);
   const readOnly = prim?.instanceProxy === true;
-  // Loading works on any prim (its payloads and those beneath it, as
-  // usdview offers); a prototype's proxies are loaded through their instance.
   // A rename or delete through an arc or a variant is refused: said before it is tried.
   const namespace = namespaceRefusal(store.session?.target, "rename", path);
+  // Loading works on any prim (its payloads and those beneath it, as
+  // usdview offers); a prototype's proxies are loaded through their instance.
   const loadable = prim !== null && !readOnly && (prim.hasAuthoredPayloads || stage.findLoadable(path).length > 0 || stage.loadRules().length > 0);
   return (
     <>

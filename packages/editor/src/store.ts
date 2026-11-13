@@ -39,7 +39,7 @@ import { type NamespaceAction, namespaceRefusal, type NewArc, newArcLabel, remov
 import type { ViewportScene, ViewportUpdate } from "./model/draws.ts";
 import { planSave, type SaveEntry } from "./model/files.ts";
 import { indexOfId, type InstancerColumns, toggled } from "./model/instancer.ts";
-import { type AuthoredArc, type LayerSpecs, type LayerSummary, readLayerSpecs, summarizeBytes, summaryOf } from "./model/layerSpecs.ts";
+import type { AuthoredArc, LayerSpecs, LayerSummary } from "./model/layerSpecs.ts";
 import type { LayerTextRead } from "./model/layerText.ts";
 import { type Shadow, shadowOf, targetOpinion } from "./model/propertyOps.ts";
 import { releaseValue } from "./model/values.ts";
@@ -51,6 +51,7 @@ import { type FieldSource, type MetadataPlacement, metadataLayer } from "./model
 import { StageReports } from "./store/reports.ts";
 import type { SceneSource } from "./model/sources.ts";
 import { ActionQueue } from "./store/actions.ts";
+import { arcLayers, type Authoring, type CompositionEdit, CompositionState, layerSummary } from "./store/composition.ts";
 import { Drawing } from "./store/drawing.ts";
 import { type EditLayerChoice, FileState } from "./store/files.ts";
 import { type FrameNote, FrameNotes, type Notice, Notices } from "./store/notices.ts";
@@ -73,32 +74,7 @@ export { PAYLOAD_BUDGET, type PayloadChoice } from "./store/opening.ts";
 export type { TimeRange } from "./store/playback.ts";
 export { type EditorStatus, moduleTrap } from "./store/status.ts";
 
-/** A composition edit made here ({@link EditorStore.compositionEdit}): what the inspector offers to show. */
-export interface CompositionEdit {
-  /** The prim it edited. */
-  readonly prim: string;
-  /** The action, as History lists it. */
-  readonly label: string;
-  /** The layer it wrote. */
-  readonly layer: Layer;
-  /** The step it made: the edit is offered while this is the newest. */
-  readonly step: HistoryStep;
-  /** The variant it added and selected, when it did: offered to edit inside. */
-  readonly variant?: { readonly set: string; readonly variant: string };
-}
-
-/**
- * An action that may wait on its assets: its refusal, known at once when
- * it ran now (`undefined` when the stage took it, or when it waits its
- * turn: a refusal is then a notice alone), and its end.
- */
-export interface Authoring {
-  readonly refusal: string | undefined;
-  readonly done: Promise<void>;
-}
-
-/** The most bytes of a layer the stage has not read that are read for its default and root prims alone. */
-export const SUMMARY_BYTES = 16 * 1024 ** 2;
+export { type Authoring, type CompositionEdit, SUMMARY_BYTES } from "./store/composition.ts";
 
 /** The editor: one session at a time, and the state the panels share. */
 export class EditorStore {
@@ -134,15 +110,8 @@ export class EditorStore {
   #read: { session: Session | null; changes: number } = { session: null, changes: 0 };
   /** The last value edit that does not show ({@link EditorStore.shadow}). */
   #shadow: Shadow | null = null;
-  /** The last composition edit made here ({@link EditorStore.compositionEdit}). */
-  #compositionEdit: CompositionEdit | null = null;
-  /** What each layer authors about composition, read once per change of the stage, and the layers too large to read ({@link EditorStore.layerSpecs}). */
-  #specs: { session: Session | null; stamp: string; read: Map<Layer, LayerSpecs | null>; large: Set<Layer> } = {
-    session: null,
-    stamp: "",
-    read: new Map(),
-    large: new Set(),
-  };
+  /** The last composition edit, and what the layers author about composition ({@link EditorStore.layerSpecs}). */
+  readonly #composition = new CompositionState();
   #frame = 0;
   /** The channels {@link EditorStore.#bumpSoon} bumps at the next frame. */
   readonly #soon = new Set<Channel>();
@@ -1093,7 +1062,7 @@ export class EditorStore {
    * Heard on `history`.
    */
   get compositionEdit(): CompositionEdit | null {
-    const edit = this.#compositionEdit;
+    const edit = this.#composition.edit;
     return edit !== null && this.session?.history.nextUndo === edit.step ? edit : null;
   }
 
@@ -1192,25 +1161,12 @@ export class EditorStore {
     const session = this.session;
     if (session === null) return null;
     const stamp = `${this.signals.revision("history")}:${this.signals.revision("composition")}`;
-    if (this.#specs.session !== session) this.#specs = { session, stamp, read: new Map(), large: new Set() };
-    else if (this.#specs.stamp !== stamp) this.#specs = { ...this.#specs, stamp, read: new Map() };
-    if (this.#specs.large.has(layer)) return null;
-    const cached = this.#specs.read.get(layer);
-    if (cached !== undefined) return cached;
-    const text = this.layerText(layer);
-    if (typeof text !== "string" && text.truncated) this.#specs.large.add(layer);
-    const specs = typeof text === "string" || text.truncated ? null : readLayerSpecs(text.lines.join("\n"));
-    this.#specs.read.set(layer, specs);
-    return specs;
+    return this.#composition.specs(session, stamp, layer, (read) => this.layerText(read));
   }
 
   /** The layers an arc can be pointed at: those the source lists and those the stage holds, by identifier, sorted. */
   async arcLayers(): Promise<string[]> {
-    const session = this.session;
-    if (session === null) return [];
-    const held = session.stage.layers().flatMap((layer) => (layer.identifier === null || layer.identifier.includes("[") ? [] : [layer.identifier]));
-    const listed = (await this.source?.layers?.().catch(() => [])) ?? [];
-    return [...new Set([...listed, ...held])].sort();
+    return this.session === null ? [] : arcLayers(this.session, this.source);
   }
 
   /**
@@ -1222,18 +1178,8 @@ export class EditorStore {
     const session = this.session;
     const source = this.source;
     if (session === null || source === null) return { kind: "unread", reason: "Nothing is open." };
-    const held = session.stage.layers().find((layer) => layer.identifier === identifier);
-    if (held !== undefined) {
-      const specs = this.layerSpecs(held);
-      return specs === null ? { kind: "unread", reason: `${identifier} is too large to read for its prims here.` } : summaryOf(specs);
-    }
     try {
-      const size = await source.size(identifier);
-      if (size !== null && size > SUMMARY_BYTES) return { kind: "unread", reason: `${identifier} is ${(size / 1024 ** 2).toFixed(1)} MB: too large to read for its prims alone.` };
-      const bytes = await source.fetch(identifier);
-      if (bytes === null) return { kind: "unread", reason: `The scene's source has no ${identifier}.` };
-      if (bytes.byteLength > SUMMARY_BYTES) return { kind: "unread", reason: `${identifier} is too large to read for its prims alone.` };
-      return summarizeBytes(this.layerstack, identifier, bytes);
+      return await layerSummary(session, source, this.layerstack, identifier, (layer) => this.layerSpecs(layer));
     } catch (error) {
       if (this.lose(error)) return { kind: "unread", reason: "The module was lost." };
       return { kind: "unread", reason: error instanceof Error ? error.message : String(error) };
@@ -1258,7 +1204,7 @@ export class EditorStore {
     if (layer !== null && this.lastLayerText(layer) === null) this.layerText(layer);
     const receipt = run();
     const step = session.history.nextUndo;
-    this.#compositionEdit = step === null ? null : { prim, label: step.label, layer: receipt.target.layer, step, ...(variant === undefined ? {} : { variant }) };
+    this.#composition.edit = step === null ? null : { prim, label: step.label, layer: receipt.target.layer, step, ...(variant === undefined ? {} : { variant }) };
     return step;
   }
 

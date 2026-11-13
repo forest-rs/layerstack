@@ -29,6 +29,7 @@ import {
   type PrimSpecifier,
   SPECIFIER_MEANINGS,
 } from "../model/primAuthoring.ts";
+import { arcNoun } from "../model/composition.ts";
 import type { EditorStore } from "../store.ts";
 import { useEditorStore, useRevision } from "./context.ts";
 import { layerName } from "./format.ts";
@@ -472,7 +473,7 @@ function CopyRefusedDialog({ store, stage, path, refusal, onClose }: { store: Ed
               <span className="min-w-0 flex-1 truncate font-mono" title={site.layer.identifier ?? undefined}>
                 {layerName(site.layer.identifier)}
               </span>
-              {site.arc !== null && <Badge variant="outline">through a {site.arc}</Badge>}
+              {site.arc !== null && <Badge variant="outline">through a {arcNoun(site.arc)}</Badge>}
               <Button
                 variant="outline"
                 size="xs"

@@ -236,6 +236,62 @@ describe("edit kinds", () => {
     );
   });
 
+  it("createAttribute takes every value type the module lists", async () => {
+    const types = layerstack.valueTypes();
+    assert.equal(layerstack.valueTypes(), types, "read once");
+    assert.ok(Object.isFrozen(types) && Object.isFrozen(types[0]));
+    assert.equal(types.length, 120, "61 scalar types, all but opaque and group with an array form");
+    const named = (name: string) => types.find((type) => type.name === name);
+    assert.deepEqual(named("color3f[]"), {
+      name: "color3f[]",
+      isArray: true,
+      scalarType: "color3f",
+      arrayType: "color3f[]",
+      role: "Color",
+      storage: "float3[]",
+      dimensions: [3],
+      legacy: false,
+    });
+    assert.deepEqual(named("frame4d"), {
+      name: "frame4d",
+      isArray: false,
+      scalarType: "frame4d",
+      arrayType: "frame4d[]",
+      role: "Frame",
+      storage: "matrix4d",
+      dimensions: [4, 4],
+      legacy: false,
+    });
+    assert.deepEqual(
+      [named("group")?.arrayType, named("opaque")?.arrayType, named("token")?.dimensions],
+      [null, null, []],
+    );
+    assert.deepEqual(
+      types.filter((type) => type.legacy).map((type) => type.name),
+      ["Transform", "Transform[]", "PointIndex", "PointIndex[]", "EdgeIndex", "EdgeIndex[]", "FaceIndex", "FaceIndex[]"],
+    );
+    assert.deepEqual(
+      types.slice(0, 4).map((type) => type.name),
+      ["bool", "bool[]", "uchar", "uchar[]"],
+      "each scalar type, then its array",
+    );
+
+    using stage = await openScene();
+    stage.apply(
+      types.map((type, index): Edit => ({ type: "createAttribute", path: `/World/Rock.t${index}`, typeName: type.name })),
+      stage.root,
+    );
+    for (const [index, type] of types.entries()) {
+      assert.equal(stage.attribute(`/World/Rock.t${index}`)?.typeName, type.name);
+    }
+    for (const format of ["usda", "usdc"] as const) {
+      using reopened = layerstack.open({ identifier: `scene.${format}`, bytes: stage.exportLayer(stage.root, format) });
+      for (const [index, type] of types.entries()) {
+        assert.equal(reopened.attribute(`/World/Rock.t${index}`)?.typeName, type.name, `${format} ${type.name}`);
+      }
+    }
+  });
+
   it("setValue authors the default and time samples", async () => {
     using stage = await roundTrip(
       [

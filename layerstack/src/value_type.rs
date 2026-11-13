@@ -223,6 +223,48 @@ value_types! {
 }
 
 impl ValueType {
+    /// The shape of one value of the type, as OpenUSD records it: `[]` for
+    /// a single component (`float`, `token`), `[3]` for a vector of three
+    /// (`float3`, `color3f`), `[4]` for a quaternion, `[4, 4]` for a 4×4
+    /// matrix (`matrix4d`, `frame4d`). A role keeps its storage's shape.
+    ///
+    /// OpenUSD: `SdfValueTypeName::GetDimensions` (`SdfTupleDimensions`),
+    /// as `_RegisterStandardTypes` registers them (`pxr/usd/sdf/schema.cpp`).
+    ///
+    /// Spec: AOUSD Core §6.3 (dimensioned types).
+    #[must_use]
+    pub const fn dimensions(self) -> &'static [usize] {
+        match self.storage() {
+            Self::Int2 | Self::Half2 | Self::Float2 | Self::Double2 => &[2],
+            Self::Int3 | Self::Half3 | Self::Float3 | Self::Double3 => &[3],
+            Self::Int4
+            | Self::Half4
+            | Self::Float4
+            | Self::Double4
+            | Self::Quath
+            | Self::Quatf
+            | Self::Quatd => &[4],
+            Self::Matrix2d => &[2, 2],
+            Self::Matrix3d => &[3, 3],
+            Self::Matrix4d => &[4, 4],
+            _ => &[],
+        }
+    }
+
+    /// Whether the type is one of the four legacy types OpenUSD still
+    /// registers with no current name, `Transform`, `PointIndex`,
+    /// `EdgeIndex` and `FaceIndex` (see the [module docs](self)): read and
+    /// written as they are, but not what new scene description declares.
+    ///
+    /// OpenUSD: `_AddLegacyTypesToRegistry` (`pxr/usd/sdf/schema.cpp`).
+    #[must_use]
+    pub const fn is_legacy(self) -> bool {
+        matches!(
+            self,
+            Self::Transform | Self::PointIndex | Self::EdgeIndex | Self::FaceIndex
+        )
+    }
+
     /// The value type of `type_name`, a scalar name or an array name
     /// (`color3f[]`), and whether it names the array form; `None` when no
     /// registered type has the name, including `opaque[]` and `group[]`.
@@ -474,6 +516,19 @@ mod tests {
         assert_eq!(ValueType::Group.storage(), ValueType::Opaque);
         assert_eq!(ValueType::TexCoord2h.zero(), Value::Vec2h([0; 2]));
         assert_eq!(ValueType::Group.zero(), Value::Null);
+        assert_eq!(ValueType::Color3f.dimensions(), &[3]);
+        assert_eq!(ValueType::Frame4d.dimensions(), &[4, 4]);
+        assert_eq!(ValueType::Quath.dimensions(), &[4]);
+        assert_eq!(ValueType::Token.dimensions(), &[] as &[usize]);
+        assert_eq!(ValueType::Transform.dimensions(), &[4, 4]);
+        assert_eq!(
+            ValueType::ALL
+                .iter()
+                .filter(|ty| ty.is_legacy())
+                .map(|ty| ty.name())
+                .collect::<alloc::vec::Vec<_>>(),
+            ["Transform", "PointIndex", "EdgeIndex", "FaceIndex"]
+        );
         let tokens = crate::TokenInterner::default();
         assert_eq!(ValueType::Token.zero(), Value::Token(tokens.intern("")));
     }

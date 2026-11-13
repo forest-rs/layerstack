@@ -764,6 +764,60 @@ export interface SchemaInfo {
   readonly allowedInstanceNames: readonly string[];
 }
 
+/**
+ * The role of a {@link ValueTypeInfo}: what its values mean beyond their
+ * storage, as OpenUSD's `SdfValueRoleNames` spells it. `Transform`,
+ * `PointIndex`, `EdgeIndex` and `FaceIndex` are the legacy types' roles.
+ * AOUSD Core §6.5 (semantic roles).
+ */
+export type ValueRole =
+  | "Color"
+  | "Frame"
+  | "Group"
+  | "Normal"
+  | "Point"
+  | "TextureCoordinate"
+  | "Vector"
+  | "Transform"
+  | "PointIndex"
+  | "EdgeIndex"
+  | "FaceIndex";
+
+/**
+ * A value type name an attribute may declare ({@link CreateAttributeEdit}
+ * `typeName`), from {@link Layerstack.valueTypes}: OpenUSD's
+ * `SdfValueTypeName`, as `Sdf.ValueTypeNames` lists them. AOUSD Core §6.2
+ * (value types), §6.3 (dimensioned types), §7.6.4.1.1 (`typeName`).
+ */
+export interface ValueTypeInfo {
+  /** The name an attribute declares: `color3f`, `color3f[]`. */
+  readonly name: string;
+  /** Whether it is an array type (`color3f[]`), `IsArray`. */
+  readonly isArray: boolean;
+  /** The scalar type: itself for a scalar type, `color3f` for `color3f[]` (`GetScalarType`). */
+  readonly scalarType: string;
+  /** The array type: itself for an array type, `color3f[]` for `color3f`; `null` for `opaque` and `group`, which have none (`GetArrayType`). */
+  readonly arrayType: string | null;
+  /** Its role (`Color` for `color3f`), or `null` for a type without one (`GetRole`). */
+  readonly role: ValueRole | null;
+  /**
+   * The type without a role whose values it holds, its role changing
+   * what they mean, not how they are stored: `float3` for `color3f`, `float3[]` for `color3f[]`,
+   * `matrix4d` for `frame4d`, `opaque` for `group`; itself for a type
+   * without a role (`GetType`).
+   */
+  readonly storage: string;
+  /** The shape of one value, or of each element of an array: `[]` for one component (`float`, `token`), `[3]` for `float3` or `color3f`, `[4]` for a quaternion, `[4, 4]` for `matrix4d` (`GetDimensions`). */
+  readonly dimensions: readonly number[];
+  /**
+   * One of the legacy types OpenUSD still registers with no current
+   * name (`Transform`, `PointIndex`, `EdgeIndex`, `FaceIndex`, and their
+   * arrays): read and authored as any other, but not what new scene
+   * description declares, so a picker may leave them out.
+   */
+  readonly legacy: boolean;
+}
+
 /** A variant set of a prim. */
 export interface VariantSet {
   /** The set's name. */

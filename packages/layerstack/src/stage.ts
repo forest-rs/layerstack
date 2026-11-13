@@ -106,6 +106,8 @@ import type {
   VariantSet,
   Version,
   SchemaInfo,
+  ValueRole,
+  ValueTypeInfo,
 } from "./types.js";
 
 /** This package's version. */
@@ -347,6 +349,8 @@ export interface NativeModule {
     elementSize: number,
   ): Float64Array;
   blackbodyTemperatureRgb(kelvin: number): Float32Array;
+  /** The value types an attribute may declare ({@link Layerstack.valueTypes}). */
+  valueTypes(): unknown;
   /**
    * Why the module trapped (`layerstack_wasm::TrapCause`): 1 a panic, 2
    * out of memory, 0 when the module cannot tell (one built with `std`).
@@ -376,6 +380,7 @@ export class Layerstack {
   #bytesOut = 0;
   #views = 0;
   #bytesViewed = 0;
+  #valueTypes: readonly ValueTypeInfo[] | undefined = undefined;
 
   /** Wraps an initialized module, refusing one of another ABI (`module.abi`). */
   constructor(module: NativeModule) {
@@ -520,6 +525,32 @@ export class Layerstack {
    */
   blackbodyTemperatureRgb(kelvin: number): Float32Array {
     return this.call("blackbodyTemperatureRgb", () => this.#module.blackbodyTemperatureRgb(kelvin));
+  }
+
+  /**
+   * Every value type name an attribute may declare, as the module's value
+   * type registry has them (OpenUSD's `Sdf.ValueTypeNames`): each scalar
+   * type followed by its array form, the types without a role first, then
+   * those with one, the legacy types last. What an "add attribute" picker
+   * offers: each `name` is a {@link CreateAttributeEdit} `typeName`. The
+   * registry is the module's, the same for every stage.
+   *
+   * ```ts
+   * layerstack.valueTypes().filter((type) => !type.legacy && type.role === "Color").map((type) => type.name);
+   * // ["color3h", "color3h[]", "color3f", "color3f[]", ...]
+   * ```
+   */
+  valueTypes(): readonly ValueTypeInfo[] {
+    if (this.#valueTypes === undefined) {
+      type ValueTypeRow = [string, boolean, string, string | null, ValueRole | null, string, number[], boolean];
+      const rows = this.call("valueTypes", () => this.#module.valueTypes()) as ValueTypeRow[];
+      this.#valueTypes = Object.freeze(
+        rows.map(([name, isArray, scalarType, arrayType, role, storage, dimensions, legacy]) =>
+          Object.freeze({ name, isArray, scalarType, arrayType, role, storage, dimensions: Object.freeze(dimensions), legacy }),
+        ),
+      );
+    }
+    return this.#valueTypes;
   }
 
   /** @internal A new native batch of edits. */

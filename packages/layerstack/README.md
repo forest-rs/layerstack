@@ -133,7 +133,16 @@ await stage.resolve(source);
   each one's `kind` (`concreteTyped`, the types a `definePrim` may name;
   `abstractTyped`; `singleApplyApi` or `multipleApplyApi`, what
   `apiSchemas` may list), a typed schema's `bases` nearest first, and an
-  applied schema's `canOnlyApplyTo` and `allowedInstanceNames`.
+  applied schema's `canOnlyApplyTo` and `allowedInstanceNames`. The
+  value types are the module's, the same for every stage:
+  `layerstack.valueTypes()` lists each name a `createAttribute` may
+  declare (OpenUSD's `Sdf.ValueTypeNames`), each scalar type then its
+  array form (`color3f`, `color3f[]`), with `isArray`, its `scalarType`
+  and `arrayType` (`null` for `opaque` and `group`), its `role`
+  (`Color`), its `storage` (the role-less type holding its values,
+  `float3`), one value's `dimensions` (`[3]`, `[4, 4]`) and whether it is
+  one of the `legacy` types (`Transform`, `PointIndex`, `EdgeIndex`,
+  `FaceIndex`) an "add attribute" picker may leave out.
 - **Paths are text**: `/World/Rock` for prims, `/World/Rock.size` for
   properties.
 - **Values say their shape.** `Value` is a union on `kind`: `scalar`

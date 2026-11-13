@@ -212,6 +212,14 @@ pub fn native_version() -> JsValue {
     .into()
 }
 
+/// The value type names an attribute may declare, with what each is: the
+/// record `value::value_types` builds.
+#[wasm_bindgen(js_name = valueTypes)]
+#[must_use]
+pub fn value_types() -> JsValue {
+    value::value_types().into()
+}
+
 /// The linear Rec. 709 color of a blackbody at `kelvin` (clamped to
 /// 1000–10000 K), normalized to unit luminance, as OpenUSD's
 /// `UsdLuxBlackbodyTemperatureAsRgb`: what a light's `colorTemperature`

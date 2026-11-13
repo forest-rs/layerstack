@@ -138,17 +138,18 @@ test("connecting creates the ports only the definition has, with the definition'
   // An unauthored output into an unauthored input: the output created first (with its own type, not the
   // input's), then the input by the connection.
   assert.deepEqual(connectEdits(stage, `${CHECKER}/Surface.inputs:opacity`, `${CHECKER}/Texture.outputs:rgb`), [
-    [{ type: "connectToSource", path: `${CHECKER}/Surface.inputs:opacity`, source: `${CHECKER}/Texture.outputs:rgb`, typeName: "float" }],
+    { type: "connectToSource", path: `${CHECKER}/Surface.inputs:opacity`, source: `${CHECKER}/Texture.outputs:rgb`, typeName: "float" },
   ]);
   assert.deepEqual(connectEdits(stage, `${CHECKER}/Surface.inputs:opacity`, `${CHECKER}/Texture.outputs:b`), [
-    [{ type: "createAttribute", path: `${CHECKER}/Texture.outputs:b`, typeName: "float", custom: false }],
-    [{ type: "connectToSource", path: `${CHECKER}/Surface.inputs:opacity`, source: `${CHECKER}/Texture.outputs:b`, typeName: "float" }],
+    { type: "createAttribute", path: `${CHECKER}/Texture.outputs:b`, typeName: "float", custom: false },
+    { type: "connectToSource", path: `${CHECKER}/Surface.inputs:opacity`, source: `${CHECKER}/Texture.outputs:b`, typeName: "float" },
   ]);
   // Both authored: the connection alone.
   assert.deepEqual(connectEdits(stage, `${CHECKER}/Surface.inputs:roughness`, `${CHECKER}/Reader.outputs:result`), [
-    [{ type: "connectToSource", path: `${CHECKER}/Surface.inputs:roughness`, source: `${CHECKER}/Reader.outputs:result` }],
+    { type: "connectToSource", path: `${CHECKER}/Surface.inputs:roughness`, source: `${CHECKER}/Reader.outputs:result` },
   ]);
-  for (const batch of connectEdits(stage, `${CHECKER}/Surface.inputs:opacity`, `${CHECKER}/Texture.outputs:a`)) stage.apply(batch);
+  // The output created and connected to in one apply.
+  stage.apply(connectEdits(stage, `${CHECKER}/Surface.inputs:opacity`, `${CHECKER}/Texture.outputs:a`));
   assert.equal(stage.port(`${CHECKER}/Texture.outputs:a`)?.typeName, "float");
   assert.deepEqual(stage.port(`${CHECKER}/Surface.inputs:opacity`)?.connections, [`${CHECKER}/Texture.outputs:a`]);
   stage.apply(disconnectEdits(`${CHECKER}/Surface.inputs:opacity`, `${CHECKER}/Texture.outputs:a`));
@@ -217,7 +218,7 @@ test("after an edit, the nodes stay where they were drawn and a new one goes whe
   const stage = sample();
   const before = layoutNetwork(connectedOnly(readNetwork(stage, CHECKER)).network);
   // Connecting the reader straight into the surface's roughness would move columns in a fresh layout.
-  for (const batch of connectEdits(stage, `${CHECKER}/Surface.inputs:roughness`, `${CHECKER}/Reader.outputs:result`)) stage.apply(batch);
+  stage.apply(connectEdits(stage, `${CHECKER}/Surface.inputs:roughness`, `${CHECKER}/Reader.outputs:result`));
   const path = `${CHECKER}/Extra`;
   stage.apply(addShaderEdits(path, "UsdTransform2d", null));
   const after = layoutNetwork(connectedOnly(readNetwork(stage, CHECKER), new Set([path])).network);

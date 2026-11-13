@@ -181,7 +181,15 @@ function RenameDialog({ store, stage, path, onClose }: { store: EditorStore; sta
         }}
         className="flex flex-col gap-1 text-xs"
       >
-        <Input autoFocus aria-label="Name" value={name} onChange={(event) => setName(event.target.value)} className="h-7 font-mono text-xs" />
+        {/* The name is selected, so typing replaces it. */}
+        <Input
+          autoFocus
+          aria-label="Name"
+          value={name}
+          onFocus={(event) => event.target.select()}
+          onChange={(event) => setName(event.target.value)}
+          className="h-7 font-mono text-xs"
+        />
         {problem !== null && <span className="text-[11px] text-destructive">{problem}</span>}
         <RefusalNote refusal={refusal} className="text-[11px] text-destructive" />
       </form>

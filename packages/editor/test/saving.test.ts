@@ -1,0 +1,213 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+// What leaves the page, through the store as the File menu and the Text
+// tab drive it: a save writes the dirty layers and clears them, exports
+// return the bytes of their format, a flatten says what it lost, a
+// package fetches what the stage never read, a USDZ root opens editable
+// in a session layer, and the page knows when leaving would lose edits.
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import type { SceneSource } from "../src/model/sources.ts";
+import { harness, sampleSource } from "./support/storeHarness.ts";
+
+const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
+const HIDE_ROBOT = { type: "token", value: "invisible" } as const;
+
+test("a save writes the edited layer, clears it, and says so on the history channel", async () => {
+  const h = await harness();
+  await h.open(sampleSource());
+  const { store } = h;
+  assert.deepEqual(store.dirtyLayers(), []);
+  assert.equal(store.unsaved, false, "nothing to lose on open");
+  assert.deepEqual(store.savePlan(), []);
+
+  assert.equal(store.setValue("/World/Robot.visibility", HIDE_ROBOT), undefined);
+  assert.deepEqual(store.dirtyLayers().map((layer) => layer.identifier), ["scene.usda"]);
+  assert.equal(store.unsaved, true, "leaving would lose the edit");
+  assert.deepEqual(
+    store.savePlan().map((entry) => [entry.layer.identifier, entry.name, entry.disposition]),
+    [["scene.usda", "scene.usda", "write"]],
+  );
+
+  const before = store.signals.revision("history");
+  const result = await h.settle(store.save());
+  assert.ok(result !== null);
+  assert.deepEqual(result.written.map((layer) => layer.identifier), ["scene.usda"]);
+  assert.match(text(result.written[0]!.bytes), /token visibility = "invisible"/);
+  assert.deepEqual(result.failures, []);
+  assert.deepEqual(store.dirtyLayers(), []);
+  assert.equal(store.unsaved, false, "saved, nothing to lose");
+  assert.ok(store.signals.revision("history") > before, "the File menu and the Layers tab hear the layers are clean");
+  assert.deepEqual(store.session!.saved.map((file) => file.identifier), ["scene.usda"]);
+});
+
+test("a layer exports as USDA text or USDC binary, and stays edited", async () => {
+  const h = await harness();
+  await h.open(sampleSource());
+  const { store } = h;
+  store.setValue("/World/Robot.visibility", HIDE_ROBOT);
+  const root = store.session!.stage.root;
+  const usda = store.exportLayer(root, "usda");
+  assert.ok(usda !== null);
+  assert.match(text(usda), /^#usda 1\.0/);
+  assert.match(text(usda), /token visibility = "invisible"/);
+  const usdc = store.exportLayer(root, "usdc");
+  assert.ok(usdc !== null);
+  assert.equal(text(usdc.subarray(0, 8)), "PXR-USDC");
+  assert.ok(store.session!.stage.isDirty(root), "an export saves nothing");
+  assert.deepEqual(store.notices, []);
+});
+
+/** A root whose prim reads value clips from a layer that is not there: a flatten cannot bake them. */
+const MISSING_CLIP = `#usda 1.0
+def Xform "World" (
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./missing_clip.usda@]
+            string primPath = "/Clip"
+            double2[] active = [(0, 0)]
+        }
+    }
+)
+{
+    double size = 1
+}
+`;
+
+test("a flatten of the sample is lossless; one that cannot bake value clips says what it lost", async () => {
+  const h = await harness();
+  await h.open(sampleSource());
+  const lossless = h.store.exportFlattened("usda");
+  assert.ok(lossless !== null);
+  assert.equal(lossless.lossless, true);
+  assert.deepEqual(lossless.lost, []);
+  assert.doesNotMatch(text(lossless.bytes), /@\.\/assets\/|subLayers/, "no arcs to other layers");
+
+  await h.open(sampleSource("clips.usda", { "clips.usda": MISSING_CLIP }));
+  const flat = h.store.exportFlattened("usdc");
+  assert.ok(flat !== null);
+  assert.equal(flat.lossless, false);
+  assert.deepEqual(flat.lost, [{ path: "/World", message: "lost: value clips" }]);
+  assert.equal(text(flat.bytes.subarray(0, 8)), "PXR-USDC", "written all the same, for the person to decide");
+});
+
+test("a save leaves the session layer, and says it is the session layer", async () => {
+  const h = await harness();
+  h.store.setEditLayerChoice("session");
+  await h.open(sampleSource());
+  const { store } = h;
+  const sessionLayer = store.session!.sessionLayer!;
+  assert.ok(sessionLayer.anonymous);
+  assert.equal(store.session!.sessionNote, null, "asked for, not forced");
+  // The stage makes its session layer dirty and empty: nothing is edited until an edit writes it.
+  assert.deepEqual(store.dirtyLayers(), []);
+  assert.equal(store.unsaved, false);
+  store.setValue("/World/Robot.visibility", HIDE_ROBOT);
+  assert.deepEqual(store.dirtyLayers(), [sessionLayer]);
+  assert.equal(store.unsaved, true, "the session layer's edits are lost with the page");
+  assert.deepEqual(
+    store.savePlan().map((entry) => [entry.name, entry.disposition]),
+    [["session.usda", "session"]],
+  );
+  const result = await h.settle(store.save());
+  assert.deepEqual(result?.written, []);
+  assert.equal(store.unsaved, true, "still unsaved: only an export keeps it");
+  const exported = store.exportLayer(sessionLayer, "usda");
+  assert.ok(exported !== null);
+  assert.match(text(exported), /over "World"[\s\S]*over "Robot"[\s\S]*token visibility = "invisible"/);
+  // Undone, the session layer holds nothing to lose.
+  await h.settle(store.undo());
+  assert.equal(store.unsaved, false);
+});
+
+/** A source serving one USDZ package as its root. */
+function packageSource(name: string, bytes: Uint8Array): SceneSource {
+  return {
+    label: name,
+    root: name,
+    fetch: async (identifier) => (identifier === name ? bytes : null),
+    exists: async (identifier) => identifier === name,
+    size: async (identifier) => (identifier === name ? bytes.byteLength : null),
+  };
+}
+
+test("a package fetches what the stage never read, and a USDZ root opens editable in a session layer", async () => {
+  const h = await harness();
+  const source = sampleSource();
+  await h.open(source);
+  const { store } = h;
+  store.setValue("/World/Robot.visibility", HIDE_ROBOT);
+  // Neither the chrome variant's layer nor the textures were read by the stage: the package fetches them.
+  const packaged = await h.settle(store.exportPackage());
+  assert.ok(packaged !== null);
+  assert.ok(packaged.bytes !== null, JSON.stringify(packaged.unresolved.map((each) => each.reason)));
+  assert.deepEqual(packaged.unresolved, []);
+  assert.deepEqual(packaged.omitted, [], "no session layer");
+  assert.equal(packaged.layers, 5, "the root, its sublayer, and the robot, the chrome finish and the beacon");
+  assert.equal(packaged.assets, 3, "the checker and the two UDIM tiles");
+  assert.ok(source.asked.includes("textures/tile.1002.png"), "every tile of the UDIM set");
+  assert.ok(store.dirtyLayers().length === 1, "packaging saves nothing");
+  // The variant whose layer the package fetched still composes when chosen.
+  await h.settle(store.selectVariant("/World/Robot", "finish", "chrome"));
+  assert.deepEqual(store.notices, []);
+  assert.ok(store.session!.stage.layers().some((layer) => layer.identifier === "assets/chrome.usda"));
+
+  // Opened as the root, the package is read-only: edits go to a session layer, and the scene says why.
+  assert.equal(store.editLayerChoice, "root");
+  await h.open(packageSource("sample.usdz", packaged.bytes));
+  const session = store.session!;
+  assert.match(session.sessionNote ?? "", /\.usdz package, which is read-only/);
+  const sessionLayer = session.sessionLayer;
+  assert.ok(sessionLayer !== null && sessionLayer.anonymous);
+  assert.equal(session.stage.editLayer, sessionLayer);
+  assert.deepEqual(store.dirtyLayers().map((layer) => layer.identifier), []);
+  assert.equal(store.unsaved, false);
+  assert.deepEqual(session.stage.attribute("/World/Robot.visibility")?.get(), { kind: "scalar", type: "token", value: "invisible" }, "the package holds the unsaved edit");
+  // An edit applies, where edits go.
+  assert.equal(store.setValue("/World/Beacons/North.visibility", HIDE_ROBOT), undefined);
+  assert.deepEqual(store.notices, []);
+  assert.deepEqual(store.dirtyLayers(), [sessionLayer]);
+  assert.deepEqual(store.savePlan().map((entry) => entry.disposition), ["session"]);
+  // A package of it leaves the session layer out, and says so.
+  const again = await h.settle(store.exportPackage());
+  assert.ok(again?.bytes != null);
+  assert.deepEqual(again.omitted, [sessionLayer]);
+});
+
+test("the Text tab reads a layer as USDA and marks the lines the last edit changed", async () => {
+  const h = await harness();
+  await h.open(sampleSource());
+  const { store } = h;
+  const root = store.session!.stage.root;
+  assert.equal(store.textLayer, root, "the edit layer by default");
+  const first = store.layerText(root);
+  assert.ok(typeof first !== "string");
+  assert.deepEqual(first.changes.added, [], "nothing to compare the first read with");
+  assert.equal(first.truncated, false);
+
+  store.setValue("/World/Robot.visibility", HIDE_ROBOT);
+  const after = store.layerText(root);
+  assert.ok(typeof after !== "string");
+  const changed = after.changes.added.map((line) => after.lines[line]!.trim());
+  assert.ok(changed.includes('token visibility = "invisible"'), JSON.stringify(changed));
+  assert.ok(changed.length < 4, `only what the edit authored: ${JSON.stringify(changed)}`);
+  // An edit elsewhere leaves the text as it was, and what the last edit here showed.
+  const again = store.layerText(root);
+  assert.ok(typeof again !== "string");
+  assert.deepEqual(again.changes, after.changes);
+
+  // Undone, the line is gone, and the text says where.
+  await h.settle(store.undo());
+  const undone = store.layerText(root);
+  assert.ok(typeof undone !== "string");
+  assert.deepEqual(undone.changes.added, []);
+  assert.ok(undone.changes.removed >= 1 && undone.changes.removedBefore.length > 0);
+
+  // Showing another layer brings the tab forward.
+  const library = store.session!.stage.layers().find((layer) => layer.identifier === "library.usda")!;
+  store.showBottomTab("explain");
+  store.showLayerText(library);
+  assert.equal(store.textLayer, library);
+  assert.equal(store.bottomTab, "text");
+});

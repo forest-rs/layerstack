@@ -18,15 +18,31 @@
 // stage) or `#fetching` (it may want assets after) with what to do to the
 // session; state that is not the stage's goes in the module of its
 // concern, with a getter here and a bump of its channel.
-import type { Edit, EditReceipt, EditTarget, Layer, Layerstack, LoadOutcome, LoadPolicy, ValueInput } from "@forest-rs/layerstack";
+import type {
+  Edit,
+  EditReceipt,
+  EditTarget,
+  FlattenResult,
+  Layer,
+  LayerFormat,
+  Layerstack,
+  LoadOutcome,
+  LoadPolicy,
+  PackageResult,
+  SaveResult,
+  ValueInput,
+} from "@forest-rs/layerstack";
 import type { BudgetReport, DrawCost, Stagehand } from "@forest-rs/layerstack_stagehand";
 import type { AssetFocus, BudgetChoice, DrawScopeChoice } from "./model/assetView.ts";
 import type { ViewportScene, ViewportUpdate } from "./model/draws.ts";
+import { planSave, type SaveEntry } from "./model/files.ts";
 import { indexOfId, type InstancerColumns, toggled } from "./model/instancer.ts";
+import type { LayerTextRead } from "./model/layerText.ts";
 import type { PathMove, Session } from "./model/session.ts";
 import type { SceneSource } from "./model/sources.ts";
 import { ActionQueue } from "./store/actions.ts";
 import { Drawing } from "./store/drawing.ts";
+import { type EditLayerChoice, FileState } from "./store/files.ts";
 import { type FrameNote, FrameNotes, type Notice, Notices } from "./store/notices.ts";
 import { type BusyPhase, OpenController, type PayloadChoice } from "./store/opening.ts";
 import { Playback, type TimeRange, timeRange } from "./store/playback.ts";
@@ -41,6 +57,7 @@ import { rememberLoop } from "./model/playbackLoop.ts";
 import type { ToneMapChoice } from "./viewport/toneMap.ts";
 import type { Viewport } from "./viewport/viewport3d.ts";
 
+export type { EditLayerChoice } from "./store/files.ts";
 export { FRAME_NOTE_MS, type FrameNote, type Notice } from "./store/notices.ts";
 export { PAYLOAD_BUDGET, type PayloadChoice } from "./store/opening.ts";
 export type { TimeRange } from "./store/playback.ts";
@@ -74,6 +91,7 @@ export class EditorStore {
   readonly #drawing: Drawing;
   readonly #notices: Notices;
   readonly #frameNotes: FrameNotes;
+  readonly #files: FileState;
   /** The session whose metadata {@link EditorStore.#readStage} last read, and the change records it had then. */
   #read: { session: Session | null; changes: number } = { session: null, changes: 0 };
   #frame = 0;
@@ -87,6 +105,7 @@ export class EditorStore {
     this.#actions = new ActionQueue(() => signals.bump("status"));
     this.#notices = new Notices(signals);
     this.#frameNotes = new FrameNotes(signals);
+    this.#files = new FileState(signals);
     this.#playback = new Playback(
       () => this.#syncTime(),
       () => signals.bump("time"),
@@ -309,6 +328,16 @@ export class EditorStore {
   /** Sets how the next scene opens its payloads. */
   setPayloads(choice: PayloadChoice): void {
     this.#opener.setPayloads(choice);
+  }
+
+  /** Where the next scene's edits go: its root, or a session layer ({@link EditLayerChoice}). */
+  get editLayerChoice(): EditLayerChoice {
+    return this.#opener.editLayer;
+  }
+
+  /** Sets where the next scene's edits go; a package root is edited in a session layer whatever is set. */
+  setEditLayerChoice(choice: EditLayerChoice): void {
+    this.#opener.setEditLayer(choice);
   }
 
   /** Takes the session an open made as the scene: the one it had is freed, and everything starts over on the new one. */
@@ -762,6 +791,150 @@ export class EditorStore {
         if (!this.lose(error)) throw error;
       }
     });
+  }
+
+  // What leaves the page: saving, exporting, and a layer as text.
+
+  /** The layers with unsaved edits, the session layer's among them; empty with no scene. */
+  dirtyLayers(): Layer[] {
+    return this.session?.dirtyLayers() ?? [];
+  }
+
+  /** Whether `layer` has unsaved edits ({@link Session.isEdited}): what the Layers tab marks "edited". */
+  isEdited(layer: Layer): boolean {
+    return this.session?.isEdited(layer) ?? false;
+  }
+
+  /**
+   * Whether anything would be lost by leaving the page: a layer has edits
+   * not saved (or, for the session layer, not exported). What the page's
+   * `beforeunload` asks.
+   */
+  get unsaved(): boolean {
+    if (this.status.kind === "lost") return false;
+    return this.dirtyLayers().length > 0;
+  }
+
+  /** The dirty layers and what a save does with each ({@link planSave}), the written ones first. */
+  savePlan(): SaveEntry[] {
+    const session = this.session;
+    return session === null ? [] : planSave(session.stage, session.dirtyLayers(), session.sessionLayer);
+  }
+
+  /**
+   * Saves the dirty layers (`Stage.save`) in its turn: what it returns is
+   * written (the bytes are the caller's to download or write) and those
+   * layers are clean; the session layer and muted layers stay dirty. A
+   * layer that cannot be written is a notice too. `null` with no scene, or
+   * when the save threw (a notice says why).
+   */
+  async save(): Promise<SaveResult | null> {
+    let result: SaveResult | null = null;
+    await this.#actions.run("save", () => {
+      const session = this.session;
+      if (session === null || this.status.kind === "lost") return;
+      try {
+        result = session.save();
+        for (const failure of result.failures) {
+          this.#notices.add("save", `${failure.layer.identifier ?? "the session layer"} was not saved: ${failure.message}`, failure.code);
+        }
+      } catch (error) {
+        if (!this.lose(error)) this.#notices.report("save", error);
+      }
+      this.signals.bump("history");
+    });
+    return result;
+  }
+
+  /**
+   * `layer` as `format` (`Stage.exportLayer`): a copy, the layer's state
+   * unchanged. `null` when the stage could not write it, with a notice
+   * saying why.
+   */
+  exportLayer(layer: Layer, format: LayerFormat): Uint8Array | null {
+    return this.#exporting(`export ${layer.identifier ?? "the session layer"}`, (session) => session.stage.exportLayer(layer, format));
+  }
+
+  /**
+   * The composed stage as one layer with no arcs (`Stage.exportFlattened`),
+   * with whether it is lossless and what was lost. `null` when the stage
+   * could not write it, with a notice saying why.
+   */
+  exportFlattened(format: LayerFormat): FlattenResult | null {
+    return this.#exporting("export flattened", (session) => session.stage.exportFlattened(format));
+  }
+
+  /**
+   * The root and what it depends on as a USDZ package, in its turn: the
+   * assets the stage was never asked for are fetched from the source for
+   * it ({@link Session.exportPackage}). Its `bytes` are `null` while a
+   * dependency is unresolved, and `unresolved` says which; the session
+   * layer is `omitted`. `null` with no scene, or when it failed (a notice
+   * says why).
+   */
+  async exportPackage(): Promise<PackageResult | null> {
+    let result: PackageResult | null = null;
+    await this.#actions.run("package", async (signal) => {
+      const session = this.session;
+      const source = this.source;
+      if (session === null || source === null || this.status.kind === "lost") return;
+      try {
+        result = (await session.exportPackage((identifier) => source.exists(identifier), signal)).result;
+      } catch (error) {
+        if (this.lose(error)) return;
+        if (!signal.aborted) this.#notices.report("export package", error);
+      }
+      this.signals.bump("loop");
+    });
+    return result;
+  }
+
+  /** The layer the Text tab shows: the one chosen ({@link EditorStore.showLayerText}) while the stage holds it, else the edit layer. */
+  get textLayer(): Layer | null {
+    return this.#files.shown(this.session);
+  }
+
+  /** Shows `layer` as text in the Text tab, bringing the tab forward. */
+  showLayerText(layer: Layer): void {
+    const session = this.session;
+    if (session === null) return;
+    this.#files.show(session, layer);
+    this.#view.showBottomTab("text");
+  }
+
+  /**
+   * `layer` as USDA text, with the lines that changed since it was last
+   * read here ({@link LayerTextRead.changes}): read after an edit, the
+   * lines the edit authored. The text says why when the layer cannot be
+   * written as text.
+   */
+  layerText(layer: Layer): LayerTextRead | string {
+    const session = this.session;
+    if (session === null) return "Nothing is open.";
+    try {
+      return this.#files.texts.read(session.stage, layer);
+    } catch (error) {
+      if (this.lose(error)) return "The module was lost.";
+      return error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  /** The last text read of `layer` ({@link EditorStore.layerText}) without reading it again; `null` when none was. */
+  lastLayerText(layer: Layer): LayerTextRead | null {
+    const session = this.session;
+    return session === null ? null : this.#files.texts.last(session.stage, layer);
+  }
+
+  /** Runs an export that only reads the stage; its failure is a notice, a module's trap loses the module. */
+  #exporting<T>(action: string, run: (session: Session) => T): T | null {
+    const session = this.session;
+    if (session === null || this.status.kind === "lost") return null;
+    try {
+      return run(session);
+    } catch (error) {
+      if (!this.lose(error)) this.#notices.report(action, error);
+      return null;
+    }
   }
 
   /** Forgets a notice. */

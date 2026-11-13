@@ -16,11 +16,13 @@ import type {
   LoadPolicy,
   LoadResult,
   OpenOptions,
+  PackageResult,
   ReleasedLayers,
   SaveResult,
   Stage,
   ValueInput,
 } from "@forest-rs/layerstack";
+import { packageWants, sessionLayerReason, UNSAVABLE_ROOT } from "./files.ts";
 import { LoopRecorder } from "./timeline.ts";
 
 /**
@@ -163,6 +165,9 @@ export type OpenPhase =
  */
 const MAX_ROUNDS = 100;
 
+/** The most times {@link Session.exportPackage} supplies what the package still wants before it gives up. */
+const MAX_PACKAGE_ROUNDS = 8;
+
 /**
  * A stage being edited. Edits go to {@link Session.target} (the stage's
  * edit layer until another is chosen); each action's receipt goes to the
@@ -183,6 +188,12 @@ export class Session implements Disposable {
   readonly loopLog: LoopEntry[] = [];
   /** When each step of the asset loop happened, run by run, for the waterfall. */
   readonly loops: LoopRecorder;
+  /**
+   * Why the stage edits in a session layer though the open did not ask
+   * for one (`OpenOptions.editLayer`): its root cannot take edits, as a
+   * USDZ package cannot; `null` when it was asked for, or is not used.
+   */
+  readonly sessionNote: string | null;
   /** The layers last saved: what a reopen reads before fetching. */
   saved: readonly LayerFile[] = [];
   /**
@@ -227,8 +238,21 @@ export class Session implements Disposable {
     this.#local = options.local ?? new Map();
     this.#progress = options.progress;
     this.#phase = options.phase;
-    this.#open = options.open ?? {};
-    this.stage = layerstack.open({ identifier: root, bytes }, options.open ?? {});
+    // A root that cannot take edits (a package) is edited in a session layer in front of it.
+    const asked = options.open ?? {};
+    const own = asked.editLayer === "session" || asked.sessionLayer !== undefined;
+    let note = own ? null : sessionLayerReason(root, bytes);
+    let open: OpenOptions = note === null ? asked : { ...asked, editLayer: "session" };
+    let stage = layerstack.open({ identifier: root, bytes }, open);
+    if (stage.editLayer === null && open.editLayer !== "session") {
+      stage.free();
+      note = UNSAVABLE_ROOT;
+      open = { ...asked, editLayer: "session" };
+      stage = layerstack.open({ identifier: root, bytes }, open);
+    }
+    this.#open = open;
+    this.sessionNote = note;
+    this.stage = stage;
     this.history = new UndoHistory(this.stage);
     this.stage.onChange((changes) => {
       this.changeLog.push({ cause: this.#cause, changes });
@@ -460,17 +484,83 @@ export class Session implements Disposable {
     return layer;
   }
 
-  /** The layers with unsaved changes. */
-  dirtyLayers(): Layer[] {
-    return this.stage.layers().filter((layer) => this.stage.isDirty(layer));
+  /**
+   * The session layer edits go to by default, when the stage was opened
+   * with one (`editLayer: "session"`, or a root that cannot take edits,
+   * {@link Session.sessionNote}); `null` when edits go to the root.
+   */
+  get sessionLayer(): Layer | null {
+    return this.#open.editLayer === "session" || this.#open.sessionLayer !== undefined ? this.stage.editLayer : null;
   }
 
-  /** Saves the dirty layers: their bytes are the host's to persist ({@link Session.saved}). */
+  /**
+   * Whether `layer` has edits that are not saved (`Stage.isDirty`). The
+   * stage reads an anonymous session layer as dirty from the moment it
+   * makes it, with nothing in it, so that one counts as edited only while
+   * an action on the undo stack writes it.
+   */
+  isEdited(layer: Layer): boolean {
+    if (!this.stage.isDirty(layer)) return false;
+    if (!layer.anonymous || layer !== this.sessionLayer) return true;
+    return this.history.undoSteps.some((step) => step.layers.some((written) => written.id === layer.id));
+  }
+
+  /** The layers with unsaved edits ({@link Session.isEdited}). */
+  dirtyLayers(): Layer[] {
+    return this.stage.layers().filter((layer) => this.isEdited(layer));
+  }
+
+  /**
+   * Saves the dirty layers: their bytes are the host's to persist
+   * ({@link Session.saved}). A save of the stage leaves the session layer
+   * (export it, `Stage.exportLayer`) and muted layers dirty.
+   */
   save(): SaveResult {
     this.#cause = "save";
     const result = this.stage.save();
     this.saved = result.written.map(({ identifier, bytes }) => ({ identifier, bytes }));
     return result;
+  }
+
+  /**
+   * The root and everything it depends on as a USDZ package
+   * (`Stage.exportPackage`), the unsaved edits with it. The stage packages
+   * what the host supplied; the assets it was never asked for (textures,
+   * the layers of a variant not selected) or whose bytes it let go once
+   * read are fetched here and supplied, every tile of a UDIM set at once
+   * (those `exists` says are there), and the package made again, until
+   * nothing more can be supplied. What is still unresolved then is in the
+   * result's `unresolved`, and its `bytes` are `null`. Returns, with the
+   * result, how many assets were fetched for it.
+   */
+  async exportPackage(
+    exists?: (identifier: string) => Promise<boolean>,
+    signal?: AbortSignal,
+  ): Promise<{ readonly result: PackageResult; readonly fetched: number }> {
+    this.#cause = "package";
+    // What was fetched for the package, supplied again before each try: a layer the packager reads is let go.
+    const supplied = new Map<string, Uint8Array | null>();
+    let result = this.stage.exportPackage();
+    for (let round = 0; round < MAX_PACKAGE_ROUNDS && result.bytes === null; round++) {
+      const wants = packageWants(result.unresolved);
+      const fresh = wants.fetch.filter((identifier) => !supplied.has(identifier));
+      const tiles = wants.tiles.filter((identifier) => !supplied.has(identifier));
+      // Nothing new to fetch, and what was fetched supplied again already: nothing more helps.
+      if (fresh.length === 0 && tiles.length === 0 && wants.fetch.length === 0) break;
+      const found = await unlessAborted(Promise.all(tiles.map(async (tile) => (exists === undefined || (await exists(tile)) ? tile : null))), signal);
+      const identifiers = [...fresh, ...found.filter((tile) => tile !== null)];
+      const bytes = await unlessAborted(Promise.all(identifiers.map((identifier) => this.#fetch(identifier, signal))), signal);
+      identifiers.forEach((identifier, index) => {
+        const data = bytes[index] ?? null;
+        supplied.set(identifier, data);
+        this.#log("supply", identifier, data === null ? "confirmed absent, for the package" : `${data.byteLength} B, for the package`);
+      });
+      // Tiles that are not there are not supplied: the packager asks only for those it is told exist.
+      for (const tile of tiles) if (!supplied.has(tile)) supplied.set(tile, null);
+      for (const [identifier, data] of supplied) this.stage.supply(identifier, data);
+      result = this.stage.exportPackage();
+    }
+    return { result, fetched: [...supplied.values()].filter((data) => data !== null).length };
   }
 
   /**

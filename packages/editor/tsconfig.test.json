@@ -8,7 +8,7 @@
     "noUncheckedIndexedAccess": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
-    "types": ["node"],
+    "types": ["node", "@types/wicg-file-system-access"],
     "allowImportingTsExtensions": true
   },
   "include": ["test"]

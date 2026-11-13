@@ -62,10 +62,40 @@ nothing more.
   which is read-only, is always edited so, and the edit target says why.
   A save leaves the session layer, which is never part of the root: it is
   kept by exporting it, and a package lists it as left out.
-- **Layers.** Every layer the stage holds, edited ones marked, the root
-  stack's and the session layer marked; a switch mutes or unmutes each
-  (the stage's state, not an edit). Each is live, as a layer is anywhere:
-  a click shows its text, a context menu offers the rest.
+- **Layers.** The stage's own layer stack as a tree in strength order,
+  stronger above weaker: the session layer, then the root, each layer's
+  sublayers beneath it in the order it lists them, numbered, each with
+  the asset path and offset its parent authors (`Stage.sublayers`). A
+  sublayer the stage could not read is marked missing. On a layer of the
+  stack that takes edits, **Add a sublayer** picks a layer the source
+  holds (or a typed path), a position among its sublayers and an offset,
+  and shows the `subLayers` it authors; each sublayer moves stronger or
+  weaker (`setSublayers`), takes a new offset, or is removed. Each is one
+  undoable edit of that layer, whatever layer other edits go to, after
+  which the asset loop reads what it names. Below the stack, the layers
+  reached through references and payloads, then muted layers the stage
+  released. A switch mutes or unmutes a layer (the stage's state, not an
+  edit), and every layer is live: a click shows its text, a context menu
+  offers the rest, **Reload from source** among it. **Reload** reads every
+  layer again from the source (`Stage.reloadLayers`), so files changed on
+  disk come in and only what changed recomposes; a layer with unsaved
+  edits is left as it is, and one asked for alone is refused.
+- **Stage.** The stage's metadata: up axis (the viewport turns with it),
+  meters per unit (by unit name, or any length), default prim (one of the
+  root prims), start and end time codes, time codes and frames per
+  second, and documentation. Each says which layer holds its opinion (the
+  session layer over the root; no sublayer counts), or that it is the
+  field's fallback, and clears it. An edit is one undoable action in the
+  root, or in the session layer when edits go there; with edits going to
+  another layer, the tab says the stage's metadata is authored in the
+  root instead.
+- **Health.** What is wrong with the stage, counted on its tab:
+  composition errors grouped by prim (each prim live, and marked in the
+  prim tree), missing assets with the layer that authors each and the
+  prims composed without it, assets not supplied yet, and the paths the
+  last move or delete left naming the old one. Read once per change of
+  the stage, never as time moves; with nothing wrong, it says what it
+  checked.
 - **Text.** A layer as USDA, as `Stage.exportLayer` writes it with its
   unsaved edits ("Show text" on any layer, or the edit layer from the
   File menu), read again after each edit, undo and redo. The lines the

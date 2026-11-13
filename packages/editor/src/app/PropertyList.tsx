@@ -97,7 +97,9 @@ export function PropertyList({ store, stage, prim }: { store: EditorStore; stage
     .filter((attribute) => attribute !== null);
   const authored = attributes.filter((attribute) => attribute.authored);
   const defined = attributes.filter((attribute) => !attribute.authored);
-  const schema = schemaChoice ?? authored.length === 0;
+  // A schema just applied to this prim shows what it brought, at its fallbacks.
+  const revealed = useStoreSelector(store, ["history"], (at) => (at.revealed?.prim === prim.path && at.revealed.names.length > 0 ? at.revealed : null));
+  const schema = schemaChoice ?? (authored.length === 0 || revealed !== null);
   const authoredPaths = authored.map((attribute) => attribute.path);
   const varying = new Set(stage.valuesMightBeTimeVarying(authoredPaths).flatMap((varies, index) => (varies ? [authoredPaths[index]!] : [])));
   const keyed = new Set(stage.valueSourcesMightBeTimeVarying(authoredPaths).flatMap((varies, index) => (varies ? [authoredPaths[index]!] : [])));

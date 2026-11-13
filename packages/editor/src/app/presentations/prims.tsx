@@ -9,7 +9,6 @@
 import { registerPresentation } from "../../presentations/registry.ts";
 import { DrawModeSection } from "../DrawModeSection.tsx";
 import { CompositionSection } from "../CompositionSection.tsx";
-import { MaterialSection, State } from "../PrimSections.tsx";
 import { PropertyList } from "../PropertyList.tsx";
 import { ShadingSection } from "../ShadingSection.tsx";
 import { TransformSection } from "../TransformSection.tsx";
@@ -21,14 +20,6 @@ import { CameraView, LightView, SkeletonView, XformOpsView } from "../views/Type
 
 /** Registers the built-in prim panels. */
 export function registerPrimPresentations(): void {
-  registerPresentation({
-    id: "builtin.state",
-    kind: "prim",
-    type: "Prim",
-    title: "State",
-    priority: 100,
-    panel: ({ object, context }) => <State store={context.store} prim={object.prim} />,
-  });
   registerPresentation({
     id: "builtin.transform",
     kind: "prim",
@@ -80,14 +71,6 @@ export function registerPrimPresentations(): void {
     title: "Properties",
     priority: 0,
     panel: ({ object, context }) => <PropertyList store={context.store} stage={context.stage} prim={object.prim} />,
-  });
-  registerPresentation({
-    id: "builtin.bound-material",
-    kind: "prim",
-    type: "Prim",
-    title: "Bound material",
-    priority: -10,
-    panel: ({ object, context }) => <MaterialSection stage={context.stage} prim={object.prim} />,
   });
   registerPresentation({
     id: "builtin.composition",

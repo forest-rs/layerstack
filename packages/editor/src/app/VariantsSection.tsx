@@ -16,7 +16,7 @@ import type { EditTarget, Prim } from "@forest-rs/layerstack";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { MoreHorizontalIcon, PlusSignIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogSubmit, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -225,6 +225,7 @@ export function VariantDialog({ store, prim, set, onClose }: { store: EditorStor
         }}
         className="flex flex-col gap-2"
       >
+        <DialogSubmit />
         {newSet && (
           <label className="flex flex-col gap-1 text-xs">
             Set name

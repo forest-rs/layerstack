@@ -17,7 +17,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ListBox, ListBoxItem, ToggleButton, ToggleButtonGroup } from "react-aria-components";
 import type { Layer, ListPosition, Prim, Stage } from "@forest-rs/layerstack";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogSubmit, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
@@ -158,6 +158,7 @@ export function AddArcDialog({ store, prim, kind: initial, onClose }: { store: E
         }}
         className="flex flex-col gap-2.5"
       >
+        <DialogSubmit />
         <ToggleButtonGroup
           aria-label="Kind of arc"
           selectionMode="single"

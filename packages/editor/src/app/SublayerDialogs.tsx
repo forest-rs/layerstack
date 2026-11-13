@@ -12,7 +12,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ListBox, ListBoxItem } from "react-aria-components";
 import type { Layer } from "@forest-rs/layerstack";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogSubmit, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
@@ -169,6 +169,7 @@ export function AddSublayerDialog({
         }}
         className="flex flex-col gap-2"
       >
+        <DialogSubmit />
         <span className="text-xs">Layer</span>
         {source?.layers === undefined ? (
           <p className="text-[11px] text-muted-foreground">This source cannot list its layers: type the asset path.</p>
@@ -291,6 +292,7 @@ export function SublayerOffsetDialog({ store, parent, index, onClose }: { store:
         }}
         className="flex flex-col gap-2"
       >
+        <DialogSubmit />
         <OffsetFields initial={entry.layerOffset} onChange={setOffset} />
         <SublayersUsda sublayers={after} marked={index} />
         {refused !== null && (

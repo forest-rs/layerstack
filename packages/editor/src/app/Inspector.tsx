@@ -99,13 +99,13 @@ function Header({ store, prim }: { store: EditorStore; prim: Prim }) {
       <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground" title={prim.path}>
         {prim.path}
       </div>
-      <div className="mt-1.5 flex flex-wrap gap-1">
+      <div className="mt-1.5 flex flex-wrap items-center gap-1">
         <span title="Retype it: author its typeName where edits go" className="flex">
           <AriaButton
             aria-label={`Type ${prim.typeName ?? "none"}: retype`}
             isDisabled={prim.instanceProxy || prim.path === "/"}
             onPress={() => askPrim({ kind: "retype", path: prim.path })}
-            className="rounded-sm outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-default"
+            className="flex rounded-sm outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-default"
           >
             <Badge variant="secondary">{prim.typeName ?? "typeless"}</Badge>
           </AriaButton>

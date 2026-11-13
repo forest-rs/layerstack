@@ -10,12 +10,17 @@ import { Header, ListBox, ListBoxItem, ListBoxSection } from "react-aria-compone
 import type { Stage } from "@forest-rs/layerstack";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { cn } from "@/lib/utils";
-import { typeGroups } from "../model/primAuthoring.ts";
+import { typeForFilter, typeGroups, typeMatches } from "../model/primAuthoring.ts";
 import { primIcon } from "./icons.ts";
 
 /** The count of concrete types `stage` registers, for a dialog's description. */
 export function typeCount(stage: Stage): number {
   return typeGroups(stage.schemas()).reduce((count, [, schemas]) => count + schemas.length, 0);
+}
+
+/** The type chosen once the list of `stage`'s types is narrowed to `filter` (`typeForFilter`): one the list shows. */
+export function chosenUnderFilter(stage: Stage, filter: string, chosen: string | null): string | null {
+  return typeForFilter(typeGroups(stage.schemas()), filter, chosen);
 }
 
 /**
@@ -37,9 +42,8 @@ export function TypeList({
   typelessLabel?: string;
 }) {
   const groups = useMemo(() => typeGroups(stage.schemas()), [stage]);
-  const needle = filter.toLowerCase();
   const shown = groups
-    .map(([group, schemas]) => [group, schemas.filter((schema) => schema.name.toLowerCase().includes(needle))] as const)
+    .map(([group, schemas]) => [group, schemas.filter((schema) => typeMatches(schema.name, filter))] as const)
     .filter(([, schemas]) => schemas.length > 0);
   return (
     <ListBox

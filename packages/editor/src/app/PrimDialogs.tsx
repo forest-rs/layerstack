@@ -14,7 +14,7 @@ import { Header, ListBox, ListBoxItem, ListBoxSection } from "react-aria-compone
 import type { BindingStrength, EditTarget, Layer, SchemaInfo, Stage } from "@forest-rs/layerstack";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogSubmit, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -36,7 +36,7 @@ import { layerName } from "./format.ts";
 import { askPrim, usePrimDialog } from "./primDialogRequests.ts";
 import { editsGoTo, RefusalNote, SpecifierPicker } from "./primAuthoringParts.tsx";
 import { PrimPicker } from "./PrimPicker.tsx";
-import { typeCount, typeItemClass, TypeList } from "./TypeList.tsx";
+import { chosenUnderFilter, typeCount, typeItemClass, TypeList } from "./TypeList.tsx";
 
 /** The dialog asked for, over the open stage; nothing when none is, or no stage is open. */
 export function PrimDialogHost() {
@@ -112,7 +112,20 @@ function AddPrimDialog({ store, stage, parent, onClose }: { store: EditorStore; 
         }}
         className="contents"
       >
-        <Input autoFocus placeholder="Find a type" aria-label="Find a type" value={filter} onChange={(event) => setFilter(event.target.value)} className="h-7 text-xs" />
+        <DialogSubmit />
+        <Input
+          autoFocus
+          placeholder="Find a type"
+          aria-label="Find a type"
+          value={filter}
+          onChange={(event) => {
+            setFilter(event.target.value);
+            // The type chosen stays one the list shows: Enter adds what the button names.
+            const next = chosenUnderFilter(stage, event.target.value, typeName);
+            if (next !== typeName) choose(next);
+          }}
+          className="h-7 text-xs"
+        />
         <TypeList stage={stage} filter={filter} typeName={typeName} onChoose={choose} />
         <div className="grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-2">
           <label className="flex flex-col gap-1 text-xs">
@@ -181,6 +194,7 @@ function RenameDialog({ store, stage, path, onClose }: { store: EditorStore; sta
         }}
         className="flex flex-col gap-1 text-xs"
       >
+        <DialogSubmit />
         {/* The name is selected, so typing replaces it. */}
         <Input
           autoFocus
@@ -334,7 +348,17 @@ function RetypeDialog({ store, stage, path, onClose }: { store: EditorStore; sta
           schemas) goes.
         </DialogDescription>
       </DialogHeader>
-      <Input autoFocus placeholder="Find a type" aria-label="Find a type" value={filter} onChange={(event) => setFilter(event.target.value)} className="h-7 text-xs" />
+      <Input
+        autoFocus
+        placeholder="Find a type"
+        aria-label="Find a type"
+        value={filter}
+        onChange={(event) => {
+          setFilter(event.target.value);
+          setTypeName(chosenUnderFilter(stage, event.target.value, typeName));
+        }}
+        className="h-7 text-xs"
+      />
       <TypeList stage={stage} filter={filter} typeName={typeName} onChoose={setTypeName} typelessLabel={`clears ${where}'s type name`} />
       <RefusalNote refusal={refusal} className="text-[11px] text-destructive" />
       <DialogFooter>
@@ -394,6 +418,7 @@ function ApplySchemaDialog({ store, stage, path, onClose }: { store: EditorStore
         }}
         className="contents"
       >
+        <DialogSubmit />
         <Input autoFocus placeholder="Find a schema" aria-label="Find a schema" value={filter} onChange={(event) => setFilter(event.target.value)} className="h-7 text-xs" />
         <ListBox
           aria-label="API schemas"

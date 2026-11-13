@@ -70,6 +70,26 @@ export function kindChoices(current: string | null): KindInfo[] {
   return choices;
 }
 
+/** Whether a type named `name` is listed under `filter`: its name contains it, whatever the case. */
+export function typeMatches(name: string, filter: string): boolean {
+  return name.toLowerCase().includes(filter.toLowerCase());
+}
+
+/**
+ * The type chosen once the type list is narrowed to `filter`: `chosen`
+ * while the list still shows it ("no type", `null`, is always shown),
+ * else the first type listed, so what a dialog's button names is a type
+ * the person can see; `chosen` when the filter matches nothing.
+ */
+export function typeForFilter(groups: readonly (readonly [string, readonly Pick<SchemaInfo, "name">[]])[], filter: string, chosen: string | null): string | null {
+  if (chosen === null || typeMatches(chosen, filter)) return chosen;
+  for (const [, schemas] of groups) {
+    const first = schemas.find((schema) => typeMatches(schema.name, filter));
+    if (first !== undefined) return first.name;
+  }
+  return chosen;
+}
+
 /** The concrete typed schemas, grouped by what they are, by their bases: what a prim's `typeName` may name. */
 export function typeGroups(schemas: readonly SchemaInfo[]): [string, SchemaInfo[]][] {
   const groups = new Map<string, SchemaInfo[]>();

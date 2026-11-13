@@ -5,6 +5,7 @@
 // it a frame at a time. It knows nothing of the draws: it is told what to
 // do when the time moves.
 import type { Stage } from "@forest-rs/layerstack";
+import { rememberedLoop } from "../model/playbackLoop.ts";
 
 /** The stage's frames, as its metadata gives them. */
 export interface TimeRange {
@@ -38,6 +39,8 @@ export class Playback {
   range: TimeRange | null = null;
   /** Whether time is playing. */
   playing = false;
+  /** Whether playing starts over at the start of the range after its end, or stops at the end; this viewer's choice, remembered. */
+  loop = rememberedLoop();
   readonly #moved: () => void;
   readonly #toggled: () => void;
   #frame = 0;
@@ -87,9 +90,14 @@ export class Playback {
     this.#moved();
   }
 
-  /** Plays the range from the current time at `timeCodesPerSecond`, looping at its end. */
+  /**
+   * Plays the range from the current time at `timeCodesPerSecond`, then
+   * starts over at its start ({@link Playback.loop}) or stops at its end;
+   * playing from the end, not looping, starts at the start.
+   */
   play(): void {
     if (this.range === null || this.playing) return;
+    if (!this.loop && (this.time ?? this.range.start) >= this.range.end) this.time = this.range.start;
     this.playing = true;
     let last = performance.now();
     const tick = (now: number) => {
@@ -98,6 +106,14 @@ export class Playback {
       if (!this.playing || range === null) return;
       const advanced = (this.time ?? range.start) + ((now - last) / 1000) * range.timeCodesPerSecond;
       last = now;
+      if (advanced > range.end && !this.loop) {
+        // Stopped on the last frame, a whole time code as the pause button leaves it.
+        this.playing = false;
+        this.time = range.end;
+        this.#moved();
+        this.#toggled();
+        return;
+      }
       this.time = advanced > range.end ? range.start : advanced;
       this.#moved();
       this.#frame = requestAnimationFrame(tick);

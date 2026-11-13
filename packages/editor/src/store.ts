@@ -36,6 +36,8 @@ import { type EditorStatus, moduleTrap } from "./store/status.ts";
 import { type BottomTab, type SceneTab, ViewSettings } from "./store/view.ts";
 import type { LightSettings } from "./viewport/defaultLights.ts";
 import { isBox, type UpAxis } from "./viewport/framing.ts";
+import { nextKey, selectionKeys } from "./model/keyTimes.ts";
+import { rememberLoop } from "./model/playbackLoop.ts";
 import type { ToneMapChoice } from "./viewport/toneMap.ts";
 import type { Viewport } from "./viewport/viewport3d.ts";
 
@@ -531,7 +533,41 @@ export class EditorStore {
     this.#playback.setTime(time);
   }
 
-  /** Plays the range from the current time at `timeCodesPerSecond`, looping at its end. */
+  /** Whether playing loops at the end of the range (the default) or stops there; remembered for this viewer. */
+  get loop(): boolean {
+    return this.#playback.loop;
+  }
+
+  /** Makes playing loop at the end of the range, or stop there, from now on, and remembers it for this viewer. */
+  setLoop(loop: boolean): void {
+    if (loop === this.#playback.loop) return;
+    this.#playback.loop = loop;
+    rememberLoop(loop);
+    this.signals.bump("view");
+  }
+
+  /** Pauses and reads everything at `time` (clamped to the range): a click on a key, a typed time code. */
+  seek(time: number): void {
+    this.pause();
+    this.setTime(time);
+  }
+
+  /**
+   * Pauses and moves to the next key after the current time (`direction`
+   * 1) or the previous one (-1), of the selected prim's attributes and of
+   * the explained property; returns its time, or `null` (the time stays)
+   * when there is none that way.
+   */
+  jumpToKey(direction: 1 | -1): number | null {
+    const stage = this.session?.stage;
+    const range = this.range;
+    if (stage === undefined || range === null) return null;
+    const target = nextKey(selectionKeys(stage, this.selection, this.property, range).all, this.time ?? range.start, direction);
+    if (target !== null) this.seek(target);
+    return target;
+  }
+
+  /** Plays the range from the current time at `timeCodesPerSecond`, then loops or stops at its end ({@link EditorStore.loop}). */
   play(): void {
     this.#playback.play();
   }

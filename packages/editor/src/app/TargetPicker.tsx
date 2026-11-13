@@ -5,7 +5,7 @@
 // or an edit target through an arc chosen from an opinion (the explain
 // panel's "Edit here").
 import type { EditTarget, Layer } from "@forest-rs/layerstack";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEditorStore, useRevision } from "./context.ts";
 import { layerName } from "./format.ts";
 import { countRender } from "./renders.ts";
@@ -32,6 +32,11 @@ export function TargetPicker() {
   const target = session.target;
   const through = target !== undefined && "kind" in target ? target : null;
   // The edit layer is the picker's default item, so it is chosen as that.
+  const defaultItem = (
+    <SelectItem id={DEFAULT} textValue={`${editLayer === null ? "no edit layer" : layerName(editLayer.identifier)} (edit layer)`}>
+      {editLayer === null ? "no edit layer" : layerName(editLayer.identifier)} <span className="text-muted-foreground">edit layer</span>
+    </SelectItem>
+  );
   const selected = target === undefined || (through === null && (target as Layer).id === editLayer?.id) ? DEFAULT : through !== null ? THROUGH : String((target as Layer).id);
   return (
     <Select
@@ -48,9 +53,15 @@ export function TargetPicker() {
         <SelectValue className="truncate text-foreground" />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem id={DEFAULT} textValue={`${layerName(editLayer?.identifier ?? null)} (edit layer)`}>
-          {editLayer === null ? "no edit layer" : layerName(editLayer.identifier)} <span className="text-muted-foreground">edit layer</span>
-        </SelectItem>
+        {session.sessionNote === null ? (
+          defaultItem
+        ) : (
+          // Why a scene opened without asking for one edits in a session layer.
+          <SelectGroup>
+            <SelectLabel className="max-w-64">Edits go to a session layer in front of the root: {session.sessionNote}.</SelectLabel>
+            {defaultItem}
+          </SelectGroup>
+        )}
         {own
           .filter((layer) => layer.id !== editLayer?.id)
           .map((layer) => (

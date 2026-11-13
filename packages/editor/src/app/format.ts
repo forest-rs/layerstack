@@ -9,9 +9,13 @@ export function formatBytes(count: number): string {
   return `${(count / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-/** A layer's name as the editor shows it. */
+/**
+ * A layer's name as the editor shows it. The only anonymous layer a stage
+ * the editor opens holds is its session layer (`OpenOptions.editLayer:
+ * "session"`), so that is what one is called.
+ */
 export function layerName(identifier: string | null): string {
-  return identifier ?? "(anonymous)";
+  return identifier ?? "session layer";
 }
 
 /** A time code as the editor shows it: whole frames bare, others to two decimals. */

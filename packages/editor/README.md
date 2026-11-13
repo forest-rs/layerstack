@@ -136,10 +136,23 @@ nothing more.
   scenes lit brighter than white; the choice is remembered in this
   browser, and switching rebuilds only the renderer's output pass.
 - **Timeline.** The stage's `startTimeCode` to `endTimeCode`: scrub, step
-  a frame (← →), play at `timeCodesPerSecond` (Space). The draw list moves
-  to the time, rereading only what varies; the inspector and the explain
-  panel read values there. A stage without a range is read at the default
-  time.
+  a frame (← →), play at `timeCodesPerSecond` (Space), or type a time code
+  (Enter goes there, Escape cancels; one outside the range is moved into
+  it). The draw list moves to the time, rereading only what varies; the
+  inspector and the explain panel read values there. Under the track are
+  the selected prim's keys: a tick at each time any of its attributes has
+  a time sample (`unionedTimeSamples`), and, taller and in the accent
+  colour, the samples of the property being explained. Clicking a tick
+  goes to its key; the previous and next key buttons (`,` and `.`) jump
+  between them. The times are read once per selection and composition,
+  and thinned to one tick per pixel, so playing does not read them
+  again. The loop button chooses whether playing starts over at the end or
+  stops there; it is remembered in this browser. A stage without a range
+  is read at the default time. The explain panel says where the time falls
+  among the property's samples (`bracketingSamples`): on one, before the
+  first, after the last, or between two, each time a link that moves the
+  timeline there; the stage does not report whether it interpolates, so
+  it says so only for types USD always holds (tokens, strings, integers).
 - **Skinning.** A mesh a UsdSkel skeleton binds is skinned on the GPU: its
   joint influences (up to eight per vertex) are gathered into the draw
   list's buffer once, through stagehand's `vertexPoints`, and a time change

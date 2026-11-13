@@ -50,6 +50,9 @@ export function App() {
         event.preventDefault();
         if (store.playing) store.pause();
         else store.play();
+      } else if (!mod && !event.altKey && (event.key === "," || event.key === ".")) {
+        event.preventDefault();
+        store.jumpToKey(event.key === "," ? -1 : 1);
       } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         event.preventDefault();
         store.step(event.key === "ArrowLeft" ? -1 : 1);

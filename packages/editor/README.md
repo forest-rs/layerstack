@@ -42,9 +42,17 @@ nothing more.
   Find a prim by name. A prim picked in the viewport opens its ancestors.
   Each row's "⋯" (and the inspector's) adds a child of any concrete type
   the stage registers (`Stage.schemas()`, grouped by what the types are:
-  transforms, geometry, lights, cameras, shading, physics), renames
-  (`Stage.move`, which repairs the paths that name it) or deletes, each one
-  undoable action where edits go.
+  transforms, geometry, lights, cameras, shading, physics) as a `def`,
+  `over` or `class`, duplicates it, moves it under another prim or up and
+  down among its siblings, binds a material, renames (`Stage.move`, which
+  repairs the paths that name it) or deletes, each one undoable action
+  where edits go. A row dragged onto another moves its prim there, and
+  between two of its siblings reorders it (`reorder nameChildren`). An
+  imageable prim's eye, shown on hover and always when it is hidden, makes
+  it invisible or visible again; one an ancestor hides shows it dimmed,
+  and pressing it selects that ancestor. A purpose other than `default`
+  is a badge. Visibility is read for every row at once, when the rows or
+  the paused time change, not per row nor while playing.
 - **Saving and exporting.** The **File** menu counts the layers with
   unsaved edits, and the page asks before it is left while there are any.
   **Save** (⌘S) lists every edited layer and what a save does with it,
@@ -258,6 +266,30 @@ nothing more.
   layers (the explain and history panels) are live: a click selects or
   explains, a context menu offers what else applies. Nothing has to be
   typed that the stage already knows.
+- **Authoring prims.** The inspector's **State** retypes the prim (the
+  type badge too: the Add dialog's grouped types, or none, which clears
+  the edit target's `typeName`), sets its specifier and its kind (the
+  model hierarchy's kinds, each with what it means: the stage exposes no
+  kind registry), and switches active and instanceable, with **Clear** to
+  take the edit target's opinion of either away. **Applied schemas** lists
+  `Prim.appliedSchemas`, those its type builds in told from those layers
+  author, each authored one removable; **Apply** lists the API schemas
+  that can apply to the prim (by `canOnlyApplyTo`, grouped, with a line
+  on what each is for), asks a multiple-apply schema's instance name
+  (checked against `allowedInstanceNames` and those applied), and shows
+  the properties the schema brought, at their fallbacks. **Material**
+  shows the bound material and the binding that decides it, live; **Bind…**
+  picks a `Material` (those the scene's draws bind first) with a purpose
+  and strength, and **Unbind** authors an empty binding, which also blocks
+  what ancestors bind. **Metadata** edits `documentation` and shows
+  `customData` and `assetInfo` key by key (read, not edited: a dictionary
+  composes key by key across layers). "Bind a material…", "Duplicate" and
+  "Move to…" are commands on every prim path. A duplicate copies the
+  prim's spec within the edit target's layer (`copySpec`); when that layer
+  has none, the editor names the layers that do, with **Edit there** and
+  **Duplicate there**. A move or delete that leaves paths naming the old
+  place (in a variant no prim selects) lists them in a notice, each live.
+  Every edit says the layer it goes to.
 - **Authoring properties.** Each property's name in the inspector is
   its path, live: a click explains it, and its context menu (or its
   "⋯", or Shift+F10), there and wherever the path is shown (the explain
@@ -488,7 +520,8 @@ line: a property row, a table cell, the explain and changes panels),
   (`registerCommand`) is offered on every presented object of it, a click
   running the first that applies and a context menu (or Shift+F10)
   listing them: a prim path selects, frames, draws alone or selects its
-  material; a property path explains (bringing the Explain tab forward), or
+  material, or binds one, duplicates or moves the prim where edits go; a
+  property path explains (bringing the Explain tab forward), or
   clears, blocks, keys or removes it where edits go;
   a layer is shown in the Layers tab, shows its text, is exported, has
   its identifier copied, takes edits or is muted, or is referenced from

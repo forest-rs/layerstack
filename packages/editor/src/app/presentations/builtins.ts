@@ -7,6 +7,7 @@ import { registerCompositionCommands } from "./composition.ts";
 import { registerInstancePresentations } from "./instances.tsx";
 import { registerLayerCommands } from "./layers.ts";
 import { registerObjectPresentations } from "./objects.tsx";
+import { registerPrimAuthoringPresentations } from "./primAuthoring.tsx";
 import { registerPrimPresentations } from "./prims.tsx";
 import { registerPropertyCommands } from "./properties.ts";
 import { registerShadingCommands } from "./shading.ts";
@@ -19,6 +20,7 @@ export function registerBuiltInPresentations(): void {
   registerLayerCommands();
   registerPropertyCommands();
   registerPrimPresentations();
+  registerPrimAuthoringPresentations();
   registerInstancePresentations();
   registerShadingCommands();
   registerCompositionCommands();

@@ -11,7 +11,7 @@
 // highlighted and the rest ghosted. A texture shows as its image and a
 // material on the shader ball, drawing nothing.
 import type { Stage } from "@forest-rs/layerstack";
-import type { BudgetReport, DrawBudget, DrawScope } from "@forest-rs/layerstack_stagehand";
+import { anchorAssetPath, type BudgetReport, type DrawBudget, type DrawScope } from "@forest-rs/layerstack_stagehand";
 import { enclosingMaterial, parentPath } from "./network.ts";
 
 /** What the viewport draws: the whole scene, the selection alone, or nothing. */
@@ -129,4 +129,23 @@ export function scopeFor(choice: DrawScopeChoice, focus: AssetFocus): DrawScope 
   if (choice === "scene") return { roots: ["/"] };
   if (choice === "nothing" || focus.kind !== "geometry") return { roots: [] };
   return { roots: [focus.root], space: focus.root };
+}
+
+/** Which file an asset-valued attribute names at a time: what the texture view reads, and reads again only when it changes. */
+export interface TextureAddress {
+  /** The path as authored (`textures/look.<UDIM>.png`); `""` when none is. */
+  readonly assetPath: string;
+  /** The identifier of the layer whose opinion supplies it, the path's anchor. */
+  readonly layer: string | null;
+  /** The path anchored at that layer (a UDIM set at its tile 1001); `null` when it cannot be. */
+  readonly identifier: string | null;
+}
+
+/** The file the attribute at `attribute` names at `time`. */
+export function textureAddress(stage: Stage, attribute: string, time: number | undefined): TextureAddress {
+  const value = stage.attribute(attribute)?.get(time) ?? null;
+  const assetPath = value?.kind === "scalar" && value.type === "asset" && typeof value.value === "string" ? value.value : "";
+  const explanation = stage.attribute(attribute)?.explain(time);
+  const layer = explanation?.opinions.find((opinion) => opinion.role === "contributed")?.layer.identifier ?? null;
+  return { assetPath, layer, identifier: anchorAssetPath(assetPath.replace("<UDIM>", "1001"), layer) };
 }

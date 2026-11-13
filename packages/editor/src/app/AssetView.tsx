@@ -8,9 +8,8 @@
 // texture as its image, with its size, channels and color space.
 import { useEffect, useState } from "react";
 import type { Stage } from "@forest-rs/layerstack";
-import { anchorAssetPath } from "@forest-rs/layerstack_stagehand";
 import { cn } from "@/lib/utils";
-import { BUDGET_CHOICES, budgetNote, type DrawScopeChoice } from "../model/assetView.ts";
+import { BUDGET_CHOICES, budgetNote, type DrawScopeChoice, textureAddress } from "../model/assetView.ts";
 import { imageInfo, type ImageInfo } from "../model/images.ts";
 import { enclosingMaterial } from "../model/network.ts";
 import { readAsset } from "../model/sources.ts";
@@ -124,16 +123,13 @@ type Loaded = { readonly url: string; readonly info: ImageInfo; readonly bytes: 
 export function TextureView({ store, stage, attribute }: { store: EditorStore; stage: Stage; attribute: string }) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const time = store.time;
+  // The image is read again only when the file it names changes, not as time moves over a constant path.
+  const { assetPath, layer, identifier } = textureAddress(stage, attribute, time);
   useEffect(() => {
     let live = true;
     let url: string | null = null;
     setLoaded(null);
     void (async () => {
-      const value = stage.attribute(attribute)?.get(time) ?? null;
-      const assetPath = value?.kind === "scalar" && value.type === "asset" && typeof value.value === "string" ? value.value : "";
-      const explanation = stage.attribute(attribute)?.explain(time);
-      const layer = explanation?.opinions.find((opinion) => opinion.role === "contributed")?.layer.identifier ?? null;
-      const identifier = anchorAssetPath(assetPath.replace("<UDIM>", "1001"), layer);
       const source = store.source;
       if (identifier === null || source === null) return { error: assetPath === "" ? "no file authored" : `${assetPath} cannot be anchored` };
       const bytes = await readAsset(source, stage, identifier, layer);
@@ -152,7 +148,7 @@ export function TextureView({ store, stage, attribute }: { store: EditorStore; s
       live = false;
       if (url !== null) URL.revokeObjectURL(url);
     };
-  }, [store, stage, attribute, time]);
+  }, [store, stage, assetPath, layer, identifier]);
   const [natural, setNatural] = useState<{ width: number; height: number } | null>(null);
   const prim = attribute.slice(0, attribute.lastIndexOf("."));
   const space = stage.attribute(`${prim}.inputs:sourceColorSpace`)?.get(time) ?? null;

@@ -13,9 +13,18 @@ import { formatTime } from "../format.ts";
 import { type PresentationContext, registerCommand } from "../../presentations/registry.ts";
 import { targetText } from "../TargetPicker.tsx";
 
+/** The last answer of {@link actions}, and what it was asked: each command's `applies` asks the same once a menu opens. */
+let last: { readonly key: readonly unknown[]; readonly actions: PropertyActions } | null = null;
+
 /** What the operations would do to `path` now, where edits go and at the time (none when the stage has no range). */
 function actions(path: string, { store, stage, time }: PresentationContext): PropertyActions {
-  return propertyActions(stage, path, store.session?.target, store.range === null ? undefined : time);
+  const target = store.session?.target;
+  const at = store.range === null ? undefined : time;
+  // The same stage, path, target, time and recomposition count read the same.
+  const key = [stage, path, target, at, store.session?.changeLog.length];
+  if (last !== null && last.key.every((part, index) => part === key[index])) return last.actions;
+  last = { key, actions: propertyActions(stage, path, target, at) };
+  return last.actions;
 }
 
 /** Where edits go, in words (`scene.usda`, `robot.usda at /Robot`). */

@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import type { SceneSource } from "../model/sources.ts";
 import { type EditorStore, PAYLOAD_BUDGET } from "../store.ts";
 import { useEditorStore, useRevision, useStoreSelector } from "./context.ts";
@@ -194,7 +195,7 @@ export function Toolbar() {
       <FileMenu />
       <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
         {(status.kind === "opening" || status.kind === "loading") && <Spinner className="size-3.5" />}
-        <span className="truncate">
+        <span className={cn("truncate", status.kind === "failed" && "text-destructive")} title={status.kind === "failed" ? status.message : undefined}>
           {status.kind === "opening"
             ? `Opening ${status.label}${store.opening === null ? "" : `: ${store.opening.fetched.assets} assets, ${formatBytes(store.opening.fetched.bytes)}`}`
             : status.kind === "failed"

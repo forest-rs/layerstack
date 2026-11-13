@@ -560,6 +560,9 @@ function Graph({
       case "menu":
         openMenu(target, at);
         return;
+      case "escape":
+        // The graph and the selection stay as they are.
+        return;
       case "activate":
         if (edge !== undefined) return;
         if (current.port !== null) {
@@ -762,7 +765,7 @@ function Graph({
         )}
         <p id="shading-keys" className="sr-only">
           Arrow keys move between nodes and their rows, following a row's connection left or right. Enter selects a node or explains a row. Shift+F10 opens the menu of the
-          focused row, node or connection: Connect to, Disconnect, Delete shader. Delete deletes the focused shader or disconnects the focused row or connection.
+          focused row, node or connection: Connect to, Disconnect, Delete shader. Delete deletes the focused shader or disconnects the focused row or connection. Escape cancels a drag or lets go of a chosen connection, and otherwise leaves the selection as it is.
         </p>
         <Legend />
         {menu !== null && (

@@ -138,7 +138,7 @@ export function CameraView({ object, context }: PresentProps<"prim">) {
           <span className="font-mono">{camera.projection}</span>
         </Row>
         <Row label="focal length" title="focalLength, in tenths of a scene unit: millimetres by convention">
-          <span className="font-mono">{formatNumber(focal)} mm</span>
+          <Editor context={context} attribute={prim.attribute("focalLength")} />
         </Row>
         <Row label="aperture" title="horizontalAperture × verticalAperture, in millimetres by convention">
           <span className="font-mono">
@@ -162,9 +162,6 @@ export function CameraView({ object, context }: PresentProps<"prim">) {
         </Row>
         <Row label="exposure" title="UsdGeomCamera::ComputeLinearExposureScale">
           <span className="font-mono">× {formatNumber(camera.linearExposureScale)}</span>
-        </Row>
-        <Row label="focal length">
-          <Editor context={context} attribute={prim.attribute("focalLength")} />
         </Row>
       </div>
     </Section>

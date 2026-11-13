@@ -318,6 +318,7 @@ test("the arrow keys move through a node's rows, across connections and between 
   assert.equal(press("Backspace"), null);
   assert.deepEqual(press("F10", { shiftKey: true }), { kind: "menu" });
   assert.deepEqual(press("Enter"), { kind: "activate" });
+  assert.deepEqual(press("Escape"), { kind: "escape" }, "kept from the page's Escape, which would drop the selection and the graph");
   assert.equal(press("z", { metaKey: true }), null, "undo stays the editor's");
 });
 

@@ -226,7 +226,13 @@ export type GraphKey =
   /** Its menu (the context menu key, Shift+F10). */
   | { readonly kind: "menu" }
   /** Enter or Space: select the node, explain the row. */
-  | { readonly kind: "activate" };
+  | { readonly kind: "activate" }
+  /**
+   * Escape with nothing in the drawing to cancel (no drag, no connection
+   * chosen): kept from the page, whose Escape drops the selection, and
+   * with it the graph being read.
+   */
+  | { readonly kind: "escape" };
 
 /** What `press` does on the drawing, or `null` to leave it to the page. */
 export function graphKey(press: GraphKeyPress): GraphKey | null {
@@ -247,6 +253,8 @@ export function graphKey(press: GraphKeyPress): GraphKey | null {
     case "Enter":
     case " ":
       return { kind: "activate" };
+    case "Escape":
+      return { kind: "escape" };
     default:
       return null;
   }

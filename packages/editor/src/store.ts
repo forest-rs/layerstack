@@ -40,6 +40,7 @@ import { indexOfId, type InstancerColumns, toggled } from "./model/instancer.ts"
 import type { LayerTextRead } from "./model/layerText.ts";
 import { type Shadow, shadowOf, targetOpinion } from "./model/propertyOps.ts";
 import { releaseValue } from "./model/values.ts";
+import { addShaderEdits, connectEdits, connectLabel, disconnectEdits, disconnectLabel } from "./model/networkEdits.ts";
 import type { PathMove, Session } from "./model/session.ts";
 import type { SceneSource } from "./model/sources.ts";
 import { ActionQueue } from "./store/actions.ts";
@@ -802,6 +803,52 @@ export class EditorStore {
    */
   delete(path: string): string | undefined {
     return this.#edit(`delete ${path}`, (session) => session.delete(path));
+  }
+
+  // The shading network (`model/networkEdits.ts` says what each authors).
+
+  /**
+   * Connects the shading input or output at `destination` to read
+   * `source` (`UsdShadeConnectableAPI::ConnectToSource`, replacing what
+   * it read), creating either when only its shader's definition has it.
+   * Returns why the stage refused it, as {@link EditorStore.apply} does.
+   */
+  connect(destination: string, source: string): string | undefined {
+    const label = connectLabel(destination, source);
+    return this.#edit(label, (session) => session.applyInTurn(label, connectEdits(session.stage, destination, source)));
+  }
+
+  /**
+   * Stops `destination` reading `source`, or (`null`) every source it
+   * reads (`DisconnectSource`). Returns why the stage refused it, as
+   * {@link EditorStore.apply} does.
+   */
+  disconnect(destination: string, source: string | null): string | undefined {
+    const label = disconnectLabel(destination, source);
+    return this.#edit(label, (session) => session.apply(label, disconnectEdits(destination, source)));
+  }
+
+  /**
+   * Authors `value` for the shading input at `path`, creating the input
+   * with the value's type when the prim has none yet
+   * (`UsdShadeConnectableAPI::CreateInput(...).Set`): its default, or its
+   * sample at `time`. Returns why the stage refused it, as
+   * {@link EditorStore.apply} does.
+   */
+  setShaderInput(path: string, value: ValueInput, time: number | null = null): string | undefined {
+    const label = time === null ? `set ${path}` : `set ${path} at ${time}`;
+    const edit: Edit = time === null ? { type: "setShaderInput", path, value } : { type: "setShaderInput", path, value, time };
+    return this.#edit(label, (session) => session.apply(label, [edit]));
+  }
+
+  /**
+   * Defines a `Shader` of the id `id` at `path`, with `position` as its
+   * `ui:nodegraph:node:pos` when given, as one action. Returns why the
+   * stage refused it, as {@link EditorStore.apply} does.
+   */
+  addShader(path: string, id: string, position: readonly [number, number] | null = null): string | undefined {
+    const label = `add ${id} ${path}`;
+    return this.#edit(label, (session) => session.apply(label, addShaderEdits(path, id, position)));
   }
 
   /**

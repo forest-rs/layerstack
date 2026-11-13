@@ -11,6 +11,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { BottomPanel } from "./BottomPanel.tsx";
 import { useEditorStore, useStoreSelector } from "./context.ts";
 import { widgetKeeps } from "./keys.ts";
+import { PaneBoundary } from "./PaneBoundary.tsx";
 import { Inspector } from "./Inspector.tsx";
 import { ModuleLost } from "./ModuleLost.tsx";
 import { PrimDialogHost } from "./PrimDialogs.tsx";
@@ -71,21 +72,29 @@ export function App() {
         <ResizablePanel defaultSize="72" minSize="30">
           <ResizablePanelGroup orientation="horizontal">
             <ResizablePanel defaultSize="20" minSize="12">
-              <ScenePanel />
+              <PaneBoundary title="scene panel">
+                <ScenePanel />
+              </PaneBoundary>
             </ResizablePanel>
             <ResizableHandle />
             <ResizablePanel defaultSize="54" minSize="25">
-              <ViewportPane />
+              <PaneBoundary title="viewport">
+                <ViewportPane />
+              </PaneBoundary>
             </ResizablePanel>
             <ResizableHandle />
             <ResizablePanel defaultSize="26" minSize="16">
-              <Inspector />
+              <PaneBoundary title="inspector">
+                <Inspector />
+              </PaneBoundary>
             </ResizablePanel>
           </ResizablePanelGroup>
         </ResizablePanel>
         <ResizableHandle />
         <ResizablePanel defaultSize="28" minSize="10" panelRef={bottom}>
-          <BottomPanel onTab={onTab} />
+          <PaneBoundary title="bottom panel">
+            <BottomPanel onTab={onTab} />
+          </PaneBoundary>
         </ResizablePanel>
       </ResizablePanelGroup>
       <PrimDialogHost />

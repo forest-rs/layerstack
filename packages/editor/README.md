@@ -118,6 +118,10 @@ nothing more.
   `WebGPURenderer`; the stage's `upAxis` orients the
   free camera and the grid. Click to pick, drag to orbit, scroll to zoom,
   **F** to frame the selection, **Esc** to clear it.
+  In the prim tree, **F** frames the focused row (a name starting with F is
+  found with the Find field, or by typing a second letter within a second),
+  **Delete** deletes it, **F2** or **Enter** renames it, and Shift+F10 opens
+  its context menu.
 - **Look.** A stage looks as usdview shows it by default: lit by
   usdview's default camera light (the **Camera light** switch, as View >
   Lights) and the stage's own lights as Storm approximates them, at the

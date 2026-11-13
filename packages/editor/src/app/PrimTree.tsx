@@ -18,7 +18,8 @@ import { Input } from "@/components/ui/input";
 import type { EditorStore } from "../store.ts";
 import { useStore } from "./context.ts";
 import { primIcon } from "./icons.ts";
-import { PrimActions } from "./PrimActions.tsx";
+import { PrimActions, RenameDialog } from "./PrimActions.tsx";
+import { rowAction, TYPEAHEAD_MS } from "./treeKeys.ts";
 import { CommandMenu, presentationContext } from "./presentations/Present.tsx";
 
 /** A row: a prim, and its children when it is open. */
@@ -76,6 +77,12 @@ export function PrimTree() {
   const stage = store.session?.stage ?? null;
   const [expanded, setExpanded] = useState<Set<Key>>(new Set());
   const [query, setQuery] = useState("");
+  // The row a context menu or a rename is for, and where the menu opens.
+  const [menu, setMenu] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const menuAnchor = useRef<Element | null>(null);
+  // When a letter last went to the tree's type-to-find: F frames unless it continues one.
+  const typedAt = useRef(0);
   // A new stage starts with its root prims' children shown.
   useEffect(() => {
     setExpanded(new Set(stage === null ? [] : stage.children("/").slice(0, 8)));
@@ -96,6 +103,7 @@ export function PrimTree() {
     [stage, query, revision],
   );
   if (stage === null) return <p className="p-3 text-xs text-muted-foreground">Nothing open.</p>;
+  const context = presentationContext(store);
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-1 p-2">
@@ -123,6 +131,35 @@ export function PrimTree() {
           {matches.length === MATCHES && <p className="px-2 pt-1 text-[11px] text-muted-foreground">The first {MATCHES} matches.</p>}
         </div>
       ) : (
+        // The row's keys are read in the capture phase: the tree's type-to-find
+        // takes a letter before it can reach the shortcuts, and the key that
+        // opens a context menu is sent to the focused row, not what is in it.
+        <div
+          className="flex min-h-0 flex-1 flex-col"
+          onKeyDownCapture={(event) => {
+            // Only a key on the row itself: a button in it keeps its keys.
+            const path = event.target instanceof HTMLElement ? event.target.dataset.path : undefined;
+            const searching = Date.now() - typedAt.current < TYPEAHEAD_MS;
+            const action = path === undefined ? null : rowAction(event, searching);
+            if (path === undefined || action === null) {
+              if (event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey) typedAt.current = Date.now();
+              return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            if (action === "frame") store.frameSelection();
+            else if (stage.prim(path)?.instanceProxy === true) return;
+            else if (action === "delete") store.delete(path);
+            else setRenaming(path);
+          }}
+          onContextMenu={(event) => {
+            const row = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>("[data-path]") : null;
+            if (context === null || row === null) return;
+            event.preventDefault();
+            menuAnchor.current = row;
+            setMenu(row.dataset.path ?? null);
+          }}
+        >
         <Virtualizer layout={ListLayout} layoutOptions={{ rowHeight: 24 }}>
           <Tree
             aria-label="Prims"
@@ -139,7 +176,7 @@ export function PrimTree() {
           >
             {function render(row: Row) {
               return (
-                <TreeItem id={row.id} textValue={row.prim.name} hasChildItems={row.hasChildren} className={treeItemClass}>
+                <TreeItem id={row.id} data-path={row.id} textValue={row.prim.name} hasChildItems={row.hasChildren} className={treeItemClass}>
                   <TreeItemContent>
                     {({ isExpanded, hasChildItems, level }) => (
                       <PrimRow store={store} row={row} isExpanded={isExpanded} hasChildItems={hasChildItems} level={level} />
@@ -151,7 +188,10 @@ export function PrimTree() {
             }}
           </Tree>
         </Virtualizer>
+        </div>
       )}
+      {menu !== null && context !== null && <CommandMenu object={{ kind: "primPath", path: menu }} context={context} triggerRef={menuAnchor} onClose={() => setMenu(null)} />}
+      {renaming !== null && <RenameDialog store={store} stage={stage} path={renaming} onClose={() => setRenaming(null)} />}
     </div>
   );
 }
@@ -165,22 +205,8 @@ const treeItemClass = ({ isSelected, isFocusVisible }: { isSelected: boolean; is
 
 function PrimRow({ store, row, isExpanded, hasChildItems, level }: { store: EditorStore; row: Row; isExpanded: boolean; hasChildItems: boolean; level: number }) {
   const { prim } = row;
-  // A context menu offers the commands on its path, as on any presented prim path.
-  const anchor = useRef<HTMLDivElement>(null);
-  const [menu, setMenu] = useState(false);
-  const context = presentationContext(store);
   return (
-    <div
-      ref={anchor}
-      className="flex w-full min-w-0 items-center gap-1 pr-2"
-      style={{ paddingLeft: `${(level - 1) * 12 + 2}px` }}
-      onContextMenu={(event) => {
-        if (context === null) return;
-        event.preventDefault();
-        setMenu(true);
-      }}
-    >
-      {menu && context !== null && <CommandMenu object={{ kind: "primPath", path: prim.path }} context={context} triggerRef={anchor} onClose={() => setMenu(false)} />}
+    <div className="flex w-full min-w-0 items-center gap-1 pr-2" style={{ paddingLeft: `${(level - 1) * 12 + 2}px` }}>
       {hasChildItems ? (
         <AriaButton slot="chevron" className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground outline-none hover:text-foreground">
           <HugeiconsIcon icon={ArrowRight01Icon} className={cn("size-3 transition-transform", isExpanded && "rotate-90")} />

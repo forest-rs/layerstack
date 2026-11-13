@@ -240,3 +240,26 @@ export function verticalFov(window: ArrayLike<number>): number | null {
   const degrees = ((Math.atan(top) - Math.atan(bottom)) * 180) / Math.PI;
   return degrees > 0 && degrees < 180 ? degrees : null;
 }
+
+/** What decides whether an update to the scene frames the free camera. */
+export interface FrameState {
+  /** The bounds the camera was last framed on, as text; `""` when it has not been. */
+  readonly framed: string;
+  /** Whether the person has moved the camera (orbit, pan or zoom) since the scene last started afresh. */
+  readonly moved: boolean;
+  /** Whether the update only moved time along: an animated extent would move the camera each frame. */
+  readonly timeChanged: boolean;
+}
+
+/**
+ * Whether an update whose scene has `bounds` (as text) frames the camera:
+ * when the bounds are not the ones last framed, and nothing was framed yet
+ * or the person has not taken the camera over. Editing a scene (moving a
+ * prim, adding one) changes its bounds but keeps the person's view; a new
+ * scene, or the draw scope changing, starts afresh and frames again.
+ */
+export function shouldFrame(state: FrameState, bounds: string | null): boolean {
+  if (bounds === null || bounds === state.framed) return false;
+  if (state.framed === "") return true;
+  return !state.moved && !state.timeChanged;
+}

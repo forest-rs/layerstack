@@ -1140,8 +1140,12 @@ export class EditorStore {
     const refusal = await this.#fetchingEdit(label, async (session, signal) => {
       const stage = session.stage;
       const asked = layer === null ? stage.layers().filter((each) => !each.anonymous && !stage.isMuted(each)) : [layer];
-      const skipped = asked.filter((each) => session.isEdited(each));
-      if (layer !== null && skipped.length > 0) throw new Error(`${layerLabel(layer)} has unsaved edits: save or undo them before reading it again from the source`);
+      // The stage reads no dirty layer again, edits undone or not (`io.dirty_reload`).
+      const skipped = asked.filter((each) => stage.isDirty(each));
+      if (layer !== null && skipped.length > 0) {
+        const why = session.isEdited(layer) ? "has unsaved edits: save or undo them" : "has edits, undone, that the stage still counts as changes: save it";
+        throw new Error(`${layerLabel(layer)} ${why} before reading it again from the source`);
+      }
       const reading = asked.filter((each) => !skipped.includes(each));
       const result = reading.length === 0 ? null : await session.reload(reading, signal);
       report = { reloaded: result?.reloaded ?? [], skipped, refusal: null };

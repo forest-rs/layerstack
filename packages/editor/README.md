@@ -55,6 +55,8 @@ nothing more.
   the paused time change, not per row nor while playing.
 - **Saving and exporting.** The **File** menu counts the layers with
   unsaved edits, and the page asks before it is left while there are any.
+  A layer whose edits are undone back to where it was saved or read no
+  longer counts, though the stage still reads it dirty, as OpenUSD does.
   **Save** (⌘S) lists every edited layer and what a save does with it,
   then, on one confirmation, writes each to the identifier it was read
   from (`Stage.save`): back into the folder it was opened from when the

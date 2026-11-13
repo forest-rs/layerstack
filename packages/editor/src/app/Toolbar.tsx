@@ -26,6 +26,7 @@ import { directoryRoots, directoryScene, droppedFiles, droppedScene, localScenes
 import { SceneBrowser } from "./SceneBrowser.tsx";
 import { TargetPicker } from "./TargetPicker.tsx";
 import { countRender } from "./renders.ts";
+import { EditLayerChoiceGroup, FileMenu } from "./FileMenu.tsx";
 
 /** Roots to choose between, and how to open the one chosen. */
 interface Choice {
@@ -110,6 +111,8 @@ export function Toolbar() {
             <DropdownMenuItem id="all">Load all</DropdownMenuItem>
             <DropdownMenuItem id="none">Load none</DropdownMenuItem>
           </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <EditLayerChoiceGroup store={store} />
           {local.length > 0 && (
             <>
               <DropdownMenuSeparator />
@@ -126,6 +129,7 @@ export function Toolbar() {
           )}
         </DropdownMenu>
       </DropdownMenuTrigger>
+      <FileMenu />
       <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
         {(status.kind === "opening" || status.kind === "loading") && <Spinner className="size-3.5" />}
         <span className="truncate">

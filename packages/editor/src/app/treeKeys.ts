@@ -22,9 +22,11 @@ export type RowAction = "frame" | "delete" | "rename";
  * tree. F frames unless a type-to-find search is under way (`searching`:
  * the tree's typeahead takes a letter that continues one, and a letter that
  * starts one that matches takes it from the shortcut, so the row decides
- * first); Delete deletes; F2 and Enter rename.
+ * first); Delete (or ⌘⌫) deletes; F2 and Enter rename.
  */
 export function rowAction(press: KeyPress, searching: boolean): RowAction | null {
+  // A Mac keyboard has no Delete key: ⌘⌫ deletes there, as in the Finder.
+  if (press.key === "Backspace" && press.metaKey && !press.ctrlKey && !press.altKey && !press.shiftKey) return "delete";
   if (press.metaKey || press.ctrlKey || press.altKey) return null;
   if (press.key === "f" && !press.shiftKey) return searching ? null : "frame";
   if (press.shiftKey) return null;

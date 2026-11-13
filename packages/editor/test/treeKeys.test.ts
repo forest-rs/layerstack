@@ -30,6 +30,10 @@ describe("rowAction", () => {
     assert.equal(rowAction(press("F2"), false), "rename");
     assert.equal(rowAction(press("Enter"), false), "rename");
   });
+  it("deletes on Command+Backspace, where a keyboard has no Delete key", () => {
+    assert.equal(rowAction(press("Backspace", { metaKey: true }), false), "delete");
+    assert.equal(rowAction(press("Backspace", { metaKey: true, shiftKey: true }), false), null);
+  });
   it("leaves other keys, and Shift+F10, to the tree", () => {
     for (const key of ["a", "ArrowDown", " ", "Backspace"]) assert.equal(rowAction(press(key), false), null, key);
     assert.equal(rowAction(press("F10", { shiftKey: true }), false), null);

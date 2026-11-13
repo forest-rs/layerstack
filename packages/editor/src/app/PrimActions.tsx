@@ -201,7 +201,8 @@ const itemClass = ({ isSelected, isFocused }: { isSelected: boolean; isFocused: 
     isSelected && "bg-accent text-accent-foreground",
   );
 
-function RenameDialog({ store, stage, path, onClose }: { store: EditorStore; stage: Stage; path: string; onClose: () => void }) {
+/** The dialog that renames the prim at `path`. */
+export function RenameDialog({ store, stage, path, onClose }: { store: EditorStore; stage: Stage; path: string; onClose: () => void }) {
   const parent = path.slice(0, path.lastIndexOf("/")) || "/";
   const old = path.slice(path.lastIndexOf("/") + 1);
   const [name, setName] = useState(old);

@@ -20,6 +20,7 @@ import { enclosingMaterial, primOf } from "../model/network.ts";
 import { clampToBounds, groupInputs, type ShadingInput, type ShadingInputGroup, sliderRange } from "../model/shadingInputs.ts";
 import { formatNumber } from "../model/values.ts";
 import type { EditorStore } from "../store.ts";
+import { refusedBy } from "../model/refusal.ts";
 import { CommitNumber, shown, ValueField } from "./fields.tsx";
 import { MaterialPreview } from "./MaterialPreview.tsx";
 import { Live, presentationContext } from "./presentations/Present.tsx";
@@ -243,7 +244,7 @@ function InputValue({ store, input, at }: { store: EditorStore; input: ShadingIn
         value={number}
         range={range}
         integer={/^u?int/.test(type)}
-        onCommit={(next) => store.setValue(attribute.path, { type, value: clampToBounds(next, input.bounds) }, at)}
+        onCommit={(next) => refusedBy(store.notices, () => store.setValue(attribute.path, { type, value: clampToBounds(next, input.bounds) }, at))}
       />
     );
   }
@@ -255,7 +256,7 @@ function InputValue({ store, input, at }: { store: EditorStore; input: ShadingIn
  * the number, and authors once, when the drag ends (one undo step); a
  * typed number may go past the soft range, within the hard bounds.
  */
-function SliderField({ label, value, range, integer, onCommit }: { label: string; value: number; range: readonly [number, number]; integer: boolean; onCommit: (value: number) => void }) {
+function SliderField({ label, value, range, integer, onCommit }: { label: string; value: number; range: readonly [number, number]; integer: boolean; onCommit: (value: number) => string | void }) {
   const [dragging, setDragging] = useState<number | null>(null);
   const [min, max] = range;
   const step = integer ? 1 : (max - min) / 200;

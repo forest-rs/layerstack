@@ -16,6 +16,7 @@ import { ColorPickerButton, ColorSwatch } from "@/components/ui/color-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { type ColorLike, colorLike, colorLikeCue } from "../../model/colorLike.ts";
+import { NOT_A_NUMBER, parseNumber } from "../../model/refusal.ts";
 import { formatNumber, leadingNumbers, releaseValue } from "../../model/values.ts";
 import { hexToLinear, linearToHex, swatchCss, swatches } from "../../presentations/color.ts";
 import { type AcceptProps, type PresentationContext, type PresentProps, registerCommand, registerPresentation, type ValueObject } from "../../presentations/registry.ts";
@@ -48,7 +49,7 @@ function ValueText(props: PresentProps<"value">) {
  * committing the tuple with one number changed. A colour inferred from
  * what the value is for (`cue`) has a dashed picker that says why.
  */
-function TupleFields({ props, accept, color, cue }: { props: PresentProps<"value">; accept: (value: ValueInput) => void; color: boolean; cue?: string }) {
+function TupleFields({ props, accept, color, cue }: { props: PresentProps<"value">; accept: (value: ValueInput) => string | void; color: boolean; cue?: string }) {
   const channels = tupleOf(props);
   if (channels === null || channels.length > 4) return <ValueText {...props} />;
   const type = props.object.typeName;
@@ -74,9 +75,9 @@ function TupleFields({ props, accept, color, cue }: { props: PresentProps<"value
           value={formatNumber(channel)}
           className="w-0 flex-1"
           onCommit={(text) => {
-            const number = Number(text);
-            if (text.trim() === "" || !Number.isFinite(number)) return;
-            accept({ type, value: channels.map((old, at) => (at === index ? number : old)) });
+            const number = parseNumber(text);
+            if (number === null) return NOT_A_NUMBER;
+            return accept({ type, value: channels.map((old, at) => (at === index ? number : old)) });
           }}
         />
       ))}
@@ -242,8 +243,8 @@ function NumberAccept(props: AcceptProps<"value">) {
       value={formatNumber(value.value)}
       className="w-full"
       onCommit={(text) => {
-        const number = Number(text);
-        if (text.trim() !== "" && Number.isFinite(number)) props.accept({ type: props.object.typeName, value: number });
+        const number = parseNumber(text);
+        return number === null ? NOT_A_NUMBER : props.accept({ type: props.object.typeName, value: number });
       }}
     />
   );

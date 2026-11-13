@@ -114,8 +114,11 @@ export interface PresentProps<K extends PresentedKind> {
 
 /** What an `accept` view is given: its object, and the callback that authors what is accepted. */
 export interface AcceptProps<K extends PresentedKind> extends PresentProps<K> {
-  /** Authors `value` as one edit, where edits go (for a value, its attribute's default or its sample at `at`). */
-  readonly accept: (value: ValueInput) => void;
+  /**
+   * Authors `value` as one edit, where edits go (for a value, its attribute's default or its sample at `at`).
+   * Returns the reason when the edit was refused, so the editor can say so.
+   */
+  readonly accept: (value: ValueInput) => string | void;
 }
 
 /** A presentation: how objects of one type are shown, in the views it can do. */

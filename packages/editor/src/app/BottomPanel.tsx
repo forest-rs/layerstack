@@ -25,6 +25,7 @@ import { LayerTextView } from "./LayerTextView.tsx";
 import { Present, presentationContext } from "./presentations/Present.tsx";
 import { ShadingView } from "./ShadingView.tsx";
 import { targetText } from "./TargetPicker.tsx";
+import { UnrepairedPaths } from "./UnrepairedPaths.tsx";
 import { countRender } from "./renders.ts";
 
 /** The most log rows shown, newest first. */
@@ -300,7 +301,10 @@ function NoticesView({ store }: { store: EditorStore }) {
         <li key={notice.id} className="flex items-start gap-2 border-b px-3 py-1.5 text-[11px]">
           <span className="font-medium">{notice.action}</span>
           {notice.code !== null && <Badge variant="outline">{notice.code}</Badge>}
-          <span className="min-w-0 flex-1">{notice.message}</span>
+          <span className="min-w-0 flex-1">
+            {notice.message}
+            <UnrepairedPaths store={store} unrepaired={notice.unrepaired} />
+          </span>
           <Button variant="ghost" size="xs" onPress={() => store.dismiss(notice.id)}>
             Dismiss
           </Button>

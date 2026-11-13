@@ -15,6 +15,7 @@ import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import type { Prim, Stage } from "@forest-rs/layerstack";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { searchPrims } from "../model/primSearch.ts";
 import type { EditorStore } from "../store.ts";
 import { useEditorStore, useRevision, useStoreSelector } from "./context.ts";
 import { primIcon } from "./icons.ts";
@@ -53,21 +54,6 @@ function ancestors(path: string): string[] {
   const out: string[] = [];
   for (let slash = path.indexOf("/", 1); slash > 0; slash = path.indexOf("/", slash + 1)) out.push(path.slice(0, slash));
   return out;
-}
-
-/** The prims whose names contain `text`, at most `limit`, in depth-first order. */
-function search(stage: Stage, text: string, limit: number): string[] {
-  const needle = text.toLowerCase();
-  const found: string[] = [];
-  const walk = (path: string) => {
-    for (const child of stage.children(path)) {
-      if (found.length >= limit) return;
-      if (child.slice(child.lastIndexOf("/") + 1).toLowerCase().includes(needle)) found.push(child);
-      walk(child);
-    }
-  };
-  walk("/");
-  return found;
 }
 
 /** The most matches a search lists. */
@@ -113,7 +99,7 @@ export function PrimTree() {
   }, [selection]);
   const items = useMemo(() => (stage === null ? [] : rows(stage, "/", expanded)), [stage, expanded, revision]);
   const matches = useMemo(
-    () => (stage === null || query.trim() === "" ? null : search(stage, query.trim(), MATCHES)),
+    () => (stage === null || query.trim() === "" ? null : searchPrims(stage, { text: query, limit: MATCHES })),
     [stage, query, revision],
   );
   if (stage === null) return <p className="p-3 text-xs text-muted-foreground">Nothing open.</p>;

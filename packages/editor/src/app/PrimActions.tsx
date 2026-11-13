@@ -121,64 +121,72 @@ function AddPrimDialog({ store, stage, parent, onClose }: { store: EditorStore; 
     setTypeName(next);
     if (!named) setName(freeName(stage, parent, next ?? "Prim"));
   };
+  const add = () => {
+    if (problem !== null) return;
+    store.definePrim(parent, name, typeName);
+    onClose();
+  };
   return (
     <Dialog isOpen onOpenChange={(isOpen) => isOpen || onClose()} className="sm:max-w-md">
       <DialogHeader>
         <DialogTitle>Add a child of {parent}</DialogTitle>
         <DialogDescription>Any concrete type the stage registers, {groups.reduce((count, [, schemas]) => count + schemas.length, 0)} of them.</DialogDescription>
       </DialogHeader>
-      <Input autoFocus placeholder="Find a type" value={filter} onChange={(event) => setFilter(event.target.value)} className="h-7 text-xs" />
-      <ListBox
-        aria-label="Type"
-        selectionMode="single"
-        disallowEmptySelection
-        selectedKeys={[typeName ?? ""]}
-        onSelectionChange={(keys) => {
-          const [key] = keys === "all" ? [] : [...keys];
-          if (key !== undefined) choose(key === "" ? null : String(key));
+      {/* A form, so Enter in either field adds, as in the rename dialog. */}
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          add();
         }}
-        className="max-h-64 overflow-y-auto rounded-md border p-1 outline-none"
+        className="contents"
       >
-        <ListBoxItem id="" textValue="typeless" className={itemClass}>
-          <HugeiconsIcon icon={primIcon(null)} className="size-3.5 text-muted-foreground" />
-          No type <span className="text-muted-foreground">(typeless)</span>
-        </ListBoxItem>
-        {shown.map(([group, schemas]) => (
-          <ListBoxSection key={group}>
-            <Header className="px-2 pt-2 pb-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">{group}</Header>
-            {schemas.map((schema) => (
-              <ListBoxItem key={schema.name} id={schema.name} textValue={schema.name} className={itemClass}>
-                <HugeiconsIcon icon={primIcon(schema.name)} className="size-3.5 text-muted-foreground" />
-                {schema.name}
-                <span className="ml-auto truncate text-[10px] text-muted-foreground">{schema.bases[0] ?? ""}</span>
-              </ListBoxItem>
-            ))}
-          </ListBoxSection>
-        ))}
-      </ListBox>
-      <label className="flex flex-col gap-1 text-xs">
-        Name
-        <Input
-          value={name}
-          onChange={(event) => {
-            setName(event.target.value);
-            setNamed(true);
+        <Input autoFocus placeholder="Find a type" value={filter} onChange={(event) => setFilter(event.target.value)} className="h-7 text-xs" />
+        <ListBox
+          aria-label="Type"
+          selectionMode="single"
+          disallowEmptySelection
+          selectedKeys={[typeName ?? ""]}
+          onSelectionChange={(keys) => {
+            const [key] = keys === "all" ? [] : [...keys];
+            if (key !== undefined) choose(key === "" ? null : String(key));
           }}
-          className="h-7 font-mono text-xs"
-        />
-        {problem !== null && <span className="text-[11px] text-destructive">{problem}</span>}
-      </label>
+          className="max-h-64 overflow-y-auto rounded-md border p-1 outline-none"
+        >
+          <ListBoxItem id="" textValue="typeless" className={itemClass}>
+            <HugeiconsIcon icon={primIcon(null)} className="size-3.5 text-muted-foreground" />
+            No type <span className="text-muted-foreground">(typeless)</span>
+          </ListBoxItem>
+          {shown.map(([group, schemas]) => (
+            <ListBoxSection key={group}>
+              <Header className="px-2 pt-2 pb-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">{group}</Header>
+              {schemas.map((schema) => (
+                <ListBoxItem key={schema.name} id={schema.name} textValue={schema.name} className={itemClass}>
+                  <HugeiconsIcon icon={primIcon(schema.name)} className="size-3.5 text-muted-foreground" />
+                  {schema.name}
+                  <span className="ml-auto truncate text-[10px] text-muted-foreground">{schema.bases[0] ?? ""}</span>
+                </ListBoxItem>
+              ))}
+            </ListBoxSection>
+          ))}
+        </ListBox>
+        <label className="flex flex-col gap-1 text-xs">
+          Name
+          <Input
+            value={name}
+            onChange={(event) => {
+              setName(event.target.value);
+              setNamed(true);
+            }}
+            className="h-7 font-mono text-xs"
+          />
+          {problem !== null && <span className="text-[11px] text-destructive">{problem}</span>}
+        </label>
+      </form>
       <DialogFooter>
         <Button variant="outline" onPress={onClose}>
           Cancel
         </Button>
-        <Button
-          isDisabled={problem !== null}
-          onPress={() => {
-            store.definePrim(parent, name, typeName);
-            onClose();
-          }}
-        >
+        <Button isDisabled={problem !== null} onPress={add}>
           Add {typeName ?? "prim"}
         </Button>
       </DialogFooter>

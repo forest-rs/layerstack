@@ -60,7 +60,7 @@ import type { Texture, WebGPURenderer } from "three/webgpu";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import type { MaterialItem } from "@forest-rs/layerstack_stagehand";
 import type { OpenPbrSurface } from "../model/openpbr.ts";
-import { applyToneMap, onRendererLost, sharedRenderer } from "./gpu.ts";
+import { applyToneMap, onRendererLost, resizeTarget, sharedRenderer } from "./gpu.ts";
 import { DEFAULT_TONE_MAP, type ToneMapChoice } from "./toneMap.ts";
 import { type AssetExists, type AssetReader, surfaceMaterial, TextureStore, use } from "./surfaces.ts";
 
@@ -231,8 +231,7 @@ export class MaterialPreview {
       const height = this.#canvas.clientHeight;
       if (renderer === null || width === 0 || height === 0) return;
       if (this.#canvas.width !== Math.round(width * window.devicePixelRatio)) {
-        this.#target.setPixelRatio(window.devicePixelRatio);
-        this.#target.setSize(width, height, false);
+        resizeTarget(renderer, this.#target, width, height);
       }
       this.#camera.aspect = width / height;
       this.#camera.updateProjectionMatrix();

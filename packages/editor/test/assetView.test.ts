@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { loadLayerstack } from "@forest-rs/layerstack";
 import type { BudgetGrant, BudgetReport } from "@forest-rs/layerstack_stagehand";
-import { assetFocus, budgetFor, budgetNote, DRAW_BUDGET, rememberBudget, rememberedBudget, scopeFor } from "../src/model/assetView.ts";
+import { assetFocus, budgetFor, budgetNote, DRAW_BUDGET, rememberBudget, rememberedBudget, scopeFor, textureAddress } from "../src/model/assetView.ts";
 import { imageInfo } from "../src/model/images.ts";
 
 const LAYER = `#usda 1.0
@@ -100,4 +100,33 @@ test("an image's header gives its size and channels", () => {
   assert.deepEqual(imageInfo(png), { format: "png", width: 640, height: 480, bits: 8, channels: "RGBA" });
   assert.equal(imageInfo(new Uint8Array([0x76, 0x2f, 0x31, 0x01])).format, "exr");
   assert.equal(imageInfo(new Uint8Array([1, 2, 3])).format, "unknown");
+});
+
+test("a texture's address changes only when the file it names does, not as time moves", () => {
+  const layer = `#usda 1.0
+def Shader "Image" {
+    asset inputs:fixed = @textures/look.png@
+    asset inputs:flip.timeSamples = {
+        1: @textures/a.png@,
+        2: @textures/b.png@,
+    }
+}
+`;
+  const stage = layerstack.open({ identifier: "scenes/anim.usda", bytes: new TextEncoder().encode(layer) });
+  try {
+    const fixed = (time: number | undefined) => textureAddress(stage, "/Image.inputs:fixed", time);
+    assert.deepEqual(fixed(1), fixed(7));
+    assert.equal(fixed(1).assetPath, "textures/look.png");
+    assert.equal(fixed(1).layer, "scenes/anim.usda");
+    assert.ok(fixed(1).identifier?.endsWith("textures/look.png"));
+    // A held sample is the same file at any time before the next one.
+    const flip = (time: number) => textureAddress(stage, "/Image.inputs:flip", time);
+    assert.deepEqual(flip(1), flip(1.5));
+    assert.equal(flip(1).assetPath, "textures/a.png");
+    assert.equal(flip(2).assetPath, "textures/b.png");
+    assert.notEqual(flip(1).identifier, flip(2).identifier);
+    assert.equal(textureAddress(stage, "/Image.inputs:missing", undefined).assetPath, "");
+  } finally {
+    stage.free();
+  }
 });

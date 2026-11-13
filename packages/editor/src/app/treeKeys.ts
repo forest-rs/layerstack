@@ -15,24 +15,44 @@ export interface KeyPress {
 }
 
 /** What a key on a focused prim row does, when it is the editor's. */
-export type RowAction = "frame" | "delete" | "rename";
+export type RowAction = "frame" | "delete" | "rename" | "menu" | "deselect";
 
 /**
  * The action of `press` on a focused tree row, or `null` to leave it to the
  * tree. F frames unless a type-to-find search is under way (`searching`:
  * the tree's typeahead takes a letter that continues one, and a letter that
  * starts one that matches takes it from the shortcut, so the row decides
- * first); Delete (or ⌘⌫) deletes; F2 and Enter rename.
+ * first); Delete (or ⌘⌫) deletes; F2 and Enter rename; Shift+F10 (or the
+ * Menu key) opens the row's context menu, which a browser on macOS does
+ * not do for it; Escape clears the selection.
  */
 export function rowAction(press: KeyPress, searching: boolean): RowAction | null {
   // A Mac keyboard has no Delete key: ⌘⌫ deletes there, as in the Finder.
   if (press.key === "Backspace" && press.metaKey && !press.ctrlKey && !press.altKey && !press.shiftKey) return "delete";
   if (press.metaKey || press.ctrlKey || press.altKey) return null;
+  if ((press.key === "F10" && press.shiftKey) || press.key === "ContextMenu") return "menu";
   if (press.key === "f" && !press.shiftKey) return searching ? null : "frame";
   if (press.shiftKey) return null;
+  // The tree keeps a selection once it has one (a click on the selected row
+  // does not clear it), so it does not clear it on Escape either: the row does.
+  if (press.key === "Escape") return "deselect";
   if (press.key === "Delete") return "delete";
   if (press.key === "F2" || press.key === "Enter") return "rename";
   return null;
+}
+
+/**
+ * The row that takes the focus when the row at `removed` goes with its
+ * descendants: the next row after them, else the one before it; `null`
+ * when there is no other row. `paths` are the rows as the tree lists them.
+ */
+export function rowAfterRemoval(paths: readonly string[], removed: string): string | null {
+  const at = paths.indexOf(removed);
+  if (at < 0) return null;
+  for (let index = at + 1; index < paths.length; index++) {
+    if (!paths[index]!.startsWith(`${removed}/`)) return paths[index]!;
+  }
+  return at > 0 ? paths[at - 1]! : null;
 }
 
 /** How long the tree's type-to-find search lasts after a letter, in milliseconds (react-aria's). */

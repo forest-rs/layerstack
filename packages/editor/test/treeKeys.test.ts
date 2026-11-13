@@ -6,7 +6,7 @@
 // rename, and a letter that continues a search stays the tree's.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { rowAction } from "../src/app/treeKeys.ts";
+import { rowAction, rowAfterRemoval } from "../src/app/treeKeys.ts";
 
 const press = (key: string, mods: { metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean; shiftKey?: boolean } = {}) => ({
   key,
@@ -34,9 +34,35 @@ describe("rowAction", () => {
     assert.equal(rowAction(press("Backspace", { metaKey: true }), false), "delete");
     assert.equal(rowAction(press("Backspace", { metaKey: true, shiftKey: true }), false), null);
   });
-  it("leaves other keys, and Shift+F10, to the tree", () => {
+  it("opens the row's menu on Shift+F10 and the Menu key", () => {
+    assert.equal(rowAction(press("F10", { shiftKey: true }), false), "menu");
+    assert.equal(rowAction(press("ContextMenu"), false), "menu");
+    assert.equal(rowAction(press("F10"), false), null);
+    assert.equal(rowAction(press("F10", { shiftKey: true, metaKey: true }), false), null);
+  });
+  it("clears the selection on Escape", () => {
+    assert.equal(rowAction(press("Escape"), false), "deselect");
+    assert.equal(rowAction(press("Escape", { shiftKey: true }), false), null);
+  });
+  it("leaves other keys to the tree", () => {
     for (const key of ["a", "ArrowDown", " ", "Backspace"]) assert.equal(rowAction(press(key), false), null, key);
-    assert.equal(rowAction(press("F10", { shiftKey: true }), false), null);
     assert.equal(rowAction(press("Enter", { shiftKey: true }), false), null);
+  });
+});
+
+describe("rowAfterRemoval", () => {
+  const paths = ["/World", "/World/Lamp", "/World/Robot", "/World/Robot/Arm", "/World/Robot/Arm/Hand", "/World/Top", "/Looks"];
+  it("is the next row after the removed prim and its descendants", () => {
+    assert.equal(rowAfterRemoval(paths, "/World/Lamp"), "/World/Robot");
+    assert.equal(rowAfterRemoval(paths, "/World/Robot"), "/World/Top");
+    assert.equal(rowAfterRemoval(paths, "/World"), "/Looks");
+  });
+  it("is the row before when nothing follows", () => {
+    assert.equal(rowAfterRemoval(paths, "/Looks"), "/World/Top");
+    assert.equal(rowAfterRemoval(["/World", "/World/Robot", "/World/Robot/Arm"], "/World/Robot"), "/World");
+  });
+  it("is nothing for the only row, or a row not listed", () => {
+    assert.equal(rowAfterRemoval(["/World"], "/World"), null);
+    assert.equal(rowAfterRemoval(paths, "/Missing"), null);
   });
 });

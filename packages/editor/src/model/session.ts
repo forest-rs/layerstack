@@ -18,6 +18,7 @@ import type {
   OpenOptions,
   PackageResult,
   ReleasedLayers,
+  ReloadResult,
   SaveResult,
   Stage,
   ValueInput,
@@ -217,6 +218,8 @@ export class Session implements Disposable {
   readonly #reports = new WeakMap<HistoryStep, EditReceipt>();
   /** The move each step of a move made, for what follows the moved path when it is undone and redone. */
   readonly #moves = new WeakMap<HistoryStep, PathMove>();
+  /** The steps a move or a delete made: what {@link Session.lastNamespaceEdit} looks for. */
+  readonly #namespaceSteps = new WeakSet<HistoryStep>();
   #cause = "open";
   #fetched = 0;
   #fetchedBytes = 0;
@@ -431,13 +434,97 @@ export class Session implements Disposable {
   move(path: string, to: string): EditReceipt {
     const receipt = this.#record(`move ${path} to ${to}`, () => this.stage.move(path, to, this.target));
     const step = this.history.nextUndo;
-    if (step !== null && this.#reports.get(step) === receipt) this.#moves.set(step, { from: path, to });
+    if (step !== null && this.#reports.get(step) === receipt) {
+      this.#moves.set(step, { from: path, to });
+      this.#namespaceSteps.add(step);
+    }
     return receipt;
   }
 
   /** Deletes the prim or property at `path` from the edit layer's stack, as one undoable action. */
   delete(path: string): EditReceipt {
-    return this.#record(`delete ${path}`, () => this.stage.delete(path, this.target));
+    const receipt = this.#record(`delete ${path}`, () => this.stage.delete(path, this.target));
+    const step = this.history.nextUndo;
+    if (step !== null && this.#reports.get(step) === receipt) this.#namespaceSteps.add(step);
+    return receipt;
+  }
+
+  /**
+   * The newest move or delete on the undo stack, with its receipt: its
+   * `unrepaired` lists the paths it left naming what moved. `null` when
+   * none is (none was made, or it was undone).
+   */
+  lastNamespaceEdit(): UndoEntry | null {
+    const steps = this.history.undoSteps;
+    for (let at = steps.length - 1; at >= 0; at--) {
+      const step = steps[at]!;
+      if (this.#namespaceSteps.has(step)) return this.#entry(step);
+    }
+    return null;
+  }
+
+  /**
+   * Applies `edits` to `layer`, a layer of the stage's own stack, whatever
+   * {@link Session.target} is, as one undoable action: for what belongs to
+   * one layer (its sublayers, the stage's metadata in the root).
+   */
+  applyIn(label: string, layer: Layer, edits: readonly Edit[]): EditReceipt {
+    return this.#record(label, () => this.stage.apply(edits, layer));
+  }
+
+  /**
+   * Applies `edits` to `layer`'s sublayers (`insertSublayer` and its
+   * siblings) as one undoable action, then supplies what the stack now
+   * names that the stage has not read: a sublayer added is unavailable
+   * until then, and one missing from the source is then unresolved.
+   */
+  async editSublayers(label: string, layer: Layer, edits: readonly Edit[], signal?: AbortSignal): Promise<EditReceipt> {
+    const receipt = this.applyIn(label, layer, edits);
+    await this.supplyUnavailable(label, undefined, signal);
+    return receipt;
+  }
+
+  /**
+   * Clears the metadata field `key` of `layer` (`clearLayerMetadata`), as
+   * one undoable action; throws when the layer does not author it, and
+   * records nothing.
+   */
+  clearLayerMetadata(label: string, layer: Layer, key: string): EditReceipt {
+    const receipt = this.applyIn(label, layer, [{ type: "clearLayerMetadata", key }]);
+    if (receipt.layers.length === 0) throw new Error(`${layer.identifier ?? "the session layer"} has no ${key} to clear`);
+    return receipt;
+  }
+
+  /**
+   * Reads `layers` again from the source (`Stage.reloadLayers`): each
+   * one's bytes are fetched and supplied again, and the stage reads again
+   * those whose bytes changed, publishing only what changed; what the new
+   * content names that the stage has not read is then supplied. A layer
+   * gone from the source keeps its content. Throws `io.dirty_reload` when
+   * one has unsaved edits, with nothing read: the caller leaves those out.
+   */
+  async reload(layers: readonly Layer[], signal?: AbortSignal): Promise<ReloadResult> {
+    const cause = layers.length === 1 ? `reload ${layers[0]!.identifier ?? "the session layer"}` : `reload ${layers.length} layers`;
+    this.#cause = cause;
+    // A package member is read with its package: the package's bytes are what the source holds.
+    const identifiers = [
+      ...new Set(layers.flatMap((layer) => (layer.identifier === null ? [] : [layer.identifier.includes("[") ? layer.identifier.slice(0, layer.identifier.indexOf("[")) : layer.identifier]))),
+    ];
+    const fetched = await unlessAborted(Promise.all(identifiers.map((identifier) => this.#fetch(identifier, signal))), signal);
+    identifiers.forEach((identifier, index) => {
+      const bytes = fetched[index] ?? null;
+      // Gone from the source: the layer keeps what it read.
+      if (bytes === null) {
+        this.#log("fetch", identifier, "not found, kept as read");
+        return;
+      }
+      this.stage.supply(identifier, bytes);
+      this.#log("supply", identifier, `${bytes.byteLength} B, to reload`);
+    });
+    const result = this.stage.reloadLayers(layers);
+    this.#logLoad(result);
+    await this.supplyUnavailable(cause, undefined, signal);
+    return result;
   }
 
   /**

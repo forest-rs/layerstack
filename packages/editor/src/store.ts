@@ -41,7 +41,11 @@ import type { LayerTextRead } from "./model/layerText.ts";
 import { type Shadow, shadowOf, targetOpinion } from "./model/propertyOps.ts";
 import { releaseValue } from "./model/values.ts";
 import { addShaderEdits, connectEdits, connectLabel, disconnectEdits, disconnectLabel } from "./model/networkEdits.ts";
+import type { HealthReport } from "./model/health.ts";
+import { IDENTITY, type LayerOffset, movedSublayers, offsetUsda } from "./model/layerStack.ts";
 import type { PathMove, Session } from "./model/session.ts";
+import { type FieldSource, type MetadataPlacement, metadataLayer } from "./model/stageMetadata.ts";
+import { StageReports } from "./store/reports.ts";
 import type { SceneSource } from "./model/sources.ts";
 import { ActionQueue } from "./store/actions.ts";
 import { Drawing } from "./store/drawing.ts";
@@ -95,6 +99,7 @@ export class EditorStore {
   readonly #notices: Notices;
   readonly #frameNotes: FrameNotes;
   readonly #files: FileState;
+  readonly #reports = new StageReports();
   /** The session whose metadata {@link EditorStore.#readStage} last read, and the change records it had then. */
   #read: { session: Session | null; changes: number } = { session: null, changes: 0 };
   /** The last value edit that does not show ({@link EditorStore.shadow}). */
@@ -851,6 +856,147 @@ export class EditorStore {
     return this.#edit(label, (session) => session.apply(label, addShaderEdits(path, id, position)));
   }
 
+  // The layer stack (`model/layerStack.ts`): each edit is to one layer's
+  // `subLayers`, whatever layer other edits go to, one undoable action
+  // that then runs the asset loop for what the stack names now.
+
+  /**
+   * Adds `asset` (as `parent` authors it: `./lib.usda`) to `parent`'s
+   * sublayers at `index` (0 the strongest), read through `offset`, then
+   * fetches it. Resolves why the stage refused it, as
+   * {@link EditorStore.apply} returns it; a missing asset is not refused,
+   * the Health tab reports it.
+   */
+  insertSublayer(parent: Layer, asset: string, index: number, offset: LayerOffset = IDENTITY): Promise<string | undefined> {
+    const label = `add sublayer @${asset}@${offsetUsda(offset)} to ${layerLabel(parent)}`;
+    return this.#fetchingEdit(label, (session, signal) =>
+      session.editSublayers(label, parent, [{ type: "insertSublayer", asset, index, layerOffset: { offset: offset.offset, scale: offset.scale } }], signal),
+    );
+  }
+
+  /** Removes `parent`'s sublayer at `index`, with its offset. Resolves why the stage refused it. */
+  removeSublayer(parent: Layer, index: number): Promise<string | undefined> {
+    const asset = this.session?.stage.sublayers(parent)[index]?.asset ?? `#${index}`;
+    const label = `remove sublayer @${asset}@ from ${layerLabel(parent)}`;
+    return this.#fetchingEdit(label, (session, signal) => session.editSublayers(label, parent, [{ type: "removeSublayer", index }], signal));
+  }
+
+  /**
+   * Moves `parent`'s sublayer at `index` by `by` places (negative:
+   * stronger), authoring its sublayers reordered (`setSublayers`).
+   * Resolves why the stage refused it, or why it cannot move that far.
+   */
+  moveSublayer(parent: Layer, index: number, by: number): Promise<string | undefined> {
+    const sublayers = this.session?.stage.sublayers(parent) ?? [];
+    const asset = sublayers[index]?.asset ?? `#${index}`;
+    const label = `make @${asset}@ ${by < 0 ? "stronger" : "weaker"} in ${layerLabel(parent)}`;
+    return this.#fetchingEdit(label, async (session, signal) => {
+      const moved = movedSublayers(session.stage.sublayers(parent), index, by);
+      if (moved === null) throw new Error(`@${asset}@ is the ${by < 0 ? "strongest" : "weakest"} sublayer of ${layerLabel(parent)} already`);
+      return session.editSublayers(label, parent, [{ type: "setSublayers", sublayers: moved.map(({ asset, layerOffset }) => ({ asset, layerOffset: { ...layerOffset } })) }], signal);
+    });
+  }
+
+  /** Authors `offset` for `parent`'s sublayer at `index` (`SdfLayer::SetSubLayerOffset`). Resolves why the stage refused it. */
+  setSublayerOffset(parent: Layer, index: number, offset: LayerOffset): Promise<string | undefined> {
+    const asset = this.session?.stage.sublayers(parent)[index]?.asset ?? `#${index}`;
+    const label = `set the offset of @${asset}@ in ${layerLabel(parent)}`;
+    return this.#fetchingEdit(label, (session, signal) =>
+      session.editSublayers(label, parent, [{ type: "setSublayerOffset", index, layerOffset: { offset: offset.offset, scale: offset.scale } }], signal),
+    );
+  }
+
+  /**
+   * Reads `layer` again from the source, or (`null`) every layer the
+   * stage holds that has no unsaved edits and is not muted
+   * ({@link Session.reload}): files changed on disk come in, and only what
+   * changed recomposes. A layer with unsaved edits is not read again: one
+   * asked for alone is refused, and among all it is left out and a notice
+   * says so. Not an edit: nothing goes on the undo stack.
+   */
+  async reload(layer: Layer | null): Promise<ReloadReport> {
+    const label = layer === null ? "reload from source" : `reload ${layerLabel(layer)}`;
+    let report: ReloadReport = { reloaded: [], skipped: [], refusal: null };
+    const refusal = await this.#fetchingEdit(label, async (session, signal) => {
+      const stage = session.stage;
+      const asked = layer === null ? stage.layers().filter((each) => !each.anonymous && !stage.isMuted(each)) : [layer];
+      const skipped = asked.filter((each) => session.isEdited(each));
+      if (layer !== null && skipped.length > 0) throw new Error(`${layerLabel(layer)} has unsaved edits: save or undo them before reading it again from the source`);
+      const reading = asked.filter((each) => !skipped.includes(each));
+      const result = reading.length === 0 ? null : await session.reload(reading, signal);
+      report = { reloaded: result?.reloaded ?? [], skipped, refusal: null };
+      if (skipped.length > 0) {
+        this.#notices.add(label, `not read again, having unsaved edits: ${skipped.map(layerLabel).join(", ")}`, "io.dirty_reload");
+      }
+      for (const failure of result?.failures ?? []) this.#notices.add(label, `${failure.assetPath} was not read again: ${failure.message}`, failure.code);
+    });
+    return refusal === undefined ? report : { ...report, refusal };
+  }
+
+  // The stage's metadata (`model/stageMetadata.ts`), read from the root
+  // and session layers alone: authored in one of them.
+
+  /** Which layer each stage metadata field the Stage tab shows is read from; read again after a change, not per call. */
+  stageMetadataSources(): ReadonlyMap<string, FieldSource> {
+    return this.session === null ? new Map() : this.#reports.metadataSources(this.session);
+  }
+
+  /**
+   * The layer a stage metadata edit goes to ({@link metadataLayer}): where
+   * edits go when that is the root or the session layer, else the root,
+   * with a note saying why. `null` with no scene.
+   */
+  metadataPlacement(): MetadataPlacement<Layer> | null {
+    const session = this.session;
+    if (session === null) return null;
+    const stage = session.stage;
+    const target = session.target;
+    const layer = target === undefined ? stage.editLayer : "kind" in target ? (stage.hasLocalLayer(target.layer) ? target.layer : null) : target;
+    return metadataLayer(layer, stage.root, session.sessionLayer, layerLabel);
+  }
+
+  /**
+   * Authors the stage metadata field `key` (`upAxis`, `metersPerUnit`,
+   * `startTimeCode`, ...) as `value` where {@link EditorStore.metadataPlacement}
+   * says. The viewport follows `upAxis`, the timeline the range and rate.
+   * Returns why the stage refused it.
+   */
+  setStageMetadata(key: string, value: ValueInput): string | undefined {
+    const layer = this.metadataPlacement()?.layer;
+    if (layer === undefined) return undefined;
+    const label = `set ${key} in ${layerLabel(layer)}`;
+    return this.#edit(label, (session) => session.applyIn(label, layer, [{ type: "setLayerMetadata", key, value }]));
+  }
+
+  /**
+   * Clears the stage metadata field `key` from `layer` (the root or the
+   * session layer, whichever holds the opinion), so the stage reads the
+   * other's, or the field's fallback. Returns why it was refused (the
+   * layer authors none).
+   */
+  clearStageMetadata(key: string, layer: Layer): string | undefined {
+    const label = `clear ${key} in ${layerLabel(layer)}`;
+    return this.#edit(label, (session) => session.clearLayerMetadata(label, layer, key));
+  }
+
+  /**
+   * The stage's health ({@link HealthReport}): its composition errors by
+   * prim, the assets missing or not supplied, and the paths the last move
+   * or delete left unrepaired. Read once per change of the stage (or of
+   * the undo stack), however often it is asked; `null` with no scene.
+   * Heard on `composition` and `history`.
+   */
+  get health(): HealthReport<Layer> | null {
+    const session = this.session;
+    if (session === null || this.status.kind === "lost") return null;
+    try {
+      return this.#reports.health(session);
+    } catch (error) {
+      if (!this.lose(error)) throw error;
+      return null;
+    }
+  }
+
   /**
    * Hides instance `id` of the point instancer at `instancer` (adds it to
    * `invisibleIds`, at the current time when that attribute is animated,
@@ -1176,6 +1322,27 @@ export class EditorStore {
   }
 
   /**
+   * Runs an edit that may fetch what the stage then wants, in its turn
+   * ({@link EditorStore.#fetching}), and resolves why the stage refused it
+   * (or the fetch failed), as {@link EditorStore.apply} returns it; the
+   * refusal is a notice too.
+   */
+  async #fetchingEdit(action: string, run: (session: Session, signal: AbortSignal) => Promise<unknown>): Promise<string | undefined> {
+    let refusal: string | undefined;
+    await this.#fetching(action, async (session, signal) => {
+      try {
+        await run(session, signal);
+      } catch (error) {
+        // A trap loses the module, and an abort says nothing: both are the queue's to handle.
+        if (signal.aborted || moduleTrap(error) !== null) throw error;
+        refusal = this.#notices.report(action, error).message;
+      }
+      return false;
+    });
+    return refusal;
+  }
+
+  /**
    * After an action on `session`: the selection lets go of a prim that is
    * no longer there, and the draws and the panels are brought up to the
    * stage (`selected`: the action changed the selection). Nothing when
@@ -1183,6 +1350,8 @@ export class EditorStore {
    */
   #settled(session: Session, selected: boolean, ...also: readonly Channel[]): void {
     if (this.session !== session || this.status.kind === "lost") return;
+    // What was read of the stage during the action (a panel rendering as its assets came in) may be of a stage half composed.
+    this.#reports.forget();
     const prim = this.selection;
     if (prim !== null && session.stage.prim(prim) === null) {
       this.#selection.select(null);
@@ -1261,6 +1430,21 @@ export class EditorStore {
       this.signals.bump(...due);
     });
   }
+}
+
+/** What {@link EditorStore.reload} did. */
+export interface ReloadReport {
+  /** The layers read again: those whose source changed. */
+  readonly reloaded: readonly Layer[];
+  /** The layers left out for their unsaved edits. */
+  readonly skipped: readonly Layer[];
+  /** Why the reload was refused, or failed; `null` when it ran. */
+  readonly refusal: string | null;
+}
+
+/** A layer as an action's label names it: its identifier, or the session layer. */
+function layerLabel(layer: Layer): string {
+  return layer.identifier ?? "the session layer";
 }
 
 /** The stage's `upAxis`: `Z` when it says so, else `Y`. */

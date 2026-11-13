@@ -16,12 +16,12 @@ import type { Viewport } from "../viewport/viewport3d.ts";
 import type { Signals } from "./signals.ts";
 
 /** The scene browser's tabs. */
-export const SCENE_TABS = ["prims", "layers", "cameras"] as const;
+export const SCENE_TABS = ["prims", "layers", "stage", "cameras"] as const;
 /** A tab of the scene browser. */
 export type SceneTab = (typeof SCENE_TABS)[number];
 
 /** The bottom panel's tabs. */
-export const BOTTOM_TABS = ["explain", "changes", "history", "text", "assets", "shading", "cost", "notices"] as const;
+export const BOTTOM_TABS = ["explain", "changes", "history", "text", "assets", "health", "shading", "cost", "notices"] as const;
 /** A tab of the bottom panel. */
 export type BottomTab = (typeof BOTTOM_TABS)[number];
 

@@ -4,6 +4,7 @@
 // The editor's own presentations and commands, registered through the
 // same calls a plugin makes (`registerPresentation`, `registerCommand`).
 import { registerInstancePresentations } from "./instances.tsx";
+import { registerLayerCommands } from "./layers.ts";
 import { registerObjectPresentations } from "./objects.tsx";
 import { registerPrimPresentations } from "./prims.tsx";
 import { registerPropertyCommands } from "./properties.ts";
@@ -14,6 +15,7 @@ import { registerValuePresentations } from "./values.tsx";
 export function registerBuiltInPresentations(): void {
   registerValuePresentations();
   registerObjectPresentations();
+  registerLayerCommands();
   registerPropertyCommands();
   registerPrimPresentations();
   registerInstancePresentations();

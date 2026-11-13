@@ -1,20 +1,19 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-// The scene browser: the prims, the layers the stage holds, and the
-// cameras the viewport can look through.
+// The scene browser: the prims, the layer stack and the layers the stage
+// holds, the stage's metadata, and the cameras the viewport can look
+// through.
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Video01Icon } from "@hugeicons/core-free-icons";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { SCENE_TABS } from "../store/view.ts";
 import { useEditorStore, useRevision, useStoreSelector } from "./context.ts";
-import { layerName } from "./format.ts";
-import { Present, presentationContext } from "./presentations/Present.tsx";
+import { LayerStackView } from "./LayerStackView.tsx";
 import { PrimTree } from "./PrimTree.tsx";
 import { countRender } from "./renders.ts";
+import { StageView } from "./StageView.tsx";
 
 export function ScenePanel() {
   const store = useEditorStore();
@@ -32,81 +31,22 @@ export function ScenePanel() {
       <TabsList variant="line" className="w-full justify-start border-b px-2">
         <TabsTrigger className="flex-none px-2.5" id="prims">Prims</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="layers">Layers</TabsTrigger>
+        <TabsTrigger className="flex-none px-2.5" id="stage">Stage</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="cameras">Cameras</TabsTrigger>
       </TabsList>
       <TabsContent id="prims" className="min-h-0">
         <PrimTree />
       </TabsContent>
       <TabsContent id="layers" className="min-h-0 overflow-y-auto">
-        <LayerList />
+        <LayerStackView />
+      </TabsContent>
+      <TabsContent id="stage" className="min-h-0 overflow-y-auto">
+        <StageView />
       </TabsContent>
       <TabsContent id="cameras" className="min-h-0 overflow-y-auto">
         <CameraList />
       </TabsContent>
     </Tabs>
-  );
-}
-
-/**
- * The layers the stage holds, as it reports them: the root layer stack
- * first, then the assets its arcs read; then the muted layers it
- * released, by identifier. Muting one recomposes the stage without its
- * opinions; it is the stage's state, not an edit.
- */
-function LayerList() {
-  countRender("LayerList");
-  const store = useEditorStore();
-  // A save clears the edited marks (`history`); the tab in front decides what a click on a layer does (`view`).
-  useRevision(store, "composition", "history", "view");
-  const session = store.session;
-  if (session === null) return null;
-  const stage = session.stage;
-  const layers = stage.layers();
-  const root = stage.root;
-  const sessionLayer = session.sessionLayer;
-  const held = new Set(layers.map((layer) => layer.identifier));
-  const released = stage.mutedIdentifiers().filter((identifier) => !held.has(identifier));
-  const context = presentationContext(store);
-  return (
-    <ul className="flex flex-col p-1">
-      {layers.map((layer) => {
-        const muted = stage.isMuted(layer);
-        const local = stage.hasLocalLayer(layer);
-        return (
-          <li key={String(layer.id)} className="flex items-center gap-2 rounded-md px-2 py-1 text-xs hover:bg-muted">
-            {/* Live, as a layer is anywhere: a click shows its text, a context menu (or Shift+F10) offers the rest. */}
-            <span className={cn("flex min-w-0 flex-1", muted && "line-through opacity-60")}>
-              {context === null ? (
-                <span className="truncate font-mono text-[11px]">{layerName(layer.identifier)}</span>
-              ) : (
-                <Present object={{ kind: "layer", layer }} context={context} />
-              )}
-            </span>
-            {session.isEdited(layer) && <Badge variant="secondary">edited</Badge>}
-            {layer === sessionLayer && <Badge variant="outline">session</Badge>}
-            {local && layer !== sessionLayer && <Badge variant="outline">stack</Badge>}
-            {layer.readOnly && <Badge variant="outline">read-only</Badge>}
-            {layer !== root && layer !== sessionLayer && (
-              <Switch
-                size="sm"
-                aria-label={muted ? `Unmute ${layerName(layer.identifier)}` : `Mute ${layerName(layer.identifier)}`}
-                isSelected={!muted}
-                onChange={(on) => void store.setMuted(layer, !on)}
-              />
-            )}
-          </li>
-        );
-      })}
-      {released.map((identifier) => (
-        <li key={identifier} className="flex items-center gap-2 rounded-md px-2 py-1 text-xs hover:bg-muted">
-          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground line-through" title={layerName(identifier)}>
-            {layerName(identifier)}
-          </span>
-          <Badge variant="outline">released</Badge>
-          <Switch size="sm" aria-label={`Unmute ${layerName(identifier)}`} isSelected={false} onChange={() => void store.setMuted(identifier, false)} />
-        </li>
-      ))}
-    </ul>
   );
 }
 

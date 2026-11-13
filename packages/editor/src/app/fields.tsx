@@ -35,10 +35,12 @@ const REFUSED_MS = 2500;
 
 /**
  * A text field that commits on Enter or blur, and goes back to `value` on
- * Escape (authoring nothing) or when `value` changes. `onCommit` returns
- * why the input was refused, if it was: the field then shows `value` again
- * and marks itself invalid for a moment, with the reason as its title and
- * for assistive technology.
+ * Escape (authoring nothing). What is typed is shown only until it is
+ * committed: then the field shows `value` again, which is what the stage
+ * reads after the edit, so an edit a stronger opinion hides does not look
+ * as if it took. `onCommit` returns why the input was refused, if it was:
+ * the field then marks itself invalid for a moment, with the reason as its
+ * title and for assistive technology.
  */
 export function CommitField({
   value,
@@ -55,11 +57,12 @@ export function CommitField({
   numeric?: boolean;
   disabled?: boolean;
 }) {
-  const [text, setText] = useState(value);
+  // What is typed and not yet committed; `null` shows `value`.
+  const [draft, setDraft] = useState<string | null>(null);
   const [refused, setRefused] = useState<string | null>(null);
   const cancelled = useRef(false);
   const reason = useId();
-  useEffect(() => setText(value), [value]);
+  const text = draft ?? value;
   useEffect(() => {
     if (refused === null) return;
     const timer = setTimeout(() => setRefused(null), REFUSED_MS);
@@ -75,13 +78,13 @@ export function CommitField({
         aria-invalid={refused !== null ? true : undefined}
         aria-describedby={refused !== null ? reason : undefined}
         title={refused ?? undefined}
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => setDraft(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === "Enter") event.currentTarget.blur();
           if (event.key === "Escape") {
             // The blur below runs before the reset renders: say it is a cancel.
             cancelled.current = true;
-            setText(value);
+            setDraft(null);
             setRefused(null);
             event.currentTarget.blur();
           }
@@ -91,12 +94,10 @@ export function CommitField({
             cancelled.current = false;
             return;
           }
+          setDraft(null);
           if (text === value) return;
           const why = onCommit(text);
-          if (typeof why === "string") {
-            setText(value);
-            setRefused(why);
-          }
+          if (typeof why === "string") setRefused(why);
         }}
         className={cn(
           "h-6 min-w-0 rounded-md border border-input bg-input/20 px-1.5 font-mono text-[11px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 dark:bg-input/30",

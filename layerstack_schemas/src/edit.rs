@@ -378,10 +378,70 @@ impl<'s> SchemaEdit<'s> {
     /// stage as it was before this edit, plus what this edit's own calls
     /// collect ([`Self::define_prim`], `define`, `apply`, `create_*`). A
     /// host defining a prim that a later handle needs defines it through
-    /// [`Self::define_prim`].
+    /// [`Self::define_prim`], and one creating a property spec creates it
+    /// through [`Self::declare_property`].
     pub fn append(&mut self, transaction: Transaction) -> &mut Self {
         self.transaction.append(transaction);
         self
+    }
+
+    /// Creates the spec of `property` in the edit target with
+    /// `declaration`'s kind, type, variability and `custom` qualifier, and
+    /// no value, unless the property is already there as this edit leaves
+    /// it: a spec the target layer holds (and this edit has not removed),
+    /// or one this edit creates. Later handles of this edit see the
+    /// property as they see one their own `create_*` calls create, so a
+    /// host lowering generic edits ([`Self::append`]) creates property
+    /// specs here, and a handle that would create the same spec again
+    /// (a connection's source, a shader input) finds it instead.
+    ///
+    /// Returns whether it collected the spec: `false` when the property is
+    /// already there, and for an attribute `declaration` gives no type,
+    /// as OpenUSD's `SdfAttributeSpec::New` refuses an empty type name.
+    /// Nothing is collected then. The existing spec is kept as it is,
+    /// whatever its declaration, as `UsdPrim::CreateAttribute` keeps it.
+    ///
+    /// OpenUSD: `UsdPrim::CreateAttribute`, `UsdPrim::CreateRelationship`
+    /// (`SdfAttributeSpec::New`, `SdfRelationshipSpec::New`).
+    ///
+    /// Spec: AOUSD Core §7.6.4.1 (attribute declarations), §12.2.4
+    /// (properties).
+    pub fn declare_property(
+        &mut self,
+        property: PropertyPath,
+        declaration: &PropertyDeclaration,
+    ) -> bool {
+        let (path, name) = (property.prim_path(), property.property());
+        let ty = match declaration.kind {
+            PropertyKind::Attribute => match &declaration.type_name {
+                Some(ty) => Some(ty.clone()),
+                None => return false,
+            },
+            PropertyKind::Relationship => None,
+        };
+        if self.holds_property(path, name) {
+            return false;
+        }
+        let mut spec = match &ty {
+            Some(ty) => PropertySpec::typed_attribute(ty.clone()),
+            None => PropertySpec::relationship(),
+        };
+        spec.variability = declaration.variability;
+        spec.custom = declaration.custom;
+        self.transaction
+            .create_property(self.target.property(property), spec);
+        self.created.push((path, name, ty));
+        true
+    }
+
+    /// Whether the edit target holds a spec of the property `name` of
+    /// `path` as this edit leaves it: one this edit creates, else one the
+    /// target layer holds that this edit has not removed.
+    fn holds_property(&mut self, path: PathId, name: TokenId) -> bool {
+        self.created
+            .iter()
+            .any(|(p, n, _)| (*p, *n) == (path, name))
+            || (!self.removed.contains(&(path, name)) && self.has_local_property(path, name))
     }
 
     /// Applies a registered API schema by name, including codeless schemas,
@@ -1291,7 +1351,16 @@ impl<'s> SchemaEdit<'s> {
             .and_then(|d| d.type_name)
     }
 
-    pub(crate) fn property_kind(&mut self, path: PathId, name: &str) -> Option<PropertyKind> {
+    /// Whether the property `name` of `path` is an attribute or a
+    /// relationship as this edit leaves it: one this edit creates
+    /// (including through [`Self::declare_property`]), else the stage's
+    /// composed declaration of it, else the prim's schema definition, as
+    /// this edit leaves the prim's type and applied schemas. `None` when
+    /// nothing declares or defines it.
+    ///
+    /// Spec: AOUSD Core §12.2.4 (properties), §13.3.2.3 (the prim
+    /// definition).
+    pub fn property_kind(&mut self, path: PathId, name: &str) -> Option<PropertyKind> {
         let token = self.store.tokens().intern(name);
         if let Some((_, _, ty)) = self
             .created

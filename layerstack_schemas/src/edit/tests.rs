@@ -297,6 +297,76 @@ fn appended_generic_edits_keep_their_place_in_one_transaction() {
     );
 }
 
+/// A property spec a host creates through `declare_property` is one the
+/// handles see: a connection to it finds it rather than creating it again,
+/// and declaring one a handle created collects nothing.
+#[cfg(feature = "usd-shade")]
+#[test]
+fn declared_properties_are_seen_by_the_handles() {
+    use crate::shading::{ConnectionModification, ConnectionSource};
+    use layerstack::{
+        PropertyDeclaration, PropertyKind, PropertyPath, PropertyType, Value, Variability,
+    };
+
+    let (mut store, mut live) = stage(|_, _| {});
+    let texture = store.path("/Texture");
+    let surface = store.path("/Surface");
+    let rgb = PropertyPath::new(texture, store.tokens().intern("outputs:rgb"));
+    let color = PropertyPath::new(surface, store.tokens().intern("inputs:diffuseColor"));
+    let color3f = PropertyType::parse("color3f").expect("registered");
+    let attribute = |type_name: &str| PropertyDeclaration {
+        kind: PropertyKind::Attribute,
+        type_name: Some(PropertyType::parse(type_name).expect("registered")),
+        variability: Variability::Varying,
+        custom: false,
+    };
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(ROOT));
+    edit.define_prim(texture, "Shader").expect("definable");
+    let shader = edit.define_prim(surface, "Shader").expect("definable");
+    assert!(edit.declare_property(rgb, &attribute("color3f")));
+    assert!(
+        !edit.declare_property(rgb, &attribute("float")),
+        "already created in this edit"
+    );
+    assert_eq!(
+        edit.property_kind(texture, "outputs:rgb"),
+        Some(PropertyKind::Attribute)
+    );
+    let input = shader
+        .create_input(&mut edit, "diffuseColor", color3f.clone())
+        .expect("a new input");
+    input
+        .connect_to_source(
+            &mut edit,
+            ConnectionSource::new(texture, "outputs:rgb"),
+            ConnectionModification::Replace,
+        )
+        .expect("connects to the declared output");
+    assert!(
+        !edit.declare_property(color, &attribute("color3f")),
+        "the handle created it"
+    );
+    let untyped = PropertyDeclaration {
+        type_name: None,
+        ..attribute("float")
+    };
+    let other = PropertyPath::new(texture, edit.tokens().intern("outputs:a"));
+    assert!(
+        !edit.declare_property(other, &untyped),
+        "an attribute needs a type"
+    );
+    let transaction = edit.finish();
+    live.apply(&mut store, &transaction)
+        .expect("each spec is created once");
+    let spec = store
+        .layer(ROOT)
+        .and_then(|layer| layer.prim(texture))
+        .and_then(|prim| prim.property(rgb.property()))
+        .expect("the declared output");
+    assert_eq!(spec.type_name, Some(color3f));
+    assert_eq!(spec.default, None::<Value>);
+}
+
 /// `CreateClassPrim` makes classes only in the local layer stack, or
 /// through an arc's target: a layer outside the stack that maps every path
 /// to itself is refused, before anything else is checked.

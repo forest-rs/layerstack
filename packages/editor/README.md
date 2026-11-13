@@ -552,8 +552,12 @@ line: a property row, a table cell, the explain and changes panels),
   nothing of it again. The inspector renders its panels again when the
   selection, the stage or the draws change, not as time moves: a view that
   shows a value at the time asks for it with `useTime(context.store)`
-  (passing `false` when the value cannot vary), and `context.time` is the
-  time whenever it is read. A panel that throws is replaced by a line
+  (passing `false` when the value cannot vary), or with
+  `useTimeOf(store, stage, path, reads)`, naming the attributes it reads
+  (and whether those beneath the prim, or the transforms above it), so
+  the light, camera, skeleton, mesh, instancer and material views of a
+  prim that holds still do not render as the timeline plays; and
+  `context.time` is the time whenever it is read. A panel that throws is replaced by a line
   saying so; the others still show.
 
 The built-ins (`src/app/presentations/builtins.ts`) register through the

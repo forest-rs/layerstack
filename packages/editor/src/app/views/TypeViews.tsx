@@ -27,7 +27,8 @@ import type { PresentationContext, PresentProps } from "../../presentations/regi
 import { ValueField } from "../fields.tsx";
 import { usePrimRevision } from "../presentations/Present.tsx";
 import { Section } from "../Section.tsx";
-import { useTime } from "../context.ts";
+import { useTimeOf } from "../context.ts";
+import { countRender } from "../renders.ts";
 
 /** A scalar input's number at `time`, else `fallback`. */
 function number(prim: Prim, name: string, time: number | undefined, fallback: number): number {
@@ -64,9 +65,33 @@ function Editor({ context, attribute }: { context: PresentationContext; attribut
   return <ValueField store={context.store} attribute={attribute} shown={shown(attribute.get(context.time))} at={animated ? (context.time ?? null) : null} />;
 }
 
+/** The light inputs {@link LightView} reads at the time. */
+const LIGHT_READS = { attributes: ["inputs:intensity", "inputs:exposure", "inputs:color", "inputs:enableColorTemperature", "inputs:colorTemperature", "inputs:normalize"] };
+
+/** The lens attributes `UsdGeomCamera` reads at the time: not its transform, which a moving camera animates. */
+const CAMERA_READS = {
+  attributes: [
+    "projection",
+    "focalLength",
+    "horizontalAperture",
+    "verticalAperture",
+    "horizontalApertureOffset",
+    "verticalApertureOffset",
+    "clippingRange",
+    "fStop",
+    "focusDistance",
+    "exposure",
+    "exposure:iso",
+    "exposure:time",
+    "exposure:fStop",
+    "exposure:responsivity",
+  ],
+};
+
 export function LightView({ object, context }: PresentProps<"prim">) {
+  countRender("LightView");
   const { prim } = object;
-  const time = useTime(context.store);
+  const time = useTimeOf(context.store, context.stage, prim.path, LIGHT_READS);
   usePrimRevision(context.store, prim.path);
   const intensity = number(prim, "inputs:intensity", time, 1);
   const exposure = number(prim, "inputs:exposure", time, 0);
@@ -117,9 +142,10 @@ export function LightView({ object, context }: PresentProps<"prim">) {
 const fov = (aperture: number, focal: number) => (2 * Math.atan(aperture / (2 * focal)) * 180) / Math.PI;
 
 export function CameraView({ object, context }: PresentProps<"prim">) {
+  countRender("CameraView");
   const { prim } = object;
   const { store, stage } = context;
-  const time = useTime(store);
+  const time = useTimeOf(store, stage, prim.path, CAMERA_READS);
   usePrimRevision(store, prim.path);
   const camera = stage.camera(prim.path, time === undefined ? {} : { time });
   if (camera === null) return null;
@@ -203,9 +229,10 @@ function tokens(prim: Prim, name: string, time: number | undefined): string[] {
 const JOINTS_SHOWN = 200;
 
 export function SkeletonView({ object, context }: PresentProps<"prim">) {
+  countRender("SkeletonView");
   const { prim } = object;
   const revision = usePrimRevision(context.store, prim.path);
-  const time = useTime(context.store);
+  const time = useTimeOf(context.store, context.stage, prim.path, { attributes: ["joints", "blendShapes"] });
   const joints = useMemo(() => tokens(prim, "joints", time), [prim.path, revision, time]);
   const animation = prim.typeName === "SkelAnimation";
   const shapes = useMemo(() => (animation ? tokens(prim, "blendShapes", time) : []), [prim.path, revision, animation]);

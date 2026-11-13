@@ -28,7 +28,8 @@ import type { CpuMesh, MeshPreview, MeshPreviewStyle } from "../../viewport/mesh
 import type { ToneMapChoice } from "../../viewport/toneMap.ts";
 import { Live, Present, usePrimRevision } from "../presentations/Present.tsx";
 import { Section } from "../Section.tsx";
-import { useTime } from "../context.ts";
+import { useTimeOf } from "../context.ts";
+import { countRender } from "../renders.ts";
 
 /** This mesh built alone: its buffers on the CPU, its draw ranges and subsets, and its report. */
 interface Built {
@@ -66,7 +67,7 @@ export function usePreviewOrientation(context: PresentationContext, path: string
   const revision = usePrimRevision(context.store, path);
   const up = context.store.upAxis;
   const { stage } = context;
-  const time = useTime(context.store);
+  const time = useTimeOf(context.store, stage, path, { attributes: [], worldTransform: true });
   return useMemo(() => {
     let world: Float64Array | null = null;
     try {
@@ -102,11 +103,13 @@ function scalar(prim: Prim, name: string, time: number | undefined): string | nu
 }
 
 export function MeshView({ object, context }: PresentProps<"prim">) {
+  countRender("MeshView");
   const { store } = context;
   const prim = object.prim;
   const path = prim.path;
   const revision = usePrimRevision(store, path);
-  const time = useTime(store);
+  // Its attributes and its subsets'; the preview's orientation asks about the transforms itself.
+  const time = useTimeOf(store, context.stage, path, { attributes: null, descendants: true });
   // The draw list's buffers for this mesh, when the viewport draws it.
   const view = store.scene.items.find((candidate) => candidate.item.prim === path && candidate.kind === "mesh");
   const buffers = view?.buffers ?? null;

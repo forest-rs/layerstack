@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button as AriaButton, Collection, ListLayout, Tree, TreeItem, TreeItemContent, Virtualizer, type Key } from "react-aria-components";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
+import { Alert02Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import type { Prim, Stage } from "@forest-rs/layerstack";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -226,6 +226,12 @@ function PrimRow({ store, row, isExpanded, hasChildItems, level }: { store: Edit
       >
         {prim.name}
       </span>
+      {/* The health's set, read once per change: no read of the stage per row. */}
+      {store.health?.errorPrims.has(prim.path) === true && (
+        <span role="img" aria-label="Composition errors" title="Composition errors: the Health tab says which" className="shrink-0 text-amber-600 dark:text-amber-400">
+          <HugeiconsIcon icon={Alert02Icon} className="size-3" />
+        </span>
+      )}
       <span className="ml-auto flex shrink-0 items-center gap-1 pl-2 text-[10px] text-muted-foreground">
         {prim.hasAuthoredPayloads && <PayloadToggle store={store} prim={prim} />}
         {prim.instance && <span title="An instance: its descendants come from a shared prototype">instance</span>}

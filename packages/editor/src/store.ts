@@ -136,8 +136,13 @@ export class EditorStore {
   #shadow: Shadow | null = null;
   /** The last composition edit made here ({@link EditorStore.compositionEdit}). */
   #compositionEdit: CompositionEdit | null = null;
-  /** What each layer authors about composition, read once per change of the stage ({@link EditorStore.layerSpecs}). */
-  #specs: { session: Session | null; stamp: string; read: Map<Layer, LayerSpecs | null> } = { session: null, stamp: "", read: new Map() };
+  /** What each layer authors about composition, read once per change of the stage, and the layers too large to read ({@link EditorStore.layerSpecs}). */
+  #specs: { session: Session | null; stamp: string; read: Map<Layer, LayerSpecs | null>; large: Set<Layer> } = {
+    session: null,
+    stamp: "",
+    read: new Map(),
+    large: new Set(),
+  };
   #frame = 0;
   /** The channels {@link EditorStore.#bumpSoon} bumps at the next frame. */
   readonly #soon = new Set<Channel>();
@@ -1180,16 +1185,20 @@ export class EditorStore {
   /**
    * What `layer` authors about composition (`model/layerSpecs.ts`), read
    * from its text once per change of the stage; `null` when its text is
-   * too large to read whole, or cannot be written.
+   * too large to read whole (the Text tab's limit; such a layer is not
+   * written as text for this again), or cannot be written.
    */
   layerSpecs(layer: Layer): LayerSpecs | null {
     const session = this.session;
     if (session === null) return null;
     const stamp = `${this.signals.revision("history")}:${this.signals.revision("composition")}`;
-    if (this.#specs.session !== session || this.#specs.stamp !== stamp) this.#specs = { session, stamp, read: new Map() };
+    if (this.#specs.session !== session) this.#specs = { session, stamp, read: new Map(), large: new Set() };
+    else if (this.#specs.stamp !== stamp) this.#specs = { ...this.#specs, stamp, read: new Map() };
+    if (this.#specs.large.has(layer)) return null;
     const cached = this.#specs.read.get(layer);
     if (cached !== undefined) return cached;
     const text = this.layerText(layer);
+    if (typeof text !== "string" && text.truncated) this.#specs.large.add(layer);
     const specs = typeof text === "string" || text.truncated ? null : readLayerSpecs(text.lines.join("\n"));
     this.#specs.read.set(layer, specs);
     return specs;

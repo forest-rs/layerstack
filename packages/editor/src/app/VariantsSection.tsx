@@ -201,7 +201,9 @@ export function VariantDialog({ store, prim, set, onClose }: { store: EditorStor
   const newSet = set === null;
   const name = set ?? setName;
   const taken = sets.find((each) => each.name === name)?.variants ?? [];
-  const problem = (newSet ? variantSetNameProblem(setName, sets.map((each) => each.name)) : null) ?? variantNameProblem(variant, taken);
+  // A set whose name stays listed with no variants (removed before) can be added again.
+  const named = sets.filter((each) => each.variants.length > 0).map((each) => each.name);
+  const problem = (newSet ? variantSetNameProblem(setName, named) : null) ?? variantNameProblem(variant, taken);
   const where = target === null ? "the edit layer" : describeTarget(target);
   const add = () => {
     if (problem !== null) return;

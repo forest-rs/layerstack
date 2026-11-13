@@ -38,6 +38,8 @@ import type { ViewportScene, ViewportUpdate } from "./model/draws.ts";
 import { planSave, type SaveEntry } from "./model/files.ts";
 import { indexOfId, type InstancerColumns, toggled } from "./model/instancer.ts";
 import type { LayerTextRead } from "./model/layerText.ts";
+import { type Shadow, shadowOf, targetOpinion } from "./model/propertyOps.ts";
+import { releaseValue } from "./model/values.ts";
 import type { PathMove, Session } from "./model/session.ts";
 import type { SceneSource } from "./model/sources.ts";
 import { ActionQueue } from "./store/actions.ts";
@@ -94,6 +96,8 @@ export class EditorStore {
   readonly #files: FileState;
   /** The session whose metadata {@link EditorStore.#readStage} last read, and the change records it had then. */
   #read: { session: Session | null; changes: number } = { session: null, changes: 0 };
+  /** The last value edit that does not show ({@link EditorStore.shadow}). */
+  #shadow: Shadow | null = null;
   #frame = 0;
   /** The channels {@link EditorStore.#bumpSoon} bumps at the next frame. */
   readonly #soon = new Set<Channel>();
@@ -617,6 +621,7 @@ export class EditorStore {
   setTarget(target: Layer | EditTarget | undefined): void {
     if (this.session === null) return;
     this.session.target = target;
+    this.#shadow = null;
     this.signals.bump("target");
   }
 
@@ -636,7 +641,128 @@ export class EditorStore {
    * {@link EditorStore.apply} does.
    */
   setValue(path: string, value: ValueInput, time: number | null = null): string | undefined {
-    return this.#edit(time === null ? `set ${path}` : `set ${path} at ${time}`, (session) => session.setValue(path, value, time));
+    return this.#edit(
+      time === null ? `set ${path}` : `set ${path} at ${time}`,
+      (session) => {
+        this.#shadow = null;
+        return session.setValue(path, value, time);
+      },
+      () => this.#shadowed(path, time),
+    );
+  }
+
+  // Property operations, each one undoable action where edits go.
+
+  /**
+   * The last value edit that does not show ({@link Shadow}): the edit
+   * target holds it, but a stronger opinion still gives the value, or the
+   * stage does not compose the target. Read once the edit is made; `null`
+   * after an edit that shows, an undo or redo, or a change of where edits
+   * go. Heard on `history` and `target`.
+   */
+  get shadow(): Shadow | null {
+    return this.#shadow;
+  }
+
+  /**
+   * Clears the attribute at `path` where edits go: its default (a value or
+   * a block) and, when the samples the stage reads are the target's, those
+   * samples, so its value falls back to weaker opinions or the schema's
+   * fallback. Returns why it was refused (the target holds none of them),
+   * as {@link EditorStore.apply} does.
+   */
+  clearValue(path: string): string | undefined {
+    return this.#edit(`clear ${path}`, (session) => {
+      const attribute = session.stage.attribute(path);
+      const samples = attribute === null ? [] : targetOpinion(session.stage, attribute, session.target).samples;
+      return session.clearValue(path, samples);
+    });
+  }
+
+  /** Deletes the attribute at `path`'s sample at `time` where edits go. Returns why it was refused (no key there). */
+  deleteKey(path: string, time: number): string | undefined {
+    return this.#edit(`delete key ${path} at ${time}`, (session) => session.clearSample(path, time));
+  }
+
+  /**
+   * Authors the attribute at `path`'s value at `time` as a sample there,
+   * where edits go: a key of the value as it is read now. Returns why it
+   * was refused (no value to key, a `uniform` attribute).
+   */
+  key(path: string, time: number): string | undefined {
+    return this.#edit(
+      `key ${path} at ${time}`,
+      (session) => {
+        this.#shadow = null;
+        const value = session.stage.attribute(path)?.get(time) ?? null;
+        if (value === null) throw new Error(`${path} has no value at ${time} to key`);
+        try {
+          return session.apply(`key ${path} at ${time}`, [{ type: "setValue", path, value, time }]);
+        } finally {
+          releaseValue(value);
+        }
+      },
+      () => this.#shadowed(path, time),
+    );
+  }
+
+  /** Blocks the attribute at `path` where edits go (`UsdAttribute::Block`). Returns why it was refused. */
+  blockValue(path: string): string | undefined {
+    return this.#edit(
+      `block ${path}`,
+      (session) => {
+        this.#shadow = null;
+        return session.blockValue(path);
+      },
+      () => this.#shadowed(path, null),
+    );
+  }
+
+  /** Removes the property at `path` from where edits go. Returns why it was refused (the target has no opinion of it). */
+  removeProperty(path: string): string | undefined {
+    return this.#edit(`remove ${path}`, (session) => session.removeProperty(path));
+  }
+
+  /**
+   * Creates the attribute at `path` where edits go, of `typeName` and
+   * `variability`, with `value` as its default when given, and makes it
+   * the property explained, so the inspector marks it. Returns why it was
+   * refused.
+   */
+  createAttribute(path: string, typeName: string, variability: "varying" | "uniform", value?: ValueInput): string | undefined {
+    return this.#edit(
+      `create ${path}`,
+      (session) => session.createAttribute(path, typeName, variability, value),
+      () => {
+        this.#selection.property = path;
+        return true;
+      },
+    );
+  }
+
+  /**
+   * Authors `targets` as the relationship at `path`'s explicit targets
+   * where edits go, creating a `custom` relationship when nothing declares
+   * it, and makes it the property explained. Returns why it was refused.
+   */
+  setTargets(path: string, targets: readonly string[]): string | undefined {
+    return this.#edit(
+      `set targets of ${path}`,
+      (session) => session.setTargets(path, targets),
+      () => {
+        if (this.#selection.property === path) return false;
+        this.#selection.property = path;
+        return true;
+      },
+    );
+  }
+
+  /** Reads whether the edit of `path` at `time` just made shows ({@link EditorStore.shadow}); the selection is unchanged. */
+  #shadowed(path: string, time: number | null): boolean {
+    const session = this.session;
+    const attribute = session?.stage.attribute(path) ?? null;
+    this.#shadow = session === null || attribute === null ? null : shadowOf(session.stage, attribute, session.target, time);
+    return false;
   }
 
   /**
@@ -719,12 +845,18 @@ export class EditorStore {
 
   /** Undoes the newest action, then fetches what that brings back; the selection follows a rename undone. */
   undo(): Promise<void> {
-    return this.#fetching("undo", async (session, signal) => this.#follow(await session.undo(signal)));
+    return this.#fetching("undo", async (session, signal) => {
+      this.#shadow = null;
+      return this.#follow(await session.undo(signal));
+    });
   }
 
   /** Redoes the most recently undone action, then fetches what it needs; the selection follows a rename redone. */
   redo(): Promise<void> {
-    return this.#fetching("redo", async (session, signal) => this.#follow(await session.redo(signal)));
+    return this.#fetching("redo", async (session, signal) => {
+      this.#shadow = null;
+      return this.#follow(await session.redo(signal));
+    });
   }
 
   /** Mutes or unmutes a layer, by identifier for a muted layer the stage released. */

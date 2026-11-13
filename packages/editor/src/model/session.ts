@@ -419,6 +419,61 @@ export class Session implements Disposable {
   }
 
   /**
+   * Clears the attribute at `path` where edits go: its default (a value or
+   * a block) and its samples at `samples` (stage times), as
+   * `UsdAttribute::Clear` and `ClearAtTime` do; its value falls back to
+   * weaker opinions, or the schema's fallback. Throws when the target had
+   * none of them, and records nothing.
+   */
+  clearValue(path: string, samples: readonly number[] = []): EditReceipt {
+    const edits: Edit[] = [{ type: "clearValue", path }, ...samples.map((time): Edit => ({ type: "clearValue", path, time }))];
+    return this.#changing(`clear ${path}`, edits, `${this.#targetName} has no value of ${path} to clear`);
+  }
+
+  /** Clears the attribute at `path`'s sample at stage time `time` where edits go (`UsdAttribute::ClearAtTime`); throws when there was none. */
+  clearSample(path: string, time: number): EditReceipt {
+    return this.#changing(`delete key ${path} at ${time}`, [{ type: "clearValue", path, time }], `${this.#targetName} has no key of ${path} at ${time}`);
+  }
+
+  /** Blocks the attribute at `path` where edits go (`UsdAttribute::Block`): its samples there are cleared and weaker opinions hidden. */
+  blockValue(path: string): EditReceipt {
+    return this.#changing(`block ${path}`, [{ type: "blockValue", path }], `${path} is blocked in ${this.#targetName} already`);
+  }
+
+  /** Removes the property at `path`'s spec where edits go (`UsdPrim::RemoveProperty`); throws when the target has none. */
+  removeProperty(path: string): EditReceipt {
+    return this.#changing(`remove ${path}`, [{ type: "removeProperty", path }], `${this.#targetName} has no opinion of ${path} to remove`);
+  }
+
+  /**
+   * Creates the attribute at `path` where edits go (`UsdPrim::CreateAttribute`):
+   * `typeName` and `variability` for an attribute nothing declares yet
+   * (`custom`), and `value` as its default when given.
+   */
+  createAttribute(path: string, typeName: string, variability: "varying" | "uniform", value?: ValueInput): EditReceipt {
+    const edit: Edit = value === undefined ? { type: "createAttribute", path, typeName, variability } : { type: "createAttribute", path, typeName, variability, value };
+    return this.#changing(`create ${path}`, [edit], `${path} exists in ${this.#targetName} already`);
+  }
+
+  /** Authors the relationship at `path`'s explicit targets where edits go (`UsdRelationship::SetTargets`), creating a `custom` one when nothing declares it. */
+  setTargets(path: string, targets: readonly string[]): EditReceipt {
+    return this.apply(`set targets of ${path}`, [{ type: "setTargets", path, targets }]);
+  }
+
+  /** Where edits go, in words: the layer written. */
+  get #targetName(): string {
+    const layer = this.target === undefined ? this.stage.editLayer : "kind" in this.target ? this.target.layer : this.target;
+    return layer?.identifier ?? "the anonymous edit layer";
+  }
+
+  /** Applies `edits` as one undoable action, or throws `nothing` when they wrote no layer (and nothing is recorded). */
+  #changing(label: string, edits: readonly Edit[], nothing: string): EditReceipt {
+    const receipt = this.apply(label, edits);
+    if (receipt.layers.length === 0) throw new Error(nothing);
+    return receipt;
+  }
+
+  /**
    * Selects `variant` of `set` on `prim`, then supplies what the variant
    * needs that the stage has not read, step by step.
    */

@@ -5,6 +5,7 @@
 // the stage consulted for it, the recompositions each action caused, the
 // undo history, the asset loop's requests and answers, what drawing
 // costs, and what the stage refused.
+import { useEffect } from "react";
 import type { Explanation, Layer, Opinion } from "@forest-rs/layerstack";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 import type { EditorStore } from "../store.ts";
+import { BOTTOM_TABS } from "../store/view.ts";
 import { AssetLoopView } from "./AssetLoop.tsx";
 import { CostView } from "./CostView.tsx";
 import { useEditorStore, useRevision, useStoreSelector, useTime } from "./context.ts";
@@ -31,8 +33,19 @@ export function BottomPanel({ onTab }: { onTab?: (tab: string) => void }) {
   const store = useEditorStore();
   // The tabs themselves show only how many notices there are; each view listens for what it shows.
   const notices = useStoreSelector(store, ["notices"], (at) => at.notices.length);
+  // The tab in front is the store's, so explaining a property brings its explanation forward.
+  const tab = useStoreSelector(store, ["view"], (at) => at.bottomTab);
+  // The frame hears of the tab however it was chosen.
+  useEffect(() => onTab?.(tab), [tab]);
   return (
-    <Tabs className="flex h-full flex-col gap-0" onSelectionChange={(key) => onTab?.(String(key))}>
+    <Tabs
+      className="flex h-full flex-col gap-0"
+      selectedKey={tab}
+      onSelectionChange={(key) => {
+        const chosen = BOTTOM_TABS.find((each) => each === key);
+        if (chosen !== undefined) store.showBottomTab(chosen);
+      }}
+    >
       <TabsList variant="line" className="w-full justify-start border-b px-2">
         <TabsTrigger className="flex-none px-2.5" id="explain">Explain</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="changes">Changes</TabsTrigger>

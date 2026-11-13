@@ -1,9 +1,10 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-// How the viewport shows the scene, as the viewer chose: what is drawn
-// and under what budget, the camera looked through, the default lights
-// and the tone mapping. The budget and the tone mapping are remembered
+// How the editor shows the scene, as the viewer chose: what is drawn and
+// under what budget, the camera looked through, the default lights and
+// the tone mapping, and which tab of the scene browser and of the bottom
+// panel is in front. The budget and the tone mapping are remembered
 // for the viewer (`localStorage`, through the helpers that own their
 // keys). A setting that changes what is drawn asks for the draws to be
 // synced; the others are handed to the viewport.
@@ -13,6 +14,16 @@ import type { UpAxis } from "../viewport/framing.ts";
 import { rememberToneMap, rememberedToneMap, type ToneMapChoice } from "../viewport/toneMap.ts";
 import type { Viewport } from "../viewport/viewport3d.ts";
 import type { Signals } from "./signals.ts";
+
+/** The scene browser's tabs. */
+export const SCENE_TABS = ["prims", "layers", "cameras"] as const;
+/** A tab of the scene browser. */
+export type SceneTab = (typeof SCENE_TABS)[number];
+
+/** The bottom panel's tabs. */
+export const BOTTOM_TABS = ["explain", "changes", "history", "assets", "shading", "cost", "notices"] as const;
+/** A tab of the bottom panel. */
+export type BottomTab = (typeof BOTTOM_TABS)[number];
 
 /** What {@link ViewSettings} asks of the store. */
 export interface ViewHost {
@@ -44,6 +55,10 @@ export class ViewSettings {
   lightSettings: LightSettings = DEFAULT_LIGHT_SETTINGS;
   /** How the viewport and the previews are shown on the display: usdview's sRGB by default, or AgX; remembered for this viewer. */
   toneMap: ToneMapChoice = rememberedToneMap();
+  /** The scene browser's tab in front: an action that points at a layer brings the layers forward. */
+  sceneTab: SceneTab = "prims";
+  /** The bottom panel's tab in front: explaining a property brings the explanation forward. */
+  bottomTab: BottomTab = "explain";
   readonly #signals: Signals;
   readonly #host: ViewHost;
 
@@ -87,6 +102,20 @@ export class ViewSettings {
     this.budgetChoice = choice;
     rememberBudget(choice);
     this.#host.redraw();
+  }
+
+  /** Brings `tab` of the scene browser to the front. */
+  showSceneTab(tab: SceneTab): void {
+    if (tab === this.sceneTab) return;
+    this.sceneTab = tab;
+    this.#signals.bump("view");
+  }
+
+  /** Brings `tab` of the bottom panel to the front. */
+  showBottomTab(tab: BottomTab): void {
+    if (tab === this.bottomTab) return;
+    this.bottomTab = tab;
+    this.#signals.bump("view");
   }
 
   /** Looks through the stage camera at `path`, or the free camera with `null`. */

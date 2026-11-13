@@ -115,3 +115,21 @@ test("opening another scene bumps every concern", async () => {
   await h.open(sampleSource());
   assert.deepEqual(bumped(before, h.store.signals.snapshot()), [...CHANNELS]);
 });
+
+test("explaining a property brings its tab forward, and a layer's command the layers", async () => {
+  const h = await harness();
+  await h.open(sampleSource());
+  const { store } = h;
+  store.showBottomTab("history");
+  store.showSceneTab("cameras");
+  const before = store.signals.snapshot();
+  store.explain("/World/Top.size", false);
+  assert.equal(store.bottomTab, "history", "asked not to reveal");
+  store.explain("/World/Top.size");
+  assert.equal(store.bottomTab, "explain");
+  store.showSceneTab("layers");
+  assert.equal(store.sceneTab, "layers");
+  assert.deepEqual(bumped(before, store.signals.snapshot()), ["selection", "view"]);
+  store.showSceneTab("layers");
+  assert.deepEqual(bumped(before, store.signals.snapshot()), ["selection", "view"]);
+});

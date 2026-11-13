@@ -9,14 +9,25 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { useEditorStore, useRevision } from "./context.ts";
+import { SCENE_TABS } from "../store/view.ts";
+import { useEditorStore, useRevision, useStoreSelector } from "./context.ts";
 import { layerName } from "./format.ts";
 import { PrimTree } from "./PrimTree.tsx";
 import { countRender } from "./renders.ts";
 
 export function ScenePanel() {
+  const store = useEditorStore();
+  // The tab in front is the store's, so a command elsewhere (a layer's) can bring one forward.
+  const tab = useStoreSelector(store, ["view"], (at) => at.sceneTab);
   return (
-    <Tabs className="flex h-full flex-col gap-0">
+    <Tabs
+      className="flex h-full flex-col gap-0"
+      selectedKey={tab}
+      onSelectionChange={(key) => {
+        const chosen = SCENE_TABS.find((each) => each === key);
+        if (chosen !== undefined) store.showSceneTab(chosen);
+      }}
+    >
       <TabsList variant="line" className="w-full justify-start border-b px-2">
         <TabsTrigger className="flex-none px-2.5" id="prims">Prims</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="layers">Layers</TabsTrigger>

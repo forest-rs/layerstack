@@ -145,7 +145,8 @@ function Graph({
     const prim = element.dataset.prim!;
     store.select(prim);
     const property = element.dataset.port;
-    if (property !== undefined) store.explain(property);
+    // Explained without leaving this tab for the Explain one: the graph is what is being read.
+    if (property !== undefined) store.explain(property, false);
   };
 
   const touching = (key: string) => selected !== null && key === selected.node.key;

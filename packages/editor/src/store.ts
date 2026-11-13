@@ -42,6 +42,19 @@ import { indexOfId, type InstancerColumns, toggled } from "./model/instancer.ts"
 import type { AuthoredArc, LayerSpecs, LayerSummary } from "./model/layerSpecs.ts";
 import type { LayerTextRead } from "./model/layerText.ts";
 import { type Shadow, shadowOf, targetOpinion } from "./model/propertyOps.ts";
+import {
+  childPath,
+  freeSiblingName,
+  moveProblem,
+  nameOf,
+  noSpecToCopy,
+  opinionSites,
+  parentOf,
+  type PrimSpecifier,
+  type SchemaReveal,
+  siblingOrder,
+  unrepairedMessage,
+} from "./model/primAuthoring.ts";
 import { releaseValue } from "./model/values.ts";
 import { addShaderEdits, connectEdits, connectLabel, disconnectEdits, disconnectLabel } from "./model/networkEdits.ts";
 import type { HealthReport } from "./model/health.ts";
@@ -96,6 +109,12 @@ export class EditorStore {
    * own (the prim tree's open rows) to follow it too.
    */
   renamed: PathMove | null = null;
+  /**
+   * The properties the last applied API schema brought to its prim, for
+   * the inspector to show (they are schema defaults, otherwise folded);
+   * `null` until a schema is applied. Heard on `history`.
+   */
+  revealed: SchemaReveal | null = null;
   readonly #actions: ActionQueue;
   readonly #opener: OpenController;
   readonly #playback: Playback;
@@ -784,10 +803,10 @@ export class EditorStore {
    * `null`), and selects it. Returns why the stage refused it, as
    * {@link EditorStore.apply} does.
    */
-  definePrim(parent: string, name: string, typeName: string | null): string | undefined {
+  definePrim(parent: string, name: string, typeName: string | null, specifier: PrimSpecifier = "def"): string | undefined {
     const path = parent === "/" ? `/${name}` : `${parent}/${name}`;
-    const label = `define ${typeName ?? "typeless"} ${path}`;
-    const edit = typeName === null ? { type: "definePrim" as const, path } : { type: "definePrim" as const, path, typeName };
+    const label = `${specifier === "def" ? "define" : specifier} ${typeName ?? "typeless"} ${path}`;
+    const edit: Edit = { type: "definePrim", path, ...(typeName === null ? {} : { typeName }), ...(specifier === "def" ? {} : { specifier }) };
     return this.#edit(
       label,
       (session) => {
@@ -805,13 +824,17 @@ export class EditorStore {
    * does.
    */
   move(path: string, to: string): string | undefined {
+    let receipt: EditReceipt | null = null;
     return this.#edit(
       `move ${path}`,
       (session) => {
         refuseNamespace(session, "rename", path);
-        return session.move(path, to);
+        return (receipt = session.move(path, to));
       },
-      () => this.#follow({ from: path, to }),
+      () => {
+        this.#unrepaired(`move ${path}`, "move", receipt);
+        return this.#follow({ from: path, to });
+      },
     );
   }
 
@@ -821,10 +844,186 @@ export class EditorStore {
    * it, as {@link EditorStore.apply} does.
    */
   delete(path: string): string | undefined {
-    return this.#edit(`delete ${path}`, (session) => {
-      refuseNamespace(session, "delete", path);
-      return session.delete(path);
-    });
+    let receipt: EditReceipt | null = null;
+    return this.#edit(
+      `delete ${path}`,
+      (session) => {
+        refuseNamespace(session, "delete", path);
+        return (receipt = session.delete(path));
+      },
+      () => {
+        this.#unrepaired(`delete ${path}`, "delete", receipt);
+        return false;
+      },
+    );
+  }
+
+  /** A notice of the paths a move or delete left naming what it moved, each live, when it left any. */
+  #unrepaired(action: string, kind: "move" | "delete", receipt: EditReceipt | null): void {
+    if (receipt === null || receipt.unrepaired.length === 0) return;
+    this.#notices.add(action, unrepairedMessage(kind, receipt.unrepaired), null, receipt.unrepaired);
+  }
+
+  // Prim authoring (`model/primAuthoring.ts`): each one undoable action where edits go.
+
+  /**
+   * Binds the material at `material` to the prim at `path`
+   * (`UsdShadeMaterialBindingAPI::Apply(prim).Bind`): `MaterialBindingAPI`
+   * applied and `material:binding` targeting it, in the edit target's
+   * layer. Returns why the stage refused it.
+   */
+  bindMaterial(path: string, material: string): string | undefined {
+    const label = `bind ${material} to ${path}`;
+    return this.#edit(label, (session) => session.apply(label, [{ type: "bindMaterial", path, material }]));
+  }
+
+  /**
+   * Unbinds the prim at `path`'s direct binding (`UnbindDirectBinding`):
+   * an explicit empty `material:binding`, which also blocks what weaker
+   * layers and its ancestors bind. Returns why the stage refused it.
+   */
+  unbindMaterial(path: string): string | undefined {
+    const label = `unbind the material of ${path}`;
+    return this.#edit(label, (session) => session.apply(label, [{ type: "unbindMaterial", path }]));
+  }
+
+  /** Authors the prim at `path`'s `kind` (`UsdModelAPI::SetKind`), or with `null` clears the edit target's opinion of it. */
+  setKind(path: string, kind: string | null): string | undefined {
+    if (kind !== null) return this.apply(`set the kind of ${path} to ${kind}`, [{ type: "setKind", path, kind }]);
+    const label = `clear the kind of ${path}`;
+    return this.#edit(label, (session) => session.applyChanging(label, [{ type: "clearMetadata", path, key: "kind" }], (layer) => `${layer} authors no kind of ${path} to clear`));
+  }
+
+  /** Authors the prim at `path`'s `typeName` (`UsdPrim::SetTypeName`), or with `null` clears the edit target's (`ClearTypeName`). */
+  setTypeName(path: string, typeName: string | null): string | undefined {
+    if (typeName !== null) return this.apply(`retype ${path} as ${typeName}`, [{ type: "setTypeName", path, typeName }]);
+    const label = `clear the type of ${path}`;
+    return this.#edit(label, (session) => session.applyChanging(label, [{ type: "setTypeName", path, typeName: null }], (layer) => `${layer} authors no type of ${path} to clear`));
+  }
+
+  /** Authors the specifier of the prim at `path`'s spec in the edit target (`UsdPrim::SetSpecifier`). */
+  setSpecifier(path: string, specifier: PrimSpecifier): string | undefined {
+    return this.apply(`make ${path} ${specifier === "over" ? "an" : "a"} ${specifier}`, [{ type: "setSpecifier", path, specifier }]);
+  }
+
+  /**
+   * Clears the edit target's opinion of the prim at `path`'s `active` or
+   * `instanceable` (`ClearActive`, `ClearInstanceable`), so weaker layers'
+   * show again. Refused when the target holds none.
+   */
+  clearPrimOpinion(path: string, field: "active" | "instanceable"): string | undefined {
+    const label = `clear ${field} of ${path}`;
+    const edit: Edit = field === "active" ? { type: "setActive", path, active: null } : { type: "setInstanceable", path, instanceable: null };
+    return this.#edit(label, (session) => session.applyChanging(label, [edit], (layer) => `${layer} has no opinion of ${field} on ${path} to clear`));
+  }
+
+  /**
+   * Applies the API schema `schema` (an instance named `instance` of a
+   * multiple-apply one) to the prim at `path` (`UsdPrim::ApplyAPI`), and
+   * says which properties it brought ({@link EditorStore.revealed}), so the
+   * inspector shows them. Returns why the stage refused it (a schema that
+   * cannot apply to the prim).
+   */
+  applySchema(path: string, schema: string, instance: string | null = null): string | undefined {
+    const name = instance === null ? schema : `${schema}:${instance}`;
+    const label = `apply ${name} to ${path}`;
+    let before: ReadonlySet<string> = new Set();
+    return this.#edit(
+      label,
+      (session) => {
+        before = new Set(propertyNamesOf(session, path));
+        return session.apply(label, [{ type: "applyAPI", path, schema, ...(instance === null ? {} : { instance }) }]);
+      },
+      () => {
+        const session = this.session;
+        this.revealed = { prim: path, schema: name, names: session === null ? [] : propertyNamesOf(session, path).filter((each) => !before.has(each)) };
+        return false;
+      },
+    );
+  }
+
+  /**
+   * Removes the applied schema `schema` (`instance` of a multiple-apply
+   * one) from the prim at `path` in the edit target (`RemoveAppliedSchema`):
+   * taken from its `apiSchemas` there, or deleted there, which removes
+   * weaker layers' application too.
+   */
+  removeSchema(path: string, schema: string, instance: string | null = null): string | undefined {
+    const label = `remove ${instance === null ? schema : `${schema}:${instance}`} from ${path}`;
+    return this.apply(label, [{ type: "removeAPI", path, schema, ...(instance === null ? {} : { instance }) }]);
+  }
+
+  /**
+   * Duplicates the prim at `path` beside itself (`SdfCopySpec` of its spec
+   * in the edit target's layer, to a free sibling name) and selects the
+   * copy. Refused, with where the prim's opinions are, when the edit
+   * target's layer has no spec of it; through an arc or variant, refused
+   * first when the target does not map the copy's path, as defining a
+   * prim there is.
+   */
+  duplicate(path: string): string | undefined {
+    const stage = this.session?.stage;
+    if (stage === undefined) return undefined;
+    const parent = parentOf(path);
+    const to = childPath(parent, freeSiblingName(nameOf(path), new Set(stage.children(parent).map(nameOf))));
+    const label = `duplicate ${path} as ${nameOf(to)}`;
+    return this.#edit(
+      label,
+      (session) => {
+        refuseNamespace(session, "define", to);
+        try {
+          return session.apply(label, [{ type: "copySpec", path, to }]);
+        } catch (error) {
+          if (errorCode(error) !== "edit.rejected.no_such_spec") throw error;
+          throw Object.assign(new Error(noSpecToCopy(path, session.targetName, opinionSites(session.stage, path))), { code: "edit.rejected.no_such_spec" });
+        }
+      },
+      () => this.#selection.select(to),
+    );
+  }
+
+  /** Moves the prim at `path` to be a child of `parent`, keeping its name, as {@link EditorStore.move} does. */
+  moveTo(path: string, parent: string): string | undefined {
+    const stage = this.session?.stage;
+    if (stage === undefined) return undefined;
+    const problem = moveProblem(path, parent, new Set(stage.children(parent).map(nameOf)));
+    if (problem !== null) {
+      this.#notices.add(`move ${path}`, problem, null);
+      return problem;
+    }
+    return this.move(path, childPath(parent, nameOf(path)));
+  }
+
+  /**
+   * Moves the prim at `path` one place earlier (`-1`) or later (`1`) among
+   * its siblings: the parent's `reorder nameChildren`, every child named,
+   * in the edit target (`UsdPrim::SetChildrenReorder`).
+   */
+  reorderChild(path: string, direction: -1 | 1): string | undefined {
+    const stage = this.session?.stage;
+    if (stage === undefined) return undefined;
+    const parent = parentOf(path);
+    const order = siblingOrder(stage.children(parent).map(nameOf), nameOf(path), direction);
+    if (order === null) return undefined;
+    return this.apply(`move ${nameOf(path)} ${direction < 0 ? "up" : "down"} in ${parent}`, [{ type: "setChildrenReorder", path: parent, order }]);
+  }
+
+  /**
+   * Makes the prim at `path` invisible, or visible again (`inherited`):
+   * its `visibility` where edits go, at the current time when the
+   * attribute has samples there.
+   */
+  setVisibility(path: string, visible: boolean): string | undefined {
+    const attribute = this.session?.stage.attribute(`${path}.visibility`) ?? null;
+    const at = attribute?.mightBeTimeVarying() === true ? (this.time ?? null) : null;
+    return this.setValue(`${path}.visibility`, { type: "token", value: visible ? "inherited" : "invisible" }, at);
+  }
+
+  /** Authors the prim at `path`'s `documentation`, or with `""` clears the edit target's. */
+  setDocumentation(path: string, text: string): string | undefined {
+    if (text !== "") return this.apply(`document ${path}`, [{ type: "setMetadata", path, key: "documentation", value: { type: "string", value: text } }]);
+    const label = `clear the documentation of ${path}`;
+    return this.#edit(label, (session) => session.applyChanging(label, [{ type: "clearMetadata", path, key: "documentation" }], (layer) => `${layer} authors no documentation of ${path} to clear`));
   }
 
   // The shading network (`model/networkEdits.ts` says what each authors).
@@ -1657,6 +1856,17 @@ function layerLabel(layer: Layer): string {
 function refuseNamespace(session: Session, action: NamespaceAction, path: string): void {
   const why = namespaceRefusal(session.target, action, path);
   if (why !== null) throw new Error(why);
+}
+
+/** The names of the prim at `path`'s properties, attributes and relationships; none when it is gone. */
+function propertyNamesOf(session: Session, path: string): string[] {
+  const prim = session.stage.prim(path);
+  return prim === null ? [] : [...prim.attributeNames(), ...prim.relationshipNames()];
+}
+
+/** The code of an error the stage threw (`edit.rejected.no_such_spec`); `null` for another. */
+function errorCode(error: unknown): string | null {
+  return typeof error === "object" && error !== null && "code" in error ? String((error as { code: unknown }).code) : null;
 }
 
 /** The stage's `upAxis`: `Z` when it says so, else `Y`. */

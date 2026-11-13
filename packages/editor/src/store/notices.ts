@@ -4,6 +4,7 @@
 // What the editor tells the person that is not the scene: what an action
 // reported (a refused edit, a failed fetch), kept until dismissed, and why
 // a request to frame framed nothing, shown for a few seconds.
+import type { UnrepairedPath } from "@forest-rs/layerstack";
 import type { Signals } from "./signals.ts";
 
 /** Something an action reported that the person should see: a refused edit, a failed fetch. */
@@ -13,6 +14,8 @@ export interface Notice {
   readonly message: string;
   /** The error's code, for a `LayerstackError` (`edit.invalid`, `value.kind`). */
   readonly code: string | null;
+  /** The paths a move or delete left naming what it moved (`EditReceipt.unrepaired`); empty for other notices. */
+  readonly unrepaired: readonly UnrepairedPath[];
 }
 
 /** What actions reported, newest last; bumps `notices` as it changes. */
@@ -26,9 +29,9 @@ export class Notices {
     this.#signals = signals;
   }
 
-  /** Adds a notice that `action` reported `message`; returns it. */
-  add(action: string, message: string, code: string | null): Notice {
-    const notice: Notice = { id: ++this.#next, action, message, code };
+  /** Adds a notice that `action` reported `message` (with the paths it left unrepaired, if any); returns it. */
+  add(action: string, message: string, code: string | null, unrepaired: readonly UnrepairedPath[] = []): Notice {
+    const notice: Notice = { id: ++this.#next, action, message, code, unrepaired };
     this.list.push(notice);
     this.#signals.bump("notices");
     return notice;

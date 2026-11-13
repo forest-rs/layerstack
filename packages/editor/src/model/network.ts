@@ -20,6 +20,11 @@
 // (`UsdShadeConnectableAPI::GetConnectedSources`); a source outside the
 // container (a shared node graph) brings its prim into the network.
 //
+// A shader whose `info:id` the editor knows (`shaderDefinitions.ts`) has
+// its definition's ports too, those the prim does not author marked so
+// (`authored: false`), in the definition's order, so a port keeps its row
+// once an edit authors it.
+//
 // The layout ranks each node by its longest path to a sink, so the
 // material's outputs sit on the right and every node sits one column
 // before the nearest of its consumers' columns that can hold it; nodes in
@@ -33,6 +38,7 @@
 // units are the editing tool's own, so they order the drawing rather than
 // scale it.
 import type { Stage } from "@forest-rs/layerstack";
+import { type ShaderDefinition, shaderDefinition } from "./shaderDefinitions.ts";
 
 /** A port of a node: a shading input or output. */
 export interface NetworkPort {
@@ -44,6 +50,10 @@ export interface NetworkPort {
   readonly typeName: string | null;
   /** The ports it reads from, in composed order. */
   readonly connections: readonly string[];
+  /** Its connection targets that name no shading attribute (a deleted node's output): `ShaderPort.invalidConnections`. */
+  readonly invalid: readonly string[];
+  /** Whether the prim has it; `false` for a port only its shader's definition has, which an edit creates. */
+  readonly authored: boolean;
 }
 
 /** A node of the network. */
@@ -81,10 +91,12 @@ export interface ShadingNetwork {
 const POSITION = "ui:nodegraph:node:pos";
 
 /**
- * `network` with only the ports some connection touches; a node keeps its
- * header even with none. Returns how many ports were left out.
+ * `network` with only the ports some connection touches (or that name a
+ * source that is not there); a node keeps its header even with none, and
+ * the nodes `unfolded` names (by key) keep every port. Returns how many
+ * ports were left out.
  */
-export function connectedOnly(network: ShadingNetwork): { readonly network: ShadingNetwork; readonly hidden: number } {
+export function connectedOnly(network: ShadingNetwork, unfolded: ReadonlySet<string> = new Set()): { readonly network: ShadingNetwork; readonly hidden: number } {
   const used = new Set<string>();
   for (const edge of network.edges) {
     used.add(edge.from);
@@ -92,7 +104,8 @@ export function connectedOnly(network: ShadingNetwork): { readonly network: Shad
   }
   let hidden = 0;
   const nodes = network.nodes.map((node) => {
-    const ports = node.ports.filter((port) => used.has(port.path));
+    if (unfolded.has(node.key)) return node;
+    const ports = node.ports.filter((port) => used.has(port.path) || port.connections.length > 0 || port.invalid.length > 0);
     hidden += node.ports.length - ports.length;
     return ports.length === node.ports.length ? node : { ...node, ports };
   });
@@ -147,7 +160,7 @@ export function readNetwork(stage: Stage, root: string): ShadingNetwork {
     const name = prim.name || path;
     const shader = container ? null : stage.shader(path);
     if (shader !== null) {
-      const ports = [...shader.inputs(), ...shader.outputs()].map(port);
+      const ports = withDefinition(path, shader.inputs().map(port), shader.outputs().map(port), shaderDefinition(shader.id));
       nodes.push({ key: path, path, name, role: "shader", detail: shader.id, ports });
       return;
     }
@@ -208,8 +221,51 @@ function portsOf(stage: Stage, path: string, kind: "input" | "output") {
     .filter((port) => port !== null);
 }
 
-function port(source: { path: string; name: string; kind: "input" | "output"; typeName: string | null; connections: readonly string[] }): NetworkPort {
-  return { path: source.path, name: source.name, kind: source.kind, typeName: source.typeName, connections: source.connections };
+function port(source: {
+  path: string;
+  name: string;
+  kind: "input" | "output";
+  typeName: string | null;
+  connections: readonly string[];
+  invalidConnections: readonly string[];
+}): NetworkPort {
+  return {
+    path: source.path,
+    name: source.name,
+    kind: source.kind,
+    typeName: source.typeName,
+    connections: source.connections,
+    invalid: source.invalidConnections,
+    authored: true,
+  };
+}
+
+/**
+ * A shader's ports with its definition's: inputs, then outputs, each in
+ * the definition's order (authored or not), then those the prim authors
+ * that the definition does not have, in property order.
+ */
+function withDefinition(path: string, inputs: readonly NetworkPort[], outputs: readonly NetworkPort[], definition: ShaderDefinition | null): NetworkPort[] {
+  if (definition === null) return [...inputs, ...outputs];
+  const merge = (authored: readonly NetworkPort[], defined: readonly { name: string; typeName: string }[], kind: "input" | "output") => {
+    const byName = new Map(authored.map((each) => [each.name, each]));
+    const namespace = kind === "input" ? "inputs:" : "outputs:";
+    const ports: NetworkPort[] = defined.map(
+      (each) =>
+        byName.get(each.name) ?? {
+          path: `${path}.${namespace}${each.name}`,
+          name: each.name,
+          kind,
+          typeName: each.typeName,
+          connections: [],
+          invalid: [],
+          authored: false,
+        },
+    );
+    const known = new Set(defined.map((each) => each.name));
+    return [...ports, ...authored.filter((each) => !known.has(each.name))];
+  };
+  return [...merge(inputs, definition.inputs, "input"), ...merge(outputs, definition.outputs, "output")];
 }
 
 /** Each port's node, by the port's path. */
@@ -223,8 +279,8 @@ function portOwners(nodes: readonly NetworkNode[]): Map<string, NetworkNode> {
 export const GRAPH = {
   /** A node's title: its name and its shader id. */
   header: 34,
-  /** One port row. */
-  row: 18,
+  /** One port row: tall enough for a value's field. */
+  row: 22,
   /** Space below the last row. */
   footer: 6,
   /** Between columns. */
@@ -235,7 +291,18 @@ export const GRAPH = {
   maxWidth: 300,
   /** The width of a character of a port's or node's name, roughly, at the drawing's 11px. */
   character: 6.4,
+  /** The column of a node whose rows show values ({@link showsValue}): their fields. */
+  value: 132,
 } as const;
+
+/**
+ * Whether `port`'s row on `node` shows its value, to edit: an input no
+ * connection feeds, of a shader or of a container's interface (which its
+ * shaders read).
+ */
+export function showsValue(node: NetworkNode, port: NetworkPort): boolean {
+  return port.kind === "input" && port.connections.length === 0 && (node.role === "shader" || node.role === "inputs");
+}
 
 /** A node placed. */
 export interface PlacedNode {
@@ -277,7 +344,10 @@ function nodeWidth(node: NetworkNode): number {
   const title = Math.max(node.name.length, (node.detail?.length ?? 0) + (node.role === "shader" ? 0 : 8));
   const ports = Math.max(0, ...node.ports.map((port) => port.name.length));
   const text = Math.max(title, ports + (node.role === "shader" ? 0 : 2));
-  return Math.min(GRAPH.maxWidth, Math.max(GRAPH.minWidth, Math.round(text * GRAPH.character + 28)));
+  const width = Math.min(GRAPH.maxWidth, Math.max(GRAPH.minWidth, Math.round(text * GRAPH.character + 28)));
+  // Rows with values: the names, then the fields.
+  if (!node.ports.some((each) => showsValue(node, each))) return width;
+  return Math.max(width, Math.round(Math.min(ports, 20) * GRAPH.character + 24) + GRAPH.value);
 }
 
 /**
@@ -411,26 +481,34 @@ export function layoutNetwork(network: ShadingNetwork, authored = false): Networ
     height: height[at]!,
     column: columnOf[at]!,
   }));
-  const byKey = new Map(placed.map((p) => [p.node.key, p]));
-  const edges: PlacedEdge[] = network.edges.map((edge) => {
-    const from = byKey.get(owner.get(edge.from)!.key)!;
-    const to = byKey.get(owner.get(edge.to)!.key)!;
-    return {
-      edge,
-      from: from.node.key,
-      to: to.node.key,
-      x1: from.x + from.width,
-      y1: from.y + portOffset(portIndex.get(edge.from)!),
-      x2: to.x,
-      y2: to.y + portOffset(portIndex.get(edge.to)!),
-    };
-  });
   return {
     nodes: placed,
-    edges,
+    edges: placeEdges(network, placed),
     width: Math.max(0, x - GRAPH.columnGap),
     height: Math.max(0, ...placed.map((p) => p.y + p.height)),
   };
+}
+
+/** The edges of `network` between `placed` nodes: each from its source's row on the right to its destination's row on the left. */
+export function placeEdges(network: { readonly edges: readonly NetworkEdge[] }, placed: readonly PlacedNode[]): PlacedEdge[] {
+  const owner = new Map<string, { readonly placed: PlacedNode; readonly index: number }>();
+  for (const each of placed) each.node.ports.forEach((port, index) => owner.set(port.path, { placed: each, index }));
+  return network.edges.flatMap((edge) => {
+    const from = owner.get(edge.from);
+    const to = owner.get(edge.to);
+    if (from === undefined || to === undefined) return [];
+    return [
+      {
+        edge,
+        from: from.placed.node.key,
+        to: to.placed.node.key,
+        x1: from.placed.x + from.placed.width,
+        y1: from.placed.y + portOffset(from.index),
+        x2: to.placed.x,
+        y2: to.placed.y + portOffset(to.index),
+      },
+    ];
+  });
 }
 
 /** Whether every shader node of `network` has an authored position. */

@@ -6,8 +6,8 @@
 // targets, a connection's source, the changes panel, an opinion's spec):
 // a click selects the prim (which opens its ancestors in the tree), and
 // its context menu frames it, draws it alone, selects its material or
-// copies the path. A property path explains its value; a layer is where
-// edits go, or muted.
+// copies the path. A property path explains its value; a layer's click
+// copies its identifier, and its menu sets where edits go, or mutes it.
 import { layerName } from "../format.ts";
 import { type PresentProps, registerCommand, registerPresentation } from "../../presentations/registry.ts";
 import { Live } from "./Present.tsx";
@@ -160,12 +160,23 @@ export function registerObjectPresentations(): void {
   });
   registerCommand({ id: "builtin.property-path.copy", kind: "propertyPath", type: "propertyPath", title: "Copy the path", run: (object) => copy(object.path) });
 
+  // The first command is what a click does, so it is the harmless one;
+  // changing where edits go is a deliberate choice from the menu.
+  registerCommand({
+    id: "builtin.layer.copy",
+    kind: "layer",
+    type: "layer",
+    title: "Copy the identifier",
+    applies: (object) => object.layer.identifier !== null,
+    run: (object) => copy(object.layer.identifier!),
+  });
   registerCommand({
     id: "builtin.layer.target",
     kind: "layer",
     type: "layer",
     title: "Edit in this layer",
-    applies: (object) => !object.layer.readOnly,
+    // The layers the toolbar's target picker lists (`TargetPicker.tsx`): its own stack's, not read-only.
+    applies: (object, { stage }) => !object.layer.readOnly && stage.hasLocalLayer(object.layer),
     run: (object, { store }) => store.setTarget(object.layer),
   });
   registerCommand({
@@ -183,13 +194,5 @@ export function registerObjectPresentations(): void {
     title: "Unmute",
     applies: (object, { stage }) => stage.isMuted(object.layer),
     run: (object, { store }) => void store.setMuted(object.layer, false),
-  });
-  registerCommand({
-    id: "builtin.layer.copy",
-    kind: "layer",
-    type: "layer",
-    title: "Copy the identifier",
-    applies: (object) => object.layer.identifier !== null,
-    run: (object) => copy(object.layer.identifier!),
   });
 }

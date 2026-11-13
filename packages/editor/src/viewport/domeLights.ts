@@ -114,6 +114,12 @@ export class DomeTints {
     if (!this.#apply(hemisphere, light)) this.#waiting.set(hemisphere, light);
   }
 
+  /** Forgets every light's colors, and the lights waiting: the textures they were read from are gone. */
+  clear(): void {
+    this.#colors.clear();
+    this.#waiting.clear();
+  }
+
   /** Forgets `hemisphere`: its light was dropped. */
   drop(hemisphere: HemisphereLight): void {
     this.#waiting.delete(hemisphere);

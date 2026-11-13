@@ -114,3 +114,33 @@ describe("TextureStore.takeArrived", () => {
     assert.equal(store.takeArrived().size, 0, "asking again does not load again");
   });
 });
+
+describe("TextureStore.dispose", () => {
+  const file = (identifier: string) => ({ file: { assetPath: identifier, layer: null, identifier, udim: false } });
+
+  it("forgets what it loaded, so another scene's file of the same name is read afresh", async () => {
+    let reads = 0;
+    const store = new TextureStore(async () => (reads += 1, null), async () => false, () => undefined);
+    store.image(file("textures/a.png"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(store.image(file("textures/a.png")), null, "the first scene's answer");
+    store.dispose();
+    assert.equal(store.image(file("textures/a.png")), undefined, "loading again, not the first scene's answer");
+    assert.equal(store.stats.pending, 1);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(reads, 2);
+  });
+
+  it("ignores an image that was on its way when it was cleared", async () => {
+    let arrivals = 0;
+    let finish: (bytes: Uint8Array | null) => void = () => undefined;
+    const store = new TextureStore(() => new Promise((resolve) => (finish = resolve)), async () => false, () => (arrivals += 1));
+    store.image(file("textures/a.png"));
+    store.dispose();
+    finish(null);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(arrivals, 0, "nothing is drawing it");
+    assert.equal(store.takeArrived().size, 0);
+    assert.equal(store.image(file("textures/a.png")), undefined, "asked for again rather than answered by the old request");
+  });
+});

@@ -1040,7 +1040,7 @@ export class EditorStore {
    */
   connect(destination: string, source: string): string | undefined {
     const label = connectLabel(destination, source);
-    return this.#edit(label, (session) => session.applyInTurn(label, connectEdits(session.stage, destination, source)));
+    return this.#edit(label, (session) => session.apply(label, connectEdits(session.stage, destination, source)));
   }
 
   /**

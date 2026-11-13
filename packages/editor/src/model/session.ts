@@ -409,28 +409,6 @@ export class Session implements Disposable {
   }
 
   /**
-   * Applies each of `batches` in turn, where edits go, as one undoable
-   * action (an `UndoHistory` group): for edits one `Stage.apply` does not
-   * take together. All or nothing: a batch the stage refuses undoes those
-   * before it, and its error is thrown.
-   */
-  applyInTurn(label: string, batches: readonly (readonly Edit[])[]): EditReceipt {
-    this.#cause = label;
-    const before = this.history.nextUndo;
-    let last: EditReceipt | null = null;
-    this.history.group(label, () => {
-      for (const edits of batches) {
-        last = this.stage.apply(edits, this.target);
-        this.history.record(label, last);
-      }
-    });
-    if (last === null) throw new Error(`${label}: no edits`);
-    const step = this.history.nextUndo;
-    if (step !== null && step !== before) this.#reports.set(step, last);
-    return last;
-  }
-
-  /**
    * Authors `value` for the attribute at `path` in the edit layer: its
    * default, or its sample at `time`.
    */

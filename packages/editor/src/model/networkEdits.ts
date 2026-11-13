@@ -39,20 +39,18 @@ export function portTypeName(stage: Stage, path: string): string | null {
 /**
  * The edits that connect `destination` to read `source` (property paths),
  * creating either when only its shader's definition has it, as the header
- * of this file describes; in batches to apply in turn, as one action
- * (`Session.applyInTurn`): the stage refuses a connection to a source
- * created earlier in the same `apply` ("a spec is already at"), so a
- * source to create is its own batch, before the connection.
+ * of this file describes: one `apply`, the source created before the
+ * connection that names it.
  */
-export function connectEdits(stage: Stage, destination: string, source: string): Edit[][] {
-  const batches: Edit[][] = [];
+export function connectEdits(stage: Stage, destination: string, source: string): Edit[] {
+  const edits: Edit[] = [];
   if (stage.port(source) === null) {
     const typeName = portTypeName(stage, source);
-    if (typeName !== null) batches.push([{ type: "createAttribute", path: source, typeName, custom: false }]);
+    if (typeName !== null) edits.push({ type: "createAttribute", path: source, typeName, custom: false });
   }
   const typeName = stage.port(destination) === null ? portTypeName(stage, destination) : null;
-  batches.push([typeName === null ? { type: "connectToSource", path: destination, source } : { type: "connectToSource", path: destination, source, typeName }]);
-  return batches;
+  edits.push(typeName === null ? { type: "connectToSource", path: destination, source } : { type: "connectToSource", path: destination, source, typeName });
+  return edits;
 }
 
 /** The edit that stops `destination` reading `source`, or (`null`) every source. */

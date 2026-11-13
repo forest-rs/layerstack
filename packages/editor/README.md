@@ -283,6 +283,39 @@ nothing more.
   `SetTargets` edit. Each operation is one undoable step where edits go,
   in Changes and History; one that would change nothing is refused, and
   says why.
+- **Authoring composition.** The inspector's **Composition** section
+  lists the arcs a prim composes from, strongest first, each arc's layer
+  and spec live, and says where its edits go now (`/World/Robot → /Robot
+  in assets/robot.usda` through the robot's reference). The stage does not
+  say which layer authored an arc, so the editor reads it from the layers'
+  text: an arc the layer edits go to authors can be removed there (its
+  item leaves the list and is deleted from weaker layers', as
+  `RemoveReference` does); one authored elsewhere names that layer, live,
+  and offers to edit there. Any arc offers to edit through it
+  (`CompositionArc.editTarget`), which the toolbar's target then names by
+  its arc and layer. **Add** authors a reference or payload (the layer
+  chosen from those the scene's source lists and the stage holds, offered
+  as the asset path from the layer edits go to, or this layer for an
+  internal arc, or a typed path; then its default prim, said when it has
+  none, one of its root prims, read without composing the layer, or a
+  typed path), an inherit or specialize (a prim of the stage, class prims
+  first), prepended as OpenUSD does or appended, with a layer offset
+  across a reference or payload; the dialog shows the USDA line and the
+  spec it goes on. An arc to a layer the stage has not read runs the
+  asset loop with the opening overlay, and **Cancel** takes it back; a
+  missing asset is a notice and stays listed under the arcs, with the
+  composition error, until it is removed. The **Variants** section edits
+  inside any variant (`Prim.variantEditTarget`; it says when the variant
+  is not selected, and goes back to the edit layer), adds a variant (then
+  selected, with editing inside it a click away) or a variant set with its
+  first variant, and removes a set from the layer edits go to when that
+  layer holds it: its variants and what they author and the layer's
+  selection go, and its name stays in `variantSetNames`, as OpenUSD keeps
+  it, which the dialog says. After each, the layer's text is a click
+  away, the lines it changed marked. Rename and delete, which edit the
+  stage's own layer stack, say why they are not offered while edits go
+  through an arc or inside a variant; a layer, wherever it is shown, can
+  be referenced from the selected prim or added as its payload.
 - **Meshes.** The inspector's view of a `Mesh`: the mesh alone in a
   preview (drag to orbit, scroll to zoom, framed on its extent), what
   stagehand made of it (faces, points, triangles, vertices, concave faces
@@ -458,7 +491,8 @@ line: a property row, a table cell, the explain and changes panels),
   material; a property path explains (bringing the Explain tab forward), or
   clears, blocks, keys or removes it where edits go;
   a layer is shown in the Layers tab, shows its text, is exported, has
-  its identifier copied, takes edits or is muted; an
+  its identifier copied, takes edits or is muted, or is referenced from
+  the selected prim (or added as its payload); an
   asset is shown in the asset view; an instance (a row of its instancer's
   table, the chosen instance below it, which a viewport pick chooses) is
   selected and outlined, framed, hidden or deactivated (`invisibleIds`,

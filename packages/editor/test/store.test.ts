@@ -286,7 +286,7 @@ test("cancelling an open keeps the scene the editor had and frees the one being 
   const second = payloadScene();
   const release = second.hold("assets/robot.usda");
   const opening = store.open(second);
-  await h.turn(40);
+  await h.until(() => second.askedFor("assets/robot.usda") > 0, "the open asking for its payloads");
   assert.deepEqual(store.status, { kind: "opening", label: "payloads.usda" });
   assert.notEqual(store.opening, null);
   assert.ok(second.asked.includes("assets/robot.usda"), "the open is waiting on its payloads");
@@ -315,7 +315,7 @@ test("a cancelled open stops fetching", async () => {
   const second = sampleSource("nested.usda", NESTED_LAYERS);
   const release = second.hold("middle.usda");
   const opening = store.open(second);
-  await h.turn(40);
+  await h.until(() => second.askedFor("middle.usda") > 0, "the open's first round");
   assert.deepEqual(second.asked, ["nested.usda", "middle.usda"]);
 
   store.cancel();
@@ -336,7 +336,7 @@ test("an action asked for while another waits on its assets runs after it", asyn
   const session = store.session!;
   const release = source.hold("assets/chrome.usda");
   const variant = store.selectVariant("/World/Robot", "finish", "chrome");
-  await h.turn();
+  await h.until(() => source.askedFor("assets/chrome.usda") > 0, "the variant's fetch");
   // Asked for while the variant's asset is in flight.
   const undo = store.undo();
   release();
@@ -370,7 +370,7 @@ test("two undos asked for at once undo two steps, one after the other", async ()
   const release = source.hold("assets/chrome.usda");
   const first = store.undo();
   const second = store.undo();
-  await h.turn();
+  await h.until(() => chrome() === 2, "the first undo's fetch");
   release();
   await h.settle(Promise.all([first, second]));
 
@@ -392,14 +392,14 @@ test("opening another scene while payloads load ends the load and opens it", asy
   await h.open(first);
   const release = first.hold("assets/robot.usda");
   const loading = store.load("/World");
-  await h.turn();
+  await h.until(() => first.askedFor("assets/robot.usda") > 0, "the load's fetch");
   assert.equal(store.status.kind, "loading");
 
+  // The open ends the load itself: the held fetch is let go only once it has.
   const second = sampleSource();
-  const opening = store.open(second);
-  await h.turn(60);
+  await h.settle(store.open(second));
+  await h.settle(loading);
   release();
-  await h.settle(Promise.all([loading, opening]));
   await h.turn(20);
 
   assert.equal(store.status.kind, "ready");
@@ -446,7 +446,8 @@ test("a module's trap in an open that was superseded still loses the module", as
   const first = sampleSource();
   const release = first.hold("library.usda");
   const opening = store.open(first);
-  await h.turn(40);
+  // The open has made its stage by the time it asks for a sublayer: superseded before, it would have nothing to free.
+  await h.until(() => first.askedFor("library.usda") > 0, "the open's first round");
   // Letting go of what the superseded open made is a call into the module, and it traps.
   t.mock.method(Session.prototype, "free", () => {
     throw trap();
@@ -540,7 +541,7 @@ test("cancelling a payload load stops its fetches and leaves the payloads as the
 
   const release = source.hold("assets/robot.usda");
   const loading = store.load("/World");
-  await h.turn();
+  await h.until(() => source.askedFor("assets/robot.usda") > 0, "the load's fetch");
   assert.equal(store.status.kind, "loading");
   assert.equal(store.running, "load /World");
   store.cancel();
@@ -570,14 +571,14 @@ test("an edit asked for while an action fetches runs after it, and a refusal is 
   const { store } = h;
   const release = source.hold("assets/chrome.usda");
   const variant = store.selectVariant("/World/Robot", "finish", "chrome");
-  await h.turn();
+  await h.until(() => source.askedFor("assets/chrome.usda") > 0, "the variant's fetch");
   assert.equal(store.running, "select finish=chrome");
   assert.equal(store.setValue("/World/Top.size", { type: "double", value: 3 }), undefined);
   assert.equal(store.setValue("/World/Top.size", { type: "token", value: "large" }), undefined, "not refused yet: it has not run");
   assert.equal(valueOf(store.session!.stage, "/World/Top.size"), 0.6, "the edit waits its turn");
   release();
   await h.settle(variant);
-  await h.turn();
+  await h.until(() => store.running === null && store.notices.length > 0, "the edits behind the variant");
   assert.equal(store.running, null);
   assert.equal(valueOf(store.session!.stage, "/World/Top.size"), 3);
   assert.equal(store.notices.length, 1);

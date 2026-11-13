@@ -29,6 +29,8 @@ import {
 } from "../src/model/networkEdits.ts";
 import { keepPlaces } from "../src/model/networkPlaces.ts";
 import { SHADER_DEFINITIONS, shaderDefinition } from "../src/model/shaderDefinitions.ts";
+import { groupInputs } from "../src/model/shadingInputs.ts";
+import { typesOf } from "../src/presentations/registry.ts";
 
 const layerstack = await loadLayerstack();
 const SAMPLE = readFileSync(new URL("../public/scene/scene.usda", import.meta.url));
@@ -68,6 +70,28 @@ test("a known shader has its definition's ports, unauthored ones marked, in the 
   assert.equal(folded.hidden - unfolded.hidden, surface.ports.length - 2);
   // Every definition's fallback has its input's type.
   for (const each of SHADER_DEFINITIONS) for (const input of each.inputs) assert.equal(input.fallback.type, input.typeName, `${each.id}.${input.name}`);
+});
+
+test("the inspector lists a known shader's inputs in its definition's order, unauthored ones with their definition", () => {
+  const stage = sample();
+  const texture = `${CHECKER}/Texture`;
+  const groups = groupInputs(stage, texture, stage.shader(texture)!.inputs(), shaderDefinition("UsdUVTexture"));
+  assert.equal(groups.length, 1);
+  const inputs = groups[0]!.inputs;
+  assert.deepEqual(
+    inputs.map((input) => [input.name, input.port !== null]),
+    [["file", true], ["st", true], ["wrapS", true], ["wrapT", true], ["fallback", false], ["scale", true], ["bias", false], ["sourceColorSpace", true]],
+  );
+  const bias = inputs.find((input) => input.name === "bias")!;
+  assert.equal(bias.path, `${texture}.inputs:bias`);
+  assert.deepEqual(bias.definition?.fallback, { kind: "tuple", type: "float4", value: [0, 0, 0, 0] });
+  // A token the definition restricts is presented as a menu of them, with or without an attribute.
+  const wrap = inputs.find((input) => input.name === "wrapS")!;
+  assert.deepEqual(typesOf({ kind: "value", attribute: null, typeName: "token", shown: { value: null, text: "" }, at: null, allowedTokens: wrap.definition!.allowedTokens }).slice(0, 2), [
+    "allowedToken",
+    "token",
+  ]);
+  assert.equal(typesOf({ kind: "value", attribute: null, typeName: "token", shown: { value: null, text: "" }, at: null })[0], "token");
 });
 
 test("what may connect: types by shape, refusals for a port's self, what it reads already and cycles", () => {

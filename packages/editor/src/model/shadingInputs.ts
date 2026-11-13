@@ -14,7 +14,12 @@
 // - `uimin`/`uimax` are hard bounds a typed value is clamped to;
 //   `uisoftmin`/`uisoftmax` the range a slider covers where given, else
 //   the hard bounds.
+// - A shader whose `info:id` the editor knows (`shaderDefinitions.ts`)
+//   has its definition's inputs too, those the prim does not author with
+//   their fallback; without a `uiorder`, inputs come in the definition's
+//   order, so one keeps its place once an edit authors it.
 import type { ShaderPort, Stage } from "@forest-rs/layerstack";
+import { type DefinedInput, definedInput, type ShaderDefinition } from "./shaderDefinitions.ts";
 import { releaseValue } from "./values.ts";
 
 /** The slider range and clamps of a number input; each `null` when not given. */
@@ -27,7 +32,15 @@ export interface InputBounds {
 
 /** One input as the inspector shows it. */
 export interface ShadingInput {
-  readonly port: ShaderPort;
+  /** Its property path. */
+  readonly path: string;
+  /** Its name without namespace. */
+  readonly name: string;
+  readonly typeName: string | null;
+  /** The port the stage reads; `null` for an input only its shader's definition has. */
+  readonly port: ShaderPort | null;
+  /** Its shader definition's, when the editor knows the shader's id. */
+  readonly definition: DefinedInput | null;
   /** Its label: `displayName`, `uiname` or its name. */
   readonly label: string;
   readonly group: string;
@@ -51,9 +64,19 @@ export interface ShadingInputGroup {
 /** The group of inputs without a `displayGroup`. */
 export const UNGROUPED = "Inputs";
 
-/** `ports` (of the prim at `prim`) grouped, labelled and ordered as the header of this file describes. */
-export function groupInputs(stage: Stage, prim: string, ports: readonly ShaderPort[]): ShadingInputGroup[] {
-  const inputs = ports.map((port, index) => ({ input: describe(stage, prim, port), index }));
+/**
+ * `ports` (of the prim at `prim`), with `definition`'s inputs the prim
+ * does not author, grouped, labelled and ordered as the header of this
+ * file describes.
+ */
+export function groupInputs(stage: Stage, prim: string, ports: readonly ShaderPort[], definition: ShaderDefinition | null = null): ShadingInputGroup[] {
+  const defined = definition?.inputs ?? [];
+  const position = new Map(defined.map((each, index) => [each.name, index]));
+  const authored = new Set(ports.map((port) => port.name));
+  const inputs = [
+    ...ports.map((port, index) => ({ input: describe(stage, prim, port, definedInput(definition, port.name)), index: position.get(port.name) ?? defined.length + index })),
+    ...defined.filter((each) => !authored.has(each.name)).map((each) => ({ input: unauthored(prim, each), index: position.get(each.name)! })),
+  ];
   inputs.sort((a, b) => (a.input.order ?? Infinity) - (b.input.order ?? Infinity) || a.index - b.index);
   const groups = new Map<string, ShadingInput[]>();
   for (const { input } of inputs) {
@@ -64,7 +87,23 @@ export function groupInputs(stage: Stage, prim: string, ports: readonly ShaderPo
   return [...groups].map(([name, grouped]) => ({ name, inputs: grouped }));
 }
 
-function describe(stage: Stage, prim: string, port: ShaderPort): ShadingInput {
+/** An input only `definition` has: named by it, ungrouped, unbounded, not set here. */
+function unauthored(prim: string, definition: DefinedInput): ShadingInput {
+  return {
+    path: `${prim}.inputs:${definition.name}`,
+    name: definition.name,
+    typeName: definition.typeName,
+    port: null,
+    definition,
+    label: definition.name,
+    group: UNGROUPED,
+    order: null,
+    bounds: { min: null, max: null, softMin: null, softMax: null },
+    own: false,
+  };
+}
+
+function describe(stage: Stage, prim: string, port: ShaderPort, definition: DefinedInput | null): ShadingInput {
   const attribute = stage.attribute(port.path);
   const text = (key: string) => {
     const value = attribute?.metadata(key) ?? null;
@@ -84,7 +123,11 @@ function describe(stage: Stage, prim: string, port: ShaderPort): ShadingInput {
   releaseValue(explanation?.value ?? null);
   const opinion = explanation?.opinions.find((found) => found.role !== "ignored") ?? null;
   return {
+    path: port.path,
+    name: port.name,
+    typeName: port.typeName,
     port,
+    definition,
     label: text("displayName") ?? sdr("uiname") ?? port.name,
     group: text("displayGroup") ?? UNGROUPED,
     order: number("uiorder"),

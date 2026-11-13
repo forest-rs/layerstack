@@ -26,8 +26,8 @@ import { Live } from "./Present.tsx";
 /** The most swatches a colour array's strip shows. */
 const STRIP = 8;
 
-/** A value's label for assistive technology: its attribute's name, else its type. */
-const labelOf = (props: PresentProps<"value">) => props.object.attribute?.name ?? props.object.typeName;
+/** A value's label for assistive technology: the one it was given, else its attribute's name, else its type. */
+const labelOf = (props: PresentProps<"value">) => props.object.label ?? props.object.attribute?.name ?? props.object.typeName;
 
 /** Its tuple's numbers, when it is one. */
 const tupleOf = (props: PresentProps<"value">): readonly number[] | null => (props.object.shown.value?.kind === "tuple" ? props.object.shown.value.value : null);
@@ -205,7 +205,7 @@ function ColorArrayAccept(props: AcceptProps<"value">) {
 
 function AllowedTokenAccept(props: AcceptProps<"value">) {
   const attribute = props.object.attribute;
-  const allowed = attribute === null ? null : allowedTokens(attribute);
+  const allowed = (attribute === null ? null : allowedTokens(attribute)) ?? props.object.allowedTokens ?? null;
   const value = props.object.shown.value;
   const current = value?.kind === "scalar" ? String(value.value) : "";
   if (allowed === null || allowed.length === 0) return <TextAccept {...props} />;

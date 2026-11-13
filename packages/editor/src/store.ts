@@ -1,117 +1,41 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-// The editor's state outside React: the open session, what is selected,
-// where edits go, and the draw list the viewport is kept from. Every
-// action runs here, then brings the draw list up to date from the stage's
-// change records and bumps the signals of what it changed
-// (`store/signals.ts`); a panel listens to the concerns it reads
-// (`app/context.ts`) and reads the stage directly, which is always
-// current. Nothing here knows about the DOM except the viewport it is
-// handed.
+// The editor's state outside React, as the panels see it: one object to
+// read and to act through. What it does is in `store/`, a concern a
+// module: opening a scene (`opening.ts`), the time and playback
+// (`playback.ts`), the selection (`selection.ts`), how the viewport shows
+// the scene (`view.ts`), the draws and the view they are applied to
+// (`drawing.ts`), and what is reported (`notices.ts`). This file holds the
+// session, wires those together, and runs the actions on the stage: each
+// one runs, brings the draws up to the stage's change records, and bumps
+// the signals of what it changed (`store/signals.ts`), which the panels
+// listen to (`app/context.ts`). Nothing here knows about the DOM except
+// the viewport it is handed.
 import type { Edit, EditReceipt, EditTarget, Layer, Layerstack, LoadOutcome, LoadPolicy, ValueInput } from "@forest-rs/layerstack";
-import type { BudgetReport, BufferCost, DrawCost, DrawScope, Stagehand } from "@forest-rs/layerstack_stagehand";
-import { type AssetFocus, assetFocus, type BudgetChoice, budgetFor, type DrawScopeChoice, rememberBudget, rememberedBudget, scopeFor } from "./model/assetView.ts";
-import { ViewportModel, type ViewportScene, type ViewportUpdate } from "./model/draws.ts";
-import { primRevision } from "./model/revisions.ts";
-import { boxCorners, indexOfId, instanceMatrix, type InstancerColumns, invert, multiply, readColumns, toggled } from "./model/instancer.ts";
-import { type LoadBudget, type OpenPhase, OverBudget, Session } from "./model/session.ts";
+import type { BudgetReport, DrawCost, Stagehand } from "@forest-rs/layerstack_stagehand";
+import type { AssetFocus, BudgetChoice, DrawScopeChoice } from "./model/assetView.ts";
+import type { ViewportScene, ViewportUpdate } from "./model/draws.ts";
+import { indexOfId, type InstancerColumns, toggled } from "./model/instancer.ts";
+import type { Session } from "./model/session.ts";
 import type { SceneSource } from "./model/sources.ts";
+import { Drawing } from "./store/drawing.ts";
+import { type FrameNote, FrameNotes, type Notice, Notices } from "./store/notices.ts";
+import { type BusyPhase, OpenController, type PayloadChoice } from "./store/opening.ts";
+import { Playback, type TimeRange, timeRange } from "./store/playback.ts";
+import { cornersBox, instanceCorners, type InstanceSelection, Selection } from "./store/selection.ts";
 import { type Channel, Signals } from "./store/signals.ts";
-import { DEFAULT_LIGHT_SETTINGS, type LightSettings } from "./viewport/defaultLights.ts";
-import { rememberToneMap, rememberedToneMap, type ToneMapChoice } from "./viewport/toneMap.ts";
+import { type EditorStatus, moduleTrap } from "./store/status.ts";
+import { ViewSettings } from "./store/view.ts";
+import type { LightSettings } from "./viewport/defaultLights.ts";
 import { isBox, type UpAxis } from "./viewport/framing.ts";
+import type { ToneMapChoice } from "./viewport/toneMap.ts";
 import type { Viewport } from "./viewport/viewport3d.ts";
 
-/** Where the editor is with its scene. */
-export type EditorStatus =
-  | { readonly kind: "empty" }
-  | { readonly kind: "opening"; readonly label: string }
-  /** Loading payloads of the open scene (`label` names them), and fetching what they want. */
-  | { readonly kind: "loading"; readonly label: string }
-  | { readonly kind: "ready" }
-  | { readonly kind: "failed"; readonly label: string; readonly message: string }
-  /**
-   * A Wasm module trapped: out of memory (`module.out_of_memory`, or a raw
-   * trap the stagehand module reports) or a panic. Its instance is dead
-   * for the rest of the page, so the editor stops calling into it; only a
-   * reload brings it back. `label` is the scene being opened, if any.
-   */
-  | { readonly kind: "lost"; readonly label: string | null; readonly outOfMemory: boolean; readonly message: string };
-
-/**
- * Whether `error` (or an error it was caused by) is a Wasm module's trap,
- * after which the module cannot be used again: a `LayerstackError` with a
- * `module.trapped` or `module.out_of_memory` code, or a raw
- * `WebAssembly.RuntimeError`.
- */
-export function moduleTrap(error: unknown): { readonly outOfMemory: boolean; readonly message: string; readonly raw: boolean } | null {
-  for (let cause = error, depth = 0; cause instanceof Error && depth < 4; cause = cause.cause, depth += 1) {
-    const code = (cause as { code?: unknown }).code;
-    if (code === "module.out_of_memory" || code === "module.trapped") {
-      return { outOfMemory: code === "module.out_of_memory", message: cause.message, raw: false };
-    }
-    if (cause instanceof WebAssembly.RuntimeError) return { outOfMemory: false, message: cause.message, raw: true };
-  }
-  return null;
-}
-
-/**
- * How a scene opens its payloads: all of them, none (each prim with
- * payloads then loads from the prim tree), or `auto`: none, then all of
- * them unless reading them would pass {@link PAYLOAD_BUDGET}.
- */
-export type PayloadChoice = "auto" | "all" | "none";
-
-/**
- * The layer bytes an automatic open reads for payloads before it leaves
- * them unloaded: 1 GiB. Composing takes more memory than the layers' bytes
- * (a large public scene's 3.1 GB of layers composes to 5.4 GB natively),
- * and the module has 4 GiB for the stage and its draws, so a scene whose
- * payloads read more than this would not fit with them loaded.
- */
-export const PAYLOAD_BUDGET = 1024 ** 3;
-
-/** The stage's frames, as its metadata gives them. */
-export interface TimeRange {
-  /** `startTimeCode` and `endTimeCode`. */
-  readonly start: number;
-  readonly end: number;
-  /** `timeCodesPerSecond`: how fast time codes pass when playing. */
-  readonly timeCodesPerSecond: number;
-}
-
-/** Something an action reported that the person should see: a refused edit, a failed fetch. */
-export interface Notice {
-  readonly id: number;
-  readonly action: string;
-  readonly message: string;
-  /** The error's code, for a `LayerstackError` (`edit.invalid`, `value.kind`). */
-  readonly code: string | null;
-}
-
-/** Why a request to frame framed nothing, shown briefly in the viewport ({@link EditorStore.frameNote}). */
-export interface FrameNote {
-  /** Distinct for each request, so asking again shows it again. */
-  readonly id: number;
-  /** `Nothing to frame: /World/Looks/Checker has no bounds`. */
-  readonly message: string;
-}
-
-/** How long a {@link FrameNote} is shown, in milliseconds. */
-export const FRAME_NOTE_MS = 3000;
-
-const EMPTY_SCENE: ViewportScene = {
-  items: [],
-  hidden: [],
-  bounds: null,
-  lights: [],
-  cameras: [],
-  materials: new Map(),
-  skinning: { gpu: 0, cpu: 0, shaped: 0, shapedVarying: 0, reducedBlocks: 0, droppedWeight: 0, failed: [] },
-  unlit: new Map(),
-  linking: [],
-};
+export { FRAME_NOTE_MS, type FrameNote, type Notice } from "./store/notices.ts";
+export { PAYLOAD_BUDGET, type PayloadChoice } from "./store/opening.ts";
+export type { TimeRange } from "./store/playback.ts";
+export { type EditorStatus, moduleTrap } from "./store/status.ts";
 
 /** The editor: one session at a time, and the state the panels share. */
 export class EditorStore {
@@ -119,210 +43,251 @@ export class EditorStore {
   readonly stagehand: Stagehand;
   /** What changed, by concern: what the panels listen to. */
   readonly signals = new Signals();
+  /** Where the editor is with its scene. */
   status: EditorStatus = { kind: "empty" };
+  /** The open scene's session; `null` before the first opens. */
   session: Session | null = null;
+  /** Where the open scene's bytes come from. */
   source: SceneSource | null = null;
+  /** Why the open scene's payloads were left unloaded; `null` when they were not, or were chosen so. */
+  payloadNote: string | null = null;
+  readonly #opener: OpenController;
+  readonly #playback: Playback;
+  readonly #selection = new Selection();
+  readonly #view: ViewSettings;
+  readonly #drawing: Drawing;
+  readonly #notices: Notices;
+  readonly #frameNotes: FrameNotes;
+  #frame = 0;
+  /** The channels {@link EditorStore.#bumpSoon} bumps at the next frame. */
+  readonly #soon = new Set<Channel>();
+
+  constructor(layerstack: Layerstack, stagehand: Stagehand) {
+    this.layerstack = layerstack;
+    this.stagehand = stagehand;
+    const signals = this.signals;
+    this.#notices = new Notices(signals);
+    this.#frameNotes = new FrameNotes(signals);
+    this.#playback = new Playback(
+      () => this.#syncTime(),
+      () => signals.bump("time"),
+    );
+    this.#drawing = new Drawing(stagehand, {
+      request: () => ({
+        session: this.session,
+        time: this.time,
+        drawScope: this.drawScope,
+        budgetChoice: this.budgetChoice,
+        selection: this.selection,
+        property: this.property,
+      }),
+      resync: () => this.#sync(),
+      changed: (channels, soon) => (soon ? this.#bumpSoon(...channels) : signals.bump(...channels)),
+    });
+    const viewport = () => this.viewport;
+    this.#view = new ViewSettings(signals, {
+      get viewport() {
+        return viewport();
+      },
+      redraw: () => this.#sync("view"),
+    });
+    const hasSession = () => this.session !== null;
+    this.#opener = new OpenController(layerstack, signals, {
+      get hasSession() {
+        return hasSession();
+      },
+      setStatus: (status) => this.#setStatus(status),
+      commit: (session, source, note) => this.#commit(session, source, note),
+      lose: (error, label) => this.lose(error, label),
+    });
+  }
+
+  // What the panels read, each from the concern that owns it.
+
   /** The selected prim's path. */
-  selection: string | null = null;
+  get selection(): string | null {
+    return this.#selection.prim;
+  }
+
   /**
    * The point instancer instance selected (in its inspector view, or
    * picked in the viewport): its instancer, which is the selection, and
    * its index in the instancer's arrays; `null` for none.
    */
-  instance: { readonly instancer: string; readonly index: number } | null = null;
+  get instance(): InstanceSelection | null {
+    return this.#selection.instance;
+  }
+
   /** The property whose value the explain panel shows, by path. */
-  property: string | null = null;
+  get property(): string | null {
+    return this.#selection.property;
+  }
+
   /**
    * The time everything is read at: a time code, or `undefined` for the
    * default time (a stage without a time range).
    */
-  time: number | undefined = undefined;
+  get time(): number | undefined {
+    return this.#playback.time;
+  }
+
   /** The stage's time range; `null` when it authors none. */
-  range: TimeRange | null = null;
+  get range(): TimeRange | null {
+    return this.#playback.range;
+  }
+
   /** Whether time is playing. */
-  playing = false;
+  get playing(): boolean {
+    return this.#playback.playing;
+  }
+
   /** The stage camera the viewport looks through, by path; `null` for the free camera. */
-  through: string | null = null;
+  get through(): string | null {
+    return this.#view.through;
+  }
+
   /** The stage's up axis (its `upAxis` metadata, `Y` when it has none): what the viewport and the previews orbit about. */
-  upAxis: UpAxis = "Y";
+  get upAxis(): UpAxis {
+    return this.#view.upAxis;
+  }
+
   /** The default lights the viewport adds to the stage's, as usdview's View > Lights menu sets them: the camera light on. */
-  lightSettings: LightSettings = DEFAULT_LIGHT_SETTINGS;
+  get lightSettings(): LightSettings {
+    return this.#view.lightSettings;
+  }
+
   /** How the viewport and the previews are shown on the display: usdview's sRGB by default, or AgX; remembered for this viewer. */
-  toneMap: ToneMapChoice = rememberedToneMap();
-  /** The session being opened, while its assets are fetched. */
-  opening: Session | null = null;
-  /** How the next scene opens its payloads ({@link PayloadChoice}). */
-  payloads: PayloadChoice = "auto";
-  /** Why the open scene's payloads were left unloaded; `null` when they were not, or were chosen so. */
-  payloadNote: string | null = null;
-  /** What the open is doing, and since when (`performance.now()`); `null` when nothing is opening. */
-  openingPhase: { readonly phase: OpenPhase; readonly since: number; readonly started: number } | null = null;
-  /** The draws, as last synced. */
-  scene: ViewportScene = EMPTY_SCENE;
-  /** The last sync that changed something, for the stats. */
-  lastUpdate: ViewportUpdate | null = null;
-  /** What the draws hold, measured after the last sync; `null` with no scene. */
-  cost: DrawCost | null = null;
+  get toneMap(): ToneMapChoice {
+    return this.#view.toneMap;
+  }
+
   /**
    * What the viewport draws: the whole scene (as a scene opens), the
-   * selection alone (the asset view, {@link assetFocus}), or nothing;
-   * each under the draw budget ({@link budgetChoice}).
+   * selection alone (the asset view), or nothing; each under the draw
+   * budget ({@link EditorStore.budgetChoice}).
    */
-  drawScope: DrawScopeChoice = "scene";
-  /**
-   * The draw budget this viewer chose ({@link budgetFor}), remembered
-   * across visits: what does not fit is drawn as boxes or skipped, the
-   * selection admitted first.
-   */
-  budgetChoice: BudgetChoice = rememberedBudget();
-  /** Where the draws stand against the budget, after the last sync; `null` without a budget or a scene. */
-  budget: BudgetReport | null = null;
-  /** What the asset view makes of the selection, as last synced. */
-  focus: AssetFocus = { kind: "none" };
-  /** The point instancer columns last read, and the session, prim revision and time they were read at. */
-  #columns: { session: Session; path: string; revision: number; time: number | undefined; columns: InstancerColumns | null } | null = null;
-  /** The whole scene's estimate, once asked for, and the session and change it was made at. */
-  #estimate: { session: Session; changes: number; time: number | undefined; cost: DrawCost | null } | null = null;
-  /** What actions reported, newest last. */
-  readonly notices: Notice[] = [];
-  /**
-   * Why the last request to frame (the F key, the frame command, a
-   * double-click on an instance) framed nothing, for
-   * {@link FRAME_NOTE_MS}; `null` otherwise, and once one frames.
-   */
-  frameNote: FrameNote | null = null;
-  #frameNoteTimer: ReturnType<typeof setTimeout> | undefined = undefined;
-  #frameNotes = 0;
-  readonly #draws: ViewportModel;
-  /** The change records the last sync had seen, and of which session. */
-  #synced: { session: Session | null; changes: number } = { session: null, changes: 0 };
-  #viewport: Viewport | null = null;
-  #notice = 0;
-  #opening = 0;
-  /** When the open, or the payload load, the overlay shows began. */
-  #busySince = 0;
-  #frame = 0;
-  /** The channels {@link EditorStore.#bumpSoon} bumps at the next frame. */
-  readonly #soon = new Set<Channel>();
-  #playFrame = 0;
+  get drawScope(): DrawScopeChoice {
+    return this.#view.drawScope;
+  }
 
-  constructor(layerstack: Layerstack, stagehand: Stagehand) {
-    this.layerstack = layerstack;
-    this.stagehand = stagehand;
-    this.#draws = new ViewportModel(stagehand);
+  /**
+   * The draw budget this viewer chose, remembered across visits: what
+   * does not fit is drawn as boxes or skipped, the selection admitted
+   * first.
+   */
+  get budgetChoice(): BudgetChoice {
+    return this.#view.budgetChoice;
+  }
+
+  /** The session being opened, while its assets are fetched. */
+  get opening(): Session | null {
+    return this.#opener.opening;
+  }
+
+  /** How the next scene opens its payloads ({@link PayloadChoice}). */
+  get payloads(): PayloadChoice {
+    return this.#opener.payloads;
+  }
+
+  /** What the open, or the payload load, is doing, and since when; `null` when nothing is opening or it has not said yet. */
+  get openingPhase(): BusyPhase | null {
+    return this.#opener.phase;
+  }
+
+  /** The draws, as last synced. */
+  get scene(): ViewportScene {
+    return this.#drawing.scene;
+  }
+
+  /** The last sync that changed something, for the stats. */
+  get lastUpdate(): ViewportUpdate | null {
+    return this.#drawing.lastUpdate;
+  }
+
+  /** What the draws hold, measured after the last sync; `null` with no scene. */
+  get cost(): DrawCost | null {
+    return this.#drawing.cost;
+  }
+
+  /** Where the draws stand against the budget, after the last sync; `null` without a budget or a scene. */
+  get budget(): BudgetReport | null {
+    return this.#drawing.budget;
+  }
+
+  /** What the asset view makes of the selection, as last synced. */
+  get focus(): AssetFocus {
+    return this.#drawing.focus;
   }
 
   /** The three.js view, once attached. */
   get viewport(): Viewport | null {
-    return this.#viewport;
+    return this.#drawing.viewport;
   }
+
+  /** What actions reported, newest last. */
+  get notices(): readonly Notice[] {
+    return this.#notices.list;
+  }
+
+  /**
+   * Why the last request to frame (the F key, the frame command, a
+   * double-click on an instance) framed nothing, for a few seconds;
+   * `null` otherwise, and once one frames.
+   */
+  get frameNote(): FrameNote | null {
+    return this.#frameNotes.note;
+  }
+
+  // The viewport.
 
   /** Hands the store the three.js view (or `null` when it goes), which it keeps up to date. */
-  /** The costs of meshes the viewport draws from prebuilt cluster sets, by prim (`Viewport.onResident`); `null` before any. */
-  #resident: ReadonlyMap<string, BufferCost> | null = null;
-
   attachViewport(viewport: Viewport | null): void {
-    this.#viewport = viewport;
-    this.#bump("view");
-    if (viewport === null) return;
-    // Uploaded buffers' arrays are dropped; what is held is measured again.
-    viewport.onUploaded = (key, revision) => this.#draws.release(key, revision);
-    // Meshes drawn from prebuilt cluster sets cost the budget their sets, once.
-    viewport.onResident = (costs) => {
-      this.#resident = costs;
-      this.#sync();
-    };
-    viewport.onReleased = () => {
-      this.cost = this.#draws.cost();
-      this.#bumpSoon("draws");
-    };
-    // A lost context lost every upload: the released buffers filled again, the view made again.
-    viewport.onContextRestored = () => {
-      this.#draws.restore();
-      this.scene = this.#draws.scene(this.time);
-      this.cost = this.#draws.cost();
-      viewport.update(this.scene, { ...this.#noUpdate(), reset: true }, this.#highlighted());
-      this.#bump("draws");
-    };
-    viewport.lookThrough(this.through);
-    viewport.setLightSettings(this.lightSettings);
-    viewport.setToneMap(this.toneMap);
-    this.#orient();
-    const update = this.session === null ? null : this.#draws.sync(this.session, this.time, this.#scope(this.session));
-    if (update !== null) {
-      this.scene = this.#draws.scene(this.time);
-      this.cost = this.#draws.cost();
-      viewport.update(this.scene, { ...update, reset: true }, this.#highlighted());
-    }
+    if (viewport !== null) this.#view.apply(viewport);
+    this.signals.bump(...this.#drawing.attach(viewport));
   }
 
+  // Opening.
+
   /** The source's root, opened and resolved: everything it depends on is fetched first. */
-  async open(source: SceneSource): Promise<void> {
-    const opening = ++this.#opening;
-    this.#resident = null;
-    this.status = { kind: "opening", label: source.label };
-    this.#bump("status");
-    try {
-      this.#busySince = performance.now();
-      const choice = this.payloads;
-      const session = await Session.open(this.layerstack, source.root, source.fetch, {
-        open: { load: choice === "all" ? "all" : "none" },
-        progress: (pending) => {
-          if (opening !== this.#opening) return;
-          if (this.opening !== pending) {
-            this.opening = pending;
-            this.#bump("status");
-          }
-          this.#bumpSoon("loop");
-        },
-        // Each phase is shown before its work holds the thread: two frames
-        // let the page render and paint it.
-        phase: async (phase) => {
-          if (opening !== this.#opening) return;
-          this.openingPhase = { phase, since: performance.now(), started: this.#busySince };
-          this.#bump("status", "loop");
-          await nextFrame();
-          await nextFrame();
-        },
-      });
-      if (opening !== this.#opening) {
-        session.free();
-        return;
-      }
-      const note = choice === "auto" ? await this.#loadWithin(session, source) : null;
-      if (opening !== this.#opening) {
-        session.free();
-        return;
-      }
-      this.payloadNote = note;
-      this.opening = null;
-      this.openingPhase = null;
-      this.session?.free();
-      this.session = session;
-      this.source = source;
-      this.selection = null;
-      this.instance = null;
-      this.#viewport?.setMarker(null);
-      this.property = null;
-      this.through = null;
-      this.#viewport?.lookThrough(null);
-      this.#orient();
-      this.pause();
-      this.range = timeRange(session);
-      this.time = this.range?.start;
-      this.status = { kind: "ready" };
-      this.drawScope = "scene";
-      this.#sync();
-      // Another scene: everything a panel reads may be another thing.
-      this.signals.bumpAll();
-    } catch (error) {
-      if (opening !== this.#opening) return;
-      this.opening = null;
-      this.openingPhase = null;
-      if (this.lose(error, source.label)) return;
-      this.status = { kind: "failed", label: source.label, message: error instanceof Error ? error.message : String(error) };
-      this.#bump("status");
-    }
+  open(source: SceneSource): Promise<void> {
+    this.#drawing.forgetResident();
+    return this.#opener.open(source);
+  }
+
+  /**
+   * Stops waiting for the scene being opened: the stage keeps the scene it
+   * had. Work already holding the thread finishes, and its result is
+   * dropped.
+   */
+  cancelOpen(): void {
+    if (this.status.kind !== "opening") return;
+    this.#opener.cancel();
+  }
+
+  /** Sets how the next scene opens its payloads. */
+  setPayloads(choice: PayloadChoice): void {
+    this.#opener.setPayloads(choice);
+  }
+
+  /** Takes the session an open made as the scene: the one it had is freed, and everything starts over on the new one. */
+  #commit(session: Session, source: SceneSource, note: string | null): void {
+    this.payloadNote = note;
+    this.session?.free();
+    this.session = session;
+    this.source = source;
+    this.#selection.clear();
+    this.viewport?.setMarker(null);
+    this.#view.reset(upAxis(session));
+    this.#playback.reset(timeRange(session.stage));
+    this.status = { kind: "ready" };
+    this.#drawing.sync(false);
+    // Another scene: everything a panel reads may be another thing.
+    this.signals.bumpAll();
+  }
+
+  #setStatus(status: EditorStatus): void {
+    this.status = status;
+    this.signals.bump("status");
   }
 
   /**
@@ -341,26 +306,13 @@ export class EditorStore {
     const message = trap.raw ? `the draw module trapped: ${trap.message}` : trap.message;
     // The stack says which module trapped, and where.
     console.error(error);
-    cancelAnimationFrame(this.#playFrame);
-    this.playing = false;
+    this.#playback.stop();
     this.status = { kind: "lost", label: label ?? this.source?.label ?? null, outOfMemory, message };
-    this.#bump("status", "time");
+    this.signals.bump("status", "time");
     return true;
   }
 
-  /**
-   * Stops waiting for the scene being opened: the stage keeps the scene it
-   * had. Work already holding the thread finishes, and its result is
-   * dropped.
-   */
-  cancelOpen(): void {
-    if (this.status.kind !== "opening") return;
-    this.#opening += 1;
-    this.opening = null;
-    this.openingPhase = null;
-    this.status = this.session === null ? { kind: "empty" } : { kind: "ready" };
-    this.#bump("status");
-  }
+  // The selection.
 
   /**
    * Selects the prim at `path` (`null` for none); the explain panel keeps
@@ -368,32 +320,21 @@ export class EditorStore {
    * view draws it instead.
    */
   select(path: string | null): void {
-    if (path === this.selection) return;
-    this.selection = path;
-    if (this.instance !== null && this.instance.instancer !== path) {
-      this.instance = null;
-      this.#viewport?.setMarker(null);
-    }
-    if (this.property !== null && (path === null || !this.property.startsWith(`${path}.`))) this.property = null;
+    const instance = this.instance;
+    if (!this.#selection.select(path)) return;
+    if (instance !== null && this.instance === null) this.viewport?.setMarker(null);
     // Drawing the selection, or under a budget (which admits the selection first), the draws change.
     if (this.drawScope === "selection" || this.budgetChoice !== "unlimited") {
       this.#sync("selection");
       return;
     }
-    this.#viewport?.update(this.scene, this.#noUpdate(), this.#highlighted());
-    this.#bump("selection");
+    this.#drawing.restyle();
+    this.signals.bump("selection");
   }
 
-  /** The columns of the point instancer at `path` at the current time, read again only when a change reaches it ({@link primRevision}) or the time moves ({@link readColumns}). */
+  /** The columns of the point instancer at `path` at the current time, read again only when a change reaches it or the time moves. */
   instancerColumns(path: string): InstancerColumns | null {
-    const session = this.session;
-    if (session === null) return null;
-    const at = this.#columns;
-    const revision = primRevision(session, path);
-    if (at !== null && at.session === session && at.path === path && at.revision === revision && at.time === this.time) return at.columns;
-    const columns = session.stage.prim(path)?.isA("PointInstancer") === true ? readColumns(session.stage, path, this.time) : null;
-    this.#columns = { session, path, revision, time: this.time, columns };
-    return columns;
+    return this.session === null ? null : this.#selection.columns(this.session, path, this.time);
   }
 
   /**
@@ -403,42 +344,11 @@ export class EditorStore {
    */
   selectInstance(instancer: string, index: number | null, frame = false): void {
     if (this.selection !== instancer) this.select(instancer);
-    this.instance = index === null ? null : { instancer, index };
+    this.#selection.instance = index === null ? null : { instancer, index };
     const corners = index === null ? null : this.#instanceCorners(instancer, index);
-    this.#viewport?.setMarker(corners);
-    if (frame) this.#noteFrame(corners !== null && this.#frameBox(cornersBox(corners)), `instance ${index} of ${instancer}`);
-    this.#bump("selection");
-  }
-
-  /**
-   * Hides instance `id` of the point instancer at `instancer` (adds it to
-   * `invisibleIds`, at the current time when that attribute is animated,
-   * `UsdGeomPointInstancer::InvisibleIds`) or shows it again, as one edit
-   * where edits go. Nothing when it already is.
-   */
-  setInstanceVisible(instancer: string, id: bigint, visible: boolean): void {
-    const stage = this.session?.stage;
-    const columns = this.instancerColumns(instancer);
-    if (stage === undefined || columns === null || columns.invisibleIds.includes(id) !== visible) return;
-    const attribute = stage.attribute(`${instancer}.invisibleIds`);
-    const at = attribute?.mightBeTimeVarying() === true ? (this.time ?? null) : null;
-    const value = { type: "int64[]", value: BigInt64Array.from(toggled(columns.invisibleIds, id)) } as const;
-    this.apply(`${visible ? "show" : "hide"} instance ${id} of ${instancer}`, [
-      { type: "setValue", path: `${instancer}.invisibleIds`, value, ...(at === null ? {} : { time: at }) },
-    ]);
-  }
-
-  /**
-   * Deactivates instance `id` of the point instancer at `instancer` (adds
-   * it to the `inactiveIds` list op metadata, `UsdGeomPointInstancer::
-   * DeactivateId`) or activates it again, as one edit where edits go.
-   * Nothing when it already is.
-   */
-  setInstanceActive(instancer: string, id: bigint, active: boolean): void {
-    const columns = this.instancerColumns(instancer);
-    if (columns === null || columns.inactiveIds.includes(id) !== active) return;
-    const value = { type: "int64[]", value: BigInt64Array.from(toggled(columns.inactiveIds, id)) } as const;
-    this.apply(`${active ? "activate" : "deactivate"} instance ${id} of ${instancer}`, [{ type: "setMetadata", path: instancer, key: "inactiveIds", value }]);
+    this.viewport?.setMarker(corners);
+    if (frame) this.#frameNotes.show(corners !== null && this.#frameBox(cornersBox(corners)), `instance ${index} of ${instancer}`);
+    this.signals.bump("selection");
   }
 
   /** Selects the instance with `id` of the point instancer at `instancer` (a pick's), by its index. */
@@ -448,56 +358,45 @@ export class EditorStore {
     this.selectInstance(instancer, index < 0 ? null : index);
   }
 
-  /**
-   * The corners of instance `index`'s box, in the space the viewport
-   * draws in (the world, or drawing the selection alone, its root's own
-   * space): its prototype's local bound through its transform and the
-   * instancer's. `null` when nothing is drawn or it has no finite box.
-   */
+  /** The corners of instance `index`'s box in the space the viewport draws in ({@link instanceCorners}). */
   #instanceCorners(instancer: string, index: number): Float64Array | null {
     const stage = this.session?.stage;
-    if (stage === undefined || this.drawScope === "nothing") return null;
-    const columns = this.instancerColumns(instancer);
-    if (columns === null || index >= columns.count) return null;
-    const prototype = columns.prototypes[columns.protoIndices[index]!];
-    if (prototype === undefined) return null;
-    const time = this.time === undefined ? {} : { time: this.time };
-    const bounds = stage.localBounds([prototype], { purposes: ["default", "proxy", "render"], ...time });
-    const range = bounds.ranges.subarray(0, 6);
-    if (!(range[0]! <= range[3]!)) return null;
-    let world: ArrayLike<number> = stage.worldTransforms([instancer], time);
-    if (this.drawScope === "selection") {
-      // Drawn alone, the draws are in the root's space (`DrawScope.space`).
-      if (this.focus.kind !== "geometry") return null;
-      const root = invert(stage.worldTransforms([this.focus.root], time));
-      if (root === null) return null;
-      world = multiply(world, root);
-    }
-    const corners = boxCorners(range, multiply(multiply(bounds.matrices.subarray(0, 16), instanceMatrix(columns, index)), world));
-    // An instance whose arrays are shorter than `protoIndices` has no transform to outline or frame.
-    return corners.every(Number.isFinite) ? corners : null;
+    if (stage === undefined) return null;
+    return instanceCorners(stage, instancer, this.instancerColumns(instancer), index, this.time, { drawScope: this.drawScope, focus: this.focus });
   }
 
   /** Shows `path`'s value and opinions in the explain panel (and, drawing the selection, an image it names). */
   explain(path: string | null): void {
-    this.property = path;
+    this.#selection.property = path;
     if (this.drawScope === "selection") this.#sync("selection");
-    else this.#bump("selection");
+    else this.signals.bump("selection");
   }
+
+  // How the viewport shows the scene.
 
   /** Draws the whole scene, the selection alone, or nothing, from now on. */
   setDrawScope(choice: DrawScopeChoice): void {
-    if (choice === this.drawScope) return;
-    this.drawScope = choice;
-    this.#sync("view");
+    this.#view.setDrawScope(choice);
   }
 
   /** Draws under the budget `choice` from now on, and remembers it for this viewer. */
   setBudgetChoice(choice: BudgetChoice): void {
-    if (choice === this.budgetChoice) return;
-    this.budgetChoice = choice;
-    rememberBudget(choice);
-    this.#sync("view");
+    this.#view.setBudgetChoice(choice);
+  }
+
+  /** Looks through the stage camera at `path`, or the free camera with `null`. */
+  lookThrough(path: string | null): void {
+    this.#view.lookThrough(path);
+  }
+
+  /** Switches the viewport's default lights (usdview's View > Lights menu). */
+  setLightSettings(settings: LightSettings): void {
+    this.#view.setLightSettings(settings);
+  }
+
+  /** Shows the viewport and the previews sRGB-encoded as usdview does, or through AgX, and remembers the choice. */
+  setToneMap(choice: ToneMapChoice): void {
+    this.#view.setToneMap(choice);
   }
 
   /**
@@ -506,52 +405,7 @@ export class EditorStore {
    * again after an edit. `null` with no scene, or when it cannot be made.
    */
   sceneEstimate(): DrawCost | null {
-    const session = this.session;
-    if (session === null) return null;
-    const at = this.#estimate;
-    if (at !== null && at.session === session && at.changes === session.changeLog.length && at.time === this.time) return at.cost;
-    let cost: DrawCost | null = null;
-    try {
-      cost = this.#draws.estimate(session.stage, this.time, { roots: ["/"] });
-    } catch (error) {
-      if (moduleTrap(error) !== null) throw error;
-    }
-    this.#estimate = { session, changes: session.changeLog.length, time: this.time, cost };
-    return cost;
-  }
-
-  /** The draw list's scope: {@link scopeFor} the choice and the asset view's focus. */
-  #scope(session: Session): DrawScope {
-    this.focus = assetFocus(session.stage, this.selection, this.property, this.time);
-    return scopeFor(this.drawScope, this.focus);
-  }
-
-  /** The prim the viewport highlights: the selection, or, drawing it alone, only a face subset of it. */
-  #highlighted(): string | null {
-    if (this.drawScope !== "selection") return this.selection;
-    return this.focus.kind === "geometry" ? this.focus.subset : null;
-  }
-
-  /** Looks through the stage camera at `path`, or the free camera with `null`. */
-  lookThrough(path: string | null): void {
-    this.through = path;
-    this.#viewport?.lookThrough(path);
-    this.#bump("view");
-  }
-
-  /** Switches the viewport's default lights (usdview's View > Lights menu). */
-  setLightSettings(settings: LightSettings): void {
-    this.lightSettings = settings;
-    this.#viewport?.setLightSettings(settings);
-    this.#bump("view");
-  }
-
-  /** Shows the viewport and the previews sRGB-encoded as usdview does, or through AgX, and remembers the choice. */
-  setToneMap(choice: ToneMapChoice): void {
-    this.toneMap = choice;
-    rememberToneMap(choice);
-    this.#viewport?.setToneMap(choice);
-    this.#bump("view");
+    return this.#drawing.estimate();
   }
 
   /**
@@ -560,17 +414,17 @@ export class EditorStore {
    * alone, on what is drawn. It frames again what is in view already.
    * Returns whether it framed anything: not for a selection without
    * bounds (a material, a camera, an empty prim), which leaves the view
-   * as it was and says so ({@link frameNote}).
+   * as it was and says so ({@link EditorStore.frameNote}).
    */
   frameSelection(): boolean {
     const stage = this.session?.stage;
-    if (stage === undefined || this.#viewport === null) return false;
+    if (stage === undefined || this.viewport === null) return false;
     const instance = this.instance;
     if (instance !== null && instance.instancer === this.selection) {
       const corners = this.#instanceCorners(instance.instancer, instance.index);
-      if (corners !== null) return this.#noteFrame(this.#frameBox(cornersBox(corners)), null);
+      if (corners !== null) return this.#frameNotes.show(this.#frameBox(cornersBox(corners)), null);
     }
-    if (this.drawScope !== "scene") return this.#noteFrame(this.scene.bounds !== null && this.#frameBox(this.scene.bounds), "what is drawn");
+    if (this.drawScope !== "scene") return this.#frameNotes.show(this.scene.bounds !== null && this.#frameBox(this.scene.bounds), "what is drawn");
     const path = this.selection ?? "/";
     const bounds = Array.from(
       stage
@@ -583,30 +437,7 @@ export class EditorStore {
     // A camera is not framed at its position: nothing is drawn there, so
     // the view would show nothing; the note points at looking through it.
     const camera = this.scene.cameras.some((each) => each.path === path);
-    return this.#noteFrame(this.#frameBox(bounds), path === "/" ? "the stage" : path, camera ? "look through it instead" : null);
-  }
-
-  /**
-   * Shows why a request to frame framed nothing (`what` has no bounds, and
-   * a `hint`) for {@link FRAME_NOTE_MS}, or clears the last note when it
-   * framed. Returns `framed`.
-   */
-  #noteFrame(framed: boolean, what: string | null, hint: string | null = null): boolean {
-    clearTimeout(this.#frameNoteTimer);
-    this.#frameNoteTimer = undefined;
-    const message = `Nothing to frame: ${what} has no bounds${hint === null ? "" : `; ${hint}`}`;
-    const note = framed || what === null ? null : { id: ++this.#frameNotes, message };
-    if (note === null && this.frameNote === null) return framed;
-    this.frameNote = note;
-    if (note !== null) {
-      this.#frameNoteTimer = setTimeout(() => {
-        this.#frameNoteTimer = undefined;
-        this.frameNote = null;
-        this.#bump("view");
-      }, FRAME_NOTE_MS);
-    }
-    this.#bump("view");
-    return framed;
+    return this.#frameNotes.show(this.#frameBox(bounds), path === "/" ? "the stage" : path, camera ? "look through it instead" : null);
   }
 
   /**
@@ -622,60 +453,41 @@ export class EditorStore {
 
   /** Frames `box` with the free camera; `false`, the view as it was, when it is not a box. */
   #frameBox(box: readonly number[]): boolean {
-    const viewport = this.#viewport;
+    const viewport = this.viewport;
     if (viewport === null || !isBox(box)) return false;
     this.lookThrough(null);
     return viewport.frame(box);
   }
 
+  // The time.
+
   /** Reads everything at `time` (clamped to the range): the draws move to it, the panels read it. */
   setTime(time: number | undefined): void {
-    const range = this.range;
-    const clamped = time === undefined || range === null ? time : Math.min(range.end, Math.max(range.start, time));
-    if (clamped === this.time) return;
-    this.time = clamped;
-    this.#syncTime();
+    this.#playback.setTime(time);
   }
 
   /** Plays the range from the current time at `timeCodesPerSecond`, looping at its end. */
   play(): void {
-    const range = this.range;
-    if (range === null || this.playing) return;
-    this.playing = true;
-    let last = performance.now();
-    const tick = (now: number) => {
-      if (!this.playing) return;
-      const advanced = (this.time ?? range.start) + ((now - last) / 1000) * range.timeCodesPerSecond;
-      last = now;
-      this.time = advanced > range.end ? range.start : advanced;
-      this.#syncTime();
-      this.#playFrame = requestAnimationFrame(tick);
-    };
-    this.#playFrame = requestAnimationFrame(tick);
-    this.#bump("time");
+    this.#playback.play();
   }
 
   /** Stops playing, on the nearest whole time code: an edit then authors its sample on a frame. */
   pause(): void {
-    if (!this.playing) return;
-    this.playing = false;
-    cancelAnimationFrame(this.#playFrame);
-    if (this.time !== undefined) this.time = Math.round(this.time);
-    this.#syncTime();
+    this.#playback.pause();
   }
 
   /** Moves time by `frames` whole time codes, pausing. */
   step(frames: number): void {
-    this.pause();
-    if (this.range === null) return;
-    this.setTime(Math.round(this.time ?? this.range.start) + frames);
+    this.#playback.step(frames);
   }
+
+  // Actions on the stage.
 
   /** Where edits go: a layer of the stage's stack or an edit target; `undefined` for the stage's edit layer. */
   setTarget(target: Layer | EditTarget | undefined): void {
     if (this.session === null) return;
     this.session.target = target;
-    this.#bump("target");
+    this.signals.bump("target");
   }
 
   /** Applies `edits` as one undoable action. */
@@ -711,15 +523,48 @@ export class EditorStore {
     }
   }
 
+  /**
+   * Hides instance `id` of the point instancer at `instancer` (adds it to
+   * `invisibleIds`, at the current time when that attribute is animated,
+   * `UsdGeomPointInstancer::InvisibleIds`) or shows it again, as one edit
+   * where edits go. Nothing when it already is.
+   */
+  setInstanceVisible(instancer: string, id: bigint, visible: boolean): void {
+    const stage = this.session?.stage;
+    const columns = this.instancerColumns(instancer);
+    if (stage === undefined || columns === null || columns.invisibleIds.includes(id) !== visible) return;
+    const attribute = stage.attribute(`${instancer}.invisibleIds`);
+    const at = attribute?.mightBeTimeVarying() === true ? (this.time ?? null) : null;
+    const value = { type: "int64[]", value: BigInt64Array.from(toggled(columns.invisibleIds, id)) } as const;
+    this.apply(`${visible ? "show" : "hide"} instance ${id} of ${instancer}`, [
+      { type: "setValue", path: `${instancer}.invisibleIds`, value, ...(at === null ? {} : { time: at }) },
+    ]);
+  }
+
+  /**
+   * Deactivates instance `id` of the point instancer at `instancer` (adds
+   * it to the `inactiveIds` list op metadata, `UsdGeomPointInstancer::
+   * DeactivateId`) or activates it again, as one edit where edits go.
+   * Nothing when it already is.
+   */
+  setInstanceActive(instancer: string, id: bigint, active: boolean): void {
+    const columns = this.instancerColumns(instancer);
+    if (columns === null || columns.inactiveIds.includes(id) !== active) return;
+    const value = { type: "int64[]", value: BigInt64Array.from(toggled(columns.inactiveIds, id)) } as const;
+    this.apply(`${active ? "activate" : "deactivate"} instance ${id} of ${instancer}`, [{ type: "setMetadata", path: instancer, key: "inactiveIds", value }]);
+  }
+
   /** Selects `variant` of `set` on `prim`, then fetches what it needs. */
   async selectVariant(prim: string, set: string, variant: string): Promise<void> {
     await this.#actAsync(`select ${set}=${variant}`, (session) => session.selectVariant(prim, set, variant));
   }
 
+  /** Undoes the newest action, then fetches what that brings back. */
   async undo(): Promise<void> {
     await this.#actAsync("undo", (session) => session.undo());
   }
 
+  /** Redoes the most recently undone action, then fetches what it needs. */
   async redo(): Promise<void> {
     await this.#actAsync("redo", (session) => session.redo());
   }
@@ -751,62 +596,31 @@ export class EditorStore {
     });
   }
 
-  /** Sets how the next scene opens its payloads. */
-  setPayloads(choice: PayloadChoice): void {
-    this.payloads = choice;
-    this.#bump("status");
-  }
-
-  /**
-   * Opens with payloads unloaded, then loads them all unless that would
-   * read more than {@link PAYLOAD_BUDGET} of layers (weighed before each
-   * round is fetched, from the source's sizes); then they are unloaded
-   * again, and the note says why. Returns that note, or `null`.
-   */
-  async #loadWithin(session: Session, source: SceneSource): Promise<string | null> {
-    if (session.stage.findLoadable().length === 0) return null;
-    const budget: LoadBudget = { bytes: PAYLOAD_BUDGET, size: (identifier) => source.size(identifier) };
-    try {
-      await session.loadPayloads(["/"], [], "withDescendants", budget);
-      return null;
-    } catch (error) {
-      if (!(error instanceof OverBudget)) throw error;
-      session.stage.setLoadRules("none");
-      return `Payloads are unloaded: loading them all would read ${formatGiB(error.bytes)} of layers, over the ${formatGiB(PAYLOAD_BUDGET)} an automatic open reads. Load prims from the prim tree.`;
-    }
-  }
-
   /** Runs a payload load or unload with the overlay up, then brings the draws up to it. */
   async #loading(action: string, label: string, run: (session: Session) => Promise<LoadOutcome>): Promise<void> {
     const session = this.session;
     if (session === null || this.status.kind !== "ready") return;
-    this.status = { kind: "loading", label };
-    this.#busySince = performance.now();
-    this.openingPhase = null;
-    this.#bump("status");
+    this.#opener.begin();
+    this.#setStatus({ kind: "loading", label });
     try {
       // A path the stage refuses (an inactive prim) is skipped, as in
       // OpenUSD; the notice says which and why.
       for (const { path, code } of (await run(session)).refused) {
-        this.notices.push({ id: ++this.#notice, action, message: `${path} was not ${action.startsWith("load") ? "loaded" : "unloaded"}: ${code.replaceAll("_", " ")}`, code: `load.${code}` });
-        this.#bump("notices");
+        this.#notices.add(action, `${path} was not ${action.startsWith("load") ? "loaded" : "unloaded"}: ${code.replaceAll("_", " ")}`, `load.${code}`);
       }
     } catch (error) {
       if (this.lose(error)) return;
-      this.#report(action, error);
+      this.#notices.report(action, error);
     }
     if (this.session !== session) return;
-    this.opening = null;
-    this.openingPhase = null;
+    this.#opener.end();
     this.status = { kind: "ready" };
     this.#sync("status", "loop");
   }
 
   /** Forgets a notice. */
   dismiss(id: number): void {
-    const index = this.notices.findIndex((notice) => notice.id === id);
-    if (index >= 0) this.notices.splice(index, 1);
-    this.#bump("notices");
+    this.#notices.dismiss(id);
   }
 
   /** Runs an action; whether it succeeded (a failure is a notice). */
@@ -817,7 +631,7 @@ export class EditorStore {
     try {
       run(session);
     } catch (error) {
-      this.#report(action, error);
+      this.#notices.report(action, error);
       done = false;
     }
     this.#sync("history");
@@ -830,100 +644,42 @@ export class EditorStore {
     try {
       await run(session);
     } catch (error) {
-      this.#report(action, error);
+      this.#notices.report(action, error);
     }
     if (this.session === session) this.#sync("history", "loop");
   }
 
-  /** Reads the stage's `upAxis`, and orients the view to it. */
-  #orient(): void {
-    const stage = this.session?.stage;
-    if (stage === undefined) return;
-    const up = stage.metadata("upAxis");
-    this.upAxis = up?.kind === "scalar" && up.value === "Z" ? "Z" : "Y";
-    this.#viewport?.setUpAxis(this.upAxis);
-  }
-
-  #report(action: string, error: unknown): void {
-    const code = typeof error === "object" && error !== null && "code" in error ? String((error as { code: unknown }).code) : null;
-    this.notices.push({ id: ++this.#notice, action, message: error instanceof Error ? error.message : String(error), code });
-    this.#bump("notices");
-  }
+  // Keeping the draws and the panels up to date.
 
   /**
-   * Brings the draw list up to the stage and applies what changed to the
-   * view, then bumps `draws`, `composition` when the stage reported a
-   * change since the last sync (or is another stage), and `also`.
+   * Brings the draws up to the stage and tells the panels: `draws`,
+   * `composition` when the stage reported a change since the last sync,
+   * and `also`.
    */
   #sync(...also: readonly Channel[]): void {
-    this.#bump(...also, ...this.#syncDraws(false));
+    const changed = this.#drawing.sync(false);
+    this.#outline();
+    this.signals.bump(...also, ...changed);
   }
 
   /**
-   * Brings the draws to the time, which moved: bumps `time`, and `draws`
-   * only when the move did more than place draws elsewhere (one shown or
-   * hidden, a buffer refilled, a light changed), so playing a scene of
-   * rigid motion renders what shows the time and no more.
+   * Brings the draws to the time, which moved: `time`, and `draws` only
+   * when the move did more than place draws elsewhere, so playing a scene
+   * of rigid motion renders what shows the time and no more.
    */
   #syncTime(): void {
-    this.#bump("time", ...this.#syncDraws(true));
+    const changed = this.#drawing.sync(true);
+    this.#outline();
+    this.signals.bump("time", ...changed);
   }
 
-  /** Syncs the draw list and the view; returns the channels that changed (`timeOnly`: nothing but the time was asked to). */
-  #syncDraws(timeOnly: boolean): Channel[] {
-    const changed: Channel[] = [];
-    if (this.session !== null) {
-      const promoted = this.selection === null || this.selection === "/" ? [] : [this.selection];
-      const update = this.#draws.sync(this.session, this.time, this.#scope(this.session), budgetFor(this.budgetChoice), promoted, this.#resident);
-      this.scene = this.#draws.scene(this.time);
-      this.cost = this.#draws.cost();
-      this.budget = this.#draws.budgetReport();
-      if (update.reset || update.records > 0 || update.timeChanged || update.added.size + update.removed.size > 0) this.lastUpdate = update;
-      this.#viewport?.update(this.scene, update, this.#highlighted());
-      // The selected instance's outline follows edits, time and the draw scope.
-      const instance = this.instance;
-      if (instance !== null) this.#viewport?.setMarker(this.#instanceCorners(instance.instancer, instance.index));
-      if (!timeOnly || update.reset || update.records > 0 || changesDraws(update)) changed.push("draws");
-    }
-    const changes = this.session?.changeLog.length ?? 0;
-    if (this.#synced.session !== this.session || this.#synced.changes !== changes) changed.push("composition");
-    this.#synced = { session: this.session, changes };
-    return changed;
+  /** The selected instance's outline follows edits, time and the draw scope. */
+  #outline(): void {
+    const instance = this.instance;
+    if (instance !== null && this.session !== null) this.viewport?.setMarker(this.#instanceCorners(instance.instancer, instance.index));
   }
 
-  /** An update that changes nothing: a restyle for a new selection. */
-  #noUpdate(): ViewportUpdate {
-    const none = new Set<never>();
-    return {
-      reset: false,
-      records: 0,
-      timeChanged: false,
-      added: none,
-      removed: none,
-      matrices: none,
-      visibility: none,
-      recolored: none,
-      rebound: none,
-      buffersAdded: none,
-      refilled: none,
-      rebuilt: none,
-      freed: none,
-      lightsAdded: none,
-      lightsRemoved: none,
-      lightsChanged: none,
-      cameras: none,
-      materialsAdded: none,
-      materialsRemoved: none,
-      materialsChanged: none,
-      links: 0,
-      work: this.lastUpdate?.work ?? ({} as ViewportUpdate["work"]),
-      reskinned: none,
-      skinned: none,
-      skinWork: this.lastUpdate?.skinWork ?? { gpuDraws: 0, joints: 0, cpuDraws: 0, cpuPoints: 0, shapedDraws: 0, shapedPoints: 0, gathered: 0 },
-    };
-  }
-
-  /** Bumps `channels` once per frame at most: the asset loop reports every fetch. */
+  /** Bumps `channels` once per frame at most. */
   #bumpSoon(...channels: readonly Channel[]): void {
     for (const channel of channels) this.#soon.add(channel);
     if (this.#frame !== 0) return;
@@ -931,76 +687,13 @@ export class EditorStore {
       this.#frame = 0;
       const due = [...this.#soon];
       this.#soon.clear();
-      this.#bump(...due);
+      this.signals.bump(...due);
     });
   }
-
-  #bump(...channels: readonly Channel[]): void {
-    this.signals.bump(...channels);
-  }
 }
 
-/**
- * Whether `update` changed what the draws are, beyond where they are: an
- * item added, removed, shown, hidden, recolored or rebound, a buffer
- * added, refilled, rebuilt or freed, a light, camera, material or light
- * link changed. A time change that only moves draws (`matrices`) or poses
- * skins on the GPU changes none of it.
- */
-function changesDraws(update: ViewportUpdate): boolean {
-  return (
-    update.added.size +
-      update.removed.size +
-      update.visibility.size +
-      update.recolored.size +
-      update.rebound.size +
-      update.buffersAdded.size +
-      update.refilled.size +
-      update.rebuilt.size +
-      update.freed.size +
-      update.lightsAdded.size +
-      update.lightsRemoved.size +
-      update.lightsChanged.size +
-      update.cameras.size +
-      update.materialsAdded.size +
-      update.materialsRemoved.size +
-      update.materialsChanged.size +
-      update.links +
-      update.reskinned.size >
-    0
-  );
-}
-
-/** The axis-aligned box around eight corners (24 numbers, {@link boxCorners}'s). */
-function cornersBox(corners: ArrayLike<number>): number[] {
-  const box = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
-  for (let corner = 0; corner < 8; corner++) {
-    for (let c = 0; c < 3; c++) {
-      box[c] = Math.min(box[c]!, corners[corner * 3 + c]!);
-      box[c + 3] = Math.max(box[c + 3]!, corners[corner * 3 + c]!);
-    }
-  }
-  return box;
-}
-
-/** Resolves after the next frame is rendered. */
-function nextFrame(): Promise<void> {
-  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
-}
-
-/** The stage's time range from its metadata, `null` when it authors no span (`endTimeCode` not after `startTimeCode`). */
-function timeRange(session: Session): TimeRange | null {
-  const number = (key: string, fallback: number) => {
-    const value = session.stage.metadata(key);
-    return value?.kind === "scalar" && typeof value.value === "number" ? value.value : fallback;
-  };
-  const start = number("startTimeCode", 0);
-  const end = number("endTimeCode", 0);
-  if (!(end > start)) return null;
-  return { start, end, timeCodesPerSecond: number("timeCodesPerSecond", 24) };
-}
-
-/** `bytes` in GiB, to one decimal. */
-function formatGiB(bytes: number): string {
-  return `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
+/** The stage's `upAxis`: `Z` when it says so, else `Y`. */
+function upAxis(session: Session): UpAxis {
+  const up = session.stage.metadata("upAxis");
+  return up?.kind === "scalar" && up.value === "Z" ? "Z" : "Y";
 }

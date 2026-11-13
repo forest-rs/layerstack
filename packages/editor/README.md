@@ -426,7 +426,16 @@ materials, 3.7 M triangles) draws 0.6 to 1.1 M.
   `timeline.ts` (the asset loop's timings, run by run),
   `draws.ts` (the stagehand draw list kept from the change log), `sources.ts`
   (HTTP, a picked directory, dropped files).
-- `src/store.ts`: the editor's state outside React; every action runs here,
+- `src/store.ts`: the editor's state outside React, as the panels read it
+  and act through it (`EditorStore`). What it does is in `src/store/`, a
+  concern a module: `opening.ts` (opening a scene, its phases, the payload
+  budget, cancelling), `playback.ts` (the time, the range, playing),
+  `selection.ts` (the selected prim, instance and property, and an
+  instance's box), `view.ts` (the draw scope and budget, the camera, the
+  lights and tone mapping, remembered for the viewer), `drawing.ts` (the
+  draw list, its costs, and the viewport it is applied to), `notices.ts`
+  (what actions reported, and the frame note), `status.ts`. The store
+  holds the session and runs the actions on the stage: each one runs,
   syncs the draw list, and bumps the signals of the concerns it changed
   (`src/store/signals.ts`: status, composition, selection, time, draws,
   view, history, target, notices, loop). A panel listens to the concerns

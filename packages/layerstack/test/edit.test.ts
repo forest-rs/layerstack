@@ -479,6 +479,111 @@ describe("list, schema, copy and sublayer edits", () => {
     }
   });
 
+  it("addInherit, addSpecialize and their removals edit the class arcs", async () => {
+    using inherited = await roundTrip([{ type: "addInherit", path: "/Spare", primPath: "/World/Rock" }], (stage) => {
+      assert.equal(stage.prim("/Spare")?.typeName, "Sphere", "the inherited class's type");
+      assert.ok(stage.prim("/Spare")?.compositionArcs().some((arc) => arc.arc === "inherits"));
+    });
+    using specialized = await roundTrip(
+      [{ type: "addSpecialize", path: "/Spare", primPath: "/World/Rock", position: "frontOfAppend" }],
+      (stage) => {
+        assert.match(usda(stage), /append specializes = <\/World\/Rock>/);
+      },
+    );
+    using removed = await roundTrip(
+      [
+        { type: "removeInherit", path: "/Spare", primPath: "/World/Rock" },
+        { type: "removeSpecialize", path: "/Spare", primPath: "/World/Rock" },
+      ],
+      (stage) => {
+        assert.match(usda(stage), /delete inherits = <\/World\/Rock>/);
+        assert.match(usda(stage), /delete specializes = <\/World\/Rock>/);
+      },
+    );
+    const error = failure(() => removed.apply([{ type: "addInherit", path: "/Spare", primPath: "/World.size" }], removed.root));
+    assert.deepEqual([error.code, error.edit], ["path.invalid", 0]);
+  });
+
+  it("addVariantSet, addVariant and removeVariantSet author variant sets", async () => {
+    using stage = await roundTrip(
+      [
+        { type: "addVariant", path: "/World/Rock", set: "look", variant: "rough" },
+        { type: "addVariant", path: "/World/Rock", set: "look", variant: "smooth" },
+        { type: "addVariantSet", path: "/World/Rock", set: "size", position: "backOfAppend" },
+      ],
+      (stage) => {
+        assert.deepEqual(stage.prim("/World/Rock")?.variantSets(), [
+          { name: "look", selection: null, variants: ["rough", "smooth"] },
+          { name: "size", selection: null, variants: [] },
+        ]);
+      },
+    );
+    // Author inside the new variant, then select it.
+    const rough = stage.prim("/World/Rock")!.variantEditTarget("look", "rough");
+    stage.apply([{ type: "createAttribute", path: "/World/Rock.grit", typeName: "double", value: { type: "double", value: 3 } }], rough).release();
+    stage.setVariantSelection("/World/Rock", "look", "rough").release();
+    assert.deepEqual(stage.attribute("/World/Rock.grit")?.get(), double(3));
+
+    using removed = await roundTrip([{ type: "removeVariantSet", path: "/World", set: "shade" }], (stage) => {
+      assert.equal(stage.attribute("/World.tint")?.get() ?? null, null, "the selected variant's opinions are gone");
+      assert.match(usda(stage), /prepend variantSets = "shade"/, "the name stays listed, as OpenUSD leaves it");
+    });
+    const refused = [
+      [{ type: "addVariant", path: "/World", set: "shade", variant: "two words" }, "path.invalid"],
+      [{ type: "addVariantSet", path: "/World", set: "two words" }, "edit.rejected.invalid_variant_set_name"],
+      [{ type: "addVariantSet", path: "/World", set: "look", position: "middle" }, "argument.invalid"],
+    ] as const;
+    for (const [edit, code] of refused) {
+      const error = failure(() => removed.apply([edit as unknown as Edit], removed.root));
+      assert.deepEqual([error.code, error.edit], [code, 0], JSON.stringify(edit));
+    }
+  });
+
+  it("setSpecifier, setTypeName, and null to clear active and instanceable", async () => {
+    using specifier = await roundTrip([{ type: "setSpecifier", path: "/World/Rock", specifier: "class" }], (stage) => {
+      assert.equal(stage.prim("/World/Rock")?.specifier, "class");
+      assert.equal(stage.prim("/World/Rock")?.abstract, true);
+    });
+    using typed = await roundTrip([{ type: "setTypeName", path: "/World/Rock", typeName: "Cube" }], (stage) => {
+      assert.equal(stage.prim("/World/Rock")?.typeName, "Cube");
+    });
+    using untyped = await roundTrip([{ type: "setTypeName", path: "/World/Rock", typeName: null }], (stage) => {
+      assert.equal(stage.prim("/World/Rock")?.typeName, null);
+    });
+    const authored = untyped.apply(
+      [
+        { type: "setActive", path: "/World/Rock", active: false },
+        { type: "setInstanceable", path: "/Spare", instanceable: true },
+      ],
+      untyped.root,
+    );
+    const authoredText = usda(untyped);
+    const cleared = untyped.apply(
+      [
+        { type: "setActive", path: "/World/Rock", active: null },
+        { type: "setInstanceable", path: "/Spare", instanceable: null },
+      ],
+      untyped.root,
+    );
+    assert.equal(untyped.prim("/World/Rock")?.active, true, "the fallback again");
+    assert.equal(untyped.prim("/Spare")?.instance, false);
+    assert.doesNotMatch(usda(untyped), /active|instanceable/);
+    const redo = cleared.undo();
+    assert.equal(usda(untyped), authoredText);
+    redo.undo().release();
+    assert.doesNotMatch(usda(untyped), /active|instanceable/);
+    authored.release();
+    const refused = [
+      [{ type: "setSpecifier", path: "/World", specifier: "maybe" }, "argument.invalid"],
+      [{ type: "setTypeName", path: "/World" }, "argument.invalid"],
+      [{ type: "setActive", path: "/World", active: "no" }, "argument.invalid"],
+    ] as const;
+    for (const [edit, code] of refused) {
+      const error = failure(() => untyped.apply([edit as unknown as Edit], untyped.root));
+      assert.deepEqual([error.code, error.edit], [code, 0], JSON.stringify(edit));
+    }
+  });
+
   it("copySpec duplicates a prim or a property in the target layer", async () => {
     using stage = await roundTrip(
       [

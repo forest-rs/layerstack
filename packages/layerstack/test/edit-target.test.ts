@@ -189,6 +189,44 @@ describe("edit targets", () => {
     assert.deepEqual(stage.attribute("/World/Spare.height")?.get(), double(1.2));
   });
 
+  it("author arcs, variants, targets, copies and sublayers through a reference", async () => {
+    using stage = await openScene();
+    const robot = layer(stage, "robot.usda");
+    const usda = () => new TextDecoder().decode(stage.exportLayer(robot, "usda"));
+    const before = usda();
+    const height = opinionTarget(stage, "/World/Robot.height", "robot.usda");
+    const receipt = stage.apply(
+      [
+        { type: "addVariant", path: "/World/Robot", set: "size", variant: "big" },
+        { type: "addTarget", path: "/World/Robot.aim", target: "/World/Robot.height", position: "backOfAppend" },
+        { type: "addInherit", path: "/World/Robot/Head", primPath: "/World/Robot" },
+        { type: "copySpec", path: "/World/Robot/Head", to: "/World/Robot/Eye" },
+        { type: "applyAPI", path: "/World/Robot", schema: "MaterialBindingAPI" },
+        { type: "insertSublayer", asset: "./robot_extra.usda" },
+      ],
+      height,
+    );
+    assert.deepEqual(receipt.layers, [robot], "only the referenced layer is written");
+    assert.deepEqual(stage.prim("/World/Spare")?.variantSets(), [{ name: "size", selection: null, variants: ["big"] }]);
+    assert.deepEqual(stage.relationship("/World/Spare.aim")?.targets(), ["/World/Spare/Head", "/World/Spare.height"]);
+    assert.equal(stage.prim("/World/Spare/Eye")?.typeName, "Sphere");
+    assert.equal(stage.prim("/World/Spare")?.hasAPI("MaterialBindingAPI"), true);
+    assert.match(usda(), /def Sphere "Head" \(\n\s+prepend inherits = <\/Robot>/, "mapped into the asset's namespace");
+    assert.deepEqual(stage.sublayers(robot), [{ asset: "./robot_extra.usda", layerOffset: { offset: 0, scale: 1 } }]);
+    assert.deepEqual(
+      receipt.unavailable.map((need) => need.identifier),
+      ["robot_extra.usda"],
+    );
+    receipt.undo().release();
+    assert.equal(usda(), before);
+
+    const outside = failure(() =>
+      stage.apply([{ type: "addInherit", path: "/World/Robot/Head", primPath: "/World/Lamp/Bulb" }], height),
+    );
+    assert.match(outside.code, /^edit\.rejected\.unmappable/);
+    assert.equal(outside.edit, 0);
+  });
+
   it("reject what the target does not map, naming the edit", async () => {
     using stage = await openScene();
     const height = opinionTarget(stage, "/World/Robot.height", "robot.usda");

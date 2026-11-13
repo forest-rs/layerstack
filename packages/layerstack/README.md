@@ -239,8 +239,11 @@ await stage.resolve(source);
   `setValue`, `clearValue`, `blockValue`, `setTargets`, `addTarget`,
   `removeTarget`, `clearTargets`, `addConnection`, `removeConnection`,
   `clearConnections`, `copySpec`, `addReference`,
-  `addPayload`, `removeReference`, `removePayload`, `setVariantSelection`,
-  `setActive`, `setInstanceable`, `setKind`, `setMetadata`, `clearMetadata`,
+  `addPayload`, `removeReference`, `removePayload`, `addInherit`,
+  `removeInherit`, `addSpecialize`, `removeSpecialize`, `addVariantSet`,
+  `addVariant`, `removeVariantSet`, `setVariantSelection`, `setActive`,
+  `setInstanceable` (`null` clears either), `setSpecifier`, `setTypeName`,
+  `setKind`, `setMetadata`, `clearMetadata`,
   the target layer's `setLayerMetadata` and `clearLayerMetadata`
   (`documentation`, `metersPerUnit`, `startTimeCode`, ...) and its
   sublayers' `insertSublayer`, `removeSublayer`, `setSublayerOffset` and

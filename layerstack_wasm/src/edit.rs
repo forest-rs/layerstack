@@ -22,10 +22,10 @@ use alloc::{
 };
 
 use layerstack::{
-    EditTarget, FieldValue, InMemoryStore, Layer, LayerId, LayerOffset, ListOp, ListPosition,
-    PathId, PathInterner, PropertyKind, PropertyPath, PropertySpec, PropertyType, Reference,
-    ReferenceSource, ReferenceTarget, SpecPath, Specifier, StageView, SublayerEntry, TargetPath,
-    Transaction, Value, Variability,
+    Address, EditTarget, FieldValue, InMemoryStore, Layer, LayerId, LayerOffset, ListOp,
+    ListPosition, PathId, PathInterner, PropertyKind, PropertyPath, PropertySpec, PropertyType,
+    Reference, ReferenceSource, ReferenceTarget, SpecPath, Specifier, StageView, SublayerEntry,
+    TargetPath, Transaction, Value, Variability,
 };
 use wasm_bindgen::prelude::*;
 
@@ -131,6 +131,48 @@ pub(crate) enum EditInput {
         asset: Option<String>,
         prim_path: Option<String>,
     },
+    /// `UsdInherits::AddInherit`, or `UsdSpecializes::AddSpecialize`
+    /// with `specialize`.
+    AddClassArc {
+        specialize: bool,
+        path: String,
+        prim_path: String,
+        position: String,
+    },
+    /// `UsdInherits::RemoveInherit`, or
+    /// `UsdSpecializes::RemoveSpecialize` with `specialize`.
+    RemoveClassArc {
+        specialize: bool,
+        path: String,
+        prim_path: String,
+    },
+    /// `UsdVariantSets::AddVariantSet`.
+    AddVariantSet {
+        path: String,
+        set: String,
+        position: String,
+    },
+    /// `SdfPrimSpec::RemoveVariantSet` in the target layer.
+    RemoveVariantSet { path: String, set: String },
+    /// `UsdVariantSet::AddVariant`: the set, as `AddVariantSet` adds it,
+    /// and its variant spec.
+    AddVariant {
+        path: String,
+        set: String,
+        variant: String,
+        position: String,
+    },
+    /// `UsdPrim::SetSpecifier`.
+    SetSpecifier { path: String, specifier: String },
+    /// `UsdPrim::SetTypeName`, or `ClearTypeName` for `None`.
+    SetTypeName {
+        path: String,
+        type_name: Option<String>,
+    },
+    /// `UsdPrim::ClearActive`.
+    ClearActive { path: String },
+    /// `UsdPrim::ClearInstanceable`.
+    ClearInstanceable { path: String },
     /// `UsdVariantSet::SetVariantSelection`, or `ClearVariantSelection`
     /// for `None`.
     SetVariantSelection {
@@ -179,6 +221,15 @@ impl EditInput {
             | Self::CopySpec { path, .. }
             | Self::AddArc { path, .. }
             | Self::RemoveArc { path, .. }
+            | Self::AddClassArc { path, .. }
+            | Self::RemoveClassArc { path, .. }
+            | Self::AddVariantSet { path, .. }
+            | Self::RemoveVariantSet { path, .. }
+            | Self::AddVariant { path, .. }
+            | Self::SetSpecifier { path, .. }
+            | Self::SetTypeName { path, .. }
+            | Self::ClearActive { path }
+            | Self::ClearInstanceable { path }
             | Self::SetVariantSelection { path, .. }
             | Self::SetActive { path, .. }
             | Self::SetInstanceable { path, .. }
@@ -479,6 +530,86 @@ impl EditBatch {
             asset,
             prim_path,
         });
+    }
+
+    /// Pushes an `addSpecialize` edit when `specialize`, else an
+    /// `addInherit` edit.
+    #[wasm_bindgen(js_name = addClassArc)]
+    pub fn add_class_arc(
+        &mut self,
+        specialize: bool,
+        path: String,
+        prim_path: String,
+        position: String,
+    ) {
+        self.edits.push(EditInput::AddClassArc {
+            specialize,
+            path,
+            prim_path,
+            position,
+        });
+    }
+
+    /// Pushes a `removeSpecialize` edit when `specialize`, else a
+    /// `removeInherit` edit.
+    #[wasm_bindgen(js_name = removeClassArc)]
+    pub fn remove_class_arc(&mut self, specialize: bool, path: String, prim_path: String) {
+        self.edits.push(EditInput::RemoveClassArc {
+            specialize,
+            path,
+            prim_path,
+        });
+    }
+
+    /// Pushes an `addVariantSet` edit.
+    #[wasm_bindgen(js_name = addVariantSet)]
+    pub fn add_variant_set(&mut self, path: String, set: String, position: String) {
+        self.edits.push(EditInput::AddVariantSet {
+            path,
+            set,
+            position,
+        });
+    }
+
+    /// Pushes a `removeVariantSet` edit.
+    #[wasm_bindgen(js_name = removeVariantSet)]
+    pub fn remove_variant_set(&mut self, path: String, set: String) {
+        self.edits.push(EditInput::RemoveVariantSet { path, set });
+    }
+
+    /// Pushes an `addVariant` edit.
+    #[wasm_bindgen(js_name = addVariant)]
+    pub fn add_variant(&mut self, path: String, set: String, variant: String, position: String) {
+        self.edits.push(EditInput::AddVariant {
+            path,
+            set,
+            variant,
+            position,
+        });
+    }
+
+    /// Pushes a `setSpecifier` edit.
+    #[wasm_bindgen(js_name = setSpecifier)]
+    pub fn set_specifier(&mut self, path: String, specifier: String) {
+        self.edits.push(EditInput::SetSpecifier { path, specifier });
+    }
+
+    /// Pushes a `setTypeName` edit; `None` clears the type name.
+    #[wasm_bindgen(js_name = setTypeName)]
+    pub fn set_type_name(&mut self, path: String, type_name: Option<String>) {
+        self.edits.push(EditInput::SetTypeName { path, type_name });
+    }
+
+    /// Pushes a `setActive` edit that clears the opinion.
+    #[wasm_bindgen(js_name = clearActive)]
+    pub fn clear_active(&mut self, path: String) {
+        self.edits.push(EditInput::ClearActive { path });
+    }
+
+    /// Pushes a `setInstanceable` edit that clears the opinion.
+    #[wasm_bindgen(js_name = clearInstanceable)]
+    pub fn clear_instanceable(&mut self, path: String) {
+        self.edits.push(EditInput::ClearInstanceable { path });
     }
 
     /// Pushes a `setVariantSelection` edit.
@@ -893,6 +1024,9 @@ struct Pending {
     /// Property specs the batch creates, so a later edit does not stamp
     /// them again.
     properties: Vec<String>,
+    /// Variant specs the batch creates, so a later `addVariant` does not
+    /// create them again.
+    variants: Vec<SpecPath>,
     /// The number of sublayers the target's layer has once the batch's
     /// sublayer edits so far apply; `None` before the first.
     sublayers: Option<usize>,
@@ -1181,6 +1315,109 @@ fn lower_one(
                 .map(|name| store.tokens().intern(name));
             txn.set_variant_selection(at, set, variant);
         }
+        EditInput::AddClassArc {
+            specialize,
+            path,
+            prim_path,
+            position,
+        } => {
+            let at = at.prim(prim(path)?);
+            let position = list_position(position)?;
+            let base = class_path(store, prim_path)?;
+            if *specialize {
+                txn.add_specialize(at, base, position);
+            } else {
+                txn.add_inherit(at, base, position);
+            }
+        }
+        EditInput::RemoveClassArc {
+            specialize,
+            path,
+            prim_path,
+        } => {
+            let at = at.prim(prim(path)?);
+            let base = class_path(store, prim_path)?;
+            if *specialize {
+                txn.remove_specialize(at, base);
+            } else {
+                txn.remove_inherit(at, base);
+            }
+        }
+        EditInput::AddVariantSet {
+            path,
+            set,
+            position,
+        } => {
+            let at = at.prim(prim(path)?);
+            let position = list_position(position)?;
+            txn.add_variant_set(at, store.tokens().intern(set), position);
+        }
+        EditInput::RemoveVariantSet { path, set } => {
+            txn.remove_variant_set(at.prim(prim(path)?), store.tokens().intern(set));
+        }
+        EditInput::AddVariant {
+            path,
+            set,
+            variant,
+            position,
+        } => {
+            let host = prim(path)?;
+            let position = list_position(position)?;
+            if !is_variant_name(variant) {
+                return Err(Error::new(
+                    "path.invalid",
+                    format!(
+                        "`{variant}` is not a variant name: letters, digits, `_`, `|` and `-`, after an optional `.`"
+                    ),
+                ));
+            }
+            txn.add_variant_set(at.prim(host), store.tokens().intern(set), position);
+            // The set's own checks (an identifier, not on the pseudo-root,
+            // a path the target maps) reject the edit when it applies.
+            let paths = store.paths();
+            let mapped = at
+                .map_to_spec_path(host, paths)
+                .filter(|_| paths.parent(host).is_some() && layerstack::ident::is_identifier(set));
+            if let Some(mapped) = mapped {
+                let named = format!(
+                    "{}{{{set}={variant}}}",
+                    mapped.display(paths, store.tokens())
+                );
+                let spec = SpecPath::parse(&named, store.tokens(), paths).map_err(|error| {
+                    Error::new(
+                        "path.invalid",
+                        format!("`{named}` is not a variant: {error}"),
+                    )
+                })?;
+                let authored = store
+                    .layer(at.layer())
+                    .is_some_and(|layer| layer.variant_spec_at(&spec, paths).is_some());
+                if !authored && !pending.variants.contains(&spec) {
+                    txn.create_prim(
+                        Address::spec(at.layer(), spec.clone()),
+                        Specifier::Over,
+                        None,
+                    );
+                    pending.variants.push(spec);
+                }
+            }
+        }
+        EditInput::SetSpecifier { path, specifier } => {
+            txn.set_specifier(at.prim(prim(path)?), define_specifier(specifier)?);
+        }
+        EditInput::SetTypeName { path, type_name } => {
+            let at = at.prim(prim(path)?);
+            match type_name {
+                Some(name) => txn.set_type_name(at, store.tokens().intern(name)),
+                None => txn.clear_type_name(at),
+            };
+        }
+        EditInput::ClearActive { path } => {
+            txn.clear_active(at.prim(prim(path)?));
+        }
+        EditInput::ClearInstanceable { path } => {
+            txn.clear_instanceable(at.prim(prim(path)?));
+        }
         EditInput::SetActive { path, active } => {
             txn.set_active(at.prim(prim(path)?), *active);
         }
@@ -1310,6 +1547,36 @@ fn target_path(store: &InMemoryStore, path: &str) -> Result<TargetPath, Error> {
             format!("`{path}` is not a target path: {error}"),
         )
     })
+}
+
+/// The prim an inherit or specialize names, a stage path the transaction
+/// maps through the target (a root prim path is authored as given).
+fn class_path(store: &InMemoryStore, path: &str) -> Result<PathId, Error> {
+    if path.contains('.') {
+        return Err(Error::new(
+            "path.invalid",
+            format!("`{path}` is not a prim path to inherit or specialize"),
+        ));
+    }
+    store.try_path(path).map_err(|error| {
+        Error::new(
+            "path.invalid",
+            format!("`{path}` is not a prim path to inherit or specialize: {error}"),
+        )
+    })
+}
+
+/// Whether `name` is a variant name, as OpenUSD's
+/// `SdfSchema::IsValidVariantIdentifier` reads one: letters, digits, `_`,
+/// `|` and `-`, after an optional leading `.`.
+///
+/// Spec: AOUSD Core §7.3.6 (variant specs), §8 (paths).
+fn is_variant_name(name: &str) -> bool {
+    let rest = name.strip_prefix('.').unwrap_or(name);
+    !rest.is_empty()
+        && rest
+            .chars()
+            .all(|c| c.is_alphanumeric() || matches!(c, '_' | '|' | '-'))
 }
 
 /// The list position `name` names (OpenUSD's `UsdListPosition`).
@@ -2337,6 +2604,182 @@ def "Spare" (
         assert_eq!(
             stage.apply(target.0, &mut batch).unwrap_err().code,
             "prim.not_found"
+        );
+    }
+
+    #[test]
+    fn add_and_remove_inherits_and_specializes() {
+        let mut batch = EditBatch::new();
+        batch.add_class_arc(
+            false,
+            "/Spare".into(),
+            "/World/Rock".into(),
+            "backOfPrepend".into(),
+        );
+        let stage = round_trip(batch, |stage| {
+            assert_eq!(prim_field(stage, "/Spare", 0), Wire::text("Sphere"));
+        });
+        assert!(text(&stage, root(&stage)).contains("prepend inherits = </World/Rock>"));
+        let mut batch = EditBatch::new();
+        batch.add_class_arc(
+            true,
+            "/Spare".into(),
+            "/World/Rock".into(),
+            "frontOfAppend".into(),
+        );
+        let stage = round_trip(batch, |stage| {
+            assert_eq!(prim_field(stage, "/Spare", 0), Wire::text("Sphere"));
+        });
+        assert!(text(&stage, root(&stage)).contains("append specializes = </World/Rock>"));
+        let mut batch = EditBatch::new();
+        batch.remove_class_arc(true, "/Spare".into(), "/World/Rock".into());
+        let stage = round_trip(batch, |_| {});
+        assert!(text(&stage, root(&stage)).contains("delete specializes = </World/Rock>"));
+        let mut stage = open();
+        let target = root(&stage);
+        let mut batch = EditBatch::new();
+        batch.add_class_arc(
+            false,
+            "/Spare".into(),
+            "/World.size".into(),
+            "backOfPrepend".into(),
+        );
+        assert_eq!(
+            stage.apply(target.0, &mut batch).unwrap_err().code,
+            "path.invalid"
+        );
+    }
+
+    #[test]
+    fn variant_sets_and_variants_are_added_and_removed() {
+        let mut batch = EditBatch::new();
+        batch.add_variant(
+            "/World/Rock".into(),
+            "look".into(),
+            "rough".into(),
+            "backOfPrepend".into(),
+        );
+        batch.add_variant(
+            "/World/Rock".into(),
+            "look".into(),
+            "smooth".into(),
+            "backOfPrepend".into(),
+        );
+        // Adding what the batch added already adds nothing more.
+        batch.add_variant(
+            "/World/Rock".into(),
+            "look".into(),
+            "rough".into(),
+            "backOfPrepend".into(),
+        );
+        batch.add_variant_set("/World/Rock".into(), "size".into(), "backOfAppend".into());
+        let stage = round_trip(batch, |stage| {
+            assert_eq!(
+                stage.variant_sets("/World/Rock").unwrap(),
+                Wire::List(vec![
+                    Wire::List(vec![
+                        Wire::text("look"),
+                        Wire::Null,
+                        Wire::List(vec![Wire::text("rough"), Wire::text("smooth")]),
+                    ]),
+                    Wire::List(vec![Wire::text("size"), Wire::Null, Wire::List(Vec::new())]),
+                ])
+            );
+        });
+        let usda = text(&stage, root(&stage));
+        assert!(usda.contains(r#"prepend variantSets = "look""#), "{usda}");
+        assert!(usda.contains(r#"append variantSets = "size""#), "{usda}");
+
+        // A variant the layer has already is left as it is.
+        let mut stage = open();
+        let target = root(&stage);
+        let before = text(&stage, target);
+        let mut batch = EditBatch::new();
+        batch.add_variant(
+            "/World".into(),
+            "shade".into(),
+            "light".into(),
+            "backOfPrepend".into(),
+        );
+        stage.apply(target.0, &mut batch).unwrap();
+        assert_eq!(text(&stage, target), before);
+
+        let mut batch = EditBatch::new();
+        batch.remove_variant_set("/World".into(), "shade".into());
+        let stage = round_trip(batch, |stage| {
+            assert_eq!(stage.get("/World.tint", None).unwrap(), Wire::Null);
+        });
+        let usda = text(&stage, root(&stage));
+        assert!(!usda.contains("variantSet \"shade\""));
+        assert!(
+            usda.contains(r#"prepend variantSets = "shade""#),
+            "the name stays listed, as SdfPrimSpec::RemoveVariantSet leaves it"
+        );
+
+        let mut stage = open();
+        let refused = |batch: &mut EditBatch, stage: &mut Stage| {
+            stage.apply(target.0, batch).unwrap_err().code
+        };
+        let mut batch = EditBatch::new();
+        batch.add_variant(
+            "/World".into(),
+            "shade".into(),
+            "a b".into(),
+            "backOfPrepend".into(),
+        );
+        assert_eq!(refused(&mut batch, &mut stage), "path.invalid");
+        let mut batch = EditBatch::new();
+        batch.add_variant(
+            "/World".into(),
+            "two words".into(),
+            "a".into(),
+            "backOfPrepend".into(),
+        );
+        assert_eq!(
+            refused(&mut batch, &mut stage),
+            "edit.rejected.invalid_variant_set_name"
+        );
+    }
+
+    #[test]
+    fn specifier_type_name_and_cleared_prim_fields() {
+        let mut batch = EditBatch::new();
+        batch.set_specifier("/World/Rock".into(), "class".into());
+        round_trip(batch, |stage| {
+            assert_eq!(prim_field(stage, "/World/Rock", 1), Wire::text("class"));
+        });
+        let mut batch = EditBatch::new();
+        batch.set_type_name("/World/Rock".into(), Some("Cube".into()));
+        round_trip(batch, |stage| {
+            assert_eq!(prim_field(stage, "/World/Rock", 0), Wire::text("Cube"));
+        });
+        let mut batch = EditBatch::new();
+        batch.set_type_name("/World/Rock".into(), None);
+        round_trip(batch, |stage| {
+            assert_eq!(prim_field(stage, "/World/Rock", 0), Wire::Null);
+        });
+
+        let mut stage = open();
+        let target = root(&stage);
+        let before = text(&stage, target);
+        let mut batch = EditBatch::new();
+        batch.set_active("/World/Rock".into(), false);
+        batch.set_instanceable("/Spare".into(), true);
+        stage.apply(target.0, &mut batch).unwrap();
+        let mut batch = EditBatch::new();
+        batch.clear_active("/World/Rock".into());
+        batch.clear_instanceable("/Spare".into());
+        let mut receipt = stage.apply(target.0, &mut batch).unwrap();
+        assert_eq!(text(&stage, target), before, "both opinions cleared");
+        assert_eq!(prim_field(&stage, "/World/Rock", 2), Wire::Bool(true));
+        stage.undo(&mut receipt).unwrap();
+        assert_eq!(prim_field(&stage, "/World/Rock", 2), Wire::Bool(false));
+
+        let mut batch = EditBatch::new();
+        batch.set_specifier("/World".into(), "maybe".into());
+        assert_eq!(
+            stage.apply(target.0, &mut batch).unwrap_err().code,
+            "argument.invalid"
         );
     }
 

@@ -11,6 +11,7 @@ import { formatNumber } from "../model/values.ts";
 import type { EditorStore } from "../store.ts";
 import { useTime } from "./context.ts";
 import { CommitNumber } from "./fields.tsx";
+import { formatTime } from "./format.ts";
 import { Section } from "./Section.tsx";
 import { countRender } from "./renders.ts";
 
@@ -51,7 +52,7 @@ export function TransformSection({ store, stage, prim }: { store: EditorStore; s
           ? "An instance proxy is read-only."
           : null;
   return (
-    <Section title="Transform" aside={at === undefined ? undefined : <span className="text-[10px] text-amber-500">sample at {at}</span>}>
+    <Section title="Transform" aside={at === undefined ? undefined : <span className="text-[10px] text-amber-500 tabular-nums">sample at {formatTime(at)}</span>}>
       <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-center gap-x-2 gap-y-1">
         {ROWS.map(([component, label, field]) => {
           const values = read[field] as readonly [number, number, number];

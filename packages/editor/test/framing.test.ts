@@ -7,7 +7,7 @@
 // same place, and nothing it returns is NaN.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { clipRange, frameBox, isBox, localView, MAX_DEPTH_RATIO, orbitFrom, reachFrom, upVector, verticalFov, viewDirection } from "../src/viewport/framing.ts";
+import { clipRange, frameBox, isBox, localView, MAX_DEPTH_RATIO, orbitFrom, reachFrom, shouldFrame, upVector, verticalFov, viewDirection } from "../src/viewport/framing.ts";
 
 const options = { fov: 45, aspect: 16 / 9, direction: viewDirection("Y") } as const;
 const finite = (values: readonly number[]) => values.every(Number.isFinite);
@@ -125,4 +125,21 @@ test("a stage camera's window gives its vertical field of view", () => {
   // An offset window spans the same angle between its edges.
   assert.ok(Math.abs(verticalFov([-1, 0, 1, 1])! - 45) < 1e-9);
   assert.equal(verticalFov([-1, 0, 1, 0]), null);
+});
+
+test("a scene is framed when it opens, and an edit keeps the view the person made", () => {
+  const open = { framed: "", moved: false, timeChanged: false };
+  assert.equal(shouldFrame(open, null), false, "nothing to frame yet");
+  assert.equal(shouldFrame(open, "[0,0,0,1,1,1]"), true, "framed on open");
+  // Bounds that grow as the scene loads are followed until the person takes the camera.
+  const loading = { framed: "[0,0,0,1,1,1]", moved: false, timeChanged: false };
+  assert.equal(shouldFrame(loading, "[0,0,0,2,2,2]"), true);
+  assert.equal(shouldFrame(loading, "[0,0,0,1,1,1]"), false, "the same bounds again");
+  // An edit changes the bounds; a view the person orbited stays.
+  assert.equal(shouldFrame({ ...loading, moved: true }, "[0,0,0,2,2,2]"), false);
+  // But a scene that was never framed is framed, moved or not.
+  assert.equal(shouldFrame({ framed: "", moved: true, timeChanged: false }, "[0,0,0,1,1,1]"), true);
+  // Time moving an animated extent never moves the camera, once framed.
+  assert.equal(shouldFrame({ ...loading, timeChanged: true }, "[0,0,0,2,2,2]"), false);
+  assert.equal(shouldFrame({ framed: "", moved: false, timeChanged: true }, "[0,0,0,1,1,1]"), true);
 });

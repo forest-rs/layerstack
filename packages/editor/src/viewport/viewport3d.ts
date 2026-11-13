@@ -226,7 +226,7 @@ import { lightSetKey, linkedLights } from "./lightLinks.ts";
 import { stormLight } from "./sceneLights.ts";
 import { fixNodes, setFixedNode } from "./fixedNodes.ts";
 import { applyToneMap, onRendererLost, sharedRenderer } from "./gpu.ts";
-import { type Box, clipRange, frameBox, orbitFrom, reachFrom, sphereOf, verticalFov, viewDirection } from "./framing.ts";
+import { type Box, clipRange, frameBox, orbitFrom, reachFrom, shouldFrame, sphereOf, verticalFov, viewDirection } from "./framing.ts";
 import { followCamera, followMatrices, makeViewCamera } from "./viewCamera.ts";
 import { SkinnedDraw, withSkinning } from "./skinning.ts";
 import { TextureStore, surfaceMaterial, uvChannels } from "./surfaces.ts";
@@ -316,6 +316,8 @@ export class Viewport {
   #selected: string | null = null;
   /** The bounds the camera was last framed on, to frame again only when they change. */
   #framed = "";
+  /** Whether the person moved the camera since it was last framed: edits then keep their view. */
+  #moved = false;
   /** What is drawn's bounds, as last applied: the far plane reaches them. */
   #sceneBounds: Box | null = null;
   /** The textures the materials read. */
@@ -598,6 +600,8 @@ export class Viewport {
    * infinite).
    */
   frame(bounds: readonly number[]): boolean {
+    // Asked for: the view is the person's now, and edits keep it.
+    this.#moved = true;
     try {
       return this.#frame(bounds);
     } finally {
@@ -802,6 +806,8 @@ export class Viewport {
     // directly from then on: recording its bundle each frame would cost more.
     const playing = update.timeChanged && !reset;
     if (reset) {
+      // A new scene (or draw scope) starts afresh: it is framed, even after the last one was orbited.
+      this.#moved = false;
       // A new stage's identifiers are relative to its own root: what the last one's named is not theirs.
       this.#domes.clear();
       this.#textures.dispose();
@@ -960,8 +966,9 @@ export class Viewport {
     // extent would move the camera every frame.
     this.#sceneBounds = scene.bounds;
     const framed = JSON.stringify(scene.bounds);
-    if (scene.bounds !== null && framed !== this.#framed && (!update.timeChanged || this.#framed === "")) {
+    if (scene.bounds !== null && shouldFrame({ framed: this.#framed, moved: this.#moved, timeChanged: update.timeChanged }, framed)) {
       this.#framed = framed;
+      this.#moved = false;
       this.#frame(scene.bounds);
     }
     this.#draw();
@@ -1513,6 +1520,7 @@ export class Viewport {
 
   #makeControls(): OrbitControls {
     const controls = new OrbitControls(this.#camera, this.#canvas);
+    controls.addEventListener("start", () => (this.#moved = true));
     controls.addEventListener("change", () => {
       this.#reclip();
       this.#draw();

@@ -153,6 +153,8 @@ export class TextureStore {
   #arrived = new Set<string>();
   #decoded = 0;
   #capped = 0;
+  /** Bumped by {@link dispose}: an image that arrives for an earlier one is freed, not kept. */
+  #epoch = 0;
 
   /** `loaded` is called when an image arrives, to draw again. */
   constructor(read: AssetReader, exists: AssetExists, loaded: () => void) {
@@ -175,7 +177,13 @@ export class TextureStore {
         },
       );
       this.#images.set(identifier, loading);
+      const epoch = this.#epoch;
       void loading.then((image) => {
+        if (epoch !== this.#epoch) {
+          // Asked for before the store was cleared: nothing reads it now.
+          image?.texture.dispose();
+          return;
+        }
         this.#ready.set(identifier, image);
         this.#arrived.add(identifier);
         this.#loaded();
@@ -269,8 +277,16 @@ export class TextureStore {
     return { texture: new CanvasTexture(canvas), columns, rows, auto: decoded.find((tile) => tile !== null)?.auto ?? null };
   }
 
-  /** Frees every image and its uses ({@link use}). */
+  /**
+   * Frees every image and its uses ({@link use}), and forgets them: the
+   * store is empty again, and is used afresh (a new scene's identifiers
+   * are relative to its own root, so a file of the same name is another
+   * image). Images still on their way are freed when they arrive.
+   */
   dispose(): void {
+    this.#epoch += 1;
+    this.#decoded = 0;
+    this.#capped = 0;
     for (const image of this.#ready.values()) {
       if (image === null || image === undefined) continue;
       for (const kept of USES.get(image.texture)?.values() ?? []) kept.dispose();

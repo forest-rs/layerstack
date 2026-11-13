@@ -779,6 +779,8 @@ export class Viewport {
     this.#geometries.clear();
     for (const path of [...this.#lights.keys()]) this.#dropLight(path);
     this.#clusters.dispose();
+    this.#textures.dispose();
+    this.#domes.clear();
     this.#marker.geometry.dispose();
     (this.#marker.material as LineBasicNodeMaterial).dispose();
     this.#target.dispose();
@@ -800,6 +802,9 @@ export class Viewport {
     // directly from then on: recording its bundle each frame would cost more.
     const playing = update.timeChanged && !reset;
     if (reset) {
+      // A new stage's identifiers are relative to its own root: what the last one's named is not theirs.
+      this.#domes.clear();
+      this.#textures.dispose();
       this.#manifestMisses.clear();
       for (const id of [...this.#objects.keys()]) this.#drop(id);
       for (const geometry of this.#geometries.values()) geometry.dispose();

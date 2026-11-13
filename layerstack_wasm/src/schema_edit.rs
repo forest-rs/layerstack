@@ -659,6 +659,12 @@ pub(crate) enum Refusal {
     Metadata(MetadataError),
     NotXformable(PathId),
     CommonTransform(CommonTransformError),
+    /// A connection edit of a property an earlier edit of the batch
+    /// created as a relationship.
+    NotAnAttribute(PropertyPath),
+    /// A connection edit of a property nothing declares, before the batch
+    /// or in it.
+    UndeclaredType(PropertyPath),
 }
 
 impl From<CannotEdit> for Refusal {
@@ -773,6 +779,12 @@ impl Refusal {
             }
             Self::CoordSys(error) => {
                 Error::new("coord_sys.no_binding", error.display(store).to_string())
+            }
+            Self::NotAnAttribute(property) => {
+                crate::edit::not_an_attribute(property.display(store.paths(), store.tokens()))
+            }
+            Self::UndeclaredType(property) => {
+                crate::edit::undeclared_type(property.display(store.paths(), store.tokens()))
             }
             Self::Metadata(error) => {
                 let code = match &error {

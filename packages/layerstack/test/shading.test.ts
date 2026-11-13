@@ -303,6 +303,94 @@ describe("an editor authoring materials", () => {
     assert.equal(stage.prim("/World/Rock")!.subsetFamilyType("pins"), "nonOverlapping");
   });
 
+  it("sees, in one apply, the attributes earlier edits create, generic or shading", () => {
+    const texture = "/Looks/Stone/Texture";
+    const surface = "/Looks/Stone/Surface";
+    const specular = `${surface}.inputs:specularColor`;
+    const white: Edit = { type: "setShaderInput", path: specular, value: { type: "color3f", value: [1, 1, 1] } };
+    const batches: Record<string, Edit[]> = {
+      "createAttribute, then a connection to it": [
+        { type: "createAttribute", path: `${texture}.outputs:a`, typeName: "float" },
+        { type: "connectToSource", path: `${surface}.inputs:roughness`, source: `${texture}.outputs:a` },
+      ],
+      "a connection, then createAttribute of its source": [
+        { type: "connectToSource", path: `${surface}.inputs:roughness`, source: `${texture}.outputs:a` },
+        { type: "createAttribute", path: `${texture}.outputs:a`, typeName: "float" },
+      ],
+      "createAttribute, then a connection from it": [
+        { type: "createAttribute", path: specular, typeName: "color3f" },
+        { type: "connectToSource", path: specular, source: `${texture}.outputs:rgb` },
+      ],
+      "a connection creating its input, then createAttribute of it": [
+        { type: "connectToSource", path: specular, source: `${texture}.outputs:rgb`, typeName: "color3f" },
+        { type: "createAttribute", path: specular, typeName: "float" },
+      ],
+      "createAttribute, then setValue": [
+        { type: "createAttribute", path: specular, typeName: "color3f" },
+        { type: "setValue", path: specular, value: { type: "color3f", value: [1, 1, 1] } },
+      ],
+      "a new shader, then a connection to its new output": [
+        { type: "definePrim", path: "/Looks/Stone/Noise", typeName: "Shader" },
+        { type: "connectToSource", path: `${surface}.inputs:roughness`, source: "/Looks/Stone/Noise.outputs:a" },
+      ],
+      "createAttribute, then addConnection": [
+        { type: "createAttribute", path: specular, typeName: "color3f" },
+        { type: "addConnection", path: specular, source: `${texture}.outputs:rgb` },
+      ],
+      "a connection creating its input, then addConnection": [
+        { type: "connectToSource", path: specular, source: `${texture}.outputs:rgb`, typeName: "color3f" },
+        { type: "addConnection", path: specular, source: `${texture}.outputs:a` },
+      ],
+      "setShaderInput, then a connection": [
+        white,
+        { type: "connectToSource", path: specular, source: `${texture}.outputs:rgb` },
+      ],
+      "setShaderInput, then createAttribute": [white, { type: "createAttribute", path: specular, typeName: "color3f" }],
+      "createAttribute, then setShaderInput": [{ type: "createAttribute", path: specular, typeName: "color3f" }, white],
+      "createAttribute, then sdrMetadata": [
+        { type: "createAttribute", path: specular, typeName: "color3f" },
+        { type: "setSdrMetadata", path: specular, key: "page", value: "basic" },
+      ],
+      "setMetadata, then a connection": [
+        { type: "setMetadata", path: `${texture}.outputs:rgb`, key: "documentation", value: { type: "string", value: "colour" } },
+        { type: "connectToSource", path: specular, source: `${texture}.outputs:rgb`, typeName: "color3f" },
+      ],
+    };
+    for (const editLayer of ["root", "session"] as const) {
+      for (const [name, edits] of Object.entries(batches)) {
+        using stage = openShaded(shaded, editLayer);
+        const layer = stage.editLayer!;
+        const before = decoder.decode(stage.exportLayer(layer, "usda"));
+        const receipt = stage.apply(edits);
+        receipt.undo();
+        assert.equal(decoder.decode(stage.exportLayer(layer, "usda")), before, `${name} undoes`);
+      }
+    }
+
+    using stage = openShaded();
+    stage.apply(batches["a connection, then createAttribute of its source"]!);
+    assert.deepEqual(stage.port(`${surface}.inputs:roughness`)?.connections, [`${texture}.outputs:a`]);
+    assert.equal(stage.attribute(`${texture}.outputs:a`)?.typeName, "float", "created once, with the input's type");
+    stage.apply(batches["a connection creating its input, then createAttribute of it"]!);
+    assert.equal(
+      stage.attribute(specular)?.typeName,
+      "color3f",
+      "createAttribute keeps the spec the connection created, as UsdPrim::CreateAttribute keeps one",
+    );
+    stage.apply(batches["a connection creating its input, then addConnection"]!);
+    assert.deepEqual(stage.port(specular)?.connections, [`${texture}.outputs:rgb`, `${texture}.outputs:a`]);
+
+    // A connection edit of a property an earlier edit makes a relationship is still refused.
+    const refused = failure(() =>
+      stage.apply([
+        { type: "setTargets", path: `${surface}.inputs:link`, targets: [texture] },
+        { type: "addConnection", path: `${surface}.inputs:link`, source: `${texture}.outputs:rgb` },
+      ]),
+    );
+    assert.equal(refused.edit, 1);
+    assert.equal(refused.code, "edit.rejected.undeclared_type");
+  });
+
   it("refuses invalid edits with their codes, naming the edit, and changes nothing", () => {
     using stage = openShaded();
     const before = decoder.decode(stage.exportLayer(stage.root, "usda"));

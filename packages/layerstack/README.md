@@ -257,8 +257,10 @@ await stage.resolve(source);
   `UsdAttribute::Set`, `UsdShadeMaterialBindingAPI::Bind`, ...). A failure
   names the edit (`error.edit`, its index) and changes nothing. A schema-shaped
   edit sees the prims, types and API schemas earlier edits of the same
-  `apply` define and apply, so a material, its shaders, their connections
-  and its bindings can be one undoable step. `addTarget` and
+  `apply` define and apply, and every edit sees the attributes earlier
+  ones create (a `createAttribute` of a shader's output, then a
+  `connectToSource` to it, in either order), so a material, its shaders,
+  their connections and its bindings can be one undoable step. `addTarget` and
   `addConnection` edit the target layer's list op, so a layer adds to
   what weaker layers author where `setTargets` replaces it. `copySpec`
   duplicates a prim (or property) spec within the target layer, to a
@@ -566,7 +568,8 @@ type), `setSdrMetadata`, `setBaseMaterial`, then `bindMaterial`
 (which applies `MaterialBindingAPI`, as `Apply(prim).Bind(material)`),
 `createMaterialSubset` and a `bindMaterial` of the new subset, and
 `bindCoordSys`. Schema-shaped edits see the prims, types and API schemas
-earlier edits of the same `apply` define, so the material, its shader,
+earlier edits of the same `apply` define, and the attributes earlier
+edits create, `createAttribute` among them, so the material, its shader,
 their connection and its bindings are one undoable step, through the
 edit layer or any edit target (a reference's, to author in the asset), and
 the receipt undoes all of it. A refused edit names its index

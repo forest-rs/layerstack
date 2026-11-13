@@ -23,16 +23,16 @@ use alloc::{
 
 use layerstack::{
     Address, EditTarget, FieldValue, InMemoryStore, Layer, LayerId, LayerOffset, ListOp,
-    ListPosition, PathId, PathInterner, PropertyKind, PropertyPath, PropertySpec, PropertyType,
-    Reference, ReferenceSource, ReferenceTarget, Relocate, SpecPath, Specifier, StageView,
-    SublayerEntry, TargetPath, TokenId, Transaction, Value, Variability,
+    ListPosition, PathId, PathInterner, PropertyDeclaration, PropertyKind, PropertyPath,
+    PropertyType, Reference, ReferenceSource, ReferenceTarget, Relocate, SpecPath, Specifier,
+    StageView, SublayerEntry, TargetPath, TokenId, Transaction, Value, Variability,
 };
 use wasm_bindgen::prelude::*;
 
 use crate::{
     array::ArrayHandle,
     error::Error,
-    schema_edit::{self, SchemaInput},
+    schema_edit::{self, Refusal, SchemaInput},
     value::{self, DictionaryEntry, InputData, ValueInput},
 };
 
@@ -54,7 +54,7 @@ pub(crate) enum EditInput {
     /// `UsdPrim::CreateAttribute`, with an optional default: a spec the
     /// target layer has is kept, and a new one copies the schema
     /// definition or composed declaration when there is one
-    /// ([`ensure_property_spec`]).
+    /// ([`stamped_declaration`]).
     CreateAttribute {
         path: String,
         type_name: String,
@@ -933,14 +933,50 @@ pub(crate) struct Scope<'a> {
 
 /// One edit, checked against the store and ready to collect.
 enum Step {
-    /// A generic edit's transaction.
-    Generic(Transaction),
+    /// A generic edit's transaction, and what it needs collected through
+    /// the schema edit first.
+    Generic(Transaction, Option<Need>),
     /// A define (`UsdStage::DefinePrim`, `OverridePrim` or
     /// `CreateClassPrim`, and the type name given), collected through the
     /// schema edit so later edits of the batch see the prim.
     Define(PathId, Specifier, Option<String>),
     /// A schema-shaped edit.
     Schema(schema_edit::Prepared),
+}
+
+/// What a generic edit needs collected through the batch's schema edit
+/// before its transaction, so that it and the schema-shaped edits see the
+/// property specs each other create: a connection's source an earlier
+/// `createAttribute` made is not created again, and an attribute a
+/// connection created is not refused as undeclared.
+#[derive(Debug)]
+enum Need {
+    /// The property's spec in the target layer, with this declaration,
+    /// unless the layer or an earlier edit of the batch already has one
+    /// ([`layerstack_schemas::SchemaEdit::declare_property`]).
+    Spec(PropertyPath, PropertyDeclaration),
+    /// The property, which nothing declares before the batch, must be an
+    /// attribute as the earlier edits of the batch leave it
+    /// ([`check_connectable`]).
+    Attribute(PropertyPath),
+}
+
+/// Collects `need` through `edit`.
+fn collect_need(edit: &mut layerstack_schemas::SchemaEdit<'_>, need: Need) -> Result<(), Refusal> {
+    match need {
+        Need::Spec(property, declaration) => {
+            edit.declare_property(property, &declaration);
+            Ok(())
+        }
+        Need::Attribute(property) => {
+            let name = String::from(edit.tokens().resolve(property.property()));
+            match edit.property_kind(property.prim_path(), &name) {
+                Some(PropertyKind::Attribute) => Ok(()),
+                Some(PropertyKind::Relationship) => Err(Refusal::NotAnAttribute(property)),
+                None => Err(Refusal::UndeclaredType(property)),
+            }
+        }
+    }
 }
 
 /// Lowers `batch` to one transaction whose edits are addressed through
@@ -953,9 +989,11 @@ enum Step {
 /// batch. Then the edits are collected in order through one
 /// [`layerstack_schemas::SchemaEdit`]: a define (`def`, `over` or `class`)
 /// and the schema-shaped edits through its handles, which see the prims,
-/// types and applied schemas earlier edits of the batch define and apply;
-/// the other edits as
-/// their own transactions, appended ([`layerstack_schemas::SchemaEdit::append`]).
+/// types, applied schemas and property specs earlier edits of the batch
+/// define, apply and create; the other edits as their own transactions,
+/// appended ([`layerstack_schemas::SchemaEdit::append`]) after the
+/// property specs they create, which are created through the schema edit
+/// ([`Need`]) so that every later edit sees them.
 ///
 /// # Errors
 ///
@@ -966,7 +1004,9 @@ enum Step {
 /// [`value::decode`]; then a schema handle's refusal
 /// ([`schema_edit::Refusal`]): `prim.not_found`, `prim.not_class`,
 /// `material.not_found`, `schema.cannot_edit`, `shading.*`, `subset.*`, `coord_sys.no_binding`,
-/// `metadata.*`.
+/// `metadata.*`, and for a connection edit of a property the batch
+/// leaves undeclared or a relationship, `edit.rejected.undeclared_type`
+/// and `edit.rejected.not_an_attribute`.
 pub(crate) fn lower(
     batch: &EditBatch,
     stage: &layerstack::Stage,
@@ -1009,9 +1049,9 @@ pub(crate) fn lower(
                 ),
                 _ => {
                     let mut txn = Transaction::new();
-                    lower_one(edit, batch, &scope, &mut txn, &mut pending)
+                    let need = lower_one(edit, batch, &scope, &mut txn, &mut pending)
                         .map_err(|error| fail(index, error))?;
-                    Step::Generic(txn)
+                    Step::Generic(txn, need)
                 }
             };
             steps.push(step);
@@ -1023,10 +1063,11 @@ pub(crate) fn lower(
         let mut refused = None;
         for (index, step) in steps.into_iter().enumerate() {
             let result = match step {
-                Step::Generic(txn) => {
-                    edit.append(txn);
-                    Ok(())
-                }
+                Step::Generic(txn, need) => need
+                    .map_or(Ok(()), |need| collect_need(&mut edit, need))
+                    .map(|()| {
+                        edit.append(txn);
+                    }),
                 Step::Define(path, specifier, type_name) => {
                     define(&mut edit, path, specifier, type_name.as_deref())
                 }
@@ -1072,9 +1113,6 @@ fn prim_path(store: &InMemoryStore, path: &str) -> Result<PathId, Error> {
 /// the stage as it was before the batch, must know.
 #[derive(Debug, Default)]
 struct Pending {
-    /// Property specs the batch creates, so a later edit does not stamp
-    /// them again.
-    properties: Vec<String>,
     /// Variant specs the batch creates, so a later `addVariant` does not
     /// create them again.
     variants: Vec<SpecPath>,
@@ -1096,14 +1134,16 @@ impl Pending {
     }
 }
 
+/// Lowers the generic edit `edit` into `txn`, returning what it needs
+/// collected through the schema edit first.
 fn lower_one(
     edit: &EditInput,
     batch: &EditBatch,
     scope: &Scope<'_>,
     txn: &mut Transaction,
     pending: &mut Pending,
-) -> Result<(), Error> {
-    let ensured = &mut pending.properties;
+) -> Result<Option<Need>, Error> {
+    let mut need = None;
     let store = scope.store;
     let at = scope.target;
     let prim = |path: &str| -> Result<PathId, Error> {
@@ -1150,20 +1190,24 @@ fn lower_one(
                 )
             })?;
             let value = slot.map(value).transpose()?;
-            if !ensure_property_spec(scope, txn, ensured, path, property) {
-                let mut spec = PropertySpec::typed_attribute(ty);
-                if *uniform {
-                    spec = spec.uniform();
-                }
-                if *custom {
-                    spec = spec.custom();
-                }
-                txn.create_property(at.property(property), spec);
-                ensured.push(path.clone());
-            }
+            // `UsdPrim::CreateAttribute`: the spec is stamped as
+            // `_CreateAttributeSpecForEditing` stamps one, else created
+            // with the type and qualifiers given.
+            let declaration =
+                stamped_declaration(scope, path).unwrap_or_else(|| PropertyDeclaration {
+                    kind: PropertyKind::Attribute,
+                    type_name: Some(ty),
+                    variability: if *uniform {
+                        Variability::Uniform
+                    } else {
+                        Variability::Varying
+                    },
+                    custom: *custom,
+                });
             if let Some(value) = value {
                 txn.set_default(at.property(property), value);
             }
+            return Ok(Some(Need::Spec(property, declaration)));
         }
         EditInput::SetValue {
             path,
@@ -1205,7 +1249,7 @@ fn lower_one(
             let position = list_position(position)?;
             let target = target_path(store, target)?;
             if *connection {
-                check_connectable(scope, ensured, path, property, true)?;
+                need = check_connectable(scope, path, property, true)?;
             }
             txn.add_target(at.property(property), target, position);
         }
@@ -1217,14 +1261,14 @@ fn lower_one(
             let property = property(path)?;
             let target = target_path(store, target)?;
             if *connection {
-                check_connectable(scope, ensured, path, property, true)?;
+                need = check_connectable(scope, path, property, true)?;
             }
             txn.remove_target(at.property(property), target);
         }
         EditInput::ClearTargets { connection, path } => {
             let property = property(path)?;
             if *connection {
-                check_connectable(scope, ensured, path, property, false)?;
+                need = check_connectable(scope, path, property, false)?;
             }
             txn.clear_targets(at.property(property));
         }
@@ -1522,7 +1566,8 @@ fn lower_one(
             let value = value(*slot)?;
             let at = if path.contains('.') {
                 let property = property(path)?;
-                ensure_property_spec(scope, txn, ensured, path, property);
+                need = stamped_declaration(scope, path)
+                    .map(|declaration| Need::Spec(property, declaration));
                 at.property(property)
             } else {
                 at.prim(prim(path)?)
@@ -1551,76 +1596,34 @@ fn lower_one(
         // Prepared and collected by `lower` itself.
         EditInput::Schema(_) => {}
     }
-    Ok(())
+    Ok(need)
 }
 
-/// Makes sure the target layer has a spec for the property at `path`, as
-/// OpenUSD's `UsdStage::_CreatePropertySpecForEditing` does before it
-/// authors one of the property's fields: a spec the layer (or an earlier
-/// edit of the batch) has at the path the target maps `path` to stays
-/// (`/Robot.height` through a reference to `/Robot`); otherwise one is
-/// stamped from the prim's schema definition of the property (not
-/// `custom`), else from the stage's composed declaration of it, read in
-/// stage namespace. Returns whether the spec exists or was stamped;
-/// `false` when nothing defines or declares the property.
+/// The declaration a spec for the property at `path` is stamped with, as
+/// OpenUSD's `UsdStage::_CreatePropertySpecForEditing` stamps one before
+/// it authors one of the property's fields where the target layer has no
+/// spec: the prim's schema definition of the property (not `custom`),
+/// else the stage's composed declaration of it, read in stage namespace.
+/// `None` when nothing defines or declares the property, or declares it
+/// an attribute without a type. A spec the target layer (or an earlier
+/// edit of the batch) already has stays as it is
+/// ([`layerstack_schemas::SchemaEdit::declare_property`]).
 ///
 /// Spec: AOUSD Core §12.2.2–§12.2.4 (property declarations), §13.3.2.3
 /// (the prim definition).
-fn ensure_property_spec(
-    scope: &Scope<'_>,
-    txn: &mut Transaction,
-    ensured: &mut Vec<String>,
-    path: &str,
-    property: PropertyPath,
-) -> bool {
-    let target = scope.target;
-    let authored = target
-        .map_property_to_spec_path(property, scope.store.paths())
-        .is_some_and(|spec| {
-            scope
-                .store
-                .layer(target.layer())
-                .is_some_and(|layer| layer.property_at(&spec).is_some())
-        });
-    if authored || ensured.iter().any(|done| done == path) {
-        return true;
-    }
-    let Some(composed) = scope.view.property(path) else {
-        return false;
+fn stamped_declaration(scope: &Scope<'_>, path: &str) -> Option<PropertyDeclaration> {
+    let composed = scope.view.property(path)?;
+    let declaration = match composed.definition() {
+        Some(definition) => PropertyDeclaration {
+            kind: definition.kind,
+            type_name: definition.type_name.clone(),
+            variability: definition.variability,
+            custom: false,
+        },
+        None => composed.declaration()?,
     };
-    let (kind, type_name, variability, custom) = match composed.definition() {
-        Some(definition) => (
-            definition.kind,
-            definition.type_name.clone(),
-            definition.variability,
-            false,
-        ),
-        None => {
-            let Some(declared) = composed.declaration() else {
-                return false;
-            };
-            (
-                declared.kind,
-                declared.type_name,
-                declared.variability,
-                declared.custom,
-            )
-        }
-    };
-    let mut spec = match (kind, type_name) {
-        (PropertyKind::Relationship, _) => PropertySpec::relationship(),
-        (PropertyKind::Attribute, Some(ty)) => PropertySpec::typed_attribute(ty),
-        (PropertyKind::Attribute, None) => return false,
-    };
-    if variability == Variability::Uniform {
-        spec = spec.uniform();
-    }
-    if custom {
-        spec = spec.custom();
-    }
-    txn.create_property(target.property(property), spec);
-    ensured.push(path.to_string());
-    true
+    (declaration.kind == PropertyKind::Relationship || declaration.type_name.is_some())
+        .then_some(declaration)
 }
 
 /// The relationship target or attribute connection `path` names.
@@ -1705,23 +1708,24 @@ fn layer_offset(offset: f64, scale: f64) -> Result<LayerOffset, Error> {
 }
 
 /// Checks that the property at `path` is an attribute, which connection
-/// edits author: as the target layer (or an earlier edit of the batch)
-/// authors it, else as the stage defines or declares it. A relationship
-/// is refused (`edit.rejected.not_an_attribute`), and so is a property
-/// nothing declares when `declared` (`edit.rejected.undeclared_type`):
-/// the transaction would create a `custom` relationship for it, where
-/// OpenUSD's `AddConnection` and `RemoveConnection` fail for want of a
-/// type. Clearing connections nothing authors does nothing, as the
-/// transaction does.
+/// edits author: as the target layer authors it, else as the stage
+/// defines or declares it. A relationship is refused
+/// (`edit.rejected.not_an_attribute`). A property nothing declares
+/// before the batch, when `declared`, must be created as an attribute by
+/// an earlier edit of the batch ([`Need::Attribute`], checked as the
+/// edits are collected), else it is refused
+/// (`edit.rejected.undeclared_type`): the transaction would create a
+/// `custom` relationship for it, where OpenUSD's `AddConnection` and
+/// `RemoveConnection` fail for want of a type. Clearing connections
+/// nothing authors does nothing, as the transaction does.
 ///
 /// Spec: AOUSD Core §7.6.4.2.3 (`connectionPaths`).
 fn check_connectable(
     scope: &Scope<'_>,
-    ensured: &[String],
     path: &str,
     property: PropertyPath,
     declared: bool,
-) -> Result<(), Error> {
+) -> Result<Option<Need>, Error> {
     let target = scope.target;
     let authored = target
         .map_property_to_spec_path(property, scope.store.paths())
@@ -1740,17 +1744,28 @@ fn check_connectable(
             .or_else(|| composed.declaration().map(|declared| declared.kind))
     });
     match kind {
-        Some(PropertyKind::Attribute) => Ok(()),
-        Some(PropertyKind::Relationship) => Err(Error::new(
-            "edit.rejected.not_an_attribute",
-            format!("{path} is a relationship: edit its targets instead"),
-        )),
-        None if !declared || ensured.iter().any(|done| done == path) => Ok(()),
-        None => Err(Error::new(
-            "edit.rejected.undeclared_type",
-            format!("nothing declares the attribute {path}: create it with its type first"),
-        )),
+        Some(PropertyKind::Attribute) => Ok(None),
+        Some(PropertyKind::Relationship) => Err(not_an_attribute(path)),
+        None if !declared => Ok(None),
+        None => Ok(Some(Need::Attribute(property))),
     }
+}
+
+/// The refusal of a connection edit of the relationship at `path`.
+pub(crate) fn not_an_attribute(path: impl core::fmt::Display) -> Error {
+    Error::new(
+        "edit.rejected.not_an_attribute",
+        format!("{path} is a relationship: edit its targets instead"),
+    )
+}
+
+/// The refusal of a connection edit of the property at `path`, which
+/// nothing declares.
+pub(crate) fn undeclared_type(path: impl core::fmt::Display) -> Error {
+    Error::new(
+        "edit.rejected.undeclared_type",
+        format!("nothing declares the attribute {path}: create it with its type first"),
+    )
 }
 
 /// `time` as a time code, refusing a NaN or an infinity.
@@ -1802,7 +1817,7 @@ fn define(
     path: PathId,
     specifier: Specifier,
     type_name: Option<&str>,
-) -> Result<(), schema_edit::Refusal> {
+) -> Result<(), Refusal> {
     match specifier {
         Specifier::Def => {
             edit.define_prim(path, type_name.unwrap_or(""))?;

@@ -85,6 +85,21 @@ export function valueShape(typeName: string): string {
   return typeName;
 }
 
+/** The kinds of value a port's type holds, which the drawing marks by shape as well as colour. */
+export type TypeFamily = "color" | "number" | "vector" | "text" | "bool" | "token" | "other";
+
+/** The kind of value `typeName` holds: a colour, a number, a vector (or matrix), a file or text, a switch, a token (a terminal's). */
+export function typeFamily(typeName: string | null): TypeFamily {
+  const type = typeName ?? "";
+  if (type.startsWith("color")) return "color";
+  if (/^(float|double|half|u?int|u?int64|uchar)$/.test(type)) return "number";
+  if (/^(float|double|half|int)[234]$|^(vector|normal|point|texCoord)|^(matrix|quat)/.test(type)) return "vector";
+  if (type === "asset" || type === "string") return "text";
+  if (type === "bool") return "bool";
+  if (type === "token") return "token";
+  return "other";
+}
+
 /** How a node is named in a reason: its prim's name, and which side for a container. */
 export function nodeName(node: NetworkNode): string {
   return node.role === "shader" ? node.name : `${node.name} ${node.role}`;
@@ -151,7 +166,7 @@ export function judge(network: ShadingNetwork, source: PortRef, destination: Por
   const from = source.port.typeName;
   const to = destination.port.typeName;
   if (from !== null && to !== null && valueShape(from) !== valueShape(to)) {
-    return { kind: "warn", reason: `a ${from} into a ${to}: USD connects any types, and what a renderer reads of it is up to the renderer` };
+    return { kind: "warn", reason: `a ${from} into a ${to}: USD connects it, and the renderer decides what it reads` };
   }
   if (destination.node.role === "outputs") {
     // A container's output reads a node directly inside it, or passes one of its own inputs through.

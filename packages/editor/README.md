@@ -288,8 +288,12 @@ nothing more.
   prim's spec within the edit target's layer (`copySpec`); when that layer
   has none, the editor names the layers that do, with **Edit there** and
   **Duplicate there**. A move or delete that leaves paths naming the old
-  place (in a variant no prim selects) lists them in a notice, each live.
-  Every edit says the layer it goes to.
+  place (in a variant no prim selects) lists them in a notice, each live,
+  as the Health tab does for the last one. While edits go through an arc
+  or inside a variant, moving (by **Move to…** or a drag) is not offered,
+  as rename and delete are not, and neither is a duplicate whose copy the
+  target does not map; the menu says why. Every edit says the layer it
+  goes to.
 - **Authoring properties.** Each property's name in the inspector is
   its path, live: a click explains it, and its context menu (or its
   "⋯", or Shift+F10), there and wherever the path is shown (the explain

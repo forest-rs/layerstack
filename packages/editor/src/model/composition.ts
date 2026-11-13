@@ -390,6 +390,38 @@ export function variantOfSite(site: string | null): { readonly set: string; read
   return match === null ? null : { set: match[1]!, variant: match[2]! };
 }
 
+/** What {@link targetGone} reads of the stage: a prim's variant sets. */
+export interface VariantSetsReader {
+  prim(path: string): { variantSets(): readonly { readonly name: string; readonly variants: readonly string[] }[] } | null;
+}
+
+/**
+ * Why `target` writes where the stage has nothing any more, or `null`
+ * while what it goes through is there: its prim is gone (deleted, renamed,
+ * or an undo took it), the variant it writes inside is no longer one of
+ * the prim's (an undo of the edit that added it, the set removed), or no
+ * arc maps it (`target.stale`). A variant that is there and not selected
+ * is not gone: editing inside it is what a variant target is for. Edits
+ * through a target that is gone would author opinions nothing composes,
+ * so the editor stops sending them there.
+ */
+export function targetGone(stage: VariantSetsReader, target: Layer | Pick<EditTarget, "kind" | "prim" | "site" | "mapPath"> | undefined): string | null {
+  if (target === undefined || !("kind" in target) || target.kind === "layer" || target.prim === null) return null;
+  const prim = stage.prim(target.prim);
+  if (prim === null) return `${target.prim} is no longer there`;
+  const variant = target.kind === "variant" ? variantOfSite(target.site) : null;
+  if (variant !== null) {
+    const set = prim.variantSets().find((each) => each.name === variant.set);
+    return set?.variants.includes(variant.variant) === true ? null : `${target.prim} no longer has the variant ${variant.set}=${variant.variant}`;
+  }
+  try {
+    target.mapPath(target.prim);
+    return null;
+  } catch {
+    return `${target.prim} no longer has the arc they went through`;
+  }
+}
+
 /**
  * Where a target writes, in words, naming its layer and how it is
  * reached: `scene.usda`; `scene.usda, inside finish=chrome of

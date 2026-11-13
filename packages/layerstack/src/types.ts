@@ -1207,7 +1207,8 @@ export interface RemoveAPIEdit {
  * created as `over`s. Duplicating `/World/Rock` to `/World/Pebble` is
  * one. Paths the copy authors that point into the copied prim follow it
  * to `to` (relationship targets, connections, inherits, specializes,
- * internal arcs), where OpenUSD leaves them pointing at the source.
+ * internal arcs, and path expressions, which OpenUSD leaves pointing at
+ * the source).
  *
  * Both paths are stage paths the edit target maps into its one layer: a
  * copy reads and writes that layer only, so a spec another layer

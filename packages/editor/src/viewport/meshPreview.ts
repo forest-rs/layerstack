@@ -36,7 +36,7 @@ import {
 import type { WebGPURenderer } from "three/webgpu";
 import { checker, mix, uv, vec3 } from "three/tsl";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { applyToneMap, onRendererLost, sharedRenderer } from "./gpu.ts";
+import { applyToneMap, onRendererLost, resizeTarget, sharedRenderer } from "./gpu.ts";
 import { DEFAULT_TONE_MAP, type ToneMapChoice } from "./toneMap.ts";
 import { clipRange, frameBox, type ViewOrientation } from "./framing.ts";
 
@@ -275,8 +275,7 @@ export class MeshPreview {
       const height = this.#canvas.clientHeight;
       if (renderer === null || width === 0 || height === 0) return;
       if (this.#canvas.width !== Math.round(width * window.devicePixelRatio)) {
-        this.#target.setPixelRatio(window.devicePixelRatio);
-        this.#target.setSize(width, height, false);
+        resizeTarget(renderer, this.#target, width, height);
       }
       this.#camera.aspect = width / height;
       this.#camera.updateProjectionMatrix();

@@ -225,7 +225,7 @@ import { DrawBundles, type BundleCounts } from "./bundles.ts";
 import { lightSetKey, linkedLights } from "./lightLinks.ts";
 import { stormLight } from "./sceneLights.ts";
 import { fixNodes, setFixedNode } from "./fixedNodes.ts";
-import { applyToneMap, onRendererLost, sharedRenderer } from "./gpu.ts";
+import { applyToneMap, onRendererLost, resizeTarget, sharedRenderer } from "./gpu.ts";
 import { type Box, clipRange, frameBox, orbitFrom, reachFrom, shouldFrame, sphereOf, verticalFov, viewDirection } from "./framing.ts";
 import { followCamera, followMatrices, makeViewCamera } from "./viewCamera.ts";
 import { SkinnedDraw, withSkinning } from "./skinning.ts";
@@ -1547,8 +1547,7 @@ export class Viewport {
   #resize(): void {
     const { clientWidth: width, clientHeight: height } = this.#canvas;
     if (width === 0 || height === 0) return;
-    this.#target.setPixelRatio(window.devicePixelRatio);
-    this.#target.setSize(width, height, false);
+    resizeTarget(this.#renderer, this.#target, width, height);
     this.#camera.aspect = width / height;
     this.#camera.updateProjectionMatrix();
     this.#draw();

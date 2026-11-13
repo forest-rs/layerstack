@@ -35,10 +35,11 @@ nothing more.
   scene directory (below). Where edits go (the stage's edit layer, another
   layer of its stack, or an opinion's edit target chosen in the explain
   panel), undo and redo, and what the stage holds: its layers, the draws,
-  the bytes fetched and the module's memory. An action that waits on the
-  host (an undo or a variant fetching what it brings in) is named there
-  once it has waited a moment, with how many actions are queued behind it
-  and, for a payload load, Cancel.
+  the bytes fetched and the module's memory (read again every few seconds
+  and after each recomposition, never per frame). An action that waits on
+  the host (an undo or a variant fetching what it brings in) is named
+  there once it has waited a moment, with how many actions are queued
+  behind it and, for a payload load, Cancel.
 - **Prims.** The composed hierarchy, read as rows open (a prim's children
   are asked for only when it is expanded) and drawn by a virtualized React
   Aria tree, so a stage of tens of thousands of prims scrolls as one of ten.

@@ -10,12 +10,25 @@ import {
   TooltipTrigger as TooltipTriggerPrimitive,
 } from "react-aria-components"
 
+/** What the trigger wrapper reads of a trigger that may be disabled. */
+interface DisabledTriggerProps {
+  isDisabled?: boolean
+  "aria-label"?: string
+  "aria-hidden"?: boolean
+}
+
 function TooltipTrigger({
   delay = 0,
   children,
   ...props
 }: React.ComponentProps<typeof TooltipTriggerPrimitive>) {
   const [trigger, tooltip] = React.Children.toArray(children)
+  // A disabled control takes neither hover nor focus, so its tooltip (the
+  // reason it is disabled) would never show: a focusable stand-in around it
+  // takes them instead, and is what assistive technology reads.
+  const disabled =
+    React.isValidElement<DisabledTriggerProps>(trigger) &&
+    trigger.props.isDisabled === true
 
   return (
     <TooltipTriggerPrimitive
@@ -24,7 +37,20 @@ function TooltipTrigger({
       {...props}
     >
       <Focusable>
-        {trigger as React.ComponentProps<typeof Focusable>["children"]}
+        {disabled ? (
+          <span
+            role="button"
+            tabIndex={0}
+            aria-disabled="true"
+            aria-label={trigger.props["aria-label"]}
+            data-slot="tooltip-disabled-trigger"
+            className="inline-flex rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50 *:pointer-events-none"
+          >
+            {React.cloneElement(trigger, { "aria-hidden": true })}
+          </span>
+        ) : (
+          (trigger as React.ComponentProps<typeof Focusable>["children"])
+        )}
       </Focusable>
       {tooltip}
     </TooltipTriggerPrimitive>

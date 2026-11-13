@@ -265,6 +265,16 @@ export class EditorStore {
     return this.#actions.running;
   }
 
+  /** How many actions wait behind the {@link EditorStore.running} one. */
+  get queued(): number {
+    return this.#actions.waiting;
+  }
+
+  /** Whether {@link EditorStore.cancel} stops what runs: an open, or a load whose fetching the overlay shows (which it takes back). */
+  get cancellable(): boolean {
+    return this.status.kind === "opening" || this.status.kind === "loading";
+  }
+
   /** The scene browser's tab in front (prims, layers, cameras). */
   get sceneTab(): SceneTab {
     return this.#view.sceneTab;

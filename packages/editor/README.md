@@ -223,6 +223,8 @@ nothing more.
   first, after the last, or between two, each time a link that moves the
   timeline there; the stage does not report whether it interpolates, so
   it says so only for types USD always holds (tokens, strings, integers).
+  While the timeline plays, the samples are asked for again only when the
+  time crosses one, not every frame.
 - **Skinning.** A mesh a UsdSkel skeleton binds is skinned on the GPU: its
   joint influences (up to eight per vertex) are gathered into the draw
   list's buffer once, through stagehand's `vertexPoints`, and a time change

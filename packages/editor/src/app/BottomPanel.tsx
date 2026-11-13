@@ -5,14 +5,14 @@
 // the stage consulted for it, the recompositions each action caused, the
 // undo history, the asset loop's requests and answers, what is wrong with
 // the stage, what drawing costs, and what the stage refused.
-import { useEffect } from "react";
-import type { Attribute, Explanation, Layer, Opinion } from "@forest-rs/layerstack";
+import { useEffect, useRef } from "react";
+import type { Attribute, BracketingSamples, Explanation, Layer, Opinion } from "@forest-rs/layerstack";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
-import { bracketNote } from "../model/keyTimes.ts";
+import { bracketNote, stillBrackets } from "../model/keyTimes.ts";
 import type { EditorStore } from "../store.ts";
 import { BOTTOM_TABS } from "../store/view.ts";
 import { AssetLoopView } from "./AssetLoop.tsx";
@@ -159,7 +159,14 @@ function ExplainView({ store }: { store: EditorStore }) {
  * interpolates or holds, so only a type USD always holds is said to be held.
  */
 function SampleNote({ store, attribute, time, typeName }: { store: EditorStore; attribute: Attribute; time: number; typeName: string }) {
-  const note = bracketNote(attribute.bracketingSamples(time), time, typeName);
+  // Asked of the stage again only for another attribute, after a recomposition, or once the time crosses a sample: not every frame as it plays.
+  const recompositions = store.session?.changeLog.length ?? 0;
+  const read = useRef<{ path: string; recompositions: number; at: number; bracket: BracketingSamples } | null>(null);
+  const last = read.current;
+  if (last === null || last.path !== attribute.path || last.recompositions !== recompositions || !stillBrackets(last.bracket, last.at, time)) {
+    read.current = { path: attribute.path, recompositions, at: time, bracket: attribute.bracketingSamples(time) };
+  }
+  const note = bracketNote(read.current!.bracket, time, typeName);
   if (note.kind === "none") return null;
   const at = (sample: number) => (
     <button type="button" className="font-mono text-foreground underline decoration-dotted underline-offset-2 hover:decoration-solid" onClick={() => store.seek(sample)}>

@@ -73,7 +73,7 @@ export function AppliedSchemasSection({ store, prim }: { store: EditorStore; pri
         <p role="status" className="mt-1.5 text-[11px] text-muted-foreground">
           {revealed.names.length === 0
             ? `${revealed.schema} brought no properties of its own.`
-            : `${revealed.schema} brought ${revealed.names.length} propert${revealed.names.length === 1 ? "y" : "ies"}, at their fallbacks under Properties: ${revealed.names.slice(0, NAMED).join(", ")}${revealed.names.length > NAMED ? ` and ${revealed.names.length - NAMED} more` : ""}.`}
+            : `${revealed.schema} brought ${revealed.names.length} ${revealed.names.length === 1 ? "property" : "properties"}, at their fallbacks under Properties: ${revealed.names.slice(0, NAMED).join(", ")}${revealed.names.length > NAMED ? ` and ${revealed.names.length - NAMED} more` : ""}.`}
         </p>
       )}
       <RefusalNote refusal={refusal} className="mt-1 text-[11px] text-destructive" />

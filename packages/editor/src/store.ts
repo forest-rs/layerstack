@@ -1109,7 +1109,7 @@ export class EditorStore {
       try {
         let step: HistoryStep | null;
         try {
-          step = this.#composing(session, prim, label, () => session.addArc(prim, arc));
+          step = this.#composing(session, prim, () => session.addArc(prim, arc));
         } catch (error) {
           if (this.lose(error)) return;
           refusal = this.#notices.report(label, error).message;
@@ -1135,7 +1135,7 @@ export class EditorStore {
    */
   removeArc(prim: string, arc: AuthoredArc): string | undefined {
     const label = removeArcLabel(prim, arc);
-    return this.#edit(label, (session) => this.#composed(session, prim, label, () => session.removeArc(prim, arc)));
+    return this.#edit(label, (session) => this.#composed(session, prim, () => session.removeArc(prim, arc)));
   }
 
   /**
@@ -1145,7 +1145,7 @@ export class EditorStore {
    */
   addVariant(prim: string, set: string, variant: string, newSet = false): string | undefined {
     const label = newSet ? `add variant set ${set}` : `add variant ${set}=${variant}`;
-    return this.#edit(label, (session) => this.#composed(session, prim, label, () => session.addVariant(prim, set, variant, newSet), { set, variant }));
+    return this.#edit(label, (session) => this.#composed(session, prim, () => session.addVariant(prim, set, variant, newSet), { set, variant }));
   }
 
   /**
@@ -1156,7 +1156,7 @@ export class EditorStore {
    */
   removeVariantSet(prim: string, set: string): string | undefined {
     const label = `remove variant set ${set}`;
-    return this.#edit(label, (session) => this.#composed(session, prim, label, () => session.removeVariantSet(prim, set)));
+    return this.#edit(label, (session) => this.#composed(session, prim, () => session.removeVariantSet(prim, set)));
   }
 
   /**
@@ -1232,9 +1232,9 @@ export class EditorStore {
   }
 
   /** Runs a composition edit of `prim` and notes it ({@link EditorStore.compositionEdit}); returns its receipt. */
-  #composed(session: Session, prim: string, label: string, run: () => EditReceipt, variant?: CompositionEdit["variant"]): EditReceipt {
+  #composed(session: Session, prim: string, run: () => EditReceipt, variant?: CompositionEdit["variant"]): EditReceipt {
     let receipt: EditReceipt | null = null;
-    this.#composing(session, prim, label, () => (receipt = run()), variant);
+    this.#composing(session, prim, () => (receipt = run()), variant);
     return receipt!;
   }
 
@@ -1243,13 +1243,13 @@ export class EditorStore {
    * the Text tab never read it (so the tab can mark what the edit
    * changed), and notes it; returns the step it made.
    */
-  #composing(session: Session, prim: string, label: string, run: () => EditReceipt, variant?: CompositionEdit["variant"]): HistoryStep | null {
+  #composing(session: Session, prim: string, run: () => EditReceipt, variant?: CompositionEdit["variant"]): HistoryStep | null {
     const target = session.target;
     const layer = target === undefined ? session.stage.editLayer : "kind" in target ? target.layer : target;
     if (layer !== null && this.lastLayerText(layer) === null) this.layerText(layer);
     const receipt = run();
     const step = session.history.nextUndo;
-    this.#compositionEdit = step === null ? null : { prim, label, layer: receipt.target.layer, step, ...(variant === undefined ? {} : { variant }) };
+    this.#compositionEdit = step === null ? null : { prim, label: step.label, layer: receipt.target.layer, step, ...(variant === undefined ? {} : { variant }) };
     return step;
   }
 

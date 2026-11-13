@@ -8,8 +8,10 @@
 // change. A panel that reads a value at the time asks for the time
 // (`useTime`), saying whether the value can vary, so playing the timeline
 // renders the animated rows and leaves the rest.
-import { createContext, use, useCallback, useSyncExternalStore } from "react";
+import { createContext, use, useCallback, useMemo, useSyncExternalStore } from "react";
+import type { Stage } from "@forest-rs/layerstack";
 import { primRevision } from "../model/revisions.ts";
+import { readsMightVary, type TimedReads } from "../model/timeVarying.ts";
 import type { EditorStore } from "../store.ts";
 import type { Channel } from "../store/signals.ts";
 
@@ -60,6 +62,22 @@ const COMPOSITION = ["composition"] as const;
 export function useTime(store: EditorStore, varying = true): number | undefined {
   useSyncExternalStore(useSubscribe(store, TIME), () => (varying ? store.time : undefined));
   return store.time;
+}
+
+/**
+ * The time a view of the prim at `path` reads `reads` at ({@link useTime}),
+ * rendering it again as time moves only when one of them might vary
+ * ({@link readsMightVary}), asked again after each recomposition the view
+ * renders for: a light, mesh or material that holds still is left alone
+ * while the timeline plays.
+ */
+export function useTimeOf(store: EditorStore, stage: Stage, path: string, reads: TimedReads): number | undefined {
+  const revision = usePrimRevision(store, path);
+  const recompositions = store.session?.changeLog.length ?? 0;
+  const key = JSON.stringify(reads);
+  // `reads` is keyed by its contents: callers pass a literal.
+  const varying = useMemo(() => readsMightVary(stage, path, reads), [stage, path, revision, recompositions, key]);
+  return useTime(store, varying);
 }
 
 /**

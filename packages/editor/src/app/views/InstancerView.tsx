@@ -25,7 +25,8 @@ import type { EditorStore } from "../../store.ts";
 import { presentedInstance } from "../presentations/instances.tsx";
 import { CommandMenu, Live, Present } from "../presentations/Present.tsx";
 import { Section } from "../Section.tsx";
-import { useTime } from "../context.ts";
+import { useTimeOf } from "../context.ts";
+import { countRender } from "../renders.ts";
 
 /** A table row's height in pixels, and the table's. */
 const ROW = 20;
@@ -50,10 +51,11 @@ const GRID = { gridTemplateColumns: COLUMNS.map((column) => column.width).join("
 const cell = (value: number | undefined) => (value === undefined ? "" : formatNumber(Number(value.toPrecision(4))));
 
 export function InstancerView({ object, context }: PresentProps<"prim">) {
+  countRender("InstancerView");
   const { store } = context;
   const path = object.prim.path;
-  // Its columns are read at the time.
-  useTime(store);
+  // Its columns are read at the time: again as it moves only when one of its attributes might vary.
+  useTimeOf(store, context.stage, path, { attributes: null });
   const columns = store.instancerColumns(path);
   if (columns === null) return null;
   return <Instances store={store} path={path} columns={columns} context={context} />;

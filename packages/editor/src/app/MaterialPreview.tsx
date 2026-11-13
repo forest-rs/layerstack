@@ -13,7 +13,8 @@ import { readMaterial } from "@forest-rs/layerstack_stagehand";
 import { readOpenPbr } from "../model/openpbr.ts";
 import { assetExists, readAsset } from "../model/sources.ts";
 import type { EditorStore } from "../store.ts";
-import { useTime } from "./context.ts";
+import { useTimeOf } from "./context.ts";
+import { countRender } from "./renders.ts";
 import type { MaterialPreview as Preview, PreviewSource } from "../viewport/materialPreview.ts";
 
 /** What the preview draws for a material, and what it says about it. */
@@ -57,11 +58,13 @@ export function MaterialPreview({
   material: string;
   shape?: "sphere" | "shaderBall";
 }) {
+  countRender("MaterialPreview");
   const canvas = useRef<HTMLCanvasElement>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const recompositions = store.session?.changeLog.length ?? 0;
-  const time = useTime(store);
+  // Its network's inputs: read again as time moves only when one might vary.
+  const time = useTimeOf(store, stage, material, { attributes: null, descendants: true });
   const reading = useMemo(() => read(stage, material, time), [stage, material, time, recompositions]);
 
   useEffect(() => {

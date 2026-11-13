@@ -974,6 +974,195 @@ export interface Sublayer {
   readonly layerOffset: { readonly offset: number; readonly scale: number };
 }
 
+/**
+ * What one layer authors at one path ({@link Stage.layerSpec}): the spec
+ * there, as OpenUSD's `SdfLayer::GetPseudoRoot`, `GetPrimAtPath` and
+ * `GetPropertyAtPath` find it. A union on `type`:
+ *
+ * - `pseudoRoot`: the layer's own spec at `/`, holding its metadata,
+ *   sublayers and root prims ({@link PseudoRootSpec});
+ * - `prim`: a prim spec, outside variants or inside them
+ *   (`/World/Robot{finish=painted}Decal`); `variant`: a variant spec
+ *   (`/World/Robot{finish=painted}`), which holds what a prim spec does
+ *   but a specifier and a type ({@link PrimSpec});
+ * - `attribute` ({@link AttributeSpec}) and `relationship`
+ *   ({@link RelationshipSpec}): a property spec.
+ *
+ * Every kind has its `path` in the layer's namespace and the `fields` it
+ * authors. A spec is a snapshot: read it again after an edit.
+ */
+export type LayerSpec = PseudoRootSpec | PrimSpec | AttributeSpec | RelationshipSpec;
+
+/** What every {@link LayerSpec} has. */
+export interface SpecBase {
+  /** The spec's path in its layer, as the layer spells it (`/World/Robot{finish=painted}Decal.size`). */
+  readonly path: string;
+  /**
+   * The fields the spec authors, by their OpenUSD keys (`SdfFieldKeys`,
+   * the names {@link Changes.primFields} uses), sorted: `specifier`,
+   * `typeName`, `kind`, `active`, `references`, `payload`, `inheritPaths`,
+   * `variantSelection`, `apiSchemas`, `documentation`, `default`,
+   * `timeSamples`, `targetPaths`, `upAxis`, `subLayers`, ... A field is
+   * listed when the layer holds an opinion for it, an emptied list op
+   * included (`references` with no items, as OpenUSD keeps one). The
+   * children lists (`primChildren`, `properties`, `variantSetChildren`)
+   * are not fields here: read them from the spec's own members. `custom`
+   * and `variability` are listed only when they are not their fallbacks
+   * (`custom`, `uniform`), as USDA writes them.
+   *
+   * Most fields an editor acts on are members of the spec as well; any
+   * other's value is read composed ({@link Prim.metadata},
+   * {@link Stage.metadata}), or as an opinion ({@link Attribute.explain}).
+   */
+  readonly fields: readonly string[];
+}
+
+/**
+ * The pseudo-root of a layer: its metadata, sublayers and root prims.
+ * AOUSD Core §7.6.1 (layer fields), §7.6.1.2.3 (`defaultPrim`).
+ */
+export interface PseudoRootSpec extends SpecBase {
+  readonly type: "pseudoRoot";
+  /** `defaultPrim` as authored (`World`); `null` when the layer authors none. */
+  readonly defaultPrim: string | null;
+  /** `documentation` (`doc` in USDA); `null` when the layer authors none. */
+  readonly documentation: string | null;
+  /** Its sublayers, strongest first, as {@link Stage.sublayers} reads them. */
+  readonly sublayers: readonly Sublayer[];
+  /** Its root prims' names, in the order the layer holds them (`primChildren`). */
+  readonly primChildren: readonly string[];
+}
+
+/**
+ * A prim spec (`type` `"prim"`), or a variant spec (`"variant"`), which
+ * holds the same fields but `specifier` and `typeName`. A member is
+ * `null` when the spec does not author its field. AOUSD Core §7.6.2
+ * (prim fields), §7.6.7 (variant specs), §7.3.6 (variant set specs).
+ */
+export interface PrimSpec extends SpecBase {
+  readonly type: "prim" | "variant";
+  /** `specifier`; `null` for a variant. */
+  readonly specifier: "def" | "over" | "class" | null;
+  /** `typeName` (`Xform`); `null` for a variant. */
+  readonly typeName: string | null;
+  /** `kind` (`component`). */
+  readonly kind: string | null;
+  /** `active`. */
+  readonly active: boolean | null;
+  /** `instanceable`. */
+  readonly instanceable: boolean | null;
+  /** `documentation` (`doc` in USDA). */
+  readonly documentation: string | null;
+  /** `references`, each item as authored. */
+  readonly references: ListOp<AuthoredReference> | null;
+  /** `payload`, each item as authored. */
+  readonly payloads: ListOp<AuthoredReference> | null;
+  /** `inheritPaths`: prim paths in this layer's namespace. */
+  readonly inherits: ListOp<string> | null;
+  /** `specializes`: prim paths in this layer's namespace. */
+  readonly specializes: ListOp<string> | null;
+  /** `apiSchemas` (`CollectionAPI:parts`). */
+  readonly apiSchemas: ListOp<string> | null;
+  /** `variantSetNames` (`variantSets` in USDA): the variant sets it says the prim has. AOUSD Core §7.6.2.3.5. */
+  readonly variantSetNames: ListOp<string> | null;
+  /** `variantSelection`: each variant set's selection, by set name. AOUSD Core §7.6.2.3.4. */
+  readonly variantSelections: ReadonlyMap<string, string> | null;
+  /** The variant set specs it holds (`variantSetChildren`), in authored order, each with its variants: `[]` for none. */
+  readonly variantSets: readonly VariantSetSpec[];
+  /** Its child prims' names, in authored order (`primChildren`). */
+  readonly primChildren: readonly string[];
+  /** Its properties' names, in authored order (`properties`). */
+  readonly properties: readonly string[];
+}
+
+/** A variant set spec a {@link PrimSpec} holds, and the variants it holds. */
+export interface VariantSetSpec {
+  readonly name: string;
+  /** Its variants' names, in authored order (`variantChildren`). */
+  readonly variants: readonly string[];
+}
+
+/**
+ * An attribute spec. Its values are not read here: `default` says
+ * whether one is authored and whether it is a block, and `timeSamples`
+ * the times of its samples. AOUSD Core §7.6.3–§7.6.4 (property and
+ * attribute fields).
+ */
+export interface AttributeSpec extends SpecBase {
+  readonly type: "attribute";
+  /** `typeName`, the value type it declares (`double`, `point3f[]`); `null` for an override that declares none. */
+  readonly typeName: string | null;
+  /** `custom`. */
+  readonly custom: boolean;
+  /** `variability`: `uniform` or the fallback `varying`. */
+  readonly variability: "varying" | "uniform";
+  /**
+   * `default`: `"value"` for a value, `"block"` for a value block
+   * (`None`), `"animationBlock"` for an animation block; `null` when none
+   * is authored. AOUSD Core §7.6.4.2.1, §12.3 (value blocking).
+   */
+  readonly default: "value" | "block" | "animationBlock" | null;
+  /**
+   * The times of its `timeSamples`, ascending, in the layer's own time
+   * (`SdfLayer::ListTimeSamplesForPath`); `null` when it authors no
+   * `timeSamples` field, `[]` for an empty one. An edit target maps a
+   * stage time into it ({@link EditTarget.mapTime}). AOUSD Core
+   * §7.6.4.2.2.
+   */
+  readonly timeSamples: readonly number[] | null;
+  /** `connectionPaths`: attribute paths in this layer's namespace. AOUSD Core §7.6.4.2.3. */
+  readonly connections: ListOp<string> | null;
+}
+
+/** A relationship spec. AOUSD Core §7.6.5. */
+export interface RelationshipSpec extends SpecBase {
+  readonly type: "relationship";
+  /** `custom`. */
+  readonly custom: boolean;
+  /** `targetPaths`: paths in this layer's namespace. AOUSD Core §7.6.5.1.1. */
+  readonly targets: ListOp<string> | null;
+}
+
+/**
+ * A list op one spec authors, with each of its lists apart, as OpenUSD's
+ * `SdfListOp` keeps them: what the spec adds to, removes from or replaces
+ * in what weaker opinions author. An item can be removed from where it
+ * was added (`removeReference`) only in the layer whose list holds it.
+ * AOUSD Core §12.4 (list ops).
+ */
+export interface ListOp<T> {
+  /**
+   * The explicit items (`references = [...]`), which replace weaker
+   * opinions and make the other lists spurious; `null` when the op is not
+   * explicit. `references = None` is explicit and empty: `[]`.
+   */
+  readonly explicit: readonly T[] | null;
+  /** `prepend` items. */
+  readonly prepended: readonly T[];
+  /** `append` items. */
+  readonly appended: readonly T[];
+  /** `delete` items. */
+  readonly deleted: readonly T[];
+  /** The legacy `add` items. */
+  readonly added: readonly T[];
+  /** `reorder` items: the order to move the items it names into. */
+  readonly ordered: readonly T[];
+}
+
+/**
+ * A reference or payload as a list op authors it (OpenUSD's
+ * `SdfReference`, `SdfPayload`), in the authoring layer's terms. AOUSD
+ * Core §10.3.2.1–§10.3.2.2.
+ */
+export interface AuthoredReference {
+  /** The asset path as authored (`./robot.usda`), anchored at the authoring layer; `null` for an internal arc (`</World/Spare>`). */
+  readonly asset: string | null;
+  /** The prim path as authored; `null` for the target layer's `defaultPrim`. */
+  readonly primPath: string | null;
+  /** The layer offset across the arc: identity when none is authored. */
+  readonly layerOffset: { readonly offset: number; readonly scale: number };
+}
+
 /** A listener of {@link Stage.onChange}. */
 export type ChangeListener = (changes: Changes) => void;
 

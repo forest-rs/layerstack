@@ -9,6 +9,7 @@ import type {
   Changes,
   Edit,
   EditReceipt,
+  HistoryMark,
   HistoryStep,
   Layer,
   Layerstack,
@@ -64,6 +65,24 @@ function unlessAborted<T>(work: Promise<T>, signal: AbortSignal | undefined): Pr
       },
     );
   });
+}
+
+/** Where the history stood at a moment (a layer's save): a mark of it, and its undo steps then. */
+interface HistoryPoint {
+  readonly mark: HistoryMark;
+  readonly steps: readonly HistoryStep[];
+}
+
+/**
+ * The steps between two states of a history, given each one's undo steps:
+ * those undone since `then` and those recorded or redone since, past the
+ * steps both share. A step undone and redone is the same step, so it is
+ * shared again.
+ */
+function stepsBetween(then: readonly HistoryStep[], now: readonly HistoryStep[]): HistoryStep[] {
+  let shared = 0;
+  while (shared < then.length && shared < now.length && then[shared] === now[shared]) shared += 1;
+  return [...then.slice(shared), ...now.slice(shared)];
 }
 
 /** A prim or property that moved: where it was, and where it is. */
@@ -222,6 +241,10 @@ export class Session implements Disposable {
   readonly #moves = new WeakMap<HistoryStep, PathMove>();
   /** The steps a move or a delete made: what {@link Session.lastNamespaceEdit} looks for. */
   readonly #namespaceSteps = new WeakSet<HistoryStep>();
+  /** Where the history stood when the scene opened: the saved point of every layer not saved since. */
+  readonly #opened: HistoryPoint;
+  /** Where the history stood when each layer (by id) was last saved, for {@link Session.isEdited}. */
+  readonly #savedAt = new Map<Layer["id"], HistoryPoint>();
   #cause = "open";
   #fetched = 0;
   #fetchedBytes = 0;
@@ -259,6 +282,7 @@ export class Session implements Disposable {
     this.sessionNote = note;
     this.stage = stage;
     this.history = new UndoHistory(this.stage);
+    this.#opened = this.#historyPoint();
     this.stage.onChange((changes) => {
       this.changeLog.push({ cause: this.#cause, changes });
       for (const identifier of changes.mutedIdentifiers) this.muted.add(identifier);
@@ -727,15 +751,20 @@ export class Session implements Disposable {
   }
 
   /**
-   * Whether `layer` has edits that are not saved (`Stage.isDirty`). The
-   * stage reads an anonymous session layer as dirty from the moment it
-   * makes it, with nothing in it, so that one counts as edited only while
-   * an action on the undo stack writes it.
+   * Whether `layer` has edits that are not saved. `Stage.isDirty` says the
+   * layer changed since it was read or saved, and stays so once those
+   * changes are undone, as OpenUSD's `SdfLayer::IsDirty` does; so a dirty
+   * layer counts as edited only when a step between the history as it
+   * stood then and as it stands now writes it: undo back to the save, and
+   * it is not. While a group is open (its receipts are no step yet), a
+   * dirty layer counts.
    */
   isEdited(layer: Layer): boolean {
     if (!this.stage.isDirty(layer)) return false;
-    if (!layer.anonymous || layer !== this.sessionLayer) return true;
-    return this.history.undoSteps.some((step) => step.layers.some((written) => written.id === layer.id));
+    if (this.history.groupDepth > 0) return true;
+    const saved = this.#savedAt.get(layer.id) ?? this.#opened;
+    if (this.history.isAt(saved.mark)) return false;
+    return stepsBetween(saved.steps, this.history.undoSteps).some((step) => step.layers.some((written) => written.id === layer.id));
   }
 
   /** The layers with unsaved edits ({@link Session.isEdited}). */
@@ -752,6 +781,8 @@ export class Session implements Disposable {
     this.#cause = "save";
     const result = this.stage.save();
     this.saved = result.written.map(({ identifier, bytes }) => ({ identifier, bytes }));
+    const point = this.#historyPoint();
+    for (const { layer } of result.written) this.#savedAt.set(layer.id, point);
     return result;
   }
 
@@ -821,6 +852,11 @@ export class Session implements Disposable {
     const receipt = action();
     if (this.history.record(label, receipt).kind === "step") this.#reports.set(this.history.nextUndo!, receipt);
     return receipt;
+  }
+
+  /** Where the history stands: a mark of it, and its undo steps. */
+  #historyPoint(): HistoryPoint {
+    return { mark: this.history.mark(), steps: this.history.undoSteps };
   }
 
   #entry(step: HistoryStep): UndoEntry {

@@ -42,6 +42,48 @@ test("a save writes the edited layer, clears it, and says so on the history chan
   assert.deepEqual(store.session!.saved.map((file) => file.identifier), ["scene.usda"]);
 });
 
+test("an edit undone back to the save leaves nothing unsaved, though the stage still reads the layer dirty", async () => {
+  const h = await harness();
+  await h.open(sampleSource());
+  const { store } = h;
+  const root = store.session!.stage.root;
+  store.setValue("/World/Robot.visibility", HIDE_ROBOT);
+  await h.settle(store.undo());
+  assert.ok(store.session!.stage.isDirty(root), "dirty means changed since read, as in OpenUSD");
+  assert.deepEqual(store.dirtyLayers(), []);
+  assert.equal(store.unsaved, false, "nothing to lose on leaving");
+  await h.settle(store.redo());
+  assert.deepEqual(store.dirtyLayers(), [root]);
+
+  // Saved with the edit, then undone: the layer differs from what was saved.
+  await h.settle(store.save());
+  assert.deepEqual(store.dirtyLayers(), []);
+  await h.settle(store.undo());
+  assert.deepEqual(store.dirtyLayers(), [root], "the undo changed it from the save");
+  await h.settle(store.redo());
+  assert.deepEqual(store.dirtyLayers(), [], "back at the save");
+  // Undone past the save and edited anew: the save's step is gone, and the layer counts.
+  await h.settle(store.undo());
+  store.setValue("/World/Robot.visibility", { type: "token", value: "inherited" });
+  assert.deepEqual(store.dirtyLayers(), [root]);
+});
+
+test("each layer counts as unsaved only while a step since its save writes it", async () => {
+  const h = await harness();
+  await h.open(sampleSource());
+  const { store } = h;
+  const session = store.session!;
+  const library = session.layerNamed("library.usda");
+  store.setValue("/World/Robot.visibility", HIDE_ROBOT);
+  store.setTarget(library);
+  assert.equal(store.setValue("/World/Robot.visibility", { type: "token", value: "inherited" }), undefined);
+  assert.deepEqual(new Set(store.dirtyLayers().map((layer) => layer.identifier)), new Set(["scene.usda", "library.usda"]));
+  await h.settle(store.undo());
+  assert.deepEqual(store.dirtyLayers().map((layer) => layer.identifier), ["scene.usda"], "only the library's step was undone");
+  await h.settle(store.undo());
+  assert.deepEqual(store.dirtyLayers(), []);
+});
+
 test("a layer exports as USDA text or USDC binary, and stays edited", async () => {
   const h = await harness();
   await h.open(sampleSource());
@@ -100,7 +142,8 @@ test("a save leaves the session layer, and says it is the session layer", async 
   const sessionLayer = store.session!.sessionLayer!;
   assert.ok(sessionLayer.anonymous);
   assert.equal(store.session!.sessionNote, null, "asked for, not forced");
-  // The stage makes its session layer dirty and empty: nothing is edited until an edit writes it.
+  // A new session layer is clean until an edit writes it.
+  assert.equal(store.session!.stage.isDirty(sessionLayer), false);
   assert.deepEqual(store.dirtyLayers(), []);
   assert.equal(store.unsaved, false);
   store.setValue("/World/Robot.visibility", HIDE_ROBOT);

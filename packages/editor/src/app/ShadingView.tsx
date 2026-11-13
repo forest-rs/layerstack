@@ -537,14 +537,15 @@ function Graph({
   /** The keys of the focused node, row or curve. */
   function onKey(event: React.KeyboardEvent<HTMLDivElement>): void {
     const target = event.target as Element;
-    if (target.closest("[data-control]") !== null || menu !== null) return;
-    if (event.key === "Escape" && selectedEdge !== null) {
+    if (menu !== null) return;
+    const key = graphKey(event);
+    // Escape anywhere in the drawing, a row's value control too, lets go of a chosen connection and leaves the graph and the selection as they are.
+    if (key?.kind === "escape") {
       event.preventDefault();
       setSelectedEdge(null);
       return;
     }
-    const key = graphKey(event);
-    if (key === null) return;
+    if (target.closest("[data-control]") !== null || key === null) return;
     event.preventDefault();
     setKeyboard(true);
     const edge = target.closest<SVGElement>("[data-edge]")?.dataset.edge;
@@ -559,9 +560,6 @@ function Graph({
         return;
       case "menu":
         openMenu(target, at);
-        return;
-      case "escape":
-        // The graph and the selection stay as they are.
         return;
       case "activate":
         if (edge !== undefined) return;

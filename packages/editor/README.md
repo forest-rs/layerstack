@@ -103,7 +103,7 @@ nothing more.
   composition errors grouped by prim (each prim live, and marked in the
   prim tree), missing assets with the layer that authors each and the
   prims composed without it, assets not supplied yet, and the paths the
-  last move or delete left naming the old one. Read once per change of
+  last move or delete left naming the old one, each live. Read once per change of
   the stage, never as time moves; with nothing wrong, it says what it
   checked.
 - **Text.** A layer as USDA, as `Stage.exportLayer` writes it with its
@@ -290,8 +290,8 @@ nothing more.
   prim's spec within the edit target's layer (`copySpec`); when that layer
   has none, the editor names the layers that do, with **Edit there** and
   **Duplicate there**. A move or delete that leaves paths naming the old
-  place (in a variant no prim selects) lists them in a notice, each live,
-  as the Health tab does for the last one. While edits go through an arc
+  place (in a variant no prim selects) says how many in a notice, which
+  brings the Health tab forward, where they are listed, each live. While edits go through an arc
   or inside a variant, moving (by **Move to…** or a drag) is not offered,
   as rename and delete are not, and neither is a duplicate whose copy the
   target does not map; the menu says why. Every edit says the layer it

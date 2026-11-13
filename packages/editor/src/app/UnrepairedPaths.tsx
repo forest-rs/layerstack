@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 // The paths a move or delete left naming what it moved
-// (`EditReceipt.unrepaired`), as a notice lists them: each the layer that
+// (`EditReceipt.unrepaired`), as the Health tab lists them: each the layer that
 // authors it, the spec holding it (as a stage path, its variant
 // selections dropped, so a click explains or selects it), the field, and
 // the old path it still names, each live.
-import type { UnrepairedPath } from "@forest-rs/layerstack";
+import type { Layer } from "@forest-rs/layerstack";
+import type { HealthUnrepaired } from "../model/health.ts";
 import { specStagePath } from "../model/primAuthoring.ts";
 import type { EditorStore } from "../store.ts";
 import { Present, presentationContext } from "./presentations/Present.tsx";
@@ -16,8 +17,8 @@ function pathObject(path: string): { readonly kind: "propertyPath"; readonly pat
   return path.includes(".") ? { kind: "propertyPath", path } : { kind: "primPath", path };
 }
 
-/** The unrepaired paths of a notice; nothing when it has none. */
-export function UnrepairedPaths({ store, unrepaired }: { store: EditorStore; unrepaired: readonly UnrepairedPath[] }) {
+/** Unrepaired paths, each live; nothing when there are none. */
+export function UnrepairedPaths({ store, unrepaired }: { store: EditorStore; unrepaired: readonly HealthUnrepaired<Layer>[] }) {
   const context = presentationContext(store);
   if (context === null || unrepaired.length === 0) return null;
   return (
@@ -35,7 +36,7 @@ export function UnrepairedPaths({ store, unrepaired }: { store: EditorStore; unr
             )}
             <span className="text-muted-foreground">
               {each.field}
-              {each.metadata === null ? "" : ` ${each.metadata}`} still names
+              {each.metadata === null || each.metadata === undefined ? "" : ` ${each.metadata}`} still names
             </span>
             <Present object={pathObject(each.path)} context={context} />
           </li>

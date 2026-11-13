@@ -277,7 +277,7 @@ test("duplicating a prim beside itself, undone; one whose opinions are in anothe
   assert.match(noSpecToCopy("/X", "a.usda", []), /^a\.usda has no spec of \/X to copy\. /);
 });
 
-test("moving a prim under another, reordering siblings, each undone; unrepaired paths are a live notice", async () => {
+test("moving a prim under another, reordering siblings, each undone; unrepaired paths are a notice that points at Health", async () => {
   const { h, store, stage, steps } = await opened();
   assert.equal(store.moveTo("/World/Rock", "/World/Beacons"), undefined);
   assert.equal(store.selection, null);
@@ -298,9 +298,11 @@ test("moving a prim under another, reordering siblings, each undone; unrepaired 
   // The chrome variant's relationship names the robot, and no prim selects it: the move leaves it.
   store.moveTo("/World/Robot", "/World/Beacons");
   const notice = store.notices.at(-1)!;
-  assert.match(notice.message, /1 path still names what was moved/);
+  assert.equal(notice.message, "1 path still names what was moved, in specs no composed prim uses: see Health.");
+  assert.equal(notice.tab, "health", "a click brings the Health tab forward");
+  // Health lists them, once.
   assert.deepEqual(
-    notice.unrepaired.map((each) => [each.layer.identifier, specStagePath(each.spec), each.field, each.path]),
+    store.health!.namespaceEdit!.unrepaired.map((each) => [each.layer.identifier, specStagePath(each.spec), each.field, each.path]),
     [["scene.usda", "/World/Beacons/Robot.mirrors", "targets", "/World/Robot"]],
   );
 });

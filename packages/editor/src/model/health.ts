@@ -45,6 +45,8 @@ export interface HealthUnrepaired<L> {
   readonly field: string;
   /** The path it names. */
   readonly path: string;
+  /** For a `metadata` field, the metadata field's name. */
+  readonly metadata?: string | null;
 }
 
 /** What {@link healthReport} reads. */

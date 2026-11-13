@@ -864,7 +864,7 @@ export class EditorStore {
   /** A notice of the paths a move or delete left naming what it moved, each live, when it left any. */
   #unrepaired(action: string, kind: "move" | "delete", receipt: EditReceipt | null): void {
     if (receipt === null || receipt.unrepaired.length === 0) return;
-    this.#notices.add(action, unrepairedMessage(kind, receipt.unrepaired), null, receipt.unrepaired);
+    this.#notices.add(action, unrepairedMessage(kind, receipt.unrepaired.length), null, "health");
   }
 
   // Prim authoring (`model/primAuthoring.ts`): each one undoable action where edits go.

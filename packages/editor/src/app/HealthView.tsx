@@ -17,6 +17,7 @@ import { useEditorStore, useRevision } from "./context.ts";
 import { layerName } from "./format.ts";
 import { Present, presentationContext } from "./presentations/Present.tsx";
 import { countRender } from "./renders.ts";
+import { UnrepairedPaths } from "./UnrepairedPaths.tsx";
 
 /** A section's heading. */
 function Heading({ children, count }: { children: React.ReactNode; count: number }) {
@@ -145,18 +146,9 @@ export function HealthView() {
           <p className="px-3 pb-1 text-[11px] text-muted-foreground">
             {health.namespaceEdit.label} left these naming what moved or went: a path in a variant no prim selects, which the stage does not compose, is not repaired (as in OpenUSD); selecting that variant would compose it dangling.
           </p>
-          <ul>
-            {unrepaired.map((each, index) => (
-              <li key={index} className="flex flex-wrap items-baseline gap-x-2 border-b px-3 py-1.5 text-[11px]">
-                <span className="font-mono">{each.spec}</span>
-                <span className="text-muted-foreground">{each.field} names</span>
-                <span className="font-mono">{each.path}</span>
-                <span className="text-muted-foreground">
-                  in <LayerLink context={context} layer={each.layer} />
-                </span>
-              </li>
-            ))}
-          </ul>
+          <div className="px-3 pb-2 text-[11px]">
+            <UnrepairedPaths store={store} unrepaired={unrepaired} />
+          </div>
         </section>
       )}
     </div>

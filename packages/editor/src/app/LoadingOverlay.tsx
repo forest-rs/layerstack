@@ -4,7 +4,7 @@
 // What the editor is doing while a scene opens, or while payloads load in
 // one: the phase (fetching the root, reading it, each round of the asset
 // loop fetching and reading, then composing what the rounds read),
-// what has arrived, how long it has taken, and a way to stop waiting. Each
+// what has arrived, how long it has taken, and a way to stop either. Each
 // phase is shown before its work holds the page (the session waits for it
 // to paint), so even a root layer that takes seconds to read says so.
 import { useEffect, useState } from "react";
@@ -67,11 +67,9 @@ export function LoadingOverlay() {
             </span>
           )}
           {elapsed !== null && <span>{elapsed.toFixed(1)} s</span>}
-          {status.kind === "opening" && (
-            <Button variant="ghost" size="xs" className="ml-auto" onPress={() => store.cancelOpen()}>
-              Cancel
-            </Button>
-          )}
+          <Button variant="ghost" size="xs" className="ml-auto" onPress={() => store.cancel()}>
+            Cancel
+          </Button>
         </div>
       </div>
     </div>

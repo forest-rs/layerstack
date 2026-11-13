@@ -102,9 +102,10 @@ test("each action bumps the concerns it changed", async () => {
   assert.deepEqual(store.notices, []);
   assert.notDeepEqual(store.scene.linking, links);
 
+  // An undo may fetch: `status` says an action is running, and then that none is.
   const before = store.signals.snapshot();
   await h.settle(store.undo());
-  assert.deepEqual(bumped(before, store.signals.snapshot()), ["composition", "draws", "history", "loop"]);
+  assert.deepEqual(bumped(before, store.signals.snapshot()), ["status", "composition", "draws", "history", "loop"]);
 });
 
 test("opening another scene bumps every concern", async () => {

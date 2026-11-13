@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Session } from "../src/model/session.ts";
-import { harness, PAYLOAD_ROOT, sampleSource, trap } from "./support/storeHarness.ts";
+import { harness, NESTED_LAYERS, PAYLOAD_ROOT, sampleSource, trap } from "./support/storeHarness.ts";
 
 /** The scalar value of the attribute at `path`; `null` when it has none. */
 function valueOf(stage: Session["stage"], path: string, time?: number): unknown {
@@ -110,12 +110,18 @@ test("a value set is read back, undone and redone", async () => {
   assert.deepEqual(store.notices, []);
 });
 
-test("an edit the stage refuses is a notice, and changes nothing", async () => {
+test("an edit the stage refuses returns why, is a notice, and changes nothing", async () => {
   const h = await harness();
   await h.open(sampleSource());
   const { store } = h;
-  store.setValue("/World/Top.size", { type: "token", value: "large" });
+  assert.equal(store.setValue("/World/Top.size", { type: "double", value: 1 }), undefined, "an edit the stage takes returns nothing");
+  await h.settle(store.undo());
+  const refusal = store.setValue("/World/Top.size", { type: "token", value: "large" });
+  assert.equal(typeof refusal, "string");
   assert.equal(store.notices.length, 1);
+  assert.equal(store.notices[0]!.message, refusal);
+  assert.equal(store.apply("nothing there", [{ type: "setValue", path: "/World/Nowhere.size", value: { type: "double", value: 1 } }]), store.notices[1]!.message);
+  store.dismiss(store.notices[1]!.id);
   assert.equal(store.notices[0]!.action, "set /World/Top.size");
   assert.equal(valueOf(store.session!.stage, "/World/Top.size"), 0.6);
   assert.equal(store.status.kind, "ready");
@@ -285,7 +291,7 @@ test("cancelling an open keeps the scene the editor had and frees the one being 
   assert.notEqual(store.opening, null);
   assert.ok(second.asked.includes("assets/robot.usda"), "the open is waiting on its payloads");
 
-  store.cancelOpen();
+  store.cancel();
   assert.equal(store.status.kind, "ready");
   assert.equal(store.opening, null);
   assert.equal(store.openingPhase, null);
@@ -301,26 +307,28 @@ test("cancelling an open keeps the scene the editor had and frees the one being 
   assert.deepEqual(store.notices, []);
 });
 
-test("a cancelled open stops fetching", { todo: "the open has no abort signal yet" }, async () => {
+test("a cancelled open stops fetching", async () => {
   const h = await harness();
   await h.open(sampleSource());
   const { store } = h;
-  const second = sampleSource();
-  const release = second.hold("library.usda");
+  // Its first round fetches a layer whose reference is the second round's.
+  const second = sampleSource("nested.usda", NESTED_LAYERS);
+  const release = second.hold("middle.usda");
   const opening = store.open(second);
   await h.turn(40);
-  assert.deepEqual(second.asked, ["scene.usda", "library.usda"]);
+  assert.deepEqual(second.asked, ["nested.usda", "middle.usda"]);
 
-  store.cancelOpen();
-  assert.equal(second.signals.get("library.usda")?.aborted, true, "the fetch in flight is told to stop");
+  store.cancel();
+  assert.equal(second.signals.get("middle.usda")?.aborted, true, "the fetch in flight is told to stop");
   release();
   await h.settle(opening);
   await h.turn(40);
-  // The round after the sublayer's (the referenced assets) is never asked for.
-  assert.deepEqual(second.asked, ["scene.usda", "library.usda"]);
+  // The round in flight is not read, and the round after it is never asked for.
+  assert.deepEqual(second.asked, ["nested.usda", "middle.usda"]);
+  assert.equal(store.status.kind, "ready");
 });
 
-test("an action asked for while another waits on its assets runs after it", { todo: "actions are not serialized yet" }, async () => {
+test("an action asked for while another waits on its assets runs after it", async () => {
   const h = await harness();
   const source = sampleSource();
   await h.open(source);
@@ -338,14 +346,14 @@ test("an action asked for while another waits on its assets runs after it", { to
   assert.equal(session.loops.current, null);
   const run = session.loops.runs.find((each) => each.cause === "finish=chrome")!;
   assert.equal(run.error, null);
-  assert.equal(run.assets[0]!.outcome, "loaded");
+  assert.equal(run.assets[0]!.outcome, "read");
   // The undo ran once the variant had what it needed, and undid it.
   assert.equal(variantOf(session.stage, "/World/Robot", "finish"), "painted");
   assert.equal(session.history.nextUndo, null);
   assert.equal(session.history.redoSteps.length, 1);
 });
 
-test("two undos asked for at once undo two steps, one after the other", { todo: "actions are not serialized yet" }, async () => {
+test("two undos asked for at once undo two steps, one after the other", async () => {
   const h = await harness();
   const source = sampleSource();
   await h.open(source);
@@ -376,7 +384,7 @@ test("two undos asked for at once undo two steps, one after the other", { todo: 
   assert.equal(session.history.redoSteps.length, 2);
 });
 
-test("opening another scene while payloads load ends the load and opens it", { todo: "the open frees the session a load still awaits on" }, async () => {
+test("opening another scene while payloads load ends the load and opens it", async () => {
   const h = await harness();
   const first = payloadScene();
   const { store } = h;
@@ -402,7 +410,7 @@ test("opening another scene while payloads load ends the load and opens it", { t
   assert.equal(first.signals.get("assets/robot.usda")?.aborted, true);
 });
 
-test("a module's trap during an edit loses the module, not just the edit", { todo: "an edit's trap is reported as a notice" }, async () => {
+test("a module's trap during an edit loses the module, not just the edit", async () => {
   const h = await harness();
   await h.open(sampleSource());
   const { store } = h;
@@ -417,7 +425,7 @@ test("a module's trap during an edit loses the module, not just the edit", { tod
   assert.deepEqual(store.notices, []);
 });
 
-test("a module's trap during an undo loses the module", { todo: "an undo's trap is reported as a notice" }, async () => {
+test("a module's trap during an undo loses the module", async () => {
   const h = await harness();
   await h.open(sampleSource());
   const { store } = h;
@@ -432,22 +440,27 @@ test("a module's trap during an undo loses the module", { todo: "an undo's trap 
   assert.deepEqual(store.notices, []);
 });
 
-test("a module's trap in an open that was superseded still loses the module", { todo: "a superseded open's trap is dropped" }, async () => {
+test("a module's trap in an open that was superseded still loses the module", async (t) => {
   const h = await harness();
   const { store } = h;
   const first = sampleSource();
   const release = first.hold("library.usda");
-  first.fail("library.usda", trap());
   const opening = store.open(first);
   await h.turn(40);
-  // Another open supersedes it before its fetch fails with the trap.
+  // Letting go of what the superseded open made is a call into the module, and it traps.
+  t.mock.method(Session.prototype, "free", () => {
+    throw trap();
+  });
   const second = store.open(sampleSource("missing.usda"));
   release();
   await h.settle(Promise.all([opening, second]));
   assert.equal(store.status.kind, "lost");
+  // Lost is for good: an open asked for afterwards does nothing.
+  await h.settle(store.open(sampleSource()));
+  assert.equal(store.status.kind, "lost");
 });
 
-test("the selection follows a renamed ancestor", { todo: "only the renamed prim itself is followed" }, async () => {
+test("the selection follows a renamed ancestor", async () => {
   const h = await harness();
   await h.open(payloadScene());
   const { store } = h;
@@ -461,7 +474,7 @@ test("the selection follows a renamed ancestor", { todo: "only the renamed prim 
   assert.equal(h.view.updates.at(-1)!.selected, "/World/Light/Post");
 });
 
-test("the selection follows a rename undone and redone", { todo: "an undo leaves the selection on the old path" }, async () => {
+test("the selection follows a rename undone and redone", async () => {
   const h = await harness();
   await h.open(payloadScene());
   const { store } = h;
@@ -474,7 +487,7 @@ test("the selection follows a rename undone and redone", { todo: "an undo leaves
   assert.deepEqual(store.notices, []);
 });
 
-test("a scene without payloads, opened automatically, lets its prims be renamed", { todo: "its load rules are left at none, which refuses a move" }, async () => {
+test("a scene without payloads, opened automatically, lets its prims be renamed", async () => {
   const h = await harness();
   await h.open(sampleSource());
   const { store } = h;
@@ -483,7 +496,7 @@ test("a scene without payloads, opened automatically, lets its prims be renamed"
   assert.notEqual(store.session!.stage.prim("/World/Spinner"), null);
 });
 
-test("undoing the definition of the selected prim clears the selection", { todo: "an undo leaves the selection on a prim that is gone" }, async () => {
+test("undoing the definition of the selected prim clears the selection", async () => {
   const h = await harness();
   await h.open(sampleSource());
   const { store } = h;
@@ -494,7 +507,7 @@ test("undoing the definition of the selected prim clears the selection", { todo:
   assert.equal(h.view.updates.at(-1)!.selected, null);
 });
 
-test("the time range and up axis follow the stage's metadata as it is edited and undone", { todo: "they are read once, at open" }, async () => {
+test("the time range and up axis follow the stage's metadata as it is edited and undone", async () => {
   const h = await harness();
   await h.open(sampleSource());
   const { store } = h;
@@ -513,4 +526,64 @@ test("the time range and up axis follow the stage's metadata as it is edited and
   store.setTime(40);
   store.apply("set endTimeCode", [{ type: "setLayerMetadata", key: "endTimeCode", value: { type: "double", value: 24 } }]);
   assert.equal(store.time, 24);
+});
+
+test("cancelling a payload load stops its fetches and leaves the payloads as they were", async () => {
+  const h = await harness();
+  const source = payloadScene();
+  const { store } = h;
+  store.setPayloads("none");
+  await h.open(source);
+  const session = store.session!;
+  await h.settle(store.load("/World/Beacon"));
+  const rules = session.stage.loadRules();
+
+  const release = source.hold("assets/robot.usda");
+  const loading = store.load("/World");
+  await h.turn();
+  assert.equal(store.status.kind, "loading");
+  assert.equal(store.running, "load /World");
+  store.cancel();
+  await h.settle(loading);
+  release();
+  await h.turn(20);
+
+  assert.equal(store.status.kind, "ready");
+  assert.equal(store.running, null);
+  assert.equal(source.signals.get("assets/robot.usda")?.aborted, true);
+  assert.deepEqual(session.stage.loadRules(), rules);
+  assert.equal(session.stage.prim("/World/Robot/Body"), null);
+  assert.notEqual(session.stage.prim("/World/Beacon/Post"), null, "what was loaded before stays loaded");
+  assert.equal(session.loops.runs.at(-1)!.error, "cancelled");
+  assert.equal(session.loops.current, null);
+  assert.deepEqual(store.notices, []);
+  // Loading it again, uncancelled, fetches it and loads it.
+  await h.settle(store.load("/World/Robot"));
+  assert.notEqual(session.stage.prim("/World/Robot/Body"), null);
+  assert.deepEqual(store.notices, []);
+});
+
+test("an edit asked for while an action fetches runs after it, and a refusal is then a notice", async () => {
+  const h = await harness();
+  const source = sampleSource();
+  await h.open(source);
+  const { store } = h;
+  const release = source.hold("assets/chrome.usda");
+  const variant = store.selectVariant("/World/Robot", "finish", "chrome");
+  await h.turn();
+  assert.equal(store.running, "select finish=chrome");
+  assert.equal(store.setValue("/World/Top.size", { type: "double", value: 3 }), undefined);
+  assert.equal(store.setValue("/World/Top.size", { type: "token", value: "large" }), undefined, "not refused yet: it has not run");
+  assert.equal(valueOf(store.session!.stage, "/World/Top.size"), 0.6, "the edit waits its turn");
+  release();
+  await h.settle(variant);
+  await h.turn();
+  assert.equal(store.running, null);
+  assert.equal(valueOf(store.session!.stage, "/World/Top.size"), 3);
+  assert.equal(store.notices.length, 1);
+  // Each recomposition is logged under the action that caused it.
+  assert.deepEqual(
+    store.session!.changeLog.slice(-2).map((entry) => entry.cause),
+    ["finish=chrome", "set /World/Top.size"],
+  );
 });

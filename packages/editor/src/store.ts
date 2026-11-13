@@ -7,18 +7,25 @@
 // (`playback.ts`), the selection (`selection.ts`), how the viewport shows
 // the scene (`view.ts`), the draws and the view they are applied to
 // (`drawing.ts`), and what is reported (`notices.ts`). This file holds the
-// session, wires those together, and runs the actions on the stage: each
-// one runs, brings the draws up to the stage's change records, and bumps
-// the signals of what it changed (`store/signals.ts`), which the panels
-// listen to (`app/context.ts`). Nothing here knows about the DOM except
-// the viewport it is handed.
+// session, wires those together, and runs the actions on the stage, one
+// at a time in the order asked (`actions.ts`): each one runs, brings the
+// draws up to the stage's change records, and bumps the signals of what
+// it changed (`store/signals.ts`), which the panels listen to
+// (`app/context.ts`). Nothing here knows about the DOM except the
+// viewport it is handed.
+//
+// To add an action: a method here that calls `#edit` (it only edits the
+// stage) or `#fetching` (it may want assets after) with what to do to the
+// session; state that is not the stage's goes in the module of its
+// concern, with a getter here and a bump of its channel.
 import type { Edit, EditReceipt, EditTarget, Layer, Layerstack, LoadOutcome, LoadPolicy, ValueInput } from "@forest-rs/layerstack";
 import type { BudgetReport, DrawCost, Stagehand } from "@forest-rs/layerstack_stagehand";
 import type { AssetFocus, BudgetChoice, DrawScopeChoice } from "./model/assetView.ts";
 import type { ViewportScene, ViewportUpdate } from "./model/draws.ts";
 import { indexOfId, type InstancerColumns, toggled } from "./model/instancer.ts";
-import type { Session } from "./model/session.ts";
+import type { PathMove, Session } from "./model/session.ts";
 import type { SceneSource } from "./model/sources.ts";
+import { ActionQueue } from "./store/actions.ts";
 import { Drawing } from "./store/drawing.ts";
 import { type FrameNote, FrameNotes, type Notice, Notices } from "./store/notices.ts";
 import { type BusyPhase, OpenController, type PayloadChoice } from "./store/opening.ts";
@@ -51,6 +58,13 @@ export class EditorStore {
   source: SceneSource | null = null;
   /** Why the open scene's payloads were left unloaded; `null` when they were not, or were chosen so. */
   payloadNote: string | null = null;
+  /**
+   * The last move of a prim the store followed (a rename, or one undone
+   * or redone): another object each time, for what keeps paths of its
+   * own (the prim tree's open rows) to follow it too.
+   */
+  renamed: PathMove | null = null;
+  readonly #actions: ActionQueue;
   readonly #opener: OpenController;
   readonly #playback: Playback;
   readonly #selection = new Selection();
@@ -58,6 +72,8 @@ export class EditorStore {
   readonly #drawing: Drawing;
   readonly #notices: Notices;
   readonly #frameNotes: FrameNotes;
+  /** The session whose metadata {@link EditorStore.#readStage} last read, and the change records it had then. */
+  #read: { session: Session | null; changes: number } = { session: null, changes: 0 };
   #frame = 0;
   /** The channels {@link EditorStore.#bumpSoon} bumps at the next frame. */
   readonly #soon = new Set<Channel>();
@@ -66,6 +82,7 @@ export class EditorStore {
     this.layerstack = layerstack;
     this.stagehand = stagehand;
     const signals = this.signals;
+    this.#actions = new ActionQueue(() => signals.bump("status"));
     this.#notices = new Notices(signals);
     this.#frameNotes = new FrameNotes(signals);
     this.#playback = new Playback(
@@ -97,6 +114,7 @@ export class EditorStore {
         return hasSession();
       },
       setStatus: (status) => this.#setStatus(status),
+      settle: () => this.#actions.cancel(),
       commit: (session, source, note) => this.#commit(session, source, note),
       lose: (error, label) => this.lose(error, label),
     });
@@ -179,6 +197,15 @@ export class EditorStore {
     return this.#view.budgetChoice;
   }
 
+  /**
+   * The action waiting on its assets (`undo`, `select finish=chrome`,
+   * `load /World`), by its label; `null` when none is. Actions asked for
+   * meanwhile run after it, in order.
+   */
+  get running(): string | null {
+    return this.#actions.running;
+  }
+
   /** The session being opened, while its assets are fetched. */
   get opening(): Session | null {
     return this.#opener.opening;
@@ -249,19 +276,22 @@ export class EditorStore {
   // Opening.
 
   /** The source's root, opened and resolved: everything it depends on is fetched first. */
-  open(source: SceneSource): Promise<void> {
-    this.#drawing.forgetResident();
-    return this.#opener.open(source);
+  async open(source: SceneSource): Promise<void> {
+    // A lost module opens nothing.
+    if (this.status.kind === "lost") return;
+    await this.#opener.open(source);
   }
 
   /**
-   * Stops waiting for the scene being opened: the stage keeps the scene it
-   * had. Work already holding the thread finishes, and its result is
-   * dropped.
+   * Stops what the overlay shows. An open: its fetches are aborted and
+   * what it made is freed, and the editor keeps the scene it had. A
+   * payload load: its fetches are aborted, the payloads go back to how
+   * they were loaded before it, and the layers it read are released.
+   * Work already holding the thread finishes first.
    */
-  cancelOpen(): void {
-    if (this.status.kind !== "opening") return;
-    this.#opener.cancel();
+  cancel(): void {
+    if (this.status.kind === "opening") this.#opener.cancel();
+    else if (this.status.kind === "loading") this.#actions.cancelRunning();
   }
 
   /** Sets how the next scene opens its payloads. */
@@ -273,12 +303,16 @@ export class EditorStore {
   #commit(session: Session, source: SceneSource, note: string | null): void {
     this.payloadNote = note;
     this.session?.free();
+    // The cluster sets the viewport holds are the freed scene's.
+    this.#drawing.forgetResident();
+    this.renamed = null;
     this.session = session;
     this.source = source;
     this.#selection.clear();
     this.viewport?.setMarker(null);
     this.#view.reset(upAxis(session));
     this.#playback.reset(timeRange(session.stage));
+    this.#read = { session, changes: session.changeLog.length };
     this.status = { kind: "ready" };
     this.#drawing.sync(false);
     // Another scene: everything a panel reads may be another thing.
@@ -286,6 +320,8 @@ export class EditorStore {
   }
 
   #setStatus(status: EditorStatus): void {
+    // Lost is for good: nothing that was in flight says otherwise.
+    if (this.status.kind === "lost") return;
     this.status = status;
     this.signals.bump("status");
   }
@@ -308,6 +344,9 @@ export class EditorStore {
     console.error(error);
     this.#playback.stop();
     this.status = { kind: "lost", label: label ?? this.source?.label ?? null, outOfMemory, message };
+    // Whatever was in flight stops where it waits, and calls into no module again.
+    this.#opener.abort();
+    void this.#actions.cancel();
     this.signals.bump("status", "time");
     return true;
   }
@@ -490,37 +529,62 @@ export class EditorStore {
     this.signals.bump("target");
   }
 
-  /** Applies `edits` as one undoable action. */
-  apply(label: string, edits: readonly Edit[]): void {
-    this.#act(label, (session) => session.apply(label, edits));
+  /**
+   * Applies `edits` as one undoable action. Returns why the stage refused
+   * them (the notice's message), or `undefined` when it did not, or when
+   * the action waits its turn behind one that is fetching: a refusal is
+   * then a notice alone.
+   */
+  apply(label: string, edits: readonly Edit[]): string | undefined {
+    return this.#edit(label, (session) => session.apply(label, edits));
   }
 
-  /** Authors `value` for the attribute at `path`: its default, or its sample at `time`. */
-  setValue(path: string, value: ValueInput, time: number | null = null): void {
-    this.#act(time === null ? `set ${path}` : `set ${path} at ${time}`, (session) => session.setValue(path, value, time));
+  /**
+   * Authors `value` for the attribute at `path`: its default, or its
+   * sample at `time`. Returns why the stage refused it, as
+   * {@link EditorStore.apply} does.
+   */
+  setValue(path: string, value: ValueInput, time: number | null = null): string | undefined {
+    return this.#edit(time === null ? `set ${path}` : `set ${path} at ${time}`, (session) => session.setValue(path, value, time));
   }
 
   /**
    * Defines a child of `parent` named `name`, of `typeName` (typeless with
-   * `null`), and selects it.
+   * `null`), and selects it. Returns why the stage refused it, as
+   * {@link EditorStore.apply} does.
    */
-  definePrim(parent: string, name: string, typeName: string | null): void {
+  definePrim(parent: string, name: string, typeName: string | null): string | undefined {
     const path = parent === "/" ? `/${name}` : `${parent}/${name}`;
     const label = `define ${typeName ?? "typeless"} ${path}`;
     const edit = typeName === null ? { type: "definePrim" as const, path } : { type: "definePrim" as const, path, typeName };
-    if (this.#act(label, (session) => session.apply(label, [edit]))) this.select(path);
+    return this.#edit(
+      label,
+      (session) => session.apply(label, [edit]),
+      () => this.#selection.select(path),
+    );
   }
 
-  /** Renames or reparents the prim at `path` to `to`, repairing the paths that name it, and keeps it selected. */
-  move(path: string, to: string): void {
-    if (this.#act(`move ${path}`, (session) => session.move(path, to)) && this.selection === path) this.select(to);
+  /**
+   * Renames or reparents the prim at `path` to `to`, repairing the paths
+   * that name it; the selection follows when it is the prim or beneath
+   * it. Returns why the stage refused it, as {@link EditorStore.apply}
+   * does.
+   */
+  move(path: string, to: string): string | undefined {
+    return this.#edit(
+      `move ${path}`,
+      (session) => session.move(path, to),
+      () => this.#follow({ from: path, to }),
+    );
   }
 
-  /** Removes the prim at `path` from the edit target's layer stack. */
-  delete(path: string): void {
-    if (this.#act(`delete ${path}`, (session) => session.delete(path)) && this.selection !== null && (this.selection === path || this.selection.startsWith(`${path}/`))) {
-      this.select(null);
-    }
+  /**
+   * Removes the prim at `path` from the edit target's layer stack; a
+   * selection at or beneath it is cleared. Returns why the stage refused
+   * it, as {@link EditorStore.apply} does.
+   */
+  delete(path: string): string | undefined {
+    return this.#edit(`delete ${path}`, (session) => session.delete(path));
   }
 
   /**
@@ -529,14 +593,14 @@ export class EditorStore {
    * `UsdGeomPointInstancer::InvisibleIds`) or shows it again, as one edit
    * where edits go. Nothing when it already is.
    */
-  setInstanceVisible(instancer: string, id: bigint, visible: boolean): void {
+  setInstanceVisible(instancer: string, id: bigint, visible: boolean): string | undefined {
     const stage = this.session?.stage;
     const columns = this.instancerColumns(instancer);
-    if (stage === undefined || columns === null || columns.invisibleIds.includes(id) !== visible) return;
+    if (stage === undefined || columns === null || columns.invisibleIds.includes(id) !== visible) return undefined;
     const attribute = stage.attribute(`${instancer}.invisibleIds`);
     const at = attribute?.mightBeTimeVarying() === true ? (this.time ?? null) : null;
     const value = { type: "int64[]", value: BigInt64Array.from(toggled(columns.invisibleIds, id)) } as const;
-    this.apply(`${visible ? "show" : "hide"} instance ${id} of ${instancer}`, [
+    return this.apply(`${visible ? "show" : "hide"} instance ${id} of ${instancer}`, [
       { type: "setValue", path: `${instancer}.invisibleIds`, value, ...(at === null ? {} : { time: at }) },
     ]);
   }
@@ -547,40 +611,47 @@ export class EditorStore {
    * DeactivateId`) or activates it again, as one edit where edits go.
    * Nothing when it already is.
    */
-  setInstanceActive(instancer: string, id: bigint, active: boolean): void {
+  setInstanceActive(instancer: string, id: bigint, active: boolean): string | undefined {
     const columns = this.instancerColumns(instancer);
-    if (columns === null || columns.inactiveIds.includes(id) !== active) return;
+    if (columns === null || columns.inactiveIds.includes(id) !== active) return undefined;
     const value = { type: "int64[]", value: BigInt64Array.from(toggled(columns.inactiveIds, id)) } as const;
-    this.apply(`${active ? "activate" : "deactivate"} instance ${id} of ${instancer}`, [{ type: "setMetadata", path: instancer, key: "inactiveIds", value }]);
+    return this.apply(`${active ? "activate" : "deactivate"} instance ${id} of ${instancer}`, [{ type: "setMetadata", path: instancer, key: "inactiveIds", value }]);
   }
 
   /** Selects `variant` of `set` on `prim`, then fetches what it needs. */
-  async selectVariant(prim: string, set: string, variant: string): Promise<void> {
-    await this.#actAsync(`select ${set}=${variant}`, (session) => session.selectVariant(prim, set, variant));
+  selectVariant(prim: string, set: string, variant: string): Promise<void> {
+    return this.#fetching(`select ${set}=${variant}`, async (session, signal) => {
+      await session.selectVariant(prim, set, variant, signal);
+      return false;
+    });
   }
 
-  /** Undoes the newest action, then fetches what that brings back. */
-  async undo(): Promise<void> {
-    await this.#actAsync("undo", (session) => session.undo());
+  /** Undoes the newest action, then fetches what that brings back; the selection follows a rename undone. */
+  undo(): Promise<void> {
+    return this.#fetching("undo", async (session, signal) => this.#follow(await session.undo(signal)));
   }
 
-  /** Redoes the most recently undone action, then fetches what it needs. */
-  async redo(): Promise<void> {
-    await this.#actAsync("redo", (session) => session.redo());
+  /** Redoes the most recently undone action, then fetches what it needs; the selection follows a rename redone. */
+  redo(): Promise<void> {
+    return this.#fetching("redo", async (session, signal) => this.#follow(await session.redo(signal)));
   }
 
   /** Mutes or unmutes a layer, by identifier for a muted layer the stage released. */
-  async setMuted(layer: Layer | string, muted: boolean): Promise<void> {
-    await this.#actAsync(muted ? "mute" : "unmute", (session) => session.setMuted(layer, muted));
+  setMuted(layer: Layer | string, muted: boolean): Promise<void> {
+    return this.#fetching(muted ? "mute" : "unmute", async (session, signal) => {
+      await session.setMuted(layer, muted, signal);
+      return false;
+    });
   }
 
   /**
    * Loads the payloads at `path` (and beneath it, with `"withDescendants"`)
    * and fetches what they want, the prim tree showing them loaded once
-   * they are; the overlay shows the rounds as an open's.
+   * they are; the overlay shows the rounds as an open's, and
+   * {@link EditorStore.cancel} stops it.
    */
-  async load(path: string, policy: LoadPolicy = "withDescendants"): Promise<void> {
-    await this.#loading(`load ${path}`, path, (session) => session.loadPayloads([path], [], policy));
+  load(path: string, policy: LoadPolicy = "withDescendants"): Promise<void> {
+    return this.#loading(`load ${path}`, path, (session, signal) => session.loadPayloads([path], [], policy, undefined, signal));
   }
 
   /**
@@ -588,34 +659,47 @@ export class EditorStore {
    * stage and the draws, and the layers nothing uses any more are
    * released, so their memory comes back; loading them again fetches them.
    */
-  async unload(path: string): Promise<void> {
-    await this.#loading(`unload ${path}`, path, async (session) => {
-      const outcome = await session.loadPayloads([], [path]);
+  unload(path: string): Promise<void> {
+    return this.#loading(`unload ${path}`, path, async (session, signal) => {
+      const outcome = await session.loadPayloads([], [path], "withDescendants", undefined, signal);
       session.releaseUnusedLayers();
       return outcome;
     });
   }
 
-  /** Runs a payload load or unload with the overlay up, then brings the draws up to it. */
-  async #loading(action: string, label: string, run: (session: Session) => Promise<LoadOutcome>): Promise<void> {
-    const session = this.session;
-    if (session === null || this.status.kind !== "ready") return;
-    this.#opener.begin();
-    this.#setStatus({ kind: "loading", label });
-    try {
-      // A path the stage refuses (an inactive prim) is skipped, as in
-      // OpenUSD; the notice says which and why.
-      for (const { path, code } of (await run(session)).refused) {
-        this.#notices.add(action, `${path} was not ${action.startsWith("load") ? "loaded" : "unloaded"}: ${code.replaceAll("_", " ")}`, `load.${code}`);
+  /** Runs a payload load or unload in its turn with the overlay up, then brings the draws up to it. */
+  #loading(action: string, label: string, run: (session: Session, signal: AbortSignal) => Promise<LoadOutcome>): Promise<void> {
+    return this.#actions.run(action, async (signal) => {
+      const session = this.session;
+      // Behind an open's overlay, or with no scene, there is nothing to load into.
+      if (session === null || this.status.kind !== "ready") return;
+      const rules = session.stage.loadRules();
+      this.#opener.begin();
+      this.#setStatus({ kind: "loading", label });
+      try {
+        // A path the stage refuses (an inactive prim) is skipped, as in
+        // OpenUSD; the notice says which and why.
+        for (const { path, code } of (await run(session, signal)).refused) {
+          this.#notices.add(action, `${path} was not ${action.startsWith("load") ? "loaded" : "unloaded"}: ${code.replaceAll("_", " ")}`, `load.${code}`);
+        }
+      } catch (error) {
+        if (this.lose(error)) return;
+        if (!signal.aborted) this.#notices.report(action, error);
       }
-    } catch (error) {
-      if (this.lose(error)) return;
-      this.#notices.report(action, error);
-    }
-    if (this.session !== session) return;
-    this.#opener.end();
-    this.status = { kind: "ready" };
-    this.#sync("status", "loop");
+      try {
+        if (signal.aborted) {
+          // Cancelled: the payloads are loaded as they were, and what was read for them is let go.
+          session.stage.setLoadRules(rules);
+          session.releaseUnusedLayers();
+        }
+        this.#opener.end();
+        // An open that began meanwhile says where the editor is.
+        if ((this.status as EditorStatus).kind === "loading") this.status = { kind: "ready" };
+        this.#settled(session, false, "status", "loop");
+      } catch (error) {
+        if (!this.lose(error)) throw error;
+      }
+    });
   }
 
   /** Forgets a notice. */
@@ -623,30 +707,87 @@ export class EditorStore {
     this.#notices.dismiss(id);
   }
 
-  /** Runs an action; whether it succeeded (a failure is a notice). */
-  #act(action: string, run: (session: Session) => EditReceipt | void): boolean {
-    const session = this.session;
-    if (session === null) return false;
-    let done = true;
-    try {
-      run(session);
-    } catch (error) {
-      this.#notices.report(action, error);
-      done = false;
-    }
-    this.#sync("history");
-    return done;
+  /**
+   * Runs an edit of the stage in its turn: now, when no action is
+   * waiting on its assets, else after those asked for before it. `then`
+   * runs after an edit the stage took, and returns whether it changed the
+   * selection. A refusal is a notice, and what this returns when the
+   * edit ran now; a module's trap loses the module.
+   */
+  #edit(action: string, run: (session: Session) => EditReceipt, then?: () => boolean): string | undefined {
+    let refusal: string | undefined;
+    void this.#actions.run(action, () => {
+      const session = this.session;
+      if (session === null || this.status.kind === "lost") return;
+      try {
+        let selected = false;
+        try {
+          run(session);
+          selected = then?.() ?? false;
+        } catch (error) {
+          if (this.lose(error)) return;
+          refusal = this.#notices.report(action, error).message;
+        }
+        this.#settled(session, selected, "history");
+      } catch (error) {
+        if (!this.lose(error)) throw error;
+      }
+    });
+    return refusal;
   }
 
-  async #actAsync(action: string, run: (session: Session) => Promise<unknown>): Promise<void> {
-    const session = this.session;
-    if (session === null) return;
-    try {
-      await run(session);
-    } catch (error) {
-      this.#notices.report(action, error);
+  /**
+   * Runs an action that may fetch what the stage then wants, in its turn;
+   * resolves once it has run. `run` returns whether it changed the
+   * selection. A failure is a notice, a module's trap loses the module,
+   * and an action aborted (the scene is going) says nothing.
+   */
+  #fetching(action: string, run: (session: Session, signal: AbortSignal) => Promise<boolean>): Promise<void> {
+    return this.#actions.run(action, async (signal) => {
+      const session = this.session;
+      if (session === null || this.status.kind === "lost") return;
+      try {
+        let selected = false;
+        try {
+          selected = await run(session, signal);
+        } catch (error) {
+          if (this.lose(error)) return;
+          if (!signal.aborted) this.#notices.report(action, error);
+        }
+        this.#settled(session, selected, "history", "loop");
+      } catch (error) {
+        if (!this.lose(error)) throw error;
+      }
+    });
+  }
+
+  /**
+   * After an action on `session`: the selection lets go of a prim that is
+   * no longer there, and the draws and the panels are brought up to the
+   * stage (`selected`: the action changed the selection). Nothing when
+   * the scene is another one by now.
+   */
+  #settled(session: Session, selected: boolean, ...also: readonly Channel[]): void {
+    if (this.session !== session || this.status.kind === "lost") return;
+    const prim = this.selection;
+    if (prim !== null && session.stage.prim(prim) === null) {
+      this.#selection.select(null);
+      selected = true;
     }
-    if (this.session === session) this.#sync("history", "loop");
+    // An instance let go with its instancer takes its outline with it.
+    if (selected && this.instance === null) this.viewport?.setMarker(null);
+    this.#sync(...also, ...(selected ? (["selection"] as const) : []));
+  }
+
+  /**
+   * The selection follows `move`, a prim's (`null`: nothing moved), and
+   * {@link EditorStore.renamed} says so. Returns whether the selection
+   * changed.
+   */
+  #follow(move: PathMove | null): boolean {
+    if (move === null) return false;
+    this.renamed = { ...move };
+    return this.#selection.follow(move.from, move.to);
   }
 
   // Keeping the draws and the panels up to date.
@@ -657,9 +798,25 @@ export class EditorStore {
    * and `also`.
    */
   #sync(...also: readonly Channel[]): void {
+    const moved = this.#readStage();
     const changed = this.#drawing.sync(false);
     this.#outline();
-    this.signals.bump(...also, ...changed);
+    this.signals.bump(...also, ...changed, ...(moved ? (["time"] as const) : []));
+  }
+
+  /**
+   * Reads what the store keeps of the stage's metadata, when the stage
+   * reported a change since it last did: its time range and its up axis
+   * are an edit, or an undo, away from what they were at open. Returns
+   * whether the range or the time changed.
+   */
+  #readStage(): boolean {
+    const session = this.session;
+    if (session === null || (this.#read.session === session && this.#read.changes === session.changeLog.length)) return false;
+    this.#read = { session, changes: session.changeLog.length };
+    const up = upAxis(session);
+    if (up !== this.upAxis) this.#view.setUpAxis(up);
+    return this.#playback.setRange(timeRange(session.stage));
   }
 
   /**

@@ -107,7 +107,7 @@ export class Drawing {
     return ["view", ...this.sync(false, true)];
   }
 
-  /** Forgets the resident cluster sets' costs: they are another scene's. */
+  /** Forgets the resident cluster sets' costs: they are another scene's, once that scene is the one drawn. */
   forgetResident(): void {
     this.#resident = null;
   }

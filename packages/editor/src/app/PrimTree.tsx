@@ -92,6 +92,16 @@ export function PrimTree() {
   useEffect(() => {
     setExpanded(new Set(stage === null ? [] : stage.children("/").slice(0, 8)));
   }, [stage]);
+  // A prim renamed (or a rename undone) keeps its rows open under its new path.
+  const renamed = useStoreSelector(store, ["composition"], (at) => at.renamed);
+  useEffect(() => {
+    if (renamed === null) return;
+    const { from, to } = renamed;
+    setExpanded((open) => {
+      const moved = [...open].map((key) => (key === from || String(key).startsWith(`${from}/`) ? `${to}${String(key).slice(from.length)}` : key));
+      return moved.every((key, at) => key === [...open][at]) ? open : new Set(moved);
+    });
+  }, [renamed]);
   // A selection made elsewhere (the viewport) opens its ancestors.
   const selection = useStoreSelector(store, ["selection"], (at) => at.selection);
   useEffect(() => {

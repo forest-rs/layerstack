@@ -54,6 +54,23 @@ export class Selection {
   }
 
   /**
+   * Follows a prim that moved from `from` to `to`: the selected prim, the
+   * instance's instancer and the explained property, when they are it or
+   * beneath it, are where it is now. Returns whether anything changed.
+   */
+  follow(from: string, to: string): boolean {
+    const moved = (path: string): string => (path === from || path.startsWith(`${from}/`) || path.startsWith(`${from}.`) ? `${to}${path.slice(from.length)}` : path);
+    const prim = this.prim === null ? null : moved(this.prim);
+    const property = this.property === null ? null : moved(this.property);
+    const instancer = this.instance === null ? null : moved(this.instance.instancer);
+    if (prim === this.prim && property === this.property && instancer === (this.instance?.instancer ?? null)) return false;
+    this.prim = prim;
+    this.property = property;
+    if (this.instance !== null && instancer !== null) this.instance = { instancer, index: this.instance.index };
+    return true;
+  }
+
+  /**
    * The columns of the point instancer at `path` in `session` at `time`,
    * read again only when a change reaches it ({@link primRevision}) or
    * the time moves ({@link readColumns}); `null` when it is not one.

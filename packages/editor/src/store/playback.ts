@@ -58,6 +58,26 @@ export class Playback {
     this.time = range?.start;
   }
 
+  /**
+   * Takes the stage's range as it is now (an edit to its metadata, or an
+   * undo, changed it): the time is brought into it, to its start when
+   * there was no range before, and to the default time when there is
+   * none now. Tells no one; returns whether the range or the time
+   * changed.
+   */
+  setRange(range: TimeRange | null): boolean {
+    const was = this.range;
+    if (was?.start === range?.start && was?.end === range?.end && was?.timeCodesPerSecond === range?.timeCodesPerSecond) return false;
+    this.range = range;
+    if (range === null) {
+      this.stop();
+      this.time = undefined;
+    } else {
+      this.time = this.time === undefined ? range.start : Math.min(range.end, Math.max(range.start, this.time));
+    }
+    return true;
+  }
+
   /** Reads everything at `time` (clamped to the range). */
   setTime(time: number | undefined): void {
     const range = this.range;

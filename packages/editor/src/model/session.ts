@@ -26,9 +26,46 @@ import { LoopRecorder } from "./timeline.ts";
 /**
  * Where the editor gets an asset's bytes: HTTP in a browser, the disk in
  * Node. `null` means the asset does not exist; a throw means the fetch
- * failed.
+ * failed. `signal`, when given, aborts once the bytes are no longer
+ * wanted (the open was cancelled): a fetcher that can stop should, and
+ * one that cannot is not waited for.
  */
-export type Fetcher = (identifier: string) => Promise<Uint8Array | null>;
+export type Fetcher = (identifier: string, signal?: AbortSignal) => Promise<Uint8Array | null>;
+
+/**
+ * `work`, or a rejection with `signal`'s reason as soon as it aborts:
+ * what is awaited on the host (a fetch, a frame) is not waited for once
+ * nobody wants it. The work itself goes on unless it heeds the signal;
+ * its result is dropped.
+ */
+function unlessAborted<T>(work: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (signal === undefined) return work;
+  if (signal.aborted) {
+    // Its rejection, if any, has no one to hear it.
+    work.catch(() => {});
+    return Promise.reject(signal.reason);
+  }
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(signal.reason);
+    signal.addEventListener("abort", abort, { once: true });
+    work.then(
+      (value) => {
+        signal.removeEventListener("abort", abort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", abort);
+        reject(error);
+      },
+    );
+  });
+}
+
+/** A prim or property that moved: where it was, and where it is. */
+export interface PathMove {
+  readonly from: string;
+  readonly to: string;
+}
 
 /**
  * How much an asset loop may read: before each round is fetched, the
@@ -99,6 +136,11 @@ export interface SessionOptions {
    * reading a round's supplied layers, composing them) begins.
    */
   readonly phase?: ((phase: OpenPhase) => void | Promise<void>) | undefined;
+  /**
+   * Aborts the open: nothing more is fetched or read, and the open rejects
+   * with the signal's reason, its stage freed.
+   */
+  readonly signal?: AbortSignal | undefined;
 }
 
 /** What an open, or a later round of the asset loop, is doing. */
@@ -162,6 +204,8 @@ export class Session implements Disposable {
   readonly #open: OpenOptions;
   /** The receipt that made each step, for its report. */
   readonly #reports = new WeakMap<HistoryStep, EditReceipt>();
+  /** The move each step of a move made, for what follows the moved path when it is undone and redone. */
+  readonly #moves = new WeakMap<HistoryStep, PathMove>();
   #cause = "open";
   #fetched = 0;
   #fetchedBytes = 0;
@@ -201,12 +245,16 @@ export class Session implements Disposable {
   static async open(layerstack: Layerstack, root: string, fetch: Fetcher, options: SessionOptions = {}): Promise<Session> {
     const loops = new LoopRecorder();
     const start = performance.now();
+    const signal = options.signal;
     loops.begin("open", start);
     const local = options.local?.get(root);
+    signal?.throwIfAborted();
     if (local === undefined) await options.phase?.({ kind: "fetchingRoot", identifier: root });
-    const bytes = local ?? (await fetch(root));
+    signal?.throwIfAborted();
+    const bytes = local ?? (await unlessAborted(fetch(root, signal), signal));
     if (bytes === null) throw new Error(`the root layer ${root} does not exist`);
     await options.phase?.({ kind: "readingRoot", identifier: root, bytes: bytes.byteLength });
+    signal?.throwIfAborted();
     const readStart = performance.now();
     loops.root(root, start, readStart, bytes.byteLength, local === undefined ? "fetched" : "saved");
     const session = new Session(layerstack, root, bytes, fetch, options, loops);
@@ -217,7 +265,7 @@ export class Session implements Disposable {
     }
     session.#log("supply", root, `${bytes.byteLength} B ${local === undefined ? "fetched" : "from the saved layers"} (the root)`);
     try {
-      await session.supplyUnavailable("open");
+      await session.supplyUnavailable("open", undefined, signal);
     } catch (error) {
       session.free();
       throw error;
@@ -267,17 +315,24 @@ export class Session implements Disposable {
    * stage reads are hidden in it. As `resolve` does, a fetch that throws
    * fails the loop after what the round's other fetches returned is read
    * and composed, and an asset supplied but wanted again fails it.
+   *
+   * When `signal` aborts, the loop stops where it waits (a fetch, a
+   * phase's paint) and rejects with the signal's reason: what was
+   * supplied is read, the round in flight is not supplied, and the stage
+   * still wants it, so the caller either lets the stage go or asks for
+   * something else. One loop runs at a time: the caller (the store's
+   * action queue) does not start another until this one settles.
    */
-  async supplyUnavailable(cause: string, budget?: LoadBudget): Promise<number> {
+  async supplyUnavailable(cause: string, budget?: LoadBudget, signal?: AbortSignal): Promise<number> {
     this.#cause = cause;
     const run = this.loops.current ?? this.loops.begin(cause, performance.now());
     try {
-      const rounds = await this.#rounds(budget);
+      const rounds = await this.#rounds(budget, signal);
       if (run.assets.length === 0) this.loops.discard();
       else this.loops.end(performance.now());
       return rounds;
     } catch (error) {
-      this.loops.end(performance.now(), error instanceof Error ? error.message : String(error));
+      this.loops.end(performance.now(), signal?.aborted === true ? "cancelled" : error instanceof Error ? error.message : String(error));
       throw error;
     }
   }
@@ -328,7 +383,10 @@ export class Session implements Disposable {
    * layer's stack and repairs the paths that name it.
    */
   move(path: string, to: string): EditReceipt {
-    return this.#record(`move ${path} to ${to}`, () => this.stage.move(path, to, this.target));
+    const receipt = this.#record(`move ${path} to ${to}`, () => this.stage.move(path, to, this.target));
+    const step = this.history.nextUndo;
+    if (step !== null && this.#reports.get(step) === receipt) this.#moves.set(step, { from: path, to });
+    return receipt;
   }
 
   /** Deletes the prim or property at `path` from the edit layer's stack, as one undoable action. */
@@ -340,34 +398,40 @@ export class Session implements Disposable {
    * Selects `variant` of `set` on `prim`, then supplies what the variant
    * needs that the stage has not read, step by step.
    */
-  async selectVariant(prim: string, set: string, variant: string): Promise<EditReceipt> {
+  async selectVariant(prim: string, set: string, variant: string, signal?: AbortSignal): Promise<EditReceipt> {
     const receipt = this.apply(`select ${set}=${variant} on ${prim}`, [
       { type: "setVariantSelection", path: prim, set, variant },
     ]);
-    await this.supplyUnavailable(`${set}=${variant}`);
+    await this.supplyUnavailable(`${set}=${variant}`, undefined, signal);
     return receipt;
   }
 
   /**
    * Undoes the newest action; what it brings back may want assets, which
    * are supplied. A step an edit outside the history made stale throws
-   * `history.stale` and stays.
+   * `history.stale` and stays. Returns the move it made, when the step
+   * was one: back from where the step moved its prim to.
    */
-  async undo(): Promise<void> {
+  async undo(signal?: AbortSignal): Promise<PathMove | null> {
     const step = this.history.nextUndo;
-    if (step === null) return;
-    this.#cause = `undo ${step.label}`;
+    if (step === null) return null;
+    const cause = `undo ${step.label}`;
+    this.#cause = cause;
+    const moved = this.#moves.get(step);
     this.history.undo();
-    await this.supplyUnavailable(this.#cause);
+    await this.supplyUnavailable(cause, undefined, signal);
+    return moved === undefined ? null : { from: moved.to, to: moved.from };
   }
 
-  /** Redoes the most recently undone action. */
-  async redo(): Promise<void> {
+  /** Redoes the most recently undone action. Returns the move it made, when the step was one. */
+  async redo(signal?: AbortSignal): Promise<PathMove | null> {
     const step = this.history.nextRedo;
-    if (step === null) return;
-    this.#cause = `redo ${step.label}`;
+    if (step === null) return null;
+    const cause = `redo ${step.label}`;
+    this.#cause = cause;
     this.history.redo();
-    await this.supplyUnavailable(this.#cause);
+    await this.supplyUnavailable(cause, undefined, signal);
+    return this.#moves.get(step) ?? null;
   }
 
   /**
@@ -379,12 +443,13 @@ export class Session implements Disposable {
    * muted one among them unless it has unsaved edits; it is then unmuted
    * by identifier, and fetched again. Returns whether the muting changed.
    */
-  async setMuted(layer: Layer | string, muted: boolean): Promise<boolean> {
+  async setMuted(layer: Layer | string, muted: boolean, signal?: AbortSignal): Promise<boolean> {
     const name = typeof layer === "string" ? layer : (layer.identifier ?? "(anonymous)");
-    this.#cause = `${muted ? "mute" : "unmute"} ${name}`;
+    const cause = `${muted ? "mute" : "unmute"} ${name}`;
+    this.#cause = cause;
     const changed = muted ? this.stage.muteLayer(layer) : this.stage.unmuteLayer(layer);
     if (muted) this.releaseUnusedLayers();
-    else await this.supplyUnavailable(this.#cause);
+    else await this.supplyUnavailable(cause, undefined, signal);
     return changed;
   }
 
@@ -448,18 +513,26 @@ export class Session implements Disposable {
    * Returns what the request did (`LoadOutcome`: whether the load rules
    * changed, and the paths the stage refused). Over the budget it throws
    * {@link OverBudget}, the rules as the request left them and the
-   * layers fetched so far read; the caller decides what to unload.
+   * layers fetched so far read; the caller decides what to unload. So it
+   * does when `signal` aborts the fetching: the rules are as the request
+   * left them, and the caller puts back those it had.
    */
-  async loadPayloads(load: readonly string[], unload: readonly string[], policy: LoadPolicy = "withDescendants", budget?: LoadBudget): Promise<LoadOutcome> {
+  async loadPayloads(
+    load: readonly string[],
+    unload: readonly string[],
+    policy: LoadPolicy = "withDescendants",
+    budget?: LoadBudget,
+    signal?: AbortSignal,
+  ): Promise<LoadOutcome> {
     const cause = load.length > 0 ? `load ${load.join(", ")}` : `unload ${unload.join(", ")}`;
     this.#cause = cause;
     const outcome = this.stage.loadAndUnload(load, unload, policy);
-    await this.supplyUnavailable(cause, budget);
+    await this.supplyUnavailable(cause, budget, signal);
     return outcome;
   }
 
   /** The rounds of {@link Session.supplyUnavailable}, recorded into the current run. */
-  async #rounds(budget?: LoadBudget): Promise<number> {
+  async #rounds(budget?: LoadBudget, signal?: AbortSignal): Promise<number> {
     const supplied = new Set<string>();
     // What the run fetched, against the budget.
     let fetchedBytes = 0;
@@ -469,12 +542,14 @@ export class Session implements Disposable {
       const layers = read ?? 0;
       read = null;
       await this.#phase?.({ kind: "composing", layers });
+      signal?.throwIfAborted();
       const start = performance.now();
       const result = this.stage.loadSupplied();
       this.loops.composed(result, start, performance.now());
       this.#logLoad(result);
     };
     for (let round = 0; round < MAX_ROUNDS; ) {
+      signal?.throwIfAborted();
       const wantStart = performance.now();
       const wanted = this.stage.unavailable();
       const wantEnd = performance.now();
@@ -493,7 +568,7 @@ export class Session implements Disposable {
       const stuck = identifiers.find((identifier) => supplied.has(identifier));
       if (stuck !== undefined) throw new Error(`${stuck} was supplied but the stage still wants it`);
       if (budget !== undefined) {
-        const sizes = await Promise.all(identifiers.map((identifier) => budget.size(identifier)));
+        const sizes = await unlessAborted(Promise.all(identifiers.map((identifier) => budget.size(identifier))), signal);
         const planned = fetchedBytes + sizes.reduce<number>((sum, size) => sum + (size ?? 0), 0);
         if (planned > budget.bytes) {
           // Nothing more is fetched, and what the rounds read is left for
@@ -503,7 +578,9 @@ export class Session implements Disposable {
         }
       }
       await this.#phase?.({ kind: "fetching", round, assets: identifiers.length });
-      const settled = await Promise.allSettled(identifiers.map((identifier) => this.#source(identifier)));
+      signal?.throwIfAborted();
+      // Aborted, the round is not supplied: the fetches in flight are told, and not waited for.
+      const settled = await unlessAborted(Promise.allSettled(identifiers.map((identifier) => this.#source(identifier, signal))), signal);
       this.loops.fetched(performance.now());
       let failed: Error | null = null;
       settled.forEach((outcome, index) => {
@@ -522,6 +599,7 @@ export class Session implements Disposable {
       const suppliedBytes = settled.reduce((sum, outcome) => sum + (outcome.status === "fulfilled" ? (outcome.value?.byteLength ?? 0) : 0), 0);
       fetchedBytes += suppliedBytes;
       await this.#phase?.({ kind: "reading", round, layers: identifiers.length, bytes: suppliedBytes });
+      // Not checked for an abort here: what was supplied is read, so the stage holds nothing half taken.
       const readStart = performance.now();
       const result = this.stage.readSupplied();
       this.loops.read(result, readStart, performance.now());
@@ -543,7 +621,7 @@ export class Session implements Disposable {
   }
 
   /** The host's bytes for `identifier`: the saved layers first, then the fetch; logged and timed. */
-  async #source(identifier: string): Promise<Uint8Array | null> {
+  async #source(identifier: string, signal?: AbortSignal): Promise<Uint8Array | null> {
     this.loops.fetchStarted(identifier, performance.now());
     const local = this.#local.get(identifier);
     if (local !== undefined) {
@@ -553,7 +631,7 @@ export class Session implements Disposable {
     }
     let bytes: Uint8Array | null;
     try {
-      bytes = await this.#fetch(identifier);
+      bytes = await this.#fetch(identifier, signal);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.loops.fetchSettled(identifier, performance.now(), null, "error", message);

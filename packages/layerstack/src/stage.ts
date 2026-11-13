@@ -1384,7 +1384,15 @@ export class Stage implements Disposable {
     return rows.map(([asset, offset, scale]) => ({ asset, layerOffset: { offset, scale } }));
   }
 
-  /** Whether `layer` changed since it was read or last saved. Throws `layer.affinity` for another stage's layer. */
+  /**
+   * Whether `layer` changed since it was read or last saved, or, an
+   * anonymous layer never saved (the session layer), since it was
+   * created: a new one is clean until its first edit. An edit undone
+   * leaves it dirty, as OpenUSD's `SdfLayer::IsDirty` reports change
+   * since the save, not a difference from it; {@link UndoHistory.isAt}
+   * tells when undo brought the edits back to a save. Throws
+   * `layer.affinity` for another stage's layer.
+   */
   isDirty(layer: Layer): boolean {
     this.#own("isDirty", layer);
     return this.#call("isDirty", (native) => native.layerDirty(layer.id));

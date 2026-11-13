@@ -47,7 +47,7 @@ export interface Recorded {
   readonly dropped: HistoryStep | null;
 }
 
-/** A point to unwind back to ({@link UndoHistory.unwindTo}), from {@link UndoHistory.mark}. */
+/** A point to unwind back to ({@link UndoHistory.unwindTo}) or to ask whether the history is back at ({@link UndoHistory.isAt}), from {@link UndoHistory.mark}. */
 export interface HistoryMark {
   /** @internal */
   readonly history: UndoHistory;
@@ -343,7 +343,7 @@ export class UndoHistory implements Disposable {
     this.#epoch += 1;
   }
 
-  /** A mark of where the history stands, for {@link UndoHistory.unwindTo}. */
+  /** A mark of where the history stands, for {@link UndoHistory.unwindTo} and {@link UndoHistory.isAt}. */
   mark(): HistoryMark {
     return Object.freeze({
       history: this,
@@ -389,6 +389,39 @@ export class UndoHistory implements Disposable {
     undone.release();
     this.#undo.length = keep;
     return undone;
+  }
+
+  /**
+   * Whether the history stands where it did when `mark` was taken: the
+   * same newest undo step (undone and redone since, or not), or, for a
+   * mark taken with no undo step, none again and none dropped by the
+   * bound since; never after a {@link UndoHistory.reset} or while an open
+   * group has recorded a receipt.
+   *
+   * With a mark taken when the stage was saved, an editor tells that undo
+   * or redo brought the recorded edits back to what was saved, as its
+   * title bar may show: {@link Stage.isDirty} stays `true` then, as
+   * OpenUSD's `SdfLayer::IsDirty` does, since it reports change since the
+   * save, not a difference from it. Edits the history did not record are
+   * not seen.
+   *
+   * ```ts
+   * stage.save();
+   * const saved = history.mark();
+   * history.record("set size", stage.apply([setSize]));
+   * history.undo();
+   * history.isAt(saved); // true; stage.isDirty(stage.root) is still true
+   * ```
+   *
+   * Throws `argument.invalid` for a mark of another history.
+   */
+  isAt(mark: HistoryMark): boolean {
+    if (typeof mark !== "object" || mark === null || mark.history !== this) {
+      throw new LayerstackError("argument.invalid", "isAt", "expected a mark of this history");
+    }
+    if (mark.epoch !== this.#epoch || (this.#group?.receipts.length ?? 0) > 0) return false;
+    const top = this.#undo[this.#undo.length - 1]?.id ?? -1;
+    return top === mark.top && (mark.top >= 0 || mark.dropped === this.#dropped);
   }
 
   /** Releases every receipt it holds, as {@link UndoHistory.reset} does. */

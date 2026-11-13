@@ -86,6 +86,9 @@ impl<B: Storage> StageDocument<B> {
     ///   stage composing this store uses. A package's layers are released
     ///   together, so a package is kept whole while any of its layers is.
     ///
+    /// A layer with no source to read it from again, such as an anonymous
+    /// layer not yet edited, is kept too, and not reported.
+    ///
     /// The stage composes first ([`Self::synchronize`]), so a layer read
     /// and not yet composed counts as composition will use it. Nothing
     /// composed changes and no notice follows: a released layer
@@ -134,6 +137,10 @@ impl<B: Storage> StageDocument<B> {
             } else if self.is_dirty(id) {
                 kept_groups.insert(group(id));
                 kept_dirty.push(id);
+            } else if self.catalog.source(id).is_none() {
+                // Nothing could read it again: an anonymous layer, clean
+                // since it was created.
+                kept_groups.insert(group(id));
             } else {
                 candidates.push(id);
             }

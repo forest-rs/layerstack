@@ -201,9 +201,10 @@ impl<B> PreparedReload<'_, B> {
         let clean: Vec<LayerId> = anchors
             .into_iter()
             .filter(|anchor| {
-                document.store.layer(*anchor).is_some_and(|layer| {
-                    document.catalog.saved(*anchor) == Some(layer.generation())
-                })
+                document
+                    .store
+                    .layer(*anchor)
+                    .is_some_and(|layer| document.catalog.is_clean(*anchor, layer.generation()))
             })
             .collect();
         batch.commit(&mut document.store, &mut document.catalog);

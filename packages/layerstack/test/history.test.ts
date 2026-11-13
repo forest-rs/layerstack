@@ -287,6 +287,52 @@ describe("UndoHistory", () => {
     assert.equal(failure(() => other.unwindTo(before)).code, "argument.invalid");
   });
 
+  it("says when undo and redo bring it back to a mark, as a save's, while the layer stays dirty", () => {
+    using stage = open();
+    using history = new UndoHistory(stage, { limit: 2 });
+    const empty = history.mark();
+    assert.equal(history.isAt(empty), true);
+    history.record("size", apply(stage, set("/World.size", 3)));
+    assert.deepEqual(
+      stage.save().written.map(({ identifier }) => identifier),
+      ["scene.usda"],
+    );
+    const saved = history.mark();
+    assert.equal(stage.isDirty(stage.root), false);
+    assert.equal(history.isAt(saved), true);
+    assert.equal(history.isAt(empty), false);
+
+    history.record("spin", apply(stage, set("/World.spin", 1)));
+    assert.equal(history.isAt(saved), false);
+    history.undo();
+    assert.equal(history.isAt(saved), true, "undone back to the save");
+    assert.equal(stage.isDirty(stage.root), true, "changed since the save, as SdfLayer::IsDirty reads it");
+    history.undo();
+    assert.equal(history.isAt(saved), false, "undone past the save");
+    history.redo();
+    assert.equal(history.isAt(saved), true, "redone to it");
+
+    history.beginGroup("drag");
+    assert.equal(history.isAt(saved), true, "an open group that recorded nothing");
+    history.record("spin", apply(stage, set("/World.spin", 2)));
+    assert.equal(history.isAt(saved), false, "an open group that recorded an edit");
+    history.endGroup();
+    history.record("radius", apply(stage, set("/World/Rock.radius", 4)));
+    history.record("size", apply(stage, set("/World.size", 5)));
+    assert.equal(history.dropped, 2, "the bound dropped the saved step and the group");
+    history.undo();
+    history.undo();
+    assert.equal(history.undoSteps.length, 0);
+    assert.equal(history.isAt(empty), false, "a step was dropped since the empty mark");
+    assert.equal(history.isAt(saved), false);
+
+    const now = history.mark();
+    history.reset();
+    assert.equal(history.isAt(now), false, "a reset forgets where it stood");
+    using other = new UndoHistory(stage);
+    assert.equal(failure(() => other.isAt(now)).code, "argument.invalid");
+  });
+
   it("takes the receipts it records, and records nothing for a no-op", () => {
     using stage = open();
     using other = open();

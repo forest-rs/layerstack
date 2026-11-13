@@ -180,6 +180,22 @@ fn unused_dirty_layers_are_kept_and_reported() {
     unload(&mut doc, "/P");
     let released = doc.release_unused_layers(&[]);
     assert_eq!(identifiers(&released), ["payload_sub.usda"]);
+    // The anonymous layer, clean until edited, is kept unreported:
+    // nothing could read it again.
+    assert_eq!(released.kept_dirty, [payload]);
+    assert!(doc.store().layer(anonymous).is_some());
+    let a = doc
+        .store()
+        .paths()
+        .intern(layerstack::Path::parse_absolute("/A", doc.store().tokens()).unwrap());
+    let mut edit = Transaction::new();
+    edit.create_prim(
+        EditTarget::for_layer(anonymous).prim(a),
+        layerstack::Specifier::Over,
+        None,
+    );
+    doc.apply(&edit).unwrap();
+    let released = doc.release_unused_layers(&[]);
     // In id order.
     assert_eq!(released.kept_dirty, [anonymous, payload]);
     load(&mut doc, "/P");

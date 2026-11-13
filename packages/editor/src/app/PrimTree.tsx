@@ -106,6 +106,8 @@ export function PrimTree() {
   const menuAnchor = useRef<Element | null>(null);
   // The prim being dragged, for where it may drop.
   const dragged = useRef<string | null>(null);
+  // Why the prim being dragged cannot move to another parent where edits go (the menu's sentence), said while it is dragged.
+  const [dragRefusal, setDragRefusal] = useState<string | null>(null);
   // When a letter last went to the tree's type-to-find: F frames unless it continues one.
   const typedAt = useRef(0);
   // A new stage starts with its root prims' children shown.
@@ -163,9 +165,11 @@ export function PrimTree() {
     acceptedDragTypes: [PRIM_DRAG],
     onDragStart: (event) => {
       dragged.current = [...event.keys].map(String)[0] ?? null;
+      setDragRefusal(dragged.current === null ? null : namespaceRefusal(store.session?.target, "rename", dragged.current));
     },
     onDragEnd: () => {
       dragged.current = null;
+      setDragRefusal(null);
     },
     getDropOperation: (target) => (dropOf(store, dragged.current, target) === null ? "cancel" : "move"),
     onMove: (event) => {
@@ -270,6 +274,12 @@ export function PrimTree() {
           </Tree>
         </Virtualizer>
         </div>
+      )}
+      {/* Below the rows, so saying it moves none of them under the pointer. */}
+      {dragRefusal !== null && (
+        <p role="status" className="mx-2 mb-2 rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground">
+          Not moved to another parent: {dragRefusal}
+        </p>
       )}
       {menu !== null && context !== null && <CommandMenu object={{ kind: "primPath", path: menu }} context={context} triggerRef={menuAnchor} onClose={() => setMenu(null)} />}
     </div>

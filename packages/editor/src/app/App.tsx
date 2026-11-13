@@ -10,6 +10,7 @@ import { usePanelRef } from "react-resizable-panels";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { BottomPanel } from "./BottomPanel.tsx";
 import { useStore } from "./context.ts";
+import { widgetKeeps } from "./keys.ts";
 import { Inspector } from "./Inspector.tsx";
 import { ModuleLost } from "./ModuleLost.tsx";
 import { ScenePanel } from "./ScenePanel.tsx";
@@ -29,8 +30,10 @@ export function App() {
   };
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, [contenteditable]")) return;
+      // A widget that handled the key has said so; one that has not keeps its own keys (text, Space on a button, arrows in a list).
+      if (event.defaultPrevented) return;
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (widgetKeeps(target, event.key)) return;
       const mod = event.metaKey || event.ctrlKey;
       if (mod && event.key.toLowerCase() === "z") {
         event.preventDefault();
@@ -44,7 +47,6 @@ export function App() {
         if (store.playing) store.pause();
         else store.play();
       } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-        if (target?.closest('[role="tree"], [role="slider"]')) return;
         event.preventDefault();
         store.step(event.key === "ArrowLeft" ? -1 : 1);
       }

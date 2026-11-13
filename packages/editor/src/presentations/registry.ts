@@ -155,6 +155,12 @@ export interface Command<K extends PresentedKind = PresentedKind> {
   readonly type: string;
   /** The menu's label (`Select`, `Frame in the viewport`). */
   readonly title: string;
+  /**
+   * The menu's label for this object now, when it says more than
+   * {@link Command.title} (`Clear its value in scene.usda`, `Key at frame
+   * 12`); read when the menu opens.
+   */
+  readonly label?: (object: Presented<K>, context: PresentationContext) => string;
   /** Whether it applies to this object now; always when absent. */
   readonly applies?: (object: Presented<K>, context: PresentationContext) => boolean;
   /** Runs it. Edits go through the store, as any. */

@@ -178,7 +178,7 @@ export function CommandMenu<K extends PresentedKind>({
       >
         {offered.map((command) => (
           <MenuItem key={command.id} id={command.id} className="cursor-default rounded-md px-2 py-1 text-xs outline-hidden data-focused:bg-foreground/10">
-            {command.title}
+            {command.label?.(object, context) ?? command.title}
           </MenuItem>
         ))}
       </Menu>

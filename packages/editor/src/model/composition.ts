@@ -295,13 +295,26 @@ export function findAuthoring(arcs: readonly ArcRecord[], index: number, specsOf
   return null;
 }
 
+/**
+ * The spec path `target` writes `path` at (`EditTarget.mapPath`); `null`
+ * when it does not map it, or when the target is stale (the arc it went
+ * through was removed, its prim renamed), which maps nothing.
+ */
+export function mapThrough(target: Pick<EditTarget, "mapPath">, path: string): string | null {
+  try {
+    return target.mapPath(path);
+  } catch {
+    return null;
+  }
+}
+
 /** What {@link authoredHere} reads of where edits go. */
 export type TargetLike = Pick<EditTarget, "layer" | "mapPath">;
 
 /** Where edits of `prim` go through `target`: its layer and the spec path; `null` when it does not map the prim. */
 export function targetSpec(target: Layer | TargetLike, prim: string): { readonly layer: Layer; readonly specPath: string } | null {
   if (!("mapPath" in target)) return { layer: target, specPath: prim };
-  const specPath = target.mapPath(prim);
+  const specPath = mapThrough(target, prim);
   return specPath === null ? null : { layer: target.layer, specPath };
 }
 
@@ -414,7 +427,12 @@ export interface Mapping {
 /** Where edits of `prim` go through `target` ({@link Mapping}). */
 export function mapping(target: Layer | Pick<EditTarget, "kind" | "layer" | "prim" | "site" | "arc" | "mapPath" | "mapsOutsidePrim">, prim: string): Mapping {
   if (!("kind" in target)) return { text: `${prim} in ${layerName(target)}`, specPath: prim };
-  const specPath = target.mapPath(prim);
+  let specPath: string | null;
+  try {
+    specPath = target.mapPath(prim);
+  } catch {
+    return { text: `${describeTarget(target)}, which no longer composes anything: choose where edits go again`, specPath: null };
+  }
   if (specPath !== null) return { text: `${prim} → ${specPath} in ${layerName(target.layer)}`, specPath };
   const reach = target.mapsOutsidePrim ? "" : `: across a ${target.arc === null ? "reference" : arcNoun(target.arc)}, it maps only ${target.prim} and what is beneath it`;
   return { text: `${prim} is not written through ${describeTarget(target)}${reach}`, specPath: null };
@@ -437,7 +455,7 @@ export function namespaceRefusal(target: Layer | Pick<EditTarget, "kind" | "laye
   if (action === "rename" || action === "delete") {
     return `Renaming and deleting edit the opinions of the stage's own layer stack, and edits go to ${where}: make a layer of the stack where edits go first.`;
   }
-  if (target.mapPath(path) === null) return `Edits go to ${where}, which does not map ${path}: define it where edits go to a layer of the stack, or inside ${target.prim}.`;
+  if (mapThrough(target, path) === null) return `Edits go to ${where}, which does not map ${path}: define it where edits go to a layer of the stack, or inside ${target.prim}.`;
   return null;
 }
 

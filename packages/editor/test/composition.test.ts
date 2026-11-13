@@ -292,6 +292,11 @@ test("where a target writes the selected prim, in words, and the namespace actio
   assert.match(namespaceRefusal(reference, "rename", "/World/Robot/Head")!, /assets\/robot\.usda at \/Robot/);
   assert.equal(namespaceRefusal(reference, "define", "/World/Robot/Arm"), null);
   assert.match(namespaceRefusal(reference, "define", "/World/Other")!, /does not map \/World\/Other/);
+  // A target whose arc is gone maps nothing, and says so rather than throw.
+  stage.apply([{ type: "removeReference", path: "/World/Robot", asset: "./assets/robot.usda" }]);
+  assert.equal(mapping(reference, "/World/Robot").specPath, null);
+  assert.match(mapping(reference, "/World/Robot").text, /no longer composes anything/);
+  assert.match(namespaceRefusal(reference, "define", "/World/Robot/Arm")!, /does not map/);
   stage.free();
 });
 

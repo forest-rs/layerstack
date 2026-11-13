@@ -61,6 +61,10 @@ export interface NativeEditBatch extends Disposable {
   addVariant(path: string, set: string, variant: string, position: string): void;
   setSpecifier(path: string, specifier: string): void;
   setTypeName(path: string, typeName: string | null): void;
+  setChildrenReorder(path: string, order: string[] | null): void;
+  setPropertyOrder(path: string, order: string[] | null): void;
+  setRelocates(sources: string[], targets: string[]): void;
+  clearRelocates(): void;
   setKind(path: string, kind: string): void;
   setMetadata(path: string, key: string, value: number): void;
   clearMetadata(path: string, key: string): void;
@@ -176,6 +180,23 @@ function lowerEdit(batch: NativeEditBatch, edit: Edit, host: ArrayHost): void {
         [offsets[at], scales[at]] = layerOffset(sublayer.layerOffset);
       });
       batch.setSublayers(assets, offsets, scales);
+      return;
+    }
+    case "setRelocates": {
+      if (edit.relocates === null) {
+        batch.clearRelocates();
+        return;
+      }
+      if (!Array.isArray(edit.relocates)) fail("`relocates` must be an array of { source, target }, or null to clear them");
+      const sources: string[] = [];
+      const targets: string[] = [];
+      for (const relocate of edit.relocates) {
+        if (typeof relocate !== "object" || relocate === null) fail("`relocates` must be an array of { source, target }");
+        sources.push(text(relocate.source, "source"));
+        // The module reads an empty target as `<>`; an empty path is no path.
+        targets.push(relocate.target === null ? "" : nonEmpty(relocate.target, "target"));
+      }
+      batch.setRelocates(sources, targets);
       return;
     }
   }
@@ -302,6 +323,12 @@ function lowerEdit(batch: NativeEditBatch, edit: Edit, host: ArrayHost): void {
       return;
     case "setSpecifier":
       batch.setSpecifier(path, oneOf(edit.specifier, "specifier", ["def", "over", "class"]));
+      return;
+    case "setChildrenReorder":
+      batch.setChildrenReorder(path, order(edit.order));
+      return;
+    case "setPropertyOrder":
+      batch.setPropertyOrder(path, order(edit.order));
       return;
     case "setTypeName":
       if (edit.typeName === undefined) fail("`typeName` must be a type name, or null to clear it");
@@ -546,6 +573,19 @@ function indices(value: unknown): Int32Array {
     fail("`indices` must be an Int32Array or an array of 32-bit integers");
   }
   return Int32Array.from(value as number[]);
+}
+
+/** A child or property order: names, or `null` to clear it. */
+function order(value: unknown): string[] | null {
+  if (value === null) return null;
+  if (!Array.isArray(value)) fail("`order` must be an array of names, or null to clear it");
+  return value.map((name) => text(name, "order"));
+}
+
+function nonEmpty(value: unknown, field: string): string {
+  const found = text(value, field);
+  if (found === "") fail(`\`${field}\` must be a path, or null`);
+  return found;
 }
 
 /** A list position, `backOfPrepend` by default, as OpenUSD's `UsdListPosition` default. */

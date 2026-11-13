@@ -584,6 +584,32 @@ describe("list, schema, copy and sublayer edits", () => {
     }
   });
 
+  it("setChildrenReorder and setPropertyOrder order children and properties, and null clears them", async () => {
+    using stage = await roundTrip([{ type: "setChildrenReorder", path: "/", order: ["Spare", "World"] }], (stage) => {
+      assert.deepEqual(stage.children("/"), ["/Spare", "/World"]);
+    });
+    using properties = await roundTrip(
+      [{ type: "setPropertyOrder", path: "/World", order: ["spin", "size"] }],
+      (stage) => {
+        assert.match(usda(stage), /reorder properties = \["spin", "size"\]/);
+      },
+    );
+    const before = usda(stage);
+    const ordered = stage.apply([{ type: "setChildrenReorder", path: "/", order: null }], stage.root);
+    assert.deepEqual(stage.children("/"), ["/World", "/Spare"]);
+    ordered.undo().release();
+    assert.equal(usda(stage), before);
+    const refused = [
+      [{ type: "setChildrenReorder", path: "/World", order: "Rock" }, "argument.invalid"],
+      [{ type: "setPropertyOrder", path: "/World", order: [1] }, "argument.invalid"],
+      [{ type: "setPropertyOrder", path: "/World.size", order: [] }, "path.invalid"],
+    ] as const;
+    for (const [edit, code] of refused) {
+      const error = failure(() => stage.apply([edit as unknown as Edit], stage.root));
+      assert.deepEqual([error.code, error.edit], [code, 0], JSON.stringify(edit));
+    }
+  });
+
   it("copySpec duplicates a prim or a property in the target layer", async () => {
     using stage = await roundTrip(
       [

@@ -24,8 +24,8 @@ use alloc::{
 use layerstack::{
     Address, EditTarget, FieldValue, InMemoryStore, Layer, LayerId, LayerOffset, ListOp,
     ListPosition, PathId, PathInterner, PropertyKind, PropertyPath, PropertySpec, PropertyType,
-    Reference, ReferenceSource, ReferenceTarget, SpecPath, Specifier, StageView, SublayerEntry,
-    TargetPath, Transaction, Value, Variability,
+    Reference, ReferenceSource, ReferenceTarget, Relocate, SpecPath, Specifier, StageView,
+    SublayerEntry, TargetPath, TokenId, Transaction, Value, Variability,
 };
 use wasm_bindgen::prelude::*;
 
@@ -169,6 +169,25 @@ pub(crate) enum EditInput {
         path: String,
         type_name: Option<String>,
     },
+    /// `UsdPrim::SetChildrenReorder`, or `ClearChildrenReorder` for
+    /// `None`; on the pseudo-root, `SdfLayer::SetRootPrimOrder`.
+    SetChildrenReorder {
+        path: String,
+        order: Option<Vec<String>>,
+    },
+    /// `UsdPrim::SetPropertyOrder`, or `ClearPropertyOrder` for `None`.
+    SetPropertyOrder {
+        path: String,
+        order: Option<Vec<String>>,
+    },
+    /// `SdfLayer::SetRelocates` of the target's layer, each source to the
+    /// target at its index (an empty one for `<>`).
+    SetRelocates {
+        sources: Vec<String>,
+        targets: Vec<String>,
+    },
+    /// `SdfLayer::ClearRelocates` of the target's layer.
+    ClearRelocates,
     /// `UsdPrim::ClearActive`.
     ClearActive { path: String },
     /// `UsdPrim::ClearInstanceable`.
@@ -230,6 +249,8 @@ impl EditInput {
             | Self::SetTypeName { path, .. }
             | Self::ClearActive { path }
             | Self::ClearInstanceable { path }
+            | Self::SetChildrenReorder { path, .. }
+            | Self::SetPropertyOrder { path, .. }
             | Self::SetVariantSelection { path, .. }
             | Self::SetActive { path, .. }
             | Self::SetInstanceable { path, .. }
@@ -242,7 +263,9 @@ impl EditInput {
             | Self::InsertSublayer { .. }
             | Self::RemoveSublayer { .. }
             | Self::SetSublayerOffset { .. }
-            | Self::SetSublayers { .. } => "/",
+            | Self::SetSublayers { .. }
+            | Self::SetRelocates { .. }
+            | Self::ClearRelocates => "/",
             Self::Schema(input) => input.path(),
         }
     }
@@ -610,6 +633,34 @@ impl EditBatch {
     #[wasm_bindgen(js_name = clearInstanceable)]
     pub fn clear_instanceable(&mut self, path: String) {
         self.edits.push(EditInput::ClearInstanceable { path });
+    }
+
+    /// Pushes a `setChildrenReorder` edit; `None` clears the order.
+    #[wasm_bindgen(js_name = setChildrenReorder)]
+    pub fn set_children_reorder(&mut self, path: String, order: Option<Vec<String>>) {
+        self.edits
+            .push(EditInput::SetChildrenReorder { path, order });
+    }
+
+    /// Pushes a `setPropertyOrder` edit; `None` clears the order.
+    #[wasm_bindgen(js_name = setPropertyOrder)]
+    pub fn set_property_order(&mut self, path: String, order: Option<Vec<String>>) {
+        self.edits.push(EditInput::SetPropertyOrder { path, order });
+    }
+
+    /// Pushes a `setRelocates` edit: `sources[i]` to `targets[i]`, an
+    /// empty target removing its source (`<>`). Lists of other lengths are
+    /// refused when the batch is applied.
+    #[wasm_bindgen(js_name = setRelocates)]
+    pub fn set_relocates(&mut self, sources: Vec<String>, targets: Vec<String>) {
+        self.edits
+            .push(EditInput::SetRelocates { sources, targets });
+    }
+
+    /// Pushes a `setRelocates` edit that clears the layer's relocates.
+    #[wasm_bindgen(js_name = clearRelocates)]
+    pub fn clear_relocates(&mut self) {
+        self.edits.push(EditInput::ClearRelocates);
     }
 
     /// Pushes a `setVariantSelection` edit.
@@ -1412,6 +1463,39 @@ fn lower_one(
                 None => txn.clear_type_name(at),
             };
         }
+        EditInput::SetChildrenReorder { path, order } => {
+            let at = at.prim(prim(path)?);
+            match order {
+                Some(order) => txn.set_prim_order(at, names(store, order)),
+                None => txn.clear_prim_order(at),
+            };
+        }
+        EditInput::SetPropertyOrder { path, order } => {
+            let at = at.prim(prim(path)?);
+            match order {
+                Some(order) => txn.set_property_order(at, names(store, order)),
+                None => txn.clear_property_order(at),
+            };
+        }
+        EditInput::SetRelocates { sources, targets } => {
+            if sources.len() != targets.len() {
+                return Err(Error::new(
+                    "argument.invalid",
+                    "a relocate list needs one target per source",
+                ));
+            }
+            let mut list = Vec::with_capacity(sources.len());
+            for (source, target) in sources.iter().zip(targets) {
+                list.push(Relocate {
+                    source: prim(source)?,
+                    target: (!target.is_empty()).then(|| prim(target)).transpose()?,
+                });
+            }
+            txn.set_layer_relocates(at.layer(), list);
+        }
+        EditInput::ClearRelocates => {
+            txn.clear_layer_relocates(at.layer());
+        }
         EditInput::ClearActive { path } => {
             txn.clear_active(at.prim(prim(path)?));
         }
@@ -1564,6 +1648,14 @@ fn class_path(store: &InMemoryStore, path: &str) -> Result<PathId, Error> {
             format!("`{path}` is not a prim path to inherit or specialize: {error}"),
         )
     })
+}
+
+/// The names of a child or property order, interned.
+fn names(store: &InMemoryStore, order: &[String]) -> Vec<TokenId> {
+    order
+        .iter()
+        .map(|name| store.tokens().intern(name))
+        .collect()
 }
 
 /// Whether `name` is a variant name, as OpenUSD's
@@ -2784,6 +2876,39 @@ def "Spare" (
     }
 
     #[test]
+    fn child_and_property_orders() {
+        let mut batch = EditBatch::new();
+        batch.set_children_reorder("/".into(), Some(vec!["Spare".into(), "World".into()]));
+        let stage = round_trip(batch, |stage| {
+            assert_eq!(
+                stage.children("/").unwrap(),
+                vec![String::from("/Spare"), String::from("/World")]
+            );
+        });
+        assert!(text(&stage, root(&stage)).contains(r#"reorder rootPrims = ["Spare", "World"]"#));
+        let mut batch = EditBatch::new();
+        batch.set_property_order("/World".into(), Some(vec!["spin".into(), "size".into()]));
+        let stage = round_trip(batch, |_| {});
+        assert!(
+            text(&stage, root(&stage)).contains(r#"reorder properties = ["spin", "size"]"#),
+            "{}",
+            text(&stage, root(&stage))
+        );
+
+        let mut stage = open();
+        let target = root(&stage);
+        let before = text(&stage, target);
+        let mut batch = EditBatch::new();
+        batch.set_children_reorder("/World".into(), Some(vec!["Rock".into()]));
+        stage.apply(target.0, &mut batch).unwrap();
+        let mut batch = EditBatch::new();
+        batch.set_children_reorder("/World".into(), None);
+        batch.set_property_order("/World".into(), None);
+        stage.apply(target.0, &mut batch).unwrap();
+        assert_eq!(text(&stage, target), before, "cleared");
+    }
+
+    #[test]
     fn copy_spec_duplicates_a_prim_or_property() {
         let mut batch = EditBatch::new();
         batch.copy_spec("/World/Rock".into(), "/World/Pebble".into());
@@ -3281,6 +3406,7 @@ mod through_arcs {
 
     use super::EditBatch;
     use crate::{
+        error::Error,
         stage::{BROWSER_LIMITS, Resolved, Stage},
         wire::Wire,
     };
@@ -3652,6 +3778,85 @@ def Xform "Robot" {
             stage.time_samples("/World/Lamp.glow").unwrap(),
             [10.0, 15.0],
             "read back at the stage time it was set at"
+        );
+    }
+
+    /// Relocates move what arcs bring: `robot.usda`'s `Head`, reached
+    /// through the reference, moves to `Face`; a locally authored prim
+    /// would not move.
+    #[test]
+    fn relocates_are_set_and_cleared() {
+        let mut stage = open();
+        let root = stage.document().root_layer();
+        let before = text(&stage, root);
+        let relocate = |stage: &mut Stage, sources: Vec<String>, targets: Vec<String>| {
+            let mut batch = EditBatch::new();
+            batch.set_relocates(sources, targets);
+            stage.apply(root.0, &mut batch)
+        };
+        let children = |stage: &Stage| stage.children("/World/Robot").unwrap();
+        let mut moved = relocate(
+            &mut stage,
+            vec!["/World/Robot/Head".into()],
+            vec!["/World/Robot/Face".into()],
+        )
+        .unwrap();
+        assert!(
+            text(&stage, root).contains("relocates = {"),
+            "{}",
+            text(&stage, root)
+        );
+        assert!(children(&stage).contains(&String::from("/World/Robot/Face")));
+        assert!(!children(&stage).contains(&String::from("/World/Robot/Head")));
+        let mut clear = EditBatch::new();
+        clear.clear_relocates();
+        let mut cleared = stage.apply(root.0, &mut clear).unwrap();
+        assert_eq!(text(&stage, root), before);
+        assert!(children(&stage).contains(&String::from("/World/Robot/Head")));
+        stage.undo(&mut cleared).unwrap();
+        assert!(children(&stage).contains(&String::from("/World/Robot/Face")));
+        stage.undo(&mut moved).unwrap();
+        assert_eq!(text(&stage, root), before);
+
+        let mut removed = relocate(
+            &mut stage,
+            vec!["/World/Robot/Head".into()],
+            vec![String::new()],
+        )
+        .unwrap();
+        assert!(
+            !children(&stage)
+                .iter()
+                .any(|child| child.ends_with("/Head")),
+            "an empty target removes the source"
+        );
+        stage.undo(&mut removed).unwrap();
+
+        let code = |result: Result<_, Error>| result.unwrap_err().code;
+        assert_eq!(
+            code(relocate(
+                &mut stage,
+                vec!["/World".into()],
+                vec!["/Elsewhere".into()]
+            )),
+            "edit.rejected.invalid_relocate",
+            "a root prim is not relocated"
+        );
+        assert_eq!(
+            code(relocate(
+                &mut stage,
+                vec!["/World/Robot/Head".into()],
+                vec![]
+            )),
+            "argument.invalid"
+        );
+        assert_eq!(
+            code(relocate(
+                &mut stage,
+                vec!["World".into()],
+                vec!["/World/Face".into()]
+            )),
+            "path.invalid"
         );
     }
 }

@@ -36,7 +36,7 @@ import type {
 } from "@forest-rs/layerstack";
 import type { BudgetReport, DrawCost, Stagehand } from "@forest-rs/layerstack_stagehand";
 import type { AssetFocus, BudgetChoice, DrawScopeChoice } from "./model/assetView.ts";
-import { type NamespaceAction, namespaceRefusal, type NewArc, newArcLabel, removeArcLabel } from "./model/composition.ts";
+import { describeTarget, type NamespaceAction, namespaceRefusal, type NewArc, newArcLabel, removeArcLabel, targetGone } from "./model/composition.ts";
 import type { ViewportScene, ViewportUpdate } from "./model/draws.ts";
 import { planSave, type SaveEntry } from "./model/files.ts";
 import { indexOfId, type InstancerColumns, toggled } from "./model/instancer.ts";
@@ -1820,9 +1820,26 @@ export class EditorStore {
     const session = this.session;
     if (session === null || (this.#read.session === session && this.#read.changes === session.changeLog.length)) return false;
     this.#read = { session, changes: session.changeLog.length };
+    this.#leaveGoneTarget(session);
     const up = upAxis(session);
     if (up !== this.upAxis) this.#view.setUpAxis(up);
     return this.#playback.setRange(timeRange(session.stage));
+  }
+
+  /**
+   * Edits go back to the stage's edit layer when a change took what they
+   * went through (`targetGone`: an undo of the variant set they were
+   * inside, the prim deleted, the arc removed), and a notice says so:
+   * edits sent there would author what nothing composes.
+   */
+  #leaveGoneTarget(session: Session): void {
+    const target = session.target;
+    const why = targetGone(session.stage, target);
+    if (why === null || target === undefined) return;
+    session.target = undefined;
+    this.#shadow = null;
+    this.#notices.add("where edits go", `Edits go to ${session.targetName} again: ${why} (they went to ${describeTarget(target)}).`, null);
+    this.signals.bump("target");
   }
 
   /**

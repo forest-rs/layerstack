@@ -194,6 +194,32 @@ test("a variant set added with its first variant, a variant added, edited inside
   assert.equal(steps(), steps2);
 });
 
+test("edits go back to the edit layer when an undo takes the variant or the arc they went through", async () => {
+  const { h, store, stage } = await opened();
+  assert.equal(store.addVariant("/World/Rock", "size", "small", true), undefined);
+  store.editInsideVariant("/World/Rock", "size", "small");
+  assert.ok(store.session!.target !== undefined);
+  // A variant that is there and not selected stays where edits go.
+  assert.equal(store.addVariant("/World/Rock", "size", "large"), undefined);
+  await h.settle(store.undo());
+  const inside = store.session!.target;
+  assert.ok(inside !== undefined && "kind" in inside && inside.kind === "variant");
+  // The undo of the set takes the variant: edits go to the edit layer again, and a notice says so.
+  await h.settle(store.undo());
+  assert.deepEqual(stage.prim("/World/Rock")!.variantSets(), []);
+  assert.equal(store.session!.target, undefined);
+  assert.match(store.notices.at(-1)?.message ?? "", /Edits go to scene\.usda again: \/World\/Rock no longer has the variant size=small/);
+  // The same through an arc whose prim an undo takes away.
+  assert.equal(store.definePrim("/World", "Copy", "Xform"), undefined);
+  await h.settle(store.addArc("/World/Copy", reference("./assets/robot.usda")).done);
+  const arc = stage.prim("/World/Copy")!.compositionArcs().find((each) => each.arc === "references")!;
+  store.setTarget(arc.editTarget());
+  await h.settle(store.undo());
+  await h.settle(store.undo());
+  assert.equal(stage.prim("/World/Copy"), null);
+  assert.equal(store.session!.target, undefined);
+});
+
 test("a rename or delete through a variant or an arc says why before it is tried", async () => {
   const { store, stage, steps } = await opened();
   store.editInsideVariant("/World/Robot", "finish", "painted");

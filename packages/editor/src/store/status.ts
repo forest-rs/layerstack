@@ -8,8 +8,12 @@
 export type EditorStatus =
   | { readonly kind: "empty" }
   | { readonly kind: "opening"; readonly label: string }
-  /** Loading payloads of the open scene (`label` names them), and fetching what they want. */
-  | { readonly kind: "loading"; readonly label: string }
+  /**
+   * Loading payloads of the open scene (`label` names them), and fetching
+   * what they want; or fetching what another action wants (an arc added),
+   * which `title` says.
+   */
+  | { readonly kind: "loading"; readonly label: string; readonly title?: string }
   | { readonly kind: "ready" }
   | { readonly kind: "failed"; readonly label: string; readonly message: string }
   /**

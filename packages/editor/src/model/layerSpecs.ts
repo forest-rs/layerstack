@@ -18,6 +18,7 @@
 // the prim, variant set and variant blocks and the metadata of each, and
 // skips everything else (properties, values, dictionaries) as balanced
 // runs, so a layer's large arrays cost one pass and no allocation.
+import type { Layerstack } from "@forest-rs/layerstack";
 
 /** The prim spec fields that author arcs. */
 export type ArcField = "references" | "payload" | "inherits" | "specializes";
@@ -476,4 +477,36 @@ export function readLayerSpecs(text: string): LayerSpecs {
   const reader = new Reader(text);
   reader.read();
   return { defaultPrim: reader.defaultPrim, roots: reader.roots, specs: reader.specs };
+}
+
+/** A layer's default prim and root prims, as the dialog that adds an arc offers them; or why they were not read. */
+export type LayerSummary =
+  | { readonly kind: "read"; readonly defaultPrim: string | null; readonly roots: readonly RootPrim[] }
+  | { readonly kind: "unread"; readonly reason: string };
+
+/** The summary of a layer read ({@link LayerSpecs}). */
+export function summaryOf(specs: LayerSpecs): LayerSummary {
+  return { kind: "read", defaultPrim: specs.defaultPrim, roots: specs.roots };
+}
+
+/**
+ * The default prim and root prims of a layer the stage has not read, from
+ * its bytes: USDA text is scanned ({@link readLayerSpecs}); a crate or a
+ * package is opened on a stage of its own, read and freed, nothing it
+ * names fetched.
+ */
+export function summarizeBytes(layerstack: Pick<Layerstack, "open">, identifier: string, bytes: Uint8Array): LayerSummary {
+  if (new TextDecoder().decode(bytes.subarray(0, 5)) === "#usda") return summaryOf(readLayerSpecs(new TextDecoder().decode(bytes)));
+  const stage = layerstack.open({ identifier, bytes });
+  try {
+    const value = stage.metadata("defaultPrim");
+    const defaultPrim = value?.kind === "scalar" && typeof value.value === "string" && value.value !== "" ? value.value : null;
+    const roots = stage.children("/").map((path): RootPrim => {
+      const prim = stage.prim(path);
+      return { name: path.slice(1), specifier: prim?.specifier ?? "def", typeName: prim?.typeName ?? null };
+    });
+    return { kind: "read", defaultPrim, roots };
+  } finally {
+    stage.free();
+  }
 }

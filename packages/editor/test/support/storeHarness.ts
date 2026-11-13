@@ -111,6 +111,8 @@ export function sampleSource(root = "scene.usda", extra: Readonly<Record<string,
         () => null,
       );
     },
+    // As the sample's host lists them (its layers.json), with the layers served from memory.
+    layers: async () => [...(JSON.parse(await readFile(new URL("layers.json", SCENE), "utf8")) as string[]), ...Object.keys(extra)].sort(),
     asked,
     signals,
     hold(identifier) {

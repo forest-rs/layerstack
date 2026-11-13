@@ -9,7 +9,6 @@
 import type { CommonTransform, Edit, Prim, Stage } from "@forest-rs/layerstack";
 import { formatNumber } from "../model/values.ts";
 import type { EditorStore } from "../store.ts";
-import { refusedBy } from "../model/refusal.ts";
 import { useTime } from "./context.ts";
 import { CommitNumber } from "./fields.tsx";
 import { Section } from "./Section.tsx";
@@ -41,7 +40,7 @@ export function TransformSection({ store, stage, prim }: { store: EditorStore; s
       component === "rotate"
         ? { type: "setRotate", path: prim.path, value, rotationOrder: read.rotationOrder, ...time }
         : { type: component === "translate" ? "setTranslate" : component === "scale" ? "setScale" : "setPivot", path: prim.path, value, ...time };
-    return refusedBy(store.notices, () => store.apply(`${component} ${prim.path}${at === undefined ? "" : ` at ${at}`}`, [edit]));
+    return store.apply(`${component} ${prim.path}${at === undefined ? "" : ` at ${at}`}`, [edit]);
   };
   const note =
     read.source === "decomposed"

@@ -20,7 +20,6 @@ import { enclosingMaterial, primOf } from "../model/network.ts";
 import { clampToBounds, groupInputs, type ShadingInput, type ShadingInputGroup, sliderRange } from "../model/shadingInputs.ts";
 import { formatNumber } from "../model/values.ts";
 import type { EditorStore } from "../store.ts";
-import { refusedBy } from "../model/refusal.ts";
 import { useTime } from "./context.ts";
 import { CommitNumber, shown, ValueField } from "./fields.tsx";
 import { MaterialPreview } from "./MaterialPreview.tsx";
@@ -247,7 +246,7 @@ function InputValue({ store, input, at }: { store: EditorStore; input: ShadingIn
         value={number}
         range={range}
         integer={/^u?int/.test(type)}
-        onCommit={(next) => refusedBy(store.notices, () => store.setValue(attribute.path, { type, value: clampToBounds(next, input.bounds) }, at))}
+        onCommit={(next) => store.setValue(attribute.path, { type, value: clampToBounds(next, input.bounds) }, at)}
       />
     );
   }

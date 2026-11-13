@@ -10,7 +10,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { Attribute } from "@forest-rs/layerstack";
 import { cn } from "@/lib/utils";
-import { NOT_A_NUMBER, parseNumber, refusedBy } from "../model/refusal.ts";
+import { NOT_A_NUMBER, parseNumber } from "../model/refusal.ts";
 import { releaseValue, type Shown } from "../model/values.ts";
 
 export { shown, type Shown } from "../model/values.ts";
@@ -152,5 +152,5 @@ export function ValueField({ store, attribute, shown, at }: { store: EditorStore
   const context = presentationContext(store);
   if (context === null) return null;
   const typeName = attribute.typeName ?? shown.value?.type ?? "";
-  return <Present object={{ kind: "value", attribute, typeName, shown, at }} context={context} accept={(value) => refusedBy(store.notices, () => store.setValue(attribute.path, value, at))} />;
+  return <Present object={{ kind: "value", attribute, typeName, shown, at }} context={context} accept={(value) => store.setValue(attribute.path, value, at)} />;
 }

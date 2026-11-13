@@ -26,7 +26,8 @@
  * - `view`: how the viewport shows the scene (`drawScope`, `budgetChoice`,
  *   `through`, `lightSettings`, `toneMap`, `frameNote`, `viewport`) and
  *   which tabs are in front (`sceneTab`, `bottomTab`).
- * - `history`: the session's undo and redo stacks.
+ * - `history`: the session's undo and redo stacks, and which layers are
+ *   dirty (every edit, undo and redo bumps it, and so does a save).
  * - `target`: where edits go (`session.target`).
  * - `notices`: `notices`.
  * - `loop`: the asset loop's logs and counts (`session.loops`,

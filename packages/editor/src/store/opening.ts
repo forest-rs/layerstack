@@ -10,6 +10,7 @@
 import type { Layerstack } from "@forest-rs/layerstack";
 import { type LoadBudget, type OpenPhase, OverBudget, Session } from "../model/session.ts";
 import type { SceneSource } from "../model/sources.ts";
+import type { EditLayerChoice } from "./files.ts";
 import type { Signals } from "./signals.ts";
 import type { EditorStatus } from "./status.ts";
 
@@ -60,6 +61,8 @@ export interface OpenHost {
 export class OpenController {
   /** How the next scene opens its payloads. */
   payloads: PayloadChoice = "auto";
+  /** Where the next scene's edits go ({@link EditLayerChoice}). */
+  editLayer: EditLayerChoice = "root";
   /** The session being opened, while its assets are fetched. */
   opening: Session | null = null;
   /** What the open is doing; `null` when nothing is opening. */
@@ -98,7 +101,7 @@ export class OpenController {
     try {
       const choice = this.payloads;
       session = await Session.open(this.#layerstack, source.root, source.fetch, {
-        open: { load: choice === "all" ? "all" : "none" },
+        open: { load: choice === "all" ? "all" : "none", editLayer: this.editLayer },
         signal,
         progress: (pending) => {
           if (!heard()) return;
@@ -186,6 +189,12 @@ export class OpenController {
   /** Sets how the next scene opens its payloads. */
   setPayloads(choice: PayloadChoice): void {
     this.payloads = choice;
+    this.#signals.bump("status");
+  }
+
+  /** Sets where the next scene's edits go. */
+  setEditLayer(choice: EditLayerChoice): void {
+    this.editLayer = choice;
     this.#signals.bump("status");
   }
 

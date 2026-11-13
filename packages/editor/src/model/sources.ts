@@ -25,6 +25,25 @@ export interface SceneSource {
    * is weighed with it before fetching ({@link Session.supplyUnavailable}).
    */
   readonly size: (identifier: string) => Promise<number | null>;
+  /** Writing layers back where they were read from, when the source can (a picked folder); absent when it cannot. */
+  readonly writable?: WritableSource;
+}
+
+/**
+ * A source that layers can be written back into: a folder on this
+ * computer, which asks the person before the page may write
+ * (`FileSystemHandle.requestPermission`).
+ */
+export interface WritableSource {
+  /** Where the layers are written, in words (the folder's name). */
+  readonly where: string;
+  /**
+   * Asks for permission to write, unless it was given: call it from a
+   * press, as a browser asks only then. Resolves whether it was given.
+   */
+  permit(): Promise<boolean>;
+  /** Writes `bytes` to `identifier`, replacing the file; throws when it cannot (outside the folder, refused). */
+  write(identifier: string, bytes: Uint8Array): Promise<void>;
 }
 
 /** The identifier's path segments, `.` and `..` resolved; `null` when it climbs out of the source. */
@@ -115,6 +134,28 @@ export function directorySource(directory: FileSystemDirectoryHandle, root: stri
     },
     async size(identifier) {
       return (await file(identifier))?.size ?? null;
+    },
+    writable: {
+      where: directory.name,
+      async permit() {
+        const mode = { mode: "readwrite" } as const;
+        if ((await directory.queryPermission(mode)) === "granted") return true;
+        return (await directory.requestPermission(mode)) === "granted";
+      },
+      async write(identifier, bytes) {
+        const parts = segments(identifier);
+        if (parts === null || parts.length === 0 || identifier.includes("[")) throw new Error(`${identifier} is not a file in ${directory.name}`);
+        let handle = directory;
+        for (const part of parts.slice(0, -1)) handle = await handle.getDirectoryHandle(part);
+        const writer = await (await handle.getFileHandle(parts.at(-1)!, { create: true })).createWritable();
+        try {
+          await writer.write(bytes.slice());
+          await writer.close();
+        } catch (error) {
+          await writer.abort().catch(() => {});
+          throw error;
+        }
+      },
     },
   };
 }

@@ -21,7 +21,7 @@ export const SCENE_TABS = ["prims", "layers", "cameras"] as const;
 export type SceneTab = (typeof SCENE_TABS)[number];
 
 /** The bottom panel's tabs. */
-export const BOTTOM_TABS = ["explain", "changes", "history", "assets", "shading", "cost", "notices"] as const;
+export const BOTTOM_TABS = ["explain", "changes", "history", "text", "assets", "shading", "cost", "notices"] as const;
 /** A tab of the bottom panel. */
 export type BottomTab = (typeof BOTTOM_TABS)[number];
 

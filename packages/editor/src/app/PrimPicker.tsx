@@ -29,7 +29,8 @@ const NOTHING: readonly string[] = [];
  * A dialog that chooses a prim of `stage`, or with `properties` one of its
  * properties, and hands its path to `onPick` (then closes). `type`
  * narrows the prims to a schema (`Prim.isA`, or `Prim.hasAPI` for an API
- * schema); `exclude` leaves out paths already chosen.
+ * schema); `exclude` leaves out paths already chosen; `prefer` lists the
+ * prims it holds for first (class prims, for an inherit).
  */
 export function PrimPicker({
   stage,
@@ -38,6 +39,7 @@ export function PrimPicker({
   type,
   properties = false,
   exclude = NOTHING,
+  prefer,
   onPick,
   onClose,
 }: {
@@ -47,6 +49,7 @@ export function PrimPicker({
   type?: string;
   properties?: boolean;
   exclude?: readonly string[];
+  prefer?: (path: string) => boolean;
   onPick: (path: string) => void;
   onClose: () => void;
 }) {
@@ -54,10 +57,10 @@ export function PrimPicker({
   const [chosen, setChosen] = useState<string | null>(null);
   // Keyed by the paths left out, not the array the caller built this render.
   const excluded = exclude.join("\n");
-  const matches = useMemo(
-    () => searchPrims(stage, { text, limit: LISTED + exclude.length, ...(type === undefined ? {} : { type }) }).filter((path) => !exclude.includes(path)).slice(0, LISTED),
-    [stage, text, type, excluded],
-  );
+  const matches = useMemo(() => {
+    const found = searchPrims(stage, { text, limit: LISTED + exclude.length, ...(type === undefined ? {} : { type }) }).filter((path) => !exclude.includes(path)).slice(0, LISTED);
+    return prefer === undefined ? found : [...found.filter(prefer), ...found.filter((path) => !prefer(path))];
+  }, [stage, text, type, excluded, prefer]);
   const prim = chosen === null ? null : stage.prim(chosen);
   const propertyNames = useMemo(() => (prim === null ? [] : [...prim.attributeNames(), ...prim.relationshipNames()].sort()), [prim]);
   const pick = (path: string) => {
@@ -98,7 +101,10 @@ export function PrimPicker({
                 <span className="truncate">{path.slice(path.lastIndexOf("/") + 1)}</span>
                 <span className="truncate font-mono text-[10px] text-muted-foreground">{path}</span>
               </span>
-              <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">{found?.typeName ?? ""}</span>
+              <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+                {found?.specifier === "class" ? "class " : ""}
+                {found?.typeName ?? ""}
+              </span>
             </ListBoxItem>
           );
         })}

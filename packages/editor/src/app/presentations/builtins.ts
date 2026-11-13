@@ -3,6 +3,7 @@
 
 // The editor's own presentations and commands, registered through the
 // same calls a plugin makes (`registerPresentation`, `registerCommand`).
+import { registerCompositionCommands } from "./composition.ts";
 import { registerInstancePresentations } from "./instances.tsx";
 import { registerLayerCommands } from "./layers.ts";
 import { registerObjectPresentations } from "./objects.tsx";
@@ -20,4 +21,5 @@ export function registerBuiltInPresentations(): void {
   registerPrimPresentations();
   registerInstancePresentations();
   registerShadingCommands();
+  registerCompositionCommands();
 }

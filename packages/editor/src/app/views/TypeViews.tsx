@@ -27,6 +27,7 @@ import type { PresentationContext, PresentProps } from "../../presentations/regi
 import { ValueField } from "../fields.tsx";
 import { usePrimRevision } from "../presentations/Present.tsx";
 import { Section } from "../Section.tsx";
+import { useTime } from "../context.ts";
 
 /** A scalar input's number at `time`, else `fallback`. */
 function number(prim: Prim, name: string, time: number | undefined, fallback: number): number {
@@ -65,7 +66,7 @@ function Editor({ context, attribute }: { context: PresentationContext; attribut
 
 export function LightView({ object, context }: PresentProps<"prim">) {
   const { prim } = object;
-  const time = context.time;
+  const time = useTime(context.store);
   usePrimRevision(context.store, prim.path);
   const intensity = number(prim, "inputs:intensity", time, 1);
   const exposure = number(prim, "inputs:exposure", time, 0);
@@ -117,7 +118,8 @@ const fov = (aperture: number, focal: number) => (2 * Math.atan(aperture / (2 * 
 
 export function CameraView({ object, context }: PresentProps<"prim">) {
   const { prim } = object;
-  const { store, stage, time } = context;
+  const { store, stage } = context;
+  const time = useTime(store);
   usePrimRevision(store, prim.path);
   const camera = stage.camera(prim.path, time === undefined ? {} : { time });
   if (camera === null) return null;
@@ -203,9 +205,10 @@ const JOINTS_SHOWN = 200;
 export function SkeletonView({ object, context }: PresentProps<"prim">) {
   const { prim } = object;
   const revision = usePrimRevision(context.store, prim.path);
-  const joints = useMemo(() => tokens(prim, "joints", context.time), [prim.path, revision, context.time]);
+  const time = useTime(context.store);
+  const joints = useMemo(() => tokens(prim, "joints", time), [prim.path, revision, time]);
   const animation = prim.typeName === "SkelAnimation";
-  const shapes = useMemo(() => (animation ? tokens(prim, "blendShapes", context.time) : []), [prim.path, revision, animation]);
+  const shapes = useMemo(() => (animation ? tokens(prim, "blendShapes", time) : []), [prim.path, revision, animation]);
   const tree = useMemo(() => jointTree(joints), [joints]);
   return (
     <Section title={animation ? "Skeleton animation" : "Skeleton"} aside={<span>{joints.length} joints</span>}>

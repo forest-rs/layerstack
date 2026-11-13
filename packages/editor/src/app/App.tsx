@@ -9,19 +9,23 @@ import { useEffect } from "react";
 import { usePanelRef } from "react-resizable-panels";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { BottomPanel } from "./BottomPanel.tsx";
-import { useStore } from "./context.ts";
+import { useEditorStore, useStoreSelector } from "./context.ts";
 import { widgetKeeps } from "./keys.ts";
 import { Inspector } from "./Inspector.tsx";
 import { ModuleLost } from "./ModuleLost.tsx";
 import { ScenePanel } from "./ScenePanel.tsx";
 import { Toolbar } from "./Toolbar.tsx";
 import { ViewportPane } from "./ViewportPane.tsx";
+import { countRender } from "./renders.ts";
 
 /** The share of the window the bottom panel takes, at least, while it draws a shading network. */
 const GRAPH_PANEL = 45;
 
 export function App() {
-  const store = useStore();
+  countRender("App");
+  const store = useEditorStore();
+  // The frame itself shows nothing of the scene: it renders again only when the module is lost.
+  const lost = useStoreSelector(store, ["status"], (at) => at.status.kind === "lost");
   const bottom = usePanelRef();
   // A network wants height: the Shading tab grows a short panel, never shrinks one.
   const onTab = (tab: string) => {
@@ -55,7 +59,7 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [store]);
   // A trapped module is dead: nothing may call into it, so no panel draws.
-  if (store.status.kind === "lost") return <ModuleLost status={store.status} />;
+  if (lost && store.status.kind === "lost") return <ModuleLost status={store.status} />;
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
       <Toolbar />

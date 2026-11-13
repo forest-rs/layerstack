@@ -25,6 +25,7 @@ import type { EditorStore } from "../../store.ts";
 import { presentedInstance } from "../presentations/instances.tsx";
 import { CommandMenu, Live, Present } from "../presentations/Present.tsx";
 import { Section } from "../Section.tsx";
+import { useTime } from "../context.ts";
 
 /** A table row's height in pixels, and the table's. */
 const ROW = 20;
@@ -51,6 +52,8 @@ const cell = (value: number | undefined) => (value === undefined ? "" : formatNu
 export function InstancerView({ object, context }: PresentProps<"prim">) {
   const { store } = context;
   const path = object.prim.path;
+  // Its columns are read at the time.
+  useTime(store);
   const columns = store.instancerColumns(path);
   if (columns === null) return null;
   return <Instances store={store} path={path} columns={columns} context={context} />;

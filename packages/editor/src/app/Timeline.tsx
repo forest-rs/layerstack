@@ -9,11 +9,14 @@ import { NextIcon, PauseIcon, PlayIcon, PreviousIcon } from "@hugeicons/core-fre
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip";
-import { useStore } from "./context.ts";
+import { useEditorStore, useRevision } from "./context.ts";
 import { formatTime } from "./format.ts";
+import { countRender } from "./renders.ts";
 
 export function Timeline() {
-  const store = useStore();
+  countRender("Timeline");
+  const store = useEditorStore();
+  useRevision(store, "time", "composition");
   const range = store.range;
   if (store.session === null) return null;
   if (range === null) {

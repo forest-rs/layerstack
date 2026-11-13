@@ -6,7 +6,7 @@
 // click picks the prim drawn there; a drag orbits.
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { useStore } from "./context.ts";
+import { useEditorStore, useRevision } from "./context.ts";
 import { updateSummary, viewportSummary } from "../model/draws.ts";
 import { assetExists, readAsset } from "../model/sources.ts";
 import { SKIN_SLOTS } from "../model/skinning.ts";
@@ -19,6 +19,8 @@ import { Timeline } from "./Timeline.tsx";
 import type { Viewport } from "../viewport/viewport3d.ts";
 import type { TextureStats } from "../viewport/surfaces.ts";
 import { TONE_MAP_CHOICES } from "../viewport/toneMap.ts";
+import { countRender } from "./renders.ts";
+import type { EditorStore } from "../store.ts";
 
 /**
  * The viewport's texture counts, re-rendering the pane once a frame at
@@ -47,7 +49,10 @@ function useTextureStats(viewport: Viewport | null): TextureStats | undefined {
 }
 
 export function ViewportPane() {
-  const store = useStore();
+  countRender("ViewportPane");
+  const store = useEditorStore();
+  // What is selected and drawn and how it is shown; the counts that move with time are `DrawStats`'s.
+  useRevision(store, "selection", "view", "status", "composition", "draws");
   const canvas = useRef<HTMLCanvasElement>(null);
   const [failed, setFailed] = useState<string | null>(null);
   useEffect(() => {
@@ -90,8 +95,7 @@ export function ViewportPane() {
   }, [store]);
   // A click picks; a drag (the orbit controls') does not.
   const down = useRef<{ x: number; y: number } | null>(null);
-  const summary = viewportSummary(store.scene);
-  const update = store.lastUpdate === null ? null : updateSummary(store.lastUpdate);
+  const drawsNothing = !store.scene.items.some((view) => !view.item.hidden);
   const through = store.through;
   // The material view: the selected material (or the one around a selected
   // shader) on a shader ball. By default it shows when the scene draws
@@ -101,10 +105,8 @@ export function ViewportPane() {
   const material = stage === null || store.selection === null ? null : enclosingMaterial(stage, store.selection);
   // The asset view's texture: the image a selected texture names, in place of the draws.
   const texture = store.drawScope === "selection" && store.focus.kind === "texture" ? store.focus.attribute : null;
-  const showMaterial = texture === null && material !== null && (materialChoice ?? summary.drawn.length === 0);
+  const showMaterial = texture === null && material !== null && (materialChoice ?? drawsNothing);
   const textures = useTextureStats(store.viewport);
-  const skinning = store.scene.skinning;
-  const skinned = skinning.gpu + skinning.cpu + skinning.failed.length > 0;
   return (
     <div className="flex h-full w-full flex-col">
       <div className="relative min-h-0 w-full flex-1 overflow-hidden bg-[#20201e]">
@@ -233,42 +235,57 @@ export function ViewportPane() {
             {store.drawScope === "selection" && !showMaterial && stage !== null && <AssetCard store={store} stage={stage} />}
           </div>
         )}
-        {!showMaterial && texture === null && (
-        <div className="pointer-events-none absolute right-2 bottom-2 rounded-md bg-black/40 px-2 py-1 text-right font-mono text-[11px] leading-relaxed text-white/80 tabular-nums backdrop-blur-sm">
-          <div>
-            {summary.drawn.length} prims drawn · {summary.triangles.toLocaleString()} triangles · {summary.lights.length} lights
-            {store.cost !== null && store.cost.total.items > 0 && (
-              <span title="Bytes the draws upload (compact vertices: 16 per vertex with a position, normal and st; u16 or u32 indices; 64 per instance), and the JavaScript arrays they still hold (a static buffer's are dropped once uploaded); the Draw cost tab lists them by item">
-                {" "}· {formatBytes(store.cost.total.gpuBytes)} uploaded · {formatBytes(store.cost.total.cpuBytes)} held
-              </span>
-            )}
-          {textures !== undefined && textures.images > 0 && ` · ${textures.images} images${textures.capped > 0 ? ` (${textures.capped} scaled to ${textures.limit})` : ""}`}
-          </div>
-          {store.viewport !== null && <ClusterLine viewport={store.viewport} />}
-          {update !== null && (
-            <div className="text-white/60">
-              last update: +{update.added} −{update.removed} moved {update.moved} refilled {update.refilled} rebuilt {update.rebuilt} · read{" "}
-              {update.itemsRead} draws
-              {store.lastUpdate?.timeChanged === true && `, ${update.itemsTimeInvariant} left as they were`}
-            </div>
-          )}
-          {skinned && store.lastUpdate !== null && (
-            <div className="text-white/60" title={skinning.failed.join("\n")}>
-              skinned: posed {store.lastUpdate.skinWork.gpuDraws} on the GPU ({store.lastUpdate.skinWork.joints.toLocaleString()} joints)
-              {store.lastUpdate.skinWork.shapedDraws > 0 &&
-                `, blend-shaped ${store.lastUpdate.skinWork.shapedDraws} (${store.lastUpdate.skinWork.shapedPoints.toLocaleString()} points)`}
-              , deformed {store.lastUpdate.skinWork.cpuDraws} on the CPU ({store.lastUpdate.skinWork.cpuPoints.toLocaleString()} points)
-              {skinning.shaped > 0 &&
-                ` · ${skinning.shaped} with blend shapes${skinning.shapedVarying > 0 ? ` (${skinning.shapedVarying} reshaped as time plays)` : ""}`}
-              {skinning.cpu > 0 && ` · ${skinning.cpu} with dual quaternions`}
-              {skinning.reducedBlocks > 0 && ` · ${skinning.reducedBlocks.toLocaleString()} points kept ${SKIN_SLOTS} joints (dropped ≤ ${skinning.droppedWeight.toFixed(3)})`}
-              {skinning.failed.length > 0 && ` · ${skinning.failed.length} drawn at rest`}
-            </div>
-          )}
-        </div>
-      )}
+        {!showMaterial && texture === null && <DrawStats store={store} textures={textures} />}
       </div>
       <Timeline />
+    </div>
+  );
+}
+
+/**
+ * What the viewport draws, in numbers, and what the last sync did: the
+ * part of the pane that changes with every frame of playback, so it
+ * listens for the time and the rest of the pane does not.
+ */
+function DrawStats({ store, textures }: { store: EditorStore; textures: TextureStats | undefined }) {
+  countRender("DrawStats");
+  useRevision(store, "time", "draws");
+  const summary = viewportSummary(store.scene);
+  const update = store.lastUpdate === null ? null : updateSummary(store.lastUpdate);
+  const skinning = store.scene.skinning;
+  const skinned = skinning.gpu + skinning.cpu + skinning.failed.length > 0;
+  return (
+    <div className="pointer-events-none absolute right-2 bottom-2 rounded-md bg-black/40 px-2 py-1 text-right font-mono text-[11px] leading-relaxed text-white/80 tabular-nums backdrop-blur-sm">
+      <div>
+        {summary.drawn.length} prims drawn · {summary.triangles.toLocaleString()} triangles · {summary.lights.length} lights
+        {store.cost !== null && store.cost.total.items > 0 && (
+          <span title="Bytes the draws upload (compact vertices: 16 per vertex with a position, normal and st; u16 or u32 indices; 64 per instance), and the JavaScript arrays they still hold (a static buffer's are dropped once uploaded); the Draw cost tab lists them by item">
+            {" "}· {formatBytes(store.cost.total.gpuBytes)} uploaded · {formatBytes(store.cost.total.cpuBytes)} held
+          </span>
+        )}
+      {textures !== undefined && textures.images > 0 && ` · ${textures.images} images${textures.capped > 0 ? ` (${textures.capped} scaled to ${textures.limit})` : ""}`}
+      </div>
+      {store.viewport !== null && <ClusterLine viewport={store.viewport} />}
+      {update !== null && (
+        <div className="text-white/60">
+          last update: +{update.added} −{update.removed} moved {update.moved} refilled {update.refilled} rebuilt {update.rebuilt} · read{" "}
+          {update.itemsRead} draws
+          {store.lastUpdate?.timeChanged === true && `, ${update.itemsTimeInvariant} left as they were`}
+        </div>
+      )}
+      {skinned && store.lastUpdate !== null && (
+        <div className="text-white/60" title={skinning.failed.join("\n")}>
+          skinned: posed {store.lastUpdate.skinWork.gpuDraws} on the GPU ({store.lastUpdate.skinWork.joints.toLocaleString()} joints)
+          {store.lastUpdate.skinWork.shapedDraws > 0 &&
+            `, blend-shaped ${store.lastUpdate.skinWork.shapedDraws} (${store.lastUpdate.skinWork.shapedPoints.toLocaleString()} points)`}
+          , deformed {store.lastUpdate.skinWork.cpuDraws} on the CPU ({store.lastUpdate.skinWork.cpuPoints.toLocaleString()} points)
+          {skinning.shaped > 0 &&
+            ` · ${skinning.shaped} with blend shapes${skinning.shapedVarying > 0 ? ` (${skinning.shapedVarying} reshaped as time plays)` : ""}`}
+          {skinning.cpu > 0 && ` · ${skinning.cpu} with dual quaternions`}
+          {skinning.reducedBlocks > 0 && ` · ${skinning.reducedBlocks.toLocaleString()} points kept ${SKIN_SLOTS} joints (dropped ≤ ${skinning.droppedWeight.toFixed(3)})`}
+          {skinning.failed.length > 0 && ` · ${skinning.failed.length} drawn at rest`}
+        </div>
+      )}
     </div>
   );
 }

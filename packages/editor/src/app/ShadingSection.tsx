@@ -21,6 +21,7 @@ import { clampToBounds, groupInputs, type ShadingInput, type ShadingInputGroup, 
 import { formatNumber } from "../model/values.ts";
 import type { EditorStore } from "../store.ts";
 import { refusedBy } from "../model/refusal.ts";
+import { useTime } from "./context.ts";
 import { CommitNumber, shown, ValueField } from "./fields.tsx";
 import { MaterialPreview } from "./MaterialPreview.tsx";
 import { Live, presentationContext } from "./presentations/Present.tsx";
@@ -195,6 +196,8 @@ function InputGroup({
 
 function InputRow({ store, input, animated }: { store: EditorStore; input: ShadingInput; animated: boolean }) {
   const { port } = input;
+  // Only an animated input is read again as time moves.
+  const time = useTime(store, animated);
   const focused = store.property === port.path;
   const context = presentationContext(store);
   // The shader outputs that produce its value, through node graphs: a texture's among them.
@@ -222,7 +225,7 @@ function InputRow({ store, input, animated }: { store: EditorStore; input: Shadi
             {context !== null && producers.map((source) => <TextureSource key={source} context={context} source={source} />)}
           </div>
         ) : (
-          <InputValue store={store} input={input} at={animated ? (store.time ?? null) : null} />
+          <InputValue store={store} input={input} at={animated ? (time ?? null) : null} />
         )}
       </div>
     </>

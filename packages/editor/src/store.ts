@@ -4,11 +4,11 @@
 // The editor's state outside React: the open session, what is selected,
 // where edits go, and the draw list the viewport is kept from. Every
 // action runs here, then brings the draw list up to date from the stage's
-// change records and bumps `revision`; components subscribe to it
-// (`useEditor`) and read the stage directly, which is cheap and always
+// change records and bumps the signals of what it changed
+// (`store/signals.ts`); a panel listens to the concerns it reads
+// (`app/context.ts`) and reads the stage directly, which is always
 // current. Nothing here knows about the DOM except the viewport it is
 // handed.
-import { useSyncExternalStore } from "react";
 import type { Edit, EditReceipt, EditTarget, Layer, Layerstack, LoadOutcome, LoadPolicy, ValueInput } from "@forest-rs/layerstack";
 import type { BudgetReport, BufferCost, DrawCost, DrawScope, Stagehand } from "@forest-rs/layerstack_stagehand";
 import { type AssetFocus, assetFocus, type BudgetChoice, budgetFor, type DrawScopeChoice, rememberBudget, rememberedBudget, scopeFor } from "./model/assetView.ts";
@@ -17,6 +17,7 @@ import { primRevision } from "./model/revisions.ts";
 import { boxCorners, indexOfId, instanceMatrix, type InstancerColumns, invert, multiply, readColumns, toggled } from "./model/instancer.ts";
 import { type LoadBudget, type OpenPhase, OverBudget, Session } from "./model/session.ts";
 import type { SceneSource } from "./model/sources.ts";
+import { type Channel, Signals } from "./store/signals.ts";
 import { DEFAULT_LIGHT_SETTINGS, type LightSettings } from "./viewport/defaultLights.ts";
 import { rememberToneMap, rememberedToneMap, type ToneMapChoice } from "./viewport/toneMap.ts";
 import { isBox, type UpAxis } from "./viewport/framing.ts";
@@ -116,8 +117,8 @@ const EMPTY_SCENE: ViewportScene = {
 export class EditorStore {
   readonly layerstack: Layerstack;
   readonly stagehand: Stagehand;
-  /** Bumped after every change the panels may show. */
-  revision = 0;
+  /** What changed, by concern: what the panels listen to. */
+  readonly signals = new Signals();
   status: EditorStatus = { kind: "empty" };
   session: Session | null = null;
   source: SceneSource | null = null;
@@ -193,13 +194,16 @@ export class EditorStore {
   #frameNoteTimer: ReturnType<typeof setTimeout> | undefined = undefined;
   #frameNotes = 0;
   readonly #draws: ViewportModel;
-  readonly #listeners = new Set<() => void>();
+  /** The change records the last sync had seen, and of which session. */
+  #synced: { session: Session | null; changes: number } = { session: null, changes: 0 };
   #viewport: Viewport | null = null;
   #notice = 0;
   #opening = 0;
   /** When the open, or the payload load, the overlay shows began. */
   #busySince = 0;
   #frame = 0;
+  /** The channels {@link EditorStore.#bumpSoon} bumps at the next frame. */
+  readonly #soon = new Set<Channel>();
   #playFrame = 0;
 
   constructor(layerstack: Layerstack, stagehand: Stagehand) {
@@ -213,17 +217,13 @@ export class EditorStore {
     return this.#viewport;
   }
 
-  subscribe = (listener: () => void): (() => void) => {
-    this.#listeners.add(listener);
-    return () => this.#listeners.delete(listener);
-  };
-
   /** Hands the store the three.js view (or `null` when it goes), which it keeps up to date. */
   /** The costs of meshes the viewport draws from prebuilt cluster sets, by prim (`Viewport.onResident`); `null` before any. */
   #resident: ReadonlyMap<string, BufferCost> | null = null;
 
   attachViewport(viewport: Viewport | null): void {
     this.#viewport = viewport;
+    this.#bump("view");
     if (viewport === null) return;
     // Uploaded buffers' arrays are dropped; what is held is measured again.
     viewport.onUploaded = (key, revision) => this.#draws.release(key, revision);
@@ -234,7 +234,7 @@ export class EditorStore {
     };
     viewport.onReleased = () => {
       this.cost = this.#draws.cost();
-      this.#bumpSoon();
+      this.#bumpSoon("draws");
     };
     // A lost context lost every upload: the released buffers filled again, the view made again.
     viewport.onContextRestored = () => {
@@ -242,7 +242,7 @@ export class EditorStore {
       this.scene = this.#draws.scene(this.time);
       this.cost = this.#draws.cost();
       viewport.update(this.scene, { ...this.#noUpdate(), reset: true }, this.#highlighted());
-      this.#bump();
+      this.#bump("draws");
     };
     viewport.lookThrough(this.through);
     viewport.setLightSettings(this.lightSettings);
@@ -261,22 +261,26 @@ export class EditorStore {
     const opening = ++this.#opening;
     this.#resident = null;
     this.status = { kind: "opening", label: source.label };
-    this.#bump();
+    this.#bump("status");
     try {
       this.#busySince = performance.now();
       const choice = this.payloads;
       const session = await Session.open(this.layerstack, source.root, source.fetch, {
         open: { load: choice === "all" ? "all" : "none" },
         progress: (pending) => {
-          if (opening === this.#opening) this.opening = pending;
-          this.#bumpSoon();
+          if (opening !== this.#opening) return;
+          if (this.opening !== pending) {
+            this.opening = pending;
+            this.#bump("status");
+          }
+          this.#bumpSoon("loop");
         },
         // Each phase is shown before its work holds the thread: two frames
         // let the page render and paint it.
         phase: async (phase) => {
           if (opening !== this.#opening) return;
           this.openingPhase = { phase, since: performance.now(), started: this.#busySince };
-          this.#bump();
+          this.#bump("status", "loop");
           await nextFrame();
           await nextFrame();
         },
@@ -309,13 +313,15 @@ export class EditorStore {
       this.status = { kind: "ready" };
       this.drawScope = "scene";
       this.#sync();
+      // Another scene: everything a panel reads may be another thing.
+      this.signals.bumpAll();
     } catch (error) {
       if (opening !== this.#opening) return;
       this.opening = null;
       this.openingPhase = null;
       if (this.lose(error, source.label)) return;
       this.status = { kind: "failed", label: source.label, message: error instanceof Error ? error.message : String(error) };
-      this.#bump();
+      this.#bump("status");
     }
   }
 
@@ -338,7 +344,7 @@ export class EditorStore {
     cancelAnimationFrame(this.#playFrame);
     this.playing = false;
     this.status = { kind: "lost", label: label ?? this.source?.label ?? null, outOfMemory, message };
-    this.#bump();
+    this.#bump("status", "time");
     return true;
   }
 
@@ -353,7 +359,7 @@ export class EditorStore {
     this.opening = null;
     this.openingPhase = null;
     this.status = this.session === null ? { kind: "empty" } : { kind: "ready" };
-    this.#bump();
+    this.#bump("status");
   }
 
   /**
@@ -371,11 +377,11 @@ export class EditorStore {
     if (this.property !== null && (path === null || !this.property.startsWith(`${path}.`))) this.property = null;
     // Drawing the selection, or under a budget (which admits the selection first), the draws change.
     if (this.drawScope === "selection" || this.budgetChoice !== "unlimited") {
-      this.#sync();
+      this.#sync("selection");
       return;
     }
     this.#viewport?.update(this.scene, this.#noUpdate(), this.#highlighted());
-    this.#bump();
+    this.#bump("selection");
   }
 
   /** The columns of the point instancer at `path` at the current time, read again only when a change reaches it ({@link primRevision}) or the time moves ({@link readColumns}). */
@@ -401,7 +407,7 @@ export class EditorStore {
     const corners = index === null ? null : this.#instanceCorners(instancer, index);
     this.#viewport?.setMarker(corners);
     if (frame) this.#noteFrame(corners !== null && this.#frameBox(cornersBox(corners)), `instance ${index} of ${instancer}`);
-    this.#bump();
+    this.#bump("selection");
   }
 
   /**
@@ -475,15 +481,15 @@ export class EditorStore {
   /** Shows `path`'s value and opinions in the explain panel (and, drawing the selection, an image it names). */
   explain(path: string | null): void {
     this.property = path;
-    if (this.drawScope === "selection") this.#sync();
-    else this.#bump();
+    if (this.drawScope === "selection") this.#sync("selection");
+    else this.#bump("selection");
   }
 
   /** Draws the whole scene, the selection alone, or nothing, from now on. */
   setDrawScope(choice: DrawScopeChoice): void {
     if (choice === this.drawScope) return;
     this.drawScope = choice;
-    this.#sync();
+    this.#sync("view");
   }
 
   /** Draws under the budget `choice` from now on, and remembers it for this viewer. */
@@ -491,7 +497,7 @@ export class EditorStore {
     if (choice === this.budgetChoice) return;
     this.budgetChoice = choice;
     rememberBudget(choice);
-    this.#sync();
+    this.#sync("view");
   }
 
   /**
@@ -530,14 +536,14 @@ export class EditorStore {
   lookThrough(path: string | null): void {
     this.through = path;
     this.#viewport?.lookThrough(path);
-    this.#bump();
+    this.#bump("view");
   }
 
   /** Switches the viewport's default lights (usdview's View > Lights menu). */
   setLightSettings(settings: LightSettings): void {
     this.lightSettings = settings;
     this.#viewport?.setLightSettings(settings);
-    this.#bump();
+    this.#bump("view");
   }
 
   /** Shows the viewport and the previews sRGB-encoded as usdview does, or through AgX, and remembers the choice. */
@@ -545,7 +551,7 @@ export class EditorStore {
     this.toneMap = choice;
     rememberToneMap(choice);
     this.#viewport?.setToneMap(choice);
-    this.#bump();
+    this.#bump("view");
   }
 
   /**
@@ -596,10 +602,10 @@ export class EditorStore {
       this.#frameNoteTimer = setTimeout(() => {
         this.#frameNoteTimer = undefined;
         this.frameNote = null;
-        this.#bump();
+        this.#bump("view");
       }, FRAME_NOTE_MS);
     }
-    this.#bump();
+    this.#bump("view");
     return framed;
   }
 
@@ -628,7 +634,7 @@ export class EditorStore {
     const clamped = time === undefined || range === null ? time : Math.min(range.end, Math.max(range.start, time));
     if (clamped === this.time) return;
     this.time = clamped;
-    this.#sync();
+    this.#syncTime();
   }
 
   /** Plays the range from the current time at `timeCodesPerSecond`, looping at its end. */
@@ -642,11 +648,11 @@ export class EditorStore {
       const advanced = (this.time ?? range.start) + ((now - last) / 1000) * range.timeCodesPerSecond;
       last = now;
       this.time = advanced > range.end ? range.start : advanced;
-      this.#sync();
+      this.#syncTime();
       this.#playFrame = requestAnimationFrame(tick);
     };
     this.#playFrame = requestAnimationFrame(tick);
-    this.#bump();
+    this.#bump("time");
   }
 
   /** Stops playing, on the nearest whole time code: an edit then authors its sample on a frame. */
@@ -655,7 +661,7 @@ export class EditorStore {
     this.playing = false;
     cancelAnimationFrame(this.#playFrame);
     if (this.time !== undefined) this.time = Math.round(this.time);
-    this.#sync();
+    this.#syncTime();
   }
 
   /** Moves time by `frames` whole time codes, pausing. */
@@ -669,7 +675,7 @@ export class EditorStore {
   setTarget(target: Layer | EditTarget | undefined): void {
     if (this.session === null) return;
     this.session.target = target;
-    this.#bump();
+    this.#bump("target");
   }
 
   /** Applies `edits` as one undoable action. */
@@ -748,7 +754,7 @@ export class EditorStore {
   /** Sets how the next scene opens its payloads. */
   setPayloads(choice: PayloadChoice): void {
     this.payloads = choice;
-    this.#bump();
+    this.#bump("status");
   }
 
   /**
@@ -777,12 +783,13 @@ export class EditorStore {
     this.status = { kind: "loading", label };
     this.#busySince = performance.now();
     this.openingPhase = null;
-    this.#bump();
+    this.#bump("status");
     try {
       // A path the stage refuses (an inactive prim) is skipped, as in
       // OpenUSD; the notice says which and why.
       for (const { path, code } of (await run(session)).refused) {
         this.notices.push({ id: ++this.#notice, action, message: `${path} was not ${action.startsWith("load") ? "loaded" : "unloaded"}: ${code.replaceAll("_", " ")}`, code: `load.${code}` });
+        this.#bump("notices");
       }
     } catch (error) {
       if (this.lose(error)) return;
@@ -792,14 +799,14 @@ export class EditorStore {
     this.opening = null;
     this.openingPhase = null;
     this.status = { kind: "ready" };
-    this.#sync();
+    this.#sync("status", "loop");
   }
 
   /** Forgets a notice. */
   dismiss(id: number): void {
     const index = this.notices.findIndex((notice) => notice.id === id);
     if (index >= 0) this.notices.splice(index, 1);
-    this.#bump();
+    this.#bump("notices");
   }
 
   /** Runs an action; whether it succeeded (a failure is a notice). */
@@ -813,7 +820,7 @@ export class EditorStore {
       this.#report(action, error);
       done = false;
     }
-    this.#sync();
+    this.#sync("history");
     return done;
   }
 
@@ -825,7 +832,7 @@ export class EditorStore {
     } catch (error) {
       this.#report(action, error);
     }
-    if (this.session === session) this.#sync();
+    if (this.session === session) this.#sync("history", "loop");
   }
 
   /** Reads the stage's `upAxis`, and orients the view to it. */
@@ -840,10 +847,31 @@ export class EditorStore {
   #report(action: string, error: unknown): void {
     const code = typeof error === "object" && error !== null && "code" in error ? String((error as { code: unknown }).code) : null;
     this.notices.push({ id: ++this.#notice, action, message: error instanceof Error ? error.message : String(error), code });
+    this.#bump("notices");
   }
 
-  /** Brings the draw list up to the stage, applies what changed to the view, and bumps the revision. */
-  #sync(): void {
+  /**
+   * Brings the draw list up to the stage and applies what changed to the
+   * view, then bumps `draws`, `composition` when the stage reported a
+   * change since the last sync (or is another stage), and `also`.
+   */
+  #sync(...also: readonly Channel[]): void {
+    this.#bump(...also, ...this.#syncDraws(false));
+  }
+
+  /**
+   * Brings the draws to the time, which moved: bumps `time`, and `draws`
+   * only when the move did more than place draws elsewhere (one shown or
+   * hidden, a buffer refilled, a light changed), so playing a scene of
+   * rigid motion renders what shows the time and no more.
+   */
+  #syncTime(): void {
+    this.#bump("time", ...this.#syncDraws(true));
+  }
+
+  /** Syncs the draw list and the view; returns the channels that changed (`timeOnly`: nothing but the time was asked to). */
+  #syncDraws(timeOnly: boolean): Channel[] {
+    const changed: Channel[] = [];
     if (this.session !== null) {
       const promoted = this.selection === null || this.selection === "/" ? [] : [this.selection];
       const update = this.#draws.sync(this.session, this.time, this.#scope(this.session), budgetFor(this.budgetChoice), promoted, this.#resident);
@@ -855,8 +883,12 @@ export class EditorStore {
       // The selected instance's outline follows edits, time and the draw scope.
       const instance = this.instance;
       if (instance !== null) this.#viewport?.setMarker(this.#instanceCorners(instance.instancer, instance.index));
+      if (!timeOnly || update.reset || update.records > 0 || changesDraws(update)) changed.push("draws");
     }
-    this.#bump();
+    const changes = this.session?.changeLog.length ?? 0;
+    if (this.#synced.session !== this.session || this.#synced.changes !== changes) changed.push("composition");
+    this.#synced = { session: this.session, changes };
+    return changed;
   }
 
   /** An update that changes nothing: a restyle for a new selection. */
@@ -891,19 +923,52 @@ export class EditorStore {
     };
   }
 
-  /** Bumps once per frame at most: the asset loop reports every fetch. */
-  #bumpSoon(): void {
+  /** Bumps `channels` once per frame at most: the asset loop reports every fetch. */
+  #bumpSoon(...channels: readonly Channel[]): void {
+    for (const channel of channels) this.#soon.add(channel);
     if (this.#frame !== 0) return;
     this.#frame = requestAnimationFrame(() => {
       this.#frame = 0;
-      this.#bump();
+      const due = [...this.#soon];
+      this.#soon.clear();
+      this.#bump(...due);
     });
   }
 
-  #bump(): void {
-    this.revision += 1;
-    for (const listener of this.#listeners) listener();
+  #bump(...channels: readonly Channel[]): void {
+    this.signals.bump(...channels);
   }
+}
+
+/**
+ * Whether `update` changed what the draws are, beyond where they are: an
+ * item added, removed, shown, hidden, recolored or rebound, a buffer
+ * added, refilled, rebuilt or freed, a light, camera, material or light
+ * link changed. A time change that only moves draws (`matrices`) or poses
+ * skins on the GPU changes none of it.
+ */
+function changesDraws(update: ViewportUpdate): boolean {
+  return (
+    update.added.size +
+      update.removed.size +
+      update.visibility.size +
+      update.recolored.size +
+      update.rebound.size +
+      update.buffersAdded.size +
+      update.refilled.size +
+      update.rebuilt.size +
+      update.freed.size +
+      update.lightsAdded.size +
+      update.lightsRemoved.size +
+      update.lightsChanged.size +
+      update.cameras.size +
+      update.materialsAdded.size +
+      update.materialsRemoved.size +
+      update.materialsChanged.size +
+      update.links +
+      update.reskinned.size >
+    0
+  );
 }
 
 /** The axis-aligned box around eight corners (24 numbers, {@link boxCorners}'s). */
@@ -933,11 +998,6 @@ function timeRange(session: Session): TimeRange | null {
   const end = number("endTimeCode", 0);
   if (!(end > start)) return null;
   return { start, end, timeCodesPerSecond: number("timeCodesPerSecond", 24) };
-}
-
-/** Re-renders the component after every change to `store`; read the store and its stage directly. */
-export function useEditor(store: EditorStore): number {
-  return useSyncExternalStore(store.subscribe, () => store.revision);
 }
 
 /** `bytes` in GiB, to one decimal. */

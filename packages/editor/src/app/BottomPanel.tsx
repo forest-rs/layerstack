@@ -14,20 +14,23 @@ import { cn } from "@/lib/utils";
 import type { EditorStore } from "../store.ts";
 import { AssetLoopView } from "./AssetLoop.tsx";
 import { CostView } from "./CostView.tsx";
-import { useStore } from "./context.ts";
+import { useEditorStore, useRevision, useStoreSelector, useTime } from "./context.ts";
 import { shown } from "./fields.tsx";
 import { formatTime, layerName } from "./format.ts";
 import { Present, presentationContext } from "./presentations/Present.tsx";
 import { ShadingView } from "./ShadingView.tsx";
 import { targetText } from "./TargetPicker.tsx";
+import { countRender } from "./renders.ts";
 
 /** The most log rows shown, newest first. */
 const SHOWN = 400;
 
 /** The bottom panel; `onTab` hears which tab is chosen, so the frame can give a tab that draws a graph more room. */
 export function BottomPanel({ onTab }: { onTab?: (tab: string) => void }) {
-  const store = useStore();
-  const notices = store.notices.length;
+  countRender("BottomPanel");
+  const store = useEditorStore();
+  // The tabs themselves show only how many notices there are; each view listens for what it shows.
+  const notices = useStoreSelector(store, ["notices"], (at) => at.notices.length);
   return (
     <Tabs className="flex h-full flex-col gap-0" onSelectionChange={(key) => onTab?.(String(key))}>
       <TabsList variant="line" className="w-full justify-start border-b px-2">
@@ -69,13 +72,17 @@ export function BottomPanel({ onTab }: { onTab?: (tab: string) => void }) {
 
 /** The focused property's resolved value, where it comes from, and each opinion strongest first. */
 function ExplainView({ store }: { store: EditorStore }) {
+  countRender("ExplainView");
+  useRevision(store, "selection", "composition", "target");
   const stage = store.session?.stage;
   const path = store.property;
+  const attribute = stage === undefined || path === null ? null : stage.attribute(path);
+  // Only an animated property is explained again as time moves.
+  const time = useTime(store, attribute?.mightBeTimeVarying() === true);
   if (stage === undefined || path === null) {
     return <p className="p-3 text-xs text-muted-foreground">Choose a property's name in the inspector to see why it has its value.</p>;
   }
-  const attribute = stage.attribute(path);
-  const explanation: Explanation | null = attribute?.explain(store.time) ?? null;
+  const explanation: Explanation | null = attribute?.explain(time) ?? null;
   if (attribute === null || explanation === null) {
     return <p className="p-3 text-xs text-muted-foreground">{path} has no value to explain.</p>;
   }
@@ -87,7 +94,7 @@ function ExplainView({ store }: { store: EditorStore }) {
     <div className="p-3 text-xs">
       <div className="flex flex-wrap items-baseline gap-x-2">
         <span className="font-mono">{path}</span>
-        {store.time !== undefined && <span className="text-muted-foreground">at {formatTime(store.time)}</span>}
+        {time !== undefined && <span className="text-muted-foreground">at {formatTime(time)}</span>}
         <span className="text-muted-foreground">=</span>
         {context !== null ? <Present object={{ kind: "value", attribute, typeName, shown: value, at: null }} context={context} /> : <span className="font-mono">{value.text}</span>}
       </div>
@@ -142,6 +149,7 @@ function OpinionRow({ store, opinion }: { store: EditorStore; opinion: Opinion }
 
 /** Each recomposition, newest first, with the action that caused it. */
 function ChangesView({ store }: { store: EditorStore }) {
+  useRevision(store, "composition");
   const log = store.session?.changeLog ?? [];
   const context = presentationContext(store);
   if (log.length === 0) return <p className="p-3 text-xs text-muted-foreground">No recompositions yet.</p>;
@@ -191,6 +199,7 @@ function ChangesView({ store }: { store: EditorStore }) {
 
 /** The undo stack (newest first), then what was undone. */
 function HistoryView({ store }: { store: EditorStore }) {
+  useRevision(store, "history", "composition");
   const session = store.session;
   if (session === null) return null;
   const undo = [...session.history.undoSteps].reverse();
@@ -225,6 +234,7 @@ function HistoryView({ store }: { store: EditorStore }) {
 
 /** What actions reported: refused edits, failed fetches. */
 function NoticesView({ store }: { store: EditorStore }) {
+  useRevision(store, "notices");
   if (store.notices.length === 0) return <p className="p-3 text-xs text-muted-foreground">Nothing to report.</p>;
   return (
     <ol>

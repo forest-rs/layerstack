@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import type { Session } from "../model/session.ts";
 import { summarize, type LoopRun } from "../model/timeline.ts";
 import type { EditorStore } from "../store.ts";
+import { useRevision } from "./context.ts";
 import { formatBytes } from "./format.ts";
 import { COMPOSE_COLOR, formatDuration, LoopWaterfall, STAGE_COLOR } from "./LoopWaterfall.tsx";
 
@@ -21,6 +22,8 @@ const SHOWN = 400;
 
 /** The asset loop of the open (or opening) session: its waterfall, or its log. */
 export function AssetLoopView({ store }: { store: EditorStore }) {
+  // The loop's logs, of the session open or opening, and the selection its rows mark.
+  useRevision(store, "loop", "status", "composition", "selection");
   const session = store.session ?? store.opening;
   const [mode, setMode] = useState<"waterfall" | "log">("waterfall");
   if (session === null || session.loopLog.length === 0) {

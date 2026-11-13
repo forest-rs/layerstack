@@ -6,8 +6,9 @@
 // panel's "Edit here").
 import type { EditTarget, Layer } from "@forest-rs/layerstack";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useStore } from "./context.ts";
+import { useEditorStore, useRevision } from "./context.ts";
 import { layerName } from "./format.ts";
+import { countRender } from "./renders.ts";
 
 const DEFAULT = "default";
 const THROUGH = "through";
@@ -20,7 +21,9 @@ export function targetText(target: Layer | EditTarget): string {
 }
 
 export function TargetPicker() {
-  const store = useStore();
+  countRender("TargetPicker");
+  const store = useEditorStore();
+  useRevision(store, "composition", "target");
   const session = store.session;
   if (session === null) return null;
   const stage = session.stage;

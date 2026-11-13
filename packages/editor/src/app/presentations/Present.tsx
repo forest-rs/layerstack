@@ -7,21 +7,32 @@
 // makes what it wraps a live presentation of an object (a click runs its
 // first command, a context menu offers them all, a hover shows its
 // `tooltip` presentation when it has one), and `usePrimRevision`
-// is what a panel keys its reads by, so it reads its prim again only when
-// a change reaches it.
+// (`../context.ts`) is what a panel keys its reads by, so it reads its
+// prim again only when a change reaches it.
 import { useRef, useState } from "react";
 import { Menu, MenuItem, Popover } from "react-aria-components";
 import type { ValueInput } from "@forest-rs/layerstack";
 import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { primRevision } from "../../model/revisions.ts";
 import { commands, type PresentationContext, type Presented, type PresentedKind, presentations, type PresentationView } from "../../presentations/registry.ts";
 import type { EditorStore } from "../../store.ts";
 
-/** The context presentations are given, for `store` as it is now; `null` with no stage. */
+/**
+ * The context presentations are given, for `store`'s stage as it is now;
+ * `null` with no stage. Its `time` is the store's whenever it is read, so
+ * a command run later reads the time then; a view that shows a value at
+ * the time renders again as time moves by asking for it (`useTime`).
+ */
 export function presentationContext(store: EditorStore): PresentationContext | null {
   const stage = store.session?.stage;
-  return stage === undefined ? null : { store, stage, time: store.time };
+  if (stage === undefined) return null;
+  return {
+    store,
+    stage,
+    get time() {
+      return store.time;
+    },
+  };
 }
 
 /**
@@ -175,11 +186,4 @@ export function CommandMenu<K extends PresentedKind>({
   );
 }
 
-/**
- * A number that changes when, and only when, a recomposition reaches the
- * prim at `path` ({@link primRevision}): what a panel keys its reads of
- * the prim by (`useMemo`), so an edit elsewhere reads nothing of it again.
- */
-export function usePrimRevision(store: EditorStore, path: string): number {
-  return store.session === null ? 0 : primRevision(store.session, path);
-}
+export { usePrimRevision } from "../context.ts";

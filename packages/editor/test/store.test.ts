@@ -588,3 +588,77 @@ test("an edit asked for while an action fetches runs after it, and a refusal is 
     ["finish=chrome", "set /World/Top.size"],
   );
 });
+
+test("jumping between keys pauses and lands on the selected prim's keys", async () => {
+  const h = await harness();
+  await h.open(sampleSource());
+  const { store } = h;
+  assert.equal(store.jumpToKey(1), null, "nothing is selected");
+  store.select("/World/Top");
+  store.setTime(10);
+  assert.equal(store.jumpToKey(1), 48);
+  assert.equal(store.time, 48);
+  assert.equal(store.jumpToKey(1), null, "no key after the last, and the time stays");
+  assert.equal(store.time, 48);
+  assert.equal(store.jumpToKey(-1), 0);
+  assert.equal(store.jumpToKey(-1), null);
+
+  // A key authored between them is walked through once the composition has it.
+  assert.equal(store.setValue("/World/Top.xformOp:rotateY", { type: "double", value: 180 }, 24), undefined);
+  assert.equal(store.jumpToKey(1), 24);
+  assert.equal(store.jumpToKey(1), 48);
+
+  // Playing is paused by a jump.
+  store.setTime(0);
+  store.play();
+  assert.equal(store.playing, true);
+  assert.equal(store.jumpToKey(1), 24);
+  assert.equal(store.playing, false);
+});
+
+test("seek pauses and clamps to the range", async () => {
+  const h = await harness();
+  await h.open(sampleSource());
+  const { store } = h;
+  store.play();
+  store.seek(30);
+  assert.equal(store.playing, false);
+  assert.equal(store.time, 30);
+  store.seek(-4);
+  assert.equal(store.time, 0);
+  store.seek(500);
+  assert.equal(store.time, 48);
+});
+
+test("the loop setting loops playback at the end, or stops it there", async () => {
+  const h = await harness();
+  await h.open(sampleSource());
+  const { store, frames } = h;
+  assert.equal(store.loop, true, "looping is the default");
+
+  store.setLoop(false);
+  assert.equal(store.loop, false);
+  store.setTime(47);
+  store.play();
+  frames.run(20);
+  assert.equal(store.playing, true);
+  frames.run(2000);
+  assert.equal(store.time, 48, "stopped on the last frame");
+  assert.equal(store.playing, false);
+  assert.equal(frames.waiting, 0, "no frame is left requested");
+
+  // Playing from the end starts over at the start.
+  store.play();
+  assert.equal(store.time, 0);
+  assert.equal(store.playing, true);
+  store.pause();
+
+  store.setLoop(true);
+  store.setTime(47);
+  store.play();
+  frames.run(20);
+  frames.run(2000);
+  assert.equal(store.playing, true, "still playing past the end");
+  assert.ok(store.time! < 48);
+  store.pause();
+});

@@ -19,6 +19,7 @@
 // session; state that is not the stage's goes in the module of its
 // concern, with a getter here and a bump of its channel.
 import type {
+  BindingStrength,
   Edit,
   EditReceipt,
   EditTarget,
@@ -439,6 +440,8 @@ export class EditorStore {
   select(path: string | null): void {
     const instance = this.instance;
     if (!this.#selection.select(path)) return;
+    // What a schema brought is shown while its prim stays selected.
+    if (this.revealed !== null && this.revealed.prim !== path) this.revealed = null;
     if (instance !== null && this.instance === null) this.viewport?.setMarker(null);
     // Drawing the selection, or under a budget (which admits the selection first), the draws change.
     if (this.drawScope === "selection" || this.budgetChoice !== "unlimited") {
@@ -870,11 +873,12 @@ export class EditorStore {
    * Binds the material at `material` to the prim at `path`
    * (`UsdShadeMaterialBindingAPI::Apply(prim).Bind`): `MaterialBindingAPI`
    * applied and `material:binding` targeting it, in the edit target's
-   * layer. Returns why the stage refused it.
+   * layer; for `purpose` (`preview`, `full`) alone when given, and with
+   * `strength` as its `bindMaterialAs`. Returns why the stage refused it.
    */
-  bindMaterial(path: string, material: string): string | undefined {
-    const label = `bind ${material} to ${path}`;
-    return this.#edit(label, (session) => session.apply(label, [{ type: "bindMaterial", path, material }]));
+  bindMaterial(path: string, material: string, options: { readonly purpose?: string; readonly strength?: BindingStrength } = {}): string | undefined {
+    const label = `bind ${material} to ${path}${options.purpose === undefined ? "" : ` for ${options.purpose}`}`;
+    return this.#edit(label, (session) => session.apply(label, [{ type: "bindMaterial", path, material, ...options }]));
   }
 
   /**

@@ -29,8 +29,13 @@ const NOTHING: readonly string[] = [];
  * A dialog that chooses a prim of `stage`, or with `properties` one of its
  * properties, and hands its path to `onPick` (then closes). `type`
  * narrows the prims to a schema (`Prim.isA`, or `Prim.hasAPI` for an API
- * schema); `exclude` leaves out paths already chosen; `prefer` lists the
- * prims it holds for first (class prims, for an inherit).
+ * schema); `exclude` leaves out paths already chosen, and `hide` any
+ * other it says to (a prim's own subtree, for a move). `prefer` lists
+ * the prims it holds for ahead of the others found (class prims, for an
+ * inherit); `first` lists those paths (of the type, matching the text,
+ * within the search's limit or not) ahead of everything, marked with
+ * `firstNote` (the materials the scene binds already); `footer` is
+ * shown above the buttons (a binding's purpose and strength).
  */
 export function PrimPicker({
   stage,
@@ -39,7 +44,11 @@ export function PrimPicker({
   type,
   properties = false,
   exclude = NOTHING,
+  hide,
   prefer,
+  first = NOTHING,
+  firstNote,
+  footer,
   onPick,
   onClose,
 }: {
@@ -49,18 +58,28 @@ export function PrimPicker({
   type?: string;
   properties?: boolean;
   exclude?: readonly string[];
+  hide?: (path: string) => boolean;
   prefer?: (path: string) => boolean;
+  first?: readonly string[];
+  firstNote?: string;
+  footer?: React.ReactNode;
   onPick: (path: string) => void;
   onClose: () => void;
 }) {
   const [text, setText] = useState("");
   const [chosen, setChosen] = useState<string | null>(null);
-  // Keyed by the paths left out, not the array the caller built this render.
+  // Keyed by the paths left out and put first, not the arrays the caller built this render.
   const excluded = exclude.join("\n");
+  const firsts = first.join("\n");
   const matches = useMemo(() => {
-    const found = searchPrims(stage, { text, limit: LISTED + exclude.length, ...(type === undefined ? {} : { type }) }).filter((path) => !exclude.includes(path)).slice(0, LISTED);
-    return prefer === undefined ? found : [...found.filter(prefer), ...found.filter((path) => !prefer(path))];
-  }, [stage, text, type, excluded, prefer]);
+    const shown = (path: string) => !exclude.includes(path) && hide?.(path) !== true;
+    const needle = text.trim().toLowerCase();
+    const ahead = first.filter((path) => shown(path) && path.slice(path.lastIndexOf("/") + 1).toLowerCase().includes(needle) && stage.prim(path) !== null);
+    const found = searchPrims(stage, { text, limit: LISTED + exclude.length + ahead.length, ...(type === undefined ? {} : { type }) }).filter((path) => shown(path) && !ahead.includes(path));
+    const ordered = prefer === undefined ? found : [...found.filter(prefer), ...found.filter((path) => !prefer(path))];
+    return [...ahead, ...ordered].slice(0, LISTED);
+    // `hide` is the caller's for the dialog's life: not a key.
+  }, [stage, text, type, excluded, firsts, prefer]);
   const prim = chosen === null ? null : stage.prim(chosen);
   const propertyNames = useMemo(() => (prim === null ? [] : [...prim.attributeNames(), ...prim.relationshipNames()].sort()), [prim]);
   const pick = (path: string) => {
@@ -102,8 +121,7 @@ export function PrimPicker({
                 <span className="truncate font-mono text-[10px] text-muted-foreground">{path}</span>
               </span>
               <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
-                {found?.specifier === "class" ? "class " : ""}
-                {found?.typeName ?? ""}
+                {firstNote !== undefined && first.includes(path) ? firstNote : `${found?.specifier === "class" ? "class " : ""}${found?.typeName ?? ""}`}
               </span>
             </ListBoxItem>
           );
@@ -129,6 +147,7 @@ export function PrimPicker({
           )}
         </div>
       )}
+      {footer}
       <DialogFooter>
         <Button variant="outline" onPress={onClose}>
           Cancel

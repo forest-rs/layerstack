@@ -7,19 +7,37 @@
 // prims scrolls as one of ten. Selecting a row selects the prim; a prim
 // picked in the viewport opens its ancestors. A prim with payloads says
 // whether they are loaded, and loads or unloads them in place, as
-// usdview's tree does.
+// usdview's tree does. An imageable prim's eye (shown on hover or focus,
+// and always when it is hidden) makes it invisible or visible again, and
+// a purpose other than `default` is a badge. A row dragged onto another
+// moves the prim beneath it (`Stage.move`), and between two of its
+// siblings reorders it among them (`reorder nameChildren`).
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Button as AriaButton, Collection, ListLayout, Tree, TreeItem, TreeItemContent, Virtualizer, type Key } from "react-aria-components";
+import {
+  Button as AriaButton,
+  Collection,
+  DropIndicator,
+  ListLayout,
+  Tree,
+  TreeItem,
+  TreeItemContent,
+  useDragAndDrop,
+  Virtualizer,
+  type Key,
+} from "react-aria-components";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Alert02Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
-import type { Prim, Stage } from "@forest-rs/layerstack";
+import { Alert02Icon, ArrowRight01Icon, DragDropVerticalIcon, ViewIcon, ViewOffIcon, ViewOffSlashIcon } from "@hugeicons/core-free-icons";
+import type { Prim, PurposeInfo, Stage } from "@forest-rs/layerstack";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { childPath, hiddenBy, nameOf, parentOf, type RowVisibility, rowVisibilities, treeDrop } from "../model/primAuthoring.ts";
+import { namespaceRefusal } from "../model/composition.ts";
 import { searchPrims } from "../model/primSearch.ts";
 import type { EditorStore } from "../store.ts";
 import { useEditorStore, useRevision, useStoreSelector } from "./context.ts";
 import { primIcon } from "./icons.ts";
-import { PrimActions, RenameDialog } from "./PrimActions.tsx";
+import { PrimActions } from "./PrimActions.tsx";
+import { askPrim } from "./primDialogRequests.ts";
 import { rowAction, TYPEAHEAD_MS } from "./treeKeys.ts";
 import { CommandMenu, presentationContext } from "./presentations/Present.tsx";
 import { countRender } from "./renders.ts";
@@ -56,6 +74,21 @@ function ancestors(path: string): string[] {
   return out;
 }
 
+/** The rows' paths, parents before children, as the tree lists them. */
+function rowPaths(items: readonly Row[], out: string[] = []): string[] {
+  for (const row of items) {
+    out.push(row.id);
+    rowPaths(row.children, out);
+  }
+  return out;
+}
+
+/** What a row shows of its prim besides its fields: its visibility and a purpose other than `default`. */
+interface RowLooks {
+  readonly visibility: ReadonlyMap<string, RowVisibility>;
+  readonly purposes: ReadonlyMap<string, PurposeInfo>;
+}
+
 /** The most matches a search lists. */
 const MATCHES = 500;
 
@@ -68,10 +101,11 @@ export function PrimTree() {
   const stage = store.session?.stage ?? null;
   const [expanded, setExpanded] = useState<Set<Key>>(new Set());
   const [query, setQuery] = useState("");
-  // The row a context menu or a rename is for, and where the menu opens.
+  // The row a context menu is for, and where the menu opens.
   const [menu, setMenu] = useState<string | null>(null);
-  const [renaming, setRenaming] = useState<string | null>(null);
   const menuAnchor = useRef<Element | null>(null);
+  // The prim being dragged, for where it may drop.
+  const dragged = useRef<string | null>(null);
   // When a letter last went to the tree's type-to-find: F frames unless it continues one.
   const typedAt = useRef(0);
   // A new stage starts with its root prims' children shown.
@@ -98,10 +132,56 @@ export function PrimTree() {
     });
   }, [selection]);
   const items = useMemo(() => (stage === null ? [] : rows(stage, "/", expanded)), [stage, expanded, revision]);
+  const paths = useMemo(() => rowPaths(items), [items]);
+  // Visibility can vary with time: read for every row at once when the rows
+  // change or the time does while not playing (scrubbing, stepping), not as
+  // it plays. Purpose cannot (it is uniform): read when the rows change.
+  // The time last read while not playing: starting to play changes nothing here, stopping reads again.
+  const stillAt = useRef(store.time);
+  const still = useStoreSelector(store, ["time"], (at) => {
+    if (!at.playing) stillAt.current = at.time;
+    return stillAt.current;
+  });
+  const visibility = useMemo(
+    () => (stage === null ? new Map<string, RowVisibility>() : rowVisibilities(paths, stage.visibilities(paths, { time: store.time }))),
+    [stage, paths, still],
+  );
+  const purposes = useMemo(() => {
+    const out = new Map<string, PurposeInfo>();
+    if (stage === null) return out;
+    stage.purposeInfos(paths).forEach((info, index) => info !== null && info.purpose !== "default" && out.set(paths[index]!, info));
+    return out;
+  }, [stage, paths]);
+  const looks: RowLooks = { visibility, purposes };
   const matches = useMemo(
     () => (stage === null || query.trim() === "" ? null : searchPrims(stage, { text: query, limit: MATCHES })),
     [stage, query, revision],
   );
+  const { dragAndDropHooks } = useDragAndDrop<Row>({
+    getItems: (keys) => [...keys].map((key) => ({ [PRIM_DRAG]: String(key), "text/plain": String(key) })),
+    getAllowedDropOperations: () => ["move"],
+    acceptedDragTypes: [PRIM_DRAG],
+    onDragStart: (event) => {
+      dragged.current = [...event.keys].map(String)[0] ?? null;
+    },
+    onDragEnd: () => {
+      dragged.current = null;
+    },
+    getDropOperation: (target) => (dropOf(store, dragged.current, target) === null ? "cancel" : "move"),
+    onMove: (event) => {
+      const path = [...event.keys].map(String)[0] ?? null;
+      const drop = dropOf(store, path, event.target);
+      if (drop === null || path === null) return;
+      if (drop.kind === "reorder") {
+        store.apply(`move ${nameOf(path)} in ${drop.parent}`, [{ type: "setChildrenReorder", path: drop.parent, order: drop.order }]);
+        return;
+      }
+      // The prim dropped is selected, which opens the rows down to it.
+      if (store.moveTo(path, drop.parent) === undefined) store.select(childPath(drop.parent, nameOf(path)));
+    },
+    renderDropIndicator: (target) => <DropIndicator target={target} className={({ isDropTarget }) => cn("h-0.5 rounded-full", isDropTarget && "bg-primary")} />,
+    isDisabled: stage === null,
+  });
   if (stage === null) return <p className="p-3 text-xs text-muted-foreground">Nothing open.</p>;
   const context = presentationContext(store);
   return (
@@ -150,7 +230,7 @@ export function PrimTree() {
             if (action === "frame") store.frameSelection();
             else if (stage.prim(path)?.instanceProxy === true) return;
             else if (action === "delete") store.delete(path);
-            else setRenaming(path);
+            else askPrim({ kind: "rename", path });
           }}
           onContextMenu={(event) => {
             const row = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>("[data-path]") : null;
@@ -172,14 +252,15 @@ export function PrimTree() {
             }}
             expandedKeys={expanded}
             onExpandedChange={(keys) => setExpanded(new Set(keys))}
-            className="min-h-0 flex-1 overflow-y-auto px-1 pb-2 outline-none"
+            dragAndDropHooks={dragAndDropHooks}
+            className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-1 pb-2 outline-none"
           >
             {function render(row: Row) {
               return (
                 <TreeItem id={row.id} data-path={row.id} textValue={row.prim.name} hasChildItems={row.hasChildren} className={treeItemClass}>
                   <TreeItemContent>
                     {({ isExpanded, hasChildItems, level }) => (
-                      <PrimRow store={store} row={row} isExpanded={isExpanded} hasChildItems={hasChildItems} level={level} />
+                      <PrimRow store={store} row={row} looks={looks} isExpanded={isExpanded} hasChildItems={hasChildItems} level={level} />
                     )}
                   </TreeItemContent>
                   <Collection items={row.children}>{render}</Collection>
@@ -191,21 +272,41 @@ export function PrimTree() {
         </div>
       )}
       {menu !== null && context !== null && <CommandMenu object={{ kind: "primPath", path: menu }} context={context} triggerRef={menuAnchor} onClose={() => setMenu(null)} />}
-      {renaming !== null && <RenameDialog store={store} stage={stage} path={renaming} onClose={() => setRenaming(null)} />}
     </div>
   );
 }
 
-const treeItemClass = ({ isSelected, isFocusVisible }: { isSelected: boolean; isFocusVisible: boolean }) =>
+/** The drag type of a prim dragged within the tree: its path. */
+const PRIM_DRAG = "application/x-layerstack-prim";
+
+/**
+ * What dropping the prim at `path` on `target` does (`treeDrop`); `null`
+ * for nothing, a drop on the tree's background, or a move while edits go
+ * through an arc or variant, which a move cannot (`namespaceRefusal`).
+ */
+function dropOf(store: EditorStore, path: string | null, target: { type: "root" } | { type: "item"; key: Key; dropPosition: "on" | "before" | "after" }) {
+  const stage = store.session?.stage;
+  if (stage === undefined || path === null || target.type !== "item") return null;
+  const at = String(target.key);
+  if (stage.prim(path)?.instanceProxy !== false || stage.prim(at)?.instanceProxy !== false) return null;
+  const siblings = target.dropPosition === "on" ? [] : stage.children(parentOf(at)).map(nameOf);
+  const drop = treeDrop(path, at, target.dropPosition, siblings);
+  return drop?.kind === "move" && namespaceRefusal(store.session?.target, "rename", path) !== null ? null : drop;
+}
+
+const treeItemClass = ({ isSelected, isFocusVisible, isDropTarget }: { isSelected: boolean; isFocusVisible: boolean; isDropTarget?: boolean }) =>
   cn(
     "group flex h-6 cursor-default items-center rounded-md text-xs outline-none select-none hover:bg-muted",
     isSelected && "bg-accent text-accent-foreground hover:bg-accent",
     isFocusVisible && "ring-1 ring-ring",
+    isDropTarget === true && "ring-1 ring-primary bg-primary/10",
   );
 
-function PrimRow({ store, row, isExpanded, hasChildItems, level }: { store: EditorStore; row: Row; isExpanded: boolean; hasChildItems: boolean; level: number }) {
+function PrimRow({ store, row, looks, isExpanded, hasChildItems, level }: { store: EditorStore; row: Row; looks: RowLooks; isExpanded: boolean; hasChildItems: boolean; level: number }) {
   countRender("PrimRow");
   const { prim } = row;
+  const visibility = looks.visibility.get(prim.path) ?? null;
+  const purpose = looks.purposes.get(prim.path) ?? null;
   return (
     <div className="flex w-full min-w-0 items-center gap-1 pr-2" style={{ paddingLeft: `${(level - 1) * 12 + 2}px` }}>
       {hasChildItems ? (
@@ -222,6 +323,7 @@ function PrimRow({ store, row, isExpanded, hasChildItems, level }: { store: Edit
           !prim.active && "text-muted-foreground line-through",
           prim.active && !prim.loaded && "text-muted-foreground",
           prim.specifier !== "def" && "italic",
+          visibility !== null && visibility !== "visible" && "opacity-60",
         )}
       >
         {prim.name}
@@ -234,12 +336,63 @@ function PrimRow({ store, row, isExpanded, hasChildItems, level }: { store: Edit
       )}
       <span className="ml-auto flex shrink-0 items-center gap-1 pl-2 text-[10px] text-muted-foreground">
         {prim.hasAuthoredPayloads && <PayloadToggle store={store} prim={prim} />}
+        {purpose !== null && (
+          <span title={`Its purpose is ${purpose.purpose}${purpose.authoredOn === null || purpose.authoredOn === prim.path ? "" : `, from ${purpose.authoredOn}`}: drawn only when that purpose is`}>
+            {purpose.purpose}
+          </span>
+        )}
         {prim.instance && <span title="An instance: its descendants come from a shared prototype">instance</span>}
         {prim.specifier !== "def" && <span title={`Its specifier is ${prim.specifier}`}>{prim.specifier}</span>}
         <span>{prim.typeName ?? ""}</span>
       </span>
+      {visibility !== null && <VisibilityToggle store={store} prim={prim} visibility={visibility} rows={looks.visibility} />}
+      {/* What a keyboard or screen reader drags the row by; a pointer drags the row itself. */}
+      <AriaButton
+        slot="drag"
+        aria-label={`Drag ${prim.name} onto a prim to move it there, or between its siblings to reorder it`}
+        className="sr-only flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground outline-none focus-visible:not-sr-only focus-visible:ring-1 focus-visible:ring-ring"
+      >
+        <HugeiconsIcon icon={DragDropVerticalIcon} className="size-3" />
+      </AriaButton>
       <PrimActions store={store} path={prim.path} className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[pressed]:opacity-100" />
     </div>
+  );
+}
+
+/**
+ * An imageable prim's eye: shown on hover or focus, and always when the
+ * prim is not visible. Pressing it makes the prim invisible, or visible
+ * again (its `visibility` where edits go); when an ancestor hides it, it
+ * selects that ancestor, whose visibility is what to change.
+ */
+function VisibilityToggle({ store, prim, visibility, rows }: { store: EditorStore; prim: Prim; visibility: RowVisibility; rows: ReadonlyMap<string, RowVisibility> }) {
+  const by = visibility === "hidden" ? hiddenBy(prim.path, rows) : null;
+  const label =
+    visibility === "visible"
+      ? `Make ${prim.name} invisible`
+      : visibility === "invisible"
+        ? `Make ${prim.name} visible`
+        : by === null
+          ? `${prim.name} is hidden by an ancestor`
+          : `${prim.name} is hidden by ${nameOf(by)}: select it`;
+  return (
+    <span title={label} className="flex">
+      <AriaButton
+        aria-label={label}
+        isDisabled={prim.instanceProxy || (visibility === "hidden" && by === null)}
+        onPress={() => {
+          if (visibility === "hidden") {
+            if (by !== null) store.select(by);
+          } else store.setVisibility(prim.path, visibility === "invisible");
+        }}
+        className={cn(
+          "flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground outline-none hover:text-foreground focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-ring",
+          visibility === "visible" ? "opacity-0 group-hover:opacity-100" : visibility === "hidden" && "opacity-50",
+        )}
+      >
+        <HugeiconsIcon icon={visibility === "visible" ? ViewIcon : visibility === "invisible" ? ViewOffSlashIcon : ViewOffIcon} className="size-3" />
+      </AriaButton>
+    </span>
   );
 }
 

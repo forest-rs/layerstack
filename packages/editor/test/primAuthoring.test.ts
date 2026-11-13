@@ -15,14 +15,17 @@ import {
   appliedSchemaRows,
   authoredApiSchemas,
   freeSiblingName,
+  hiddenBy,
   instanceNameProblem,
   kindChoices,
   moveProblem,
   noSpecToCopy,
   opinionSites,
   primNameProblem,
+  rowVisibilities,
   siblingOrder,
   specStagePath,
+  treeDrop,
   typeGroups,
 } from "../src/model/primAuthoring.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
@@ -123,6 +126,31 @@ test("names, moves and orders", () => {
   assert.equal(siblingOrder(["A", "B", "C"], "A", -1), null);
   assert.equal(siblingOrder(["A", "B", "C"], "C", 1), null);
   assert.equal(specStagePath("/World/Robot{finish=chrome}.mirrors"), "/World/Robot.mirrors");
+});
+
+test("a drop on a row moves beneath it; between its own siblings, reorders", () => {
+  const siblings = ["North", "South", "Rock"];
+  assert.deepEqual(treeDrop("/World/Rock", "/World/Beacons", "on", []), { kind: "move", parent: "/World/Beacons" });
+  assert.equal(treeDrop("/World/Rock", "/World", "on", []), null, "its own parent");
+  assert.equal(treeDrop("/World", "/World/Rock", "on", []), null, "its own subtree");
+  assert.equal(treeDrop("/World/Rock", "/World/Rock", "before", siblings), null, "itself");
+  assert.deepEqual(treeDrop("/World/B/Rock", "/World/B/North", "before", siblings), { kind: "reorder", parent: "/World/B", order: ["Rock", "North", "South"] });
+  assert.deepEqual(treeDrop("/World/B/North", "/World/B/Rock", "after", siblings), { kind: "reorder", parent: "/World/B", order: ["South", "Rock", "North"] });
+  assert.equal(treeDrop("/World/B/North", "/World/B/South", "before", siblings), null, "where it is already");
+  assert.equal(treeDrop("/World/Rock", "/World/B/North", "before", siblings), null, "another parent's children");
+});
+
+test("rows' visibility: hidden by itself, or by an ancestor", () => {
+  const paths = ["/World", "/World/A", "/World/A/B", "/World/C", "/Looks"];
+  const rows = rowVisibilities(paths, ["inherited", "invisible", "invisible", "inherited", null]);
+  assert.deepEqual([...rows], [
+    ["/World", "visible"],
+    ["/World/A", "invisible"],
+    ["/World/A/B", "hidden"],
+    ["/World/C", "visible"],
+  ]);
+  assert.equal(hiddenBy("/World/A/B", rows), "/World/A");
+  assert.equal(hiddenBy("/World/C", rows), null);
 });
 
 test("binding a material and unbinding it, each undone; a missing material refused", async () => {

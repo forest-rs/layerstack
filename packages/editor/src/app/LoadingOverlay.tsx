@@ -4,7 +4,8 @@
 // What the editor is doing while a scene opens, or while payloads load in
 // one: the phase (fetching the root, reading it, each round of the asset
 // loop fetching and reading, then composing what the rounds read),
-// what has arrived, how long it has taken, and a way to stop either. Each
+// what has arrived, how long it has taken, and a way to stop either; and,
+// when an open failed with nothing open, why, and a way on. Each
 // phase is shown before its work holds the page (the session waits for it
 // to paint), so even a root layer that takes seconds to read says so.
 import { useEffect, useState } from "react";
@@ -13,6 +14,7 @@ import { Spinner } from "@/components/ui/spinner";
 import type { OpenPhase } from "../model/session.ts";
 import { useEditorStore, useRevision } from "./context.ts";
 import { formatBytes } from "./format.ts";
+import { SAMPLE } from "./scenes.ts";
 
 /** The phase in words. */
 function describe(phase: OpenPhase): string {
@@ -42,6 +44,25 @@ export function LoadingOverlay() {
     return () => clearInterval(timer);
   }, [opening]);
   const status = store.status;
+  // An open that failed with nothing open leaves an empty viewport: say so there, with a way on.
+  if (status.kind === "failed" && store.session === null) {
+    return (
+      <div className="absolute inset-0 z-10 flex items-center justify-center">
+        <div role="alert" className="flex w-96 max-w-[90%] flex-col gap-3 rounded-xl border bg-popover p-4 shadow-lg">
+          <span className="min-w-0 truncate text-sm font-medium" title={status.label}>
+            {status.label} did not open
+          </span>
+          <p className="text-xs break-words text-destructive">{status.message}</p>
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            <span className="min-w-0 flex-1">Open another scene from the toolbar, or drop its files here.</span>
+            <Button variant="outline" size="xs" onPress={() => void store.open(SAMPLE.source())}>
+              Open the sample
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (status.kind !== "opening" && status.kind !== "loading") return null;
   const label = status.label;
   const at = store.openingPhase;

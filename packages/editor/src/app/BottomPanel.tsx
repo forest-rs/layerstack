@@ -112,7 +112,7 @@ function ExplainView({ store }: { store: EditorStore }) {
   return (
     <div className="p-3 text-xs">
       <div className="flex flex-wrap items-baseline gap-x-2">
-        <span className="font-mono">{path}</span>
+        {context !== null ? <Present object={{ kind: "propertyPath", path }} context={context} /> : <span className="font-mono">{path}</span>}
         {time !== undefined && <span className="text-muted-foreground">at {formatTime(time)}</span>}
         <span className="text-muted-foreground">=</span>
         {context !== null ? <Present object={{ kind: "value", attribute, typeName, shown: value, at: null }} context={context} /> : <span className="font-mono">{value.text}</span>}

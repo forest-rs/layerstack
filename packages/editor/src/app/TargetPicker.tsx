@@ -28,7 +28,8 @@ export function TargetPicker() {
   const editLayer = stage.editLayer;
   const target = session.target;
   const through = target !== undefined && "kind" in target ? target : null;
-  const selected = target === undefined ? DEFAULT : through !== null ? THROUGH : String((target as Layer).id);
+  // The edit layer is the picker's default item, so it is chosen as that.
+  const selected = target === undefined || (through === null && (target as Layer).id === editLayer?.id) ? DEFAULT : through !== null ? THROUGH : String((target as Layer).id);
   return (
     <Select
       aria-label="Where edits go"

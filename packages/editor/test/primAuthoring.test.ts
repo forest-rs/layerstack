@@ -26,7 +26,9 @@ import {
   siblingOrder,
   specStagePath,
   treeDrop,
+  typeForFilter,
   typeGroups,
+  typeMatches,
 } from "../src/model/primAuthoring.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
@@ -53,7 +55,7 @@ test("kinds: the model hierarchy's, and a prim's own kind when it is another", (
     ["component", "assembly", "group", "subcomponent", "model"],
   );
   assert.equal(kindChoices("component").length, 5);
-  assert.equal(kindChoices("chair").at(-1)?.kind, "chair");
+  assert.equal(kindChoices("prop").at(-1)?.kind, "prop");
 });
 
 test("types are grouped by what they are", () => {
@@ -74,6 +76,24 @@ test("types are grouped by what they are", () => {
       ["Shading", ["Material"]],
     ],
   );
+});
+
+test("the type chosen follows the filter to a type the list shows", () => {
+  const groups: [string, { name: string }[]][] = [
+    ["Transforms and groups", [{ name: "Xform" }, { name: "Scope" }]],
+    ["Geometry", [{ name: "Cone" }, { name: "Sphere" }]],
+    ["Lights", [{ name: "SphereLight" }]],
+  ];
+  // Still listed: kept, whatever the case typed.
+  assert.equal(typeForFilter(groups, "", "Xform"), "Xform");
+  assert.equal(typeForFilter(groups, "xf", "Xform"), "Xform");
+  // No longer listed: the first that is, in the list's order.
+  assert.equal(typeForFilter(groups, "Cone", "Xform"), "Cone");
+  assert.equal(typeForFilter(groups, "sphere", "Xform"), "Sphere");
+  // "No type" is always listed, and a filter that matches nothing changes nothing.
+  assert.equal(typeForFilter(groups, "Cone", null), null);
+  assert.equal(typeForFilter(groups, "zzz", "Xform"), "Xform");
+  assert.equal(typeMatches("SphereLight", "light"), true);
 });
 
 test("the API schemas that can apply: what they apply to, and single-apply ones not had", () => {

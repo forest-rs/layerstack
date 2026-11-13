@@ -216,8 +216,18 @@ export function ViewportPane() {
           <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
             <DrawScopeSwitch store={store} />
             {!showMaterial && texture === null && (
-              <div className="pointer-events-none rounded-md bg-black/40 px-2 py-1 font-mono text-[11px] text-white/80 backdrop-blur-sm">
-                {through === null ? "Free camera" : `Looking through ${through}`}
+              <div className={cn("rounded-md bg-black/40 px-2 py-1 font-mono text-[11px] text-white/80 backdrop-blur-sm", through === null && "pointer-events-none")}>
+                {through === null ? (
+                  "Free camera"
+                ) : (
+                  <>
+                    <div>Looking through {through}</div>
+                    <div className="text-white/60">The stage camera's view: orbit and zoom are off.</div>
+                    <button type="button" onClick={() => store.lookThrough(null)} className="mt-0.5 rounded bg-white/15 px-1.5 py-0.5 text-white hover:bg-white/25">
+                      Return to the free camera
+                    </button>
+                  </>
+                )}
               </div>
             )}
             {store.drawScope === "selection" && !showMaterial && stage !== null && <AssetCard store={store} stage={stage} />}

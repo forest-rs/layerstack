@@ -93,6 +93,7 @@ import type {
   Scalar,
   SkippedLayer,
   StageStatus,
+  Sublayer,
   SubsetElementType,
   SubsetProblem,
   Transfer,
@@ -142,6 +143,7 @@ export interface NativeStage extends Disposable {
   prepareClipQuery(path: string, time: number | null | undefined, maxLoads: number, maxDemands: number): unknown;
   layers(): unknown;
   layerDirty(id: bigint): boolean;
+  layerSublayers(id: bigint): [string, number, number][];
   setLayerMuted(id: bigint, muted: boolean): boolean;
   muteAndUnmuteLayers(
     muteIds: BigUint64Array,
@@ -1363,6 +1365,23 @@ export class Stage implements Disposable {
     }
     this.#call("layer", () => undefined);
     return this.#layer(id, "layer");
+  }
+
+  /**
+   * The sublayers `layer` authors, strongest first, as OpenUSD's
+   * `SdfLayer::GetSubLayerPaths` and `GetSubLayerOffsets` read them: what
+   * the sublayer edits change ({@link InsertSublayerEdit} and its
+   * siblings), whose `index` is a place in this list. Throws
+   * `layer.affinity` for another stage's layer.
+   *
+   * ```ts
+   * stage.sublayers(stage.root); // [{ asset: "./shot.usda", layerOffset: { offset: 10, scale: 1 } }]
+   * ```
+   */
+  sublayers(layer: Layer): Sublayer[] {
+    this.#own("sublayers", layer);
+    const rows = this.#call("sublayers", (native) => native.layerSublayers(layer.id));
+    return rows.map(([asset, offset, scale]) => ({ asset, layerOffset: { offset, scale } }));
   }
 
   /** Whether `layer` changed since it was read or last saved. Throws `layer.affinity` for another stage's layer. */

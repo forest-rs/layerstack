@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { EditReceipt, LayerstackError, loadLayerstack } from "../dist/index.js";
+import { EditReceipt, LayerstackError, UndoHistory, loadLayerstack } from "../dist/index.js";
 import type { Changes, Edit, Layerstack, Stage, Value } from "../dist/index.js";
 import { mockSource, usdz } from "./fixtures.ts";
 
@@ -107,18 +107,19 @@ function plain(key: string, value: unknown): unknown {
 
 /**
  * Applies `edits` to the root, checks `effect`, undoes and checks the
- * composed stage is exactly as before, then redoes and checks `effect`
- * again.
+ * composed stage and the root layer's text are exactly as before, then
+ * redoes and checks `effect` again.
  */
 async function roundTrip(edits: Edit[], effect: (stage: Stage) => void): Promise<Stage> {
   const stage = await openScene();
-  const before = snapshot(stage);
+  const state = () => `${snapshot(stage)}\n${usda(stage)}`;
+  const before = state();
   const receipt = stage.apply(edits, stage.root);
-  assert.notEqual(snapshot(stage), before, "the edits change something");
+  assert.notEqual(state(), before, "the edits change something");
   effect(stage);
   const redo = receipt.undo();
   assert.equal(receipt.released, true, "undoing spends the receipt");
-  assert.equal(snapshot(stage), before, "undo restores the composed stage");
+  assert.equal(state(), before, "undo restores the composed stage and the layer");
   redo.undo();
   effect(stage);
   return stage;
@@ -370,6 +371,212 @@ describe("edit kinds", () => {
     stage.apply([{ type: "setLayerMetadata", key: "documentation", value: { type: "string", value: "kept" } }], stage.root).release();
     stage.apply([{ type: "clearLayerMetadata", key: "documentation" }], stage.root).release();
     assert.doesNotMatch(text(), /kept/);
+  });
+});
+
+/** The root layer's USDA text. */
+function usda(stage: Stage): string {
+  return new TextDecoder().decode(stage.exportLayer(stage.root, "usda"));
+}
+
+describe("list, schema, copy and sublayer edits", () => {
+  it("addTarget, removeTarget and clearTargets edit the target layer's list op", async () => {
+    using added = await roundTrip(
+      [{ type: "addTarget", path: "/World.lookAt", target: "/Spare", position: "backOfAppend" }],
+      (stage) => {
+        assert.deepEqual(stage.relationship("/World.lookAt")?.targets(), ["/World/Rock", "/Spare"]);
+      },
+    );
+    using removed = await roundTrip([{ type: "removeTarget", path: "/World.lookAt", target: "/World/Rock" }], (stage) => {
+      assert.deepEqual(stage.relationship("/World.lookAt")?.targets(), []);
+    });
+    using created = await roundTrip([{ type: "addTarget", path: "/Spare.aim", target: "/World" }], (stage) => {
+      assert.equal(stage.relationship("/Spare.aim")?.custom, true, "created custom, as setTargets creates it");
+      assert.deepEqual(stage.relationship("/Spare.aim")?.targets(), ["/World"]);
+    });
+    using cleared = await roundTrip([{ type: "clearTargets", path: "/World.lookAt" }], (stage) => {
+      assert.deepEqual(stage.relationship("/World.lookAt")?.targets(), []);
+      assert.match(usda(stage), /rel lookAt\n/, "the spec stays");
+    });
+  });
+
+  it("addConnection, removeConnection and clearConnections need an attribute", async () => {
+    using added = await roundTrip(
+      [
+        { type: "addConnection", path: "/World.size", source: "/Spare.count" },
+        { type: "removeConnection", path: "/World.spin", source: "/Spare.count" },
+      ],
+      (stage) => {
+        assert.match(usda(stage), /prepend double size\.connect = <\/Spare\.count>/);
+        assert.match(usda(stage), /delete double spin\.connect = <\/Spare\.count>/);
+      },
+    );
+    const receipt = added.apply([{ type: "clearConnections", path: "/World.size" }], added.root);
+    assert.doesNotMatch(usda(added), /size\.connect/);
+    receipt.undo().release();
+    assert.match(usda(added), /size\.connect/);
+    // Created in the same edits, the attribute has a type to connect.
+    added
+      .apply(
+        [
+          { type: "createAttribute", path: "/World.gain", typeName: "float" },
+          { type: "addConnection", path: "/World.gain", source: "/Spare.count", position: "frontOfAppend" },
+        ],
+        added.root,
+      )
+      .release();
+    assert.match(usda(added), /append float gain\.connect = <\/Spare\.count>/);
+    const relationship = failure(() =>
+      added.apply([{ type: "addConnection", path: "/World.lookAt", source: "/Spare.count" }], added.root),
+    );
+    assert.deepEqual([relationship.code, relationship.edit], ["edit.rejected.not_an_attribute", 0]);
+    const undeclared = failure(() =>
+      added.apply([{ type: "removeConnection", path: "/World.missing", source: "/Spare.count" }], added.root),
+    );
+    assert.equal(undeclared.code, "edit.rejected.undeclared_type");
+  });
+
+  it("applyAPI and removeAPI author apiSchemas, through any edit target", async () => {
+    using stage = await roundTrip(
+      [
+        { type: "applyAPI", path: "/World/Rock", schema: "MaterialBindingAPI" },
+        { type: "applyAPI", path: "/World/Rock", schema: "CollectionAPI", instance: "shiny" },
+        // The schema just applied defines the attribute.
+        {
+          type: "setValue",
+          path: "/World/Rock.collection:shiny:expansionRule",
+          value: { type: "token", value: "expandPrims" },
+        },
+      ],
+      (stage) => {
+        const rock = stage.prim("/World/Rock");
+        assert.deepEqual(rock?.appliedSchemas(), ["MaterialBindingAPI", "CollectionAPI:shiny"]);
+        assert.equal(rock?.hasAPI("CollectionAPI", "shiny"), true);
+      },
+    );
+    const removed = stage.apply([{ type: "removeAPI", path: "/World/Rock", schema: "MaterialBindingAPI" }], stage.root);
+    assert.deepEqual(stage.prim("/World/Rock")?.appliedSchemas(), ["CollectionAPI:shiny"]);
+    removed.undo().release();
+    assert.deepEqual(stage.prim("/World/Rock")?.appliedSchemas(), ["MaterialBindingAPI", "CollectionAPI:shiny"]);
+
+    // Inside the selected variant, the prim has it while the variant is selected.
+    const light = stage.prim("/World")!.variantEditTarget("shade", "light");
+    const inVariant = stage.apply([{ type: "applyAPI", path: "/World", schema: "MaterialBindingAPI" }], light);
+    assert.match(usda(stage), /"light" \(\n\s+prepend apiSchemas = \["MaterialBindingAPI"\]/);
+    assert.equal(stage.prim("/World")?.hasAPI("MaterialBindingAPI"), true);
+    inVariant.undo().release();
+    assert.equal(stage.prim("/World")?.hasAPI("MaterialBindingAPI"), false);
+
+    const refused = [
+      [{ type: "applyAPI", path: "/World", schema: "NoSuchAPI" }, "schema.cannot_apply"],
+      [{ type: "applyAPI", path: "/World", schema: "CollectionAPI" }, "schema.cannot_apply"],
+      [{ type: "applyAPI", path: "/Nowhere", schema: "MaterialBindingAPI" }, "prim.not_found"],
+      [{ type: "removeAPI", path: "/Nowhere", schema: "MaterialBindingAPI" }, "prim.not_found"],
+      [{ type: "applyAPI", path: "/World", schema: 3 }, "argument.invalid"],
+    ] as const;
+    for (const [edit, code] of refused) {
+      assert.equal(failure(() => stage.apply([edit as unknown as Edit], stage.root)).code, code, JSON.stringify(edit));
+    }
+  });
+
+  it("copySpec duplicates a prim or a property in the target layer", async () => {
+    using stage = await roundTrip(
+      [
+        { type: "copySpec", path: "/World/Rock", to: "/World/Pebble" },
+        { type: "copySpec", path: "/World.size", to: "/World.width" },
+      ],
+      (stage) => {
+        assert.equal(stage.prim("/World/Pebble")?.typeName, "Sphere");
+        assert.deepEqual(stage.attribute("/World.width")?.get(), double(2));
+      },
+    );
+    const refused = [
+      [{ type: "copySpec", path: "/World/Rock", to: "/World.rock" }, "edit.rejected.copy_between_kinds"],
+      [{ type: "copySpec", path: "/World", to: "/World/Inner" }, "edit.rejected.copy_into_source"],
+      [{ type: "copySpec", path: "/Part", to: "/Copy" }, "edit.rejected.no_such_spec"],
+      [{ type: "copySpec", path: "/World", to: "World2" }, "path.invalid"],
+    ] as const;
+    for (const [edit, code] of refused) {
+      const error = failure(() => stage.apply([edit], stage.root));
+      assert.deepEqual([error.code, error.edit], [code, 0], JSON.stringify(edit));
+    }
+  });
+
+  it("insertSublayer asks for its asset, and sublayers reorder, offset and go, with undo and redo", async () => {
+    using stage = await openScene();
+    const before = snapshot(stage);
+    const history = new UndoHistory(stage);
+    const extra = `#usda 1.0\ndef "Extra" {\n    int count = 5\n    double spin.timeSamples = {\n        0: 1,\n    }\n}\n`;
+    const more = `#usda 1.0\ndef "Extra" {\n    int count = 6\n}\n`;
+    const inserted = stage.apply(
+      [
+        { type: "insertSublayer", asset: "./extra.usda" },
+        { type: "insertSublayer", asset: "./more.usda", index: 1, layerOffset: { offset: 10 } },
+      ],
+      stage.root,
+    );
+    history.record("add sublayers", inserted);
+    assert.deepEqual(
+      inserted.unavailable.map((need) => [need.identifier, need.usedBy]),
+      [
+        ["extra.usda", "sublayer"],
+        ["more.usda", "sublayer"],
+      ],
+      "an inserted sublayer is asked for, as an added reference is",
+    );
+    assert.deepEqual(stage.sublayers(stage.root), [
+      { asset: "./extra.usda", layerOffset: { offset: 0, scale: 1 } },
+      { asset: "./more.usda", layerOffset: { offset: 10, scale: 1 } },
+    ]);
+    assert.equal(stage.prim("/Extra"), null, "not read yet");
+    const source = mockSource({ "extra.usda": extra, "more.usda": more });
+    await stage.resolve(source);
+    assert.deepEqual(source.asked.sort(), ["extra.usda", "more.usda"]);
+    assert.deepEqual(stage.attribute("/Extra.count")?.get(), { kind: "scalar", type: "int", value: 5 });
+
+    history.record(
+      "reorder",
+      stage.apply(
+        [
+          {
+            type: "setSublayers",
+            sublayers: [{ asset: "./more.usda" }, { asset: "./extra.usda", layerOffset: { offset: 2, scale: 2 } }],
+          },
+        ],
+        stage.root,
+      ),
+    );
+    assert.deepEqual(stage.attribute("/Extra.count")?.get(), { kind: "scalar", type: "int", value: 6 });
+    history.record(
+      "offset",
+      stage.apply([{ type: "setSublayerOffset", index: 1, layerOffset: { offset: 4 } }], stage.root),
+    );
+    assert.deepEqual(stage.attribute("/Extra.spin")?.timeSamples(), [4]);
+    history.record("remove", stage.apply([{ type: "removeSublayer", index: 0 }], stage.root));
+    assert.deepEqual(stage.attribute("/Extra.count")?.get(), { kind: "scalar", type: "int", value: 5 });
+
+    for (let step = 0; step < 4; step += 1) history.undo();
+    assert.deepEqual(stage.sublayers(stage.root), []);
+    assert.equal(snapshot(stage), before, "undo restores the composed stage");
+    for (let step = 0; step < 4; step += 1) history.redo();
+    assert.deepEqual(stage.sublayers(stage.root), [
+      { asset: "./extra.usda", layerOffset: { offset: 4, scale: 1 } },
+    ]);
+    assert.deepEqual(stage.attribute("/Extra.count")?.get(), { kind: "scalar", type: "int", value: 5 });
+
+    const refused = [
+      [{ type: "removeSublayer", index: 3 }, "edit.rejected.no_such_sublayer"],
+      [{ type: "insertSublayer", asset: "./extra.usda" }, "edit.rejected.duplicate_sublayer"],
+      [{ type: "insertSublayer", asset: "" }, "edit.rejected.empty_sublayer_asset"],
+      [{ type: "insertSublayer", asset: "./x.usda", index: -1 }, "argument.invalid"],
+      [{ type: "insertSublayer", asset: "./x.usda", layerOffset: { scale: 0 } }, "argument.invalid"],
+      [{ type: "setSublayerOffset", index: 0 }, "argument.invalid"],
+    ] as const;
+    for (const [edit, code] of refused) {
+      const error = failure(() => stage.apply([edit as unknown as Edit], stage.root));
+      assert.deepEqual([error.code, error.edit], [code, 0], JSON.stringify(edit));
+    }
+    assert.equal(failure(() => stage.sublayers({} as never)).code, "layer.affinity");
   });
 });
 

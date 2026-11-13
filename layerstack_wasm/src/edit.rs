@@ -24,8 +24,8 @@ use alloc::{
 use layerstack::{
     EditTarget, FieldValue, InMemoryStore, Layer, LayerId, LayerOffset, ListOp, ListPosition,
     PathId, PathInterner, PropertyKind, PropertyPath, PropertySpec, PropertyType, Reference,
-    ReferenceSource, ReferenceTarget, SpecPath, Specifier, StageView, Transaction, Value,
-    Variability,
+    ReferenceSource, ReferenceTarget, SpecPath, Specifier, StageView, SublayerEntry, TargetPath,
+    Transaction, Value, Variability,
 };
 use wasm_bindgen::prelude::*;
 
@@ -74,6 +74,46 @@ pub(crate) enum EditInput {
     BlockValue { path: String },
     /// `UsdRelationship::SetTargets`.
     SetTargets { path: String, targets: Vec<String> },
+    /// `UsdRelationship::AddTarget`, or `UsdAttribute::AddConnection`
+    /// with `connection`.
+    AddTarget {
+        connection: bool,
+        path: String,
+        target: String,
+        position: String,
+    },
+    /// `UsdRelationship::RemoveTarget`, or
+    /// `UsdAttribute::RemoveConnection` with `connection`.
+    RemoveTarget {
+        connection: bool,
+        path: String,
+        target: String,
+    },
+    /// `UsdRelationship::ClearTargets`, or
+    /// `UsdAttribute::ClearConnections` with `connection`.
+    ClearTargets { connection: bool, path: String },
+    /// `SdfCopySpec` of the spec at `path` to `to`, both in the target
+    /// layer.
+    CopySpec { path: String, to: String },
+    /// `SdfLayer::InsertSubLayerPath` of the target's layer; at the end
+    /// without an index.
+    InsertSublayer {
+        asset: String,
+        index: Option<u32>,
+        offset: f64,
+        scale: f64,
+    },
+    /// `SdfLayer::RemoveSubLayerPath` of the target's layer.
+    RemoveSublayer { index: u32 },
+    /// `SdfLayer::SetSubLayerOffset` of the target's layer.
+    SetSublayerOffset { index: u32, offset: f64, scale: f64 },
+    /// `SdfLayer::SetSubLayerPaths` with `subLayerOffsets` of the
+    /// target's layer: one entry per asset path.
+    SetSublayers {
+        assets: Vec<String>,
+        offsets: Vec<f64>,
+        scales: Vec<f64>,
+    },
     /// `UsdReferences::AddReference` / `UsdPayloads::AddPayload`.
     AddArc {
         payload: bool,
@@ -133,6 +173,10 @@ impl EditInput {
             | Self::ClearValue { path, .. }
             | Self::BlockValue { path }
             | Self::SetTargets { path, .. }
+            | Self::AddTarget { path, .. }
+            | Self::RemoveTarget { path, .. }
+            | Self::ClearTargets { path, .. }
+            | Self::CopySpec { path, .. }
             | Self::AddArc { path, .. }
             | Self::RemoveArc { path, .. }
             | Self::SetVariantSelection { path, .. }
@@ -141,8 +185,13 @@ impl EditInput {
             | Self::SetKind { path, .. }
             | Self::SetMetadata { path, .. }
             | Self::ClearMetadata { path, .. } => path,
-            // Layer metadata is the pseudo-root spec's.
-            Self::SetLayerMetadata { .. } | Self::ClearLayerMetadata { .. } => "/",
+            // Layer metadata and sublayers are the pseudo-root spec's.
+            Self::SetLayerMetadata { .. }
+            | Self::ClearLayerMetadata { .. }
+            | Self::InsertSublayer { .. }
+            | Self::RemoveSublayer { .. }
+            | Self::SetSublayerOffset { .. }
+            | Self::SetSublayers { .. } => "/",
             Self::Schema(input) => input.path(),
         }
     }
@@ -314,6 +363,82 @@ impl EditBatch {
         self.edits.push(EditInput::SetTargets { path, targets });
     }
 
+    /// Pushes an `addConnection` edit when `connection`, else an
+    /// `addTarget` edit.
+    #[wasm_bindgen(js_name = addTarget)]
+    pub fn add_target(&mut self, connection: bool, path: String, target: String, position: String) {
+        self.edits.push(EditInput::AddTarget {
+            connection,
+            path,
+            target,
+            position,
+        });
+    }
+
+    /// Pushes a `removeConnection` edit when `connection`, else a
+    /// `removeTarget` edit.
+    #[wasm_bindgen(js_name = removeTarget)]
+    pub fn remove_target(&mut self, connection: bool, path: String, target: String) {
+        self.edits.push(EditInput::RemoveTarget {
+            connection,
+            path,
+            target,
+        });
+    }
+
+    /// Pushes a `clearConnections` edit when `connection`, else a
+    /// `clearTargets` edit.
+    #[wasm_bindgen(js_name = clearTargets)]
+    pub fn clear_targets(&mut self, connection: bool, path: String) {
+        self.edits
+            .push(EditInput::ClearTargets { connection, path });
+    }
+
+    /// Pushes a `copySpec` edit.
+    #[wasm_bindgen(js_name = copySpec)]
+    pub fn copy_spec(&mut self, path: String, to: String) {
+        self.edits.push(EditInput::CopySpec { path, to });
+    }
+
+    /// Pushes an `insertSublayer` edit; at the end without an `index`.
+    #[wasm_bindgen(js_name = insertSublayer)]
+    pub fn insert_sublayer(&mut self, asset: String, index: Option<u32>, offset: f64, scale: f64) {
+        self.edits.push(EditInput::InsertSublayer {
+            asset,
+            index,
+            offset,
+            scale,
+        });
+    }
+
+    /// Pushes a `removeSublayer` edit.
+    #[wasm_bindgen(js_name = removeSublayer)]
+    pub fn remove_sublayer(&mut self, index: u32) {
+        self.edits.push(EditInput::RemoveSublayer { index });
+    }
+
+    /// Pushes a `setSublayerOffset` edit.
+    #[wasm_bindgen(js_name = setSublayerOffset)]
+    pub fn set_sublayer_offset(&mut self, index: u32, offset: f64, scale: f64) {
+        self.edits.push(EditInput::SetSublayerOffset {
+            index,
+            offset,
+            scale,
+        });
+    }
+
+    /// Pushes a `setSublayers` edit: `assets[i]` at `offsets[i]` and
+    /// `scales[i]`. Lists of other lengths are refused when the batch is
+    /// applied.
+    #[wasm_bindgen(js_name = setSublayers)]
+    pub fn set_sublayers(&mut self, assets: Vec<String>, offsets: Vec<f64>, scales: Vec<f64>) {
+        self.edits.push(EditInput::SetSublayers {
+            assets,
+            offsets,
+            scales,
+        });
+    }
+
     /// Pushes an `addPayload` edit when `payload`, else an
     /// `addReference` edit.
     #[wasm_bindgen(js_name = addArc)]
@@ -465,6 +590,26 @@ impl EditBatch {
     #[wasm_bindgen(js_name = disconnectSource)]
     pub fn disconnect_source(&mut self, path: String, source: Option<String>) {
         self.schema(SchemaInput::DisconnectSource { path, source });
+    }
+
+    /// Pushes an `applyAPI` edit.
+    #[wasm_bindgen(js_name = applyApi)]
+    pub fn apply_api(&mut self, path: String, schema: String, instance: Option<String>) {
+        self.schema(SchemaInput::ApplyApi {
+            path,
+            schema,
+            instance,
+        });
+    }
+
+    /// Pushes a `removeAPI` edit.
+    #[wasm_bindgen(js_name = removeApi)]
+    pub fn remove_api(&mut self, path: String, schema: String, instance: Option<String>) {
+        self.schema(SchemaInput::RemoveApi {
+            path,
+            schema,
+            instance,
+        });
     }
 
     /// Pushes a `setBaseMaterial` edit.
@@ -665,9 +810,7 @@ pub(crate) fn lower(
             store: &*store,
             values: &batch.values,
         };
-        // Property specs this batch creates, so a later edit does not stamp
-        // them again.
-        let mut ensured = Vec::new();
+        let mut pending = Pending::default();
         for (index, edit) in batch.edits.iter().enumerate() {
             let step = match edit {
                 EditInput::DefinePrim {
@@ -684,7 +827,7 @@ pub(crate) fn lower(
                 ),
                 _ => {
                     let mut txn = Transaction::new();
-                    lower_one(edit, batch, &scope, &mut txn, &mut ensured)
+                    lower_one(edit, batch, &scope, &mut txn, &mut pending)
                         .map_err(|error| fail(index, error))?;
                     Step::Generic(txn)
                 }
@@ -743,13 +886,39 @@ fn prim_path(store: &InMemoryStore, path: &str) -> Result<PathId, Error> {
         .map_err(|error| Error::new("path.invalid", format!("not a prim path: {error}")))
 }
 
+/// What earlier edits of a batch leave that later ones, lowered against
+/// the stage as it was before the batch, must know.
+#[derive(Debug, Default)]
+struct Pending {
+    /// Property specs the batch creates, so a later edit does not stamp
+    /// them again.
+    properties: Vec<String>,
+    /// The number of sublayers the target's layer has once the batch's
+    /// sublayer edits so far apply; `None` before the first.
+    sublayers: Option<usize>,
+}
+
+impl Pending {
+    /// The number of sublayers the target's layer has, as the batch's
+    /// sublayer edits so far leave it.
+    fn sublayers(&mut self, scope: &Scope<'_>) -> usize {
+        *self.sublayers.get_or_insert_with(|| {
+            scope
+                .store
+                .layer(scope.target.layer())
+                .map_or(0, |layer| layer.sublayers().len())
+        })
+    }
+}
+
 fn lower_one(
     edit: &EditInput,
     batch: &EditBatch,
     scope: &Scope<'_>,
     txn: &mut Transaction,
-    ensured: &mut Vec<String>,
+    pending: &mut Pending,
 ) -> Result<(), Error> {
+    let ensured = &mut pending.properties;
     let store = scope.store;
     let at = scope.target;
     let prim = |path: &str| -> Result<PathId, Error> {
@@ -837,14 +1006,119 @@ fn lower_one(
             let at = at.property(property(path)?);
             let mut list = Vec::with_capacity(targets.len());
             for target in targets {
-                list.push(store.try_target_path(target).map_err(|error| {
-                    Error::new(
-                        "path.invalid",
-                        format!("`{target}` is not a target path: {error}"),
-                    )
-                })?);
+                list.push(target_path(store, target)?);
             }
             txn.set_targets(at, ListOp::explicit(list));
+        }
+        EditInput::AddTarget {
+            connection,
+            path,
+            target,
+            position,
+        } => {
+            let property = property(path)?;
+            let position = list_position(position)?;
+            let target = target_path(store, target)?;
+            if *connection {
+                check_connectable(scope, ensured, path, property, true)?;
+            }
+            txn.add_target(at.property(property), target, position);
+        }
+        EditInput::RemoveTarget {
+            connection,
+            path,
+            target,
+        } => {
+            let property = property(path)?;
+            let target = target_path(store, target)?;
+            if *connection {
+                check_connectable(scope, ensured, path, property, true)?;
+            }
+            txn.remove_target(at.property(property), target);
+        }
+        EditInput::ClearTargets { connection, path } => {
+            let property = property(path)?;
+            if *connection {
+                check_connectable(scope, ensured, path, property, false)?;
+            }
+            txn.clear_targets(at.property(property));
+        }
+        EditInput::CopySpec { path, to } => {
+            let address = |path: &str| -> Result<_, Error> {
+                Ok(if path.contains('.') {
+                    at.property(property(path)?)
+                } else {
+                    at.prim(prim(path)?)
+                })
+            };
+            txn.copy_spec(address(path)?, address(to)?);
+        }
+        EditInput::InsertSublayer {
+            asset,
+            index,
+            offset,
+            scale,
+        } => {
+            let offset = layer_offset(*offset, *scale)?;
+            let count = pending.sublayers(scope);
+            let index = index.map_or(count, |index| index as usize);
+            txn.insert_sublayer(
+                at.layer(),
+                index,
+                SublayerEntry::unresolved(asset.as_str(), offset),
+            );
+            // An index past the end is rejected when the batch applies.
+            pending.sublayers = Some(count + usize::from(index <= count));
+        }
+        EditInput::RemoveSublayer { index } => {
+            let count = pending.sublayers(scope);
+            let index = *index as usize;
+            txn.remove_sublayer(at.layer(), index);
+            pending.sublayers = Some(count - usize::from(index < count));
+        }
+        EditInput::SetSublayerOffset {
+            index,
+            offset,
+            scale,
+        } => {
+            let offset = layer_offset(*offset, *scale)?;
+            txn.set_sublayer_offset(at.layer(), *index as usize, offset);
+        }
+        EditInput::SetSublayers {
+            assets,
+            offsets,
+            scales,
+        } => {
+            if offsets.len() != assets.len() || scales.len() != assets.len() {
+                return Err(Error::new(
+                    "argument.invalid",
+                    "a sublayer list needs one offset and one scale per asset path",
+                ));
+            }
+            // An entry the layer lists already keeps the layer it resolved
+            // to; another is authored by its asset path, which the stage
+            // then asks for, as `insertSublayer` authors one.
+            let current = store
+                .layer(at.layer())
+                .map(|layer| layer.sublayers().to_vec())
+                .unwrap_or_default();
+            let mut entries = Vec::with_capacity(assets.len());
+            for ((asset, offset), scale) in assets.iter().zip(offsets).zip(scales) {
+                let offset = layer_offset(*offset, *scale)?;
+                entries.push(
+                    match current
+                        .iter()
+                        .find(|entry| entry.asset.as_deref() == Some(asset.as_str()))
+                    {
+                        Some(entry) => {
+                            SublayerEntry::with_asset(entry.layer, asset.as_str(), offset)
+                        }
+                        None => SublayerEntry::unresolved(asset.as_str(), offset),
+                    },
+                );
+            }
+            pending.sublayers = Some(entries.len());
+            txn.set_sublayers(at.layer(), entries);
         }
         EditInput::AddArc {
             payload,
@@ -856,35 +1130,12 @@ fn lower_one(
             scale,
         } => {
             let at_prim = at.prim(prim(path)?);
-            let position = match position.as_str() {
-                "frontOfPrepend" => ListPosition::FrontOfPrepend,
-                "backOfPrepend" => ListPosition::BackOfPrepend,
-                "frontOfAppend" => ListPosition::FrontOfAppend,
-                "backOfAppend" => ListPosition::BackOfAppend,
-                other => {
-                    return Err(Error::new(
-                        "argument.invalid",
-                        format!(
-                            "`{other}` is not a list position: frontOfPrepend, backOfPrepend, \
-                             frontOfAppend or backOfAppend"
-                        ),
-                    ));
-                }
-            };
-            if !(offset.is_finite() && scale.is_finite() && *scale > 0.0) {
-                return Err(Error::new(
-                    "argument.invalid",
-                    "a layer offset needs a finite offset and a finite, positive scale",
-                ));
-            }
+            let position = list_position(position)?;
             let arc = arc(
                 scope,
                 asset.as_deref(),
                 prim_path.as_deref(),
-                LayerOffset {
-                    offset: *offset,
-                    scale: *scale,
-                },
+                layer_offset(*offset, *scale)?,
             )?;
             if *payload {
                 txn.add_payload(at_prim, arc, position);
@@ -1049,6 +1300,98 @@ fn ensure_property_spec(
     txn.create_property(target.property(property), spec);
     ensured.push(path.to_string());
     true
+}
+
+/// The relationship target or attribute connection `path` names.
+fn target_path(store: &InMemoryStore, path: &str) -> Result<TargetPath, Error> {
+    store.try_target_path(path).map_err(|error| {
+        Error::new(
+            "path.invalid",
+            format!("`{path}` is not a target path: {error}"),
+        )
+    })
+}
+
+/// The list position `name` names (OpenUSD's `UsdListPosition`).
+fn list_position(name: &str) -> Result<ListPosition, Error> {
+    Ok(match name {
+        "frontOfPrepend" => ListPosition::FrontOfPrepend,
+        "backOfPrepend" => ListPosition::BackOfPrepend,
+        "frontOfAppend" => ListPosition::FrontOfAppend,
+        "backOfAppend" => ListPosition::BackOfAppend,
+        other => {
+            return Err(Error::new(
+                "argument.invalid",
+                format!(
+                    "`{other}` is not a list position: frontOfPrepend, backOfPrepend, \
+                     frontOfAppend or backOfAppend"
+                ),
+            ));
+        }
+    })
+}
+
+/// A layer offset of an arc or sublayer: a finite offset and a finite,
+/// positive scale.
+///
+/// Spec: AOUSD Core §12.3.2.1 (layer offsets).
+fn layer_offset(offset: f64, scale: f64) -> Result<LayerOffset, Error> {
+    if !(offset.is_finite() && scale.is_finite() && scale > 0.0) {
+        return Err(Error::new(
+            "argument.invalid",
+            "a layer offset needs a finite offset and a finite, positive scale",
+        ));
+    }
+    Ok(LayerOffset { offset, scale })
+}
+
+/// Checks that the property at `path` is an attribute, which connection
+/// edits author: as the target layer (or an earlier edit of the batch)
+/// authors it, else as the stage defines or declares it. A relationship
+/// is refused (`edit.rejected.not_an_attribute`), and so is a property
+/// nothing declares when `declared` (`edit.rejected.undeclared_type`):
+/// the transaction would create a `custom` relationship for it, where
+/// OpenUSD's `AddConnection` and `RemoveConnection` fail for want of a
+/// type. Clearing connections nothing authors does nothing, as the
+/// transaction does.
+///
+/// Spec: AOUSD Core §7.6.4.2.3 (`connectionPaths`).
+fn check_connectable(
+    scope: &Scope<'_>,
+    ensured: &[String],
+    path: &str,
+    property: PropertyPath,
+    declared: bool,
+) -> Result<(), Error> {
+    let target = scope.target;
+    let authored = target
+        .map_property_to_spec_path(property, scope.store.paths())
+        .and_then(|spec| {
+            scope
+                .store
+                .layer(target.layer())?
+                .property_at(&spec)
+                .map(|spec| spec.kind)
+        });
+    let kind = authored.or_else(|| {
+        let composed = scope.view.property(path)?;
+        composed
+            .definition()
+            .map(|definition| definition.kind)
+            .or_else(|| composed.declaration().map(|declared| declared.kind))
+    });
+    match kind {
+        Some(PropertyKind::Attribute) => Ok(()),
+        Some(PropertyKind::Relationship) => Err(Error::new(
+            "edit.rejected.not_an_attribute",
+            format!("{path} is a relationship: edit its targets instead"),
+        )),
+        None if !declared || ensured.iter().any(|done| done == path) => Ok(()),
+        None => Err(Error::new(
+            "edit.rejected.undeclared_type",
+            format!("nothing declares the attribute {path}: create it with its type first"),
+        )),
+    }
 }
 
 /// `time` as a time code, refusing a NaN or an infinity.
@@ -1834,6 +2177,299 @@ def "Spare" (
                 "created custom"
             );
         });
+    }
+
+    #[test]
+    fn add_remove_and_clear_targets_and_connections() {
+        let mut batch = EditBatch::new();
+        batch.add_target(
+            false,
+            "/World.lookAt".into(),
+            "/Spare".into(),
+            "backOfAppend".into(),
+        );
+        round_trip(batch, |stage| {
+            assert_eq!(
+                stage
+                    .relationship("/World.lookAt")
+                    .unwrap()
+                    .as_list()
+                    .unwrap()[1],
+                Wire::List(vec![Wire::text("/World/Rock"), Wire::text("/Spare")]),
+                "an explicit list takes the target"
+            );
+        });
+        let mut batch = EditBatch::new();
+        batch.remove_target(false, "/World.lookAt".into(), "/World/Rock".into());
+        round_trip(batch, |stage| {
+            assert_eq!(
+                stage
+                    .relationship("/World.lookAt")
+                    .unwrap()
+                    .as_list()
+                    .unwrap()[1],
+                Wire::List(Vec::new())
+            );
+        });
+        let mut batch = EditBatch::new();
+        batch.clear_targets(false, "/World.lookAt".into());
+        let stage = round_trip(batch, |stage| {
+            assert_eq!(
+                stage
+                    .relationship("/World.lookAt")
+                    .unwrap()
+                    .as_list()
+                    .unwrap()[1],
+                Wire::List(Vec::new())
+            );
+        });
+        assert!(text(&stage, root(&stage)).contains("rel lookAt\n"));
+        let mut batch = EditBatch::new();
+        batch.add_target(
+            true,
+            "/World.size".into(),
+            "/Spare.count".into(),
+            "backOfPrepend".into(),
+        );
+        let stage = round_trip(batch, |_| {});
+        assert!(
+            text(&stage, root(&stage)).contains("prepend double size.connect = </Spare.count>"),
+            "{}",
+            text(&stage, root(&stage))
+        );
+        let mut batch = EditBatch::new();
+        batch.remove_target(true, "/World.spin".into(), "/Spare.count".into());
+        let stage = round_trip(batch, |_| {});
+        assert!(text(&stage, root(&stage)).contains("delete double spin.connect = </Spare.count>"));
+
+        let mut stage = open();
+        let target = root(&stage);
+        let refused = |stage: &mut Stage, batch: &mut EditBatch| {
+            let error = stage.apply(target.0, batch).unwrap_err();
+            (error.code, error.edit)
+        };
+        let mut batch = EditBatch::new();
+        batch.add_target(
+            true,
+            "/World.lookAt".into(),
+            "/Spare.count".into(),
+            "backOfPrepend".into(),
+        );
+        assert_eq!(
+            refused(&mut stage, &mut batch),
+            ("edit.rejected.not_an_attribute", Some(0))
+        );
+        let mut batch = EditBatch::new();
+        batch.add_target(
+            true,
+            "/World.nothing".into(),
+            "/Spare.count".into(),
+            "backOfPrepend".into(),
+        );
+        assert_eq!(
+            refused(&mut stage, &mut batch),
+            ("edit.rejected.undeclared_type", Some(0)),
+            "OpenUSD's AddConnection fails without a type"
+        );
+        let mut batch = EditBatch::new();
+        batch.create_attribute("/World.nothing".into(), "double".into(), false, true, None);
+        batch.add_target(
+            true,
+            "/World.nothing".into(),
+            "/Spare.count".into(),
+            "backOfPrepend".into(),
+        );
+        stage.apply(target.0, &mut batch).unwrap();
+        let mut batch = EditBatch::new();
+        batch.add_target(
+            false,
+            "/World.lookAt".into(),
+            "/Spare".into(),
+            "middle".into(),
+        );
+        assert_eq!(
+            refused(&mut stage, &mut batch),
+            ("argument.invalid", Some(0))
+        );
+    }
+
+    #[test]
+    fn apply_and_remove_api_schemas() {
+        let mut batch = EditBatch::new();
+        batch.apply_api("/World/Rock".into(), "MaterialBindingAPI".into(), None);
+        batch.apply_api(
+            "/World/Rock".into(),
+            "CollectionAPI".into(),
+            Some("shiny".into()),
+        );
+        let stage = round_trip(batch, |_| {});
+        assert!(
+            text(&stage, root(&stage))
+                .contains(r#"prepend apiSchemas = ["MaterialBindingAPI", "CollectionAPI:shiny"]"#),
+            "{}",
+            text(&stage, root(&stage))
+        );
+        let mut batch = EditBatch::new();
+        batch.remove_api("/World".into(), "PluginOnlyAPI".into(), None);
+        let stage = round_trip(batch, |_| {});
+        assert!(
+            text(&stage, root(&stage)).contains(r#"delete apiSchemas = ["PluginOnlyAPI"]"#),
+            "any name is removed, registered or not"
+        );
+
+        let mut stage = open();
+        let target = root(&stage);
+        let mut batch = EditBatch::new();
+        batch.apply_api("/World".into(), "NoSuchAPI".into(), None);
+        assert_eq!(
+            stage.apply(target.0, &mut batch).unwrap_err().code,
+            "schema.cannot_apply"
+        );
+        let mut batch = EditBatch::new();
+        batch.apply_api("/World".into(), "CollectionAPI".into(), None);
+        assert_eq!(
+            stage.apply(target.0, &mut batch).unwrap_err().code,
+            "schema.cannot_apply",
+            "a multiple-apply schema needs an instance"
+        );
+        let mut batch = EditBatch::new();
+        batch.remove_api("/Nowhere".into(), "MaterialBindingAPI".into(), None);
+        assert_eq!(
+            stage.apply(target.0, &mut batch).unwrap_err().code,
+            "prim.not_found"
+        );
+    }
+
+    #[test]
+    fn copy_spec_duplicates_a_prim_or_property() {
+        let mut batch = EditBatch::new();
+        batch.copy_spec("/World/Rock".into(), "/World/Pebble".into());
+        batch.copy_spec("/World.size".into(), "/World.width".into());
+        round_trip(batch, |stage| {
+            assert_eq!(prim_field(stage, "/World/Pebble", 0), Wire::text("Sphere"));
+            assert_eq!(
+                stage.get("/World.width", None).unwrap(),
+                scalar("double", Wire::Number(2.0))
+            );
+        });
+        let mut stage = open();
+        let target = root(&stage);
+        let mut batch = EditBatch::new();
+        batch.copy_spec("/World/Rock".into(), "/World.rock".into());
+        assert_eq!(
+            stage.apply(target.0, &mut batch).unwrap_err().code,
+            "edit.rejected.copy_between_kinds"
+        );
+        let mut batch = EditBatch::new();
+        batch.copy_spec("/World".into(), "/World/Inner".into());
+        assert_eq!(
+            stage.apply(target.0, &mut batch).unwrap_err().code,
+            "edit.rejected.copy_into_source"
+        );
+    }
+
+    #[test]
+    fn sublayers_are_inserted_reordered_offset_and_removed() {
+        const EXTRA: &str = "#usda 1.0\ndef \"Extra\" {\n    int count = 5\n}\n";
+        const MORE: &str = "#usda 1.0\ndef \"Extra\" {\n    int count = 6\n}\n";
+        let mut stage = open();
+        let target = root(&stage);
+        let before = (text(&stage, target), snapshot(&stage));
+        let mut batch = EditBatch::new();
+        batch.insert_sublayer("./extra.usda".into(), None, 0.0, 1.0);
+        batch.insert_sublayer("./more.usda".into(), None, 10.0, 2.0);
+        let mut receipt = stage.apply(target.0, &mut batch).unwrap();
+        let record = receipt.record.as_list().unwrap().to_vec();
+        let wanted: Vec<_> = record[4]
+            .as_list()
+            .unwrap()
+            .iter()
+            .map(|row| row.as_list().unwrap()[0].as_text().unwrap().to_string())
+            .collect();
+        assert_eq!(
+            wanted,
+            ["extra.usda", "more.usda"],
+            "asked for, as an arc's asset is"
+        );
+        assert_eq!(
+            stage.layer_sublayers(target.0).unwrap(),
+            Wire::List(vec![
+                Wire::List(vec![
+                    Wire::text("./extra.usda"),
+                    Wire::Number(0.0),
+                    Wire::Number(1.0)
+                ]),
+                Wire::List(vec![
+                    Wire::text("./more.usda"),
+                    Wire::Number(10.0),
+                    Wire::Number(2.0)
+                ]),
+            ])
+        );
+        let storage = stage.document_mut().storage_mut();
+        storage.supply("extra.usda", EXTRA.as_bytes().to_vec());
+        storage.supply("more.usda", MORE.as_bytes().to_vec());
+        stage.load_supplied().unwrap();
+        assert_eq!(
+            stage.get("/Extra.count", None).unwrap(),
+            scalar("int", Wire::Number(5.0)),
+            "the stronger sublayer wins"
+        );
+
+        let mut reorder = EditBatch::new();
+        reorder.set_sublayers(
+            vec!["./more.usda".into(), "./extra.usda".into()],
+            vec![0.0, 0.0],
+            vec![1.0, 1.0],
+        );
+        let mut reordered = stage.apply(target.0, &mut reorder).unwrap();
+        assert_eq!(
+            stage.get("/Extra.count", None).unwrap(),
+            scalar("int", Wire::Number(6.0))
+        );
+        let mut offset = EditBatch::new();
+        offset.set_sublayer_offset(1, 5.0, 1.0);
+        let mut offsetted = stage.apply(target.0, &mut offset).unwrap();
+        assert!(text(&stage, target).contains("@./extra.usda@ (offset = 5)"));
+        let mut remove = EditBatch::new();
+        remove.remove_sublayer(0);
+        let mut removed = stage.apply(target.0, &mut remove).unwrap();
+        assert_eq!(
+            stage.get("/Extra.count", None).unwrap(),
+            scalar("int", Wire::Number(5.0))
+        );
+        for receipt in [&mut removed, &mut offsetted, &mut reordered, &mut receipt] {
+            stage.undo(receipt).unwrap();
+        }
+        assert_eq!((text(&stage, target), snapshot(&stage)), before);
+
+        let mut batch = EditBatch::new();
+        batch.remove_sublayer(0);
+        let error = stage.apply(target.0, &mut batch).unwrap_err();
+        assert_eq!(
+            (error.code, error.edit),
+            ("edit.rejected.no_such_sublayer", Some(0))
+        );
+        let mut batch = EditBatch::new();
+        batch.insert_sublayer("./extra.usda".into(), None, 0.0, 1.0);
+        batch.insert_sublayer("./extra.usda".into(), None, 0.0, 1.0);
+        let error = stage.apply(target.0, &mut batch).unwrap_err();
+        assert_eq!(
+            (error.code, error.edit),
+            ("edit.rejected.duplicate_sublayer", Some(1))
+        );
+        let mut batch = EditBatch::new();
+        batch.insert_sublayer("./extra.usda".into(), None, 0.0, 0.0);
+        assert_eq!(
+            stage.apply(target.0, &mut batch).unwrap_err().code,
+            "argument.invalid"
+        );
+        let mut batch = EditBatch::new();
+        batch.set_sublayers(vec!["./extra.usda".into()], vec![], vec![]);
+        assert_eq!(
+            stage.apply(target.0, &mut batch).unwrap_err().code,
+            "argument.invalid"
+        );
     }
 
     #[test]

@@ -7,7 +7,7 @@ import { nativeOf } from "./arrays.js";
 import type { ArrayHost, NativeArrayHandle } from "./arrays.js";
 import { LayerstackError } from "./errors.js";
 import type { ErrorCode } from "./errors.js";
-import type { Edit, RotationOrder, ValueInput } from "./types.js";
+import type { Edit, LayerOffsetInput, ListPosition, RotationOrder, ValueInput } from "./types.js";
 
 /** The native batch the generated glue exports (`layerstack_wasm::EditBatch`). Not for app use. */
 export interface NativeEditBatch extends Disposable {
@@ -29,6 +29,16 @@ export interface NativeEditBatch extends Disposable {
   clearValue(path: string, time?: number | null): void;
   blockValue(path: string): void;
   setTargets(path: string, targets: string[]): void;
+  addTarget(connection: boolean, path: string, target: string, position: string): void;
+  removeTarget(connection: boolean, path: string, target: string): void;
+  clearTargets(connection: boolean, path: string): void;
+  copySpec(path: string, to: string): void;
+  insertSublayer(asset: string, index: number | null, offset: number, scale: number): void;
+  removeSublayer(index: number): void;
+  setSublayerOffset(index: number, offset: number, scale: number): void;
+  setSublayers(assets: string[], offsets: Float64Array, scales: Float64Array): void;
+  applyApi(path: string, schema: string, instance: string | null): void;
+  removeApi(path: string, schema: string, instance: string | null): void;
   addArc(
     payload: boolean,
     path: string,
@@ -126,6 +136,40 @@ function lowerEdit(batch: NativeEditBatch, edit: Edit, host: ArrayHost): void {
     batch.clearLayerMetadata(text(edit.key, "key"));
     return;
   }
+  switch (edit.type) {
+    case "insertSublayer": {
+      const [offset, scale] = layerOffset(edit.layerOffset);
+      batch.insertSublayer(
+        text(edit.asset, "asset"),
+        edit.index === undefined ? null : index(edit.index),
+        offset,
+        scale,
+      );
+      return;
+    }
+    case "removeSublayer":
+      batch.removeSublayer(index(edit.index));
+      return;
+    case "setSublayerOffset": {
+      if (edit.layerOffset === undefined) fail("`layerOffset` must be { offset?, scale? }");
+      const [offset, scale] = layerOffset(edit.layerOffset);
+      batch.setSublayerOffset(index(edit.index), offset, scale);
+      return;
+    }
+    case "setSublayers": {
+      if (!Array.isArray(edit.sublayers)) fail("`sublayers` must be an array of { asset, layerOffset? }");
+      const assets: string[] = [];
+      const offsets = new Float64Array(edit.sublayers.length);
+      const scales = new Float64Array(edit.sublayers.length);
+      edit.sublayers.forEach((sublayer, at) => {
+        if (typeof sublayer !== "object" || sublayer === null) fail("`sublayers` must be an array of { asset, layerOffset? }");
+        assets.push(text(sublayer.asset, "asset"));
+        [offsets[at], scales[at]] = layerOffset(sublayer.layerOffset);
+      });
+      batch.setSublayers(assets, offsets, scales);
+      return;
+    }
+  }
   const path = text(edit.path, "path");
   switch (edit.type) {
     case "definePrim":
@@ -165,22 +209,42 @@ function lowerEdit(batch: NativeEditBatch, edit: Edit, host: ArrayHost): void {
       );
       return;
     }
+    case "addTarget":
+      batch.addTarget(false, path, text(edit.target, "target"), listPosition(edit.position));
+      return;
+    case "removeTarget":
+      batch.removeTarget(false, path, text(edit.target, "target"));
+      return;
+    case "clearTargets":
+      batch.clearTargets(false, path);
+      return;
+    case "addConnection":
+      batch.addTarget(true, path, text(edit.source, "source"), listPosition(edit.position));
+      return;
+    case "removeConnection":
+      batch.removeTarget(true, path, text(edit.source, "source"));
+      return;
+    case "clearConnections":
+      batch.clearTargets(true, path);
+      return;
+    case "copySpec":
+      batch.copySpec(path, text(edit.to, "to"));
+      return;
+    case "applyAPI":
+      batch.applyApi(path, text(edit.schema, "schema"), optionalText(edit.instance, "instance"));
+      return;
+    case "removeAPI":
+      batch.removeApi(path, text(edit.schema, "schema"), optionalText(edit.instance, "instance"));
+      return;
     case "addReference":
     case "addPayload": {
-      const offset = edit.layerOffset?.offset ?? 0;
-      const scale = edit.layerOffset?.scale ?? 1;
-      if (typeof offset !== "number" || typeof scale !== "number") fail("`layerOffset` holds numbers");
+      const [offset, scale] = layerOffset(edit.layerOffset);
       batch.addArc(
         edit.type === "addPayload",
         path,
         optionalText(edit.asset, "asset"),
         optionalText(edit.primPath, "primPath"),
-        oneOf(edit.position ?? "backOfPrepend", "position", [
-          "frontOfPrepend",
-          "backOfPrepend",
-          "frontOfAppend",
-          "backOfAppend",
-        ]),
+        listPosition(edit.position),
         offset,
         scale,
       );
@@ -447,6 +511,27 @@ function indices(value: unknown): Int32Array {
     fail("`indices` must be an Int32Array or an array of 32-bit integers");
   }
   return Int32Array.from(value as number[]);
+}
+
+/** A list position, `backOfPrepend` by default, as OpenUSD's `UsdListPosition` default. */
+function listPosition(value: unknown): ListPosition {
+  return oneOf(value ?? "backOfPrepend", "position", ["frontOfPrepend", "backOfPrepend", "frontOfAppend", "backOfAppend"]);
+}
+
+/** A layer offset's offset and scale, identity by default; the module checks they are finite and the scale positive. */
+function layerOffset(value: LayerOffsetInput | undefined): [number, number] {
+  const offset = value?.offset ?? 0;
+  const scale = value?.scale ?? 1;
+  if (typeof offset !== "number" || typeof scale !== "number") fail("`layerOffset` holds numbers");
+  return [offset, scale];
+}
+
+/** A place in a list: a non-negative 32-bit integer. */
+function index(value: unknown): number {
+  if (!Number.isInteger(value) || (value as number) < 0 || (value as number) >= 2 ** 32) {
+    fail("`index` must be a non-negative integer");
+  }
+  return value as number;
 }
 
 function time(value: unknown): number | null {

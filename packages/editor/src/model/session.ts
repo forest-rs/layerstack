@@ -625,7 +625,20 @@ export class Session implements Disposable {
     );
   }
 
-  /** Where edits go, in words: the layer written. */
+  /**
+   * Applies `edits` where edits go as one undoable action, or, when they
+   * wrote no layer (clearing an opinion the target does not hold), throws
+   * `nothing(layer)`, the layer named, and records nothing.
+   */
+  applyChanging(label: string, edits: readonly Edit[], nothing: (layer: string) => string): EditReceipt {
+    return this.#changing(label, edits, nothing(this.#targetName));
+  }
+
+  /** Where edits go, in words: the layer written (`scene.usda`). */
+  get targetName(): string {
+    return this.#targetName;
+  }
+
   get #targetName(): string {
     const layer = this.target === undefined ? this.stage.editLayer : "kind" in this.target ? this.target.layer : this.target;
     return layer?.identifier ?? "the anonymous edit layer";

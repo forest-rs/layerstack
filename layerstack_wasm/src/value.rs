@@ -39,7 +39,9 @@ use alloc::{
 };
 use layerstack::sort;
 
-use layerstack::{FieldValue, StringArray, TokenInterner, TypedArray, Value, ValueType, half};
+use layerstack::{
+    FieldValue, StringArray, TokenInterner, TypedArray, Value, ValueRole, ValueType, half,
+};
 
 use crate::{array::ArrayHandle, error::Error, wire::Wire};
 
@@ -799,11 +801,112 @@ fn tuples<T: Copy + Default, const N: usize>(items: &[T]) -> Vec<[T; N]> {
     items.as_chunks::<N>().0.to_vec()
 }
 
+/// Every value type name an attribute may declare, as the core's value
+/// type registry has them ([`ValueType::ALL`]): each scalar type followed
+/// by its array form, role-less types first, then those with a role, the
+/// legacy types last. Each is the record
+/// `[name, isArray, scalarType, arrayType, role, storage, dimensions, legacy]`:
+/// `arrayType` is `null` for `opaque` and `group`, which have no array
+/// form; `role` is `null` for a type without one; `storage` names the
+/// role-less type whose values it holds (`float3[]` for `color3f[]`);
+/// `dimensions` is one value's shape (`[3]`, `[4, 4]`, `[]` for a single
+/// component).
+///
+/// OpenUSD: `Sdf_ValueTypeRegistry` (Python's `Sdf.ValueTypeNames`),
+/// `SdfValueTypeName::GetScalarType`, `GetArrayType`, `IsArray`,
+/// `GetRole`, `GetType`, `GetDimensions`.
+///
+/// Spec: AOUSD Core §6.2 (value types), §6.3 (dimensioned types), §6.5
+/// (semantic roles), §7.6.4.1.1 (`typeName`).
+pub(crate) fn value_types() -> Wire {
+    let mut rows = Vec::with_capacity(ValueType::ALL.len() * 2);
+    for &ty in ValueType::ALL {
+        let array = ty.array_name();
+        let storage = ty.storage();
+        let dimensions = Wire::List(
+            ty.dimensions()
+                .iter()
+                .map(|&n| Wire::Number(n as f64))
+                .collect(),
+        );
+        let row = |name: &str, is_array: bool, storage: &str| {
+            Wire::List(vec![
+                Wire::text(name),
+                Wire::Bool(is_array),
+                Wire::text(ty.name()),
+                Wire::text_or_null(array),
+                Wire::text_or_null(ty.role().map(ValueRole::name)),
+                Wire::text(storage),
+                dimensions.clone(),
+                Wire::Bool(ty.is_legacy()),
+            ])
+        };
+        rows.push(row(ty.name(), false, storage.name()));
+        if let (Some(array), Some(storage)) = (array, storage.array_name()) {
+            rows.push(row(array, true, storage));
+        }
+    }
+    Wire::List(rows)
+}
+
 #[cfg(test)]
 mod tests {
     use alloc::sync::Arc;
 
+    use layerstack::PropertyType;
+
     use super::*;
+
+    #[test]
+    fn value_types_list_each_scalar_then_its_array() {
+        let Wire::List(rows) = value_types() else {
+            panic!("a list");
+        };
+        // 61 scalar types, all but `opaque` and `group` with an array form.
+        assert_eq!(rows.len(), 61 + 59);
+        let color = |name: &str| {
+            rows.iter()
+                .find(|row| row.as_list().and_then(|row| row[0].as_text()) == Some(name))
+                .cloned()
+        };
+        assert_eq!(
+            color("color3f[]"),
+            Some(Wire::List(vec![
+                Wire::text("color3f[]"),
+                Wire::Bool(true),
+                Wire::text("color3f"),
+                Wire::text("color3f[]"),
+                Wire::text("Color"),
+                Wire::text("float3[]"),
+                Wire::List(vec![Wire::Number(3.0)]),
+                Wire::Bool(false),
+            ]))
+        );
+        assert_eq!(
+            color("group"),
+            Some(Wire::List(vec![
+                Wire::text("group"),
+                Wire::Bool(false),
+                Wire::text("group"),
+                Wire::Null,
+                Wire::text("Group"),
+                Wire::text("opaque"),
+                Wire::List(Vec::new()),
+                Wire::Bool(false),
+            ]))
+        );
+        let Some(Wire::List(transform)) = color("Transform") else {
+            panic!("the legacy Transform");
+        };
+        assert_eq!(transform[7], Wire::Bool(true));
+        for row in &rows {
+            let name = row.as_list().unwrap()[0].as_text().unwrap();
+            assert!(
+                PropertyType::parse(name).is_ok(),
+                "{name} parses as a declared type"
+            );
+        }
+    }
 
     #[test]
     fn arrays_are_one_buffer_with_their_layout() {

@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { loadLayerstack, type Stage } from "@forest-rs/layerstack";
-import { cycleEdges, destinationsFor, findPort, judge, readIssues, sourcesFor, valueShape } from "../src/model/connections.ts";
+import { cycleEdges, destinationsFor, findPort, judge, readIssues, sourcesFor, typeFamily, valueShape } from "../src/model/connections.ts";
 import { dropTargetAt, type Gesture, type GestureInput, graphKey, initialFocus, judgeDrop, moveFocus, stepGesture } from "../src/model/graphGesture.ts";
 import { connectedOnly, layoutNetwork, readNetwork, type ShadingNetwork } from "../src/model/network.ts";
 import {
@@ -101,6 +101,11 @@ test("what may connect: types by shape, refusals for a port's self, what it read
   assert.equal(valueShape("texCoord2d"), "float2");
   assert.equal(valueShape("double"), "float");
   assert.equal(valueShape("token"), "token");
+  // What the anchors' shapes say, besides their colour.
+  assert.deepEqual(
+    ["color3f", "float", "int", "float2", "normal3f", "matrix4d", "asset", "string", "bool", "token", null].map(typeFamily),
+    ["color", "number", "number", "vector", "vector", "vector", "text", "text", "bool", "token", "other"],
+  );
   // A texture's channel into a float input: a match; its rgb into a float: USD takes it, with a warning.
   assert.deepEqual(judge(network, at("Texture.outputs:r"), at("Surface.inputs:metallic")), { kind: "match" });
   assert.equal(judge(network, at("Texture.outputs:rgb"), at("Surface.inputs:metallic")).kind, "warn");

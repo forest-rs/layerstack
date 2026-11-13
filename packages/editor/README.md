@@ -306,7 +306,13 @@ nothing more.
   out: grouped by `displayGroup`, labelled by `displayName`, ordered by
   `uiorder`; a number between `uimin` and `uimax` is a slider over its
   soft range (`uisoftmin`, `uisoftmax`) where one is given, a colour a
-  swatch and picker. A connected input is a live link to its source, and
+  swatch and picker. A shader of the `UsdPreviewSurface` family
+  (`UsdPreviewSurface`, `UsdUVTexture`, the primvar readers,
+  `UsdTransform2d`) also lists the inputs its definition has that the
+  prim does not author, in italics with their fallback; the stage has no
+  shader registry, so the editor keeps these definitions in one table.
+  An edit authors through `setShaderInput`, which creates the input on
+  its first edit. A connected input is a live link to its source, and
   one that reads a `UsdUVTexture` shows the image as a thumbnail with its
   file (a click shows it in the asset view), `sourceColorSpace` and wrap
   modes. A dot marks the inputs the prim sets itself, as opposed to those
@@ -326,9 +332,38 @@ nothing more.
   columns at one scale; otherwise columns are by longest path to the
   outputs, and nodes in a column are placed by where their connections go
   ("Automatic layout" switches). Ports no connection touches fold away
-  until shown. Opening the tab grows a short bottom panel. Drag to pan,
-  scroll to zoom; clicking a node selects its prim, a port explains its
-  value.
+  until shown, all of them or a node's (its "+N"). A port's anchor says
+  its type by its shape as well as its colour (a number a circle, a
+  vector a diamond, a colour a square, a file a triangle), hollow for a
+  port only the shader's definition has. Opening the tab grows a short
+  bottom panel. Drag the background to pan, scroll to zoom; clicking a
+  node selects its prim, a port explains its value.
+
+  The network is edited in place, each edit one undoable action in the
+  layer edits go to, which the line under the toolbar names with what was
+  authored. Dragging from an output's row to an input's connects them
+  (`ConnectToSource`, replacing what the input read); while dragging, the
+  inputs that could read it are lit, amber where the types differ (USD
+  connects any types; the renderer decides what it reads), and those
+  that could not are dimmed, with why (a port reading itself, a
+  connection already there, a cycle, named). Dropping on a node asks
+  which of its inputs. A curve is selected by a click and disconnected
+  with Delete (⌘⌫), or from its context menu or its input's
+  ("Disconnect"). An unconnected input's row edits its value with the
+  inspector's editors, creating the input on its first edit. "Add
+  shader", in the toolbar or the background's context menu, adds a
+  `Shader` with its `info:id` where it was asked for (with a
+  `ui:nodegraph:node:pos` when the network places its nodes); a shader's
+  menu deletes it, and the connections to it with it. Nodes stay where
+  they were drawn across an edit. Connections that name nothing (a
+  dashed stub and a cross) and cycles (a dashed red curve) are marked on
+  the curve and the port, with the reason. The keyboard reaches all of
+  it: the arrow keys move between nodes and their rows (left and right
+  follow a row's connection), Enter selects or explains, Shift+F10 opens
+  the focused row's, node's or curve's menu ("Connect to…" lists the
+  ports that could connect), Delete deletes a shader or disconnects. A
+  shading port's path, wherever it is shown, offers "Show in the shading
+  graph" and "Disconnect what it reads".
 - **Draw cost.** What the draws hold, measured by the draw list
   (`DrawList.cost`): per item its instances, its buffer's triangles and
   vertices, the triangles it draws, the bytes it uploads (`f32`

@@ -14,7 +14,7 @@ import type { Attribute, Prim, ValueInput } from "@forest-rs/layerstack";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { PlusSignIcon } from "@hugeicons/core-free-icons";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogSubmit, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -121,6 +121,7 @@ export function AddPropertyDialog({ store, prim, onClose }: { store: EditorStore
         }}
         className="flex flex-col gap-2"
       >
+        <DialogSubmit />
         <ToggleButtonGroup
           aria-label="Kind of property"
           selectionMode="single"

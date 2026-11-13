@@ -104,6 +104,15 @@ function Dialog({
   )
 }
 
+/**
+ * A submit button that is not shown, for a dialog's form whose buttons
+ * are in its footer, outside the form: a form of more than one text field
+ * submits on Enter only when it has a submit button.
+ */
+function DialogSubmit() {
+  return <button type="submit" hidden tabIndex={-1} aria-hidden="true" />
+}
+
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -176,6 +185,7 @@ export {
   DialogFooter,
   DialogHeader,
   DialogOverlay,
+  DialogSubmit,
   DialogTitle,
   DialogTrigger,
 }

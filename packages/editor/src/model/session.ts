@@ -23,7 +23,9 @@ import type {
   Stage,
   ValueInput,
 } from "@forest-rs/layerstack";
+import { addArcEdit, type NewArc, newArcLabel, removeArcEdit, removeArcLabel } from "./composition.ts";
 import { packageWants, sessionLayerReason, UNSAVABLE_ROOT } from "./files.ts";
+import type { AuthoredArc } from "./layerSpecs.ts";
 import { LoopRecorder } from "./timeline.ts";
 
 /**
@@ -567,6 +569,60 @@ export class Session implements Disposable {
   /** Authors the relationship at `path`'s explicit targets where edits go (`UsdRelationship::SetTargets`), creating a `custom` one when nothing declares it. */
   setTargets(path: string, targets: readonly string[]): EditReceipt {
     return this.apply(`set targets of ${path}`, [{ type: "setTargets", path, targets }]);
+  }
+
+  /**
+   * Adds `arc` to the prim at `prim` where edits go, as one undoable
+   * action (`UsdReferences::AddReference` and its siblings). An asset the
+   * stage has not read is then unavailable until it is supplied
+   * ({@link Session.supplyUnavailable}).
+   */
+  addArc(prim: string, arc: NewArc): EditReceipt {
+    return this.apply(newArcLabel(prim, arc), [addArcEdit(prim, arc)]);
+  }
+
+  /**
+   * Removes `arc`, which the edit target's layer authors on the prim at
+   * `prim`, as one undoable action: it leaves the layer's list and is
+   * deleted from weaker layers' (`UsdReferences::RemoveReference` and its
+   * siblings).
+   */
+  removeArc(prim: string, arc: AuthoredArc): EditReceipt {
+    const through = this.target instanceof EditTarget ? this.target : null;
+    return this.apply(removeArcLabel(prim, arc), [removeArcEdit(prim, arc, through)]);
+  }
+
+  /**
+   * Adds the variant `variant` to the set `set` of the prim at `prim`
+   * where edits go (the set too, when the layer holds none,
+   * `UsdVariantSet::AddVariant`), and selects it, as one undoable action.
+   * `newSet` names the action as adding the set.
+   */
+  addVariant(prim: string, set: string, variant: string, newSet = false): EditReceipt {
+    const label = newSet ? `add variant set ${set} (${variant}) to ${prim}` : `add variant ${set}=${variant} to ${prim}`;
+    return this.apply(label, [
+      { type: "addVariant", path: prim, set, variant },
+      { type: "setVariantSelection", path: prim, set, variant },
+    ]);
+  }
+
+  /**
+   * Removes the edit target's layer's spec of the variant set `set` of the
+   * prim at `prim`, with its variants and what they author, and the
+   * layer's selection in it, as one undoable action
+   * (`SdfPrimSpec::RemoveVariantSet`). As in OpenUSD, the prim's
+   * `variantSetNames` keeps the name. Throws when the layer holds no such
+   * set.
+   */
+  removeVariantSet(prim: string, set: string): EditReceipt {
+    return this.#changing(
+      `remove variant set ${set} from ${prim}`,
+      [
+        { type: "removeVariantSet", path: prim, set },
+        { type: "setVariantSelection", path: prim, set, variant: null },
+      ],
+      `${this.#targetName} holds no variant set ${set} of ${prim}`,
+    );
   }
 
   /** Where edits go, in words: the layer written. */

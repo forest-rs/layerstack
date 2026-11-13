@@ -23,6 +23,7 @@ import type {
   EditReceipt,
   EditTarget,
   FlattenResult,
+  HistoryStep,
   Layer,
   LayerFormat,
   Layerstack,
@@ -34,9 +35,11 @@ import type {
 } from "@forest-rs/layerstack";
 import type { BudgetReport, DrawCost, Stagehand } from "@forest-rs/layerstack_stagehand";
 import type { AssetFocus, BudgetChoice, DrawScopeChoice } from "./model/assetView.ts";
+import { type NamespaceAction, namespaceRefusal, type NewArc, newArcLabel, removeArcLabel } from "./model/composition.ts";
 import type { ViewportScene, ViewportUpdate } from "./model/draws.ts";
 import { planSave, type SaveEntry } from "./model/files.ts";
 import { indexOfId, type InstancerColumns, toggled } from "./model/instancer.ts";
+import { type AuthoredArc, type LayerSpecs, type LayerSummary, readLayerSpecs, summarizeBytes, summaryOf } from "./model/layerSpecs.ts";
 import type { LayerTextRead } from "./model/layerText.ts";
 import { type Shadow, shadowOf, targetOpinion } from "./model/propertyOps.ts";
 import { releaseValue } from "./model/values.ts";
@@ -69,6 +72,33 @@ export { FRAME_NOTE_MS, type FrameNote, type Notice } from "./store/notices.ts";
 export { PAYLOAD_BUDGET, type PayloadChoice } from "./store/opening.ts";
 export type { TimeRange } from "./store/playback.ts";
 export { type EditorStatus, moduleTrap } from "./store/status.ts";
+
+/** A composition edit made here ({@link EditorStore.compositionEdit}): what the inspector offers to show. */
+export interface CompositionEdit {
+  /** The prim it edited. */
+  readonly prim: string;
+  /** The action, as History lists it. */
+  readonly label: string;
+  /** The layer it wrote. */
+  readonly layer: Layer;
+  /** The step it made: the edit is offered while this is the newest. */
+  readonly step: HistoryStep;
+  /** The variant it added and selected, when it did: offered to edit inside. */
+  readonly variant?: { readonly set: string; readonly variant: string };
+}
+
+/**
+ * An action that may wait on its assets: its refusal, known at once when
+ * it ran now (`undefined` when the stage took it, or when it waits its
+ * turn: a refusal is then a notice alone), and its end.
+ */
+export interface Authoring {
+  readonly refusal: string | undefined;
+  readonly done: Promise<void>;
+}
+
+/** The most bytes of a layer the stage has not read that are read for its default and root prims alone. */
+export const SUMMARY_BYTES = 16 * 1024 ** 2;
 
 /** The editor: one session at a time, and the state the panels share. */
 export class EditorStore {
@@ -104,6 +134,10 @@ export class EditorStore {
   #read: { session: Session | null; changes: number } = { session: null, changes: 0 };
   /** The last value edit that does not show ({@link EditorStore.shadow}). */
   #shadow: Shadow | null = null;
+  /** The last composition edit made here ({@link EditorStore.compositionEdit}). */
+  #compositionEdit: CompositionEdit | null = null;
+  /** What each layer authors about composition, read once per change of the stage ({@link EditorStore.layerSpecs}). */
+  #specs: { session: Session | null; stamp: string; read: Map<Layer, LayerSpecs | null> } = { session: null, stamp: "", read: new Map() };
   #frame = 0;
   /** The channels {@link EditorStore.#bumpSoon} bumps at the next frame. */
   readonly #soon = new Set<Channel>();
@@ -782,7 +816,10 @@ export class EditorStore {
     const edit = typeName === null ? { type: "definePrim" as const, path } : { type: "definePrim" as const, path, typeName };
     return this.#edit(
       label,
-      (session) => session.apply(label, [edit]),
+      (session) => {
+        refuseNamespace(session, "define", path);
+        return session.apply(label, [edit]);
+      },
       () => this.#selection.select(path),
     );
   }
@@ -796,7 +833,10 @@ export class EditorStore {
   move(path: string, to: string): string | undefined {
     return this.#edit(
       `move ${path}`,
-      (session) => session.move(path, to),
+      (session) => {
+        refuseNamespace(session, "rename", path);
+        return session.move(path, to);
+      },
       () => this.#follow({ from: path, to }),
     );
   }
@@ -807,7 +847,10 @@ export class EditorStore {
    * it, as {@link EditorStore.apply} does.
    */
   delete(path: string): string | undefined {
-    return this.#edit(`delete ${path}`, (session) => session.delete(path));
+    return this.#edit(`delete ${path}`, (session) => {
+      refuseNamespace(session, "delete", path);
+      return session.delete(path);
+    });
   }
 
   // The shading network (`model/networkEdits.ts` says what each authors).
@@ -1034,6 +1077,214 @@ export class EditorStore {
       await session.selectVariant(prim, set, variant, signal);
       return false;
     });
+  }
+
+  // Composition: arcs and variant sets (`model/composition.ts` says what each authors).
+
+  /**
+   * The last composition edit made here (an arc or a variant set added or
+   * removed) while it is the history's newest step: what the inspector
+   * offers to show in its layer's text. `null` once another step is.
+   * Heard on `history`.
+   */
+  get compositionEdit(): CompositionEdit | null {
+    const edit = this.#compositionEdit;
+    return edit !== null && this.session?.history.nextUndo === edit.step ? edit : null;
+  }
+
+  /**
+   * Adds `arc` to the prim at `prim` where edits go, then fetches what it
+   * names that the stage has not read, with the opening overlay showing
+   * the asset loop's rounds; one undoable action. Cancelling the fetch
+   * takes the arc back. What it names that is missing is a notice, and
+   * the inspector says so beside the arc. The refusal is known at once
+   * when the action runs now ({@link Authoring}).
+   */
+  addArc(prim: string, arc: NewArc): Authoring {
+    const label = newArcLabel(prim, arc);
+    let refusal: string | undefined;
+    const done = this.#actions.run(label, async (signal) => {
+      const session = this.session;
+      if (session === null || this.status.kind === "lost") return;
+      try {
+        let step: HistoryStep | null;
+        try {
+          step = this.#composing(session, prim, label, () => session.addArc(prim, arc));
+        } catch (error) {
+          if (this.lose(error)) return;
+          refusal = this.#notices.report(label, error).message;
+          this.#settled(session, false, "history");
+          return;
+        }
+        if (!(await this.#supplyShown(session, label, `Adding the ${arc.kind}: fetching what it names`, step, signal))) return;
+        for (const issue of session.stage.status().compositionErrors) {
+          if (issue.prim === prim && issue.code === "composition.unresolved_asset") this.#notices.add(label, issue.message, issue.code);
+        }
+        this.#settled(session, false, "history", "loop", "status");
+      } catch (error) {
+        if (!this.lose(error)) throw error;
+      }
+    });
+    return { refusal, done };
+  }
+
+  /**
+   * Removes `arc`, which the edit target's layer authors on the prim at
+   * `prim` (`model/composition.ts`, `findAuthoring`), as one undoable
+   * action. Returns why it was refused.
+   */
+  removeArc(prim: string, arc: AuthoredArc): string | undefined {
+    const label = removeArcLabel(prim, arc);
+    return this.#edit(label, (session) => this.#composed(session, prim, label, () => session.removeArc(prim, arc)));
+  }
+
+  /**
+   * Adds the variant `variant` to the set `set` of the prim at `prim`
+   * where edits go, the set with it when it is new (`newSet`), and selects
+   * it, as one undoable action. Returns why it was refused.
+   */
+  addVariant(prim: string, set: string, variant: string, newSet = false): string | undefined {
+    const label = newSet ? `add variant set ${set}` : `add variant ${set}=${variant}`;
+    return this.#edit(label, (session) => this.#composed(session, prim, label, () => session.addVariant(prim, set, variant, newSet), { set, variant }));
+  }
+
+  /**
+   * Removes the variant set `set` of the prim at `prim` from the edit
+   * target's layer: its variants, what they author, and the layer's
+   * selection; its name stays in `variantSetNames`, as OpenUSD leaves it.
+   * Returns why it was refused (the layer holds no such set).
+   */
+  removeVariantSet(prim: string, set: string): string | undefined {
+    const label = `remove variant set ${set}`;
+    return this.#edit(label, (session) => this.#composed(session, prim, label, () => session.removeVariantSet(prim, set)));
+  }
+
+  /**
+   * Makes edits go inside the variant `variant` of the set `set` of the
+   * prim at `prim` (`Prim.variantEditTarget`), in the layer edits go to
+   * now (the edit layer when they go through an arc).
+   */
+  editInsideVariant(prim: string, set: string, variant: string): void {
+    const session = this.session;
+    const found = session?.stage.prim(prim) ?? null;
+    if (session === null || found === null) return;
+    const target = session.target;
+    const layer = target === undefined ? session.stage.editLayer : "kind" in target ? (target.kind === "layer" ? target.layer : session.stage.editLayer) : target;
+    try {
+      this.setTarget(found.variantEditTarget(set, variant, layer));
+    } catch (error) {
+      if (!this.lose(error)) this.#notices.report(`edit inside ${set}=${variant}`, error);
+    }
+  }
+
+  /**
+   * What `layer` authors about composition (`model/layerSpecs.ts`), read
+   * from its text once per change of the stage; `null` when its text is
+   * too large to read whole, or cannot be written.
+   */
+  layerSpecs(layer: Layer): LayerSpecs | null {
+    const session = this.session;
+    if (session === null) return null;
+    const stamp = `${this.signals.revision("history")}:${this.signals.revision("composition")}`;
+    if (this.#specs.session !== session || this.#specs.stamp !== stamp) this.#specs = { session, stamp, read: new Map() };
+    const cached = this.#specs.read.get(layer);
+    if (cached !== undefined) return cached;
+    const text = this.layerText(layer);
+    const specs = typeof text === "string" || text.truncated ? null : readLayerSpecs(text.lines.join("\n"));
+    this.#specs.read.set(layer, specs);
+    return specs;
+  }
+
+  /** The layers an arc can be pointed at: those the source lists and those the stage holds, by identifier, sorted. */
+  async arcLayers(): Promise<string[]> {
+    const session = this.session;
+    if (session === null) return [];
+    const held = session.stage.layers().flatMap((layer) => (layer.identifier === null || layer.identifier.includes("[") ? [] : [layer.identifier]));
+    const listed = (await this.source?.layers?.().catch(() => [])) ?? [];
+    return [...new Set([...listed, ...held])].sort();
+  }
+
+  /**
+   * The default prim and root prims of the layer `identifier`: from the
+   * stage when it holds it, else read from the source (a layer over
+   * {@link SUMMARY_BYTES} is not, and the summary says why).
+   */
+  async layerSummary(identifier: string): Promise<LayerSummary> {
+    const session = this.session;
+    const source = this.source;
+    if (session === null || source === null) return { kind: "unread", reason: "Nothing is open." };
+    const held = session.stage.layers().find((layer) => layer.identifier === identifier);
+    if (held !== undefined) {
+      const specs = this.layerSpecs(held);
+      return specs === null ? { kind: "unread", reason: `${identifier} is too large to read for its prims here.` } : summaryOf(specs);
+    }
+    try {
+      const size = await source.size(identifier);
+      if (size !== null && size > SUMMARY_BYTES) return { kind: "unread", reason: `${identifier} is ${(size / 1024 ** 2).toFixed(1)} MB: too large to read for its prims alone.` };
+      const bytes = await source.fetch(identifier);
+      if (bytes === null) return { kind: "unread", reason: `The scene's source has no ${identifier}.` };
+      if (bytes.byteLength > SUMMARY_BYTES) return { kind: "unread", reason: `${identifier} is too large to read for its prims alone.` };
+      return summarizeBytes(this.layerstack, identifier, bytes);
+    } catch (error) {
+      if (this.lose(error)) return { kind: "unread", reason: "The module was lost." };
+      return { kind: "unread", reason: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  /** Runs a composition edit of `prim` and notes it ({@link EditorStore.compositionEdit}); returns its receipt. */
+  #composed(session: Session, prim: string, label: string, run: () => EditReceipt, variant?: CompositionEdit["variant"]): EditReceipt {
+    let receipt: EditReceipt | null = null;
+    this.#composing(session, prim, label, () => (receipt = run()), variant);
+    return receipt!;
+  }
+
+  /**
+   * Runs a composition edit of `prim`, its layer's text read first when
+   * the Text tab never read it (so the tab can mark what the edit
+   * changed), and notes it; returns the step it made.
+   */
+  #composing(session: Session, prim: string, label: string, run: () => EditReceipt, variant?: CompositionEdit["variant"]): HistoryStep | null {
+    const target = session.target;
+    const layer = target === undefined ? session.stage.editLayer : "kind" in target ? target.layer : target;
+    if (layer !== null && this.lastLayerText(layer) === null) this.layerText(layer);
+    const receipt = run();
+    const step = session.history.nextUndo;
+    this.#compositionEdit = step === null ? null : { prim, label, layer: receipt.target.layer, step, ...(variant === undefined ? {} : { variant }) };
+    return step;
+  }
+
+  /**
+   * Fetches what the stage wants after the action `action` (whose step is
+   * `step`), with the opening overlay up while it does (`title` says what
+   * for) when there is anything to fetch. Cancelled, the action is taken
+   * back: its step undone, what was read for it released. Returns whether
+   * the fetching ran to its end (a failure is a notice).
+   */
+  async #supplyShown(session: Session, action: string, title: string, step: HistoryStep | null, signal: AbortSignal): Promise<boolean> {
+    const wants = session.stage.unavailable().length > 0;
+    if (wants) {
+      this.#opener.begin();
+      this.#setStatus({ kind: "loading", label: action, title });
+    }
+    let finished = true;
+    try {
+      await session.supplyUnavailable(action, undefined, signal);
+    } catch (error) {
+      if (this.lose(error)) return false;
+      finished = false;
+      if (!signal.aborted) this.#notices.report(action, error);
+    }
+    if (signal.aborted && step !== null && session.history.nextUndo === step) {
+      // Cancelled: nothing of the action stays, and what was read for it is let go.
+      await session.undo();
+      session.releaseUnusedLayers();
+    }
+    if (wants) {
+      this.#opener.end();
+      if ((this.status as EditorStatus).kind === "loading") this.status = { kind: "ready" };
+    }
+    if (!finished) this.#settled(session, false, "history", "loop", "status");
+    return finished;
   }
 
   /** Undoes the newest action, then fetches what that brings back; the selection follows a rename undone. */
@@ -1445,6 +1696,12 @@ export interface ReloadReport {
 /** A layer as an action's label names it: its identifier, or the session layer. */
 function layerLabel(layer: Layer): string {
   return layer.identifier ?? "the session layer";
+}
+
+/** Throws why `action` on `path` cannot go where edits go ({@link namespaceRefusal}), before it is tried. */
+function refuseNamespace(session: Session, action: NamespaceAction, path: string): void {
+  const why = namespaceRefusal(session.target, action, path);
+  if (why !== null) throw new Error(why);
 }
 
 /** The stage's `upAxis`: `Z` when it says so, else `Y`. */

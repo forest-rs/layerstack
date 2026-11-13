@@ -53,7 +53,7 @@ export function LoadingOverlay() {
         <div className="flex items-center gap-2">
           <Spinner className="size-4 text-muted-foreground" />
           <span className="min-w-0 truncate text-sm font-medium" title={label}>
-            {status.kind === "opening" ? "Opening" : "Loading the payloads of"} {label}
+            {status.kind === "opening" ? `Opening ${label}` : (status.title ?? `Loading the payloads of ${label}`)}
           </span>
         </div>
         <div className="text-xs">{at === null ? "Starting" : describe(at.phase)}…</div>

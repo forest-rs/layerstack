@@ -6,12 +6,13 @@
 // undo history, the asset loop's requests and answers, what drawing
 // costs, and what the stage refused.
 import { useEffect } from "react";
-import type { Explanation, Layer, Opinion } from "@forest-rs/layerstack";
+import type { Attribute, Explanation, Layer, Opinion } from "@forest-rs/layerstack";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
+import { bracketNote } from "../model/keyTimes.ts";
 import type { EditorStore } from "../store.ts";
 import { BOTTOM_TABS } from "../store/view.ts";
 import { AssetLoopView } from "./AssetLoop.tsx";
@@ -113,9 +114,9 @@ function ExplainView({ store }: { store: EditorStore }) {
       </div>
       <div className="mt-1 text-muted-foreground">
         from <span className="text-foreground">{explanation.source}</span>
-        {explanation.samples !== null && ` (between samples ${explanation.samples.lower} and ${explanation.samples.upper})`}
         {samples.length > 0 && ` · ${samples.length} time samples, ${samples[0]} to ${samples.at(-1)}`}
       </div>
+      {time !== undefined && <SampleNote store={store} attribute={attribute} time={time} typeName={typeName} />}
       <table className="mt-3 w-full border-collapse text-[11px]">
         <thead className="text-left text-muted-foreground">
           <tr>
@@ -133,6 +134,35 @@ function ExplainView({ store }: { store: EditorStore }) {
         </tbody>
       </table>
       {explanation.opinions.length === 0 && <p className="mt-2 text-muted-foreground">No layer has an opinion: the value is the schema's fallback.</p>}
+    </div>
+  );
+}
+
+/**
+ * Where the time falls among the attribute's samples, each sample's time a
+ * button that moves the timeline there. The stage does not say whether it
+ * interpolates or holds, so only a type USD always holds is said to be held.
+ */
+function SampleNote({ store, attribute, time, typeName }: { store: EditorStore; attribute: Attribute; time: number; typeName: string }) {
+  const note = bracketNote(attribute.bracketingSamples(time), time, typeName);
+  if (note.kind === "none") return null;
+  const at = (sample: number) => (
+    <button type="button" className="font-mono text-foreground underline decoration-dotted underline-offset-2 hover:decoration-solid" onClick={() => store.seek(sample)}>
+      {formatTime(sample)}
+    </button>
+  );
+  return (
+    <div className="mt-1 text-muted-foreground">
+      At {formatTime(time)}:{" "}
+      {note.kind === "on" && <>on the sample at {at(note.time)}</>}
+      {note.kind === "before" && <>before the first sample, so its value: the sample at {at(note.time)}</>}
+      {note.kind === "after" && <>after the last sample, so its value: the sample at {at(note.time)}</>}
+      {note.kind === "between" && (
+        <>
+          between the samples at {at(note.lower)} and {at(note.upper)}
+          {note.held && `; a ${typeName} is held at the earlier one, never interpolated`}
+        </>
+      )}
     </div>
   );
 }

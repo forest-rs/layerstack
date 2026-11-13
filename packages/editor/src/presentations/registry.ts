@@ -62,6 +62,10 @@ export interface ValueObject {
   readonly shown: Shown;
   /** The time an edit authors a sample at (an animated attribute), or `null` for the default. */
   readonly at: number | null;
+  /** What it is called for assistive technology when no attribute names it (an input only its shader's definition has); its attribute's name, or its type, otherwise. */
+  readonly label?: string;
+  /** The tokens it may be when its attribute's `allowedTokens` do not say (a shader definition's), for a `token`. */
+  readonly allowedTokens?: readonly string[] | null;
 }
 
 /**
@@ -261,7 +265,9 @@ export function typesOf(object: Presented): readonly string[] {
     case "prim":
       return primTypes(object.prim);
     case "value":
-      return valueTypes(object.typeName, { allowedTokens: object.typeName === "token" && object.attribute !== null && restricted(object.attribute) });
+      return valueTypes(object.typeName, {
+        allowedTokens: object.typeName === "token" && ((object.allowedTokens?.length ?? 0) > 0 || (object.attribute !== null && restricted(object.attribute))),
+      });
     case "primPath":
       return ["primPath", "path"];
     case "propertyPath":

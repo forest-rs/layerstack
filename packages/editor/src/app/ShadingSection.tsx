@@ -11,19 +11,24 @@
 // is a link to its source, and a texture it reads (directly or through
 // node graphs) its thumbnail, file,
 // colour space and wrap modes. Each value's editor is its presentation
-// (a colour a swatch and picker).
+// (a colour a swatch and picker). A shader whose id the editor knows lists
+// its definition's inputs too, those the prim does not author showing
+// their fallback; an edit authors through `setShaderInput`, which creates
+// the input then.
 import { useMemo, useState } from "react";
 import type { Prim, ShaderPort, Stage } from "@forest-rs/layerstack";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import { enclosingMaterial, primOf } from "../model/network.ts";
+import { shaderDefinition } from "../model/shaderDefinitions.ts";
 import { clampToBounds, groupInputs, type ShadingInput, type ShadingInputGroup, sliderRange } from "../model/shadingInputs.ts";
 import { formatNumber } from "../model/values.ts";
 import type { EditorStore } from "../store.ts";
 import { useTime } from "./context.ts";
-import { CommitNumber, shown, ValueField } from "./fields.tsx";
+import { CommitNumber, shown } from "./fields.tsx";
 import { MaterialPreview } from "./MaterialPreview.tsx";
 import { Live, presentationContext } from "./presentations/Present.tsx";
+import { ShaderInputField } from "./ShaderInputField.tsx";
 import { BoundBy, TextureSource } from "./views/MaterialParts.tsx";
 import { Section } from "./Section.tsx";
 
@@ -114,12 +119,12 @@ function SourceLink({ store, path, text }: { store: EditorStore; path: string; t
 function Inputs({ store, stage, path }: { store: EditorStore; stage: Stage; path: string }) {
   // Read again after a recomposition only: explaining every input is not free.
   const recompositions = store.session?.changeLog.length ?? 0;
-  const groups = useMemo(
-    () => groupInputs(stage, path, (stage.material(path) ?? stage.shader(path))?.inputs() ?? []),
-    [stage, path, recompositions],
-  );
+  const groups = useMemo(() => {
+    const shader = stage.material(path) === null ? stage.shader(path) : null;
+    return groupInputs(stage, path, (stage.material(path) ?? shader)?.inputs() ?? [], shaderDefinition(shader?.id ?? null));
+  }, [stage, path, recompositions]);
   const [open, setOpen] = useState<ReadonlySet<string>>(() => initiallyOpen(groups));
-  const paths = groups.flatMap((group) => group.inputs.map((input) => input.port.path));
+  const paths = groups.flatMap((group) => group.inputs.flatMap((input) => (input.port === null ? [] : [input.path])));
   const varying = new Set(stage.valuesMightBeTimeVarying(paths).flatMap((varies, index) => (varies ? [paths[index]!] : [])));
   if (groups.length === 0) return <p className="text-[11px] text-muted-foreground">No inputs.</p>;
   // The legend, when some inputs are set here and some are not.
@@ -185,7 +190,7 @@ function InputGroup({
       {open && (
         <div className="mt-0.5 mb-1 grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-center gap-x-2 gap-y-1">
           {group.inputs.map((input) => (
-            <InputRow key={input.port.path} store={store} input={input} animated={varying.has(input.port.path)} />
+            <InputRow key={input.path} store={store} input={input} animated={varying.has(input.path)} />
           ))}
         </div>
       )}
@@ -195,32 +200,40 @@ function InputGroup({
 
 function InputRow({ store, input, animated }: { store: EditorStore; input: ShadingInput; animated: boolean }) {
   const { port } = input;
+  const connections = port?.connections ?? [];
   // Only an animated input is read again as time moves.
   const time = useTime(store, animated);
-  const focused = store.property === port.path;
+  const focused = store.property === input.path;
   const context = presentationContext(store);
   // The shader outputs that produce its value, through node graphs: a texture's among them.
   const recompositions = store.session?.changeLog.length ?? 0;
   const producers = useMemo(
-    () => (port.connections.length === 0 ? [] : [...new Set(port.valueSources().sources.flatMap((source) => (source.kind === "shaderOutput" ? [source.attribute] : [])))]),
-    [port.path, recompositions],
+    () =>
+      port === null || connections.length === 0
+        ? []
+        : [...new Set(port.valueSources().sources.flatMap((source) => (source.kind === "shaderOutput" ? [source.attribute] : [])))],
+    [input.path, recompositions],
   );
+  const title =
+    port === null
+      ? `inputs:${input.name}: ${input.typeName ?? "untyped"}, not authored: what is shown is its definition's fallback, and an edit authors it. Explain its value.`
+      : `inputs:${input.name}: ${input.typeName ?? "untyped"}. Explain its value.`;
   return (
     <>
       <button
         type="button"
-        onClick={() => store.explain(port.path)}
-        title={`inputs:${port.name}: ${port.typeName ?? "untyped"}. Explain its value.`}
+        onClick={() => store.explain(input.path)}
+        title={title}
         className={cn("flex min-w-0 items-center gap-1.5 rounded px-1 py-0.5 text-left text-xs hover:bg-muted", focused && "bg-accent text-accent-foreground")}
       >
-        <span className={cn("size-1.5 shrink-0 rounded-full", input.own ? "bg-primary" : "border border-muted-foreground")} />
-        <span className="truncate">{input.label}</span>
+        <span className={cn("size-1.5 shrink-0 rounded-full", input.own ? "bg-primary" : port === null ? "border border-dashed border-muted-foreground/60" : "border border-muted-foreground")} />
+        <span className={cn("truncate", port === null && "text-muted-foreground italic")}>{input.label}</span>
         {animated && <span className="size-1.5 shrink-0 rotate-45 bg-amber-500" title="Animated: an edit authors a sample at the current time" />}
       </button>
       <div className="flex min-w-0 items-center">
-        {port.connections.length > 0 ? (
+        {connections.length > 0 ? (
           <div className="flex min-w-0 flex-col">
-            <Sources store={store} sources={port.connections} />
+            <Sources store={store} sources={connections} />
             {context !== null && producers.map((source) => <TextureSource key={source} context={context} source={source} />)}
           </div>
         ) : (
@@ -231,26 +244,29 @@ function InputRow({ store, input, animated }: { store: EditorStore; input: Shadi
   );
 }
 
-/** An unconnected input's editor: a slider for a bounded number, else the inspector's usual field. */
+/**
+ * An unconnected input's editor: a slider for a bounded number, else the
+ * value's own editor; either authors through `setShaderInput`, creating an
+ * input the prim does not author yet.
+ */
 function InputValue({ store, input, at }: { store: EditorStore; input: ShadingInput; at: number | null }) {
-  const attribute = store.session?.stage.attribute(input.port.path) ?? null;
-  if (attribute === null) return null;
-  const value = shown(attribute.get(store.time));
+  const attribute = input.port === null ? null : (store.session?.stage.attribute(input.path) ?? null);
+  const value = attribute === null ? null : shown(attribute.get(store.time));
   const range = sliderRange(input.bounds);
-  const number = value.value?.kind === "scalar" && typeof value.value.value === "number" ? value.value.value : null;
-  if (range !== null && number !== null) {
-    const type = attribute.typeName ?? value.value!.type;
+  const number = value?.value?.kind === "scalar" && typeof value.value.value === "number" ? value.value.value : null;
+  if (attribute !== null && range !== null && number !== null) {
+    const type = attribute.typeName ?? value!.value!.type;
     return (
       <SliderField
         label={input.label}
         value={number}
         range={range}
         integer={/^u?int/.test(type)}
-        onCommit={(next) => store.setValue(attribute.path, { type, value: clampToBounds(next, input.bounds) }, at)}
+        onCommit={(next) => store.setShaderInput(input.path, { type, value: clampToBounds(next, input.bounds) }, at)}
       />
     );
   }
-  return <ValueField store={store} attribute={attribute} shown={value} at={at} />;
+  return <ShaderInputField store={store} path={input.path} name={input.label} definition={input.definition} time={store.time} at={at} />;
 }
 
 /**

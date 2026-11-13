@@ -59,7 +59,8 @@ test("an input only the shader's definition has is created by its first edit; a 
   const metallic = `${CHECKER}/Surface.inputs:metallic`;
   assert.equal(stage.attribute(metallic), null);
   assert.equal(store.setShaderInput(metallic, { type: "float", value: 0.75 }), undefined);
-  assert.equal(stage.attribute(metallic)?.get()?.kind === "scalar" ? stage.attribute(metallic)?.get()?.value : null, 0.75);
+  const value = stage.attribute(metallic)?.get() ?? null;
+  assert.equal(value?.kind === "scalar" ? value.value : null, 0.75);
   assert.equal(store.session!.history.nextUndo?.label, `set ${metallic}`);
   const refusal = store.setShaderInput(metallic, { type: "color3f", value: [1, 0, 0] });
   assert.equal(typeof refusal, "string", "the input is a float now");

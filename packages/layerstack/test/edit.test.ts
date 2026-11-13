@@ -953,6 +953,7 @@ describe("read-only roots", () => {
     assert.notEqual(session, stage.root);
     assert.equal(session.anonymous, true);
     assert.equal(session.readOnly, false);
+    assert.equal(stage.isDirty(session), false, "a new session layer is clean, as SdfLayer::CreateAnonymous makes one");
     const receipt = stage.apply([{ type: "setValue", path: "/Model.height", value: { type: "float", value: 5 } }], session);
     assert.deepEqual(stage.attribute("/Model.height")?.get(), { kind: "scalar", type: "float", value: 5 });
     assert.equal(stage.isDirty(session), true);
@@ -961,6 +962,7 @@ describe("read-only roots", () => {
     assert.equal(strongest?.layer, session);
     receipt.undo().release();
     assert.deepEqual(stage.attribute("/Model.height")?.get(), { kind: "scalar", type: "float", value: 3 });
+    assert.equal(stage.isDirty(session), true, "undone, but changed since it was created, as in OpenUSD");
   });
 });
 

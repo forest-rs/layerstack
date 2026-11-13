@@ -425,6 +425,13 @@ history.redo();
   `unwindTo(mark)` undoes every step since as one transaction and forgets
   them, for a cancelled tool. `history.mark_gone` says the mark's step was
   undone, dropped or reset.
+- **Back at the save.** `isAt(mark)` says whether the history stands
+  where it did when the mark was taken. With a mark taken at a save, an
+  editor shows that undo brought the edits back to what was saved:
+  `stage.isDirty(layer)` stays `true` then, as OpenUSD's
+  `SdfLayer::IsDirty` does, since it reports change since the save, not
+  a difference from it. A new anonymous layer, such as the session layer
+  `editLayer: "session"` opens, is clean until its first edit.
 - **For a UI.** `canUndo` and `canRedo` (false while a group is open),
   `undoSteps` and `redoSteps` (each `{ label, layers, receipts }`, the next
   step last), `nextUndo`, `nextRedo`, `openGroup` and `groupDepth`.

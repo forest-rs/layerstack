@@ -1710,6 +1710,53 @@ fn save_tracks_successful_generations_and_excludes_sessions() {
     );
     assert!(doc.save().saved.is_empty());
 }
+/// A new anonymous layer is clean until its first edit, as OpenUSD's
+/// `SdfLayer::CreateAnonymous` returns a clean layer, and stays dirty once
+/// edited, even when the edit is undone: dirtiness is change since saved.
+#[test]
+fn a_new_anonymous_layer_is_clean_until_edited() {
+    let backend = Memory::with(&[(
+        "root.usda",
+        "#usda 1.0\ndef \"Root\" {\n int value = 1\n}\n",
+    )]);
+    let mut store = InMemoryStore::default();
+    let session = LayerId(50);
+    store.insert_layer(Layer::new(session));
+    let mut doc = StageDocument::open(
+        backend,
+        "root.usda",
+        OpenOptions {
+            stage: StageOptions {
+                session_layer: Some(session),
+                ..Default::default()
+            },
+            store: Some(store),
+            ..OpenOptions::default()
+        },
+    )
+    .unwrap();
+    assert!(
+        !doc.is_dirty(session),
+        "an empty session layer, never edited"
+    );
+    let created = doc.create_anonymous_layer().unwrap();
+    assert!(!doc.is_dirty(created));
+    assert!(doc.save_session_layers().anonymous.is_empty());
+
+    let (store, stage) = doc.parts_mut();
+    let property = store.property_path("/Root.value");
+    let mut edit = Transaction::new();
+    edit.set_default(
+        EditTarget::for_layer(session).property(property),
+        Value::Int(2),
+    );
+    let inverse = stage.apply(store, &edit).unwrap().inverse;
+    assert!(doc.is_dirty(session));
+    let (store, stage) = doc.parts_mut();
+    stage.apply(store, &inverse).unwrap();
+    assert!(doc.is_dirty(session), "undone, but changed since created");
+    assert_eq!(doc.save_session_layers().anonymous, vec![session]);
+}
 /// A session layer read from storage (`UsdStage::Open(rootLayer,
 /// sessionLayer)`) brings its sublayers, the session layer stack, which is
 /// stronger than the root's; it is saved only with the session layers.

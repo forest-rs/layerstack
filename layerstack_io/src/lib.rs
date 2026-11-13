@@ -1047,6 +1047,17 @@ impl Catalog {
     fn saved(&self, layer: LayerId) -> Option<u64> {
         self.record(layer)?.saved
     }
+    /// Whether `layer`, now at `generation`, is as it was last read or
+    /// saved, or, an anonymous layer (no source) never saved, as it was
+    /// created: every edit moves a layer's generation forward from 0
+    /// ([`StageDocument::is_dirty`]). A layer with a source it was never
+    /// read from or saved to, such as a created root, is not clean.
+    fn is_clean(&self, layer: LayerId, generation: u64) -> bool {
+        match self.saved(layer) {
+            Some(saved) => saved == generation,
+            None => self.source(layer).is_none() && generation == 0,
+        }
+    }
     /// Records the generation of `layer` as read or saved.
     fn set_saved(&mut self, layer: LayerId, generation: u64) {
         self.record_mut(layer).saved = Some(generation);
@@ -1927,12 +1938,25 @@ impl<B: Storage> StageDocument<B> {
     pub fn identifier(&self, layer: LayerId) -> Option<&str> {
         self.catalog.source(layer).map(|s| &*s.identifier)
     }
-    /// Whether a layer has changed since import or its last successful save.
-    /// Anonymous layers have no saved generation and remain dirty.
+    /// Whether a layer has changed since import, its last successful save
+    /// or, for an anonymous layer never saved (one with no identifier,
+    /// such as a new session layer), since it was created: a new anonymous
+    /// layer is clean until its first edit. Every edit moves the layer's
+    /// generation forward ([`Layer::generation`]), which starts at 0, so
+    /// an edit undone leaves the layer dirty, as OpenUSD's dirtiness means
+    /// changed since saved, not different from it. A layer
+    /// [`Self::create`] makes the root is dirty until saved: unlike
+    /// OpenUSD's `SdfLayer::CreateNew`, creating it writes nothing.
+    ///
+    /// OpenUSD: `SdfLayer::IsDirty` (`SdfSimpleLayerStateDelegate`); a
+    /// new `SdfLayer` marks its state clean (`_MarkCurrentStateAsClean`),
+    /// so `SdfLayer::CreateAnonymous` returns a clean layer.
+    ///
+    /// [`Layer::generation`]: layerstack::Layer::generation
     pub fn is_dirty(&self, layer: LayerId) -> bool {
         self.store
             .layer(layer)
-            .is_some_and(|l| self.catalog.saved(layer) != Some(l.generation()))
+            .is_some_and(|l| !self.catalog.is_clean(layer, l.generation()))
     }
     /// Creates an anonymous layer without colliding with imported identities.
     pub fn create_anonymous_layer(&mut self) -> Result<LayerId, IoError> {
@@ -2474,7 +2498,7 @@ impl ReadBatch {
         let clean_anchors = sort::collect_set(self.bindings.keys().copied().filter(|id| {
             store
                 .layer(*id)
-                .is_some_and(|l| catalog.saved(*id) == Some(l.generation()))
+                .is_some_and(|l| catalog.is_clean(*id, l.generation()))
         }));
         // The first layer read for each id is committed; the report lists
         // them in id order.

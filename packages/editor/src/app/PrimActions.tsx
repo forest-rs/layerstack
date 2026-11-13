@@ -12,9 +12,10 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { MoreHorizontalIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { namespaceRefusal } from "../model/composition.ts";
 import type { EditorStore } from "../store.ts";
 import { primIcon } from "./icons.ts";
 
@@ -64,6 +65,8 @@ export function PrimActions({ store, path, className }: { store: EditorStore; pa
   const readOnly = prim?.instanceProxy === true;
   // Loading works on any prim (its payloads and those beneath it, as
   // usdview offers); a prototype's proxies are loaded through their instance.
+  // A rename or delete through an arc or a variant is refused: said before it is tried.
+  const namespace = namespaceRefusal(store.session?.target, "rename", path);
   const loadable = prim !== null && !readOnly && (prim.hasAuthoredPayloads || stage.findLoadable(path).length > 0 || stage.loadRules().length > 0);
   return (
     <>
@@ -89,13 +92,18 @@ export function PrimActions({ store, path, className }: { store: EditorStore; pa
           )}
           {path !== "/" && (
             <>
-              <DropdownMenuItem onAction={() => setOpen({ kind: "rename", path })} isDisabled={readOnly}>
+              <DropdownMenuItem onAction={() => setOpen({ kind: "rename", path })} isDisabled={readOnly || namespace !== null}>
                 Rename…
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onAction={() => store.delete(path)} isDisabled={readOnly}>
+              <DropdownMenuItem variant="destructive" onAction={() => store.delete(path)} isDisabled={readOnly || namespace !== null}>
                 Delete
               </DropdownMenuItem>
+              {namespace !== null && (
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="max-w-64 text-[11px]">{namespace}</DropdownMenuLabel>
+                </DropdownMenuGroup>
+              )}
             </>
           )}
         </DropdownMenu>

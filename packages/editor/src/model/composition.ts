@@ -386,11 +386,21 @@ export function variantOfSite(site: string | null): { readonly set: string; read
 export function describeTarget(target: Layer | Pick<EditTarget, "kind" | "layer" | "prim" | "site" | "arc">): string {
   if (!("kind" in target)) return layerName(target);
   const layer = layerName(target.layer);
-  if (target.kind === "layer" || target.prim === null) return layer;
+  const route = targetRoute(target);
+  if (route === null) return layer;
+  return target.kind === "variant" ? `${layer}, ${route}` : `${layer} at ${target.site}, ${route}`;
+}
+
+/**
+ * How a target reaches its layer, in words: `inside finish=chrome of
+ * /World/Robot`, `through /World/Robot's reference`; `null` for a layer
+ * of the stage's own stack.
+ */
+export function targetRoute(target: Pick<EditTarget, "kind" | "prim" | "site" | "arc">): string | null {
+  if (target.kind === "layer" || target.prim === null) return null;
   const variant = variantOfSite(target.site);
-  if (target.kind === "variant" && variant !== null) return `${layer}, inside ${variant.set}=${variant.variant} of ${target.prim}`;
-  const through = target.arc === null ? "an arc" : `${target.prim}'s ${arcNoun(target.arc)}`;
-  return `${layer} at ${target.site}, through ${through}`;
+  if (target.kind === "variant" && variant !== null) return `inside ${variant.set}=${variant.variant} of ${target.prim}`;
+  return `through ${target.arc === null ? "an arc" : `${target.prim}'s ${arcNoun(target.arc)}`}`;
 }
 
 /** Where the selected prim's edits land through a target: the mapping, or why there is none. */
@@ -425,7 +435,7 @@ export function namespaceRefusal(target: Layer | Pick<EditTarget, "kind" | "laye
   if (target === undefined || !("kind" in target) || target.kind === "layer") return null;
   const where = describeTarget(target);
   if (action === "rename" || action === "delete") {
-    return `A ${action} edits the opinions of the stage's own layer stack, and edits go to ${where}: choose a layer of the stack where edits go first.`;
+    return `Renaming and deleting edit the opinions of the stage's own layer stack, and edits go to ${where}: make a layer of the stack where edits go first.`;
   }
   if (target.mapPath(path) === null) return `Edits go to ${where}, which does not map ${path}: define it where edits go to a layer of the stack, or inside ${target.prim}.`;
   return null;

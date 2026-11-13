@@ -2,15 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 // The inspector's sections every prim has: its state (active,
-// instanceable), its variant sets, its bound material and the arcs it
-// composes from. Each is a panel presentation of `Prim`
-// (`presentations/prims.tsx`).
+// instanceable) and its bound material. Each is a panel presentation of
+// `Prim` (`presentations/prims.tsx`); its variant sets and the arcs it
+// composes from are `VariantsSection.tsx` and `CompositionSection.tsx`.
 import type { Prim, Stage } from "@forest-rs/layerstack";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { materialSummary } from "../model/materials.ts";
 import type { EditorStore } from "../store.ts";
-import { layerName } from "./format.ts";
 import { Section } from "./Section.tsx";
 
 /** Active and instanceable: composed metadata, authored as edits. */
@@ -43,46 +41,6 @@ export function State({ store, prim }: { store: EditorStore; prim: Prim }) {
   );
 }
 
-export function Variants({ store, prim }: { store: EditorStore; prim: Prim }) {
-  const sets = prim.variantSets();
-  if (sets.length === 0) return null;
-  return (
-    <Section title="Variants">
-      <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-center gap-x-2 gap-y-1.5 text-xs">
-        {sets.map((set) => (
-          <VariantRow key={set.name} store={store} prim={prim} name={set.name} selection={set.selection} variants={set.variants} />
-        ))}
-      </div>
-    </Section>
-  );
-}
-
-function VariantRow({ store, prim, name, selection, variants }: { store: EditorStore; prim: Prim; name: string; selection: string | null; variants: readonly string[] }) {
-  return (
-    <>
-      <span className="truncate">{name}</span>
-      <Select
-        aria-label={name}
-        value={selection}
-        placeholder="none selected"
-        onChange={(key) => key !== null && key !== selection && void store.selectVariant(prim.path, name, String(key))}
-        className="w-full"
-      >
-        <SelectTrigger size="sm">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {variants.map((variant) => (
-            <SelectItem key={variant} id={variant} textValue={variant}>
-              {variant}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </>
-  );
-}
-
 export function MaterialSection({ stage, prim }: { stage: Stage; prim: Prim }) {
   const summary = materialSummary(stage, prim.path);
   if (summary === null) return null;
@@ -102,31 +60,4 @@ export function MaterialSection({ stage, prim }: { stage: Stage; prim: Prim }) {
       </div>
     </Section>
   );
-}
-
-/** The prim's composition, strongest first: each arc's kind, the layer stack it reaches and the spec there. */
-export function Arcs({ prim }: { prim: Prim }) {
-  const arcs = prim.compositionArcs();
-  return (
-    <Section title="Composition">
-      <ol className="flex flex-col gap-1">
-        {arcs.map((arc, index) => (
-          <li key={index} className="text-[11px]" style={{ paddingLeft: `${depth(arcs, index) * 10}px` }}>
-            <span className="font-medium">{arc.arc}</span>
-            {arc.implied && <span className="text-muted-foreground"> (implied)</span>}{" "}
-            <span className="font-mono text-muted-foreground">
-              {layerName(arc.layerStack.identifier)} {arc.site}
-            </span>
-          </li>
-        ))}
-      </ol>
-    </Section>
-  );
-}
-
-/** How many arcs `index`'s arc is beneath. */
-function depth(arcs: readonly { readonly parent: number | null }[], index: number): number {
-  let count = 0;
-  for (let at = arcs[index]?.parent ?? null; at !== null; at = arcs[at]?.parent ?? null) count++;
-  return count;
 }

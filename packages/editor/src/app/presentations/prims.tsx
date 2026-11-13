@@ -8,10 +8,12 @@
 // 0 its properties, below 0 what follows them.
 import { registerPresentation } from "../../presentations/registry.ts";
 import { DrawModeSection } from "../DrawModeSection.tsx";
-import { Arcs, MaterialSection, State, Variants } from "../PrimSections.tsx";
+import { CompositionSection } from "../CompositionSection.tsx";
+import { MaterialSection, State } from "../PrimSections.tsx";
 import { PropertyList } from "../PropertyList.tsx";
 import { ShadingSection } from "../ShadingSection.tsx";
 import { TransformSection } from "../TransformSection.tsx";
+import { VariantsSection } from "../VariantsSection.tsx";
 import { CurvesView, PointsView } from "../views/CurvesView.tsx";
 import { InstancerView } from "../views/InstancerView.tsx";
 import { MeshView } from "../views/MeshView.tsx";
@@ -69,7 +71,7 @@ export function registerPrimPresentations(): void {
     title: "Variants",
     priority: 30,
     applies: ({ prim }) => prim.variantSets().length > 0,
-    panel: ({ object, context }) => <Variants store={context.store} prim={object.prim} />,
+    panel: ({ object, context }) => <VariantsSection store={context.store} prim={object.prim} />,
   });
   registerPresentation({
     id: "builtin.properties",
@@ -93,6 +95,6 @@ export function registerPrimPresentations(): void {
     type: "Prim",
     title: "Composition",
     priority: -20,
-    panel: ({ object }) => <Arcs prim={object.prim} />,
+    panel: ({ object, context }) => <CompositionSection store={context.store} prim={object.prim} />,
   });
 }

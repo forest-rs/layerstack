@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 // Where edits go: the stage's edit layer, another layer of its own stack,
-// or an edit target through an arc chosen from an opinion (the explain
-// panel's "Edit here").
+// or an edit target through an arc or inside a variant, chosen from an
+// opinion (the explain panel's "Edit here") or the inspector's
+// Composition and Variants sections, named by its arc and layer.
 import type { EditTarget, Layer } from "@forest-rs/layerstack";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { describeTarget } from "../model/composition.ts";
 import { useEditorStore, useRevision } from "./context.ts";
 import { layerName } from "./format.ts";
 import { countRender } from "./renders.ts";
@@ -13,11 +15,12 @@ import { countRender } from "./renders.ts";
 const DEFAULT = "default";
 const THROUGH = "through";
 
-/** A target in words: its layer, and the spec it maps its prim to. */
+/**
+ * A target in words: its layer, and how it is reached (inside which
+ * variant, through which arc to which spec), as `describeTarget` says.
+ */
 export function targetText(target: Layer | EditTarget): string {
-  if (!("kind" in target)) return layerName(target.identifier);
-  const layer = layerName(target.layer.identifier);
-  return target.site === null ? layer : `${layer} at ${target.site}`;
+  return describeTarget(target);
 }
 
 export function TargetPicker() {
@@ -46,7 +49,8 @@ export function TargetPicker() {
         if (key === DEFAULT) store.setTarget(undefined);
         else if (key !== THROUGH) store.setTarget(own.find((layer) => String(layer.id) === key));
       }}
-      className="w-64"
+      // Wider while edits go through an arc or inside a variant, which takes more words to name.
+      className={through === null ? "w-64" : "w-96"}
     >
       <SelectTrigger size="sm" className="text-muted-foreground">
         <span className="shrink-0">Edits go to</span>
@@ -71,7 +75,7 @@ export function TargetPicker() {
           ))}
         {through !== null && (
           <SelectItem id={THROUGH} textValue={targetText(through)}>
-            {targetText(through)} <span className="text-muted-foreground">through {through.arc}</span>
+            {targetText(through)}
           </SelectItem>
         )}
       </SelectContent>

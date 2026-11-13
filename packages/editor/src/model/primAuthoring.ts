@@ -8,7 +8,7 @@
 // free sibling name for a duplicate, a reparent's destination and why it
 // cannot be made, a sibling order with one child moved, and where a
 // prim's opinions are when the edit target has none to copy.
-import type { EditTarget, Layer, Prim, SchemaInfo, Stage, UnrepairedPath } from "@forest-rs/layerstack";
+import type { ArcKind, EditTarget, Layer, Prim, SchemaInfo, Stage, UnrepairedPath } from "@forest-rs/layerstack";
 import { releaseValue } from "./values.ts";
 
 /** A prim name as USD takes it: an identifier. */
@@ -332,7 +332,7 @@ export interface OpinionSite {
   /** The target that writes there; `null` when none does (a value clip's layer). */
   readonly editTarget: EditTarget | null;
   /** The arc that reaches it; `null` for the stage's own layer stack. */
-  readonly arc: string | null;
+  readonly arc: ArcKind | null;
 }
 
 /** How many of a prim's authored attributes {@link opinionSites} explains. */

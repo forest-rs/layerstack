@@ -321,3 +321,15 @@ test("visibility and documentation, each undone", async () => {
   await h.settle(store.undo());
   assert.deepEqual(stage.visibilities(["/World/Rock"]), ["invisible"]);
 });
+
+test("through an arc, a move is refused before it is tried, and so is a duplicate the target does not map", async () => {
+  const { store, stage, steps } = await opened();
+  const reference = stage.prim("/World/Robot")!.compositionArcs().find((arc) => arc.arc === "references")!;
+  store.setTarget(reference.editTarget());
+  assert.match(store.moveTo("/World/Robot/Body", "/World/Robot/Looks")!, /Renaming and deleting edit the opinions of the stage's own layer stack/);
+  assert.match(store.duplicate("/World/Rock")!, /does not map \/World\/Rock1/);
+  // Inside the referenced prim, the copy is made in its asset.
+  assert.equal(store.duplicate("/World/Robot/Body"), undefined);
+  assert.notEqual(stage.prim("/World/Robot/Body1"), null);
+  assert.equal(steps(), 1);
+});

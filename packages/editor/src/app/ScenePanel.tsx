@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { SCENE_TABS } from "../store/view.ts";
 import { useEditorStore, useRevision, useStoreSelector } from "./context.ts";
 import { layerName } from "./format.ts";
+import { Present, presentationContext } from "./presentations/Present.tsx";
 import { PrimTree } from "./PrimTree.tsx";
 import { countRender } from "./renders.ts";
 
@@ -55,14 +56,17 @@ export function ScenePanel() {
 function LayerList() {
   countRender("LayerList");
   const store = useEditorStore();
-  useRevision(store, "composition");
+  // A save clears the edited marks (`history`); the tab in front decides what a click on a layer does (`view`).
+  useRevision(store, "composition", "history", "view");
   const session = store.session;
   if (session === null) return null;
   const stage = session.stage;
   const layers = stage.layers();
-  const root = layers[0];
+  const root = stage.root;
+  const sessionLayer = session.sessionLayer;
   const held = new Set(layers.map((layer) => layer.identifier));
   const released = stage.mutedIdentifiers().filter((identifier) => !held.has(identifier));
+  const context = presentationContext(store);
   return (
     <ul className="flex flex-col p-1">
       {layers.map((layer) => {
@@ -70,13 +74,19 @@ function LayerList() {
         const local = stage.hasLocalLayer(layer);
         return (
           <li key={String(layer.id)} className="flex items-center gap-2 rounded-md px-2 py-1 text-xs hover:bg-muted">
-            <span className={cn("min-w-0 flex-1 truncate font-mono text-[11px]", muted && "text-muted-foreground line-through")} title={layerName(layer.identifier)}>
-              {layerName(layer.identifier)}
+            {/* Live, as a layer is anywhere: a click shows its text, a context menu (or Shift+F10) offers the rest. */}
+            <span className={cn("flex min-w-0 flex-1", muted && "line-through opacity-60")}>
+              {context === null ? (
+                <span className="truncate font-mono text-[11px]">{layerName(layer.identifier)}</span>
+              ) : (
+                <Present object={{ kind: "layer", layer }} context={context} />
+              )}
             </span>
-            {stage.isDirty(layer) && <Badge variant="secondary">edited</Badge>}
-            {local && <Badge variant="outline">stack</Badge>}
+            {session.isEdited(layer) && <Badge variant="secondary">edited</Badge>}
+            {layer === sessionLayer && <Badge variant="outline">session</Badge>}
+            {local && layer !== sessionLayer && <Badge variant="outline">stack</Badge>}
             {layer.readOnly && <Badge variant="outline">read-only</Badge>}
-            {layer !== root && (
+            {layer !== root && layer !== sessionLayer && (
               <Switch
                 size="sm"
                 aria-label={muted ? `Unmute ${layerName(layer.identifier)}` : `Mute ${layerName(layer.identifier)}`}

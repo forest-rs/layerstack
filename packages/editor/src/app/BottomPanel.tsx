@@ -3,8 +3,8 @@
 
 // What happened, and why: the focused property's value and every opinion
 // the stage consulted for it, the recompositions each action caused, the
-// undo history, the asset loop's requests and answers, what drawing
-// costs, and what the stage refused.
+// undo history, the asset loop's requests and answers, what is wrong with
+// the stage, what drawing costs, and what the stage refused.
 import { useEffect } from "react";
 import type { Attribute, Explanation, Layer, Opinion } from "@forest-rs/layerstack";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,7 @@ import { CostView } from "./CostView.tsx";
 import { useEditorStore, useRevision, useStoreSelector, useTime } from "./context.ts";
 import { shown } from "./fields.tsx";
 import { formatTime, layerName } from "./format.ts";
+import { HealthView } from "./HealthView.tsx";
 import { LayerTextView } from "./LayerTextView.tsx";
 import { Present, presentationContext } from "./presentations/Present.tsx";
 import { ShadingView } from "./ShadingView.tsx";
@@ -35,6 +36,8 @@ export function BottomPanel({ onTab }: { onTab?: (tab: string) => void }) {
   const store = useEditorStore();
   // The tabs themselves show only how many notices there are; each view listens for what it shows.
   const notices = useStoreSelector(store, ["notices"], (at) => at.notices.length);
+  // The stage's problems, read once per change of the stage or the undo stack.
+  const problems = useStoreSelector(store, ["composition", "history", "status"], (at) => at.health?.count ?? 0);
   // The tab in front is the store's, so explaining a property brings its explanation forward.
   const tab = useStoreSelector(store, ["view"], (at) => at.bottomTab);
   // The frame hears of the tab however it was chosen.
@@ -54,6 +57,10 @@ export function BottomPanel({ onTab }: { onTab?: (tab: string) => void }) {
         <TabsTrigger className="flex-none px-2.5" id="history">History</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="text">Text</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="assets">Asset loop</TabsTrigger>
+        <TabsTrigger className="flex-none px-2.5" id="health">
+          Health
+          {problems > 0 && <Badge variant="outline">{problems}</Badge>}
+        </TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="shading">Shading</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="cost">Draw cost</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="notices">
@@ -75,6 +82,9 @@ export function BottomPanel({ onTab }: { onTab?: (tab: string) => void }) {
       </TabsContent>
       <TabsContent id="assets" className="min-h-0">
         <AssetLoopView store={store} />
+      </TabsContent>
+      <TabsContent id="health" className="min-h-0 overflow-y-auto">
+        <HealthView />
       </TabsContent>
       <TabsContent id="shading" className="min-h-0">
         <ShadingView />

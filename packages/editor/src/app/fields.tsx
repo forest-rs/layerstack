@@ -7,9 +7,10 @@
 // those editors are made of. What has no editor (most arrays,
 // dictionaries) shows its value. Every commit authors through the store,
 // which reports what the stage refused.
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { Attribute } from "@forest-rs/layerstack";
 import { cn } from "@/lib/utils";
+import { NOT_A_NUMBER, parseNumber, refusedBy } from "../model/refusal.ts";
 import { releaseValue, type Shown } from "../model/values.ts";
 
 export { shown, type Shown } from "../model/values.ts";
@@ -29,7 +30,16 @@ export function allowedTokens(attribute: Attribute): string[] | null {
   }
 }
 
-/** A text field that commits on Enter or blur, and goes back to `value` on Escape or when `value` changes. */
+/** How long a field shows that its input was refused, in milliseconds. */
+const REFUSED_MS = 2500;
+
+/**
+ * A text field that commits on Enter or blur, and goes back to `value` on
+ * Escape (authoring nothing) or when `value` changes. `onCommit` returns
+ * why the input was refused, if it was: the field then shows `value` again
+ * and marks itself invalid for a moment, with the reason as its title and
+ * for assistive technology.
+ */
 export function CommitField({
   value,
   onCommit,
@@ -39,43 +49,84 @@ export function CommitField({
   disabled = false,
 }: {
   value: string;
-  onCommit: (text: string) => void;
+  onCommit: (text: string) => string | void;
   className?: string;
   label: string;
   numeric?: boolean;
   disabled?: boolean;
 }) {
   const [text, setText] = useState(value);
+  const [refused, setRefused] = useState<string | null>(null);
+  const cancelled = useRef(false);
+  const reason = useId();
   useEffect(() => setText(value), [value]);
+  useEffect(() => {
+    if (refused === null) return;
+    const timer = setTimeout(() => setRefused(null), REFUSED_MS);
+    return () => clearTimeout(timer);
+  }, [refused]);
   return (
-    <input
-      aria-label={label}
-      value={text}
-      disabled={disabled}
-      inputMode={numeric ? "decimal" : undefined}
-      onChange={(event) => setText(event.target.value)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") event.currentTarget.blur();
-        if (event.key === "Escape") {
-          setText(value);
-          event.currentTarget.blur();
-        }
-      }}
-      onBlur={() => {
-        if (text !== value) onCommit(text);
-      }}
-      className={cn(
-        "h-6 min-w-0 rounded-md border border-input bg-input/20 px-1.5 font-mono text-[11px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 dark:bg-input/30",
-        numeric && "text-right tabular-nums",
-        disabled && "opacity-60",
-        className,
+    <>
+      <input
+        aria-label={label}
+        value={text}
+        disabled={disabled}
+        inputMode={numeric ? "decimal" : undefined}
+        aria-invalid={refused !== null ? true : undefined}
+        aria-describedby={refused !== null ? reason : undefined}
+        title={refused ?? undefined}
+        onChange={(event) => setText(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+          if (event.key === "Escape") {
+            // The blur below runs before the reset renders: say it is a cancel.
+            cancelled.current = true;
+            setText(value);
+            setRefused(null);
+            event.currentTarget.blur();
+          }
+        }}
+        onBlur={() => {
+          if (cancelled.current) {
+            cancelled.current = false;
+            return;
+          }
+          if (text === value) return;
+          const why = onCommit(text);
+          if (typeof why === "string") {
+            setText(value);
+            setRefused(why);
+          }
+        }}
+        className={cn(
+          "h-6 min-w-0 rounded-md border border-input bg-input/20 px-1.5 font-mono text-[11px] outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 dark:bg-input/30",
+          numeric && "text-right tabular-nums",
+          disabled && "opacity-60",
+          refused !== null && "border-destructive focus-visible:border-destructive focus-visible:ring-destructive/30",
+          className,
+        )}
+      />
+      {refused !== null && (
+        <span id={reason} role="alert" className="sr-only">
+          {refused}
+        </span>
       )}
-    />
+    </>
   );
 }
 
-/** A number field of a vector that commits a finite number on Enter or blur. */
-export function CommitNumber({ label, value, onCommit, disabled = false }: { label: string; value: string; onCommit: (value: number) => void; disabled?: boolean }) {
+/** A number field of a vector that commits a finite number on Enter or blur; `onCommit` may return why it was refused. */
+export function CommitNumber({
+  label,
+  value,
+  onCommit,
+  disabled = false,
+}: {
+  label: string;
+  value: string;
+  onCommit: (value: number) => string | void;
+  disabled?: boolean;
+}) {
   return (
     <CommitField
       label={label}
@@ -84,8 +135,8 @@ export function CommitNumber({ label, value, onCommit, disabled = false }: { lab
       disabled={disabled}
       className="w-0 flex-1"
       onCommit={(text) => {
-        const number = Number(text);
-        if (text.trim() !== "" && Number.isFinite(number)) onCommit(number);
+        const number = parseNumber(text);
+        return number === null ? NOT_A_NUMBER : onCommit(number);
       }}
     />
   );
@@ -101,5 +152,5 @@ export function ValueField({ store, attribute, shown, at }: { store: EditorStore
   const context = presentationContext(store);
   if (context === null) return null;
   const typeName = attribute.typeName ?? shown.value?.type ?? "";
-  return <Present object={{ kind: "value", attribute, typeName, shown, at }} context={context} accept={(value) => store.setValue(attribute.path, value, at)} />;
+  return <Present object={{ kind: "value", attribute, typeName, shown, at }} context={context} accept={(value) => refusedBy(store.notices, () => store.setValue(attribute.path, value, at))} />;
 }

@@ -38,7 +38,7 @@ export function Present<K extends PresentedKind>({
   object: Presented<K>;
   context: PresentationContext;
   view?: Exclude<PresentationView, "panel" | "accept">;
-  accept?: (value: ValueInput) => void;
+  accept?: (value: ValueInput) => string | void;
 }) {
   if (accept !== undefined) {
     const editor = presentations.find(object, "accept", context);

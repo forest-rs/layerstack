@@ -5,7 +5,8 @@
 // drawn for a width, and what the bracketing samples say.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bracketNote, heldBetweenSamples, mergeTimes, nextKey, thinTicks } from "../src/model/keyTimes.ts";
+import { bracketNote, heldBetweenSamples, mergeTimes, nextKey, stillBrackets, thinTicks } from "../src/model/keyTimes.ts";
+import { harness, sampleSource } from "./support/storeHarness.ts";
 
 test("nextKey finds the key past the time: on a key, between keys, before the first, after the last, with none", () => {
   const keys = [0, 12, 30, 48];
@@ -78,4 +79,24 @@ test("bracketNote says where a time falls among the samples", () => {
 test("only the types USD never interpolates are held", () => {
   for (const held of ["bool", "int", "int[]", "uint64", "token", "token[]", "string", "asset"]) assert.ok(heldBetweenSamples(held), held);
   for (const moved of ["float", "double", "double3", "float3[]", "matrix4d", "quatf", "color3f"]) assert.ok(!heldBetweenSamples(moved), moved);
+});
+
+test("stillBrackets keeps a bracket exactly while the stage would read the same one, as the sample's top spins", async () => {
+  const h = await harness();
+  await h.open(sampleSource());
+  const attribute = h.store.session!.stage.attribute("/World/Top.xformOp:rotateY")!;
+  // Played from before the first sample to past the last, in steps that land on each sample.
+  const times = Array.from({ length: 125 }, (_, at) => -6 + at * 0.5);
+  let read = { at: times[0]!, bracket: attribute.bracketingSamples(times[0]!) };
+  let reads = 1;
+  for (const time of times) {
+    if (!stillBrackets(read.bracket, read.at, time)) {
+      read = { at: time, bracket: attribute.bracketingSamples(time) };
+      reads += 1;
+    }
+    assert.deepEqual(read.bracket, attribute.bracketingSamples(time), `at ${time}`);
+  }
+  // Before 0, on 0, between, on 48, after: five reads, not one per frame.
+  assert.equal(reads, 5);
+  assert.equal(stillBrackets({ kind: "noSamples" }, 1, 2), false, "asked again: nothing to keep");
 });

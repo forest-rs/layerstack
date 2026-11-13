@@ -120,6 +120,23 @@ export type BracketNote =
   | { readonly kind: "none" };
 
 /**
+ * Whether `bracket`, the stage's bracketing samples at `readAt`, are its
+ * bracketing samples at `time` too, the samples unchanged: `time` is
+ * strictly between the same two samples, or, with one sample bracketing
+ * (before the first or after the last), on the same side of it. On a
+ * sample, only that time. So a view reading them as time moves asks the
+ * stage again only when the time crosses a sample, not every frame.
+ */
+export function stillBrackets(bracket: BracketingSamples, readAt: number, time: number): boolean {
+  if (time === readAt) return true;
+  if (bracket.kind !== "samples") return false;
+  const { lower, upper } = bracket;
+  if (lower !== upper) return time > lower && time < upper;
+  if (readAt === lower || time === lower) return false;
+  return readAt < lower === time < lower;
+}
+
+/**
  * The note for `bracket` at `time`. The stage does not report whether it
  * interpolates linearly or holds, so `held` is true only where the
  * attribute's type is held whatever it does ({@link heldBetweenSamples});

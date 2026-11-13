@@ -10,8 +10,10 @@ import type { CommonTransform, Edit, Prim, Stage } from "@forest-rs/layerstack";
 import { formatNumber } from "../model/values.ts";
 import type { EditorStore } from "../store.ts";
 import { refusedBy } from "../model/refusal.ts";
+import { useTime } from "./context.ts";
 import { CommitNumber } from "./fields.tsx";
 import { Section } from "./Section.tsx";
+import { countRender } from "./renders.ts";
 
 type Component = "translate" | "rotate" | "scale" | "pivot";
 
@@ -23,11 +25,15 @@ const ROWS: readonly [Component, string, keyof CommonTransform][] = [
 ];
 
 export function TransformSection({ store, stage, prim }: { store: EditorStore; stage: Stage; prim: Prim }) {
+  countRender("TransformSection");
   const xformable = stage.xformable(prim.path);
+  const animated = xformable !== null && xformable.transformTimeSamples.length > 0;
+  // Only an animated transform is read again as time moves.
+  const time = useTime(store, animated);
   if (xformable === null) return null;
-  const read = xformable.commonTransform(store.time);
+  const read = xformable.commonTransform(time);
   // An animated transform is edited by a sample at the current frame.
-  const at = xformable.transformTimeSamples.length > 0 && store.time !== undefined ? store.time : undefined;
+  const at = animated && time !== undefined ? time : undefined;
   const editable = read.compatible && !prim.instanceProxy;
   const author = (component: Component, value: [number, number, number]) => {
     const time = at === undefined ? {} : { time: at };

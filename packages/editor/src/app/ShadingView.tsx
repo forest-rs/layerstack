@@ -26,10 +26,11 @@ import {
   readNetwork,
 } from "../model/network.ts";
 import type { EditorStore } from "../store.ts";
-import { useStore } from "./context.ts";
+import { useEditorStore, useRevision } from "./context.ts";
 
 export function ShadingView() {
-  const store = useStore();
+  const store = useEditorStore();
+  useRevision(store, "selection", "composition");
   const session = store.session;
   const stage = session?.stage ?? null;
   const root = stage === null || store.selection === null ? null : networkRoot(stage, store.selection);

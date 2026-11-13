@@ -14,6 +14,7 @@ import { imageInfo, type ImageInfo } from "../model/images.ts";
 import { enclosingMaterial } from "../model/network.ts";
 import { readAsset } from "../model/sources.ts";
 import type { EditorStore } from "../store.ts";
+import { useTime } from "./context.ts";
 import { formatBytes } from "./format.ts";
 
 const CHOICES: readonly [DrawScopeChoice, string, string][] = [
@@ -122,7 +123,7 @@ type Loaded = { readonly url: string; readonly info: ImageInfo; readonly bytes: 
  */
 export function TextureView({ store, stage, attribute }: { store: EditorStore; stage: Stage; attribute: string }) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
-  const time = store.time;
+  const time = useTime(store);
   // The image is read again only when the file it names changes, not as time moves over a constant path.
   const { assetPath, layer, identifier } = textureAddress(stage, attribute, time);
   useEffect(() => {

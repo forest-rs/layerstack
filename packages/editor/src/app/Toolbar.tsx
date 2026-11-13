@@ -19,12 +19,13 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip";
 import type { SceneSource } from "../model/sources.ts";
-import { PAYLOAD_BUDGET } from "../store.ts";
-import { useStore } from "./context.ts";
+import { type EditorStore, PAYLOAD_BUDGET } from "../store.ts";
+import { useEditorStore, useRevision, useStoreSelector } from "./context.ts";
 import { formatBytes } from "./format.ts";
 import { directoryRoots, directoryScene, droppedFiles, droppedScene, localScenes, SAMPLE, type SceneEntry } from "./scenes.ts";
 import { SceneBrowser } from "./SceneBrowser.tsx";
 import { TargetPicker } from "./TargetPicker.tsx";
+import { countRender } from "./renders.ts";
 
 /** Roots to choose between, and how to open the one chosen. */
 interface Choice {
@@ -33,8 +34,14 @@ interface Choice {
   readonly open: (root: string) => SceneSource;
 }
 
+/** How many draws are shown. */
+const drawnCount = (store: EditorStore) => store.scene.items.reduce((count, view) => count + (view.item.hidden ? 0 : 1), 0);
+
 export function Toolbar() {
-  const store = useStore();
+  countRender("Toolbar");
+  const store = useEditorStore();
+  // What is open and opening, the stage's layers, the undo stack and what was fetched: not the time.
+  useRevision(store, "status", "composition", "history", "loop");
   const [local, setLocal] = useState<SceneEntry[]>([]);
   const [choice, setChoice] = useState<Choice | null>(null);
   const [browsing, setBrowsing] = useState(false);
@@ -72,7 +79,7 @@ export function Toolbar() {
   const session = store.session;
   const status = store.status;
   const history = session?.history;
-  const draws = store.scene.items.filter((view) => !view.item.hidden).length;
+  const draws = useStoreSelector(store, ["draws"], drawnCount);
   return (
     <header className="flex h-10 shrink-0 items-center gap-2 border-b px-2">
       <span className="px-1 text-sm font-semibold tracking-tight">Layerstack</span>

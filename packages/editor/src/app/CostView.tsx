@@ -14,6 +14,7 @@ import { useState } from "react";
 import type { BudgetGrant, BudgetReport, DrawCost, ItemCost } from "@forest-rs/layerstack_stagehand";
 import { cn } from "@/lib/utils";
 import type { EditorStore } from "../store.ts";
+import { useRevision, useTime } from "./context.ts";
 import { formatBytes } from "./format.ts";
 
 /** The most rows shown, after sorting. */
@@ -188,8 +189,11 @@ export function BudgetTable({ store, report }: { store: EditorStore; report: Bud
  */
 export function CostView({ store }: { store: EditorStore }) {
   const [choice, setChoice] = useState<"drawn" | "estimated" | "simplified" | null>(null);
+  useRevision(store, "draws", "selection", "view", "composition");
   const drawn = store.cost !== null && store.cost.items.length > 0 ? store.cost : null;
   const showing = choice ?? (drawn !== null ? "drawn" : "estimated");
+  // The estimate is made at the time.
+  useTime(store, showing === "estimated");
   const cost = showing === "drawn" ? drawn : showing === "estimated" ? store.sceneEstimate() : null;
   return (
     <div>

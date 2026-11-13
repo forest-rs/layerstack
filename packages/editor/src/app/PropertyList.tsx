@@ -14,9 +14,11 @@ import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { EditorStore } from "../store.ts";
+import { useTime } from "./context.ts";
 import { shown, ValueField } from "./fields.tsx";
 import { Present, presentationContext } from "./presentations/Present.tsx";
 import { Section } from "./Section.tsx";
+import { countRender } from "./renders.ts";
 
 /** One property row. */
 type Entry =
@@ -66,6 +68,7 @@ function shortName(name: string, under: string): string {
 }
 
 export function PropertyList({ store, stage, prim }: { store: EditorStore; stage: Stage; prim: Prim }) {
+  countRender("PropertyList");
   // Shown by default when nothing is authored: a new prim's schema is what there is to edit.
   const [schemaChoice, setSchema] = useState<boolean | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
@@ -169,6 +172,9 @@ function text(attribute: Attribute, key: string): string | null {
 }
 
 function Row({ store, entry, under, depth }: { store: EditorStore; entry: Entry; under: string; depth: number }) {
+  countRender("PropertyRow");
+  // Only an animated attribute is read again as time moves.
+  const time = useTime(store, entry.kind === "attribute" && entry.animated);
   const label = shortName(entry.name, under);
   const dimmed = label.lastIndexOf(":");
   const name = (
@@ -206,7 +212,7 @@ function Row({ store, entry, under, depth }: { store: EditorStore; entry: Entry;
   }
   const { attribute, animated } = entry;
   const focused = store.property === attribute.path;
-  const value = shown(attribute.get(store.time));
+  const value = shown(attribute.get(time));
   const displayName = text(attribute, "displayName");
   const displayGroup = text(attribute, "displayGroup");
   const documentation = text(attribute, "documentation");
@@ -243,7 +249,7 @@ function Row({ store, entry, under, depth }: { store: EditorStore; entry: Entry;
         </Tooltip>
       </TooltipTrigger>
       <div className="flex min-w-0 items-center">
-        <ValueField store={store} attribute={attribute} shown={value} at={animated ? (store.time ?? null) : null} />
+        <ValueField store={store} attribute={attribute} shown={value} at={animated ? (time ?? null) : null} />
       </div>
     </>
   );

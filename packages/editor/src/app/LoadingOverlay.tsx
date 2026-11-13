@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import type { OpenPhase } from "../model/session.ts";
-import { useStore } from "./context.ts";
+import { useEditorStore, useRevision } from "./context.ts";
 import { formatBytes } from "./format.ts";
 
 /** The phase in words. */
@@ -31,7 +31,8 @@ function describe(phase: OpenPhase): string {
 }
 
 export function LoadingOverlay() {
-  const store = useStore();
+  const store = useEditorStore();
+  useRevision(store, "status", "loop");
   const [, tick] = useState(0);
   const opening = store.status.kind === "opening" || store.status.kind === "loading";
   // The elapsed time moves on its own while the open waits on the network.

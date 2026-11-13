@@ -21,13 +21,17 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip";
 import { presentations } from "../presentations/registry.ts";
 import type { EditorStore } from "../store.ts";
-import { useStore } from "./context.ts";
+import { useEditorStore, useRevision } from "./context.ts";
 import { primIcon } from "./icons.ts";
 import { PrimActions } from "./PrimActions.tsx";
 import { presentationContext } from "./presentations/Present.tsx";
+import { countRender } from "./renders.ts";
 
 export function Inspector() {
-  const store = useStore();
+  countRender("Inspector");
+  const store = useEditorStore();
+  // The selection, the stage, and what its views show of the draws and the viewport. Not the time: a view that reads at the time asks for it (`useTime`).
+  useRevision(store, "selection", "composition", "draws", "view");
   const context = presentationContext(store);
   const prim = context === null || store.selection === null ? null : context.stage.prim(store.selection);
   if (context === null || prim === null) {

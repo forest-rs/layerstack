@@ -334,8 +334,12 @@ line: a property row, a table cell, the explain and changes panels),
   edited or read-only.
 - A panel keys its reads by `usePrimRevision(store, path)`, which changes
   only when a recomposition reaches its prim, so an edit elsewhere reads
-  nothing of it again. A panel that throws is replaced by a line saying
-  so; the others still show.
+  nothing of it again. The inspector renders its panels again when the
+  selection, the stage or the draws change, not as time moves: a view that
+  shows a value at the time asks for it with `useTime(context.store)`
+  (passing `false` when the value cannot vary), and `context.time` is the
+  time whenever it is read. A panel that throws is replaced by a line
+  saying so; the others still show.
 
 The built-ins (`src/app/presentations/builtins.ts`) register through the
 same two calls a plugin makes. A panel for a schema of one's own, and a
@@ -423,7 +427,13 @@ materials, 3.7 M triangles) draws 0.6 to 1.1 M.
   `draws.ts` (the stagehand draw list kept from the change log), `sources.ts`
   (HTTP, a picked directory, dropped files).
 - `src/store.ts`: the editor's state outside React; every action runs here,
-  syncs the draw list, and bumps the revision components subscribe to.
+  syncs the draw list, and bumps the signals of the concerns it changed
+  (`src/store/signals.ts`: status, composition, selection, time, draws,
+  view, history, target, notices, loop). A panel listens to the concerns
+  it reads (`src/app/context.ts`: `useRevision`, `useStoreSelector`,
+  `useTime`), so playing the timeline renders what shows the time and
+  nothing else; `src/app/renders.ts` counts each panel's renders, for
+  measuring that.
 - `src/viewport/`: three.js, in its own chunk: one `WebGPURenderer`
   (`gpu.ts`) shared by the viewport and the material previews, each canvas
   a target of it; node materials and TSL where the editor shades its own

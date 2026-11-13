@@ -9,9 +9,10 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { useStore } from "./context.ts";
+import { useEditorStore, useRevision } from "./context.ts";
 import { layerName } from "./format.ts";
 import { PrimTree } from "./PrimTree.tsx";
+import { countRender } from "./renders.ts";
 
 export function ScenePanel() {
   return (
@@ -41,7 +42,9 @@ export function ScenePanel() {
  * opinions; it is the stage's state, not an edit.
  */
 function LayerList() {
-  const store = useStore();
+  countRender("LayerList");
+  const store = useEditorStore();
+  useRevision(store, "composition");
   const session = store.session;
   if (session === null) return null;
   const stage = session.stage;
@@ -88,7 +91,9 @@ function LayerList() {
 
 /** The stage's cameras; choosing one looks through it, as its `GfFrustum` is computed. */
 function CameraList() {
-  const store = useStore();
+  countRender("CameraList");
+  const store = useEditorStore();
+  useRevision(store, "draws", "view");
   const cameras = store.scene.cameras;
   const row = (path: string | null, label: string) => (
     <li key={path ?? ""}>

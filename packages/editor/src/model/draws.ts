@@ -371,6 +371,13 @@ export class ViewportModel {
   /** The session's change log entries already applied. */
   #seen = 0;
   #colors = new Map<number, Pick<ViewItem, "color" | "colorSource" | "rangeColors">>();
+  /**
+   * The light-link tables of the last {@link ViewportModel.scene}, kept
+   * while a sync changes no item, light or link (a time change that only
+   * moves draws): evaluating them asks the list about every draw for
+   * every linking light. `null` when they are to be made again.
+   */
+  #links: Pick<ViewportScene, "unlit" | "linking"> | null = null;
   readonly #skins: SkinningModel;
 
   constructor(stagehand: Stagehand) {
@@ -517,6 +524,12 @@ export class ViewportModel {
       links: diffs.reduce((count, diff) => count + diff.linksChanged.length, 0),
       work: diffs.reduce((work, diff) => addWork(work, diff.work), EMPTY_WORK),
     };
+    // The link tables hold while the items, the lights and the links do.
+    const linksHold =
+      !reset &&
+      records === 0 &&
+      update.added.size + update.removed.size + update.lightsAdded.size + update.lightsRemoved.size + update.lightsChanged.size + update.links === 0;
+    if (!linksHold) this.#links = null;
     // Skinning: bound where items, buffers or the prims they skin with
     // changed; posed when the time did.
     const skins = this.#skins.sync(
@@ -597,31 +610,9 @@ export class ViewportModel {
     const bounds = scopeBounds(stage, list.scope, time, items);
     const empty = bounds === null || bounds[0]! > bounds[3]!;
     const cameras = list.cameras().sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-    // Light links: only those with a category leave draws out; the rest
-    // (the `includeRoot` fallback) link everything.
     const lights = list.lights();
-    const targets = list.items().flatMap((item) => item.linkPaths.map((path) => ({ item: item.id, path })));
-    const unlit = new Map<number, Set<string>>();
-    const linking: LinkLine[] = [];
-    for (const light of [...lights].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))) {
-      for (const [kind, link] of [
-        ["light", light.lightLink],
-        ["shadow", light.shadowLink],
-      ] as const) {
-        if (link.category === null) continue;
-        const linked = targets.filter((target) => list.isLinked(light.key, kind, target));
-        linking.push({ light: light.key, kind, linked: linked.map((target) => target.path).sort(), of: targets.length });
-        if (kind !== "light") continue;
-        for (const item of list.items()) {
-          const first = item.linkPaths[0];
-          if (first !== undefined && !list.isLinked(light.key, kind, { item: item.id, path: first })) {
-            const set = unlit.get(item.id) ?? new Set<string>();
-            set.add(light.key);
-            unlit.set(item.id, set);
-          }
-        }
-      }
-    }
+    this.#links ??= lightLinks(list, lights);
+    const { unlit, linking } = this.#links;
     return {
       items,
       hidden: [...hidden],
@@ -641,7 +632,38 @@ export class ViewportModel {
     this.#list?.dispose();
     this.#list = null;
     this.#stage = null;
+    this.#links = null;
   }
+}
+
+/**
+ * The light links that leave draws out, evaluated: only those with a
+ * category do; the rest (the `includeRoot` fallback) link everything.
+ */
+function lightLinks(list: DrawList, lights: readonly LightItem[]): Pick<ViewportScene, "unlit" | "linking"> {
+  const targets = list.items().flatMap((item) => item.linkPaths.map((path) => ({ item: item.id, path })));
+  const unlit = new Map<number, Set<string>>();
+  const linking: LinkLine[] = [];
+  for (const light of [...lights].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))) {
+    for (const [kind, link] of [
+      ["light", light.lightLink],
+      ["shadow", light.shadowLink],
+    ] as const) {
+      if (link.category === null) continue;
+      const linked = targets.filter((target) => list.isLinked(light.key, kind, target));
+      linking.push({ light: light.key, kind, linked: linked.map((target) => target.path).sort(), of: targets.length });
+      if (kind !== "light") continue;
+      for (const item of list.items()) {
+        const first = item.linkPaths[0];
+        if (first !== undefined && !list.isLinked(light.key, kind, { item: item.id, path: first })) {
+          const set = unlit.get(item.id) ?? new Set<string>();
+          set.add(light.key);
+          unlit.set(item.id, set);
+        }
+      }
+    }
+  }
+  return { unlit, linking };
 }
 
 /** Whether two scopes draw the same: the same roots, once normalized, and space. */

@@ -16,11 +16,12 @@ import type { Prim, Stage } from "@forest-rs/layerstack";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import type { EditorStore } from "../store.ts";
-import { useStore } from "./context.ts";
+import { useEditorStore, useRevision, useStoreSelector } from "./context.ts";
 import { primIcon } from "./icons.ts";
 import { PrimActions, RenameDialog } from "./PrimActions.tsx";
 import { rowAction, TYPEAHEAD_MS } from "./treeKeys.ts";
 import { CommandMenu, presentationContext } from "./presentations/Present.tsx";
+import { countRender } from "./renders.ts";
 
 /** A row: a prim, and its children when it is open. */
 interface Row {
@@ -73,7 +74,11 @@ function search(stage: Stage, text: string, limit: number): string[] {
 const MATCHES = 500;
 
 export function PrimTree() {
-  const store = useStore();
+  countRender("PrimTree");
+  const store = useEditorStore();
+  // The hierarchy is read again when the stage changes, not when time or the draws do.
+  const revision = useRevision(store, "composition");
+  useRevision(store, "status");
   const stage = store.session?.stage ?? null;
   const [expanded, setExpanded] = useState<Set<Key>>(new Set());
   const [query, setQuery] = useState("");
@@ -88,7 +93,7 @@ export function PrimTree() {
     setExpanded(new Set(stage === null ? [] : stage.children("/").slice(0, 8)));
   }, [stage]);
   // A selection made elsewhere (the viewport) opens its ancestors.
-  const selection = store.selection;
+  const selection = useStoreSelector(store, ["selection"], (at) => at.selection);
   useEffect(() => {
     if (selection === null) return;
     setExpanded((open) => {
@@ -96,7 +101,6 @@ export function PrimTree() {
       return missing.length === 0 ? open : new Set([...open, ...missing]);
     });
   }, [selection]);
-  const revision = store.revision;
   const items = useMemo(() => (stage === null ? [] : rows(stage, "/", expanded)), [stage, expanded, revision]);
   const matches = useMemo(
     () => (stage === null || query.trim() === "" ? null : search(stage, query.trim(), MATCHES)),
@@ -204,6 +208,7 @@ const treeItemClass = ({ isSelected, isFocusVisible }: { isSelected: boolean; is
   );
 
 function PrimRow({ store, row, isExpanded, hasChildItems, level }: { store: EditorStore; row: Row; isExpanded: boolean; hasChildItems: boolean; level: number }) {
+  countRender("PrimRow");
   const { prim } = row;
   return (
     <div className="flex w-full min-w-0 items-center gap-1 pr-2" style={{ paddingLeft: `${(level - 1) * 12 + 2}px` }}>
@@ -241,7 +246,8 @@ function PrimRow({ store, row, isExpanded, hasChildItems, level }: { store: Edit
  * with those beneath (or unloads them), as usdview's Load column does.
  */
 function PayloadToggle({ store, prim }: { store: EditorStore; prim: Prim }) {
-  const busy = store.status.kind !== "ready";
+  // Its row is kept by the tree while the hierarchy is: it listens for the status itself.
+  const busy = useStoreSelector(store, ["status"], (at) => at.status.kind !== "ready");
   const label = prim.loaded ? `Unload the payloads of ${prim.path}` : `Load the payloads of ${prim.path} and beneath it`;
   return (
     <AriaButton

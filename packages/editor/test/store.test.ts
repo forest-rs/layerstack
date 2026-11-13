@@ -199,6 +199,8 @@ test("muting a layer recomposes without it, and unmuting fetches it again", asyn
   assert.deepEqual([...session.muted], ["library.usda"]);
   assert.equal(store.scene.lights.length, lights - 1);
   assert.equal(session.history.nextUndo, null, "muting is not an edit");
+  // The muted layer was released: a panel still holding it (the Layers tab, between the mute and its next read) asks of a layer the stage no longer has.
+  assert.equal(store.isEdited(library), false);
 
   await h.settle(store.setMuted("library.usda", false));
   assert.notEqual(session.stage.prim("/World/Lamp"), null);

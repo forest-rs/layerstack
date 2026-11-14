@@ -460,7 +460,7 @@ impl Flattener<'_> {
     /// layer that authors them). OpenUSD: `SdfAnchorAssetPaths`, which its
     /// flatten applies to every value and metadatum.
     fn anchor_value(&mut self, value: &Value, layer: LayerId) -> Option<Value> {
-        if self.requirements.asset_paths != AssetPaths::Anchored {
+        if self.requirements.asset_paths == AssetPaths::AsAuthored {
             return None;
         }
         let resolver = self.assets;
@@ -475,7 +475,7 @@ impl Flattener<'_> {
     /// their sources (`opinions.with_records` reads them).
     fn anchor_opinions<'o>(&mut self, opinions: Opinions<'o>) -> Cow<'o, [Opinion]> {
         let records = opinions.records();
-        if self.requirements.asset_paths != AssetPaths::Anchored {
+        if self.requirements.asset_paths == AssetPaths::AsAuthored {
             return Cow::Borrowed(records);
         }
         let resolver = self.assets;

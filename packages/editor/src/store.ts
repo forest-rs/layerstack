@@ -1036,13 +1036,13 @@ export class EditorStore {
    * a variant, where the stage copies nothing (`copyRefusal`).
    */
   duplicate(path: string): string | undefined {
-    const stage = this.session?.stage;
-    if (stage === undefined) return undefined;
-    const to = copyPath(stage, path);
-    const label = `duplicate ${path} as ${nameOf(to)}`;
+    // Named when it runs, not when asked: behind an action that fetches, a name chosen now may be taken by then, and a copy replaces what its path holds.
+    let to = path;
     return this.#edit(
-      label,
+      `duplicate ${path}`,
       (session) => {
+        to = copyPath(session.stage, path);
+        const label = `duplicate ${path} as ${nameOf(to)}`;
         const why = copyRefusal(session.target, to);
         if (why !== null) throw new Error(why);
         try {

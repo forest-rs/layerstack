@@ -110,21 +110,46 @@ export function portName({ node, port }: PortRef): string {
   return `${node.name}.${port.name}`;
 }
 
-/** Node-level consumers: each node's key, the keys of the nodes its ports feed. */
-function consumersOf(network: ShadingNetwork): Map<string, Set<string>> {
-  const owner = new Map<string, string>();
-  for (const node of network.nodes) for (const port of node.ports) owner.set(port.path, node.key);
-  const consumers = new Map<string, Set<string>>(network.nodes.map((node) => [node.key, new Set<string>()]));
-  for (const edge of network.edges) {
-    const from = owner.get(edge.from);
-    const to = owner.get(edge.to);
-    if (from !== undefined && to !== undefined) consumers.get(from)!.add(to);
-  }
-  return consumers;
+/**
+ * What a port's value is one with, following connections: a shader is one
+ * vertex (each of its outputs may read each of its inputs), keyed by its
+ * node; a container's boundary port is its own (it passes the one value
+ * it reads through, whatever the container's other ports read), keyed by
+ * its path.
+ */
+function vertexOf(node: NetworkNode, port: NetworkPort): string {
+  return node.role === "shader" ? node.key : port.path;
 }
 
-/** The keys of the nodes on a path of connections from `from` to `to` (both included), or `null` when none leads there. */
-export function pathBetween(network: ShadingNetwork, from: string, to: string, consumers = consumersOf(network)): string[] | null {
+/** The connections of a network between vertices ({@link vertexOf}): each port's vertex, each vertex's consumers and its name in a reason. */
+interface Reads {
+  readonly vertex: ReadonlyMap<string, string>;
+  readonly consumers: ReadonlyMap<string, ReadonlySet<string>>;
+  readonly names: ReadonlyMap<string, string>;
+}
+
+function readsOf(network: ShadingNetwork): Reads {
+  const vertex = new Map<string, string>();
+  const consumers = new Map<string, Set<string>>();
+  const names = new Map<string, string>();
+  for (const node of network.nodes) {
+    for (const port of node.ports) {
+      const key = vertexOf(node, port);
+      vertex.set(port.path, key);
+      consumers.set(key, consumers.get(key) ?? new Set());
+      names.set(key, node.role === "shader" ? node.name : portName({ node, port }));
+    }
+  }
+  for (const edge of network.edges) {
+    const from = vertex.get(edge.from);
+    const to = vertex.get(edge.to);
+    if (from !== undefined && to !== undefined) consumers.get(from)!.add(to);
+  }
+  return { vertex, consumers, names };
+}
+
+/** The vertices on a path of connections from `from` to `to` (both included), or `null` when none leads there. */
+function pathBetween(reads: Reads, from: string, to: string): string[] | null {
   const previous = new Map<string, string | null>([[from, null]]);
   const queue = [from];
   while (queue.length > 0) {
@@ -134,7 +159,7 @@ export function pathBetween(network: ShadingNetwork, from: string, to: string, c
       for (let step: string | null = at; step !== null; step = previous.get(step) ?? null) path.unshift(step);
       return path;
     }
-    for (const next of consumers.get(at) ?? []) {
+    for (const next of reads.consumers.get(at) ?? []) {
       if (previous.has(next)) continue;
       previous.set(next, at);
       queue.push(next);
@@ -143,10 +168,9 @@ export function pathBetween(network: ShadingNetwork, from: string, to: string, c
   return null;
 }
 
-/** The names of the nodes keyed `keys`, joined by arrows. */
-function chain(network: ShadingNetwork, keys: readonly string[]): string {
-  const byKey = new Map(network.nodes.map((node) => [node.key, node]));
-  return keys.map((key) => nodeName(byKey.get(key)!)).join(" → ");
+/** The names of the vertices `keys`, joined by arrows. */
+function chain(reads: Reads, keys: readonly string[]): string {
+  return keys.map((key) => reads.names.get(key)!).join(" → ");
 }
 
 /** What connecting `source` to `destination` would be, as the header of this file describes. */
@@ -158,11 +182,13 @@ export function judge(network: ShadingNetwork, source: PortRef, destination: Por
   if (source.node.role === "shader" && source.node.key === destination.node.key) {
     return { kind: "refused", reason: `${source.node.name} would read its own output: a cycle` };
   }
-  // A path from the destination's node back to the source's closes a cycle.
-  const back = pathBetween(network, destination.node.key, source.node.key);
-  if (back !== null && source.node.key !== destination.node.key) {
-    return { kind: "refused", reason: `it would make a cycle: ${chain(network, [...back, destination.node.key])}` };
-  }
+  // A path from what the destination feeds back to what the source reads closes a cycle: through a
+  // shader by any of its ports, through a container's boundary by that port alone.
+  const reads = readsOf(network);
+  const tail = vertexOf(source.node, source.port);
+  const head = vertexOf(destination.node, destination.port);
+  const back = pathBetween(reads, head, tail);
+  if (back !== null) return { kind: "refused", reason: `it would make a cycle: ${chain(reads, [...back, head])}` };
   const from = source.port.typeName;
   const to = destination.port.typeName;
   if (from !== null && to !== null && valueShape(from) !== valueShape(to)) {
@@ -221,26 +247,25 @@ export function edgeKey(edge: NetworkEdge): string {
 }
 
 /**
- * The edges on a cycle through the network's nodes, each with the cycle
- * named (`it is on a cycle: Surface → Texture → Surface`), by
- * {@link edgeKey}: an edge from a node to itself, or one whose
- * destination's node leads back to its source's.
+ * The edges on a cycle of connections, each with the cycle named (`it is
+ * on a cycle: Surface → Texture → Surface`), by {@link edgeKey}: an edge
+ * from a shader to itself, or one whose destination leads back to its
+ * source. A container's boundary is followed port by port: two of a node
+ * graph's ports that read nothing of each other are not one node.
  */
 export function cycleEdges(network: ShadingNetwork): Map<string, string> {
-  const owner = new Map<string, string>();
-  for (const node of network.nodes) for (const port of node.ports) owner.set(port.path, node.key);
-  const consumers = consumersOf(network);
+  const reads = readsOf(network);
   const cycles = new Map<string, string>();
   for (const edge of network.edges) {
-    const from = owner.get(edge.from);
-    const to = owner.get(edge.to);
+    const from = reads.vertex.get(edge.from);
+    const to = reads.vertex.get(edge.to);
     if (from === undefined || to === undefined) continue;
     if (from === to) {
-      cycles.set(edgeKey(edge), `it is on a cycle: ${chain(network, [from, from])}`);
+      cycles.set(edgeKey(edge), `it is on a cycle: ${chain(reads, [from, from])}`);
       continue;
     }
-    const back = pathBetween(network, to, from, consumers);
-    if (back !== null) cycles.set(edgeKey(edge), `it is on a cycle: ${chain(network, [from, ...back])}`);
+    const back = pathBetween(reads, to, from);
+    if (back !== null) cycles.set(edgeKey(edge), `it is on a cycle: ${chain(reads, [from, ...back])}`);
   }
   return cycles;
 }

@@ -245,6 +245,17 @@ export function shadowOf(stage: Stage, attribute: Attribute, target: Target, tim
   return { path: attribute.path, time, layer: winner.layer, specPath: winner.specPath, editTarget: winner.editTarget, composed };
 }
 
+/**
+ * The time a field's edit is authored at: `null` (the default) for a
+ * field that edits the default, else the time now. Not the time the
+ * field was rendered at (`rendered`): a row whose value holds still, an
+ * attribute with one sample, is not rendered again as the time moves,
+ * and would key the frame it was last drawn at.
+ */
+export function editTime(rendered: number | null, now: number | undefined): number | null {
+  return rendered === null ? null : (now ?? rendered);
+}
+
 /** A property name as USD takes it: identifiers joined by `:` (`radius`, `primvars:displayColor`). */
 const PROPERTY_NAME = /^[A-Za-z_][A-Za-z0-9_]*(:[A-Za-z_][A-Za-z0-9_]*)*$/;
 

@@ -60,7 +60,7 @@ describe("a session layer", () => {
 
 describe("what a package asks of the host", () => {
   const layer = {} as Layer;
-  const unresolved = (assetPath: string, reason: string): UnpackagedAsset => ({ layer, assetPath, reason });
+  const unresolved = (assetPath: string, reason: string): UnpackagedAsset => ({ layer, identifier: "scene.usda", assetPath, reason });
 
   it("reads the identifier from a dependency the host has not supplied, or let go", () => {
     assert.equal(suppliable("textures/checker.png: the host has not supplied it yet"), "textures/checker.png");

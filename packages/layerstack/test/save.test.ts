@@ -137,6 +137,24 @@ describe("saving", () => {
     using flat = layerstack.open({ identifier: "flat.usda", bytes: stage.exportFlattened().bytes });
     assert.deepEqual(flat.attribute("/Ball.radius")?.get(), { kind: "scalar", type: "double", value: 2 }, "the flattened stage has the edit");
   });
+
+  it("leaves a sublayer authored on the session layer, as it leaves the session layer", async () => {
+    using stage = layerstack.open({ identifier: "scene.usda", bytes: bytes("scene.usda") }, { editLayer: "session" });
+    const session = stage.editLayer;
+    assert.ok(session?.anonymous);
+    stage.apply([{ type: "insertSublayer", asset: "patch.usda" }], session).release();
+    await stage.resolve(mockSource({ ...scene, "patch.usda": '#usda 1.0\nover "Ball" {\n}\n' }));
+    const patch = stage.layers().find((layer) => layer.identifier === "patch.usda");
+    assert.ok(patch);
+    stage.apply([{ type: "setValue", path: "/Ball.size", value: { type: "double", value: 9 } }], patch).release();
+    stage.apply([{ type: "setValue", path: "/Ball.size", value: { type: "double", value: 4 } }], stage.root).release();
+    // `UsdStage::Save` leaves the session layer's stack: the patch stays dirty, and is not "skipped" as a muted layer is.
+    const saved = stage.save();
+    assert.deepEqual(saved.written.map((layer) => layer.identifier), ["scene.usda"]);
+    assert.deepEqual(saved.skipped, []);
+    assert.ok(stage.isDirty(patch));
+    assert.deepEqual(stage.save(patch).written.map((layer) => layer.identifier), ["patch.usda"]);
+  });
 });
 
 describe("a session layer from bytes", () => {
@@ -272,6 +290,60 @@ describe("exporting", () => {
     const packaged = stage.exportPackage();
     assert.equal(packaged.bytes, null);
     assert.deepEqual(packaged.unresolved.map((use) => use.assetPath).sort(), ["./parts/ball.usda", "./sub.usda"]);
-    assert.ok(packaged.unresolved.every((use) => use.layer === stage.root && use.reason.length > 0));
+    assert.ok(packaged.unresolved.every((use) => use.layer === stage.root && use.identifier === "scene.usda" && use.reason.length > 0));
+  });
+
+  it("names the layer of a variant not selected whose dependency keeps a package from being made", () => {
+    const text = new TextEncoder();
+    const root = [
+      "#usda 1.0",
+      'def Xform "World" (',
+      '    variants = { string look = "plain" }',
+      '    prepend variantSets = "look"',
+      ") {",
+      '    variantSet "look" = {',
+      '        "plain" {}',
+      '        "fancy" (references = @./fancy.usda@) {}',
+      "    }",
+      "}",
+      "",
+    ].join("\n");
+    using stage = layerstack.open({ identifier: "world.usda", bytes: text.encode(root) });
+    assert.ok(stage.status().complete, "the stage never asks for the layer of the variant not selected");
+    // The package holds every variant, as OpenUSD's does: it asks for the layer, then for what that layer names.
+    assert.deepEqual(stage.exportPackage().unresolved.map((use) => [use.layer, use.assetPath]), [[stage.root, "./fancy.usda"]]);
+    stage.supply("fancy.usda", text.encode('#usda 1.0\n(\n    defaultPrim = "Fancy"\n)\ndef Xform "Fancy" {\n    asset image = @./fancy.png@\n}\n'));
+    const wanting = stage.exportPackage();
+    assert.equal(wanting.bytes, null);
+    assert.deepEqual(
+      wanting.unresolved.map((use) => [use.layer, use.identifier, use.assetPath]),
+      [[null, "fancy.usda", "./fancy.png"]],
+      "a layer the stage does not hold is named, not handed out",
+    );
+    assert.match(wanting.unresolved[0]!.reason, /^fancy\.png: the host has not supplied it yet/);
+    stage.supply("fancy.usda", text.encode('#usda 1.0\n(\n    defaultPrim = "Fancy"\n)\ndef Xform "Fancy" {\n    asset image = @./fancy.png@\n}\n'));
+    stage.supply("fancy.png", new Uint8Array([1, 2, 3]));
+    const packaged = stage.exportPackage();
+    assert.ok(packaged.bytes, JSON.stringify(packaged.unresolved.map((use) => use.reason)));
+    assert.equal(packaged.layers, 2);
+    assert.equal(packaged.assets, 1);
+  });
+
+  it("flattens with an asset path it cannot anchor reported, and every other path anchored", () => {
+    const text = new TextEncoder();
+    const root = '#usda 1.0\ndef "Model" (\n    references = @./assets/model.usda@\n) {\n}\n';
+    const model = '#usda 1.0\n(\n    defaultPrim = "Model"\n)\ndef Xform "Model" {\n    asset bark = @./textures/bark.png@\n    asset leaf = @./textures/leaf.png@\n}\n';
+    using stage = layerstack.open({ identifier: "root.usda", bytes: text.encode(root) }, { editLayer: "session" });
+    stage.supply("assets/model.usda", text.encode(model));
+    stage.loadSupplied();
+    assert.ok(stage.exportFlattened().lossless);
+    // A path relative to the anonymous session layer has nothing to be anchored to.
+    stage.apply([{ type: "setValue", path: "/Model.leaf", value: { type: "asset", value: "./other.png" } }]).release();
+    const flat = stage.exportFlattened();
+    assert.equal(flat.lossless, false);
+    assert.deepEqual(flat.lost.map((loss) => loss.path), ["/Model.leaf"]);
+    const written = decoder.decode(flat.bytes);
+    assert.match(written, /asset leaf = @\.\/other\.png@/, "written as authored");
+    assert.match(written, /asset bark = @\.\/assets\/textures\/bark\.png@/, "the model's own path is anchored all the same");
   });
 });

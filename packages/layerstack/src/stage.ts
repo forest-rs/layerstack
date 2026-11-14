@@ -2711,8 +2711,9 @@ export class Stage implements Disposable {
       bytes,
       layers,
       assets,
-      unresolved: unresolved.map(([layer, assetPath, reason]) => ({
-        layer: this.#layer(layer as bigint),
+      unresolved: unresolved.map(([layer, assetPath, reason, identifier]) => ({
+        layer: layer === null ? null : this.#layer(layer as bigint),
+        identifier: (identifier ?? null) as string | null,
         assetPath: assetPath as string,
         reason: reason as string,
       })),

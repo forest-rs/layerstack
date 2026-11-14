@@ -2433,15 +2433,7 @@ impl Stage {
         let stage = self.document.stage().stage();
         // The session layer stack, which a save of the stage leaves alone
         // (`UsdStage::Save`), as `save_session_layers` saves it.
-        let mut session = BTreeSet::new();
-        let mut queue: Vec<LayerId> = stage.session_layer().into_iter().collect();
-        while let Some(id) = queue.pop() {
-            if session.insert(id)
-                && let Some(layer) = self.document.store().layer(id)
-            {
-                queue.extend(layer.sublayers().iter().map(|sublayer| sublayer.layer));
-            }
-        }
+        let session = self.document.session_layers();
         let reported = |id: LayerId| {
             report.saved.contains(&id)
                 || report.anonymous.contains(&id)
@@ -2619,7 +2611,11 @@ impl Stage {
     /// The record is `[bytes, layers, assets, unresolved, omitted]`:
     /// `bytes` the package, or `null` when a dependency is unresolved (an
     /// asset the host has not supplied); the counts of layers and other
-    /// assets packaged; each unresolved use as `[layer, assetPath, reason]`;
+    /// assets packaged; each unresolved use as `[layer, assetPath, reason,
+    /// identifier]`, `layer` the authoring layer's id, or `null` for a
+    /// layer the packager read that the stage does not hold (the layer an
+    /// unselected variant references), and `identifier` what that layer
+    /// was read from;
     /// and the ids of the layers the stage composes that the package
     /// leaves out: the session layer, which is not part of the root's
     /// closure (export it with `exportLayer`, or the composed stage with
@@ -2660,11 +2656,22 @@ impl Stage {
             .iter()
             .flat_map(|dependency| {
                 dependency.targets.iter().filter_map(|target| match target {
-                    DependencyTarget::Unresolved(reason) => Some(Wire::List(vec![
-                        Wire::UInt64(dependency.source.layer.0),
-                        Wire::text(&*dependency.source.identifier),
-                        Wire::text(&**reason),
-                    ])),
+                    DependencyTarget::Unresolved(reason) => {
+                        // A layer read for the package alone is not one of
+                        // the stage's: it is named, not handed out by id.
+                        let layer = dependency.source.layer;
+                        let held = self.document.store().contains_layer(layer);
+                        Some(Wire::List(vec![
+                            if held {
+                                Wire::UInt64(layer.0)
+                            } else {
+                                Wire::Null
+                            },
+                            Wire::text(&*dependency.source.identifier),
+                            Wire::text(&**reason),
+                            package.identifier(layer).map_or(Wire::Null, Wire::text),
+                        ]))
+                    }
                     _ => None,
                 })
             })

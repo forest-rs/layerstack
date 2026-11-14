@@ -5,13 +5,17 @@
 // read and authored as OpenUSD's `UsdGeomXformCommonAPI` does: each field
 // authors its one component (`setTranslate`, `setRotate`, ...), adding
 // only that op. Ops that are not a common stack are shown as the stage
-// factors them, read-only, with why.
+// factors them, read-only, with why. A value refused is said under its
+// row, naming the field, until a commit is taken.
+import { useState } from "react";
 import type { CommonTransform, Edit, Prim, Stage } from "@forest-rs/layerstack";
+import { NOT_A_NUMBER, parseNumber, type RowRefusal, rowRefusal } from "../model/refusal.ts";
 import { formatNumber } from "../model/values.ts";
 import type { EditorStore } from "../store.ts";
 import { useTime } from "./context.ts";
-import { CommitNumber } from "./fields.tsx";
+import { CommitField } from "./fields.tsx";
 import { formatTime } from "./format.ts";
+import { RefusalNote } from "./primAuthoringParts.tsx";
 import { Section } from "./Section.tsx";
 import { countRender } from "./renders.ts";
 
@@ -30,6 +34,7 @@ export function TransformSection({ store, stage, prim }: { store: EditorStore; s
   const animated = xformable !== null && xformable.transformTimeSamples.length > 0;
   // Only an animated transform is read again as time moves.
   const time = useTime(store, animated);
+  const [refusal, setRefusal] = useState<RowRefusal<Component> | null>(null);
   if (xformable === null) return null;
   const read = xformable.commonTransform(time);
   // An animated transform is edited by a sample at the current frame.
@@ -64,15 +69,24 @@ export function TransformSection({ store, stage, prim }: { store: EditorStore; s
               </span>
               <div className="flex min-w-0 gap-1">
                 {values.map((value, axis) => (
-                  <CommitNumber
+                  <CommitField
                     key={axis}
                     label={`${label} ${"XYZ"[axis]}`}
+                    numeric
                     value={formatNumber(value)}
                     disabled={!editable}
-                    onCommit={(number) => author(component, values.map((old, index) => (index === axis ? number : old)) as [number, number, number])}
+                    className="w-0 flex-1"
+                    saysRefusal
+                    onCommit={(text) => {
+                      const number = parseNumber(text);
+                      const why = number === null ? NOT_A_NUMBER : author(component, values.map((old, index) => (index === axis ? number : old)) as [number, number, number]);
+                      setRefusal(rowRefusal(component, `${label} ${"XYZ"[axis]}`, why));
+                      return why;
+                    }}
                   />
                 ))}
               </div>
+              {refusal?.row === component && <RefusalNote refusal={refusal.text} />}
             </div>
           );
         })}

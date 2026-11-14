@@ -295,7 +295,9 @@ export function AddArcDialog({ store, prim, kind: initial, onClose }: { store: E
 
         <div className="flex flex-col gap-1">
           <pre className="overflow-x-auto rounded-md bg-muted px-2 py-1.5 font-mono text-[11px] text-muted-foreground" aria-label="What is authored, in USDA">
-            {newArcUsda({ ...arc, asset: external && !internal && asset === null ? "…" : arc.asset, primPath: arc.primPath ?? (!external || internal ? "/…" : null) })}
+            {arc.primPath === null && (!external || internal)
+              ? newArcUsda({ ...arc, primPath: "/…" })
+              : newArcUsda({ ...arc, asset: external && !internal && asset === null ? "…" : arc.asset }, target)}
           </pre>
           {where !== null && (
             <span className="text-[11px] text-muted-foreground">

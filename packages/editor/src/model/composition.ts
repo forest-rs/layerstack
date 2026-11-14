@@ -112,11 +112,34 @@ export function arcUsda(op: ListOpKind, field: ArcField, item: string): string {
   return `${op === "explicit" ? "" : `${op} `}${field} = ${item}`;
 }
 
-/** The USDA line adding `arc` authors (`prepend references = @./robot.usda@</Robot>`). */
-export function newArcUsda(arc: NewArc): string {
+/**
+ * The USDA line adding `arc` authors (`prepend references =
+ * @./robot.usda@</Robot>`) where edits go: through `target`, the prim an
+ * internal or class arc names is written as the target's layer names it
+ * ({@link authoredArcPath}).
+ */
+export function newArcUsda(arc: NewArc, target: Layer | Pick<EditTarget, "mapPath"> | null = null): string {
   const external = arc.kind === "reference" || arc.kind === "payload";
-  const item = external ? arcItemText(arc.asset, arc.primPath, arc.offset, arc.scale) : arcItemText(null, arc.primPath);
+  const internal = arc.asset === null && arc.primPath !== null ? authoredArcPath(target, arc.primPath) : arc.primPath;
+  const item = external ? arcItemText(arc.asset, internal, arc.offset, arc.scale) : arcItemText(null, internal);
   return arcUsda(positionOp(arc.position), fieldOf(arc.kind), item);
+}
+
+/**
+ * The path an internal reference or payload, an inherit or a specialize
+ * to the stage's prim at `primPath` is authored with through `target`:
+ * the path in its layer's namespace (`/Robot/Head` for `/World/Robot/Head`
+ * through `/World/Robot`'s reference to `/Robot`), with no variant
+ * selections, as OpenUSD's `UsdReferences::AddReference` translates it;
+ * a path the target does not map (a root prim's, `/Shape`) as given.
+ */
+export function authoredArcPath(target: Layer | Pick<EditTarget, "mapPath"> | null, primPath: string): string {
+  if (target === null || !("mapPath" in target)) return primPath;
+  const mapped = mapThrough(target, primPath);
+  if (mapped === null) return primPath;
+  // A variant selection is a place in the layer, not part of a prim's path: `/Robot{finish=chrome}Head` is `/Robot/Head`.
+  const plain = mapped.replace(/\{[^{}]*\}/g, "/").replace(/\/{2,}/g, "/");
+  return plain.length > 1 && plain.endsWith("/") ? plain.slice(0, -1) : plain;
 }
 
 /** The edit that adds `arc` to the prim at `prim` (`UsdReferences::AddReference` and its siblings). */

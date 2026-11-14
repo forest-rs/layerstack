@@ -153,7 +153,7 @@ async function stacked() {
   const h = await harness();
   await h.open(sampleSource("stacked.usda", STACKED));
   const stage = h.store.session!.stage;
-  const looks = stage.layers().find((layer) => layer.identifier.endsWith("looks.usda"))!;
+  const looks = stage.layers().find((layer) => layer.identifier?.endsWith("looks.usda"))!;
   return { h, store: h.store, stage, looks };
 }
 
@@ -285,7 +285,7 @@ test("a connection asked for while an action fetches is authored where edits wen
   await h.open(source);
   const { store } = h;
   const stage = store.session!.stage;
-  const library = stage.layers().find((layer) => layer.identifier.endsWith("library.usda"))!;
+  const library = stage.layers().find((layer) => layer.identifier?.endsWith("library.usda"))!;
   const opacity = `${CHECKER}/Surface.inputs:opacity`;
   const alpha = `${CHECKER}/Texture.outputs:a`;
   const release = source.hold("assets/chrome.usda");

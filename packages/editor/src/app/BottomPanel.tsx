@@ -51,7 +51,7 @@ export function BottomPanel({ onTab }: { onTab?: (tab: string) => void }) {
         if (chosen !== undefined) store.showBottomTab(chosen);
       }}
     >
-      <TabsList variant="line" className="w-full justify-start border-b px-2">
+      <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b px-2 [scrollbar-width:none]">
         <TabsTrigger className="flex-none px-2.5" id="explain">Explain</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="changes">Changes</TabsTrigger>
         <TabsTrigger className="flex-none px-2.5" id="history">History</TabsTrigger>

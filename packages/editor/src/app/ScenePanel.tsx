@@ -28,11 +28,11 @@ export function ScenePanel() {
         if (chosen !== undefined) store.showSceneTab(chosen);
       }}
     >
-      <TabsList variant="line" className="w-full justify-start border-b px-2">
-        <TabsTrigger className="flex-none px-2.5" id="prims">Prims</TabsTrigger>
-        <TabsTrigger className="flex-none px-2.5" id="layers">Layers</TabsTrigger>
-        <TabsTrigger className="flex-none px-2.5" id="stage">Stage</TabsTrigger>
-        <TabsTrigger className="flex-none px-2.5" id="cameras">Cameras</TabsTrigger>
+      <TabsList variant="line" className="w-full justify-start overflow-x-auto border-b px-1 [scrollbar-width:none]">
+        <TabsTrigger className="flex-none px-2" id="prims">Prims</TabsTrigger>
+        <TabsTrigger className="flex-none px-2" id="layers">Layers</TabsTrigger>
+        <TabsTrigger className="flex-none px-2" id="stage">Stage</TabsTrigger>
+        <TabsTrigger className="flex-none px-2" id="cameras">Cameras</TabsTrigger>
       </TabsList>
       <TabsContent id="prims" className="min-h-0">
         <PrimTree />

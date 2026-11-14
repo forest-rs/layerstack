@@ -3,7 +3,7 @@
 
 // What authoring a property does where edits go, read from the stage with
 // no DOM: which opinion of an attribute the edit target holds (its
-// default, a block, the time samples the stage reads), whether an edit
+// default, a block, its time samples, read from its layer), whether an edit
 // there shows (a stronger opinion may still win), the names a new
 // property may take, the value types it may declare and the value it
 // starts with, and a relationship's target list edited one target at a
@@ -54,16 +54,31 @@ function explain(attribute: Attribute, time?: number): Explanation | null {
   return explanation;
 }
 
-/** What the edit target authors of an attribute, as the stage reads it. */
+/**
+ * The time in the target's layer a stage time is written at
+ * (`UsdEditTarget`'s time mapping, `EditTarget.mapTime`): through an edit
+ * target its own offset (none inside a variant on its prim, whatever
+ * offset its layer is read at); in a layer of the stage's stack, or the
+ * edit layer, the offset the stack reads the layer at.
+ */
+function layerTime(stage: Stage, target: Target, site: TargetSite, time: number): number {
+  const through = target !== undefined && "kind" in target ? target : stage.editTargetForLayer(site.layer);
+  return through.mapTime(time);
+}
+
+/** What the edit target's layer authors of an attribute, read from its spec there (`Stage.layerSpec`). */
 export interface TargetOpinion {
   /** Where the target writes the attribute; `null` when it does not map it. */
   readonly site: TargetSite | null;
+  /** The spec the target's layer holds where it writes it, of either kind of property (what removing it removes); `null` when none. */
+  readonly spec: LayerSpec | null;
   /** Its default there: a value, a block (`UsdAttribute::Block`), or none. */
   readonly default: "value" | "block" | null;
   /**
-   * The time samples the stage reads (stage times) when they are the
-   * target's: its samples win the value at a sample time. Empty when the
-   * attribute has none, or another opinion's are read.
+   * The times of the samples the target's layer holds, in the layer's own
+   * time ({@link layerTime} maps a stage time to it), whether the stage
+   * reads them or a stronger opinion hides them: clearing the attribute
+   * there clears them all, as `UsdAttribute::Clear` does.
    */
   readonly samples: readonly number[];
   /** Whether any layer has an opinion of its value (a default, a block or samples). */
@@ -71,29 +86,23 @@ export interface TargetOpinion {
 }
 
 /**
- * What the edit target authors of `attribute`: its default (read from the
- * opinions consulted at the default time, which are the defaults), and
- * whether the time samples the stage reads are its own (the strongest
- * opinion at the first sample is the target's, and the value comes from
- * samples). Samples the target holds under a stronger opinion's are not
- * seen: they change nothing the stage reads.
+ * What the edit target authors of `attribute`: the default and the time
+ * samples of its spec where the target writes it. They are read from the
+ * layer, not from the opinions the stage consults or the sample times it
+ * composes: samples (or a default) a stronger opinion hides are still the
+ * target's to clear, key and remove, and the stage's sample times are the
+ * layer's only through the target's own time mapping.
  */
 export function targetOpinion(stage: Stage, attribute: Attribute, target: Target): TargetOpinion {
   const site = targetSite(stage, target, attribute.path);
-  const atDefault = explain(attribute);
-  const times = attribute.timeSamples();
-  const own = site === null ? undefined : atDefault?.opinions.find((opinion) => atSite(opinion, site));
-  let samples: readonly number[] = [];
-  if (site !== null && times.length > 0) {
-    const atSample = explain(attribute, times[0]);
-    const winner = atSample?.opinions.find((opinion) => opinion.role !== "ignored");
-    if (atSample?.source === "timeSamples" && winner !== undefined && atSite(winner, site)) samples = times;
-  }
+  const spec = specAt(stage, site);
+  const own = spec?.type === "attribute" ? spec : null;
   return {
     site,
-    default: own === undefined ? null : own.role === "block" ? "block" : "value",
-    samples,
-    any: (atDefault?.opinions.length ?? 0) > 0 || times.length > 0,
+    spec,
+    default: own === null || own.default === null ? null : own.default === "block" ? "block" : "value",
+    samples: own?.timeSamples ?? [],
+    any: (explain(attribute)?.opinions.length ?? 0) > 0 || attribute.timeSamples().length > 0,
   };
 }
 
@@ -103,7 +112,7 @@ export function targetOpinion(stage: Stage, attribute: Attribute, target: Target
  * nothing is `false`.
  */
 export interface PropertyActions {
-  /** Clear its value: the target holds its default (or block), or the samples the stage reads. */
+  /** Clear its value: the target's layer holds its default (or block), or samples of it. */
   readonly clear: boolean;
   /** Block its value: some layer gives it one, and the target does not block it already. */
   readonly block: boolean;
@@ -111,7 +120,7 @@ export interface PropertyActions {
   readonly remove: boolean;
   /** Key it at the time: the stage has a time range, it may vary, it has a value there, and the target has no key there. */
   readonly key: boolean;
-  /** Delete the key at the time: the samples the stage reads are the target's, and one is at the time. */
+  /** Delete the key at the time: the target's layer holds a sample where it writes that time. */
   readonly deleteKey: boolean;
   /**
    * Deleting the key leaves the target's spec empty: that sample is all
@@ -164,23 +173,22 @@ export function propertyActions(stage: Stage, path: string, target: Target, time
       return { ...NONE, remove: holdsProperty(specAt(stage, targetSite(stage, target, path))) };
     }
     const own = targetOpinion(stage, attribute, target);
-    const spec = specAt(stage, own.site);
-    const clear = own.default !== null || own.samples.length > 0;
+    const spec = own.spec;
+    const keyed = time !== undefined && own.site !== null && own.samples.includes(layerTime(stage, target, own.site, time));
     let key = false;
-    if (time !== undefined && attribute.variability === "varying" && !own.samples.includes(time)) {
+    if (time !== undefined && attribute.variability === "varying" && !keyed) {
       const value = attribute.get(time);
       key = value !== null;
       releaseValue(value);
     }
-    const deleteKey = time !== undefined && own.samples.includes(time);
     return {
-      clear,
+      clear: own.default !== null || own.samples.length > 0,
       block: own.site !== null && own.any && !(own.default === "block" && own.samples.length === 0),
       remove: holdsProperty(spec),
       key: own.site !== null && key,
-      deleteKey,
+      deleteKey: keyed,
       lastKey:
-        deleteKey &&
+        keyed &&
         spec?.type === "attribute" &&
         spec.default === null &&
         spec.connections === null &&

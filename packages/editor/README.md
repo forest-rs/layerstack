@@ -322,9 +322,9 @@ nothing more.
   its path, live: a click explains it, and its context menu (or its
   "⋯", or Shift+F10), there and wherever the path is shown (the explain
   and changes panels), offers what would change something where edits
-  go, each saying in which layer: clear its value (`ClearAtTime` of its
-  default, and of the samples the stage reads when they are the edit
-  target's, so weaker opinions show), block it (`UsdAttribute::Block`),
+  go, each saying in which layer: clear its value (`UsdAttribute::Clear`: the
+  default and every sample the edit target's layer holds of it, read
+  from that layer, so weaker opinions show), block it (`UsdAttribute::Block`),
   key it at the current frame or delete the key there, or remove its
   spec, offered exactly when the layer edits go to holds one. Deleting a
   key that is the spec's only opinion says that the spec stays, empty,

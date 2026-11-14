@@ -533,13 +533,16 @@ export class Session implements Disposable {
 
   /**
    * Clears the attribute at `path` where edits go: its default (a value or
-   * a block) and its samples at `samples` (stage times), as
-   * `UsdAttribute::Clear` and `ClearAtTime` do; its value falls back to
-   * weaker opinions, or the schema's fallback. Throws when the target had
-   * none of them, and records nothing.
+   * a block) and, with `samples`, every time sample the target's layer
+   * holds, as `UsdAttribute::Clear` does; its value falls back to weaker
+   * opinions, or the schema's fallback. The samples go as a block takes
+   * them (`UsdAttribute::Block` clears the layer's samples and authors a
+   * blocked default, which the clear after it takes out), so none is
+   * named by a time mapped out of the layer and back. Throws when the
+   * target had none of them, and records nothing.
    */
-  clearValue(path: string, samples: readonly number[] = []): EditReceipt {
-    const edits: Edit[] = [{ type: "clearValue", path }, ...samples.map((time): Edit => ({ type: "clearValue", path, time }))];
+  clearValue(path: string, samples = false): EditReceipt {
+    const edits: Edit[] = samples ? [{ type: "blockValue", path }, { type: "clearValue", path }] : [{ type: "clearValue", path }];
     return this.#changing(`clear ${path}`, edits, `${this.#targetName} has no value of ${path} to clear`);
   }
 

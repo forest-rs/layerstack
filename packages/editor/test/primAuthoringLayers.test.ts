@@ -167,6 +167,55 @@ test("where a prim's opinions are: the layers that hold a spec of it, not the ro
   assert.deepEqual(names(stage, "/World/Keep1"), ["Base", "Roof"]);
 });
 
+test("a reorder that the stage would not compose is refused with nothing authored; one that it composes is a step", async () => {
+  const { h, store, stage, weak, steps } = await opened();
+  const before = names(stage, "/World");
+  assert.deepEqual(before, ["Group", "Keep", "Cone", "Pebble", "Hall", "Ball", "Stone", "Moss", "Tower", "Blink", "Shed"]);
+  // In the root layer, the strongest, every child is known: Ball moves above Hall, which only the sublayer defines.
+  assert.equal(store.reorderChild("/World/Ball", -1), undefined);
+  const moved = names(stage, "/World");
+  assert.deepEqual(moved.slice(3, 6), ["Pebble", "Ball", "Hall"]);
+  await h.settle(store.undo());
+  assert.deepEqual(names(stage, "/World"), before);
+
+  // In the sublayer, Ball is not known: its reorder cannot place it, and the composed order would stay as it was.
+  store.setTarget(weak);
+  const refusal = store.reorderChild("/World/Ball", -1);
+  assert.match(refusal!, /The children of \/World do not take that order from weak\.usda/);
+  assert.equal(store.notices.at(-1)?.message, refusal);
+  assert.deepEqual(names(stage, "/World"), before);
+  const spec = stage.layerSpec(weak, "/World");
+  assert.ok(spec?.type === "prim");
+  assert.ok(!spec.fields.includes("primOrder"), "nothing was authored");
+  assert.equal(steps(), 0, "and nothing is there to undo");
+  assert.equal(store.isEdited(weak), false);
+  // The refusal took nothing from what can be redone.
+  await h.settle(store.redo());
+  assert.deepEqual(names(stage, "/World"), moved);
+  await h.settle(store.undo());
+  // Among the sublayer's own children it orders, and shows.
+  assert.equal(store.reorderChild("/World/Cone", -1), undefined);
+  assert.deepEqual(names(stage, "/World").slice(0, 3), ["Group", "Cone", "Keep"]);
+  await h.settle(store.undo());
+  // Nor from a step that wrote the same field of the same spec.
+  assert.ok(store.reorderChild("/World/Ball", -1) !== undefined);
+  await h.settle(store.redo());
+  assert.deepEqual(names(stage, "/World").slice(0, 3), ["Group", "Cone", "Keep"]);
+  await h.settle(store.undo());
+  assert.deepEqual(store.notices.map((notice) => notice.code), [null, null], "the two refusals, and no failed redo");
+  store.setTarget(undefined);
+
+  // Through the reference, the asset knows its own children, not the one the root layer adds beneath the prim.
+  const reference = stage.prim("/World/Tower")!.compositionArcs().find((arc) => arc.arc === "references")!;
+  store.setTarget(reference.editTarget());
+  assert.deepEqual(names(stage, "/World/Tower"), ["Base", "Roof", "Flag"]);
+  assert.match(store.reorderChild("/World/Tower/Flag", -1)!, /do not take that order from asset\.usda/);
+  assert.equal(store.reorderChild("/World/Tower/Roof", -1), undefined);
+  assert.deepEqual(names(stage, "/World/Tower"), ["Roof", "Base", "Flag"]);
+  // A drop between siblings goes the same way.
+  assert.match(store.reorderChildren("/World/Tower", ["Flag", "Roof", "Base"])!, /do not take that order/);
+});
+
 test("the eye on a prim whose visibility has one time sample authors the sample, not a default the sample hides", async () => {
   const { h, store, stage } = await opened();
   store.seek(10);

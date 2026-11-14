@@ -702,6 +702,23 @@ export class Session implements Disposable {
     return this.#changing(label, edits, nothing(this.#targetName));
   }
 
+  /**
+   * Applies `edits` where edits go as one undoable action when, once
+   * applied, `shows()` says the stage composes what they were for; else
+   * takes them back, throws `hidden` and records nothing. For an edit
+   * that is no edit unless it shows: a children order authored where a
+   * stronger opinion, or children the layer does not hold, leave the
+   * composed order as it was.
+   */
+  applyShowing(label: string, edits: readonly Edit[], shows: () => boolean, hidden: string): EditReceipt {
+    return this.#record(label, () => {
+      const receipt = this.stage.apply(edits, this.target);
+      if (shows()) return receipt;
+      if (receipt.layers.length > 0) this.stage.undo(receipt);
+      throw new Error(hidden);
+    });
+  }
+
   /** Where edits go, in words: the layer written (`scene.usda`). */
   get targetName(): string {
     return this.#targetName;

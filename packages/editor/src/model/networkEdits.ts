@@ -68,6 +68,21 @@ export function disconnectLabel(destination: string, source: string | null): str
   return source === null ? `disconnect ${destination}` : `disconnect ${destination} from ${source}`;
 }
 
+/**
+ * Why the connection edit just made on `destination` does not show, or
+ * `null` when it does: `connected` to `source` (which replaces what it
+ * read), or disconnected from it (`null`: from every source). The edit
+ * is in the layer edits go to, and a stronger opinion of the port's
+ * connections still gives what it reads.
+ */
+export function unshownConnection(stage: Stage, destination: string, source: string | null, connected: boolean): string | null {
+  const port = stage.port(destination);
+  const reads = [...(port?.connections ?? []), ...(port?.invalidConnections ?? [])];
+  const shows = connected ? reads.length === 1 && reads[0] === source : source === null ? reads.length === 0 : !reads.includes(source);
+  if (shows) return null;
+  return `${destination}.connect is authored where edits go, and a stronger opinion still gives what it reads: ${reads.length === 0 ? "nothing" : reads.join(", ")}`;
+}
+
 /** `base`, or with the first number after it that makes it a name `taken` does not have. */
 export function uniqueName(base: string, taken: ReadonlySet<string>): string {
   if (!taken.has(base)) return base;

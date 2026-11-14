@@ -8,6 +8,7 @@
 // edits go, undone and redone.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { unshownConnection } from "../src/model/networkEdits.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
 const CHECKER = "/World/Looks/Checker";
@@ -168,4 +169,35 @@ test("a shading input's edit that a stronger layer hides is said not to show, an
   // An edit that shows: nothing is shadowed any more.
   assert.equal(store.setShaderInput(metallic, { type: "float", value: 0.4 }), undefined);
   assert.equal(store.shadow, null);
+});
+
+test("a connection or disconnection that a stronger layer hides is a notice saying what the port still reads", async () => {
+  const { h, store, stage, looks } = await stacked();
+  const diffuse = "/Looks/M/Surface.inputs:diffuseColor";
+  const tex = "/Looks/M/Tex.outputs:rgb";
+  const tex2 = "/Looks/M/Tex2.outputs:rgb";
+  store.setTarget(looks);
+  // The root authors what the colour reads: a connection made in the sublayer is authored there, and changes nothing read.
+  assert.equal(store.connect(diffuse, tex2), undefined);
+  const authored = stage.layerSpec(looks, diffuse);
+  assert.deepEqual(authored?.type === "attribute" ? authored.connections?.explicit : null, [tex2]);
+  assert.deepEqual(stage.port(diffuse)?.connections, [tex]);
+  assert.equal(unshownConnection(stage, diffuse, tex2, true), `${diffuse}.connect is authored where edits go, and a stronger opinion still gives what it reads: ${tex}`);
+  assert.equal(store.notices.at(-1)?.action, `connect ${diffuse} to ${tex2}`);
+  assert.match(store.notices.at(-1)?.message ?? "", /a stronger opinion still gives what it reads/);
+  // Disconnecting there does not show either.
+  const before = store.notices.length;
+  assert.equal(store.disconnect(diffuse, tex), undefined);
+  assert.deepEqual(stage.port(diffuse)?.connections, [tex]);
+  assert.equal(store.notices.length, before + 1);
+  // Where edits go to the root, both show, and nothing more is said.
+  await h.settle(store.undo());
+  await h.settle(store.undo());
+  store.setTarget(undefined);
+  assert.equal(store.connect(diffuse, tex2), undefined);
+  assert.deepEqual(stage.port(diffuse)?.connections, [tex2]);
+  assert.equal(unshownConnection(stage, diffuse, tex2, true), null);
+  assert.equal(store.disconnect(diffuse, tex2), undefined);
+  assert.equal(unshownConnection(stage, diffuse, tex2, false), null);
+  assert.equal(store.notices.length, before + 1);
 });

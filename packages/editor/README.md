@@ -95,16 +95,23 @@ nothing more.
   offers the rest, **Reload from source** among it. **Reload** reads every
   layer again from the source (`Stage.reloadLayers`), so files changed on
   disk come in and only what changed recomposes; a layer with unsaved
-  edits is left as it is, and one asked for alone is refused.
+  edits is left as it is, and one asked for alone is refused. Reloading
+  every layer also looks again for the assets that were missing, and the
+  tab says which layers could not be read or are gone. A reload is not an
+  edit: when it reads a layer the undo history changed, the history is
+  forgotten, and a notice says so.
 - **Stage.** The stage's metadata: up axis (the viewport turns with it),
   meters per unit (by unit name, or any length), default prim (one of the
-  root prims), start and end time codes, time codes and frames per
+  root prims; a prim path authored in a file is shown as it is), start and
+  end time codes, time codes and frames per
   second, and documentation. Each says which layer holds its opinion (the
   session layer over the root; no sublayer counts), or that it is the
   field's fallback, and clears it. An edit is one undoable action in the
   root, or in the session layer when edits go there; with edits going to
   another layer, the tab says the stage's metadata is authored in the
-  root instead.
+  root instead. The default prim is always authored in the root, which is
+  where a reference reads it (`UsdStage::SetDefaultPrim`), and is refused
+  when the root is read-only.
 - **Health.** What is wrong with the stage, counted on its tab:
   composition errors grouped by prim (each prim live, and marked in the
   prim tree), missing assets with the layer that authors each and the

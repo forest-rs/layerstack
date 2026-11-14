@@ -130,6 +130,8 @@ pub(crate) enum EditInput {
         path: String,
         asset: Option<String>,
         prim_path: Option<String>,
+        offset: f64,
+        scale: f64,
     },
     /// `UsdInherits::AddInherit`, or `UsdSpecializes::AddSpecialize`
     /// with `specialize`.
@@ -538,7 +540,9 @@ impl EditBatch {
     }
 
     /// Pushes a `removePayload` edit when `payload`, else a
-    /// `removeReference` edit.
+    /// `removeReference` edit: of the arc to `asset` and `prim_path` at
+    /// the layer offset `offset` and `scale`, which is part of what the
+    /// arc is (OpenUSD's `SdfReference::operator==`).
     #[wasm_bindgen(js_name = removeArc)]
     pub fn remove_arc(
         &mut self,
@@ -546,12 +550,16 @@ impl EditBatch {
         path: String,
         asset: Option<String>,
         prim_path: Option<String>,
+        offset: f64,
+        scale: f64,
     ) {
         self.edits.push(EditInput::RemoveArc {
             payload,
             path,
             asset,
             prim_path,
+            offset,
+            scale,
         });
     }
 
@@ -1377,13 +1385,15 @@ fn lower_one(
             path,
             asset,
             prim_path,
+            offset,
+            scale,
         } => {
             let path_id = prim(path)?;
             let built = arc(
                 scope,
                 asset.as_deref(),
                 prim_path.as_deref(),
-                LayerOffset::IDENTITY,
+                layer_offset(*offset, *scale)?,
             )?;
             // An internal arc names a stage path, which the transaction maps;
             // the authored item, in the layer's namespace, stands in for it
@@ -1875,9 +1885,18 @@ fn arc(
 }
 
 /// The arc a layer of the target's layer stack authors on `path` that
-/// names what `wanted` names (its asset path as authored and its target),
-/// as it is authored: a removal must name the authored item, which records
-/// how the arc was resolved, not only what was written.
+/// is the one `wanted` names (its asset path as authored, its target and
+/// its layer offset), as it is authored: a removal must name the authored
+/// item, which records how the arc was resolved, not only what was
+/// written. Two arcs to one asset and prim at different offsets are two
+/// items (OpenUSD's `SdfReference::operator==` and
+/// `SdfPayload::operator==` compare the layer offset), so an arc at
+/// another offset is never taken for the one wanted. A reference's custom
+/// data, which no edit here authors or names, does not tell items apart:
+/// among those that match, one without custom data is preferred.
+///
+/// Spec: AOUSD Core §10.3.2.1 (reference fields), §12.3.2.1 (layer
+/// offsets), §12.4 (list ops).
 ///
 /// The target layer is searched first, then the other layers of its
 /// stack, at the spec path the target maps `path` to (`/Robot` through a
@@ -1920,15 +1939,23 @@ fn authored_arc(
             else {
                 continue;
             };
-            let found = list
-                .explicit
-                .iter()
-                .flatten()
-                .chain(&list.prepend)
-                .chain(&list.append)
-                .chain(&list.add)
-                .chain(&list.delete)
-                .find(|arc| arc.target == wanted.target && asset(arc) == wanted_asset);
+            let same = || {
+                list.explicit
+                    .iter()
+                    .flatten()
+                    .chain(&list.prepend)
+                    .chain(&list.append)
+                    .chain(&list.add)
+                    .chain(&list.delete)
+                    .filter(|arc| {
+                        arc.target == wanted.target
+                            && arc.layer_offset == wanted.layer_offset
+                            && asset(arc) == wanted_asset
+                    })
+            };
+            let found = same()
+                .find(|arc| arc.custom_data.is_empty())
+                .or_else(|| same().next());
             if let Some(found) = found {
                 return Some(found.clone());
             }
@@ -3097,10 +3124,142 @@ def "Spare" (
             "/Spare".into(),
             Some("./spare.usda".into()),
             Some("/Part".into()),
+            0.0,
+            1.0,
         );
         round_trip(batch, |stage| {
             assert_eq!(stage.get("/Spare.count", None).unwrap(), Wire::Null);
         });
+    }
+
+    /// The references (or payloads) of `/World/Rock` in the root's text:
+    /// each list op line, trimmed.
+    fn rock_arcs(stage: &Stage, payload: bool) -> Vec<String> {
+        let field = if payload { "payload" } else { "references" };
+        let all = text(stage, root(stage));
+        let rock = &all[all.find("\"Rock\"").unwrap()..];
+        let lines: Vec<&str> = rock[..rock.find('{').unwrap()].lines().collect();
+        let mut out = Vec::new();
+        let mut at = 0;
+        while at < lines.len() {
+            let line = lines[at].trim();
+            if line.contains(&format!("{field} = ")) {
+                let mut entry = line.to_string();
+                while entry.ends_with('[') || (entry.contains('[') && !entry.ends_with(']')) {
+                    at += 1;
+                    entry.push_str(lines[at].trim());
+                }
+                out.push(entry);
+            }
+            at += 1;
+        }
+        out
+    }
+
+    /// Two arcs to one asset and prim that differ by their layer offset
+    /// alone are two items, and a removal takes the one it names: OpenUSD's
+    /// `SdfReference::operator==` and `SdfPayload::operator==` compare the
+    /// offset, and `SdfListEditorProxy::Remove` removes the item equal to
+    /// the one given. AOUSD Core §10.3.2.1, §12.3.2.1, §12.4.
+    #[test]
+    fn removing_an_arc_takes_the_one_at_its_layer_offset() {
+        // (the second arc's offset and scale, which of the two to remove)
+        for payload in [false, true] {
+            for (offset, scale) in [(24.0, 1.0), (0.0, 2.0)] {
+                for second in [true, false] {
+                    let field = if payload { "payload" } else { "references" };
+                    let other = if scale == 1.0 {
+                        format!("@./spare.usda@</Part> (offset = {offset})")
+                    } else {
+                        format!("@./spare.usda@</Part> (scale = {scale})")
+                    };
+                    let mut stage = open();
+                    let target = root(&stage);
+                    let mut batch = EditBatch::new();
+                    for (offset, scale) in [(0.0, 1.0), (offset, scale)] {
+                        batch.add_arc(
+                            payload,
+                            "/World/Rock".into(),
+                            Some("./spare.usda".into()),
+                            Some("/Part".into()),
+                            "backOfPrepend".into(),
+                            offset,
+                            scale,
+                        );
+                    }
+                    stage.apply(target.0, &mut batch).unwrap();
+                    let both = rock_arcs(&stage, payload);
+                    assert_eq!(
+                        both,
+                        [format!("prepend {field} = [@./spare.usda@</Part>,{other}]")]
+                    );
+                    let (gone, kept) = if second {
+                        (other.clone(), "@./spare.usda@</Part>".to_string())
+                    } else {
+                        ("@./spare.usda@</Part>".to_string(), other.clone())
+                    };
+                    let mut batch = EditBatch::new();
+                    let (offset, scale) = if second { (offset, scale) } else { (0.0, 1.0) };
+                    batch.remove_arc(
+                        payload,
+                        "/World/Rock".into(),
+                        Some("./spare.usda".into()),
+                        Some("/Part".into()),
+                        offset,
+                        scale,
+                    );
+                    let mut receipt = stage.apply(target.0, &mut batch).unwrap();
+                    let after = rock_arcs(&stage, payload);
+                    assert_eq!(
+                        after,
+                        [
+                            format!("delete {field} = {gone}"),
+                            format!("prepend {field} = {kept}")
+                        ],
+                        "the arc named leaves, deleted as OpenUSD deletes it, and the other stays"
+                    );
+                    let mut redo = stage.undo(&mut receipt).unwrap();
+                    assert_eq!(rock_arcs(&stage, payload), both, "undo: both, in order");
+                    stage.undo(&mut redo).unwrap();
+                    assert_eq!(rock_arcs(&stage, payload), after, "redo");
+                }
+            }
+        }
+    }
+
+    /// A removal that names an arc at an offset no list holds deletes that
+    /// arc and leaves the one authored at another offset, as OpenUSD's
+    /// `RemoveReference` does: nothing is matched by asset and prim alone.
+    #[test]
+    fn removing_an_arc_at_another_offset_leaves_the_one_authored() {
+        let mut stage = open();
+        let target = root(&stage);
+        let mut batch = EditBatch::new();
+        batch.add_arc(
+            false,
+            "/World/Rock".into(),
+            Some("./spare.usda".into()),
+            Some("/Part".into()),
+            "backOfPrepend".into(),
+            24.0,
+            1.0,
+        );
+        batch.remove_arc(
+            false,
+            "/World/Rock".into(),
+            Some("./spare.usda".into()),
+            Some("/Part".into()),
+            0.0,
+            1.0,
+        );
+        stage.apply(target.0, &mut batch).unwrap();
+        assert_eq!(
+            rock_arcs(&stage, false),
+            [
+                "delete references = @./spare.usda@</Part>",
+                "prepend references = @./spare.usda@</Part> (offset = 24)"
+            ]
+        );
     }
 
     #[test]
@@ -3630,6 +3789,8 @@ def Xform "Robot" {
             "/World/Robot/Part".into(),
             None,
             Some("/World/Robot/Head".into()),
+            0.0,
+            1.0,
         );
         // An external arc is removed as the asset authors it.
         batch.remove_arc(
@@ -3637,6 +3798,8 @@ def Xform "Robot" {
             "/World/Robot/Badge".into(),
             Some("./paint.usda".into()),
             None,
+            0.0,
+            1.0,
         );
         stage.apply_through(&target, &mut batch).unwrap();
         let after = text(&stage, robot);
@@ -3762,6 +3925,8 @@ def Xform "Robot" {
             "/World/Robot".into(),
             Some("./paint.usda".into()),
             None,
+            0.0,
+            1.0,
         );
         stage.apply_through(&target, &mut batch).unwrap();
         let after = text(&stage, scene);

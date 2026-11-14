@@ -364,6 +364,50 @@ describe("edit kinds", () => {
     );
   });
 
+  // OpenUSD's `SdfReference::operator==` and `SdfPayload::operator==`
+  // compare the layer offset: two arcs to one asset and prim at different
+  // offsets are two items, and `RemoveReference` takes the one given.
+  it("removes the reference or payload at the layer offset named, not another to the same asset and prim", async () => {
+    const identity = { offset: 0, scale: 1 };
+    for (const kind of ["Reference", "Payload"] as const) {
+      const field = kind === "Reference" ? "references" : "payloads";
+      for (const other of [{ offset: 24, scale: 1 }, { offset: 0, scale: 2 }]) {
+        for (const removed of [other, identity]) {
+          using stage = await openScene();
+          const arcs = () => {
+            const spec = stage.layerSpec(stage.root, "/World/Rock");
+            assert.ok(spec !== null && spec.type === "prim");
+            const list = spec[field];
+            return { prepended: list?.prepended.map((arc) => arc.layerOffset), deleted: list?.deleted.map((arc) => arc.layerOffset) };
+          };
+          const arc = { path: "/World/Rock", asset: "./spare.usda", primPath: "/Part" };
+          stage.apply([{ type: `add${kind}`, ...arc }, { type: `add${kind}`, ...arc, layerOffset: other }]).release();
+          const both = { prepended: [identity, other], deleted: [] };
+          assert.deepEqual(arcs(), both);
+          const receipt = stage.apply([{ type: `remove${kind}`, ...arc, ...(removed === identity ? {} : { layerOffset: removed }) }]);
+          const kept = removed === identity ? other : identity;
+          assert.deepEqual(arcs(), { prepended: [kept], deleted: [removed] }, `${kind}: removing ${JSON.stringify(removed)} keeps ${JSON.stringify(kept)}`);
+          const redo = receipt.undo();
+          assert.deepEqual(arcs(), both, "undo brings both back in order");
+          redo.undo().release();
+          assert.deepEqual(arcs(), { prepended: [kept], deleted: [removed] }, "redo");
+        }
+      }
+    }
+  });
+
+  it("a removal at an offset no list holds deletes that arc and leaves the one authored", async () => {
+    using stage = await openScene();
+    const arc = { path: "/World/Rock", asset: "./spare.usda", primPath: "/Part" };
+    stage.apply([{ type: "addReference", ...arc, layerOffset: { offset: 24 } }]).release();
+    stage.apply([{ type: "removeReference", ...arc }]).release();
+    const spec = stage.layerSpec(stage.root, "/World/Rock");
+    assert.ok(spec !== null && spec.type === "prim");
+    assert.deepEqual(spec.references?.prepended.map((each) => each.layerOffset), [{ offset: 24, scale: 1 }]);
+    assert.deepEqual(spec.references?.deleted.map((each) => each.layerOffset), [{ offset: 0, scale: 1 }]);
+    assert.deepEqual(stage.attribute("/World/Rock.count")?.get(), { kind: "scalar", type: "int", value: 3 }, "the reference at offset 24 still composes");
+  });
+
   it("setVariantSelection, setActive, setInstanceable and setKind", async () => {
     using variant = await roundTrip(
       [{ type: "setVariantSelection", path: "/World", set: "shade", variant: null }],

@@ -9,7 +9,7 @@
 // starts with, and a relationship's target list edited one target at a
 // time. The store's property operations and the inspector's commands
 // decide from these what applies.
-import type { Attribute, EditTarget, Explanation, Layer, Opinion, Stage, ValueInput, ValueTypeInfo } from "@forest-rs/layerstack";
+import type { Attribute, EditTarget, Explanation, Layer, LayerSpec, Opinion, Stage, ValueInput, ValueTypeInfo } from "@forest-rs/layerstack";
 import { releaseValue } from "./values.ts";
 
 /** Where edits go, as the session holds it: a layer of the stage's stack, an edit target, or `undefined` for the stage's edit layer. */
@@ -107,15 +107,34 @@ export interface PropertyActions {
   readonly clear: boolean;
   /** Block its value: some layer gives it one, and the target does not block it already. */
   readonly block: boolean;
-  /** Remove it: the target holds an opinion of it, or it is a spec with no value; for a relationship, it is custom or has targets. */
+  /** Remove it: the target's layer holds a spec of it (`Stage.layerSpec`), one left with nothing in it included. */
   readonly remove: boolean;
   /** Key it at the time: the stage has a time range, it may vary, it has a value there, and the target has no key there. */
   readonly key: boolean;
   /** Delete the key at the time: the samples the stage reads are the target's, and one is at the time. */
   readonly deleteKey: boolean;
+  /**
+   * Deleting the key leaves the target's spec empty: that sample is all
+   * it holds (no default, no connections, no other sample: what keying it
+   * there made), so the spec stays with nothing in it, for Remove to take.
+   */
+  readonly lastKey: boolean;
 }
 
-const NONE: PropertyActions = { clear: false, block: false, remove: false, key: false, deleteKey: false };
+const NONE: PropertyActions = { clear: false, block: false, remove: false, key: false, deleteKey: false, lastKey: false };
+
+/** The fields a spec keying an attribute made holds besides its samples: its declaration. */
+const DECLARATION = new Set(["typeName", "custom", "variability", "timeSamples"]);
+
+/** The spec the target's layer holds at `site`; `null` when none, or the path names no spec. */
+function specAt(stage: Stage, site: TargetSite | null): LayerSpec | null {
+  if (site === null) return null;
+  try {
+    return stage.layerSpec(site.layer, site.specPath);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * What the property operations would do to the property at `path` now,
@@ -131,10 +150,11 @@ export function propertyActions(stage: Stage, path: string, target: Target, time
     if (prim === null || prim.instanceProxy) return NONE;
     const attribute = stage.attribute(path);
     if (attribute === null) {
-      const relationship = stage.relationship(path);
-      return relationship === null ? NONE : { ...NONE, remove: relationship.custom || relationship.targets().length > 0 };
+      if (stage.relationship(path) === null) return NONE;
+      return { ...NONE, remove: specAt(stage, targetSite(stage, target, path))?.type === "relationship" };
     }
     const own = targetOpinion(stage, attribute, target);
+    const spec = specAt(stage, own.site);
     const clear = own.default !== null || own.samples.length > 0;
     let key = false;
     if (time !== undefined && attribute.variability === "varying" && !own.samples.includes(time)) {
@@ -142,12 +162,20 @@ export function propertyActions(stage: Stage, path: string, target: Target, time
       key = value !== null;
       releaseValue(value);
     }
+    const deleteKey = time !== undefined && own.samples.includes(time);
     return {
       clear,
       block: own.site !== null && own.any && !(own.default === "block" && own.samples.length === 0),
-      remove: clear || (attribute.authored && !own.any),
+      remove: spec?.type === "attribute",
       key: own.site !== null && key,
-      deleteKey: time !== undefined && own.samples.includes(time),
+      deleteKey,
+      lastKey:
+        deleteKey &&
+        spec?.type === "attribute" &&
+        spec.default === null &&
+        spec.connections === null &&
+        spec.timeSamples?.length === 1 &&
+        spec.fields.every((field) => DECLARATION.has(field)),
     };
   } catch {
     // Not a property path the stage takes: nothing to offer.

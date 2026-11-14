@@ -11,7 +11,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { AuthoredReference, Stage } from "@forest-rs/layerstack";
-import { findAuthoring, type NewArc, uncomposedHere } from "../src/model/composition.ts";
+import { authoredHere, findAuthoring, type NewArc, uncomposedHere } from "../src/model/composition.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
 /** A reference to add, as the dialog makes it. */
@@ -315,6 +315,26 @@ test("of two references to one asset, to its default prim and to another prim, e
   const crate = findAuthoring(arcs, arcs.findIndex((arc) => arc.site === "/Props/Crate"), read)!;
   assert.equal(store.removeArc("/World/Pile", crate.item), undefined);
   assert.deepEqual(stage.prim("/World/Pile")!.compositionArcs().filter((arc) => arc.arc === "references").map((arc) => arc.site), ["/Props"]);
+});
+
+test("an arc a prim composes through an ancestor is read as authored on that ancestor", async () => {
+  const { store, stage } = await opened();
+  const read = (layer: Parameters<typeof store.layerSpecs>[0]) => store.layerSpecs(layer);
+  // The body is in the robot's asset because /World/Robot references it: no layer authors an arc on the body itself.
+  const arcs = stage.prim("/World/Robot/Body")!.compositionArcs();
+  const index = arcs.findIndex((arc) => arc.arc === "references");
+  assert.equal(arcs[index]!.site, "/Robot/Body");
+  const source = findAuthoring(arcs, index, read);
+  assert.ok(source !== null, "the layer that authors it is read, on the ancestor");
+  assert.equal(source.layer, stage.root);
+  assert.equal(source.specPath, "/World/Robot");
+  assert.equal(source.ancestor, "/World/Robot");
+  assert.equal(source.item.asset, "./assets/robot.usda");
+  // It is not this prim's to remove, where edits go or anywhere.
+  assert.equal(authoredHere(source, stage.root, "/World/Robot/Body"), false);
+  // On the prim that authors it, nothing is said of an ancestor.
+  const robot = stage.prim("/World/Robot")!.compositionArcs();
+  assert.equal(findAuthoring(robot, robot.findIndex((arc) => arc.arc === "references"), read)?.ancestor, null);
 });
 
 test("through a reference read at an offset, the arc removed is the one at the offset its layer authors", async () => {

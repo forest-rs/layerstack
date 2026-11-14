@@ -263,6 +263,21 @@ export interface ArcSource {
   readonly item: AuthoredArc;
   /** The arc it is authored beneath (the prim's own opinions, a variant, a reference), by index. */
   readonly parent: number;
+  /**
+   * The ancestor's site the arc is authored on (`specPath`), when it is
+   * not the prim's own: a prim beneath `/World/Robot` composes the
+   * robot's reference, which `/World/Robot` authors. `null` for an arc
+   * authored on the prim itself.
+   */
+  readonly ancestor: string | null;
+}
+
+/** The site of the prim above `site`'s (`/World/Robot{finish=chrome}` for `/World/Robot{finish=chrome}Body`); `null` for a root prim's, or a variant's. */
+function siteAbove(site: string): string | null {
+  const match = /^(.+?)\/?([^/{}]+)$/.exec(site);
+  if (match === null) return null;
+  const above = match[1]!;
+  return above === "" || above === "/" ? null : above;
 }
 
 /**
@@ -298,8 +313,30 @@ export function itemComposes(item: AuthoredArc, layer: Layer, arc: ArcRecord, pa
 export function findAuthoring(arcs: readonly ArcRecord[], index: number, specsOf: (layer: Layer) => LayerSpecs | null): ArcSource | null {
   const arc = arcs[index];
   if (arc === undefined || arc.parent === null || arc.implied || fieldOfArc(arc.arc) === null) return null;
-  const parent = arcs[arc.parent];
-  if (parent === undefined) return null;
+  if (arcs[arc.parent] === undefined) return null;
+  // On the prim itself, else on the nearest ancestor that authors it: a
+  // prim beneath one that references an asset composes that reference,
+  // each site one prim up.
+  let sites: readonly ArcRecord[] | null = arcs;
+  for (let above = false; sites !== null; above = true) {
+    const found = authoredAt(sites, index, specsOf);
+    if (found !== null) return { ...found, ancestor: above ? found.specPath : null };
+    const next: ArcRecord[] = [];
+    for (const each of sites) {
+      const site = siteAbove(each.site);
+      // An arc that reaches no prim above this one's (a root prim's) is not one an ancestor authors.
+      if (site === null && (each === sites[index] || each === sites[arc.parent])) break;
+      next.push({ ...each, site: site ?? each.site, ...(each.editTarget === undefined ? {} : { editTarget: (layer: Layer) => each.editTarget!(layer) }) });
+    }
+    sites = next.length === sites.length ? next : null;
+  }
+  return null;
+}
+
+/** The item that authors `arcs[index]` at the sites the arcs give ({@link findAuthoring} walks them up). */
+function authoredAt(arcs: readonly ArcRecord[], index: number, specsOf: (layer: Layer) => LayerSpecs | null): Omit<ArcSource, "ancestor"> | null {
+  const arc = arcs[index]!;
+  const parent = arcs[arc.parent!]!;
   // Each arc beneath the same one takes an item of its own, the arcs in
   // their order: two arcs to one asset and prim are two items (they
   // differ by layer offset, or one names the default prim), and the
@@ -309,7 +346,7 @@ export function findAuthoring(arcs: readonly ArcRecord[], index: number, specsOf
     const each = arcs[at]!;
     if (each.parent !== arc.parent || each.implied || each.arc !== arc.arc) continue;
     const found = bestItem(each, parent, taken, specsOf);
-    if (at === index) return found === null ? null : { ...found, specPath: parent.site, parent: arc.parent };
+    if (at === index) return found === null ? null : { ...found, specPath: parent.site, parent: arc.parent! };
     if (found !== null) taken.add(found.item);
   }
   return null;

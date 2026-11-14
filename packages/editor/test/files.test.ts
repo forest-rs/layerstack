@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Layer, UnpackagedAsset } from "@forest-rs/layerstack";
-import { fileName, fileNames, isPackage, packageWants, sessionLayerReason, suppliable } from "../src/model/files.ts";
+import { fileName, fileNames, isPackage, isSaveKey, packageWants, saveKeyOpens, sessionLayerReason, suppliable } from "../src/model/files.ts";
 import { drawnLine, lineChanges, MAX_LINE_CHARS } from "../src/model/layerText.ts";
 import { usdaTokens } from "../src/model/usdaSyntax.ts";
 
@@ -115,6 +115,27 @@ describe("the lines a change touched", () => {
     const before = ["head", "a", "b", "c", "tail"];
     const after = ["head", "x", "y", "z", "tail"];
     assert.deepEqual(lineChanges(before, after, 1), { added: [1, 2, 3], removedBefore: [4], removed: 3 });
+  });
+});
+
+describe("the save shortcut", () => {
+  const press = (key: string, held: Partial<Record<"metaKey" | "ctrlKey" | "shiftKey" | "altKey", boolean>> = {}) => ({ key, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, ...held });
+
+  it("is ⌘S or Ctrl+S, and nothing else", () => {
+    assert.equal(isSaveKey(press("s", { metaKey: true })), true);
+    assert.equal(isSaveKey(press("S", { ctrlKey: true })), true);
+    assert.equal(isSaveKey(press("s")), false);
+    assert.equal(isSaveKey(press("s", { metaKey: true, shiftKey: true })), false);
+    assert.equal(isSaveKey(press("s", { metaKey: true, altKey: true })), false);
+    assert.equal(isSaveKey(press("z", { metaKey: true })), false);
+  });
+
+  it("opens the save's confirmation with a scene open, and does nothing over a dialog", () => {
+    const save = press("s", { metaKey: true });
+    assert.equal(saveKeyOpens(save, true, false), true);
+    assert.equal(saveKeyOpens(save, false, false), false, "nothing is open");
+    assert.equal(saveKeyOpens(save, true, true), false, "a dialog is being answered: no second one on top of it");
+    assert.equal(saveKeyOpens(press("s"), true, false), false);
   });
 });
 

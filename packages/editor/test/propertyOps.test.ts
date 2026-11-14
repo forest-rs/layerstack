@@ -29,6 +29,113 @@ async function opened() {
   return { h, store: h.store, stage, history: () => h.store.session!.history.undoSteps.length };
 }
 
+/**
+ * A root over a sublayer and a referenced asset, each read at a layer
+ * offset: opinions of one attribute in two layers, time samples whose
+ * layer times are not the stage's, and a relationship only the asset
+ * authors.
+ */
+const STACKED: Readonly<Record<string, string>> = {
+  "stacked.usda": `#usda 1.0
+(
+    defaultPrim = "World"
+    endTimeCode = 48
+    startTimeCode = 0
+    subLayers = [
+        @./under.usda@ (offset = 10; scale = 2)
+    ]
+)
+
+def Xform "World"
+{
+    def Sphere "Ball"
+    {
+    }
+
+    def "Part" (
+        references = @./part.usda@ (offset = 10; scale = 2)
+    )
+    {
+    }
+
+    def Scope "Notes"
+    {
+        custom double level = 1
+    }
+}
+`,
+  "under.usda": `#usda 1.0
+
+over "World"
+{
+    over "Ball"
+    {
+        double radius.timeSamples = {
+            0: 1,
+            10: 2,
+        }
+    }
+
+    over "Notes"
+    {
+        custom double level = 2
+        double level.timeSamples = {
+            1: 5,
+            3: 6,
+        }
+    }
+}
+`,
+  "part.usda": `#usda 1.0
+(
+    defaultPrim = "Part"
+)
+
+def Xform "Part"
+{
+    double height = 1
+    double height.timeSamples = {
+        0: 1,
+        4: 2,
+    }
+    rel lookAt = </Part/Eye>
+
+    def Scope "Eye"
+    {
+    }
+}
+`,
+};
+
+/** {@link STACKED}, open, with nothing reported. */
+async function stacked() {
+  const h = await harness();
+  await h.open(sampleSource("stacked.usda", STACKED));
+  const session = h.store.session!;
+  return { h, store: h.store, session, stage: session.stage, root: session.layerNamed("stacked.usda"), under: session.layerNamed("under.usda") };
+}
+
+test("removing a relationship is offered where the target's layer holds its spec, not where another layer authors it", async () => {
+  const { store, stage, session, root } = await stacked();
+  const path = "/World/Part.lookAt";
+  assert.deepEqual(stage.relationship(path)!.targets(), ["/World/Part/Eye"], "from the referenced asset");
+  assert.equal(stage.layerSpec(root, path), null);
+  // The root has no spec of it: removing it there would be refused, so it is not offered.
+  assert.equal(propertyActions(stage, path, session.target, 0).remove, false);
+  assert.equal(typeof store.removeProperty(path), "string");
+  // Through the reference, where the asset's spec is, it is.
+  const part = stage.attribute("/World/Part.height")!.explain()!.opinions[0]!.editTarget!;
+  store.setTarget(part);
+  assert.equal(propertyActions(stage, path, session.target, 0).remove, true);
+  assert.equal(store.removeProperty(path), undefined);
+  assert.equal(stage.layerSpec(part.layer, "/Part.lookAt"), null);
+  // One the root authors with no targets, and not custom, is still its spec to remove.
+  store.setTarget(undefined);
+  stage.apply([{ type: "setTargets", path: "/World/Ball.proxyPrim", targets: [] }]);
+  assert.equal(stage.relationship("/World/Ball.proxyPrim")!.custom, false);
+  assert.equal(propertyActions(stage, "/World/Ball.proxyPrim", session.target, 0).remove, true);
+});
+
 test("clearing a value falls back to the schema's, is one undoable step, and clearing nothing is refused", async () => {
   const { h, store, stage, history } = await opened();
   assert.deepEqual(targetOpinion(stage, stage.attribute("/World/Top.size")!, undefined).default, "value");

@@ -55,6 +55,20 @@ export function offsetUsda(offset: LayerOffset): string {
   return ` (${parts.filter((part) => part !== null).join("; ")})`;
 }
 
+/**
+ * What a sublayer's authored offset does, in a sentence: where a sample
+ * at time t in the sublayer falls in `parent`, the layer that lists it.
+ * That is the stage's time only for a sublayer of the root at the root's
+ * rate: the stage reads `parent` through its own offsets in turn, and
+ * scales a sublayer by the ratio of its parent's `timeCodesPerSecond` to
+ * its own (`PcpLayerStack::_BuildLayerStack`), so the sentence claims no
+ * more than the authored offset says.
+ */
+export function offsetMeaning(offset: LayerOffset, parent: string): string {
+  const at = `${offset.scale === 1 ? "t" : `${offset.scale} × t`}${offset.offset === 0 ? "" : offset.offset < 0 ? ` - ${-offset.offset}` : ` + ${offset.offset}`}`;
+  return `A sample at time t in the sublayer is at ${at} in ${parent}'s time. The stage reads ${parent} through its own offsets in turn, and scales between layers whose timeCodesPerSecond differ.`;
+}
+
 /** The path segments of `path`, `.` dropped and `..` taking one off (kept at the front when there is nothing to take). */
 function normalized(path: string): string[] {
   const out: string[] = [];

@@ -114,6 +114,20 @@ export function fieldSource(key: string, session: ReadonlySet<string> | null, ro
   return root.has(key) ? "root" : "fallback";
 }
 
+/**
+ * The field a fallback of `key` is taken from instead, and where that one
+ * is authored: the stage's `timeCodesPerSecond`, authored in neither
+ * layer, is the `framesPerSecond` the session layer or the root authors
+ * before it is 24 (`UsdStage::GetTimeCodesPerSecond`: the session layer's
+ * rate, the root's, the session layer's frame rate, the root's, then the
+ * fallback). `null` when `key` is authored, or its fallback is its own.
+ */
+export function inheritedFrom(key: string, sources: ReadonlyMap<string, FieldSource>): { readonly key: string; readonly source: "session" | "root" } | null {
+  if (key !== "timeCodesPerSecond" || (sources.get(key) ?? "fallback") !== "fallback") return null;
+  const source = sources.get("framesPerSecond") ?? "fallback";
+  return source === "fallback" ? null : { key: "framesPerSecond", source };
+}
+
 /** Where a stage metadata edit goes ({@link metadataLayer}), and why there when it is not where other edits go. */
 export interface MetadataPlacement<L> {
   readonly layer: L;

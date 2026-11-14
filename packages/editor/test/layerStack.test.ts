@@ -14,6 +14,7 @@ import {
   IDENTITY,
   layerStack,
   movedSublayers,
+  offsetMeaning,
   offsetText,
   offsetUsda,
   relativeAsset,
@@ -21,7 +22,7 @@ import {
   sublayerCandidates,
   sublayerIndex,
 } from "../src/model/layerStack.ts";
-import { defaultPrimPath, fieldSource, metadataLayer, unitPreset, UNIT_PRESETS } from "../src/model/stageMetadata.ts";
+import { defaultPrimPath, fieldSource, inheritedFrom, metadataLayer, unitPreset, UNIT_PRESETS } from "../src/model/stageMetadata.ts";
 
 /** A layer as the tree reads one. */
 interface FakeLayer {
@@ -72,6 +73,15 @@ describe("asset paths", () => {
 });
 
 describe("layer offsets", () => {
+  it("are explained as the parent layer's time, which is what they author, not the stage's", () => {
+    assert.equal(
+      offsetMeaning({ offset: 5, scale: 3 }, "a.usda"),
+      "A sample at time t in the sublayer is at 3 × t + 5 in a.usda's time. The stage reads a.usda through its own offsets in turn, and scales between layers whose timeCodesPerSecond differ.",
+    );
+    assert.match(offsetMeaning({ offset: -4, scale: 1 }, "root.usda"), /is at t - 4 in root\.usda's time/);
+    assert.match(offsetMeaning(IDENTITY, "root.usda"), /is at t in root\.usda's time/);
+  });
+
   it("compose outer after inner, and are said only when they change time", () => {
     assert.deepEqual(composeOffsets({ offset: 10, scale: 2 }, { offset: 5, scale: 0.5 }), { offset: 20, scale: 1 });
     assert.deepEqual(composeOffsets(IDENTITY, { offset: 3, scale: 1 }), { offset: 3, scale: 1 });
@@ -308,6 +318,17 @@ describe("health", () => {
     assert.equal(defaultPrimPath("World//Robot"), null);
     assert.equal(defaultPrimPath("World.size"), null);
     assert.equal(defaultPrimPath("../World"), null);
+  });
+
+
+  it("says a rate no layer authors is the frame rate one does, before it is the fallback", () => {
+    const sources = (entries: Record<string, "session" | "root" | "fallback">) => new Map(Object.entries(entries));
+    assert.deepEqual(inheritedFrom("timeCodesPerSecond", sources({ timeCodesPerSecond: "fallback", framesPerSecond: "root" })), { key: "framesPerSecond", source: "root" });
+    assert.deepEqual(inheritedFrom("timeCodesPerSecond", sources({ timeCodesPerSecond: "fallback", framesPerSecond: "session" })), { key: "framesPerSecond", source: "session" });
+    // The root's rate is over the session layer's frame rate.
+    assert.equal(inheritedFrom("timeCodesPerSecond", sources({ timeCodesPerSecond: "root", framesPerSecond: "session" })), null);
+    assert.equal(inheritedFrom("timeCodesPerSecond", sources({ timeCodesPerSecond: "fallback", framesPerSecond: "fallback" })), null);
+    assert.equal(inheritedFrom("framesPerSecond", sources({ timeCodesPerSecond: "root", framesPerSecond: "fallback" })), null);
   });
 
 });

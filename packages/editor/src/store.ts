@@ -406,6 +406,8 @@ export class EditorStore {
     // The cluster sets the viewport holds are the freed scene's.
     this.#drawing.forgetResident();
     this.renamed = null;
+    // The note of an edit that did not show names the freed scene's layer and target.
+    this.#shadow = null;
     this.session = session;
     this.source = source;
     this.#selection.clear();
@@ -821,6 +823,11 @@ export class EditorStore {
     const session = this.session;
     const attribute = session?.stage.attribute(path) ?? null;
     this.#shadow = session === null || attribute === null ? null : shadowOf(session.stage, attribute, session.target, time);
+    // A default (or a block) that wins at the default time may still lose at the time shown, to a stronger layer's samples, which no default is read under.
+    if (this.#shadow === null && time === null && session !== null && attribute !== null && this.time !== undefined) {
+      const shown = shadowOf(session.stage, attribute, session.target, this.time);
+      if (shown !== null) this.#shadow = { ...shown, time: null };
+    }
     return false;
   }
 
@@ -1823,6 +1830,8 @@ export class EditorStore {
       if (session === null || this.status.kind === "lost") return;
       try {
         let selected = false;
+        // The last value edit that did not show is no longer the last edit: the one it names may be cleared or removed by this one.
+        this.#shadow = null;
         try {
           selected = this.#whereAsked(session, asked, () => {
             run(session);
@@ -1853,6 +1862,8 @@ export class EditorStore {
       if (session === null || this.status.kind === "lost") return;
       try {
         let selected = false;
+        // As an edit: what a variant selected, a layer muted or a sublayer moved composes is not what the note was read from.
+        this.#shadow = null;
         try {
           // Its edit is made before its first wait (the fetches come after), where edits went when it was asked for.
           selected = await this.#whereAsked(session, asked, () => run(session, signal));

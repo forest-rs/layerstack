@@ -61,6 +61,10 @@ def Xform "World"
     def Scope "Notes"
     {
         custom double level = 1
+        custom double pulse.timeSamples = {
+            0: 1,
+            10: 2,
+        }
     }
 }
 `,
@@ -351,6 +355,56 @@ test("an edit a stronger opinion hides says which, and editing there shows", asy
   store.setValue("/World/Top.size", { type: "double", value: 7 });
   assert.notEqual(store.shadow, null);
   await h.settle(store.undo());
+  assert.equal(store.shadow, null);
+});
+
+test("the note of an edit that does not show goes with the edit: cleared, removed, or another scene opened", async () => {
+  const { h, store, stage } = await opened();
+  const library = store.session!.layerNamed("library.usda");
+  store.setTarget(library);
+  const hidden = () => {
+    store.setValue("/World/Top.size", { type: "double", value: 5 });
+    assert.equal(store.shadow?.path, "/World/Top.size");
+  };
+  // Clearing the opinion the note is about leaves nothing in the layer for it to speak of.
+  hidden();
+  assert.equal(store.clearValue("/World/Top.size"), undefined);
+  assert.equal(store.shadow, null);
+  hidden();
+  assert.equal(store.removeProperty("/World/Top.size"), undefined);
+  assert.equal(store.shadow, null);
+  // Any other edit is the last edit now.
+  hidden();
+  assert.equal(store.definePrim("/World", "Other", "Scope"), undefined);
+  assert.equal(store.shadow, null);
+  // Selecting a variant recomposes what the note was read from.
+  hidden();
+  await h.settle(store.selectVariant("/World/Robot", "finish", "chrome"));
+  assert.equal(store.shadow, null);
+  // Another scene: the note's layer and its "Edit there" target are the freed stage's.
+  hidden();
+  await h.open(sampleSource());
+  assert.equal(store.shadow, null);
+  assert.notEqual(store.session!.stage, stage);
+  assert.deepEqual(store.notices, []);
+});
+
+test("a block under a stronger layer's samples is said not to show, though it wins at the default time", async () => {
+  const { store, stage, under } = await stacked();
+  const path = "/World/Notes.pulse";
+  store.setTarget(under);
+  store.setTime(5);
+  assert.equal(store.blockValue(path), undefined);
+  const spec = stage.layerSpec(under, path);
+  assert.equal(spec?.type === "attribute" ? spec.default : null, "block", "the block is authored");
+  assert.equal(valueOf(stage, path, 5), 1.5, "and the root's samples are still read");
+  const shadow = store.shadow!;
+  assert.notEqual(shadow, null);
+  assert.deepEqual([shadow.path, shadow.time, shadow.layer.identifier, shadow.specPath], [path, null, "stacked.usda", path]);
+  // "Edit there", and the block shows.
+  store.setTarget(shadow.editTarget!);
+  assert.equal(store.blockValue(path), undefined);
+  assert.equal(valueOf(stage, path, 5), null);
   assert.equal(store.shadow, null);
 });
 

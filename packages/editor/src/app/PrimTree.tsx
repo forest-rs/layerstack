@@ -108,7 +108,7 @@ export function PrimTree() {
   const dragged = useRef<string | null>(null);
   // Why the prim being dragged cannot move to another parent where edits go (the menu's sentence), said while it is dragged.
   const [dragRefusal, setDragRefusal] = useState<string | null>(null);
-  // Why Delete on a row was refused, said in the same place until the selection moves.
+  // Why Delete on a row, or a drop between siblings, was refused, said in the same place until the selection moves.
   const [keyRefusal, setKeyRefusal] = useState<string | null>(null);
   // When a letter last went to the tree's type-to-find: F frames unless it continues one.
   const typedAt = useRef(0);
@@ -182,7 +182,9 @@ export function PrimTree() {
       const drop = dropOf(store, path, event.target);
       if (drop === null || path === null) return;
       if (drop.kind === "reorder") {
-        store.reorderChildren(drop.parent, drop.order, `move ${nameOf(path)} in ${drop.parent}`);
+        // Refused when the stage would not compose the order (edits go to a layer that does not know every child): said under the rows.
+        const why = store.reorderChildren(drop.parent, drop.order, `move ${nameOf(path)} in ${drop.parent}`);
+        setKeyRefusal(why === undefined ? null : treeRefusal("reorder", why));
         return;
       }
       // The prim dropped is selected, which opens the rows down to it.

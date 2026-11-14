@@ -78,5 +78,6 @@ describe("treeRefusal", () => {
     assert.ok(why !== undefined);
     assert.match(treeRefusal("delete", why), /^Not deleted: Renaming and deleting edit the opinions of the stage's own layer stack/);
     assert.equal(treeRefusal("move", "edits go inside a variant."), "Not moved to another parent: edits go inside a variant.");
+    assert.equal(treeRefusal("reorder", "the children of /World do not take that order."), "Not reordered: the children of /World do not take that order.");
   });
 });

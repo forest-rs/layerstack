@@ -175,7 +175,8 @@ export function AddArcDialog({ store, prim, kind: initial, onClose }: { store: E
           className="flex gap-0.5"
         >
           {KINDS.map(([each, title]) => (
-            <ToggleButton key={each} id={each} className={option}>
+            // The kind it opened with is the dialog's first control: it takes the focus, as other dialogs' first fields do.
+            <ToggleButton key={each} id={each} className={option} autoFocus={each === initial}>
               {title}
             </ToggleButton>
           ))}

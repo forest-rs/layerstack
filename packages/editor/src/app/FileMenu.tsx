@@ -174,8 +174,8 @@ export function EditLayerChoiceGroup({ store }: { store: EditorStore }) {
         <span className="flex flex-col">
           <span>Edit in a session layer</span>
           <span className="text-[11px] text-muted-foreground">
-            An anonymous layer in front of the root takes the edits; the root is never saved, and the session layer is kept by exporting it. Always so for a .usdz,
-            which is read-only.
+            An anonymous layer in front of the root takes the edits, and is kept by exporting it. The root's layers change only by a move, rename or delete of a prim
+            they hold, which a save then writes. Always so for a .usdz, which is read-only.
           </span>
         </span>
       </DropdownMenuItem>

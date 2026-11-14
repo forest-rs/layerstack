@@ -365,8 +365,10 @@ nothing more.
   missing asset is a notice and stays listed under the arcs, with the
   composition error, until it is removed. The **Variants** section edits
   inside any variant (`Prim.variantEditTarget`; it says when the variant
-  is not selected, and goes back to the edit layer), adds a variant (then
-  selected, with editing inside it a click away) or a variant set with its
+  is not selected, and goes back to the edit layer), adds a variant (its
+  selection authored where it goes, with editing inside it a click away;
+  when a stronger layer's selection still wins, the dialog and the note
+  after it say which layer selects what, and offer to select it there) or a variant set with its
   first variant, and removes a set from the layer edits go to when that
   layer holds it: its variants and what they author and the layer's
   selection go, and its name stays in `variantSetNames`, as OpenUSD keeps

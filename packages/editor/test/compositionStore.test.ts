@@ -11,7 +11,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { AuthoredReference, Stage } from "@forest-rs/layerstack";
-import { authoredHere, findAuthoring, mapping, type NewArc, newArcUsda, uncomposedHere, variantSetSource } from "../src/model/composition.ts";
+import { authoredHere, findAuthoring, mapping, type NewArc, newArcUsda, selectionTarget, strongerSelection, uncomposedHere, variantSetSource } from "../src/model/composition.ts";
+import { targetSite } from "../src/model/propertyOps.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
 /** A reference to add, as the dialog makes it. */
@@ -192,6 +193,38 @@ test("a variant set added with its first variant, a variant added, edited inside
   const steps2 = steps();
   assert.match(store.removeVariantSet("/World/Rock", "size") ?? "", /library\.usda holds no variant set size/);
   assert.equal(steps(), steps2);
+});
+
+test("a variant added in a weaker layer is not said to be selected while a stronger layer's selection wins, and is selected there when asked", async () => {
+  const { h, store, stage } = await opened();
+  const robot = () => stage.prim("/World/Robot")!.variantSets().find((set) => set.name === "finish")!;
+  assert.equal(robot().selection, "painted", "scene.usda selects it");
+  const library = store.session!.layerNamed("library.usda");
+  store.setTarget(library);
+  const target = targetSite(stage, store.session!.target, "/World/Robot");
+  // The dialog says so before: the root's selection is stronger than the sublayer's.
+  assert.deepEqual(strongerSelection(stage.prim("/World/Robot")!.compositionArcs(), "finish", target, store.specsOf), { layer: stage.root, variant: "painted", arc: 0 });
+  assert.equal(store.addVariant("/World/Robot", "finish", "matte"), undefined);
+  assert.equal(robot().selection, "painted", "the stage still selects the root's");
+  const sub = stage.layerSpec(library, "/World/Robot");
+  assert.ok(sub !== null && sub.type === "prim");
+  assert.equal(sub.variantSelections?.get("finish"), "matte", "its selection is authored where it went");
+  const edit = store.compositionEdit!;
+  assert.equal(edit.variant?.variant, "matte");
+  assert.deepEqual(edit.variant?.outranked && [edit.variant.outranked.layer, edit.variant.outranked.variant], [stage.root, "painted"]);
+  // Selecting it where the winning selection is authored.
+  const where = selectionTarget(stage.prim("/World/Robot")!, edit.variant!.outranked!);
+  assert.equal(where, stage.root);
+  await h.settle(store.selectVariant("/World/Robot", "finish", "matte", where!));
+  assert.equal(robot().selection, "matte");
+  const root = stage.layerSpec(stage.root, "/World/Robot");
+  assert.ok(root !== null && root.type === "prim");
+  assert.equal(root.variantSelections?.get("finish"), "matte");
+  // Where edits go wins: nothing outranks it.
+  store.setTarget(undefined);
+  assert.equal(store.addVariant("/World/Robot", "finish", "satin"), undefined);
+  assert.equal(robot().selection, "satin");
+  assert.equal(store.compositionEdit?.variant?.outranked, undefined);
 });
 
 test("edits go back to the edit layer when an undo takes the variant or the arc they went through", async () => {

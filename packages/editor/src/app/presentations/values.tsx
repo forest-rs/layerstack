@@ -239,14 +239,16 @@ function BoolAccept(props: AcceptProps<"value">) {
 
 function NumberAccept(props: AcceptProps<"value">) {
   const value = props.object.shown.value;
-  if (value?.kind !== "scalar" || (typeof value.value !== "number" && typeof value.value !== "bigint")) return <ValueText {...props} />;
+  // No value (cleared, blocked, or declared without one) is still a field: a number typed gives it one.
+  if (value !== null && (value.kind !== "scalar" || (typeof value.value !== "number" && typeof value.value !== "bigint"))) return <ValueText {...props} />;
   // A 64-bit integer is read as a bigint, and authored as one: a number would lose what is past 2^53.
-  const whole = typeof value.value === "bigint";
+  const whole = value === null ? /^u?int64$/.test(props.object.typeName) : typeof value.value === "bigint";
   return (
     <CommitField
       label={labelOf(props)}
       numeric
-      value={formatNumber(value.value)}
+      placeholder="none"
+      value={value === null ? "" : formatNumber(value.value as number | bigint)}
       className="w-full"
       onCommit={(text) => {
         const number = (whole ? parseWhole(text) : null) ?? parseNumber(text);
@@ -258,8 +260,17 @@ function NumberAccept(props: AcceptProps<"value">) {
 
 function TextAccept(props: AcceptProps<"value">) {
   const value = props.object.shown.value;
-  if (value?.kind !== "scalar" || typeof value.value !== "string") return <ValueText {...props} />;
-  return <CommitField label={labelOf(props)} value={value.value} className="w-full" onCommit={(text) => props.accept({ type: props.object.typeName, value: text })} />;
+  // No value is still a field, as a number's is.
+  if (value !== null && (value.kind !== "scalar" || typeof value.value !== "string")) return <ValueText {...props} />;
+  return (
+    <CommitField
+      label={labelOf(props)}
+      placeholder="none"
+      value={value === null ? "" : (value.value as string)}
+      className="w-full"
+      onCommit={(text) => props.accept({ type: props.object.typeName, value: text })}
+    />
+  );
 }
 
 /** An asset path's file name, live: a click shows the image (or what the asset view makes of it). */

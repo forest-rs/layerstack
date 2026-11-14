@@ -52,6 +52,7 @@ export function CommitField({
   numeric = false,
   disabled = false,
   saysRefusal = false,
+  placeholder,
 }: {
   value: string;
   onCommit: (text: string) => string | void;
@@ -60,6 +61,8 @@ export function CommitField({
   numeric?: boolean;
   disabled?: boolean;
   saysRefusal?: boolean;
+  /** Shown while the field is empty: `none` for an attribute with no value. */
+  placeholder?: string;
 }) {
   // What is typed and not yet committed; `null` shows `value`.
   const [draft, setDraft] = useState<string | null>(null);
@@ -77,6 +80,7 @@ export function CommitField({
       <input
         aria-label={label}
         value={text}
+        placeholder={placeholder}
         disabled={disabled}
         inputMode={numeric ? "decimal" : undefined}
         aria-invalid={refused !== null ? true : undefined}

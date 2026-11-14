@@ -1413,14 +1413,17 @@ export class EditorStore {
   /**
    * Runs a composition edit of `prim`, its layer's text read first when
    * the Text tab never read it (so the tab can mark what the edit
-   * changed), and notes it; returns the step it made.
+   * changed), and notes it; returns the step it made, `null` when it
+   * made none (an arc added that the layer has already): the step
+   * before it is not this edit's to note, or to take back.
    */
   #composing(session: Session, prim: string, run: () => EditReceipt, variant?: CompositionEdit["variant"]): HistoryStep | null {
     const target = session.target;
     const layer = target === undefined ? session.stage.editLayer : "kind" in target ? target.layer : target;
     if (layer !== null && this.lastLayerText(layer) === null) this.layerText(layer);
+    const before = session.history.nextUndo;
     const receipt = run();
-    const step = session.history.nextUndo;
+    const step = session.history.nextUndo === before ? null : session.history.nextUndo;
     this.#composition.edit = step === null ? null : { prim, label: step.label, layer: receipt.target.layer, step, ...(variant === undefined ? {} : { variant }) };
     return step;
   }

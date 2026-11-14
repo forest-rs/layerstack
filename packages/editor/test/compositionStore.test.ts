@@ -317,6 +317,18 @@ test("of two references to one asset, to its default prim and to another prim, e
   assert.deepEqual(stage.prim("/World/Pile")!.compositionArcs().filter((arc) => arc.arc === "references").map((arc) => arc.site), ["/Props"]);
 });
 
+test("adding an arc the layer has already changes nothing, and is not noted as the step before it", async () => {
+  const { h, store, stage, steps } = await opened();
+  assert.equal(store.setValue("/World/Rock.radius", { type: "double", value: 3 }), undefined);
+  const before = steps();
+  const text = new TextDecoder().decode(stage.exportLayer(stage.root, "usda"));
+  // As OpenUSD's AddReference of an item the list holds at that place: nothing to author.
+  await h.settle(store.addArc("/World/Robot", reference("./assets/robot.usda")).done);
+  assert.equal(steps(), before, "no step");
+  assert.equal(new TextDecoder().decode(stage.exportLayer(stage.root, "usda")), text);
+  assert.equal(store.compositionEdit, null, "the value edit before it is not offered as a composition edit of the robot");
+});
+
 test("a variant set nested in a variant is found in that variant's branch, to remove it there", async () => {
   const { store, stage } = await opened();
   const read = (layer: Parameters<typeof store.layerSpecs>[0]) => store.layerSpecs(layer);

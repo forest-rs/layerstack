@@ -410,6 +410,58 @@ test("duplicating a prim beside itself, undone; one whose opinions are in anothe
   assert.match(noSpecToCopy("/X", "a.usda", []), /^a\.usda has no spec of \/X to copy\. /);
 });
 
+test("two duplicates asked for while an action fetches make two copies, each of the prim as it was when its turn came", async () => {
+  const h = await harness();
+  const source = sampleSource();
+  await h.open(source);
+  const { store } = h;
+  const stage = store.session!.stage;
+  const release = source.hold("assets/chrome.usda");
+  const variant = store.selectVariant("/World/Robot", "finish", "chrome");
+  await h.until(() => source.askedFor("assets/chrome.usda") > 0, "the variant's fetch");
+  store.duplicate("/World/Rock");
+  store.setValue("/World/Rock.radius", { type: "double", value: 9 });
+  store.duplicate("/World/Rock");
+  assert.equal(store.queued, 3);
+  release();
+  await h.settle(variant);
+  await h.until(() => store.running === null && store.queued === 0, "the edits behind the variant");
+  assert.deepEqual(store.notices, []);
+  // The second copy took the next name: it did not replace the first, made before the radius changed.
+  const radius = (path: string) => (stage.layerSpec(stage.root, `${path}.radius`) === null ? null : stage.attribute(`${path}.radius`)!.get());
+  assert.equal(radius("/World/Rock1"), null);
+  assert.deepEqual(radius("/World/Rock2"), { kind: "scalar", type: "double", value: 9 });
+  assert.equal(store.selection, "/World/Rock2");
+  await h.settle(store.undo());
+  assert.equal(stage.prim("/World/Rock2"), null);
+  assert.notEqual(stage.prim("/World/Rock1"), null);
+});
+
+// Owned by the review of property operations (`review-property-ops`), which fixes it once in the store's shared
+// edit path: an edit queued behind a fetch goes where edits go when it runs, not where they went when it was asked for.
+test("a kind set while an action fetches is authored where edits went when it was asked for", { todo: "fixed with the store's queued edits, in the property operations review" }, async () => {
+  const h = await harness();
+  const source = sampleSource();
+  await h.open(source);
+  const { store } = h;
+  const stage = store.session!.stage;
+  const library = stage.layers().find((layer) => layer.identifier === "library.usda")!;
+  const release = source.hold("assets/chrome.usda");
+  const variant = store.selectVariant("/World/Robot", "finish", "chrome");
+  await h.until(() => source.askedFor("assets/chrome.usda") > 0, "the variant's fetch");
+  store.setKind("/World/Top", "component");
+  store.setTarget(library);
+  release();
+  await h.settle(variant);
+  await h.until(() => store.running === null && store.queued === 0, "the edit behind the variant");
+  const kindIn = (layer: typeof library) => {
+    const spec = stage.layerSpec(layer, "/World/Top");
+    return spec?.type === "prim" ? spec.kind : null;
+  };
+  assert.equal(kindIn(stage.root), "component");
+  assert.equal(kindIn(library), null);
+});
+
 test("moving a prim under another, reordering siblings, each undone; unrepaired paths are a notice that points at Health", async () => {
   const { h, store, stage, steps } = await opened();
   assert.equal(store.moveTo("/World/Rock", "/World/Beacons"), undefined);

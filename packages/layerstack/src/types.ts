@@ -1898,7 +1898,11 @@ export interface BindMaterialEdit {
 /**
  * `UsdShadeMaterialBindingAPI::UnbindDirectBinding`, or
  * `UnbindCollectionBinding` with `bindingName`: an explicit empty target
- * list, which blocks weaker and inherited bindings of the purpose.
+ * list, which takes away what weaker layers target with that
+ * relationship. It does not block what the prim inherits: an empty
+ * binding is not bound (`DirectBinding::IsBound`), so
+ * {@link Prim.boundMaterial} goes on to the prim's other bindings and its
+ * ancestors', as `ComputeBoundMaterial` does.
  */
 export interface UnbindMaterialEdit {
   readonly type: "unbindMaterial";

@@ -7,7 +7,44 @@
 // stage writes nothing anywhere (`Stage.save`, `exportLayer`,
 // `exportFlattened`, `exportPackage` hand back bytes); the app downloads
 // them or writes them into the folder they came from.
-import type { Layer, LayerFormat, Stage, UnpackagedAsset } from "@forest-rs/layerstack";
+import type { FlattenResult, Layer, LayerFormat, PackageResult, Stage, UnpackagedAsset } from "@forest-rs/layerstack";
+
+/**
+ * What an export says before anything is written, as Save does: its
+ * title, what will be written, and the one button that writes it (`null`
+ * when nothing can be). Every export is confirmed this way, with what it
+ * loses or leaves out shown beside it.
+ */
+export interface ExportConfirmation {
+  readonly title: string;
+  readonly what: string;
+  readonly confirm: string | null;
+}
+
+/** The confirmation of the stage flattened into one layer, `name`, of `size` (`Stage.exportFlattened`), with what it loses ({@link FlattenResult.lost}). */
+export function flattenConfirmation(result: Pick<FlattenResult, "lost">, name: string, size: string): ExportConfirmation {
+  const lost = result.lost.length;
+  return {
+    title: lost === 0 ? `Export the stage flattened as ${name}` : `The flattened stage loses ${lost === 1 ? "one thing" : `${lost} things`}`,
+    what: `${name}, ${size}: every composed prim and value written into one layer with no arcs (Stage.exportFlattened).${lost === 0 ? " It loses nothing." : " What a layer cannot hold is written as authored and listed here."}`,
+    confirm: lost === 0 ? `Download ${name}` : `Download ${name} anyway`,
+  };
+}
+
+/**
+ * The confirmation of the stage as a package, `name`, of `size`
+ * (`Stage.exportPackage`, made before it is confirmed, as what it holds
+ * is known only then): what it holds, that it leaves the session layer's
+ * edits out (`lostEdits`), or that it cannot be made.
+ */
+export function packageConfirmation(result: Pick<PackageResult, "bytes" | "layers" | "assets">, name: string, size: string | null, lostEdits: boolean): ExportConfirmation {
+  const what = "A package holds the root layer and everything it depends on, with their unsaved edits (Stage.exportPackage).";
+  if (result.bytes === null) return { title: "The package cannot be made", what, confirm: null };
+  const holds = ` ${name}: ${result.layers} layers and ${result.assets} other assets, ${size ?? ""}.`;
+  return lostEdits
+    ? { title: "The package leaves out the session layer", what: `${what}${holds}`, confirm: "Download the package without them" }
+    : { title: `Export the stage as ${name}`, what: `${what}${holds}`, confirm: `Download ${name}` };
+}
 
 /** What a save does with one dirty layer. */
 export type SaveDisposition =

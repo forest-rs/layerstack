@@ -7,7 +7,9 @@
 // confirmation listing them; a layer exports as USDA or USDC
 // (`Stage.exportLayer`), the composed stage as one flattened layer
 // (`Stage.exportFlattened`, saying what a flatten loses) or as a USDZ
-// package (`Stage.exportPackage`, saying what it could not hold). The
+// package (`Stage.exportPackage`, saying what it could not hold). Each
+// is confirmed as a save is: what will be written first, then one button
+// that writes it (`model/files.ts`, `ExportConfirmation`). The
 // menu's button counts the layers with unsaved edits, and the page asks
 // before it is left while there are any.
 import { useEffect, useState } from "react";
@@ -27,7 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { fileName, fileNames, type SaveEntry } from "../model/files.ts";
+import { fileName, fileNames, flattenConfirmation, packageConfirmation, type SaveEntry } from "../model/files.ts";
 import type { EditorStore } from "../store.ts";
 import { useEditorStore, useRevision } from "./context.ts";
 import { download, downloadAll, exportLayerFile } from "./download.ts";
@@ -76,10 +78,8 @@ export function FileMenu() {
   }, [store]);
   const flatten = (format: LayerFormat) => {
     const result = store.exportFlattened(format);
-    if (result === null) return;
-    // A lossless flatten is downloaded at once; one that lost something says what first.
-    if (result.lossless) download(flattenedName(store, format), result.bytes);
-    else setDialog({ kind: "flatten", format, result });
+    // What will be written first, and what it loses, then one confirm.
+    if (result !== null) setDialog({ kind: "flatten", format, result });
   };
   const pack = async () => {
     setDialog({ kind: "package", result: null });
@@ -88,10 +88,7 @@ export function FileMenu() {
       setDialog(null);
       return;
     }
-    const sessionLayer = store.session?.sessionLayer ?? null;
-    const lostEdits = sessionLayer !== null && result.omitted.includes(sessionLayer) && store.isEdited(sessionLayer);
-    // A package with nothing to say is downloaded at once, and the dialog says what it holds.
-    if (result.bytes !== null && !lostEdits) download(fileName(store.session?.root ?? "stage.usda", "usdz"), result.bytes);
+    // Made first, as what it holds is known only then; downloaded once confirmed.
     setDialog({ kind: "package", result });
   };
   return (
@@ -117,9 +114,9 @@ export function FileMenu() {
           <DropdownMenuGroup>
             <DropdownMenuLabel>Export</DropdownMenuLabel>
             <DropdownMenuItem onAction={() => setDialog({ kind: "layer" })}>A layer as .usda or .usdc…</DropdownMenuItem>
-            <DropdownMenuItem onAction={() => flatten("usda")}>The stage flattened, as .usda</DropdownMenuItem>
-            <DropdownMenuItem onAction={() => flatten("usdc")}>The stage flattened, as .usdc</DropdownMenuItem>
-            <DropdownMenuItem onAction={() => void pack()}>The stage as a .usdz package</DropdownMenuItem>
+            <DropdownMenuItem onAction={() => flatten("usda")}>The stage flattened, as .usda…</DropdownMenuItem>
+            <DropdownMenuItem onAction={() => flatten("usdc")}>The stage flattened, as .usdc…</DropdownMenuItem>
+            <DropdownMenuItem onAction={() => void pack()}>The stage as a .usdz package…</DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
@@ -146,6 +143,7 @@ export function FileMenu() {
               download(flattenedName(store, dialog.format), dialog.result.bytes);
               setDialog(null);
             }}
+            onClose={() => setDialog(null)}
           />
         )}
         {dialog?.kind === "package" && <PackageDialog store={store} result={dialog.result} onClose={() => setDialog(null)} />}
@@ -389,31 +387,35 @@ function ExportLayerDialog({ store, onClose }: { store: EditorStore; onClose: ()
   );
 }
 
-/** A flatten that lost something: what, before it is downloaded. */
-function FlattenDialog({ result, name, onDownload }: { result: FlattenResult; name: string; onDownload: () => void }) {
+/** The stage flattened: what will be written, and what it loses, before it is downloaded. */
+function FlattenDialog({ result, name, onDownload, onClose }: { result: FlattenResult; name: string; onDownload: () => void; onClose: () => void }) {
+  const said = flattenConfirmation(result, name, formatBytes(result.bytes.byteLength));
   return (
     <>
       <DialogHeader>
-        <DialogTitle>The flattened stage loses {result.lost.length === 1 ? "one thing" : `${result.lost.length} things`}</DialogTitle>
-        <DialogDescription>
-          Flattening writes every composed prim and value into one layer with no arcs (<code>Stage.exportFlattened</code>). What a layer cannot hold is written as authored and listed here.
-        </DialogDescription>
+        <DialogTitle>{said.title}</DialogTitle>
+        <DialogDescription>{said.what}</DialogDescription>
       </DialogHeader>
-      <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
-        {result.lost.map((loss, index) => (
-          <li key={index}>
-            <span className="font-mono text-[11px]">{loss.path}</span> <span className="text-muted-foreground">{loss.message}</span>
-          </li>
-        ))}
-      </ul>
-      <DialogFooter showCloseButton>
-        <Button onPress={onDownload}>Download {name} anyway</Button>
+      {result.lost.length > 0 && (
+        <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
+          {result.lost.map((loss, index) => (
+            <li key={index}>
+              <span className="font-mono text-[11px]">{loss.path}</span> <span className="text-muted-foreground">{loss.message}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <DialogFooter>
+        <Button variant="outline" onPress={onClose}>
+          Cancel
+        </Button>
+        <Button onPress={onDownload}>{said.confirm}</Button>
       </DialogFooter>
     </>
   );
 }
 
-/** A package being made, then what it holds or why it could not be made, and what it leaves out. */
+/** A package being made, then what it holds or why it could not be made, and what it leaves out, before it is downloaded. */
 function PackageDialog({ store, result, onClose }: { store: EditorStore; result: PackageResult | null; onClose: () => void }) {
   if (result === null) {
     return (
@@ -430,14 +432,12 @@ function PackageDialog({ store, result, onClose }: { store: EditorStore; result:
   const lostEdits = sessionLayer !== null && result.omitted.includes(sessionLayer) && store.isEdited(sessionLayer);
   const name = fileName(session?.root ?? "stage.usda", "usdz");
   const bytes = result.bytes;
+  const said = packageConfirmation(result, name, bytes === null ? null : formatBytes(bytes.byteLength), lostEdits);
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{bytes === null ? "The package cannot be made" : lostEdits ? "The package leaves out the session layer" : `Downloaded ${name}`}</DialogTitle>
-        <DialogDescription>
-          A package holds the root layer and everything it depends on, with their unsaved edits (<code>Stage.exportPackage</code>).
-          {bytes !== null && ` This one: ${result.layers} layers and ${result.assets} other assets, ${formatBytes(bytes.byteLength)}.`}
-        </DialogDescription>
+        <DialogTitle>{said.title}</DialogTitle>
+        <DialogDescription>{said.what}</DialogDescription>
       </DialogHeader>
       {result.unresolved.length > 0 && (
         <>
@@ -463,18 +463,20 @@ function PackageDialog({ store, result, onClose }: { store: EditorStore; result:
             Export the session layer
           </Button>
         )}
-        {lostEdits && bytes !== null && (
+        <Button variant="outline" onPress={onClose}>
+          {bytes === null ? "Close" : "Cancel"}
+        </Button>
+        {bytes !== null && said.confirm !== null && (
           <Button
-            variant="outline"
+            variant={lostEdits ? "outline" : "default"}
             onPress={() => {
               download(name, bytes);
               onClose();
             }}
           >
-            Download the package without them
+            {said.confirm}
           </Button>
         )}
-        <Button onPress={onClose}>{bytes !== null && !lostEdits ? "Done" : "Close"}</Button>
       </DialogFooter>
     </>
   );

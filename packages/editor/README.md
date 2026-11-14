@@ -68,10 +68,12 @@ nothing more.
   downloads. A layer exports as `.usda` or `.usdc` (`Stage.exportLayer`;
   also its own commands, wherever a layer is shown), the composed stage
   as one flattened layer (`Stage.exportFlattened`; a flatten that loses
-  something lists what before it is downloaded), or as a `.usdz` package
+  something lists what), or as a `.usdz` package
   (`Stage.exportPackage`), for which the editor fetches what the stage
   never read (a variant's layers, textures, every tile of a UDIM set) and
-  lists what it still could not. The **Open** menu can put the next
+  lists what it still could not. Each export is confirmed as a save is:
+  what will be written first (its name and size, what it loses or leaves
+  out), then one button that downloads it. The **Open** menu can put the next
   scene's edits in a session layer in front of its root; a `.usdz` root,
   which is read-only, is always edited so, and the edit target says why.
   A save leaves the session layer, which is never part of the root: it is

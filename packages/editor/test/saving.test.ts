@@ -8,6 +8,7 @@
 // in a session layer, and the page knows when leaving would lose edits.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { flattenConfirmation, packageConfirmation } from "../src/model/files.ts";
 import type { SceneSource } from "../src/model/sources.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
@@ -125,6 +126,12 @@ test("a flatten of the sample is lossless; one that cannot bake value clips says
   assert.equal(lossless.lossless, true);
   assert.deepEqual(lossless.lost, []);
   assert.doesNotMatch(text(lossless.bytes), /@\.\/assets\/|subLayers/, "no arcs to other layers");
+  // Lossless, it is still confirmed first, as a save is: what will be written, then one button.
+  assert.deepEqual(flattenConfirmation(lossless, "scene.flat.usda", "12.0 KB"), {
+    title: "Export the stage flattened as scene.flat.usda",
+    what: "scene.flat.usda, 12.0 KB: every composed prim and value written into one layer with no arcs (Stage.exportFlattened). It loses nothing.",
+    confirm: "Download scene.flat.usda",
+  });
 
   await h.open(sampleSource("clips.usda", { "clips.usda": MISSING_CLIP }));
   const flat = h.store.exportFlattened("usdc");
@@ -132,6 +139,9 @@ test("a flatten of the sample is lossless; one that cannot bake value clips says
   assert.equal(flat.lossless, false);
   assert.deepEqual(flat.lost, [{ path: "/World", message: "lost: value clips" }]);
   assert.equal(text(flat.bytes.subarray(0, 8)), "PXR-USDC", "written all the same, for the person to decide");
+  const lossy = flattenConfirmation(flat, "clips.flat.usdc", "1.0 KB");
+  assert.equal(lossy.title, "The flattened stage loses one thing");
+  assert.equal(lossy.confirm, "Download clips.flat.usdc anyway");
 });
 
 test("a save leaves the session layer, and says it is the session layer", async () => {
@@ -191,6 +201,13 @@ test("a package fetches what the stage never read, and a USDZ root opens editabl
   assert.equal(packaged.assets, 3, "the checker and the two UDIM tiles");
   assert.ok(source.asked.includes("textures/tile.1002.png"), "every tile of the UDIM set");
   assert.ok(store.dirtyLayers().length === 1, "packaging saves nothing");
+  // Made, then confirmed: what it holds first, then one button that downloads it.
+  assert.deepEqual(packageConfirmation(packaged, "scene.usdz", "1.0 MB", false), {
+    title: "Export the stage as scene.usdz",
+    what: "A package holds the root layer and everything it depends on, with their unsaved edits (Stage.exportPackage). scene.usdz: 5 layers and 3 other assets, 1.0 MB.",
+    confirm: "Download scene.usdz",
+  });
+  assert.equal(packageConfirmation({ ...packaged, bytes: null }, "scene.usdz", null, false).confirm, null, "nothing to download");
   // The variant whose layer the package fetched still composes when chosen.
   await h.settle(store.selectVariant("/World/Robot", "finish", "chrome"));
   assert.deepEqual(store.notices, []);
@@ -216,6 +233,10 @@ test("a package fetches what the stage never read, and a USDZ root opens editabl
   const again = await h.settle(store.exportPackage());
   assert.ok(again?.bytes != null);
   assert.deepEqual(again.omitted, [sessionLayer]);
+  assert.deepEqual(
+    (({ title, confirm }) => [title, confirm])(packageConfirmation(again, "sample.usdz", "1.0 MB", true)),
+    ["The package leaves out the session layer", "Download the package without them"],
+  );
 });
 
 test("the Text tab reads a layer as USDA and marks the lines the last edit changed", async () => {

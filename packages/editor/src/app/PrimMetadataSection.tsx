@@ -11,6 +11,7 @@ import { useState } from "react";
 import type { Prim, Value } from "@forest-rs/layerstack";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { holdsField } from "../model/primAuthoring.ts";
 import { formatValue, releaseValue } from "../model/values.ts";
 import type { EditorStore } from "../store.ts";
 import { editsGoTo, RefusalNote, useRefusal } from "./primAuthoringParts.tsx";
@@ -97,7 +98,7 @@ function Documentation({ store, prim, documentation }: { store: EditorStore; pri
             Save
           </Button>
         )}
-        {!changed && documentation !== null && !readOnly && (
+        {!changed && holdsField(store.targetSpec(prim.path), "documentation") && !readOnly && (
           <Button variant="ghost" size="xs" aria-label={`Clear ${editsGoTo(store)}'s documentation`} onPress={() => attempt(() => store.setDocumentation(prim.path, ""))}>
             Clear
           </Button>

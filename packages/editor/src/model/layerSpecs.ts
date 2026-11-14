@@ -81,22 +81,44 @@ export function authoredSpec(spec: LayerSpec | null): AuthoredSpec | null {
 }
 
 /**
- * A {@link SpecsOf} over `stage` that reads each layer and path once, so
- * the arcs it gives are the same objects each time it is asked (a spec
- * read is a snapshot: make another after an edit). A path the layer
- * cannot hold a spec at reads as none.
+ * The specs of `stage`'s layers, each layer and path read once (a spec
+ * read is a snapshot: make another cache after an edit), so what it gives
+ * is the same object each time it is asked: an arc taken by one composed
+ * arc is the same item when the next asks.
  */
-export function specReader(stage: Pick<Stage, "layerSpec">): SpecsOf {
-  const read = new Map<Layer, Map<string, AuthoredSpec | null>>();
-  return (layer, path) => {
-    let paths = read.get(layer);
-    if (paths === undefined) read.set(layer, (paths = new Map()));
+export class SpecCache {
+  readonly #stage: Pick<Stage, "layerSpec">;
+  readonly #specs = new Map<Layer, Map<string, LayerSpec | null>>();
+  readonly #prims = new Map<LayerSpec, AuthoredSpec | null>();
+
+  constructor(stage: Pick<Stage, "layerSpec">) {
+    this.#stage = stage;
+  }
+
+  /** What `layer` holds at `path` (`Stage.layerSpec`): any kind of spec, or `null`. Throws what that throws. */
+  spec(layer: Layer, path: string): LayerSpec | null {
+    let paths = this.#specs.get(layer);
+    if (paths === undefined) this.#specs.set(layer, (paths = new Map()));
     const cached = paths.get(path);
     if (cached !== undefined) return cached;
-    const spec = authoredSpec(stage.layerSpec(layer, path));
+    const spec = this.#stage.layerSpec(layer, path);
     paths.set(path, spec);
     return spec;
+  }
+
+  /** The prim or variant spec `layer` holds at `path`, with its arcs ({@link SpecsOf}). */
+  readonly prim: SpecsOf = (layer, path) => {
+    const spec = this.spec(layer, path);
+    if (spec === null) return null;
+    let read = this.#prims.get(spec);
+    if (read === undefined) this.#prims.set(spec, (read = authoredSpec(spec)));
+    return read;
   };
+}
+
+/** A {@link SpecsOf} over `stage` that reads each layer and path once ({@link SpecCache}). */
+export function specReader(stage: Pick<Stage, "layerSpec">): SpecsOf {
+  return new SpecCache(stage).prim;
 }
 
 /** A root prim of a layer: its name, specifier and type. */

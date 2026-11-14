@@ -21,6 +21,7 @@ import {
   API_SCHEMA_NOTES,
   applicableSchemas,
   childPath,
+  holdsField,
   instanceNameProblem,
   nameOf,
   opinionSites,
@@ -332,9 +333,12 @@ function RetypeDialog({ store, stage, path, onClose }: { store: EditorStore; sta
   const [filter, setFilter] = useState("");
   const [refusal, setRefusal] = useState<string | null>(null);
   const where = editsGoTo(store);
+  // Clearing takes away only the type the spec edits go to holds.
+  const clears = holdsField(store.targetSpec(path), "typeName");
   const unchanged = typeName === (prim?.typeName ?? null);
+  const nothingToClear = typeName === null && !clears;
   const commit = () => {
-    if (unchanged) return;
+    if (unchanged || nothingToClear) return;
     const refused = store.setTypeName(path, typeName);
     if (refused === undefined) onClose();
     else setRefusal(refused);
@@ -359,13 +363,19 @@ function RetypeDialog({ store, stage, path, onClose }: { store: EditorStore; sta
         }}
         className="h-7 text-xs"
       />
-      <TypeList stage={stage} filter={filter} typeName={typeName} onChoose={setTypeName} typelessLabel={`clears ${where}'s type name`} />
+      <TypeList
+        stage={stage}
+        filter={filter}
+        typeName={typeName}
+        onChoose={setTypeName}
+        typelessLabel={clears ? `clears ${where}'s type name` : `${where} authors no type name to clear`}
+      />
       <RefusalNote refusal={refusal} className="text-[11px] text-destructive" />
       <DialogFooter>
         <Button variant="outline" onPress={onClose}>
           Cancel
         </Button>
-        <Button isDisabled={unchanged} onPress={commit}>
+        <Button isDisabled={unchanged || nothingToClear} onPress={commit}>
           {typeName === null ? `Clear its type in ${where}` : `Make it a ${typeName}`}
         </Button>
       </DialogFooter>

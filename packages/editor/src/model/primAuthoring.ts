@@ -4,11 +4,12 @@
 // What the prim-authoring controls decide with, with no DOM: the kinds a
 // prim may be, the concrete types grouped as the Add and Retype dialogs
 // list them, the API schemas that can apply to a prim and their instance
-// names, which applied schemas a layer authors (and so can remove), a
-// free sibling name for a duplicate, a reparent's destination and why it
+// names, which applied schemas a layer authors and what removing one where
+// edits go would do, which prim fields the edit target's own spec holds
+// (what a Clear there takes away), a free sibling name for a duplicate, a reparent's destination and why it
 // cannot be made, a sibling order with one child moved, and where a
 // prim's opinions are when the edit target has none to copy.
-import type { ArcKind, EditTarget, Layer, Prim, SchemaInfo, Stage } from "@forest-rs/layerstack";
+import type { ArcKind, CompositionArc, EditTarget, Layer, LayerSpec, Prim, PrimSpec, SchemaInfo, Stage } from "@forest-rs/layerstack";
 import { releaseValue } from "./values.ts";
 
 /** A prim name as USD takes it: an identifier. */
@@ -231,6 +232,91 @@ export function appliedSchemaRows(applied: readonly string[], authored: readonly
       authored: listed.has(name),
     };
   });
+}
+
+/** The prim fields a Clear takes away where edits go, by their OpenUSD keys (`SdfFieldKeys`). */
+export type ClearableField = "active" | "instanceable" | "kind" | "typeName" | "documentation";
+
+/**
+ * Whether `spec`, the edit target's own spec of a prim
+ * (`EditorStore.targetSpec`), holds `field`: what a Clear there would
+ * take away. A value only another layer authors is not the target's to
+ * clear, so Clear is not offered for it. AOUSD Core §7.6.2 (prim fields).
+ */
+export function holdsField(spec: LayerSpec | null, field: ClearableField): boolean {
+  return spec !== null && (spec.type === "prim" || spec.type === "variant") && spec.fields.includes(field);
+}
+
+/** Whether `spec` applies `name` (`CollectionAPI:parts`): its `apiSchemas` list op adds it in a list other than `delete` (and `reorder`, which adds nothing). */
+export function appliesSchema(spec: PrimSpec | null, name: string): boolean {
+  const op = spec?.apiSchemas ?? null;
+  if (op === null) return false;
+  return [op.explicit ?? [], op.prepended, op.appended, op.added].some((list) => list.includes(name));
+}
+
+/** One spec a prim's `apiSchemas` compose from: a layer of an arc's stack at the arc's site, and the prim spec it holds there. */
+export interface SchemaSite {
+  readonly layer: Layer;
+  readonly spec: PrimSpec | null;
+}
+
+/**
+ * The specs a prim's `apiSchemas` compose from, strongest first (each
+ * arc's layers at its site, `CompositionArc.layers`; a relocate reads
+ * none), and which of them edits write: `target` is where an edit of the
+ * prim is written (its layer and spec path), and the index returned is
+ * its site's, -1 when it is none of them (a variant not selected).
+ */
+export function schemaSites(
+  arcs: readonly Pick<CompositionArc, "arc" | "site" | "layers">[],
+  target: { readonly layer: Layer; readonly specPath: string } | null,
+  read: (layer: Layer, path: string) => PrimSpec | null,
+): { readonly sites: SchemaSite[]; readonly target: number } {
+  const sites: SchemaSite[] = [];
+  let at = -1;
+  for (const arc of arcs) {
+    if (arc.arc === "relocates") continue;
+    for (const layer of arc.layers) {
+      if (target !== null && layer === target.layer && arc.site === target.specPath) at = sites.length;
+      sites.push({ layer, spec: read(layer, arc.site) });
+    }
+  }
+  return { sites, target: at };
+}
+
+/**
+ * What removing an applied schema does where edits go (`removeAPI`,
+ * `UsdPrim::RemoveAPI`, which takes it from the target's lists and adds
+ * it to the deleted items):
+ *
+ * - `builtIn`: its type applies it; no layer can remove it;
+ * - `remove`: the target's own spec applies it, so Remove takes it away
+ *   there (and deletes what weaker layers apply);
+ * - `delete`: only a weaker spec applies it (`layer`; `null` when none is
+ *   found), so the edit is a delete here, which removes what that layer
+ *   applies;
+ * - `stronger`: a stronger spec applies it (`layer`), which a delete
+ *   where edits go does not take away: edit there to remove it.
+ *
+ * AOUSD Core §12.4 (list ops: each stronger opinion's lists apply over
+ * the weaker's result, so a weaker `delete` does not take what a
+ * stronger list adds).
+ */
+export type SchemaRemoval =
+  | { readonly kind: "builtIn" }
+  | { readonly kind: "remove" }
+  | { readonly kind: "delete"; readonly layer: Layer | null }
+  | { readonly kind: "stronger"; readonly layer: Layer };
+
+/** What removing `row` where edits go does ({@link SchemaRemoval}), over the specs its prim composes from ({@link schemaSites}). */
+export function schemaRemoval(row: Pick<AppliedSchema, "applied" | "authored">, sites: readonly SchemaSite[], target: number): SchemaRemoval {
+  if (!row.authored) return { kind: "builtIn" };
+  if (target >= 0 && appliesSchema(sites[target]!.spec, row.applied)) return { kind: "remove" };
+  const at = sites.findIndex((site, index) => index !== target && appliesSchema(site.spec, row.applied));
+  if (at < 0) return { kind: "delete", layer: null };
+  // A target the prim does not compose (a variant not selected) takes nothing away: as weak as can be.
+  if (target < 0 || at < target) return { kind: "stronger", layer: sites[at]!.layer };
+  return { kind: "delete", layer: sites[at]!.layer };
 }
 
 /** The composed `apiSchemas` of `prim` as names; empty when nothing authors it. Reads and releases the value. */

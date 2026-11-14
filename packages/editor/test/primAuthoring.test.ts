@@ -15,6 +15,7 @@ import {
   appliedSchemaRows,
   authoredApiSchemas,
   freeSiblingName,
+  holdsField,
   hiddenBy,
   instanceNameProblem,
   kindChoices,
@@ -23,6 +24,8 @@ import {
   opinionSites,
   primNameProblem,
   rowVisibilities,
+  schemaRemoval,
+  schemaSites,
   siblingOrder,
   specStagePath,
   treeDrop,
@@ -30,6 +33,7 @@ import {
   typeGroups,
   typeMatches,
 } from "../src/model/primAuthoring.ts";
+import { targetSite } from "../src/model/propertyOps.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
 /** The sample scene, open, with nothing reported. */
@@ -246,6 +250,68 @@ test("clearing the edit layer's opinion of active and instanceable", async () =>
   assert.equal(steps(), 3);
   await h.settle(store.undo());
   assert.equal(stage.prim("/World/Beacons/North")!.instance, true);
+});
+
+test("Clear is offered for a prim field only when the spec edits go to holds it", async () => {
+  const { store, stage } = await opened();
+  const library = store.session!.layerNamed("library.usda");
+  // The sublayer deactivates the lamp, kinds it and documents it; the root, where edits go, holds none of these.
+  store.setTarget(library);
+  store.apply("deactivate", [{ type: "setActive", path: "/World/Lamp", active: false }]);
+  assert.equal(store.setKind("/World/Lamp", "component"), undefined);
+  assert.equal(store.setDocumentation("/World/Lamp", "A lamp"), undefined);
+  for (const field of ["active", "kind", "documentation", "typeName"] as const) assert.equal(holdsField(store.targetSpec("/World/Lamp"), field), true, field);
+  store.setTarget(undefined);
+  assert.equal(stage.prim("/World/Lamp")!.active, false, "composed: what the sublayer says");
+  const own = store.targetSpec("/World/Lamp");
+  for (const field of ["active", "instanceable", "kind", "documentation", "typeName"] as const) assert.equal(holdsField(own, field), false, field);
+  // The refusal stays as a backstop.
+  assert.match(store.clearPrimOpinion("/World/Lamp", "active")!, /has no opinion of active/);
+  // The root's own opinion is offered, and a cleared one is not again.
+  store.apply("deactivate", [{ type: "setActive", path: "/World/Lamp", active: true }]);
+  assert.equal(holdsField(store.targetSpec("/World/Lamp"), "active"), true);
+  assert.equal(store.clearPrimOpinion("/World/Lamp", "active"), undefined);
+  assert.equal(holdsField(store.targetSpec("/World/Lamp"), "active"), false);
+  // Inside a variant, the variant's spec is where edits go.
+  store.editInsideVariant("/World/Robot", "finish", "painted");
+  assert.equal(store.targetSpec("/World/Robot")?.path, "/World/Robot{finish=painted}");
+  assert.equal(holdsField(store.targetSpec("/World/Robot"), "kind"), false);
+});
+
+test("an applied schema is removed where edits go apply it, deleted there when only a weaker layer does, and named when a stronger one does", async () => {
+  const { store, stage } = await opened();
+  const library = store.session!.layerNamed("library.usda");
+  const removals = (path: string) => {
+    const prim = stage.prim(path)!;
+    const session = store.session!;
+    const { sites, target } = schemaSites(prim.compositionArcs(), targetSite(stage, session.target, path), (layer, at) => store.authoredSpec(layer, at)?.spec ?? null);
+    return Object.fromEntries(
+      appliedSchemaRows(prim.appliedSchemas(), authoredApiSchemas(prim)).map((row) => {
+        const removal = schemaRemoval(row, sites, target);
+        return [row.applied, "layer" in removal ? `${removal.kind} ${removal.layer?.identifier}` : removal.kind];
+      }),
+    );
+  };
+  // The sublayer applies ShadowAPI to its lamp; the root applies ShapingAPI.
+  store.setTarget(library);
+  assert.equal(store.applySchema("/World/Lamp", "ShadowAPI"), undefined);
+  store.setTarget(undefined);
+  assert.equal(store.applySchema("/World/Lamp", "ShapingAPI"), undefined);
+  const lamp = removals("/World/Lamp");
+  assert.equal(lamp.ShapingAPI, "remove");
+  assert.equal(lamp.ShadowAPI, "delete library.usda", "only the weaker sublayer applies it: a delete here");
+  assert.equal(lamp.LightAPI, "builtIn", "its type applies it");
+  // With edits in the sublayer, the root's application is stronger: no delete there takes it.
+  store.setTarget(library);
+  assert.equal(removals("/World/Lamp").ShapingAPI, "stronger scene.usda");
+  assert.equal(removals("/World/Lamp").ShadowAPI, "remove");
+  store.setTarget(undefined);
+  // Deleting it in the root removes what the sublayer applies, which keeps its own.
+  assert.equal(store.removeSchema("/World/Lamp", "ShadowAPI"), undefined);
+  assert.equal(stage.prim("/World/Lamp")!.hasAPI("ShadowAPI"), false);
+  const sub = stage.layerSpec(library, "/World/Lamp");
+  assert.ok(sub !== null && sub.type === "prim");
+  assert.deepEqual(sub.apiSchemas?.prepended, ["ShadowAPI"]);
 });
 
 test("applying an API schema shows what it brought; removing it; a multiple-apply schema without a name refused", async () => {

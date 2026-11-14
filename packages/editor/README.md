@@ -281,9 +281,15 @@ nothing more.
   the edit target's `typeName`), sets its specifier and its kind (the
   model hierarchy's kinds, each with what it means: the stage exposes no
   kind registry), and switches active and instanceable, with **Clear** to
-  take the edit target's opinion of either away. **Applied schemas** lists
+  take the edit target's opinion of either away; Clear (and clearing the
+  kind, the type or the documentation) is offered only when the spec edits
+  go to holds that field (`Stage.layerSpec`), as a value only another
+  layer authors is not there to take. **Applied schemas** lists
   `Prim.appliedSchemas`, those its type builds in told from those layers
-  author, each authored one removable; **Apply** lists the API schemas
+  author: one the spec edits go to applies is removed there, one only a
+  weaker layer applies offers **Delete here**, which says that it removes
+  what that layer applies, and one a stronger layer applies names that
+  layer, as a delete where edits go would not take it; **Apply** lists the API schemas
   that can apply to the prim (by `canOnlyApplyTo`, grouped, with a line
   on what each is for), asks a multiple-apply schema's instance name
   (checked against `allowedInstanceNames` and those applied), and shows

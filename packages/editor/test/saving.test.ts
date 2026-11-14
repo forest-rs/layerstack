@@ -112,6 +112,42 @@ test("a save writes only the layers its confirmation lists, not one whose edits 
   assert.deepEqual(store.dirtyLayers(), []);
 });
 
+test("a layer whose edits were undone is read again from the source, with nothing to save first", async () => {
+  const h = await harness();
+  const files: Record<string, string> = { "plain.usda": '#usda 1.0\ndef Xform "World"\n{\n    double size = 1\n}\n' };
+  await h.open(sampleSource("plain.usda", files));
+  const { store } = h;
+  const stage = store.session!.stage;
+  const root = stage.root;
+  assert.equal(store.setValue("/World.size", { type: "double", value: 2 }), undefined);
+  // With the edit, it is refused: reading it again would lose the edit.
+  assert.match((await h.settle(store.reload(root))).refusal ?? "", /has unsaved edits/);
+  await h.settle(store.undo());
+  assert.ok(stage.isDirty(root), "dirty to the stage, with nothing to save");
+  assert.deepEqual(store.savePlan(), []);
+  // Another program writes the file.
+  files["plain.usda"] = '#usda 1.0\ndef Xform "World"\n{\n    double size = 5\n}\n';
+  const report = await h.settle(store.reload(root));
+  assert.equal(report.refusal, null);
+  assert.deepEqual(report.reloaded, [root]);
+  assert.deepEqual(stage.attribute("/World.size")?.get(), { kind: "scalar", type: "double", value: 5 });
+  assert.deepEqual(store.dirtyLayers(), []);
+  // The undone edit could be redone into a layer that is no longer what it changed: the history is forgotten, and says so.
+  assert.equal(report.forgotten, 1);
+  assert.equal(store.session!.history.canRedo, false);
+  assert.deepEqual(
+    store.notices.map((notice) => notice.message.slice(0, 40)),
+    ["plain.usda has unsaved edits: save or un", "the undo history (1 step) was forgotten:"],
+  );
+  // Every layer read again leaves none out for edits that were undone.
+  store.setValue("/World.size", { type: "double", value: 3 });
+  await h.settle(store.undo());
+  files["plain.usda"] = '#usda 1.0\ndef Xform "World"\n{\n    double size = 7\n}\n';
+  const all = await h.settle(store.reload(null));
+  assert.deepEqual(all.skipped, []);
+  assert.deepEqual(stage.attribute("/World.size")?.get(), { kind: "scalar", type: "double", value: 7 });
+});
+
 test("a layer exports as USDA text or USDC binary, and stays edited", async () => {
   const h = await harness();
   await h.open(sampleSource());

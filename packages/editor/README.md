@@ -360,7 +360,8 @@ nothing more.
   typed path), an inherit or specialize (a prim of the stage, class prims
   first), prepended as OpenUSD does or appended, with a layer offset
   across a reference or payload; the dialog shows the USDA line and the
-  spec it goes on. An arc to a layer the stage has not read runs the
+  spec it goes on, and an arc the layer already holds there is said in
+  it, which stays open, as nothing changed. An arc to a layer the stage has not read runs the
   asset loop with the opening overlay, and **Cancel** takes it back; a
   missing asset is a notice and stays listed under the arcs, with the
   composition error, until it is removed; so does an arc that makes a

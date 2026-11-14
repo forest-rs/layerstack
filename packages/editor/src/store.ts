@@ -1305,6 +1305,7 @@ export class EditorStore {
   addArc(prim: string, arc: NewArc): Authoring {
     const label = newArcLabel(prim, arc);
     let refusal: string | undefined;
+    let unchanged = false;
     const done = this.#actions.run(label, async (signal) => {
       const session = this.session;
       if (session === null || this.status.kind === "lost") return;
@@ -1318,6 +1319,12 @@ export class EditorStore {
           this.#settled(session, false, "history");
           return;
         }
+        if (step === null) {
+          // The layer holds it already: nothing was authored, so nothing is fetched.
+          unchanged = true;
+          this.#settled(session, false, "history");
+          return;
+        }
         if (!(await this.#supplyShown(session, label, `Adding the ${arc.kind}: fetching what it names`, step, signal))) return;
         for (const issue of session.stage.status().compositionErrors) {
           if (issue.prim === prim && issue.code === "composition.unresolved_asset") this.#notices.add(label, issue.message, issue.code);
@@ -1327,7 +1334,7 @@ export class EditorStore {
         if (!this.lose(error)) throw error;
       }
     });
-    return { refusal, done };
+    return { refusal, unchanged, done };
   }
 
   /**

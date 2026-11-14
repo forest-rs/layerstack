@@ -127,7 +127,8 @@ function describe(stage: Stage, prim: string, port: ShaderPort, definition: Defi
     group: text("displayGroup") ?? UNGROUPED,
     order: number("uiorder"),
     bounds: inputBounds(port.sdrMetadata),
-    own: opinion !== null && opinion.specPath.slice(0, opinion.specPath.lastIndexOf(".")) === prim,
+    // A local opinion at the prim's own path: a referenced spec may be at the same path in its own layer.
+    own: opinion !== null && opinion.arc === "local" && opinion.specPath.slice(0, opinion.specPath.lastIndexOf(".")) === prim,
   };
 }
 

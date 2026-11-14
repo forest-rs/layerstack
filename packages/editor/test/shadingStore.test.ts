@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readNetwork } from "../src/model/network.ts";
 import { nodeMenu, portMenu, unshownConnection } from "../src/model/networkEdits.ts";
+import { groupInputs } from "../src/model/shadingInputs.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
 const CHECKER = "/World/Looks/Checker";
@@ -299,4 +300,32 @@ test("a connection asked for while an action fetches is authored where edits wen
   assert.deepEqual(stage.port(opacity)?.connections, [alpha]);
   assert.notEqual(stage.layerSpec(stage.root, opacity), null, "the root, where edits went, has the connection");
   assert.equal(stage.layerSpec(library, opacity), null, "the sublayer chosen since has nothing of it");
+});
+
+test("an input a referenced material sets at the same path is not marked as set here until this prim sets it", async () => {
+  const h = await harness();
+  await h.open(
+    sampleSource("refs.usda", {
+      "refs.usda": `#usda 1.0
+def "Stone" (references = @./base.usda@</Stone>)
+{
+}
+`,
+      "base.usda": `#usda 1.0
+def Material "Stone"
+{
+    float inputs:roughness = 0.5
+}
+`,
+    }),
+  );
+  const { store } = h;
+  const stage = store.session!.stage;
+  const own = () => groupInputs(stage, "/Stone", stage.material("/Stone")!.inputs())[0]!.inputs[0]!.own;
+  // The asset's spec is at /Stone too: the same path in another layer, through a reference, is not this prim's own.
+  assert.equal(own(), false);
+  assert.equal(store.setShaderInput("/Stone.inputs:roughness", { type: "float", value: 0.25 }), undefined);
+  assert.equal(own(), true);
+  await h.settle(store.undo());
+  assert.equal(own(), false);
 });

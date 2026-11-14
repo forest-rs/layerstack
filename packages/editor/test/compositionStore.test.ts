@@ -11,7 +11,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { AuthoredReference, Stage } from "@forest-rs/layerstack";
-import { authoredHere, findAuthoring, mapping, type NewArc, newArcUsda, selectionTarget, strongerSelection, uncomposedHere, uncomposedWhy, variantSetSource } from "../src/model/composition.ts";
+import { authoredHere, findAuthoring, mapping, type NewArc, newArcUsda, outrankingTarget, selectionTarget, strongerSelection, uncomposedHere, uncomposedWhy, variantSetSource } from "../src/model/composition.ts";
 import { targetSite } from "../src/model/propertyOps.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
@@ -328,6 +328,65 @@ test("a variant added in a weaker layer is not said to be selected while a stron
   assert.equal(store.addVariant("/World/Robot", "finish", "satin"), undefined);
   assert.equal(robot().selection, "satin");
   assert.equal(store.compositionEdit?.variant?.outranked, undefined);
+});
+
+test("a variant outranked when it was added is no longer said to be, nor selected anywhere else, once the stronger layer is muted", async () => {
+  const h = await harness();
+  await h.open(
+    sampleSource("looks.usda", {
+      "looks.usda": `#usda 1.0
+(
+    subLayers = [
+        @./looks_strong.usda@,
+        @./looks_weak.usda@
+    ]
+)
+`,
+      "looks_strong.usda": `#usda 1.0
+
+over "P" (
+    variants = {
+        string look = "red"
+    }
+)
+{
+}
+`,
+      "looks_weak.usda": `#usda 1.0
+
+def Xform "P" (
+    variants = {
+        string look = "red"
+    }
+    prepend variantSets = "look"
+)
+{
+    variantSet "look" = {
+        "red" {
+        }
+    }
+}
+`,
+    }),
+  );
+  const store = h.store;
+  const session = store.session!;
+  const stage = session.stage;
+  const strong = session.layerNamed("looks_strong.usda");
+  const selection = () => stage.prim("/P")!.variantSets().find((set) => set.name === "look")!.selection;
+  store.setTarget(session.layerNamed("looks_weak.usda"));
+  assert.equal(store.addVariant("/P", "look", "green"), undefined);
+  const outranked = store.compositionEdit!.variant!.outranked!;
+  assert.deepEqual([outranked.layer, outranked.variant], [strong, "red"]);
+  assert.equal(selection(), "red");
+  // While it holds, the note's button selects in the stronger layer.
+  assert.equal(outrankingTarget(stage.prim("/P")!, "look", outranked), strong);
+  // Muted, the stronger layer selects nothing: green wins, the note is still the newest step's, and there is nowhere to select it.
+  await h.settle(store.setMuted(strong, true));
+  assert.equal(selection(), "green");
+  assert.equal(store.compositionEdit?.step, session.history.nextUndo, "the note is still shown");
+  assert.equal(selectionTarget(stage.prim("/P")!, outranked), null, "the arc no longer has the layer: passed on as no target, it meant where edits go");
+  assert.equal(outrankingTarget(stage.prim("/P")!, "look", outranked), null, "so the note says nothing of it, and offers no selection");
 });
 
 test("edits go back to the edit layer when an undo takes the variant or the arc they went through", async () => {

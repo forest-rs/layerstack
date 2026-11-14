@@ -31,7 +31,7 @@ import {
   kindOf,
   mapping,
   type NewArcKind,
-  selectionTarget,
+  outrankingTarget,
   targetRoute,
   targetSpec,
   uncomposedHere,
@@ -423,7 +423,9 @@ export function CompositionEditNote({ store, prim, variants }: { store: EditorSt
   if (edit === null || edit.prim !== prim.path || isVariantEdit(edit.label) !== variants) return null;
   const layer = edit.layer.identifier ?? "the session layer";
   const outranked = edit.variant?.outranked;
-  if (edit.variant !== undefined && outranked !== undefined) {
+  // Checked now, not as it was when the variant was added: a mute or another selection since may have let it win.
+  const there = edit.variant === undefined || outranked === undefined ? null : outrankingTarget(prim, edit.variant.set, outranked);
+  if (edit.variant !== undefined && outranked !== undefined && there !== null) {
     const stronger = outranked.layer.identifier ?? "the session layer";
     const { set, variant } = edit.variant;
     return (
@@ -432,7 +434,7 @@ export function CompositionEditNote({ store, prim, variants }: { store: EditorSt
           Done: <span className="font-mono">{edit.label}</span>, in {layer}, its selection authored there; but {stronger}, stronger, selects{" "}
           <span className="font-mono">{outranked.variant}</span>, so {variant} is not what the stage selects.
         </span>
-        <Button variant="outline" size="xs" onPress={() => void store.selectVariant(edit.prim, set, variant, selectionTarget(prim, outranked) ?? undefined)}>
+        <Button variant="outline" size="xs" onPress={() => void store.selectVariant(edit.prim, set, variant, there)}>
           Select {variant} in {stronger}
         </Button>
         <Button variant="outline" size="xs" onPress={() => store.showLayerText(edit.layer)}>

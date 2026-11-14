@@ -632,6 +632,24 @@ export function selectionTarget(prim: { compositionArcs(): readonly Pick<Composi
   }
 }
 
+/**
+ * Where to select a variant just added to `set` so that it wins, while
+ * the selection that outranked it when it was added (`selection`) still
+ * does: {@link selectionTarget}, or `null` once the stage selects another
+ * variant (that layer muted, its selection changed or undone) or the
+ * layer is no longer in the arc. A note made when the variant was added
+ * is checked with this before it says what wins, and before it authors:
+ * a selection is never written anywhere but the layer it names.
+ */
+export function outrankingTarget(
+  prim: { compositionArcs(): readonly Pick<CompositionArc, "editTarget">[]; variantSets(): readonly { readonly name: string; readonly selection: string | null }[] },
+  set: string,
+  selection: StrongerSelection,
+): Layer | EditTarget | null {
+  if (prim.variantSets().find((each) => each.name === set)?.selection !== selection.variant) return null;
+  return selectionTarget(prim, selection);
+}
+
 // Edit targets in words.
 
 /** A layer as the editor names it. */

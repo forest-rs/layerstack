@@ -190,10 +190,18 @@ export function applicableSchemas(schemas: readonly SchemaInfo[], prim: SchemaHo
   return API_GROUP_ORDER.filter((group) => groups.has(group)).map((group) => [group, groups.get(group)!]);
 }
 
+/**
+ * An instance name of a multiple-apply schema: a property name's
+ * namespaced identifier (`parts`, `render:parts`), as
+ * `UsdSchemaRegistry::IsAllowedAPISchemaInstanceName` takes it. The stage
+ * refuses one that is a property of the schema itself (`includes`).
+ */
+const INSTANCE_NAME = /^[A-Za-z_][A-Za-z0-9_]*(:[A-Za-z_][A-Za-z0-9_]*)*$/;
+
 /** Why `name` cannot be an instance of the multiple-apply `schema` on a prim with `applied`; `null` when it can. */
 export function instanceNameProblem(schema: SchemaInfo, name: string, applied: readonly string[]): string | null {
   if (name === "") return `${schema.name} is applied once per instance name: name this one.`;
-  if (!PRIM_NAME.test(name)) return "An instance name is a letter or _ then letters, digits or _.";
+  if (!INSTANCE_NAME.test(name)) return "An instance name is identifiers (a letter or _ then letters, digits or _), joined by colons when it is namespaced.";
   if (schema.allowedInstanceNames.length > 0 && !schema.allowedInstanceNames.includes(name)) {
     return `${schema.name} takes only the instance names ${schema.allowedInstanceNames.join(", ")}.`;
   }

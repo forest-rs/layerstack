@@ -120,6 +120,9 @@ test("an instance name is an identifier, allowed, and not applied already", () =
   const collection = schema("CollectionAPI", "multipleApplyApi");
   assert.match(instanceNameProblem(collection, "", [])!, /name this one/);
   assert.match(instanceNameProblem(collection, "2parts", [])!, /letter or _/);
+  // A namespaced instance name is one OpenUSD takes (`CollectionAPI:render:parts`); an empty component is not.
+  assert.equal(instanceNameProblem(collection, "render:parts", []), null);
+  assert.match(instanceNameProblem(collection, "render:", [])!, /joined by colons/);
   assert.match(instanceNameProblem(collection, "parts", ["CollectionAPI:parts"])!, /already/);
   assert.equal(instanceNameProblem(collection, "parts", ["CollectionAPI:other"]), null);
   const limited = schema("PhysicsDriveAPI", "multipleApplyApi", { allowedInstanceNames: ["linear", "angular"] });
@@ -365,6 +368,11 @@ test("applying an API schema shows what it brought; removing it; a multiple-appl
   assert.ok(stage.prim("/World/Rock")!.hasAPI("CollectionAPI", "parts"));
   assert.equal(store.removeSchema("/World/Rock", "CollectionAPI", "parts"), undefined);
   assert.equal(stage.prim("/World/Rock")!.hasAPI("CollectionAPI", "parts"), false);
+
+  assert.equal(store.applySchema("/World/Rock", "CollectionAPI", "render:parts"), undefined);
+  assert.ok(stage.prim("/World/Rock")!.hasAPI("CollectionAPI", "render:parts"));
+  assert.ok(stage.prim("/World/Rock")!.attributeNames().includes("collection:render:parts:expansionRule"));
+  await h.settle(store.undo());
 
   const refusal = store.applySchema("/World/Rock", "CollectionAPI");
   assert.match(refusal!, /instance name/);

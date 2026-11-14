@@ -253,6 +253,13 @@ test("the edits and USDA of an added arc, and its removal", () => {
   });
   assert.equal(stagePathOf({ prim: "/World/Robot", site: "/Robot" }, "/Shape"), "/Shape", "a root path outside the site is authored as given");
   assert.deepEqual(removeArcEdit("/World/Rock", { ...authored, field: "inherits", primPath: "/Shape" }, null), { type: "removeInherit", path: "/World/Rock", primPath: "/Shape" });
+  // A reference or payload is named with the offset its layer authors: it is part of which item it is.
+  assert.deepEqual(removeArcEdit("/World/Robot", { ...authored, field: "payload", asset: "./robot.usda", primPath: null, offset: 24, scale: 0.5 }, null), {
+    type: "removePayload",
+    path: "/World/Robot",
+    asset: "./robot.usda",
+    layerOffset: { offset: 24, scale: 0.5 },
+  });
 });
 
 test("asset paths relative to the layer that authors them", () => {

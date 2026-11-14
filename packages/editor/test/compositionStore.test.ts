@@ -10,7 +10,7 @@
 // cannot take say why before they are tried.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Stage } from "@forest-rs/layerstack";
+import type { AuthoredReference, Stage } from "@forest-rs/layerstack";
 import { findAuthoring, type NewArc, uncomposedHere } from "../src/model/composition.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
@@ -252,4 +252,92 @@ test("the layers an arc can name, and a layer's default and root prims, read or 
   assert.equal(library.defaultPrim, null);
   assert.deepEqual(library.roots.map((root) => [root.name, root.specifier]), [["Shape", "class"], ["World", "over"]]);
   assert.deepEqual(await store.layerSummary("assets/nothing.usda"), { kind: "unread", reason: "The scene's source has no assets/nothing.usda." });
+});
+
+/** The layer offsets of the arcs the root authors on `/World/Pile` in `field`: its prepended items, and its deleted ones. */
+function pileOffsets(stage: Stage, field: "references" | "payloads") {
+  const spec = stage.layerSpec(stage.root, "/World/Pile");
+  assert.ok(spec !== null && spec.type === "prim");
+  const offsets = (items: readonly AuthoredReference[] | undefined) => (items ?? []).map((item) => [item.layerOffset.offset, item.layerOffset.scale]);
+  return { prepended: offsets(spec[field]?.prepended), deleted: offsets(spec[field]?.deleted) };
+}
+
+// OpenUSD: an `SdfReference` is its asset path, prim path and layer offset together
+// (`SdfReference::operator==`), and `UsdReferences::RemoveReference` removes the item equal to the one given.
+test("of two arcs to one asset and prim that differ by layer offset, the one removed is the one asked for", async () => {
+  for (const kind of ["reference", "payload"] as const) {
+    const field = kind === "reference" ? "references" : "payloads";
+    for (const [offset, scale] of [[24, 1], [0, 2]] as const) {
+      for (const second of [true, false]) {
+        const { h, store, stage } = await opened({ "assets/props.usda": PROPS });
+        assert.equal(store.definePrim("/World", "Pile", "Xform"), undefined);
+        const arc: NewArc = { kind, asset: "./assets/props.usda", primPath: "/Props", position: "backOfPrepend", offset: 0, scale: 1 };
+        await h.settle(store.addArc("/World/Pile", arc).done);
+        await h.settle(store.addArc("/World/Pile", { ...arc, offset, scale }).done);
+        const both = { prepended: [[0, 1], [offset, scale]], deleted: [] };
+        assert.deepEqual(pileOffsets(stage, field), both);
+
+        // Each composed arc is read as the item that authors it: the one at its own offset.
+        const read = (layer: Parameters<typeof store.layerSpecs>[0]) => store.layerSpecs(layer);
+        const arcs = stage.prim("/World/Pile")!.compositionArcs();
+        const composed = arcs.flatMap((each, index) => (each.arc === "local" ? [] : [{ arc: each, source: findAuthoring(arcs, index, read) }]));
+        assert.deepEqual(composed.map(({ arc: each }) => [each.layerOffset.offset, each.layerOffset.scale]), [[0, 1], [offset, scale]]);
+        assert.deepEqual(composed.map(({ source }) => [source?.item.offset, source?.item.scale]), [[0, 1], [offset, scale]], "each arc's row names its own item");
+        assert.deepEqual(uncomposedHere(arcs, stage.root, "/World/Pile", read), [], "neither is listed as composing nothing");
+
+        const [gone, kept] = second ? [[offset, scale], [0, 1]] : [[0, 1], [offset, scale]];
+        assert.equal(store.removeArc("/World/Pile", composed[second ? 1 : 0]!.source!.item), undefined);
+        const after = { prepended: [kept], deleted: [gone] };
+        assert.deepEqual(pileOffsets(stage, field), after, `${kind}: removing the one at ${gone} keeps the one at ${kept}`);
+        const left = stage.prim("/World/Pile")!.compositionArcs().filter((each) => each.arc !== "local");
+        assert.deepEqual(left.map((each) => [each.layerOffset.offset, each.layerOffset.scale]), [kept]);
+        await h.settle(store.undo());
+        assert.deepEqual(pileOffsets(stage, field), both, "undo: both back, in order, at their offsets");
+        await h.settle(store.redo());
+        assert.deepEqual(pileOffsets(stage, field), after, "redo");
+      }
+    }
+  }
+});
+
+test("of two references to one asset, to its default prim and to another prim, each is read as its own item", async () => {
+  const { h, store, stage } = await opened({ "assets/props.usda": PROPS });
+  assert.equal(store.definePrim("/World", "Pile", "Xform"), undefined);
+  await h.settle(store.addArc("/World/Pile", reference("./assets/props.usda")).done);
+  await h.settle(store.addArc("/World/Pile", reference("./assets/props.usda", "/Props/Crate")).done);
+  const read = (layer: Parameters<typeof store.layerSpecs>[0]) => store.layerSpecs(layer);
+  const arcs = stage.prim("/World/Pile")!.compositionArcs();
+  // An item with no prim path composes any site, so the second arc must not be read as the first's item.
+  const sources = arcs.flatMap((arc, index) => (arc.arc === "references" ? [[arc.site, findAuthoring(arcs, index, read)?.item.primPath]] : []));
+  assert.deepEqual(sources, [["/Props", null], ["/Props/Crate", "/Props/Crate"]]);
+  assert.deepEqual(uncomposedHere(arcs, stage.root, "/World/Pile", read), [], "the one to /Props/Crate composes, and is not listed as composing nothing");
+  // Removing the one to /Props/Crate leaves the default prim's.
+  const crate = findAuthoring(arcs, arcs.findIndex((arc) => arc.site === "/Props/Crate"), read)!;
+  assert.equal(store.removeArc("/World/Pile", crate.item), undefined);
+  assert.deepEqual(stage.prim("/World/Pile")!.compositionArcs().filter((arc) => arc.arc === "references").map((arc) => arc.site), ["/Props"]);
+});
+
+test("through a reference read at an offset, the arc removed is the one at the offset its layer authors", async () => {
+  const { h, store, stage } = await opened({ "assets/props.usda": PROPS });
+  assert.equal(store.definePrim("/World", "Pile", "Xform"), undefined);
+  await h.settle(store.addArc("/World/Pile", { ...reference("./assets/props.usda"), offset: 10, scale: 2 }).done);
+  const through = stage.prim("/World/Pile")!.compositionArcs().find((arc) => arc.arc === "references")!.editTarget();
+  store.setTarget(through);
+  assert.deepEqual(through.layerOffset, { offset: 10, scale: 2 });
+  // In the asset, two references to the chrome finish beside it, at the asset's own offsets 0 and 24.
+  await h.settle(store.addArc("/World/Pile/Crate", reference("./chrome.usda")).done);
+  await h.settle(store.addArc("/World/Pile/Crate", { ...reference("./chrome.usda"), offset: 24 }).done);
+  const authored = () => {
+    const spec = stage.layerSpec(through.layer, "/Props/Crate");
+    assert.ok(spec !== null && spec.type === "prim");
+    return { prepended: spec.references?.prepended.map((item) => item.layerOffset.offset), deleted: spec.references?.deleted.map((item) => item.layerOffset.offset) };
+  };
+  assert.deepEqual(authored(), { prepended: [0, 24], deleted: [] }, "authored as given, not mapped through the target's offset");
+  const arcs = stage.prim("/World/Pile/Crate")!.compositionArcs();
+  const chrome = arcs.flatMap((arc, index) => (arc.layerStack.identifier === "assets/chrome.usda" ? [{ arc, source: findAuthoring(arcs, index, (layer) => store.layerSpecs(layer)) }] : []));
+  // To stage times: the asset's offset (10, scale 2) over each item's.
+  assert.deepEqual(chrome.map(({ arc }) => arc.layerOffset), [{ offset: 10, scale: 2 }, { offset: 58, scale: 2 }]);
+  assert.deepEqual(chrome.map(({ source }) => source?.item.offset), [0, 24]);
+  assert.equal(store.removeArc("/World/Pile/Crate", chrome[1]!.source!.item), undefined);
+  assert.deepEqual(authored(), { prepended: [0], deleted: [24] });
 });

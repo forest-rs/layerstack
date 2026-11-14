@@ -952,13 +952,16 @@ export class EditorStore {
   }
 
   /**
-   * Unbinds the prim at `path`'s direct binding (`UnbindDirectBinding`):
-   * an explicit empty `material:binding`, which also blocks what weaker
-   * layers and its ancestors bind. Returns why the stage refused it.
+   * Unbinds the prim at `path`'s direct binding (`UnbindDirectBinding`),
+   * for `purpose` (`preview`, `full`) when given, else for all purposes:
+   * an explicit empty `material:binding`, which takes away what weaker
+   * layers bind the prim to. It does not block what the prim inherits: an
+   * empty binding is not bound, and the prim is then bound as its
+   * ancestors' bindings decide. Returns why the stage refused it.
    */
-  unbindMaterial(path: string): string | undefined {
-    const label = `unbind the material of ${path}`;
-    return this.#edit(label, (session) => session.apply(label, [{ type: "unbindMaterial", path }]));
+  unbindMaterial(path: string, purpose?: string): string | undefined {
+    const label = `unbind the material of ${path}${purpose === undefined ? "" : ` for ${purpose}`}`;
+    return this.#edit(label, (session) => session.apply(label, [{ type: "unbindMaterial", path, ...(purpose === undefined ? {} : { purpose }) }]));
   }
 
   /** Authors the prim at `path`'s `kind` (`UsdModelAPI::SetKind`), or with `null` clears the edit target's opinion of it. */

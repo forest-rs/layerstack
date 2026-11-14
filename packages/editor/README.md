@@ -303,10 +303,13 @@ nothing more.
   on what each is for), asks a multiple-apply schema's instance name
   (checked against `allowedInstanceNames` and those applied), and shows
   the properties the schema brought, at their fallbacks. **Material**
-  shows the bound material and the binding that decides it, live; **Bind…**
+  shows the bound material and the binding that decides it, live, and
+  the binding of each purpose (`preview`, `full`) bound apart; **Bind…**
   picks a `Material` (those the scene's draws bind first) with a purpose
-  and strength, and **Unbind** authors an empty binding, which also blocks
-  what ancestors bind. **Metadata** edits `documentation` and shows
+  and strength, and **Unbind**, offered on the prim's own binding,
+  authors an empty one, which takes away what weaker layers bind it to
+  (an inherited binding is not blocked: an empty binding is not bound).
+  **Metadata** edits `documentation` and shows
   `customData` and `assetInfo` key by key (read, not edited: a dictionary
   composes key by key across layers). A prim's actions (add a child,
   duplicate, move, bind a material, load payloads, rename, delete) are

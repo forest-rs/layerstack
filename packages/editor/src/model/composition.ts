@@ -469,6 +469,71 @@ export function uncomposedHere(
   return authored.arcs.filter((item) => item.op !== "delete" && item.op !== "reorder" && !composed.has(key(item)));
 }
 
+/** Why an arc authored where edits go composes nothing ({@link uncomposedWhy}). */
+export interface UncomposedWhy {
+  /**
+   * `cycle`: it makes an arc cycle, which composition ignores; `error`:
+   * a composition error names its asset (missing, unreadable); `pending`:
+   * its asset is not fetched yet; `unknown`: none of these, so a stronger
+   * opinion removes it or what it names is not there.
+   */
+  readonly kind: "cycle" | "error" | "pending" | "unknown";
+  readonly text: string;
+}
+
+/** One hop of an arc cycle as a composition error spells it: `reference /World in @scene.usda@`. */
+const CYCLE_HOP = /(reference|payload|inherit|specialize) (\/\S*) in @([^@]*)@/g;
+
+/** Whether the identifier a cycle hop names is the layer `asset`, authored in `anchor`, names. */
+function namesLayer(identifier: string, anchor: string | null, asset: string): boolean {
+  const named = anchorAsset(anchor, asset);
+  return identifier === named || identifier.endsWith(`/${named}`) || identifier.endsWith(`[${named}]`);
+}
+
+/**
+ * Whether the arc cycle error `message` (`composition.arc_cycle`: `<prim>:
+ * an arc cycle is ignored: <site> in @<layer>@ -> reference <site> in
+ * @<layer>@ ...`) goes through `item`, authored in the layer `anchor`
+ * names: a hop of its kind to the site it names, in the layer its asset
+ * names (any layer of the stack for an internal arc; any site for a
+ * reference to a default prim). Matched by what the hop says, not by the
+ * item's USDA appearing in the message, which spells assets anchored and
+ * paths bare.
+ */
+export function cycleThrough(message: string, item: Pick<AuthoredArc, "field" | "asset" | "primPath">, anchor: string | null): boolean {
+  const kind = kindOf(item.field);
+  for (const [, hop, site, identifier] of message.matchAll(CYCLE_HOP)) {
+    if (hop !== kind) continue;
+    if (item.primPath !== null && site !== item.primPath) continue;
+    if (item.asset !== null && item.asset !== "" && !namesLayer(identifier!, anchor, item.asset)) continue;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Why `item`, authored where edits go in the layer `anchor` names,
+ * composes nothing, from the composition errors of its prim (`issues`)
+ * and whether its asset is waiting to be fetched (`pending`).
+ */
+export function uncomposedWhy(
+  item: Pick<AuthoredArc, "field" | "asset" | "primPath">,
+  anchor: string | null,
+  issues: readonly { readonly code: string; readonly message: string }[],
+  pending: boolean,
+): UncomposedWhy {
+  const cycle = issues.find((issue) => issue.code === "composition.arc_cycle" && cycleThrough(issue.message, item, anchor));
+  if (cycle !== undefined) {
+    const chain = cycle.message.slice(cycle.message.indexOf("ignored: ") + "ignored: ".length);
+    return { kind: "cycle", text: `It makes a cycle, so the stage ignores it: ${chain}.` };
+  }
+  const named = item.asset === null || item.asset === "" ? null : `@${item.asset}@`;
+  const error = named === null ? undefined : issues.find((issue) => issue.code !== "composition.arc_cycle" && issue.message.includes(named));
+  if (error !== undefined) return { kind: "error", text: error.message };
+  if (pending) return { kind: "pending", text: "Its asset is not fetched yet." };
+  return { kind: "unknown", text: "A stronger opinion removes it, or what it names is not there." };
+}
+
 /** The arcs the spec edits of `prim` go to deletes (`delete references = ...`): composing nothing, by design. */
 export function deletedHere(target: Layer | TargetLike, prim: string, specsOf: SpecsOf): AuthoredArc[] {
   const spec = targetSpec(target, prim);

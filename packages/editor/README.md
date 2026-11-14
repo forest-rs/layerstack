@@ -363,7 +363,9 @@ nothing more.
   spec it goes on. An arc to a layer the stage has not read runs the
   asset loop with the opening overlay, and **Cancel** takes it back; a
   missing asset is a notice and stays listed under the arcs, with the
-  composition error, until it is removed. The **Variants** section edits
+  composition error, until it is removed; so does an arc that makes a
+  cycle, said as one (the cycle error matched to the arc by the kind,
+  site and layer it names). The **Variants** section edits
   inside any variant (`Prim.variantEditTarget`; it says when the variant
   is not selected, and goes back to the edit layer), adds a variant (its
   selection authored where it goes, with editing inside it a click away;

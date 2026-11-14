@@ -9,10 +9,10 @@
 // resolution; OpenUSD's `UsdStage::GetMetadata`). So an opinion is
 // authored in one of those two, whatever layer other edits go to.
 //
-// The bindings read a field's composed value (`Stage.metadata`, its
-// fallback when nothing authors it) but not one layer's own fields, so
-// which layer holds an opinion is read from the layers' headers as USDA
-// writes them ({@link headerFields}).
+// The stage reads a field's composed value (`Stage.metadata`, its fallback
+// when nothing authors it); which of the two layers holds an opinion is
+// read from each one's pseudo-root spec (`Stage.layerSpec(layer, "/")`),
+// whose `fields` name what it authors by their OpenUSD keys.
 
 /** A field of the stage's metadata the Stage tab edits. */
 export interface StageField {
@@ -69,77 +69,6 @@ export function unitPreset(metersPerUnit: number): UnitPreset | null {
   return UNIT_PRESETS.find((preset) => Math.abs(preset.metersPerUnit - metersPerUnit) <= 1e-5 * Math.max(Math.abs(preset.metersPerUnit), Math.abs(metersPerUnit))) ?? null;
 }
 
-/** The key USDA writes a metadata field under: `documentation` is written `doc`. */
-const USDA_KEYS: Readonly<Record<string, string>> = { doc: "documentation" };
-
-/**
- * The fields a layer's header authors, as USDA writes it
- * (`Stage.exportLayer(layer, "usda")`): the keys between the `(` after
- * `#usda 1.0` and its `)`, at the header's top level (not keys nested in
- * a dictionary such as `customLayerData`), `doc` read as
- * `documentation`. Strings (`"…"`, `'…'`, triple-quoted), asset paths
- * (`@…@`) and comments are skipped, so a `=` in a value names nothing.
- * Empty for a layer with no header.
- */
-export function headerFields(text: string): Set<string> {
-  const fields = new Set<string>();
-  let at = text.startsWith("#usda") ? text.indexOf("\n") : 0;
-  if (at < 0) return fields;
-  // The header's `(`: the first character that is not space or a comment.
-  for (;;) {
-    while (at < text.length && /\s/.test(text[at]!)) at++;
-    if (text[at] === "#") {
-      const end = text.indexOf("\n", at);
-      if (end < 0) return fields;
-      at = end;
-      continue;
-    }
-    break;
-  }
-  if (text[at] !== "(") return fields;
-  at++;
-  let depth = 1;
-  // Whether the next word at depth 1 starts an entry: at the header's start, or after a line break or `;`.
-  let entry = true;
-  while (at < text.length && depth > 0) {
-    const char = text[at]!;
-    if (char === '"' || char === "'") {
-      const triple = text.startsWith(char.repeat(3), at);
-      const quote = triple ? char.repeat(3) : char;
-      at += quote.length;
-      while (at < text.length && !text.startsWith(quote, at)) at += text[at] === "\\" ? 2 : 1;
-      at += quote.length;
-      entry = false;
-      continue;
-    }
-    if (char === "@") {
-      const triple = text.startsWith("@@@", at);
-      const end = text.indexOf(triple ? "@@@" : "@", at + (triple ? 3 : 1));
-      at = end < 0 ? text.length : end + (triple ? 3 : 1);
-      entry = false;
-      continue;
-    }
-    if (char === "#") {
-      const end = text.indexOf("\n", at);
-      at = end < 0 ? text.length : end;
-      continue;
-    }
-    if (char === "(" || char === "[" || char === "{") depth++;
-    else if (char === ")" || char === "]" || char === "}") depth--;
-    if (char === "\n" || char === ";") entry = true;
-    else if (depth === 1 && entry && /[A-Za-z_]/.test(char)) {
-      const word = /^[A-Za-z_][A-Za-z0-9_:]*/.exec(text.slice(at, at + 128))![0];
-      const rest = text.slice(at + word.length, at + word.length + 8);
-      if (/^\s*=/.test(rest)) fields.add(USDA_KEYS[word] ?? word);
-      at += word.length;
-      entry = false;
-      continue;
-    } else if (!/\s/.test(char)) entry = false;
-    at++;
-  }
-  return fields;
-}
-
 /** Where a stage metadata field's value comes from. */
 export type FieldSource =
   /** The session layer authors it, over the root's. */
@@ -149,7 +78,7 @@ export type FieldSource =
   /** Neither does: the value is the field's fallback (`upAxis` Y, `metersPerUnit` 0.01, rates 24), or there is none. */
   | "fallback";
 
-/** Which layer the stage reads `key` from, given the fields the session layer's and the root's headers author. */
+/** Which layer the stage reads `key` from, given the fields the session layer's and the root's pseudo-roots author. */
 export function fieldSource(key: string, session: ReadonlySet<string> | null, root: ReadonlySet<string>): FieldSource {
   if (session?.has(key) === true) return "session";
   return root.has(key) ? "root" : "fallback";

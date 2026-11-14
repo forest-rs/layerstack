@@ -209,6 +209,28 @@ test("stage metadata is authored in the root whatever layer edits go to, follows
   assert.equal(store.range!.timeCodesPerSecond, 24);
 });
 
+test("which layer holds a stage metadata opinion is read from its own fields, no layer written as text", async () => {
+  const h = await harness();
+  await h.open(sampleSource());
+  const { store } = h;
+  const stage = store.session!.stage;
+  let exports = 0;
+  const exportLayer = stage.exportLayer.bind(stage);
+  stage.exportLayer = ((layer, format) => {
+    exports++;
+    return exportLayer(layer, format);
+  }) as typeof stage.exportLayer;
+  // A key the root's header holds only inside a dictionary is not one it authors.
+  assert.equal(store.setStageMetadata("documentation", { type: "string", value: 'upAxis = "Z"; metersPerUnit = 1' }), undefined);
+  const sources = store.stageMetadataSources();
+  assert.equal(sources.get("documentation"), "root");
+  assert.equal(sources.get("upAxis"), "fallback");
+  assert.equal(sources.get("metersPerUnit"), "fallback");
+  assert.equal(sources.get("endTimeCode"), "root");
+  assert.equal(exports, 0);
+  assert.deepEqual([...sources.keys()].filter((key) => sources.get(key) === "root").sort(), stage.layerSpec(stage.root, "/").fields.filter((key) => sources.has(key)).sort());
+});
+
 test("reloading reads changed files again, and leaves layers with unsaved edits as they are", async () => {
   const h = await harness();
   const files: Record<string, string> = {

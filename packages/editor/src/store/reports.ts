@@ -6,14 +6,14 @@
 // stage's health (`Stage.status`, the asset loop's record of who wanted
 // each asset, the last move or delete's unrepaired paths) and which layer
 // holds each stage metadata opinion (the root's and the session layer's
-// headers). Each is read when first asked for after a change, and kept
+// own fields, `Stage.layerSpec(layer, "/")`). Each is read when first asked for after a change, and kept
 // until the stage reports another, the asset loop takes a step, an undo
 // or redo moves the history, an action settles, or another scene opens;
 // a time change never reads either.
 import type { HistoryStep, Layer } from "@forest-rs/layerstack";
 import { type HealthReport, healthReport, wantingPrims } from "../model/health.ts";
 import type { Session } from "../model/session.ts";
-import { fieldSource, type FieldSource, headerFields, STAGE_FIELDS } from "../model/stageMetadata.ts";
+import { fieldSource, type FieldSource, STAGE_FIELDS } from "../model/stageMetadata.ts";
 
 /**
  * What a report was read at: its session, the changes it had heard, the
@@ -65,8 +65,8 @@ export class StageReports {
     this.#sourcesMark = mark;
     const stage = session.stage;
     const sessionLayer = session.sessionLayer;
-    const root = headerOf(session, stage.root);
-    const front = sessionLayer === null ? null : headerOf(session, sessionLayer);
+    const root = fieldsOf(session, stage.root);
+    const front = sessionLayer === null ? null : fieldsOf(session, sessionLayer);
     this.#sources = new Map(STAGE_FIELDS.map((field) => [field.key, fieldSource(field.key, front, root)]));
     return this.#sources;
   }
@@ -76,15 +76,9 @@ function markOf(session: Session): Mark {
   return { session, changes: session.changeLog.length, loop: session.loopLog.length, step: session.history.nextUndo };
 }
 
-/** The fields `layer`'s header authors, as USDA writes them; none when it cannot be written. */
-function headerOf(session: Session, layer: Layer): Set<string> {
-  try {
-    const bytes = session.stage.exportLayer(layer, "usda");
-    // The header is the text's start: a layer's prims follow it.
-    return headerFields(new TextDecoder().decode(bytes.subarray(0, Math.min(bytes.byteLength, 1 << 20))));
-  } catch {
-    return new Set();
-  }
+/** The metadata fields `layer` itself authors (its pseudo-root's, by their OpenUSD keys): one spec read, whatever the layer's size. */
+function fieldsOf(session: Session, layer: Layer): Set<string> {
+  return new Set(session.stage.layerSpec(layer, "/").fields);
 }
 
 /** Reads what {@link healthReport} sorts: the stage's status, the loop's record, the last move or delete. */

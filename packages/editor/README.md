@@ -311,7 +311,7 @@ nothing more.
   or inside a variant, moving (by **Move to…** or a drag) is not offered,
   as rename and delete are not, and neither is a duplicate whose copy the
   target does not map; the menu says why, and so does the tree under its
-  rows while a prim is dragged. Every edit says the layer it
+  rows while a prim is dragged, and after Delete on a row is refused. Every edit says the layer it
   goes to.
 - **Authoring properties.** Each property's name in the inspector is
   its path, live: a click explains it, and its context menu (or its

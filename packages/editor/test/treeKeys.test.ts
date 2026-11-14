@@ -6,7 +6,8 @@
 // rename, and a letter that continues a search stays the tree's.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { rowAction, rowAfterRemoval } from "../src/app/treeKeys.ts";
+import { rowAction, rowAfterRemoval, treeRefusal } from "../src/app/treeKeys.ts";
+import { harness, sampleSource } from "./support/storeHarness.ts";
 
 const press = (key: string, mods: { metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean; shiftKey?: boolean } = {}) => ({
   key,
@@ -64,5 +65,18 @@ describe("rowAfterRemoval", () => {
   it("is nothing for the only row, or a row not listed", () => {
     assert.equal(rowAfterRemoval(["/World"], "/World"), null);
     assert.equal(rowAfterRemoval(paths, "/Missing"), null);
+  });
+});
+
+describe("treeRefusal", () => {
+  it("says a refused drag and a refused Delete key in the same place, each for what it was", async () => {
+    // The store's refusal of a delete while edits go inside a variant: what the tree says under its rows.
+    const h = await harness();
+    await h.open(sampleSource());
+    h.store.editInsideVariant("/World/Robot", "finish", "painted");
+    const why = h.store.delete("/World/Rock");
+    assert.ok(why !== undefined);
+    assert.match(treeRefusal("delete", why), /^Not deleted: Renaming and deleting edit the opinions of the stage's own layer stack/);
+    assert.equal(treeRefusal("move", "edits go inside a variant."), "Not moved to another parent: edits go inside a variant.");
   });
 });

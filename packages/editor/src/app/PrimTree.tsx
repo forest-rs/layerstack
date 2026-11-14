@@ -38,7 +38,7 @@ import { useEditorStore, useRevision, useStoreSelector } from "./context.ts";
 import { primIcon } from "./icons.ts";
 import { PrimActions } from "./PrimActions.tsx";
 import { askPrim } from "./primDialogRequests.ts";
-import { rowAction, rowAfterRemoval, TYPEAHEAD_MS } from "./treeKeys.ts";
+import { rowAction, rowAfterRemoval, treeRefusal, TYPEAHEAD_MS } from "./treeKeys.ts";
 import { CommandMenu, presentationContext } from "./presentations/Present.tsx";
 import { countRender } from "./renders.ts";
 
@@ -108,6 +108,8 @@ export function PrimTree() {
   const dragged = useRef<string | null>(null);
   // Why the prim being dragged cannot move to another parent where edits go (the menu's sentence), said while it is dragged.
   const [dragRefusal, setDragRefusal] = useState<string | null>(null);
+  // Why Delete on a row was refused, said in the same place until the selection moves.
+  const [keyRefusal, setKeyRefusal] = useState<string | null>(null);
   // When a letter last went to the tree's type-to-find: F frames unless it continues one.
   const typedAt = useRef(0);
   // A new stage starts with its root prims' children shown.
@@ -129,6 +131,7 @@ export function PrimTree() {
   // A selection made elsewhere (the viewport) opens its ancestors.
   const selection = useStoreSelector(store, ["selection"], (at) => at.selection);
   useEffect(() => {
+    setKeyRefusal(null);
     if (selection === null) return;
     setExpanded((open) => {
       const missing = ancestors(selection).filter((path) => !open.has(path));
@@ -242,7 +245,9 @@ export function PrimTree() {
             else if (action === "delete") {
               // The focused row goes with its prim: the row after it takes the focus, so the keys go on working.
               const next = rowAfterRemoval(paths, path);
-              if (store.delete(path) === undefined && next !== null) focusRow(next);
+              const why = store.delete(path);
+              setKeyRefusal(why === undefined ? null : treeRefusal("delete", why));
+              if (why === undefined && next !== null) focusRow(next);
             } else askPrim({ kind: "rename", path });
           }}
           onContextMenu={(event) => {
@@ -287,9 +292,9 @@ export function PrimTree() {
         </div>
       )}
       {/* Below the rows, so saying it moves none of them under the pointer. */}
-      {dragRefusal !== null && (
+      {(dragRefusal ?? keyRefusal) !== null && (
         <p role="status" className="mx-2 mb-2 rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground">
-          Not moved to another parent: {dragRefusal}
+          {dragRefusal !== null ? treeRefusal("move", dragRefusal) : keyRefusal}
         </p>
       )}
       {menu !== null && context !== null && <CommandMenu object={{ kind: "primPath", path: menu }} context={context} triggerRef={menuAnchor} onClose={() => setMenu(null)} />}

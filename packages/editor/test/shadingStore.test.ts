@@ -244,3 +244,34 @@ test("deleting a shader edits every layer of the stack that has it, and its menu
   assert.notEqual(stage.layerSpec(looks, tex), null);
   assert.deepEqual(stage.port(diffuse)?.connections, [`${tex}.outputs:rgb`]);
 });
+
+test("two shaders added while an action fetches are two shaders, each where it was asked for", async () => {
+  const h = await harness();
+  const source = sampleSource();
+  await h.open(source);
+  const { store } = h;
+  const stage = store.session!.stage;
+  const release = source.hold("assets/chrome.usda");
+  const variant = store.selectVariant("/World/Robot", "finish", "chrome");
+  await h.until(() => source.askedFor("assets/chrome.usda") > 0, "the variant's fetch");
+  // Both are named from the children there are now: the same path.
+  const path = `${CHECKER}/UVTexture`;
+  assert.equal(store.addShader(path, "UsdUVTexture", [1, 2]), undefined);
+  assert.equal(store.addShader(path, "UsdUVTexture", [8, 9]), undefined);
+  assert.equal(store.queued, 2);
+  release();
+  await h.settle(variant);
+  await h.until(() => store.running === null && store.queued === 0, "the additions behind the variant");
+  const place = (prim: string) => {
+    const value = stage.attribute(`${prim}.ui:nodegraph:node:pos`)?.get() ?? null;
+    return value?.kind === "tuple" ? [...value.value] : null;
+  };
+  assert.deepEqual(place(path), [1, 2]);
+  assert.deepEqual(place(`${path}1`), [8, 9]);
+  assert.equal(store.session!.history.nextUndo?.label, `add UsdUVTexture ${path}1`);
+  // Each its own step.
+  await h.settle(store.undo());
+  assert.equal(stage.prim(`${path}1`), null);
+  assert.deepEqual(place(path), [1, 2]);
+  assert.deepEqual(store.notices, []);
+});

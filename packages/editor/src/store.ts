@@ -58,7 +58,7 @@ import {
   unrepairedMessage,
 } from "./model/primAuthoring.ts";
 import { releaseValue } from "./model/values.ts";
-import { addShaderEdits, connectEdits, connectLabel, disconnectEdits, disconnectLabel, unshownConnection } from "./model/networkEdits.ts";
+import { addShaderEdits, connectEdits, freeShaderPath, connectLabel, disconnectEdits, disconnectLabel, unshownConnection } from "./model/networkEdits.ts";
 import type { HealthReport } from "./model/health.ts";
 import { IDENTITY, type LayerOffset, movedSublayers, offsetUsda, sublayerIndex } from "./model/layerStack.ts";
 import type { PathMove, Session } from "./model/session.ts";
@@ -1161,12 +1161,17 @@ export class EditorStore {
 
   /**
    * Defines a `Shader` of the id `id` at `path`, with `position` as its
-   * `ui:nodegraph:node:pos` when given, as one action. Returns why the
-   * stage refused it, as {@link EditorStore.apply} does.
+   * `ui:nodegraph:node:pos` when given, as one action; at the next free
+   * name beside `path` when a prim is there by the time it runs (an
+   * addition queued behind another named from the same children). Returns
+   * why the stage refused it, as {@link EditorStore.apply} does.
    */
   addShader(path: string, id: string, position: readonly [number, number] | null = null): string | undefined {
-    const label = `add ${id} ${path}`;
-    return this.#edit(label, (session) => session.apply(label, addShaderEdits(path, id, position)));
+    return this.#edit(`add ${id} ${path}`, (session) => {
+      // Named when it runs: a prim defined at `path` since it was asked for (an add queued behind another) is not this one.
+      const free = freeShaderPath(session.stage, path);
+      return session.apply(`add ${id} ${free}`, addShaderEdits(free, id, position));
+    });
   }
 
   // The layer stack (`model/layerStack.ts`): each edit is to one layer's

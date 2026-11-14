@@ -307,6 +307,10 @@ test("creating an attribute authors its spec and starting value, marks it, and r
   assert.equal(valueOf(stage, "/World/Top.notes:label"), "");
   assert.equal(store.property, "/World/Top.notes:label");
   assert.equal(typeof store.createAttribute("/World/Top.two words", "string", "varying"), "string");
+  // A name in another script is one the stage takes, so the dialog must not refuse it.
+  assert.equal(store.createAttribute("/World/Top.notes:größe", "float", "varying"), undefined);
+  assert.equal(stage.attribute("/World/Top.notes:größe")!.custom, true);
+  await h.settle(store.undo());
   assert.equal(typeof store.createAttribute("/World/Top.tint", "colour3f", "varying"), "string");
   assert.equal(store.notices.length, 2);
   await h.settle(store.undo());
@@ -643,6 +647,11 @@ test("a property name is identifiers joined by colons, and not one the prim has"
   assert.equal(propertyNameProblem("tint", taken), null);
   assert.equal(propertyNameProblem("primvars:tint", taken), null);
   assert.equal(propertyNameProblem("_a:b2:c", taken), null);
+  // Letters of any script, as OpenUSD takes them (SdfPath::IsValidNamespacedIdentifier); the stage's own check is the test below.
+  assert.equal(propertyNameProblem("größe", taken), null);
+  assert.equal(propertyNameProblem("notes:重さ", taken), null);
+  assert.notEqual(propertyNameProblem("a-b", taken), null);
+  assert.notEqual(propertyNameProblem("١٢", taken), null, "digits of any script do not start a name");
   assert.notEqual(propertyNameProblem("", taken), null);
   assert.notEqual(propertyNameProblem("2d", taken), null);
   assert.notEqual(propertyNameProblem("two words", taken), null);

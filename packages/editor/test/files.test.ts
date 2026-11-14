@@ -30,6 +30,17 @@ describe("file names", () => {
     ]);
   });
 
+  it("of several layers are never the same, whatever their folders are called", () => {
+    // Joined by `_`, a folder's file takes the name another file already has.
+    assert.deepEqual(fileNames(["a/model.usda", "b/model.usda", "a_model.usda"]), ["a_model.usda", "b_model.usda", "a_model-2.usda"]);
+    // A layer above the root's folder beside one beneath it.
+    assert.deepEqual(fileNames(["../a/model.usda", "a/model.usda"]), ["a_model.usda", "a_model-2.usda"]);
+    // A package member keeps its extension.
+    assert.deepEqual(fileNames(["set.usdz[geo/rock.usda]", "rock.usda"]), ["set.usdz_geo_rock.usda", "rock.usda"]);
+    const names = fileNames(["a/b/model.usda", "a_b/model.usda", "a_b_model.usda", "/a/b/model.usda"]);
+    assert.equal(new Set(names).size, names.length, JSON.stringify(names));
+  });
+
   it("know a package by its extension", () => {
     assert.equal(isPackage("set/Model.USDZ"), true);
     assert.equal(isPackage("set/model.usda"), false);

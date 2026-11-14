@@ -73,11 +73,15 @@ export interface SaveEntry {
  * only by the save itself (`SaveResult.skipped`).
  */
 export function planSave(stage: Stage, dirty: readonly Layer[], session: Layer | null): SaveEntry[] {
-  const names = fileNames(dirty.map((layer) => layer.identifier));
+  const dispositions = dirty.map(
+    (layer): SaveDisposition => (layer === session || layer.anonymous ? "session" : layer.readOnly ? "readOnly" : stage.isMuted(layer) ? "muted" : "write"),
+  );
+  // The written layers are named apart from each other: the others are not downloaded with them.
+  const written = dirty.filter((_, index) => dispositions[index] === "write");
+  const names = fileNames(written.map((layer) => layer.identifier));
   const entries = dirty.map((layer, index): SaveEntry => {
-    const disposition: SaveDisposition =
-      layer === session || layer.anonymous ? "session" : layer.readOnly ? "readOnly" : stage.isMuted(layer) ? "muted" : "write";
-    return { layer, name: names[index]!, disposition };
+    const disposition = dispositions[index]!;
+    return { layer, name: disposition === "write" ? names[written.indexOf(layer)]! : fileName(layer.identifier), disposition };
   });
   const order: readonly SaveDisposition[] = ["write", "session", "readOnly", "muted"];
   return entries.sort((a, b) => order.indexOf(a.disposition) - order.indexOf(b.disposition));
@@ -105,16 +109,26 @@ export function fileName(identifier: string | null, format?: LayerFormat | "usdz
  * File names for several layers at once, none the same: each its
  * {@link fileName}, and where two would share one, its whole identifier
  * with its folders joined by `_` (`assets_robot.usda`), so downloads
- * landing in one folder do not overwrite each other.
+ * landing in one folder do not overwrite each other. A name still taken
+ * then (`a/x.usda` beside `a_x.usda`, `../a/x.usda` beside `a/x.usda`)
+ * is numbered before its extension (`a_x-2.usda`).
  */
 export function fileNames(identifiers: readonly (string | null)[]): string[] {
   const names = identifiers.map((identifier) => fileName(identifier));
   const counts = new Map<string, number>();
   for (const name of names) counts.set(name, (counts.get(name) ?? 0) + 1);
+  const taken = new Set<string>();
   return names.map((name, index) => {
     const identifier = identifiers[index] ?? null;
-    if (counts.get(name)! < 2 || identifier === null) return name;
-    return identifier.replace(/[[\]]/g, "_").replace(/\.\.\//g, "").replace(/\//g, "_");
+    let unique = name;
+    if (counts.get(name)! > 1 && identifier !== null) {
+      unique = identifier.replace(/\]$/, "").replace(/[[\]]/g, "_").replace(/\.\.\//g, "").replace(/^\/+/, "").replace(/\//g, "_");
+    }
+    const dot = unique.lastIndexOf(".");
+    const [stem, extension] = dot > 0 ? [unique.slice(0, dot), unique.slice(dot)] : [unique, ""];
+    for (let number = 2; taken.has(unique); number++) unique = `${stem}-${number}${extension}`;
+    taken.add(unique);
+    return unique;
   });
 }
 

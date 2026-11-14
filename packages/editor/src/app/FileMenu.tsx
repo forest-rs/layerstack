@@ -227,11 +227,12 @@ function SaveDialog({ store, onClose }: { store: EditorStore; onClose: () => voi
       onClose();
       return;
     }
+    // Each file is called what the confirmation called it.
     const names = fileNames(result.written.map((layer) => layer.identifier));
     const written: string[] = [];
     const downloads: { name: string; bytes: Uint8Array }[] = [];
     for (const [index, layer] of result.written.entries()) {
-      const name = names[index]!;
+      const name = plan.find((entry) => entry.layer === layer.layer)?.name ?? names[index]!;
       if (permitted && writable !== null) {
         try {
           await writable.write(layer.identifier, layer.bytes);

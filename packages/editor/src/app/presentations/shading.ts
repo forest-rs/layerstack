@@ -18,6 +18,11 @@ function portAt(stage: Stage, path: string): ShaderPort | null {
   }
 }
 
+/** The sources `port`'s `.connect` names: those it reads, and those that name nothing. */
+function authoredSources(port: ShaderPort | null): string[] {
+  return port === null ? [] : [...port.connections, ...port.invalidConnections];
+}
+
 /** Registers the commands on shading ports' paths. */
 export function registerShadingCommands(): void {
   registerCommand({
@@ -37,9 +42,9 @@ export function registerShadingCommands(): void {
     kind: "propertyPath",
     type: "propertyPath",
     title: "Disconnect what it reads",
-    applies: (object, { stage }) => (portAt(stage, object.path)?.connections.length ?? 0) > 0,
+    applies: (object, { stage }) => authoredSources(portAt(stage, object.path)).length > 0,
     run: (object, { store, stage }) => {
-      const connections = portAt(stage, object.path)?.connections ?? [];
+      const connections = authoredSources(portAt(stage, object.path));
       // One source is removed from the list; several are all cleared.
       store.disconnect(object.path, connections.length === 1 ? connections[0]! : null);
     },

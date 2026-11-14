@@ -8,7 +8,8 @@
 // edits go, undone and redone.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { unshownConnection } from "../src/model/networkEdits.ts";
+import { readNetwork } from "../src/model/network.ts";
+import { portMenu, unshownConnection } from "../src/model/networkEdits.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
 const CHECKER = "/World/Looks/Checker";
@@ -200,4 +201,24 @@ test("a connection or disconnection that a stronger layer hides is a notice sayi
   assert.equal(store.disconnect(diffuse, tex2), undefined);
   assert.equal(unshownConnection(stage, diffuse, tex2, false), null);
   assert.equal(store.notices.length, before + 1);
+});
+
+test("a connection that names nothing is disconnected from its port's menu, as one it reads is", async () => {
+  const { h, store, stage } = await stacked();
+  const ior = "/Looks/M/Surface.inputs:ior";
+  const gone = "/Looks/M/Gone.outputs:r";
+  assert.deepEqual(stage.port(ior)?.connections, []);
+  assert.deepEqual(stage.port(ior)?.invalidConnections, [gone]);
+  const menu = portMenu(readNetwork(stage, "/Looks/M"), ior);
+  const item = menu.find((entry) => entry.id === "disconnect");
+  assert.deepEqual(item?.action, { kind: "disconnect", destination: ior, source: gone });
+  assert.equal(store.disconnect(ior, gone), undefined);
+  assert.deepEqual(stage.port(ior)?.invalidConnections, []);
+  assert.deepEqual(store.notices, []);
+  await h.settle(store.undo());
+  assert.deepEqual(stage.port(ior)?.invalidConnections, [gone]);
+  // Beside a source it reads, each is named, the one that names nothing said so.
+  assert.equal(store.apply("add a source", [{ type: "connectToSource", path: ior, source: "/Looks/M/Tex.outputs:rgb", position: "append" }]), undefined);
+  const both = portMenu(readNetwork(stage, "/Looks/M"), ior).filter((entry) => entry.action?.kind === "disconnect");
+  assert.deepEqual(both.map((entry) => entry.label).sort(), ["Disconnect from Gone.outputs:r (names nothing)", "Disconnect from Tex.outputs:rgb"]);
 });

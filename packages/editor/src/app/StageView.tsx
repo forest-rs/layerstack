@@ -11,14 +11,14 @@
 // to a new up axis and the timeline follows the range and the rate.
 import { useEffect, useState } from "react";
 import { ToggleButton, ToggleButtonGroup } from "react-aria-components";
-import type { Layer, Value, ValueInput } from "@forest-rs/layerstack";
+import type { Layer, Stage, Value, ValueInput } from "@forest-rs/layerstack";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { NOT_A_NUMBER, parseNumber } from "../model/refusal.ts";
-import { type FieldSource, STAGE_FIELDS, type StageField, UNIT_PRESETS, unitPreset } from "../model/stageMetadata.ts";
+import { defaultPrimPath, type FieldSource, rootOnly, STAGE_FIELDS, type StageField, UNIT_PRESETS, unitPreset } from "../model/stageMetadata.ts";
 import { formatNumber } from "../model/values.ts";
 import type { EditorStore } from "../store.ts";
 import { useEditorStore, useRevision } from "./context.ts";
@@ -88,7 +88,13 @@ export function StageView() {
                 <span className="min-w-0 truncate font-mono text-[10px] text-muted-foreground">{field.key}</span>
               </div>
               <dd className="flex flex-col gap-1">
-                <FieldEditor store={store} field={field} value={scalarOf(stage.metadata(field.key))} commit={(value) => commit(field.key, value)} />
+                <FieldEditor
+                  store={store}
+                  field={field}
+                  // The stage's value is the session layer's over the root's; a field read from the root alone is the root's.
+                  value={rootOnly(field.key) ? stage.layerSpec(stage.root, "/").defaultPrim : scalarOf(stage.metadata(field.key))}
+                  commit={(value) => commit(field.key, value)}
+                />
                 <span className="flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
                   {holder === null ? (
                     field.key === "defaultPrim" || field.key === "documentation" ? (
@@ -222,11 +228,23 @@ function UnitPicker({ value, commit }: { value: number; commit: (value: ValueInp
   );
 }
 
+/** Whether `stage` composes a prim at `path`; not for a path it refuses. */
+function hasPrim(stage: Stage, path: string): boolean {
+  try {
+    return stage.prim(path) !== null;
+  } catch {
+    return false;
+  }
+}
+
 /** A root prim, by name: what the stage has at its top. */
 function DefaultPrimPicker({ store, value, commit }: { store: EditorStore; value: string | null; commit: (value: ValueInput) => string | undefined }) {
   const stage = store.session?.stage;
   const roots = (stage?.children("/") ?? []).map((path) => path.slice(1));
-  const missing = value !== null && !roots.includes(value);
+  // A root prim's name, or a prim's path (`World/Robot`): what a reference without a prim path brings in.
+  const path = value === null ? null : defaultPrimPath(value);
+  const missing = value !== null && (path === null || stage === undefined || !hasPrim(stage, path));
+  const listed = value !== null && roots.includes(value);
   return (
     <div className="flex flex-col gap-1">
       <Select
@@ -246,9 +264,9 @@ function DefaultPrimPicker({ store, value, commit }: { store: EditorStore; value
               <span className="text-muted-foreground">none</span>
             </SelectItem>
           )}
-          {missing && (
+          {value !== null && !listed && (
             <SelectItem id={value} textValue={value}>
-              <span className="font-mono">{value}</span> <span className="text-muted-foreground">no root prim</span>
+              <span className="font-mono">{value}</span> {missing && <span className="text-muted-foreground">no prim</span>}
             </SelectItem>
           )}
           {roots.map((name) => (
@@ -258,7 +276,7 @@ function DefaultPrimPicker({ store, value, commit }: { store: EditorStore; value
           ))}
         </SelectContent>
       </Select>
-      {missing && <span className="text-[11px] text-destructive">No root prim is named {value}: a reference to this layer without a prim path brings nothing.</span>}
+      {missing && <span className="text-[11px] text-destructive">No prim is at {path ?? value}: a reference to this layer without a prim path brings nothing.</span>}
       {roots.length === 0 && <span className="text-[11px] text-muted-foreground">The stage has no root prims to choose from.</span>}
     </div>
   );

@@ -21,7 +21,7 @@ import {
   sublayerCandidates,
   sublayerIndex,
 } from "../src/model/layerStack.ts";
-import { fieldSource, metadataLayer, unitPreset, UNIT_PRESETS } from "../src/model/stageMetadata.ts";
+import { defaultPrimPath, fieldSource, metadataLayer, unitPreset, UNIT_PRESETS } from "../src/model/stageMetadata.ts";
 
 /** A layer as the tree reads one. */
 interface FakeLayer {
@@ -294,4 +294,20 @@ describe("health", () => {
     assert.equal(issueKind("composition.unresolved_asset"), "unresolved asset");
     assert.equal(issueKind("other"), "other");
   });
+
+  it("reads the default prim from the root layer alone, as a root prim's name or a prim's path", () => {
+    // `UsdStage::GetDefaultPrim` reads the root layer: a session layer's opinion names nothing.
+    assert.equal(fieldSource("defaultPrim", new Set(["defaultPrim"]), new Set(["defaultPrim"])), "root");
+    assert.equal(fieldSource("defaultPrim", new Set(["defaultPrim"]), new Set()), "fallback");
+    assert.equal(fieldSource("upAxis", new Set(["upAxis"]), new Set(["upAxis"])), "session");
+    assert.equal(defaultPrimPath("World"), "/World");
+    assert.equal(defaultPrimPath("World/Robot"), "/World/Robot");
+    assert.equal(defaultPrimPath("/World/Robot"), "/World/Robot");
+    assert.equal(defaultPrimPath("Größe"), "/Größe");
+    assert.equal(defaultPrimPath(""), null);
+    assert.equal(defaultPrimPath("World//Robot"), null);
+    assert.equal(defaultPrimPath("World.size"), null);
+    assert.equal(defaultPrimPath("../World"), null);
+  });
+
 });

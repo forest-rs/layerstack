@@ -350,3 +350,56 @@ test("reloading reads changed files again, and leaves layers with unsaved edits 
   assert.match(store.notices.at(-1)!.message, /not read again, having unsaved edits: extra\.usda/);
   assert.notEqual(stage.prim("/D"), null, "the edit is kept");
 });
+
+test("the default prim is authored in the root layer with edits going to a session layer, and refused when the root is read-only", async () => {
+  const h = await harness();
+  const files = {
+    "top.usda": `#usda 1.0\n(\n    defaultPrim = "A"\n)\n\ndef "A"\n{\n    def "Inner"\n    {\n    }\n}\n\ndef "B"\n{\n}\n`,
+    // What reads the default prim: a reference without a prim path.
+    "user.usda": `#usda 1.0\ndef "R" (\n    references = @./top.usda@\n)\n{\n}\n`,
+  };
+  const { store } = h;
+  store.setEditLayerChoice("session");
+  await h.open(sampleSource("top.usda", files));
+  const session = store.session!;
+  const stage = session.stage;
+  const sessionLayer = session.sessionLayer!;
+  assert.equal(store.metadataPlacement()!.layer, sessionLayer);
+
+  // Another field goes where edits go; the default prim goes to the root, which is where a reference reads it.
+  assert.equal(store.setStageMetadata("upAxis", { type: "token", value: "Z" }), undefined);
+  assert.deepEqual(stage.layerSpec(sessionLayer, "/").fields, ["upAxis"]);
+  assert.equal(store.setStageMetadata("defaultPrim", { type: "token", value: "B" }), undefined);
+  assert.equal(stage.layerSpec(stage.root, "/").defaultPrim, "B");
+  assert.equal(stage.layerSpec(sessionLayer, "/").defaultPrim, null);
+  assert.equal(session.history.nextUndo!.label, "set defaultPrim in top.usda");
+  assert.equal(store.stageMetadataSources().get("defaultPrim"), "root");
+  await h.settle(store.undo());
+  assert.equal(stage.layerSpec(stage.root, "/").defaultPrim, "A");
+  await h.settle(store.redo());
+  assert.equal(stage.layerSpec(stage.root, "/").defaultPrim, "B");
+
+  // A path names a prim beneath a root prim: what a reference to the layer then brings in.
+  assert.equal(store.setStageMetadata("defaultPrim", { type: "token", value: "A/Inner" }), undefined);
+  const saved = session.save();
+  const rootText = new TextDecoder().decode(saved.written.find((file) => file.identifier === "top.usda")!.bytes);
+  await h.open(sampleSource("user.usda", { ...files, "top.usda": rootText }));
+  assert.deepEqual(store.session!.stage.children("/R"), [], "/R is /A/Inner, which has no children");
+  assert.equal(store.health!.count, 0);
+
+  // A package's root takes no edits: the default prim is refused, not authored in the session layer where it would name nothing.
+  store.setEditLayerChoice("root");
+  await h.open(sampleSource());
+  const packaged = await h.settle(store.exportPackage());
+  const bytes = packaged!.bytes!;
+  await h.open({ label: "sample.usdz", root: "sample.usdz", fetch: async (identifier) => (identifier === "sample.usdz" ? bytes : null), exists: async (identifier) => identifier === "sample.usdz", size: async () => null });
+  const packagedSession = store.session!;
+  assert.ok(packagedSession.stage.root.readOnly);
+  const before = packagedSession.stage.layerSpec(packagedSession.sessionLayer!, "/").fields;
+  assert.match(store.setStageMetadata("defaultPrim", { type: "token", value: "World" })!, /defaultPrim is read from the root layer alone, and sample\.usdz is read-only/);
+  assert.deepEqual(packagedSession.stage.layerSpec(packagedSession.sessionLayer!, "/").fields, before);
+  assert.equal(packagedSession.history.nextUndo, null);
+  // Other fields still go to the session layer in front of it.
+  assert.equal(store.setStageMetadata("metersPerUnit", { type: "double", value: 1 }), undefined);
+  assert.ok(packagedSession.stage.layerSpec(packagedSession.sessionLayer!, "/").fields.includes("metersPerUnit"));
+});

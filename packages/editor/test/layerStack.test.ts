@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { healthReport, issueKind, wantingPrims } from "../src/model/health.ts";
 import {
-  anchorCandidates,
+  anchoredIdentifier,
   ancestorsOf,
   composeOffsets,
   IDENTITY,
@@ -33,19 +33,25 @@ const layer = (identifier: string | null, readOnly = false): FakeLayer => ({ ide
 const entry = (asset: string, offset = 0, scale = 1): SublayerEntry => ({ asset, layerOffset: { offset, scale } });
 
 describe("asset paths", () => {
-  it("anchor beside the layer that authors them, a search path then as written", () => {
-    assert.deepEqual(anchorCandidates("set/root.usda", "./lib.usda"), ["set/lib.usda"]);
-    assert.deepEqual(anchorCandidates("set/root.usda", "../shared/lib.usda"), ["shared/lib.usda"]);
-    assert.deepEqual(anchorCandidates("set/root.usda", "lib.usda"), ["set/lib.usda", "lib.usda"]);
-    assert.deepEqual(anchorCandidates("root.usda", "./a/./b/../c.usda"), ["a/c.usda"]);
-    assert.deepEqual(anchorCandidates(null, "./lib.usda"), ["lib.usda"]);
-    assert.deepEqual(anchorCandidates("set/root.usda", "/abs/lib.usda"), ["/abs/lib.usda"]);
-    assert.deepEqual(anchorCandidates("set/root.usda", "https://host/lib.usda"), ["https://host/lib.usda"]);
+  it("anchor beside the layer that authors them, a bare path as a `./` one: the host has no search paths", () => {
+    assert.equal(anchoredIdentifier("set/root.usda", "./lib.usda"), "set/lib.usda");
+    assert.equal(anchoredIdentifier("set/root.usda", "../shared/lib.usda"), "shared/lib.usda");
+    assert.equal(anchoredIdentifier("set/root.usda", "lib.usda"), "set/lib.usda");
+    assert.equal(anchoredIdentifier("root.usda", "./a/./b/../c.usda"), "a/c.usda");
+    assert.equal(anchoredIdentifier("root.usda", "../b.usda"), "../b.usda");
+    assert.equal(anchoredIdentifier(null, "./lib.usda"), "lib.usda");
+    assert.equal(anchoredIdentifier("set/root.usda", "/abs/./lib.usda"), "/abs/lib.usda");
+    assert.equal(anchoredIdentifier("set/root.usda", "https://host/lib.usda"), "https://host/lib.usda");
+    // As the host's storage identifies them (`identify` in `layerstack_wasm/src/storage.rs`): the root's slash and a URL's host are kept.
+    assert.equal(anchoredIdentifier("/a/scene.usda", "./lib.usda"), "/a/lib.usda");
+    assert.equal(anchoredIdentifier("/a/scene.usda", "../../c.usda"), "/c.usda");
+    assert.equal(anchoredIdentifier("https://host/set/scene.usda", "../tex/d.usda"), "https://host/tex/d.usda");
+    assert.equal(anchoredIdentifier("https://host/set/scene.usda", "../../../d.usda"), "https://host/d.usda");
   });
 
   it("anchor inside a package at the member that authors them", () => {
-    assert.deepEqual(anchorCandidates("set.usdz[geo/rock.usda]", "./moss.usda"), ["set.usdz[geo/moss.usda]"]);
-    assert.deepEqual(anchorCandidates("set.usdz[geo/rock.usda]", "moss.usda"), ["set.usdz[geo/moss.usda]", "set.usdz[moss.usda]"]);
+    assert.equal(anchoredIdentifier("set.usdz[geo/rock.usda]", "./moss.usda"), "set.usdz[geo/moss.usda]");
+    assert.equal(anchoredIdentifier("set.usdz[geo/rock.usda]", "moss.usda"), "set.usdz[geo/moss.usda]");
   });
 
   it("are written from one layer to another as relative paths", () => {
@@ -60,7 +66,7 @@ describe("asset paths", () => {
       ["scene.usda", "assets/robot.usda"],
       ["assets/robot.usda", "library.usda"],
     ] as const) {
-      assert.equal(anchorCandidates(from, relativeAsset(from, to))[0], to);
+      assert.equal(anchoredIdentifier(from, relativeAsset(from, to)), to);
     }
   });
 });

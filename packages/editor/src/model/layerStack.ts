@@ -71,36 +71,51 @@ function directoryOf(path: string): string {
   return path.slice(0, path.lastIndexOf("/") + 1);
 }
 
-/** Whether `asset` is anchored at the layer that authors it (`./x`, `../x`). */
-function isRelative(asset: string): boolean {
-  return asset.startsWith("./") || asset.startsWith("../");
-}
-
-/** Whether `asset` is read as written: absolute, or a URL. */
+/** Whether `asset` is read as written: from the root (`/`), or a URL. */
 function isAbsolute(asset: string): boolean {
-  return asset.startsWith("/") || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(asset);
+  return asset.startsWith("/") || asset.includes("://");
 }
 
 /**
- * The identifiers `asset`, authored in the layer `anchor` (its
- * identifier), may name, in the order they are looked for: a path relative
- * to the layer (`./`, `../`) beside it; a search path (`b.usda`) beside it,
- * then as written; an absolute path or URL as written. Inside a USDZ
- * package (`set.usdz[geo/rock.usda]`), relative to the member, in the
- * package. An anonymous anchor (`null`, the session layer) anchors at the
- * source's top.
+ * `identifier` without `.` segments, each `..` taking off the segment
+ * before it: never the scheme and host of a URL nor the leading `/` of a
+ * path from the root, and kept at the front of a relative one.
  */
-export function anchorCandidates(anchor: string | null, asset: string): string[] {
-  if (isAbsolute(asset)) return [asset];
+function normalizedIdentifier(identifier: string): string {
+  const scheme = identifier.indexOf("://");
+  const slash = scheme < 0 ? -1 : identifier.indexOf("/", scheme + 3);
+  const cut = scheme < 0 ? 0 : slash < 0 ? identifier.length : slash;
+  const path = identifier.slice(cut);
+  const absolute = path.startsWith("/");
+  const out: string[] = [];
+  for (const part of path.split("/")) {
+    if (part === "" || part === ".") continue;
+    if (part === ".." && out.length > 0 && out.at(-1) !== "..") out.pop();
+    else if (part !== ".." || !absolute) out.push(part);
+  }
+  return `${identifier.slice(0, cut)}${absolute ? "/" : ""}${out.join("/")}`;
+}
+
+/**
+ * The identifier `asset`, authored in the layer `anchor` (its
+ * identifier), names, as the stage's host storage makes it: a relative
+ * path (`./b.usda`, `../b.usda`, and `b.usda` alike: the host has no
+ * search paths to look along) beside the layer; a path from the root or
+ * a URL as written; `.` and `..` segments resolved. Inside a USDZ package
+ * (`set.usdz[geo/rock.usda]`), beside the member, in the package. An
+ * anonymous anchor (`null`, the session layer) anchors at the source's
+ * top. The stage reads a sublayer from that identifier and no other: one
+ * it holds no layer for is not read, whatever else it holds by a like
+ * name.
+ */
+export function anchoredIdentifier(anchor: string | null, asset: string): string {
+  if (isAbsolute(asset)) return normalizedIdentifier(asset);
   const open = anchor?.indexOf("[") ?? -1;
   if (anchor !== null && open >= 0 && anchor.endsWith("]")) {
-    const outer = anchor.slice(0, open);
     const member = anchor.slice(open + 1, -1);
-    const beside = normalized(`${directoryOf(member)}${asset}`).join("/");
-    return isRelative(asset) ? [`${outer}[${beside}]`] : [...new Set([`${outer}[${beside}]`, `${outer}[${normalized(asset).join("/")}]`])];
+    return `${anchor.slice(0, open)}[${normalized(`${directoryOf(member)}${asset}`).join("/")}]`;
   }
-  const beside = normalized(`${anchor === null ? "" : directoryOf(anchor)}${asset}`).join("/");
-  return isRelative(asset) ? [beside] : [...new Set([beside, normalized(asset).join("/")])];
+  return normalizedIdentifier(`${anchor === null ? "" : directoryOf(anchor)}${asset}`);
 }
 
 /**
@@ -212,11 +227,10 @@ export function layerStack<L extends { readonly identifier: string | null }>(inp
     const below = new Set(ancestors).add(layer);
     const sublayers = input.sublayers(layer);
     sublayers.forEach((entry, index) => {
-      const candidates = anchorCandidates(layer.identifier, entry.asset);
-      const found = candidates.map((candidate) => byIdentifier.get(candidate)).find((each) => each !== undefined) ?? null;
+      const identifier = anchoredIdentifier(layer.identifier, entry.asset);
       visit(
-        found,
-        found?.identifier ?? candidates[0] ?? entry.asset,
+        byIdentifier.get(identifier) ?? null,
+        identifier,
         {
           key: `${place.key}/${index}`,
           role: "sublayer",

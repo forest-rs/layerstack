@@ -1543,14 +1543,30 @@ export interface AddArcEdit {
 
 /**
  * `UsdReferences::RemoveReference` / `UsdPayloads::RemovePayload`: removes
- * the arc naming `asset` and `primPath` from the target layer's lists, and
- * adds it to the deleted items, which removes it from weaker layers too.
+ * the arc naming `asset` and `primPath` at `layerOffset` from the target
+ * layer's lists, and adds it to the deleted items, which removes it from
+ * weaker layers too.
+ *
+ * An arc is its asset path, its prim path and its layer offset together,
+ * as OpenUSD's `SdfReference::operator==` and `SdfPayload::operator==`
+ * compare them: two arcs to one asset and prim at different offsets are
+ * two items of the list, and the removal takes the one at `layerOffset`
+ * (an {@link AuthoredReference} read with {@link Stage.layerSpec} carries
+ * all three). Without `layerOffset` it names the arc at the identity
+ * offset, as a default `SdfLayerOffset` does; when no list holds the arc
+ * named, the others stay and the one named is deleted (`delete references
+ * = @./robot.usda@ (offset = 24)`), as OpenUSD authors it. A reference's
+ * custom data, which no edit authors, is not part of what is named.
+ * AOUSD Core §10.3.2.1 (reference fields), §12.3.2.1 (layer offsets),
+ * §12.4 (list ops).
  */
 export interface RemoveArcEdit {
   readonly type: "removeReference" | "removePayload";
   readonly path: string;
   readonly asset?: string;
   readonly primPath?: string;
+  /** The layer offset of the arc to remove; identity by default. */
+  readonly layerOffset?: LayerOffsetInput;
 }
 
 /**

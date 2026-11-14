@@ -48,7 +48,14 @@ export interface NativeEditBatch extends Disposable {
     offset: number,
     scale: number,
   ): void;
-  removeArc(payload: boolean, path: string, asset?: string | null, primPath?: string | null): void;
+  removeArc(
+    payload: boolean,
+    path: string,
+    asset: string | null | undefined,
+    primPath: string | null | undefined,
+    offset: number,
+    scale: number,
+  ): void;
   setVariantSelection(path: string, set: string, variant?: string | null): void;
   setActive(path: string, active: boolean): void;
   clearActive(path: string): void;
@@ -281,14 +288,18 @@ function lowerEdit(batch: NativeEditBatch, edit: Edit, host: ArrayHost): void {
       return;
     }
     case "removeReference":
-    case "removePayload":
+    case "removePayload": {
+      const [offset, scale] = layerOffset(edit.layerOffset);
       batch.removeArc(
         edit.type === "removePayload",
         path,
         optionalText(edit.asset, "asset"),
         optionalText(edit.primPath, "primPath"),
+        offset,
+        scale,
       );
       return;
+    }
     case "setVariantSelection":
       batch.setVariantSelection(
         path,

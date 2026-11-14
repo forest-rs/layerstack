@@ -4883,6 +4883,8 @@ def "World" (
             "/Ball".into(),
             Some("./parts/ball.usda".into()),
             Some("/Ball".into()),
+            0.0,
+            1.0,
         );
         stage.apply(root.0, &mut batch).unwrap();
         let record = stage.save(None).unwrap();

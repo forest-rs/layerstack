@@ -934,6 +934,8 @@ def Xform "World" {
             "/World/Spare".into(),
             Some("./robot.usda".into()),
             None,
+            0.0,
+            1.0,
         );
         let mut removal = stage
             .apply(layer(&stage, "scene.usda"), &mut batch)

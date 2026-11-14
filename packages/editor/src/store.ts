@@ -1316,13 +1316,14 @@ export class EditorStore {
     const label = newArcLabel(prim, arc);
     let refusal: string | undefined;
     let unchanged = false;
+    const asked = this.#asked();
     const done = this.#actions.run(label, async (signal) => {
       const session = this.session;
       if (session === null || this.status.kind === "lost") return;
       try {
         let step: HistoryStep | null;
         try {
-          step = this.#composing(session, prim, () => session.addArc(prim, arc));
+          step = this.#whereAsked(session, asked, () => this.#composing(session, prim, () => session.addArc(prim, arc)));
         } catch (error) {
           if (this.lose(error)) return;
           refusal = this.#notices.report(label, error).message;
@@ -1774,6 +1775,37 @@ export class EditorStore {
     this.#notices.dismiss(id);
   }
 
+  /** Where edits go as an action is asked for, to run it there in its turn ({@link EditorStore.#whereAsked}). */
+  #asked(): { readonly session: Session; readonly target: Layer | EditTarget | undefined } | null {
+    const session = this.session;
+    return session === null ? null : { session, target: session.target };
+  }
+
+  /**
+   * Runs `run`, an action's edit of the stage, with edits going where
+   * they went when the action was asked for (`asked`), then puts back
+   * where they go now. An action queued behind one that fetches runs
+   * later, and where edits go may have been changed in that wait
+   * ({@link EditorStore.setTarget} does not queue: the toolbar shows the
+   * choice at once); the edit was asked for the layer shown then, with the
+   * spec paths and the time mapping of that target, so that is where it
+   * is written. A target gone by then refuses the edit (`target.stale`).
+   * Of an action that waits, only what it does before its first wait
+   * runs there: every action edits first and fetches after.
+   */
+  #whereAsked<T>(session: Session, asked: { readonly session: Session; readonly target: Layer | EditTarget | undefined } | null, run: () => T): T {
+    const chosen = session.target;
+    if (asked === null || asked.session !== session || asked.target === chosen) return run();
+    session.target = asked.target;
+    try {
+      return run();
+    } finally {
+      session.target = chosen;
+      // A note of an edit that does not show would name where edits go now, not where this one went.
+      this.#shadow = null;
+    }
+  }
+
   /**
    * Runs an edit of the stage in its turn: now, when no action is
    * waiting on its assets, else after those asked for before it. `then`
@@ -1783,14 +1815,17 @@ export class EditorStore {
    */
   #edit(action: string, run: (session: Session) => EditReceipt, then?: () => boolean): string | undefined {
     let refusal: string | undefined;
+    const asked = this.#asked();
     void this.#actions.run(action, () => {
       const session = this.session;
       if (session === null || this.status.kind === "lost") return;
       try {
         let selected = false;
         try {
-          run(session);
-          selected = then?.() ?? false;
+          selected = this.#whereAsked(session, asked, () => {
+            run(session);
+            return then?.() ?? false;
+          });
         } catch (error) {
           if (this.lose(error)) return;
           refusal = this.#notices.report(action, error).message;
@@ -1810,13 +1845,15 @@ export class EditorStore {
    * and an action aborted (the scene is going) says nothing.
    */
   #fetching(action: string, run: (session: Session, signal: AbortSignal) => Promise<boolean>): Promise<void> {
+    const asked = this.#asked();
     return this.#actions.run(action, async (signal) => {
       const session = this.session;
       if (session === null || this.status.kind === "lost") return;
       try {
         let selected = false;
         try {
-          selected = await run(session, signal);
+          // Its edit is made before its first wait (the fetches come after), where edits went when it was asked for.
+          selected = await this.#whereAsked(session, asked, () => run(session, signal));
         } catch (error) {
           if (this.lose(error)) return;
           if (!signal.aborted) this.#notices.report(action, error);

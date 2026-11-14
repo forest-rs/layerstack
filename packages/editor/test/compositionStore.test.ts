@@ -11,7 +11,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { AuthoredReference, Stage } from "@forest-rs/layerstack";
-import { authoredHere, findAuthoring, mapping, type NewArc, uncomposedHere, variantSetSource } from "../src/model/composition.ts";
+import { authoredHere, findAuthoring, mapping, type NewArc, newArcUsda, uncomposedHere, variantSetSource } from "../src/model/composition.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
 /** A reference to add, as the dialog makes it. */
@@ -327,6 +327,36 @@ test("adding an arc the layer has already changes nothing, and is not noted as t
   assert.equal(steps(), before, "no step");
   assert.equal(new TextDecoder().decode(stage.exportLayer(stage.root, "usda")), text);
   assert.equal(store.compositionEdit, null, "the value edit before it is not offered as a composition edit of the robot");
+});
+
+test("the USDA an added inherit or internal reference is shown to author is what its layer then holds, through an arc and inside a variant", async () => {
+  const { h, store, stage } = await opened();
+  const inherit = (primPath: string): NewArc => ({ kind: "inherit", asset: null, primPath, position: "backOfPrepend", offset: 0, scale: 1 });
+  // Through the robot's reference, a prim of the stage is named as the asset names it; a root prim's path as given.
+  const through = stage.prim("/World/Robot")!.compositionArcs().find((arc) => arc.arc === "references")!.editTarget();
+  store.setTarget(through);
+  assert.equal(newArcUsda(inherit("/World/Robot/Head"), through), "prepend inherits = </Robot/Head>");
+  assert.equal(newArcUsda(inherit("/Shape"), through), "prepend inherits = </Shape>");
+  assert.equal(newArcUsda(reference(null, "/World/Robot/Head"), through), "prepend references = </Robot/Head>");
+  await h.settle(store.addArc("/World/Robot/Body", inherit("/World/Robot/Head")).done);
+  await h.settle(store.addArc("/World/Robot/Body", inherit("/Shape")).done);
+  await h.settle(store.addArc("/World/Robot/Body", reference(null, "/World/Robot/Head")).done);
+  const body = stage.layerSpec(through.layer, "/Robot/Body");
+  assert.ok(body !== null && body.type === "prim");
+  assert.deepEqual(body.inherits?.prepended, ["/Robot/Head", "/Shape"]);
+  assert.deepEqual(body.references?.prepended.map((item) => item.primPath), ["/Robot/Head"]);
+
+  // Inside a variant the layer's namespace is the stage's, and a selection is no part of the path.
+  store.setTarget(undefined);
+  store.editInsideVariant("/World/Robot", "finish", "painted");
+  const inside = store.session!.target!;
+  assert.equal(newArcUsda(inherit("/World/Robot/Head"), inside), "prepend inherits = </World/Robot/Head>");
+  await h.settle(store.addArc("/World/Robot", inherit("/World/Robot/Head")).done);
+  const painted = stage.layerSpec(stage.root, "/World/Robot{finish=painted}");
+  assert.ok(painted !== null && painted.type === "variant");
+  assert.deepEqual(painted.inherits?.prepended, ["/World/Robot/Head"]);
+  // A layer of the stack authors it as given.
+  assert.equal(newArcUsda(inherit("/World/Robot/Head"), stage.root), "prepend inherits = </World/Robot/Head>");
 });
 
 test("a variant set nested in a variant is found in that variant's branch, to remove it there", async () => {

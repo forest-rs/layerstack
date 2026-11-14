@@ -9,6 +9,7 @@
 // and the pure pieces the inspector and the tree decide with.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { Worker } from "node:worker_threads";
 import type { SchemaInfo } from "@forest-rs/layerstack";
 import {
   applicableSchemas,
@@ -142,8 +143,6 @@ test("names, moves and orders", () => {
   assert.equal(freeSiblingName("Rock", new Set(["Rock"])), "Rock1");
   assert.equal(freeSiblingName("Rock", new Set(["Rock", "Rock1"])), "Rock2");
   assert.equal(freeSiblingName("Rock7", new Set(["Rock7"])), "Rock8");
-  // A suffix no number counts on from: the name after it, not the same one for ever.
-  assert.equal(freeSiblingName("Rock9007199254740992", new Set(["Rock9007199254740992"])), "Rock9007199254740993");
   assert.equal(primNameProblem("Rock", "/World", new Set()), null);
   assert.match(primNameProblem("Rock", "/World", new Set(["Rock"]))!, /already has a child Rock/);
   assert.match(primNameProblem("a b", "/World", new Set())!, /letter or _/);
@@ -156,6 +155,29 @@ test("names, moves and orders", () => {
   assert.equal(siblingOrder(["A", "B", "C"], "A", -1), null);
   assert.equal(siblingOrder(["A", "B", "C"], "C", 1), null);
   assert.equal(specStagePath("/World/Robot{finish=chrome}.mirrors"), "/World/Robot.mirrors");
+});
+
+test("a name whose digits no number counts on from gets the name after it, in time", async () => {
+  // Counted as a number, 2^53 plus one is 2^53 again: the name tried was the prim's own, for ever. Asked
+  // on another thread, so that never answering is a failure here and not a test run that does not end.
+  const module = new URL("../src/model/primAuthoring.ts", import.meta.url).href;
+  const worker = new Worker(
+    `const { parentPort } = require("node:worker_threads");
+     import(${JSON.stringify(module)}).then(({ freeSiblingName }) => parentPort.postMessage(freeSiblingName("Rock9007199254740992", new Set(["Rock9007199254740992"]))));`,
+    { eval: true },
+  );
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const name = await new Promise<string | null>((resolve, reject) => {
+      worker.once("message", resolve);
+      worker.once("error", reject);
+      timer = setTimeout(() => resolve(null), 5000);
+    });
+    assert.equal(name, "Rock9007199254740993", name === null ? "no name after five seconds" : undefined);
+  } finally {
+    clearTimeout(timer);
+    await worker.terminate();
+  }
 });
 
 test("a drop on a row moves beneath it; between its own siblings, reorders", () => {

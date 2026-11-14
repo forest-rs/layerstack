@@ -59,6 +59,7 @@ test("adding a reference to a layer not yet read runs the asset loop, with the o
   const release = source.hold("assets/props.usda");
   const adding = store.addArc("/World/Pile", reference("./assets/props.usda"));
   assert.equal(adding.refusal, undefined);
+  assert.equal(adding.unchanged, false);
   await h.until(() => source.asked.includes("assets/props.usda"), "the referenced layer being asked for");
   assert.equal(store.status.kind, "loading", "the overlay is up while it is fetched");
   assert.equal(store.status.kind === "loading" ? store.status.title : null, "Adding the reference: fetching what it names");
@@ -400,7 +401,10 @@ test("adding an arc the layer has already changes nothing, and is not noted as t
   const before = steps();
   const text = new TextDecoder().decode(stage.exportLayer(stage.root, "usda"));
   // As OpenUSD's AddReference of an item the list holds at that place: nothing to author.
-  await h.settle(store.addArc("/World/Robot", reference("./assets/robot.usda")).done);
+  const adding = store.addArc("/World/Robot", reference("./assets/robot.usda"));
+  // Known at once, for the dialog to say so and stay open.
+  assert.deepEqual([adding.refusal, adding.unchanged], [undefined, true]);
+  await h.settle(adding.done);
   assert.equal(steps(), before, "no step");
   assert.equal(new TextDecoder().decode(stage.exportLayer(stage.root, "usda")), text);
   assert.equal(store.compositionEdit, null, "the value edit before it is not offered as a composition edit of the robot");

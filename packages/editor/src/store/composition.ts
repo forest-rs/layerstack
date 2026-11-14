@@ -39,6 +39,12 @@ export interface CompositionEdit {
  */
 export interface Authoring {
   readonly refusal: string | undefined;
+  /**
+   * Whether the stage took it and it changed nothing (an arc the layer
+   * holds already at that place, as OpenUSD's `AddReference` of it
+   * authors nothing), known at once as the refusal is.
+   */
+  readonly unchanged: boolean;
   readonly done: Promise<void>;
 }
 

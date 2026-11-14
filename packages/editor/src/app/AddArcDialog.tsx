@@ -80,7 +80,8 @@ export function AddArcDialog({ store, prim, kind: initial, onClose }: { store: E
   const [position, setPosition] = useState<ListPosition>("backOfPrepend");
   const [offsetText, setOffsetText] = useState("0");
   const [scaleText, setScaleText] = useState("1");
-  const [refused, setRefused] = useState<string | null>(null);
+  // Why the add was refused, or that it changed nothing: said in the dialog, which stays open.
+  const [refused, setRefused] = useState<{ readonly text: string; readonly refusal: boolean } | null>(null);
   const prefer = useMemo(() => classFirst(stage), [stage]);
   const external = kind === "reference" || kind === "payload";
 
@@ -137,9 +138,10 @@ export function AddArcDialog({ store, prim, kind: initial, onClose }: { store: E
   const where = target === null ? null : mapping(target, prim.path);
   const add = () => {
     if (problem !== null) return;
-    const { refusal } = store.addArc(prim.path, arc);
-    if (refusal === undefined) onClose();
-    else setRefused(refusal);
+    const { refusal, unchanged } = store.addArc(prim.path, arc);
+    if (refusal !== undefined) setRefused({ text: refusal, refusal: true });
+    else if (unchanged) setRefused({ text: `${targetLayer?.identifier ?? "The session layer"} already holds this ${kind} there: nothing changed.`, refusal: false });
+    else onClose();
   };
   const option = ({ isSelected }: { isSelected: boolean }) => buttonVariants({ variant: isSelected ? "secondary" : "ghost", size: "sm" });
   const smallOption = ({ isSelected }: { isSelected: boolean }) => buttonVariants({ variant: isSelected ? "secondary" : "ghost", size: "xs" });
@@ -307,11 +309,16 @@ export function AddArcDialog({ store, prim, kind: initial, onClose }: { store: E
           )}
         </div>
         {problem !== null && <span className="text-[11px] text-muted-foreground">{problem}</span>}
-        {refused !== null && (
-          <span role="alert" className="text-[11px] text-destructive">
-            {refused}
-          </span>
-        )}
+        {refused !== null &&
+          (refused.refusal ? (
+            <span role="alert" className="text-[11px] text-destructive">
+              {refused.text}
+            </span>
+          ) : (
+            <span role="status" className="text-[11px] text-amber-700 dark:text-amber-300">
+              {refused.text}
+            </span>
+          ))}
       </form>
       <DialogFooter>
         <Button variant="outline" onPress={onClose}>

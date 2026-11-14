@@ -497,6 +497,54 @@ export function variantSetSource(
   return null;
 }
 
+/** A variant selection a spec authors that is stronger than where edits go: its layer, the variant it selects, and the arc it is read through. */
+export interface StrongerSelection {
+  readonly layer: Layer;
+  readonly variant: string;
+  /** The arc whose layers hold it, by index: its edit target (`CompositionArc.editTarget(layer)`) writes there. */
+  readonly arc: number;
+}
+
+/**
+ * The strongest variant selection of `set` the prim's specs author that
+ * is stronger than the spec edits of it go to (`target`, its layer and
+ * spec path): the one the stage reads whatever the target selects
+ * (`null` when the target's would win, or nothing selects the set). The
+ * specs are each arc's layers at its site, strongest first; a target the
+ * prim does not compose (a variant not selected) is weaker than all.
+ * AOUSD Core §7.6.2.3.4 (`variantSelection`, strongest opinion wins).
+ */
+export function strongerSelection(
+  arcs: readonly Pick<CompositionArc, "arc" | "site" | "layers">[],
+  set: string,
+  target: { readonly layer: Layer; readonly specPath: string } | null,
+  specsOf: SpecsOf,
+): StrongerSelection | null {
+  for (const [index, arc] of arcs.entries()) {
+    if (arc.arc === "relocates") continue;
+    for (const layer of arc.layers) {
+      if (target !== null && layer === target.layer && arc.site === target.specPath) return null;
+      const variant = specsOf(layer, arc.site)?.spec.variantSelections?.get(set);
+      if (variant !== undefined) return { layer, variant, arc: index };
+    }
+  }
+  return null;
+}
+
+/**
+ * Where a selection that wins is authored ({@link StrongerSelection}): its
+ * layer as itself for one of the stage's own stack, else the target
+ * through its arc; `null` when the arc is gone.
+ */
+export function selectionTarget(prim: { compositionArcs(): readonly Pick<CompositionArc, "editTarget">[] }, selection: StrongerSelection): Layer | EditTarget | null {
+  try {
+    const target = prim.compositionArcs()[selection.arc]?.editTarget(selection.layer) ?? null;
+    return target === null ? null : target.kind === "layer" ? target.layer : target;
+  } catch {
+    return null;
+  }
+}
+
 // Edit targets in words.
 
 /** A layer as the editor names it. */

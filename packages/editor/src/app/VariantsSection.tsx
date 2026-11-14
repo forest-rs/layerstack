@@ -5,8 +5,10 @@
 // selection, chosen from its variants (a selection fetches what the
 // variant needs). Each set's "⋯" makes edits go inside one of its
 // variants (`Prim.variantEditTarget`: what is authored there shows only
-// while it is selected, which the section says), adds a variant (then
-// selects it, and offers to edit inside it), or removes the set from the
+// while it is selected, which the section says), adds a variant (its
+// selection authored there too, and editing inside it offered; when a
+// stronger layer's selection still wins, it says so and offers to select
+// it in that layer), or removes the set from the
 // layer edits go to when that layer holds it, else names the layer that
 // does and offers to edit there. "+ Variant set" adds a set with its
 // first variant. Each edit is one undoable step where edits go.
@@ -20,7 +22,8 @@ import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogSubmit, Di
 import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { describeTarget, mapping, variantNameProblem, variantOfSite, variantSetNameProblem, variantSetSource } from "../model/composition.ts";
+import { describeTarget, mapping, strongerSelection, variantNameProblem, variantOfSite, variantSetNameProblem, variantSetSource } from "../model/composition.ts";
+import { targetSite } from "../model/propertyOps.ts";
 import type { EditorStore } from "../store.ts";
 import { CompositionEditNote, compositionBlock, currentTarget, editThrough } from "./CompositionSection.tsx";
 import { useRevision } from "./context.ts";
@@ -205,6 +208,10 @@ export function VariantDialog({ store, prim, set, onClose }: { store: EditorStor
   const named = sets.filter((each) => each.variants.length > 0).map((each) => each.name);
   const problem = (newSet ? variantSetNameProblem(setName, named) : null) ?? variantNameProblem(variant, taken);
   const where = target === null ? "the edit layer" : describeTarget(target);
+  // A stronger layer's selection of the set wins over the one authored here.
+  const session = store.session;
+  const stronger =
+    session === null || name === "" ? null : strongerSelection(prim.compositionArcs(), name, targetSite(session.stage, session.target, prim.path), store.specsOf);
   const add = () => {
     if (problem !== null) return;
     const why = store.addVariant(prim.path, name, variant, newSet);
@@ -216,7 +223,11 @@ export function VariantDialog({ store, prim, set, onClose }: { store: EditorStor
     <Dialog isOpen onOpenChange={(isOpen) => isOpen || onClose()} className="sm:max-w-md">
       <DialogHeader>
         <DialogTitle>{newSet ? `Add a variant set to ${prim.name || "/"}` : `Add a variant to ${set}`}</DialogTitle>
-        <DialogDescription>Authored in {where}, where edits go, and selected, as one undoable edit. Then edit inside it to author what it changes.</DialogDescription>
+        <DialogDescription>
+          {stronger === null
+            ? `Authored in ${where}, where edits go, and selected, as one undoable edit. Then edit inside it to author what it changes.`
+            : `Authored in ${where}, where edits go, with its selection there, as one undoable edit; but ${stronger.layer.identifier ?? "the session layer"}, stronger, selects ${stronger.variant}, which the stage keeps reading until it is selected there.`}
+        </DialogDescription>
       </DialogHeader>
       <form
         onSubmit={(event) => {

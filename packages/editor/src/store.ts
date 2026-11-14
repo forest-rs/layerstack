@@ -37,11 +37,11 @@ import type {
 } from "@forest-rs/layerstack";
 import type { BudgetReport, DrawCost, Stagehand } from "@forest-rs/layerstack_stagehand";
 import type { AssetFocus, BudgetChoice, DrawScopeChoice } from "./model/assetView.ts";
-import { describeTarget, type NamespaceAction, namespaceRefusal, type NewArc, newArcLabel, removeArcLabel, targetGone } from "./model/composition.ts";
+import { describeTarget, type NamespaceAction, namespaceRefusal, type NewArc, newArcLabel, removeArcLabel, strongerSelection, targetGone } from "./model/composition.ts";
 import type { ViewportScene, ViewportUpdate } from "./model/draws.ts";
 import { planSave, type SaveEntry } from "./model/files.ts";
 import { indexOfId, type InstancerColumns, toggled } from "./model/instancer.ts";
-import type { AuthoredArc, AuthoredSpec, LayerSummary, SpecCache } from "./model/layerSpecs.ts";
+import { type AuthoredArc, type AuthoredSpec, type LayerSummary, type SpecCache, specReader } from "./model/layerSpecs.ts";
 import type { LayerTextRead } from "./model/layerText.ts";
 import { type Shadow, shadowOf, targetOpinion, targetSite } from "./model/propertyOps.ts";
 import {
@@ -1269,10 +1269,14 @@ export class EditorStore {
     return this.apply(`${active ? "activate" : "deactivate"} instance ${id} of ${instancer}`, [{ type: "setMetadata", path: instancer, key: "inactiveIds", value }]);
   }
 
-  /** Selects `variant` of `set` on `prim`, then fetches what it needs. */
-  selectVariant(prim: string, set: string, variant: string): Promise<void> {
+  /**
+   * Selects `variant` of `set` on `prim` where edits go, or in `where`
+   * (a stronger layer whose selection wins, {@link CompositionEdit}), then
+   * fetches what it needs.
+   */
+  selectVariant(prim: string, set: string, variant: string, where?: Layer | EditTarget): Promise<void> {
     return this.#fetching(`select ${set}=${variant}`, async (session, signal) => {
-      await session.selectVariant(prim, set, variant, signal);
+      await session.selectVariant(prim, set, variant, signal, where);
       return false;
     });
   }
@@ -1338,12 +1342,27 @@ export class EditorStore {
 
   /**
    * Adds the variant `variant` to the set `set` of the prim at `prim`
-   * where edits go, the set with it when it is new (`newSet`), and selects
-   * it, as one undoable action. Returns why it was refused.
+   * where edits go, the set with it when it is new (`newSet`), and
+   * authors its selection there, as one undoable action. The edit noted
+   * ({@link EditorStore.compositionEdit}) says when a stronger layer's
+   * selection still wins, so the variant is not what the stage selects.
+   * Returns why it was refused.
    */
   addVariant(prim: string, set: string, variant: string, newSet = false): string | undefined {
     const label = newSet ? `add variant set ${set}` : `add variant ${set}=${variant}`;
-    return this.#edit(label, (session) => this.#composed(session, prim, () => session.addVariant(prim, set, variant, newSet), { set, variant }));
+    return this.#edit(label, (session) =>
+      this.#composed(
+        session,
+        prim,
+        () => session.addVariant(prim, set, variant, newSet),
+        () => {
+          // Read fresh: the store's specs are of the stage before this edit until its change is heard.
+          const arcs = session.stage.prim(prim)?.compositionArcs() ?? [];
+          const stronger = strongerSelection(arcs, set, targetSite(session.stage, session.target, prim), specReader(session.stage));
+          return { set, variant, ...(stronger === null || stronger.variant === variant ? {} : { outranked: stronger }) };
+        },
+      ),
+    );
   }
 
   /**
@@ -1448,7 +1467,7 @@ export class EditorStore {
   }
 
   /** Runs a composition edit of `prim` and notes it ({@link EditorStore.compositionEdit}); returns its receipt. */
-  #composed(session: Session, prim: string, run: () => EditReceipt, variant?: CompositionEdit["variant"]): EditReceipt {
+  #composed(session: Session, prim: string, run: () => EditReceipt, variant?: () => CompositionEdit["variant"]): EditReceipt {
     let receipt: EditReceipt | null = null;
     this.#composing(session, prim, () => (receipt = run()), variant);
     return receipt!;
@@ -1461,14 +1480,15 @@ export class EditorStore {
    * made none (an arc added that the layer has already): the step
    * before it is not this edit's to note, or to take back.
    */
-  #composing(session: Session, prim: string, run: () => EditReceipt, variant?: CompositionEdit["variant"]): HistoryStep | null {
+  #composing(session: Session, prim: string, run: () => EditReceipt, variant?: () => CompositionEdit["variant"]): HistoryStep | null {
     const target = session.target;
     const layer = target === undefined ? session.stage.editLayer : "kind" in target ? target.layer : target;
     if (layer !== null && this.lastLayerText(layer) === null) this.layerText(layer);
     const before = session.history.nextUndo;
     const receipt = run();
     const step = session.history.nextUndo === before ? null : session.history.nextUndo;
-    this.#composition.edit = step === null ? null : { prim, label: step.label, layer: receipt.target.layer, step, ...(variant === undefined ? {} : { variant }) };
+    const added = step === null ? undefined : variant?.();
+    this.#composition.edit = step === null ? null : { prim, label: step.label, layer: receipt.target.layer, step, ...(added === undefined ? {} : { variant: added }) };
     return step;
   }
 

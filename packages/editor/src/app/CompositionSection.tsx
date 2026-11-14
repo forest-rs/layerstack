@@ -31,6 +31,7 @@ import {
   kindOf,
   mapping,
   type NewArcKind,
+  selectionTarget,
   targetRoute,
   uncomposedHere,
   variantOfSite,
@@ -419,6 +420,25 @@ export function CompositionEditNote({ store, prim, variants }: { store: EditorSt
   const edit = store.compositionEdit;
   if (edit === null || edit.prim !== prim.path || isVariantEdit(edit.label) !== variants) return null;
   const layer = edit.layer.identifier ?? "the session layer";
+  const outranked = edit.variant?.outranked;
+  if (edit.variant !== undefined && outranked !== undefined) {
+    const stronger = outranked.layer.identifier ?? "the session layer";
+    const { set, variant } = edit.variant;
+    return (
+      <div role="status" className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 rounded-md bg-muted px-2 py-1 text-[11px]">
+        <span className="min-w-0">
+          Done: <span className="font-mono">{edit.label}</span>, in {layer}, its selection authored there; but {stronger}, stronger, selects{" "}
+          <span className="font-mono">{outranked.variant}</span>, so {variant} is not what the stage selects.
+        </span>
+        <Button variant="outline" size="xs" onPress={() => void store.selectVariant(edit.prim, set, variant, selectionTarget(prim, outranked) ?? undefined)}>
+          Select {variant} in {stronger}
+        </Button>
+        <Button variant="outline" size="xs" onPress={() => store.showLayerText(edit.layer)}>
+          Show in {layer}'s text
+        </Button>
+      </div>
+    );
+  }
   return (
     <div role="status" className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 rounded-md bg-muted px-2 py-1 text-[11px]">
       <span className="min-w-0">

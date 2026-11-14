@@ -654,13 +654,15 @@ export class Session implements Disposable {
   }
 
   /**
-   * Selects `variant` of `set` on `prim`, then supplies what the variant
-   * needs that the stage has not read, step by step.
+   * Selects `variant` of `set` on `prim` where edits go, or in `where`
+   * when given (the layer, or the target through an arc, whose stronger
+   * selection the stage reads), then supplies what the variant needs that
+   * the stage has not read, step by step.
    */
-  async selectVariant(prim: string, set: string, variant: string, signal?: AbortSignal): Promise<EditReceipt> {
-    const receipt = this.apply(`select ${set}=${variant} on ${prim}`, [
-      { type: "setVariantSelection", path: prim, set, variant },
-    ]);
+  async selectVariant(prim: string, set: string, variant: string, signal?: AbortSignal, where?: Layer | EditTarget): Promise<EditReceipt> {
+    const label = `select ${set}=${variant} on ${prim}`;
+    const edits: Edit[] = [{ type: "setVariantSelection", path: prim, set, variant }];
+    const receipt = where === undefined ? this.apply(label, edits) : this.#record(label, () => this.stage.apply(edits, where));
     await this.supplyUnavailable(`${set}=${variant}`, undefined, signal);
     return receipt;
   }

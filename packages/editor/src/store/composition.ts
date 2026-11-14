@@ -10,6 +10,7 @@
 // store (`../store.ts`), in its turn, as any edit.
 import type { HistoryStep, Layer, Layerstack } from "@forest-rs/layerstack";
 import { type LayerSummary, layerSummary as summarizeLayer, SpecCache, summarizeBytes } from "../model/layerSpecs.ts";
+import type { StrongerSelection } from "../model/composition.ts";
 import type { Session } from "../model/session.ts";
 import type { SceneSource } from "../model/sources.ts";
 
@@ -23,8 +24,12 @@ export interface CompositionEdit {
   readonly layer: Layer;
   /** The step it made: the edit is offered while this is the newest. */
   readonly step: HistoryStep;
-  /** The variant it added and selected, when it did: offered to edit inside. */
-  readonly variant?: { readonly set: string; readonly variant: string };
+  /**
+   * The variant it added, its selection authored where it went, when it
+   * did: offered to edit inside; or, when a stronger layer's selection of
+   * the set still wins (`outranked`), offered to select there.
+   */
+  readonly variant?: { readonly set: string; readonly variant: string; readonly outranked?: StrongerSelection };
 }
 
 /**

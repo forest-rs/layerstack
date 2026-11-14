@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip";
 import { holdsField, kindChoices } from "../model/primAuthoring.ts";
 import type { EditorStore } from "../store.ts";
+import { useRevision } from "./context.ts";
 import { primIcon } from "./icons.ts";
 import { askPrim } from "./primDialogRequests.ts";
 import { editsGoTo, RefusalNote, SpecifierPicker, useRefusal } from "./primAuthoringParts.tsx";
@@ -25,6 +26,8 @@ const NO_KIND = "";
 
 /** The prim's type, specifier, kind, active and instanceable, each authored where edits go. */
 export function PrimStateSection({ store, prim }: { store: EditorStore; prim: Prim }) {
+  // What Clear offers is the spec edits go to: read again when they go elsewhere.
+  useRevision(store, "target");
   const [refusal, attempt] = useRefusal();
   const readOnly = prim.instanceProxy;
   const where = editsGoTo(store);

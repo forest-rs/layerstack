@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { loadLayerstack, type Stage } from "@forest-rs/layerstack";
-import { cycleEdges, findPort, judge, readIssues } from "../src/model/connections.ts";
+import { cycleEdges, encapsulation, findPort, judge, readIssues } from "../src/model/connections.ts";
 import { judgeDrop } from "../src/model/graphGesture.ts";
 import { readNetwork, type ShadingNetwork } from "../src/model/network.ts";
 import { portMenu } from "../src/model/networkEdits.ts";
@@ -97,4 +97,43 @@ test("a node graph's ports that read nothing of each other are not one node of a
   // Two ports of one boundary: the reverse of a connection there is a cycle, though both are one drawn node.
   assert.deepEqual(judge(network, at("/Graph.inputs:c"), at("/Graph.inputs:b")), { kind: "refused", reason: "it would make a cycle: Graph.b → Graph.c → Graph.b" });
   assert.ok(!portMenu(network, `${M}/Graph.inputs:b`)[0]!.entries!.some((entry) => entry.id === `${M}/Graph.inputs:c`));
+});
+
+test("a connection across a container's boundary, other than through its interface, is warned of as CanConnect decides it", () => {
+  const { network } = nested();
+  const at = (path: string) => findPort(network, path)!;
+  // Each pair with what OpenUSD 26.11's `UsdShadeConnectableAPI::CanConnect(destination, source)` answers for this layer.
+  const pairs: [string, string, boolean][] = [
+    [`${M}/Reads.outputs:result`, `${M}/Graph.inputs:b`, true],
+    [`${M}/Tex.outputs:r`, `${M}/Graph.inputs:b`, true],
+    [`${M}.inputs:gain`, `${M}/Graph.inputs:b`, true],
+    [`${M}/Graph.outputs:x`, `${M}/Surface.inputs:metallic`, true],
+    [`${M}.inputs:gain`, `${M}/Surface.inputs:metallic`, true],
+    [`${M}/Tex.outputs:r`, `${M}/Surface.inputs:metallic`, true],
+    [`${M}/Graph.inputs:a`, `${M}/Graph.outputs:y`, true],
+    [`${M}/Graph/Inner.outputs:r`, `${M}/Graph.outputs:y`, true],
+    [`${M}/Graph.inputs:a`, `${M}/Graph/Inner.inputs:other`, true],
+    // A shader inside the graph reading past its boundary, and one outside reading into it.
+    [`${M}/Tex.outputs:r`, `${M}/Graph/Inner.inputs:other`, false],
+    [`${M}.inputs:gain`, `${M}/Graph/Inner.inputs:other`, false],
+    [`${M}/Graph/Inner.outputs:r`, `${M}/Surface.inputs:metallic`, false],
+    [`${M}/Graph.inputs:a`, `${M}/Surface.inputs:metallic`, false],
+    // A container's output reading what is not directly inside it; a material's passing an input through.
+    [`${M}/Reads.outputs:result`, `${M}/Graph.outputs:y`, false],
+    [`${M}/Graph/Inner.outputs:r`, `${M}.outputs:surface`, false],
+    [`${M}.inputs:gain`, `${M}.outputs:surface`, false],
+  ];
+  for (const [source, destination, can] of pairs) {
+    assert.equal(encapsulation(at(source), at(destination)) === null, can, `${destination} reading ${source}`);
+  }
+  // Warned of, not refused: USD authors it.
+  const verdict = judge(network, at(`${M}/Tex.outputs:r`), at(`${M}/Graph/Inner.inputs:other`));
+  assert.equal(verdict.kind, "warn");
+  assert.match(verdict.kind === "warn" ? verdict.reason : "", /Inner and Tex are not in the same container: UsdShadeConnectableAPI::CanConnect does not take it/);
+  assert.deepEqual(judge(network, at(`${M}/Tex.outputs:r`), at(`${M}/Surface.inputs:metallic`)), { kind: "match" });
+  // Another material's shader, in the network because something here reads it.
+  const other = readNetwork(nested().stage, "/Looks/Other");
+  const far = findPort(other, "/Looks/Other/Far.inputs:bias")!;
+  const across = judge(other, findPort(other, `${M}/Tex.outputs:r`)!, far);
+  assert.match(across.kind === "warn" ? across.reason : "", /Far and Tex are not in the same container/);
 });

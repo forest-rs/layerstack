@@ -19,8 +19,9 @@
 // only what cannot mean anything (a port reading itself, a connection
 // already there, one that closes a cycle) and warns of what USD takes but
 // a renderer may not read as meant: types of another shape, and a
-// container's output reading a source outside it. The stage refuses what
-// it refuses, and the view says why.
+// connection across a container's boundary other than through its
+// interface (`encapsulation`). The stage refuses what it refuses, and the
+// view says why.
 //
 // Issues. The stage reports a connection target that names no shading
 // attribute (`ShaderPort.invalidConnections`, and
@@ -173,6 +174,33 @@ function chain(reads: Reads, keys: readonly string[]): string {
   return keys.map((key) => reads.names.get(key)!).join(" → ");
 }
 
+/**
+ * Why USD's encapsulation does not take `destination` reading `source`,
+ * or `null` when it does, as `UsdShadeConnectableAPIBehavior` decides it
+ * for shaders, node graphs and materials (`_CanConnectInputToSource`,
+ * `_CanConnectOutputToSource`):
+ *
+ * - an input reads an output of a prim beside its own (in the same
+ *   container), or an input of the container its prim is directly in;
+ * - a container's output reads an output of a prim directly inside it,
+ *   or, a node graph's (not a material's), one of its own inputs.
+ */
+export function encapsulation(source: PortRef, destination: PortRef): string | null {
+  const from = source.node.path;
+  const to = destination.node.path;
+  if (destination.port.kind === "input") {
+    if (source.port.kind === "input") {
+      return parentPath(to) === from ? null : `${destination.node.name} is not directly inside ${source.node.name}, whose input it would read`;
+    }
+    return parentPath(to) === parentPath(from) ? null : `${destination.node.name} and ${source.node.name} are not in the same container`;
+  }
+  if (source.port.kind === "input") {
+    if (from !== to) return `${destination.node.name}'s output passes through an input of its own, not ${source.node.name}'s`;
+    return destination.node.detail === "Material" ? "a material's output does not pass one of its inputs through" : null;
+  }
+  return parentPath(from) === to ? null : `${destination.node.name}'s outputs read what is directly inside it, and ${source.node.name} is not`;
+}
+
 /** What connecting `source` to `destination` would be, as the header of this file describes. */
 export function judge(network: ShadingNetwork, source: PortRef, destination: PortRef): Verdict {
   if (!isSource(network, source)) return { kind: "refused", reason: `${portName(source)} is not read by anything: connect from an output` };
@@ -189,17 +217,12 @@ export function judge(network: ShadingNetwork, source: PortRef, destination: Por
   const head = vertexOf(destination.node, destination.port);
   const back = pathBetween(reads, head, tail);
   if (back !== null) return { kind: "refused", reason: `it would make a cycle: ${chain(reads, [...back, head])}` };
+  const outside = encapsulation(source, destination);
+  if (outside !== null) return { kind: "warn", reason: `${outside}: UsdShadeConnectableAPI::CanConnect does not take it, though ConnectToSource authors it` };
   const from = source.port.typeName;
   const to = destination.port.typeName;
   if (from !== null && to !== null && valueShape(from) !== valueShape(to)) {
     return { kind: "warn", reason: `a ${from} into a ${to}: USD connects it, and the renderer decides what it reads` };
-  }
-  if (destination.node.role === "outputs") {
-    // A container's output reads a node directly inside it, or passes one of its own inputs through.
-    const prim = primOf(source.port.path);
-    if (prim !== destination.node.path && parentPath(prim) !== destination.node.path) {
-      return { kind: "warn", reason: `${destination.node.name}'s outputs read what is directly inside it (UsdShadeConnectableAPI::CanConnect), and ${source.node.name} is not` };
-    }
   }
   return { kind: "match" };
 }

@@ -501,7 +501,9 @@ nothing more.
   shader", in the toolbar or the background's context menu, adds a
   `Shader` with its `info:id` where it was asked for (with a
   `ui:nodegraph:node:pos` when the network places its nodes); a shader's
-  menu deletes it, and the connections to it with it. Nodes stay where
+  menu deletes it, and the connections to it with it (a namespace edit:
+  in every layer of the layer stack that has them, not only the one edits
+  go to). Nodes stay where
   they were drawn across an edit. Connections that name nothing (a
   dashed stub and a cross) and cycles (a dashed red curve) are marked on
   the curve and the port, with the reason. The keyboard reaches all of

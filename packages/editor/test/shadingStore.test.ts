@@ -96,3 +96,76 @@ test("adding a shader defines it with its id in one action; deleting one takes t
   assert.deepEqual(stage.port(`${CHECKER}/Surface.inputs:diffuseColor`)?.connections, [`${texture}.outputs:rgb`]);
   assert.deepEqual(store.notices, []);
 });
+
+/** A root over a sublayer that defines a material; the root authors the surface's roughness and what its colour reads. */
+const STACKED = {
+  "stacked.usda": `#usda 1.0
+(
+    subLayers = [@./looks.usda@]
+)
+over "Looks"
+{
+    over "M"
+    {
+        over "Surface"
+        {
+            color3f inputs:diffuseColor.connect = </Looks/M/Tex.outputs:rgb>
+            float inputs:roughness = 0.75
+        }
+    }
+}
+`,
+  "looks.usda": `#usda 1.0
+def Scope "Looks"
+{
+    def Material "M"
+    {
+        token outputs:surface.connect = </Looks/M/Surface.outputs:surface>
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor.connect = </Looks/M/Tex.outputs:rgb>
+            float inputs:roughness = 0.2
+            float inputs:metallic = 0.1
+            float inputs:ior.connect = </Looks/M/Gone.outputs:r>
+            token outputs:surface
+        }
+        def Shader "Tex"
+        {
+            uniform token info:id = "UsdUVTexture"
+            float3 outputs:rgb
+        }
+        def Shader "Tex2"
+        {
+            uniform token info:id = "UsdUVTexture"
+            float3 outputs:rgb
+        }
+    }
+}
+`,
+};
+
+/** The stacked scene open, with its sublayer. */
+async function stacked() {
+  const h = await harness();
+  await h.open(sampleSource("stacked.usda", STACKED));
+  const stage = h.store.session!.stage;
+  const looks = stage.layers().find((layer) => layer.identifier.endsWith("looks.usda"))!;
+  return { h, store: h.store, stage, looks };
+}
+
+test("a shading input's edit that a stronger layer hides is said not to show, and one that shows clears what was said", async () => {
+  const { store, stage, looks } = await stacked();
+  const roughness = "/Looks/M/Surface.inputs:roughness";
+  const metallic = "/Looks/M/Surface.inputs:metallic";
+  store.setTarget(looks);
+  // The root's 0.75 still gives the value: the edit is in the sublayer, and does not show.
+  assert.equal(store.setShaderInput(roughness, { type: "float", value: 0.5 }), undefined);
+  const value = stage.attribute(roughness)?.get() ?? null;
+  assert.equal(value?.kind === "scalar" ? value.value : null, 0.75);
+  assert.equal(store.shadow?.path, roughness);
+  assert.equal(store.shadow?.layer.identifier, stage.root.identifier);
+  // An edit that shows: nothing is shadowed any more.
+  assert.equal(store.setShaderInput(metallic, { type: "float", value: 0.4 }), undefined);
+  assert.equal(store.shadow, null);
+});

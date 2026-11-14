@@ -1132,7 +1132,14 @@ export class EditorStore {
   setShaderInput(path: string, value: ValueInput, time: number | null = null): string | undefined {
     const label = time === null ? `set ${path}` : `set ${path} at ${time}`;
     const edit: Edit = time === null ? { type: "setShaderInput", path, value } : { type: "setShaderInput", path, value, time };
-    return this.#edit(label, (session) => session.apply(label, [edit]));
+    return this.#edit(
+      label,
+      (session) => {
+        this.#shadow = null;
+        return session.apply(label, [edit]);
+      },
+      () => this.#shadowed(path, time),
+    );
   }
 
   /**

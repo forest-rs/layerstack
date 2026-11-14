@@ -8,6 +8,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Layer, Stage } from "@forest-rs/layerstack";
+import { layerStack } from "../src/model/layerStack.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
 /** A layer with one root prim, `name`, to add as a sublayer. */
@@ -112,6 +113,36 @@ test("a sublayer edit queued behind one that changes the list acts on the sublay
   assert.match((await h.settle(second))!, /scene\.usda's sublayers changed since: @\.\/library\.usda@ is not one of them now/);
   assert.deepEqual(authored(), [["./extra.usda", 0, 1]]);
   assert.equal(session.history.undoSteps.length, steps + 1);
+});
+
+test("a sublayer the stage could not read is a row of its own, never another layer the stage holds by a like name", async () => {
+  const h = await harness();
+  // `set/root.usda` lists `library.usda`, which is not beside it, and references the `library.usda` a folder up.
+  const files = {
+    "set/root.usda": `#usda 1.0\n(\n    subLayers = [\n        @library.usda@\n    ]\n)\n\ndef "Use" (\n    references = @../library.usda@</Lib>\n)\n{\n}\n`,
+    "library.usda": layerWith("Lib"),
+  };
+  await h.open(sampleSource("set/root.usda", files));
+  const { store } = h;
+  const session = store.session!;
+  const stage = session.stage;
+  // What the stage says: the sublayer is missing, looked for beside its layer.
+  assert.deepEqual(
+    store.health!.missing.map((asset) => [asset.assetPath, asset.usedBy, asset.identifier]),
+    [["library.usda", "sublayer", "set/library.usda"]],
+  );
+  const tree = layerStack({ root: stage.root, session: session.sessionLayer, held: stage.layers(), sublayers: (layer) => stage.sublayers(layer), muted: (layer) => stage.isMuted(layer) });
+  assert.deepEqual(
+    tree.rows.map((row) => [row.identifier, row.state, row.strength, row.layer?.identifier ?? null]),
+    [
+      ["set/root.usda", "read", 1, "set/root.usda"],
+      ["set/library.usda", "unread", 0, null],
+    ],
+  );
+  assert.deepEqual(
+    tree.reached.map((layer) => layer.identifier),
+    ["library.usda"],
+  );
 });
 
 test("a sublayer the stage refuses says why; one the source lacks is authored, and the health reports it missing", async () => {

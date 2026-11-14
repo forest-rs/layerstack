@@ -618,7 +618,9 @@ In development the server serves a local scene directory under `/@scenes/`
 repository's main checkout. **Open** lists its layers two levels deep, and
 **Browse local scenes…** walks it folder by folder to open any layer (a
 material library three folders down); `?scene=<path>` opens any layer
-under it at load. Scenes there are never committed or
+under it at load, and one that names no layer (or, in a build, anything
+but the sample) fails the open and says why, rather than open the
+sample. Scenes there are never committed or
 built: their licenses are their own.
 
 ## Prebuilt cluster sets

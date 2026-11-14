@@ -9,6 +9,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Session } from "../src/model/session.ts";
+import { sceneChoice } from "../src/model/sources.ts";
 import { harness, NESTED_LAYERS, PAYLOAD_ROOT, sampleSource, trap } from "./support/storeHarness.ts";
 
 /** The scalar value of the attribute at `path`; `null` when it has none. */
@@ -56,6 +57,21 @@ test("a root that does not exist fails the open and keeps nothing", async () => 
   const h = await harness();
   await h.settle(h.store.open(sampleSource("missing.usda")));
   assert.equal(h.store.status.kind, "failed");
+  assert.equal(h.store.session, null);
+});
+
+test("a ?scene= that names no layer is a failed open, not the sample opened unasked", async () => {
+  assert.deepEqual(sceneChoice(null, "Sample", true), { kind: "sample" });
+  assert.deepEqual(sceneChoice("Sample", "Sample", false), { kind: "sample" });
+  assert.deepEqual(sceneChoice("set/root.usda", "Sample", true), { kind: "local", path: "set/root.usda" });
+  const refused = sceneChoice("rocks", "Sample", true);
+  assert.equal(refused.kind, "refused");
+  assert.match(refused.kind === "refused" ? refused.message : "", /"rocks" is neither/);
+  assert.equal(sceneChoice("set/root.usda", "Sample", false).kind, "refused", "a build serves no local scenes");
+  // What the page does with it: the failed-open card, nothing opened.
+  const h = await harness();
+  h.store.failOpen("rocks", refused.kind === "refused" ? refused.message : "");
+  assert.deepEqual(h.store.status, { kind: "failed", label: "rocks", message: refused.kind === "refused" ? refused.message : "" });
   assert.equal(h.store.session, null);
 });
 

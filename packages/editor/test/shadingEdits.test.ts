@@ -27,7 +27,7 @@ import {
   portMenu,
   uniqueName,
 } from "../src/model/networkEdits.ts";
-import { keepPlaces } from "../src/model/networkPlaces.ts";
+import { keepPlaces, repositioned } from "../src/model/networkPlaces.ts";
 import { SHADER_DEFINITIONS, shaderDefinition } from "../src/model/shaderDefinitions.ts";
 import { groupInputs } from "../src/model/shadingInputs.ts";
 import { typesOf } from "../src/presentations/registry.ts";
@@ -320,6 +320,29 @@ test("the arrow keys move through a node's rows, across connections and between 
   assert.deepEqual(press("Enter"), { kind: "activate" });
   assert.deepEqual(press("Escape"), { kind: "escape" }, "kept from the page's Escape, which would drop the selection and the graph");
   assert.equal(press("z", { metaKey: true }), null, "undo stays the editor's");
+});
+
+test("a node given another authored position is laid out again where the drawing follows authored positions", () => {
+  const stage = layerstack.open({ identifier: "placed.usda", bytes: new TextEncoder().encode(PLACED) });
+  const draw = () => {
+    const network = readNetwork(stage, "/M");
+    return { network, layout: layoutNetwork(connectedOnly(network).network, true) };
+  };
+  const x = (layout: ReturnType<typeof draw>["layout"], key: string) => layout.nodes.find((placed) => placed.node.key === key)!.x;
+  const before = draw();
+  const keys = new Set(before.network.nodes.map((node) => node.key));
+  assert.ok(x(before.layout, "/M/A") < x(before.layout, "/M/B"));
+  // A moved past B: its authored x from 0 to 20.
+  stage.apply([{ type: "setValue", path: "/M/A.ui:nodegraph:node:pos", value: { type: "float2", value: [20, 0] } }]);
+  const after = draw();
+  assert.ok(x(after.layout, "/M/A") > x(after.layout, "/M/B"), "the fresh layout follows the new position");
+  // Kept, the drawing would hold A where it was, though it says it is as its authors placed it.
+  assert.ok(x(keepPlaces(before.layout, after.layout), "/M/A") < x(keepPlaces(before.layout, after.layout), "/M/B"));
+  assert.equal(repositioned(before.network.positions, after.network.positions, keys), true, "so it is not kept");
+  // An edit that moves nothing, and a node added with a position, keep the drawing.
+  stage.apply(connectEdits(stage, "/M/B.inputs:roughness", "/M/A.outputs:r"));
+  stage.apply(addShaderEdits("/M/C", "UsdUVTexture", [5, 5]));
+  assert.equal(repositioned(after.network.positions, draw().network.positions, keys), false);
 });
 
 /** A material with a connection to a deleted node, a cycle through two shaders, and one through its interface. */

@@ -76,7 +76,7 @@ import {
   unshownConnection,
 } from "../model/networkEdits.ts";
 import { fitView, MAX_SCALE, MIN_SCALE, PADDING, resizedView, type View, type ViewOrigin } from "../model/graphView.ts";
-import { keepPlaces, type Place } from "../model/networkPlaces.ts";
+import { keepPlaces, type Place, repositioned } from "../model/networkPlaces.ts";
 import { shaderDefinition } from "../model/shaderDefinitions.ts";
 import type { EditorStore } from "../store.ts";
 import { useEditorStore, useRevision } from "./context.ts";
@@ -123,11 +123,20 @@ function Network({ store, root }: { store: EditorStore; root: string }) {
     return { fresh: layoutNetwork(shown.network, authored && !automatic), hidden: shown.hidden, hiddenBy: counts };
   }, [network, allPorts, automatic, authored, unfolded]);
   // The drawing as last shown, and where new nodes were asked for: what keeps the nodes still across an edit.
-  const previous = useRef<{ mode: string; layout: NetworkLayout } | null>(null);
+  const previous = useRef<{ mode: string; layout: NetworkLayout; network: ShadingNetwork } | null>(null);
   const wanted = useRef(new Map<string, Place>());
-  const layout = useMemo(() => keepPlaces(previous.current?.mode === mode ? previous.current.layout : null, fresh, wanted.current), [fresh, mode]);
+  const layout = useMemo(() => {
+    const last = previous.current;
+    // Kept across an edit, unless the edit moved a node the drawing places by its authored position.
+    const moved =
+      last !== null &&
+      authored &&
+      !automatic &&
+      repositioned(last.network.positions, network.positions, new Set(last.layout.nodes.map((placed) => placed.node.key).filter((key) => network.nodes.some((node) => node.key === key))));
+    return keepPlaces(last?.mode === mode && !moved ? last.layout : null, fresh, wanted.current);
+  }, [fresh, mode]);
   useEffect(() => {
-    previous.current = { mode, layout };
+    previous.current = { mode, layout, network };
     for (const placed of layout.nodes) wanted.current.delete(placed.node.key);
   }, [layout, mode]);
 

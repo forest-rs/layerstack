@@ -13,6 +13,7 @@ import { test } from "node:test";
 import type { Stage } from "@forest-rs/layerstack";
 import { searchPrims } from "../src/model/primSearch.ts";
 import { editTime, initialValue, movedTarget, propertyActions, propertyNameProblem, schemaStart, targetOpinion, usdaValueText, valueTypeGroups, withoutTarget, withTarget } from "../src/model/propertyOps.ts";
+import { parseWhole } from "../src/model/refusal.ts";
 import { formatValue } from "../src/model/values.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
@@ -601,6 +602,33 @@ over "P"
   assert.equal(store.removeProperty("/P.bar"), undefined);
   assert.equal(stage.layerSpec(weak, "/P.bar"), null);
   assert.equal(stage.layerSpec(stage.root, "/P.bar")?.type, "attribute");
+});
+
+test("a 64-bit integer past 2^53 is authored exactly from the digits typed, and one out of range is refused", async () => {
+  const { h, store, stage, history } = await opened();
+  for (const [name, type, digits] of [
+    ["big", "int64", "9007199254740993"],
+    ["low", "int64", "-9223372036854775808"],
+    ["most", "uint64", "18446744073709551615"],
+  ] as const) {
+    const path = `/World/Top.counts:${name}`;
+    assert.equal(store.createAttribute(path, type, "varying", initialValue(type)!), undefined);
+    // As a number, the digits are another integer, which the stage refuses rather than rounds.
+    assert.equal(typeof store.setValue(path, { type, value: Number(digits) }), "string");
+    const whole = parseWhole(digits)!;
+    assert.equal(store.setValue(path, { type, value: whole }), undefined);
+    assert.deepEqual(stage.attribute(path)!.get(), { kind: "scalar", type, value: BigInt(digits) });
+  }
+  const steps = history();
+  assert.equal(typeof store.setValue("/World/Top.counts:most", { type: "uint64", value: parseWhole("18446744073709551616")! }), "string");
+  assert.equal(typeof store.setValue("/World/Top.counts:most", { type: "uint64", value: parseWhole("-1")! }), "string");
+  assert.equal(history(), steps);
+  assert.deepEqual(stage.attribute("/World/Top.counts:most")!.get(), { kind: "scalar", type: "uint64", value: 18446744073709551615n });
+  await h.settle(store.undo());
+  assert.deepEqual(stage.attribute("/World/Top.counts:most")!.get(), { kind: "scalar", type: "uint64", value: 0n });
+  // Only digits are a whole number: the rest is left to the number parser, and to the stage.
+  for (const text of ["", "1.5", "1e3", "0x10", "12n", "one"]) assert.equal(parseWhole(text), null, text);
+  assert.equal(parseWhole(" +7 "), 7n);
 });
 
 test("a keyed field's edit goes at the time when it is committed, not the time its row was drawn at", () => {

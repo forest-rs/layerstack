@@ -7,6 +7,17 @@
 /** Why a field refuses text that is not a number (see {@link parseNumber}). */
 export const NOT_A_NUMBER = "Not a number";
 
+/**
+ * `text` as a whole number of any size (`-12`, `18446744073709551615`),
+ * or `null` when it is not digits: what an `int64` or `uint64` field
+ * authors, since a JavaScript number holds integers exactly only up to
+ * 2^53 and the stage refuses one past it rather than round it.
+ */
+export function parseWhole(text: string): bigint | null {
+  const trimmed = text.trim();
+  return /^[+-]?\d+$/.test(trimmed) ? BigInt(trimmed) : null;
+}
+
 /** `text` as a finite number, or `null` when it is empty or not one. */
 export function parseNumber(text: string): number | null {
   if (text.trim() === "") return null;

@@ -2196,7 +2196,20 @@ impl<B: Storage> StageDocument<B> {
         };
         sink.write_bytes(&bytes)
     }
-    fn session_layers(&self) -> BTreeSet<LayerId> {
+    /// The session layer and its sublayers, to any depth: the session
+    /// layer stack, which [`Self::save`] leaves and
+    /// [`Self::save_session_layers`] saves. A sublayer authored by asset
+    /// path ([`SublayerEntry::unresolved`], as an edit authors one) is the
+    /// layer the store binds the path to, as gathering the layer stack
+    /// takes it; one whose path is a variable expression is not followed.
+    ///
+    /// Spec: AOUSD Core §10.3.1 (sublayers). OpenUSD:
+    /// `PcpLayerStack::GetSessionLayers`, which `UsdStage::Save` removes
+    /// from the layers it saves (`pxr/usd/usd/stage.cpp`).
+    ///
+    /// [`SublayerEntry::unresolved`]: layerstack::SublayerEntry::unresolved
+    #[must_use]
+    pub fn session_layers(&self) -> BTreeSet<LayerId> {
         let mut layers = BTreeSet::new();
         let mut queue: Vec<_> = self.stage.stage().session_layer().into_iter().collect();
         while let Some(id) = queue.pop() {
@@ -2205,7 +2218,16 @@ impl<B: Storage> StageDocument<B> {
             }
             if let Some(layer) = self.store.layer(id) {
                 for sublayer in layer.sublayers() {
-                    queue.push(sublayer.layer);
+                    let bound = if sublayer.is_unresolved() {
+                        sublayer
+                            .asset
+                            .as_deref()
+                            .filter(|_| !sublayer.is_expression())
+                            .and_then(|asset| self.store.asset_layer(id, asset))
+                    } else {
+                        Some(sublayer.layer)
+                    };
+                    queue.extend(bound.filter(|&bound| bound != LayerId::UNRESOLVED));
                 }
             }
         }

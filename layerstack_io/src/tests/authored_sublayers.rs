@@ -189,6 +189,37 @@ fn session_sublayers_load_at_open() {
     assert!(doc.load_report().asset_failures[0].is_missing());
 }
 
+/// A save of the stage leaves the session layer's sublayers, those
+/// authored by asset path among them, and a save of the session layers
+/// writes them, as OpenUSD 26.11 does for the same edits (`UsdStage::Save`
+/// leaves the sublayer dirty; `SaveSessionLayers` writes it).
+#[test]
+fn a_save_leaves_session_sublayers_authored_by_asset_path() {
+    let mut doc = open(session_sublayers());
+    let sub = layer_named(&doc, "sub.usda");
+    let root = layer_named(&doc, "root.usda");
+    assert!(doc.session_layers().contains(&sub));
+    assert!(
+        doc.session_layers()
+            .contains(&layer_named(&doc, "nested.usda")),
+        "a sublayer's own sublayers are of the session stack too"
+    );
+    for layer in [sub, root] {
+        let (store, stage) = doc.parts_mut();
+        let property = store.property_path("/Root.value");
+        let mut edit = Transaction::new();
+        edit.set_default(
+            EditTarget::for_layer(layer).property(property),
+            Value::Int(9),
+        );
+        stage.apply(store, &edit).unwrap();
+    }
+    assert_eq!(doc.save().saved, vec![root], "not the session's sublayer");
+    assert!(doc.is_dirty(sub));
+    assert_eq!(doc.save_session_layers().saved, vec![sub]);
+    assert!(!doc.is_dirty(sub));
+}
+
 /// Call by call, as the oracle authors them: sublayers set on the session
 /// layer, inserted on the root layer, appended to a referenced layer, and
 /// removed, each loaded or dropped when `apply` recomposes.

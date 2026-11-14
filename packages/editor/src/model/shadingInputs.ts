@@ -18,7 +18,7 @@
 //   has its definition's inputs too, those the prim does not author with
 //   their fallback; without a `uiorder`, inputs come in the definition's
 //   order, so one keeps its place once an edit authors it.
-import type { ShaderPort, Stage } from "@forest-rs/layerstack";
+import type { ShaderPort, Stage, ValueInput } from "@forest-rs/layerstack";
 import { type DefinedInput, definedInput, type ShaderDefinition } from "./shaderDefinitions.ts";
 import { releaseValue } from "./values.ts";
 
@@ -113,12 +113,7 @@ function describe(stage: Stage, prim: string, port: ShaderPort, definition: Defi
     const value = port.sdrMetadata.get(key);
     return value === undefined || value === "" ? null : value;
   };
-  const number = (key: string) => {
-    const value = sdr(key);
-    if (value === null || value.includes(",")) return null;
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  };
+  const number = (key: string) => sdrNumber(port.sdrMetadata, key);
   const explanation = attribute?.explain() ?? null;
   releaseValue(explanation?.value ?? null);
   const opinion = explanation?.opinions.find((found) => found.role !== "ignored") ?? null;
@@ -131,9 +126,28 @@ function describe(stage: Stage, prim: string, port: ShaderPort, definition: Defi
     label: text("displayName") ?? sdr("uiname") ?? port.name,
     group: text("displayGroup") ?? UNGROUPED,
     order: number("uiorder"),
-    bounds: { min: number("uimin"), max: number("uimax"), softMin: number("uisoftmin"), softMax: number("uisoftmax") },
+    bounds: inputBounds(port.sdrMetadata),
     own: opinion !== null && opinion.specPath.slice(0, opinion.specPath.lastIndexOf(".")) === prim,
   };
+}
+
+/** The number the `sdrMetadata` entry `key` gives; `null` for none, or one that is not a single number. */
+function sdrNumber(sdrMetadata: ReadonlyMap<string, string>, key: string): number | null {
+  const value = sdrMetadata.get(key);
+  if (value === undefined || value === "" || value.includes(",")) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** The bounds a port's `sdrMetadata` gives: `uimin`, `uimax`, `uisoftmin`, `uisoftmax`. */
+export function inputBounds(sdrMetadata: ReadonlyMap<string, string>): InputBounds {
+  return { min: sdrNumber(sdrMetadata, "uimin"), max: sdrNumber(sdrMetadata, "uimax"), softMin: sdrNumber(sdrMetadata, "uisoftmin"), softMax: sdrNumber(sdrMetadata, "uisoftmax") };
+}
+
+/** `value` as an edit authors it for an input with `bounds`: a number within the hard bounds, anything else as it is. */
+export function withinBounds(value: ValueInput, bounds: InputBounds): ValueInput {
+  if ("kind" in value || !("type" in value) || typeof value.value !== "number") return value;
+  return { type: value.type, value: clampToBounds(value.value, bounds) };
 }
 
 /** The range a slider covers: the soft bounds where both are given, else the hard ones; `null` without both ends. */

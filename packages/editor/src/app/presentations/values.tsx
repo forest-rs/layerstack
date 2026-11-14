@@ -16,7 +16,7 @@ import { ColorPickerButton, ColorSwatch } from "@/components/ui/color-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { type ColorLike, colorLike, colorLikeCue } from "../../model/colorLike.ts";
-import { NOT_A_NUMBER, parseNumber } from "../../model/refusal.ts";
+import { NOT_A_NUMBER, parseNumber, parseWhole } from "../../model/refusal.ts";
 import { formatNumber, imaginaryFirst, isQuaternion, leadingNumbers, realFirst, releaseValue } from "../../model/values.ts";
 import { hexToLinear, linearToHex, swatchCss, swatches } from "../../presentations/color.ts";
 import { type AcceptProps, type PresentationContext, type PresentProps, registerCommand, registerPresentation, type ValueObject } from "../../presentations/registry.ts";
@@ -240,6 +240,8 @@ function BoolAccept(props: AcceptProps<"value">) {
 function NumberAccept(props: AcceptProps<"value">) {
   const value = props.object.shown.value;
   if (value?.kind !== "scalar" || (typeof value.value !== "number" && typeof value.value !== "bigint")) return <ValueText {...props} />;
+  // A 64-bit integer is read as a bigint, and authored as one: a number would lose what is past 2^53.
+  const whole = typeof value.value === "bigint";
   return (
     <CommitField
       label={labelOf(props)}
@@ -247,7 +249,7 @@ function NumberAccept(props: AcceptProps<"value">) {
       value={formatNumber(value.value)}
       className="w-full"
       onCommit={(text) => {
-        const number = parseNumber(text);
+        const number = (whole ? parseWhole(text) : null) ?? parseNumber(text);
         return number === null ? NOT_A_NUMBER : props.accept({ type: props.object.typeName, value: number });
       }}
     />

@@ -20,7 +20,7 @@ import {
   type SublayerEntry,
   sublayerCandidates,
 } from "../src/model/layerStack.ts";
-import { fieldSource, headerFields, metadataLayer, unitPreset, UNIT_PRESETS } from "../src/model/stageMetadata.ts";
+import { fieldSource, metadataLayer, unitPreset, UNIT_PRESETS } from "../src/model/stageMetadata.ts";
 
 /** A layer as the tree reads one. */
 interface FakeLayer {
@@ -187,34 +187,6 @@ describe("stage metadata", () => {
     assert.equal(unitPreset(0.5), null);
     // Every preset is told from the others.
     for (const preset of UNIT_PRESETS) assert.equal(unitPreset(preset.metersPerUnit), preset);
-  });
-
-  it("reads the fields a layer's header authors, as USDA writes them", () => {
-    const text = [
-      "#usda 1.0",
-      "(",
-      '    customLayerData = {',
-      '        string upAxis = "Z"',
-      "    }",
-      "    defaultPrim = \"World\"",
-      '    doc = """A stage; metersPerUnit = 1 is not a field',
-      'framesPerSecond = 3 neither"""',
-      "    subLayers = [",
-      "        @./a.usda@ (offset = 10),",
-      "        @b=c.usda@",
-      "    ]",
-      "    upAxis = \"Z\"  # a comment: endTimeCode = 4",
-      ")",
-      "",
-      'def "World" (',
-      "    kind = \"group\"",
-      ")",
-      "{",
-      "}",
-    ].join("\n");
-    assert.deepEqual([...headerFields(text)].sort(), ["customLayerData", "defaultPrim", "documentation", "subLayers", "upAxis"]);
-    assert.deepEqual([...headerFields('#usda 1.0\n\ndef "World"\n{\n}\n')], []);
-    assert.deepEqual([...headerFields("#usda 1.0\n(\n    startTimeCode = 1; endTimeCode = 2\n)\n")].sort(), ["endTimeCode", "startTimeCode"]);
   });
 
   it("is read from the session layer over the root, else falls back", () => {

@@ -1172,7 +1172,13 @@ export class EditorStore {
 
   /** Which layer each stage metadata field the Stage tab shows is read from; read again after a change, not per call. */
   stageMetadataSources(): ReadonlyMap<string, FieldSource> {
-    return this.session === null ? new Map() : this.#reports.metadataSources(this.session);
+    if (this.session === null || this.status.kind === "lost") return new Map();
+    try {
+      return this.#reports.metadataSources(this.session);
+    } catch (error) {
+      this.lose(error);
+      return new Map();
+    }
   }
 
   /**

@@ -33,6 +33,7 @@ import {
   type NewArcKind,
   selectionTarget,
   targetRoute,
+  targetSpec,
   uncomposedHere,
   uncomposedWhy,
   variantOfSite,
@@ -385,7 +386,7 @@ function Uncomposed({
       {items.map((item) => {
         const text = arcItemText(item.asset, item.primPath);
         const pending = item.asset !== null && waiting.some((asset) => asset.assetPath === item.asset && asset.anchor === layer);
-        const why = uncomposedWhy(item, layer.identifier, issues, pending).text;
+        const why = uncomposedWhy(item, layer.identifier, issues, pending, targetSpec(target, prim.path)?.specPath ?? null).text;
         const key = `uncomposed:${item.index}`;
         return (
           <div key={key} role="group" aria-label={`${kindOf(item.field)} ${text}`} className="flex flex-col gap-0.5 rounded-md bg-amber-500/10 px-2 py-1 text-[11px] text-amber-800 dark:text-amber-300">

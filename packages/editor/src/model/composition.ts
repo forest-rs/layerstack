@@ -482,10 +482,18 @@ export interface UncomposedWhy {
 }
 
 /**
- * One hop of an arc cycle as a composition error spells it: `reference
- * /World in @scene.usda@`; a specialize is spelled `specializes` there.
+ * One site of an arc cycle as a composition error spells it: the prim's
+ * own (`/World/Rock in @scene.usda@`), then each hop with its arc
+ * (`reference /World in @scene.usda@`); a specialize is spelled
+ * `specializes` there.
  */
-const CYCLE_HOP = /(reference|payload|inherit|specialize)s? (\/\S*) in @([^@]*)@/g;
+const CYCLE_SITE = /(?:(reference|payload|inherit|specialize)s? )?(\/\S*) in @([^@]*)@/g;
+
+/** A spec path as the prim path a cycle's site spells: its variant selections dropped (`/Robot{finish=chrome}Head` is `/Robot/Head`). */
+function withoutVariants(specPath: string): string {
+  const plain = specPath.replace(/\{[^{}]*\}/g, "/").replace(/\/{2,}/g, "/");
+  return plain.length > 1 && plain.endsWith("/") ? plain.slice(0, -1) : plain;
+}
 
 /** Whether the identifier a cycle hop names is the layer `asset`, authored in `anchor`, names. */
 function namesLayer(identifier: string, anchor: string | null, asset: string): boolean {
@@ -498,34 +506,45 @@ function namesLayer(identifier: string, anchor: string | null, asset: string): b
  * an arc cycle is ignored: <site> in @<layer>@ -> reference <site> in
  * @<layer>@ ...`) goes through `item`, authored in the layer `anchor`
  * names: a hop of its kind to the site it names, in the layer its asset
- * names (any layer of the stack for an internal arc; any site for a
- * reference to a default prim). Matched by what the hop says, not by the
+ * names (the stack the hop leaves, for an internal arc; any site for a
+ * reference to a default prim), leaving the spec that authors it
+ * (`specPath`, when given): another stack's hop to a prim of the same
+ * path is not this item's. Matched by what the hops say, not by the
  * item's USDA appearing in the message, which spells assets anchored and
  * paths bare.
  */
-export function cycleThrough(message: string, item: Pick<AuthoredArc, "field" | "asset" | "primPath">, anchor: string | null): boolean {
+export function cycleThrough(message: string, item: Pick<AuthoredArc, "field" | "asset" | "primPath">, anchor: string | null, specPath: string | null = null): boolean {
   const kind = kindOf(item.field);
-  for (const [, hop, site, identifier] of message.matchAll(CYCLE_HOP)) {
-    if (hop !== kind) continue;
+  const from = specPath === null ? null : withoutVariants(specPath);
+  let before: { readonly site: string; readonly identifier: string } | null = null;
+  for (const [, hop, site, identifier] of message.matchAll(CYCLE_SITE)) {
+    const left = before;
+    before = { site: site!, identifier: identifier! };
+    if (hop !== kind || left === null) continue;
+    if (from !== null && left.site !== from) continue;
     if (item.primPath !== null && site !== item.primPath) continue;
-    if (item.asset !== null && item.asset !== "" && !namesLayer(identifier!, anchor, item.asset)) continue;
+    if (item.asset === null || item.asset === "") {
+      if (identifier !== left.identifier) continue;
+    } else if (!namesLayer(identifier!, anchor, item.asset)) continue;
     return true;
   }
   return false;
 }
 
 /**
- * Why `item`, authored where edits go in the layer `anchor` names,
- * composes nothing, from the composition errors of its prim (`issues`)
- * and whether its asset is waiting to be fetched (`pending`).
+ * Why `item`, authored where edits go in the layer `anchor` names (at
+ * `specPath` there, when given), composes nothing, from the composition
+ * errors of its prim (`issues`) and whether its asset is waiting to be
+ * fetched (`pending`).
  */
 export function uncomposedWhy(
   item: Pick<AuthoredArc, "field" | "asset" | "primPath">,
   anchor: string | null,
   issues: readonly { readonly code: string; readonly message: string }[],
   pending: boolean,
+  specPath: string | null = null,
 ): UncomposedWhy {
-  const cycle = issues.find((issue) => issue.code === "composition.arc_cycle" && cycleThrough(issue.message, item, anchor));
+  const cycle = issues.find((issue) => issue.code === "composition.arc_cycle" && cycleThrough(issue.message, item, anchor, specPath));
   if (cycle !== undefined) {
     const chain = cycle.message.slice(cycle.message.indexOf("ignored: ") + "ignored: ".length);
     return { kind: "cycle", text: `It makes a cycle, so the stage ignores it: ${chain}.` };

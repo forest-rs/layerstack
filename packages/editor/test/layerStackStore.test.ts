@@ -566,3 +566,32 @@ test("a missing asset is not said to be wanted by a prim whose arc to it has gon
   await h.settle(store.undo());
   assert.deepEqual(store.health!.missing[0]!.prims, ["/A", "/C"]);
 });
+
+test("a layer listed under two asset paths still has its sublayers reordered and given offsets", async () => {
+  const h = await harness();
+  const files: Record<string, string> = {
+    "top.usda": `#usda 1.0\n(\n    subLayers = [\n        @./a.usda@\n    ]\n)\n`,
+    "a.usda": layerWith("A"),
+    "b.usda": layerWith("B"),
+  };
+  await h.open(sampleSource("top.usda", files));
+  const { store } = h;
+  const stage = store.session!.stage;
+  const root = stage.root;
+  // The file comes to list a.usda twice, by two paths that anchor to it, and is read again.
+  files["top.usda"] = `#usda 1.0\n(\n    subLayers = [\n        @./a.usda@ (offset = 1),\n        @a.usda@ (offset = 2),\n        @./b.usda@\n    ]\n)\n`;
+  assert.equal((await h.settle(store.reload(null))).refusal, null);
+  assert.deepEqual(sublayersOf(stage, root), ["./a.usda+1x1", "a.usda+2x1", "./b.usda"]);
+
+  // Each row is still its own: the second path's offset, and the third made stronger.
+  assert.equal(await h.settle(store.setSublayerOffset(root, 1, { offset: 7, scale: 1 }, "a.usda")), undefined);
+  assert.deepEqual(sublayersOf(stage, root), ["./a.usda+1x1", "a.usda+7x1", "./b.usda"]);
+  assert.equal(await h.settle(store.moveSublayer(root, 2, -1, "./b.usda")), undefined);
+  assert.deepEqual(sublayersOf(stage, root), ["./a.usda+1x1", "./b.usda", "a.usda+7x1"]);
+  await h.settle(store.undo());
+  await h.settle(store.undo());
+  assert.deepEqual(sublayersOf(stage, root), ["./a.usda+1x1", "a.usda+2x1", "./b.usda"]);
+  assert.deepEqual(stage.layerSpec(root, "/").sublayers, stage.sublayers(root));
+  // A path listed already is still refused.
+  assert.match((await h.settle(store.insertSublayer(root, "a.usda", 0)))!, /repeats an earlier one/);
+});

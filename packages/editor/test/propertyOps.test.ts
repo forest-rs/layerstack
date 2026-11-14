@@ -267,6 +267,58 @@ test("Remove is offered exactly when the layer edits go to holds the property's 
   assert.equal(at("/World/Top.visibility").remove, false);
 });
 
+test("Remove is offered for the spec the layer edits go to holds, though the stage composes a stronger layer's property of the other kind", async () => {
+  const h = await harness();
+  await h.open(
+    sampleSource("kinds.usda", {
+      "kinds.usda": `#usda 1.0
+(
+    subLayers = [
+        @./kinds_weak.usda@
+    ]
+)
+
+def Xform "P"
+{
+    custom rel foo = </T>
+    custom double bar = 1
+}
+
+def Xform "T"
+{
+}
+`,
+      "kinds_weak.usda": `#usda 1.0
+
+over "P"
+{
+    custom double foo = 1
+    custom rel bar = </T>
+}
+`,
+    }),
+  );
+  const store = h.store;
+  const stage = store.session!.stage;
+  const weak = store.session!.layerNamed("kinds_weak.usda");
+  store.setTarget(weak);
+  // The stage composes the root's relationship; the sublayer, where edits go, holds an attribute of that name.
+  assert.ok(stage.relationship("/P.foo") !== null && stage.attribute("/P.foo") === null);
+  assert.equal(stage.layerSpec(weak, "/P.foo")?.type, "attribute");
+  assert.equal(propertyActions(stage, "/P.foo", weak, undefined).remove, true);
+  assert.equal(store.removeProperty("/P.foo"), undefined);
+  assert.equal(stage.layerSpec(weak, "/P.foo"), null);
+  assert.equal(stage.layerSpec(stage.root, "/P.foo")?.type, "relationship", "the root's stays");
+  assert.equal(propertyActions(stage, "/P.foo", weak, undefined).remove, false);
+  // And the reverse.
+  assert.ok(stage.attribute("/P.bar") !== null);
+  assert.equal(stage.layerSpec(weak, "/P.bar")?.type, "relationship");
+  assert.equal(propertyActions(stage, "/P.bar", weak, undefined).remove, true);
+  assert.equal(store.removeProperty("/P.bar"), undefined);
+  assert.equal(stage.layerSpec(weak, "/P.bar"), null);
+  assert.equal(stage.layerSpec(stage.root, "/P.bar")?.type, "attribute");
+});
+
 test("a property name is identifiers joined by colons, and not one the prim has", () => {
   const taken = new Set(["size", "primvars:displayColor"]);
   assert.equal(propertyNameProblem("tint", taken), null);

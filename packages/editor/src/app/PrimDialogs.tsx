@@ -504,7 +504,8 @@ function targetOf(target: EditTarget): Layer | EditTarget {
  * and "Duplicate there".
  */
 function CopyRefusedDialog({ store, stage, path, refusal, onClose }: { store: EditorStore; stage: Stage; path: string; refusal: string; onClose: () => void }) {
-  const sites = useMemo(() => copySites(stage, path), [stage, path]);
+  // Read through the store's spec reader, as the composition and schema sections read: each spec once per change of the stage.
+  const sites = useMemo(() => copySites(stage, path, (layer, site) => store.authoredSpec(layer, site) !== null), [store, stage, path]);
   return (
     <Dialog isOpen onOpenChange={(isOpen) => isOpen || onClose()} className="sm:max-w-md">
       <DialogHeader>

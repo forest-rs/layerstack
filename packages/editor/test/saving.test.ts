@@ -261,6 +261,151 @@ test("a save leaves the session layer, and says it is the session layer", async 
   assert.equal(store.unsaved, false);
 });
 
+test("a save leaves a sublayer of the session layer, and its confirmation says so", async () => {
+  const h = await harness();
+  h.store.setEditLayerChoice("session");
+  await h.open(sampleSource("scene.usda", { "patch.usda": '#usda 1.0\nover "World"\n{\n}\n' }));
+  const { store } = h;
+  const session = store.session!;
+  const sessionLayer = session.sessionLayer!;
+  assert.equal(await h.settle(store.insertSublayer(sessionLayer, "patch.usda", 0)), undefined);
+  const patch = session.layerNamed("patch.usda");
+  store.setTarget(patch);
+  assert.equal(store.setValue("/World/Robot.visibility", HIDE_ROBOT), undefined);
+  // The session layer lists the patch; the patch holds the edit.
+  assert.deepEqual(
+    store.savePlan().map((entry) => [entry.name, entry.disposition]),
+    [
+      ["session.usda", "session"],
+      ["patch.usda", "sessionSublayer"],
+    ],
+    "not listed as a file the save writes",
+  );
+  const result = await h.settle(store.save());
+  assert.deepEqual(result?.written, [], "as UsdStage::Save leaves the session layer's stack");
+  assert.deepEqual(result?.skipped, []);
+  assert.deepEqual(new Set(store.dirtyLayers()), new Set([sessionLayer, patch]), "both still have edits to lose");
+  assert.equal(store.unsaved, true);
+  // Exported, it has the edit.
+  assert.match(text(store.exportLayer(patch, "usda")!), /token visibility = "invisible"/);
+});
+
+/** A root whose variant not selected references a layer that names a texture. */
+const VARIANT_ROOT = `#usda 1.0
+def Xform "World" (
+    variants = {
+        string look = "plain"
+    }
+    prepend variantSets = "look"
+)
+{
+    variantSet "look" = {
+        "plain" {
+        }
+        "fancy" (
+            references = @./assets/fancy.usda@
+        ) {
+        }
+    }
+}
+`;
+const fancy = (texture: string) => `#usda 1.0
+(
+    defaultPrim = "Fancy"
+)
+def Xform "Fancy"
+{
+    asset texture = @${texture}@
+}
+`;
+
+test("a package fetches what the layer of a variant not selected names, or says which layer wants it", async () => {
+  const h = await harness();
+  const source = sampleSource("variant.usda", { "variant.usda": VARIANT_ROOT, "assets/fancy.usda": fancy("../textures/checker.png") });
+  await h.open(source);
+  const { store } = h;
+  assert.ok(!source.asked.includes("assets/fancy.usda"), "the stage never read the variant's layer");
+  const packaged = await h.settle(store.exportPackage());
+  assert.deepEqual(store.notices, []);
+  assert.ok(packaged?.bytes != null, JSON.stringify(packaged?.unresolved.map((each) => each.reason)));
+  assert.ok(source.asked.includes("assets/fancy.usda") && source.asked.includes("textures/checker.png"), "the layer, then the texture it names");
+  assert.equal(packaged.layers, 2);
+  assert.equal(packaged.assets, 1);
+  assert.ok(!store.session!.stage.layers().some((layer) => layer.identifier === "assets/fancy.usda"), "the stage still does not hold it");
+  assert.equal(store.session!.history.undoSteps.length, 0);
+
+  // A texture that is not there is listed with the layer that names it, a layer the stage does not hold.
+  await h.open(sampleSource("variant.usda", { "variant.usda": VARIANT_ROOT, "assets/fancy.usda": fancy("./gone.png") }));
+  const failed = await h.settle(store.exportPackage());
+  assert.deepEqual(store.notices, []);
+  assert.equal(failed?.bytes, null);
+  assert.deepEqual(
+    failed?.unresolved.map((each) => [each.layer, each.identifier, each.assetPath]),
+    [[null, "assets/fancy.usda", "./gone.png"]],
+  );
+});
+
+/** A root referencing a model whose textures are beside the model. */
+const MODEL_ROOT = `#usda 1.0
+def Xform "World"
+{
+    def "Model" (
+        references = @./assets/model.usda@
+    )
+    {
+    }
+}
+`;
+const MODEL = `#usda 1.0
+(
+    defaultPrim = "Model"
+)
+def Xform "Model"
+{
+    asset bark = @./textures/bark.png@
+    asset leaf = @./textures/leaf.png@
+}
+`;
+
+test("a flatten says which asset path of the session layer it could not anchor, and anchors the others", async () => {
+  const h = await harness();
+  h.store.setEditLayerChoice("session");
+  await h.open(sampleSource("model.usda", { "model.usda": MODEL_ROOT, "assets/model.usda": MODEL }));
+  const { store } = h;
+  assert.equal(store.exportFlattened("usda")?.lossless, true);
+  // A path relative to the session layer, which is nowhere: the flatten cannot say where it points.
+  assert.equal(store.setValue("/World/Model.leaf", { type: "asset", value: "./other.png" }), undefined);
+  const flat = store.exportFlattened("usda");
+  assert.ok(flat !== null);
+  assert.equal(flat.lossless, false, "held for the person to read, not downloaded at once");
+  assert.deepEqual(flat.lost.map((loss) => loss.path), ["/World/Model.leaf"]);
+  assert.match(text(flat.bytes), /asset bark = @\.\/assets\/textures\/bark\.png@/, "the model's own path still points at its texture");
+  assert.equal(store.session!.history.undoSteps.length, 1, "an export is no step");
+  // Undone, nothing is lost again.
+  await h.settle(store.undo());
+  assert.equal(store.exportFlattened("usda")?.lossless, true);
+});
+
+test("an edit asked for while a package is being made goes where edits went when it was asked for", { todo: "queued edits read the target when they run: owned by review-property-ops" }, async () => {
+  const h = await harness();
+  const source = sampleSource();
+  await h.open(source);
+  const { store } = h;
+  const session = store.session!;
+  const library = session.layerNamed("library.usda");
+  const release = source.hold("textures/checker.png");
+  const packing = store.exportPackage();
+  await h.until(() => source.asked.includes("textures/checker.png"), "the package asking for a texture");
+  // Asked for with edits going to the root; the target changes before the package is made.
+  store.setValue("/World/Robot.visibility", HIDE_ROBOT);
+  store.setTarget(library);
+  release();
+  await h.settle(packing);
+  await h.turn();
+  assert.deepEqual(store.dirtyLayers().map((layer) => layer.identifier), ["scene.usda"]);
+  assert.equal(session.stage.layerSpec(library, "/World/Robot.visibility"), null);
+});
+
 /** A source serving one USDZ package as its root. */
 function packageSource(name: string, bytes: Uint8Array): SceneSource {
   return {

@@ -8,6 +8,7 @@
 // `exportFlattened`, `exportPackage` hand back bytes); the app downloads
 // them or writes them into the folder they came from.
 import type { FlattenResult, Layer, LayerFormat, PackageResult, Stage, UnpackagedAsset } from "@forest-rs/layerstack";
+import { layerStack } from "./layerStack.ts";
 
 /**
  * What an export says before anything is written, as Save does: its
@@ -52,6 +53,8 @@ export type SaveDisposition =
   | "write"
   /** The session layer: not part of the root, so a save of the stage leaves it; export it as its own layer. */
   | "session"
+  /** A sublayer of the session layer, to any depth: a save of the stage leaves the session layer's whole stack, as `UsdStage::Save` does; export it. */
+  | "sessionSublayer"
   /** Read-only (a package member): it cannot be saved, and stays dirty. */
   | "readOnly"
   /** Muted: a save of the stage leaves it dirty, as OpenUSD's does. */
@@ -67,15 +70,23 @@ export interface SaveEntry {
 
 /**
  * What a save of `stage` does with each of its `dirty` layers
- * (`Stage.save`: the session layer and muted layers are left, a package
- * member fails), the written ones first. `session` is the session layer,
+ * (`Stage.save`: the session layer, its sublayers and muted layers are
+ * left, a package member fails), the written ones first. `session` is the session layer,
  * when the stage has one. A layer the stage no longer composes is found
  * only by the save itself (`SaveResult.skipped`).
  */
 export function planSave(stage: Stage, dirty: readonly Layer[], session: Layer | null): SaveEntry[] {
-  const dispositions = dirty.map(
-    (layer): SaveDisposition => (layer === session || layer.anonymous ? "session" : layer.readOnly ? "readOnly" : stage.isMuted(layer) ? "muted" : "write"),
-  );
+  // The session layer's stack, as the Layers tab shows it beneath the session layer.
+  const stack = new Set<Layer | null>();
+  if (session !== null && dirty.some((layer) => layer !== session && !layer.anonymous)) {
+    const input = { root: stage.root, session, held: stage.layers(), sublayers: (layer: Layer) => stage.sublayers(layer), muted: (layer: Layer | string) => stage.isMuted(layer) };
+    for (const row of layerStack(input).rows) if (row.key.startsWith("session/")) stack.add(row.layer);
+  }
+  const dispositions = dirty.map((layer): SaveDisposition => {
+    if (layer === session || layer.anonymous) return "session";
+    if (stack.has(layer)) return "sessionSublayer";
+    return layer.readOnly ? "readOnly" : stage.isMuted(layer) ? "muted" : "write";
+  });
   // The written layers are named apart from each other: the others are not downloaded with them.
   const written = dirty.filter((_, index) => dispositions[index] === "write");
   const names = fileNames(written.map((layer) => layer.identifier));
@@ -83,7 +94,7 @@ export function planSave(stage: Stage, dirty: readonly Layer[], session: Layer |
     const disposition = dispositions[index]!;
     return { layer, name: disposition === "write" ? names[written.indexOf(layer)]! : fileName(layer.identifier), disposition };
   });
-  const order: readonly SaveDisposition[] = ["write", "session", "readOnly", "muted"];
+  const order: readonly SaveDisposition[] = ["write", "session", "sessionSublayer", "readOnly", "muted"];
   return entries.sort((a, b) => order.indexOf(a.disposition) - order.indexOf(b.disposition));
 }
 

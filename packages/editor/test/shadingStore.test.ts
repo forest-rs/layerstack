@@ -275,3 +275,28 @@ test("two shaders added while an action fetches are two shaders, each where it w
   assert.deepEqual(place(path), [1, 2]);
   assert.deepEqual(store.notices, []);
 });
+
+// Expected to pass once queued edits keep where edits went when they were asked for: a defect of the
+// store's shared queue (an edit reads the target when it runs), fixed there for every edit, not here.
+test("a connection asked for while an action fetches is authored where edits went when it was asked for", { todo: true }, async () => {
+  const h = await harness();
+  const source = sampleSource();
+  await h.open(source);
+  const { store } = h;
+  const stage = store.session!.stage;
+  const library = stage.layers().find((layer) => layer.identifier.endsWith("library.usda"))!;
+  const opacity = `${CHECKER}/Surface.inputs:opacity`;
+  const alpha = `${CHECKER}/Texture.outputs:a`;
+  const release = source.hold("assets/chrome.usda");
+  const variant = store.selectVariant("/World/Robot", "finish", "chrome");
+  await h.until(() => source.askedFor("assets/chrome.usda") > 0, "the variant's fetch");
+  // Asked for with edits going to the root; then edits are sent to the sublayer, before it runs.
+  assert.equal(store.connect(opacity, alpha), undefined);
+  store.setTarget(library);
+  release();
+  await h.settle(variant);
+  await h.until(() => store.running === null && store.queued === 0, "the connection behind the variant");
+  assert.deepEqual(stage.port(opacity)?.connections, [alpha]);
+  assert.notEqual(stage.layerSpec(stage.root, opacity), null, "the root, where edits went, has the connection");
+  assert.equal(stage.layerSpec(library, opacity), null, "the sublayer chosen since has nothing of it");
+});

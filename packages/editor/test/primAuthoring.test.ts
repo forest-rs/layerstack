@@ -178,6 +178,15 @@ test("rows' visibility: hidden by itself, or by an ancestor", () => {
   assert.equal(hiddenBy("/World/C", rows), null);
 });
 
+test("a prim under a group that is not imageable is hidden by the ancestor above the group, not by itself", () => {
+  // A typeless group has no computed visibility, and its children inherit through it (`UsdGeomImageable::ComputeVisibility`).
+  const paths = ["/World", "/World/Hid", "/World/Hid/Group", "/World/Hid/Group/Deep", "/World/Hid/Group/Deep/Leaf"];
+  const rows = rowVisibilities(paths, ["inherited", "invisible", null, "invisible", "invisible"]);
+  assert.equal(rows.get("/World/Hid/Group/Deep"), "hidden", "its eye selects what hides it, and does not offer to make it visible");
+  assert.equal(rows.get("/World/Hid/Group/Deep/Leaf"), "hidden");
+  assert.equal(hiddenBy("/World/Hid/Group/Deep", rows), "/World/Hid");
+});
+
 test("binding a material and unbinding it, each undone; a missing material refused", async () => {
   const { h, store, stage, steps } = await opened();
   assert.equal(store.bindMaterial("/World/Rock", "/World/Looks/Checker"), undefined);

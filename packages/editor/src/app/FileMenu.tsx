@@ -222,11 +222,15 @@ function SaveDialog({ store, onClose }: { store: EditorStore; onClose: () => voi
     let folderNote: string | null = null;
     const permitted = intoFolder && writable !== null ? await writable.permit().catch(() => false) : false;
     if (intoFolder && !permitted) folderNote = `Writing into ${writable?.where ?? "the folder"} was not allowed, so the files were downloaded.`;
+    // The page asks before it is left until the files are written or handed to the browser, not only until the stage wrote the bytes.
+    const outcome = await store.persisting(() => persist(permitted, folderNote));
+    if (outcome === null) onClose();
+    else setPhase(outcome);
+  };
+  const persist = async (permitted: boolean, note: string | null): Promise<SaveOutcome | null> => {
+    let folderNote = note;
     const result = await store.save();
-    if (result === null) {
-      onClose();
-      return;
-    }
+    if (result === null) return null;
     // Each file is called what the confirmation called it.
     const names = fileNames(result.written.map((layer) => layer.identifier));
     const written: string[] = [];
@@ -245,7 +249,7 @@ function SaveDialog({ store, onClose }: { store: EditorStore; onClose: () => voi
       downloads.push({ name, bytes: layer.bytes });
     }
     await downloadAll(downloads);
-    setPhase({ written, downloaded: downloads.map((file) => file.name), folderNote, result });
+    return { written, downloaded: downloads.map((file) => file.name), folderNote, result };
   };
   if (plan.length === 0 && phase === "confirm") {
     return (

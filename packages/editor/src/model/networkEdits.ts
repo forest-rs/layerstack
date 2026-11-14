@@ -267,6 +267,14 @@ export function connectionsOf(network: ShadingNetwork, node: NetworkNode): { rea
   return network.edges.filter((edge) => own.has(edge.from) || own.has(edge.to)).map((edge) => ({ destination: edge.to, source: edge.from }));
 }
 
+/**
+ * Where deleting a shader edits: a delete is a namespace edit
+ * (`UsdNamespaceEditor::DeletePrim`), which removes the prim's specs and
+ * the connections to it from each layer of the stage's layer stack that
+ * has them, whichever of them edits go to.
+ */
+export const DELETES_IN = "in every layer of the layer stack that has them";
+
 /** The menu of the node keyed `key`: select it, show or fold its ports, delete a shader. */
 export function nodeMenu(network: ShadingNetwork, key: string, unfolded: boolean, hidden: number): MenuEntry[] {
   const node = network.nodes.find((each) => each.key === key);
@@ -280,7 +288,7 @@ export function nodeMenu(network: ShadingNetwork, key: string, unfolded: boolean
       id: "delete",
       label: "Delete shader",
       destructive: true,
-      detail: `deletes ${node.path}${count === 0 ? "" : ` and the ${count} connection${count === 1 ? "" : "s"} to and from it`}`,
+      detail: `deletes ${node.path}${count === 0 ? "" : ` and the ${count} connection${count === 1 ? "" : "s"} to and from it`}, ${DELETES_IN}`,
       action: { kind: "delete", prim: node.path },
     });
   }

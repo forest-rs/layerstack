@@ -63,6 +63,7 @@ import {
   authoredPlace,
   backgroundMenu,
   connectedSources,
+  DELETES_IN,
   connectionsOf,
   dropMenu,
   dropTitle,
@@ -459,7 +460,7 @@ function Graph({
     setNote(
       refusal !== undefined
         ? { tone: "error", text: `Not deleted: ${refusal}` }
-        : { tone: "info", text: `Deleted ${prim}${count > 0 ? ` and ${count} connection${count === 1 ? "" : "s"} to and from it` : ""}, in ${editsGo(store)}` },
+        : { tone: "info", text: `Deleted ${prim}${count > 0 ? ` and ${count} connection${count === 1 ? "" : "s"} to and from it` : ""}, ${DELETES_IN}` },
     );
     moveDomFocus.current = true;
     setFocus(null);

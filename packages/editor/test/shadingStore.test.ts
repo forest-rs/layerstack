@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readNetwork } from "../src/model/network.ts";
-import { portMenu, unshownConnection } from "../src/model/networkEdits.ts";
+import { nodeMenu, portMenu, unshownConnection } from "../src/model/networkEdits.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
 const CHECKER = "/World/Looks/Checker";
@@ -221,4 +221,26 @@ test("a connection that names nothing is disconnected from its port's menu, as o
   assert.equal(store.apply("add a source", [{ type: "connectToSource", path: ior, source: "/Looks/M/Tex.outputs:rgb", position: "append" }]), undefined);
   const both = portMenu(readNetwork(stage, "/Looks/M"), ior).filter((entry) => entry.action?.kind === "disconnect");
   assert.deepEqual(both.map((entry) => entry.label).sort(), ["Disconnect from Gone.outputs:r (names nothing)", "Disconnect from Tex.outputs:rgb"]);
+});
+
+test("deleting a shader edits every layer of the stack that has it, and its menu says so", async () => {
+  const { h, store, stage, looks } = await stacked();
+  const tex = "/Looks/M/Tex";
+  const diffuse = "/Looks/M/Surface.inputs:diffuseColor";
+  // Edits go to the root, which has no spec of the texture: the sublayer defines it.
+  assert.equal(stage.editLayer?.identifier, stage.root.identifier);
+  assert.equal(stage.layerSpec(stage.root, tex), null);
+  const item = nodeMenu(readNetwork(stage, "/Looks/M"), tex, false, 0).find((entry) => entry.id === "delete")!;
+  assert.equal(item.detail, `deletes ${tex} and the 1 connection to and from it, in every layer of the layer stack that has them`);
+  assert.equal(store.delete(tex), undefined);
+  assert.equal(stage.prim(tex), null);
+  assert.equal(stage.layerSpec(looks, tex), null, "the sublayer's definition is gone");
+  for (const layer of [stage.root, looks]) {
+    const spec = stage.layerSpec(layer, diffuse);
+    assert.deepEqual(spec?.type === "attribute" ? spec.connections?.explicit : null, [], `${layer.identifier}'s connection to it is gone`);
+  }
+  assert.equal(stage.isDirty(looks), true);
+  await h.settle(store.undo());
+  assert.notEqual(stage.layerSpec(looks, tex), null);
+  assert.deepEqual(stage.port(diffuse)?.connections, [`${tex}.outputs:rgb`]);
 });

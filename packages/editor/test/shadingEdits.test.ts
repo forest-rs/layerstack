@@ -403,7 +403,7 @@ test("the menus offer the edits that apply, with what they author", () => {
   // A shader's menu says what deleting it takes with it.
   const texture = nodeMenu(network, `${CHECKER}/Texture`, false, 10);
   assert.deepEqual(texture.map((entry) => entry.label), ["Select Texture", "Show its 10 unconnected ports", "Delete shader"]);
-  assert.equal(texture[2]!.detail, `deletes ${CHECKER}/Texture and the 3 connections to and from it`);
+  assert.equal(texture[2]!.detail, `deletes ${CHECKER}/Texture and the 3 connections to and from it, in every layer of the layer stack that has them`);
   assert.deepEqual(nodeMenu(network, `${CHECKER}#outputs`, false, 0).map((entry) => entry.label), ["Select Checker"]);
   // A drop on a node: each input, refused ones disabled with why.
   const drop = dropMenu(network, `${CHECKER}/Texture.outputs:a`, `${CHECKER}/Surface`);

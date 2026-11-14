@@ -868,6 +868,20 @@ export class Session implements Disposable {
   }
 
   /**
+   * Counts `layer` as unchanged to the stage when it is dirty with no
+   * unsaved edits: its edits were undone, so it holds what its source
+   * held when it was read or saved, and the stage would still refuse to
+   * read it again (`io.dirty_reload`), with nothing for a save to write.
+   * The stage's save of it is what clears that, its bytes dropped: the
+   * source has them. Returns whether the stage now reads it clean.
+   */
+  settleUndone(layer: Layer): boolean {
+    if (!this.stage.isDirty(layer)) return true;
+    if (this.isEdited(layer) || layer.anonymous) return false;
+    return this.stage.save(layer).written.length === 1;
+  }
+
+  /**
    * The root and everything it depends on as a USDZ package
    * (`Stage.exportPackage`), the unsaved edits with it. The stage packages
    * what the host supplied; the assets it was never asked for (textures,

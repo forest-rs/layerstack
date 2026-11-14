@@ -1295,11 +1295,10 @@ export class EditorStore {
     const refusal = await this.#fetchingEdit(label, async (session, signal) => {
       const stage = session.stage;
       const asked = layer === null ? stage.layers().filter((each) => !each.anonymous && !stage.isMuted(each)) : [layer];
-      // The stage reads no dirty layer again, edits undone or not (`io.dirty_reload`).
-      const skipped = asked.filter((each) => stage.isDirty(each));
+      // The stage reads no dirty layer again (`io.dirty_reload`): one whose edits were all undone is counted unchanged first.
+      const skipped = asked.filter((each) => !session.settleUndone(each));
       if (layer !== null && skipped.length > 0) {
-        const why = session.isEdited(layer) ? "has unsaved edits: save or undo them" : "has edits, undone, that the stage still counts as changes: save it";
-        throw new Error(`${layerLabel(layer)} ${why} before reading it again from the source`);
+        throw new Error(`${layerLabel(layer)} has unsaved edits: save or undo them before reading it again from the source`);
       }
       const reading = asked.filter((each) => !skipped.includes(each));
       // Reading every layer again, what the stage found missing is looked for again too: a file made since is read.

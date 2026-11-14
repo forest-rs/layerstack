@@ -9,8 +9,8 @@
 // starts with, and a relationship's target list edited one target at a
 // time. The store's property operations and the inspector's commands
 // decide from these what applies.
-import type { Attribute, EditTarget, Explanation, Layer, LayerSpec, Opinion, Stage, ValueInput, ValueTypeInfo } from "@forest-rs/layerstack";
-import { formatNumber, isQuaternion, realFirst, releaseValue } from "./values.ts";
+import type { Attribute, EditTarget, Explanation, Layer, LayerSpec, Opinion, ScalarInput, Stage, ValueInput, ValueTypeInfo } from "@forest-rs/layerstack";
+import { formatNumber, isQuaternion, realFirst, releaseValue, scalarAt } from "./values.ts";
 
 /** Where edits go, as the session holds it: a layer of the stage's stack, an edit target, or `undefined` for the stage's edit layer. */
 export type Target = Layer | EditTarget | undefined;
@@ -341,6 +341,53 @@ export function initialValue(typeName: string): ValueInput | null {
   return null;
 }
 
+/** What adding a schema-defined attribute authors as its value ({@link schemaStart}). */
+export interface SchemaStart {
+  /** The value to author; `null` to declare the attribute with none (a fallback there is no input for). */
+  readonly value: ValueInput | null;
+  /** Whether it is the schema's fallback; false when the schema gives none and it is the type's starting value. */
+  readonly fallback: boolean;
+}
+
+/**
+ * The value an attribute its prim's schema defines, and no layer authors,
+ * is added with: the schema's fallback, so adding it changes nothing the
+ * stage reads (a `Cube`'s `extent` stays its two corners, not an empty
+ * array over them), or the type's starting value ({@link initialValue})
+ * when the schema gives no fallback. The fallback is copied out of the
+ * module, so it may be authored after this returns.
+ */
+export function schemaStart(attribute: Attribute): SchemaStart {
+  const typeName = attribute.typeName;
+  if (typeName === null) return { value: null, fallback: false };
+  const value = attribute.get();
+  try {
+    if (value === null) return { value: initialValue(typeName), fallback: false };
+    if (value.kind === "scalar" || value.kind === "tuple") return { value, fallback: true };
+    if (value.kind === "list") {
+      const elements: (ScalarInput | readonly ScalarInput[])[] = [];
+      for (const item of value.value) {
+        if (item?.kind !== "scalar" && item?.kind !== "tuple") return { value: null, fallback: true };
+        elements.push(item.value);
+      }
+      return { value: { type: typeName, value: elements }, fallback: true };
+    }
+    if (value.kind === "array") {
+      const { array } = value;
+      const view = array.view();
+      const elements: (ScalarInput | readonly ScalarInput[])[] = [];
+      for (let element = 0; element < array.length; element += 1) {
+        const scalars = Array.from({ length: array.components }, (_, component) => scalarAt(array, view, element * array.components + component));
+        elements.push(array.components === 1 ? scalars[0]! : scalars);
+      }
+      return { value: { type: typeName, value: elements }, fallback: true };
+    }
+    return { value: null, fallback: true };
+  } finally {
+    releaseValue(value);
+  }
+}
+
 /**
  * A value to author as the layer's USDA writes it after the attribute's
  * name (`0`, `(0, 0, 0)`, `""`, `@@`, `[]`, `( (1, 0), (0, 1) )`): what
@@ -356,10 +403,13 @@ export function usdaValueText(input: ValueInput | null): string {
   const one = (scalar: unknown): string =>
     typeof scalar === "string" ? (type.startsWith("asset") ? `@${scalar}@` : JSON.stringify(scalar)) : typeof scalar === "boolean" ? (scalar ? "1" : "0") : typeof scalar === "number" ? formatNumber(scalar) : String(scalar);
   const tuple = (items: readonly unknown[]): string => `(${items.map(one).join(", ")})`;
-  if (ArrayBuffer.isView(value) || (Array.isArray(value) && type.endsWith("[]"))) return (value as ArrayLike<unknown>).length === 0 ? "[]" : "";
+  const element = (items: readonly unknown[]): string => tuple(isQuaternion(type) ? realFirst(items) : items);
+  // A typed array's elements are not told apart here: only an empty one has text.
+  if (ArrayBuffer.isView(value)) return (value as unknown as ArrayLike<unknown>).length === 0 ? "[]" : "";
   if (!Array.isArray(value)) return one(value);
+  if (type.endsWith("[]")) return `[${value.map((item: unknown) => (Array.isArray(item) ? element(item) : one(item))).join(", ")}]`;
   if (value.some(Array.isArray)) return `( ${value.map((row: unknown) => tuple(row as unknown[])).join(", ")} )`;
-  return tuple(isQuaternion(type) ? realFirst(value) : value);
+  return element(value);
 }
 
 /** `targets` with `path` added at the end; unchanged when it is there already. */

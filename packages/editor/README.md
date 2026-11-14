@@ -470,7 +470,10 @@ nothing more.
   its type by its shape as well as its colour (a number a circle, a
   vector a diamond, a colour a square, a file a triangle), hollow for a
   port only the shader's definition has. Opening the tab grows a short
-  bottom panel. Drag the background to pan, scroll to zoom; clicking a
+  bottom panel, and the graph is fitted to the panel's final size (whole,
+  or legible around the outputs when it cannot be both), as it is for
+  each network selected, until it is panned or zoomed, after which a
+  change of the panel's size leaves it. Drag the background to pan, scroll to zoom; clicking a
   node selects its prim, a port explains its value.
 
   The network is edited in place, each edit one undoable action in the

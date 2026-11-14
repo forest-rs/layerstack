@@ -8,13 +8,13 @@
 // where edits go now is listed disabled with why, said before it is
 // tried: an instance proxy is read-only, a rename, delete or move edits
 // the stage's own layer stack (`namespaceRefusal`), a duplicate's copy
-// must be one the target maps, a move among siblings is authored on the
+// must be one the target maps and not inside a variant (`copyRefusal`), a move among siblings is authored on the
 // parent, which the target must map, and an inactive prim loads no payloads. (A
 // sibling at its end is disabled for Move up or down with nothing said:
 // the rows show it.)
 import type { Stage } from "@forest-rs/layerstack";
 import { mapping, mapThrough, namespaceRefusal } from "./composition.ts";
-import { childPath, freeSiblingName, nameOf, parentOf } from "./primAuthoring.ts";
+import { copyPath, copyRefusal, nameOf, parentOf } from "./primAuthoring.ts";
 import type { Target } from "./propertyOps.ts";
 
 /** An action on a prim. */
@@ -78,7 +78,7 @@ export function primActions(stage: Stage, path: string, target: Target): PrimAct
     const siblings = stage.children(parent).map(nameOf);
     const at = siblings.indexOf(nameOf(path));
     namespace = namespaceRefusal(target, "rename", path);
-    const copy = namespaceRefusal(target, "define", childPath(parent, freeSiblingName(nameOf(path), new Set(siblings))));
+    const copy = copyRefusal(target, copyPath(stage, path));
     add("duplicate", "edit", proxy ?? copy);
     add("moveTo", "edit", proxy ?? namespace);
     // A place among siblings is the parent's child order, authored on the parent: the target must map it.

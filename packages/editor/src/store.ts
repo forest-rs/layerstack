@@ -46,7 +46,8 @@ import type { LayerTextRead } from "./model/layerText.ts";
 import { type Shadow, shadowOf, targetOpinion, targetSite } from "./model/propertyOps.ts";
 import {
   childPath,
-  freeSiblingName,
+  copyPath,
+  copyRefusal,
   moveProblem,
   nameOf,
   noSpecToCopy,
@@ -1031,19 +1032,19 @@ export class EditorStore {
    * in the edit target's layer, to a free sibling name) and selects the
    * copy. Refused, with where the prim's opinions are, when the edit
    * target's layer has no spec of it; through an arc or variant, refused
-   * first when the target does not map the copy's path, as defining a
-   * prim there is.
+   * first when the target does not map the copy's path, or writes inside
+   * a variant, where the stage copies nothing (`copyRefusal`).
    */
   duplicate(path: string): string | undefined {
     const stage = this.session?.stage;
     if (stage === undefined) return undefined;
-    const parent = parentOf(path);
-    const to = childPath(parent, freeSiblingName(nameOf(path), new Set(stage.children(parent).map(nameOf))));
+    const to = copyPath(stage, path);
     const label = `duplicate ${path} as ${nameOf(to)}`;
     return this.#edit(
       label,
       (session) => {
-        refuseNamespace(session, "define", to);
+        const why = copyRefusal(session.target, to);
+        if (why !== null) throw new Error(why);
         try {
           return session.apply(label, [{ type: "copySpec", path, to }]);
         } catch (error) {

@@ -9,7 +9,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Layer, Stage } from "@forest-rs/layerstack";
-import { nameOf, opinionSites } from "../src/model/primAuthoring.ts";
+import { copyPath, copyRefusal, copySites, nameOf, opinionSites } from "../src/model/primAuthoring.ts";
+import { primActions } from "../src/model/primActions.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
 const ROOT = `#usda 1.0
@@ -164,4 +165,40 @@ test("where a prim's opinions are: the layers that hold a spec of it, not the ro
   assert.equal(store.duplicate("/World/Keep"), undefined);
   assert.notEqual(stage.layerSpec(weak, "/World/Keep1"), null);
   assert.deepEqual(names(stage, "/World/Keep1"), ["Base", "Roof"]);
+});
+
+test("a duplicate inside a variant is refused before it is tried, as itself and not as a missing spec", async () => {
+  const { store, stage, steps } = await opened();
+  store.editInsideVariant("/World/Shed", "look", "red");
+  const target = store.session!.target;
+  assert.match(copyRefusal(target, copyPath(stage, "/World/Shed/Door"))!, /a copy is not made inside a variant/);
+  const refusal = store.duplicate("/World/Shed/Door");
+  assert.match(refusal!, /a copy is not made inside a variant/);
+  // Both menus list it disabled with that reason: the one list they show agrees with the store.
+  const listed = primActions(stage, "/World/Shed/Door", target).find((action) => action.id === "duplicate")!;
+  assert.deepEqual([listed.enabled, listed.refusal], [false, refusal]);
+  // Not the code the "Nothing to copy" dialog opens for: the variant holds the spec.
+  assert.notEqual(store.notices.at(-1)?.code, "edit.rejected.no_such_spec");
+  assert.equal(steps(), 0);
+});
+
+test("a duplicate is offered at a site only where its copy can be written", async () => {
+  const { store, stage } = await opened();
+  // The reference is on the prim itself: its target maps the prim and beneath, not a sibling beside it.
+  assert.deepEqual(
+    copySites(stage, "/World/Keep").map((site) => [site.layer.identifier, site.copies]),
+    [
+      ["weak.usda", true],
+      ["asset.usda", false],
+    ],
+  );
+  // Beneath the referenced prim, the asset is where the copy is made, through the reference above it, which maps the copy too.
+  const beneath = copySites(stage, "/World/Tower/Base");
+  assert.deepEqual(
+    beneath.map((site) => [site.layer.identifier, site.copies]),
+    [["asset.usda", true]],
+  );
+  store.setTarget(beneath[0]!.editTarget);
+  assert.equal(store.duplicate("/World/Tower/Base"), undefined);
+  assert.notEqual(stage.layerSpec(beneath[0]!.layer, "/Asset/Base1"), null);
 });

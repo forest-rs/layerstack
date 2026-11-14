@@ -595,6 +595,19 @@ export function copySites(stage: Stage, path: string): CopySite[] {
   });
 }
 
+/**
+ * The layers that hold a spec of the prim at `path` and none of its copy
+ * at `to`, by name: a copy is of one layer's spec (with the arcs that
+ * spec authors, which bring their layers to the copy too), so what a
+ * sublayer, or the layer referencing an asset the copy was made in, says
+ * of the prim is not in the copy. Empty when the copy composes from the
+ * layers the prim does.
+ */
+export function opinionsNotCopied(stage: Stage, path: string, to: string): string[] {
+  const copied = new Set(opinionSites(stage, to).map((site) => site.layer));
+  return [...new Set(opinionSites(stage, path).flatMap((site) => (copied.has(site.layer) ? [] : [site.layer.identifier ?? "the session layer"])))];
+}
+
 /** The sentence a copy refused for want of a spec says (`edit.rejected.no_such_spec`). */
 export function noSpecToCopy(path: string, where: string, sites: readonly OpinionSite[]): string {
   const names = [...new Set(sites.map((site) => site.layer.identifier ?? "the session layer"))];

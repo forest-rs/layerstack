@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Layer, UnpackagedAsset } from "@forest-rs/layerstack";
 import { fileName, fileNames, isPackage, packageWants, sessionLayerReason, suppliable } from "../src/model/files.ts";
-import { lineChanges } from "../src/model/layerText.ts";
+import { drawnLine, lineChanges, MAX_LINE_CHARS } from "../src/model/layerText.ts";
 import { usdaTokens } from "../src/model/usdaSyntax.ts";
 
 describe("file names", () => {
@@ -104,6 +104,19 @@ describe("the lines a change touched", () => {
     const before = ["head", "a", "b", "c", "tail"];
     const after = ["head", "x", "y", "z", "tail"];
     assert.deepEqual(lineChanges(before, after, 1), { added: [1, 2, 3], removedBefore: [4], removed: 3 });
+  });
+});
+
+describe("a line as the Text tab draws it", () => {
+  it("is whole when short, and its start with what is left out when it is a mesh's array", () => {
+    assert.deepEqual(drawnLine("    double size = 1"), { text: "    double size = 1", more: 0 });
+    // A mesh's points on one line of USDA: over a million characters, 600,000 tokens.
+    const points = `    point3f[] points = [${Array.from({ length: 100_000 }, (_, index) => `(${index}.5, -1e-5, 2)`).join(", ")}]`;
+    const drawn = drawnLine(points);
+    assert.equal(drawn.text.length, MAX_LINE_CHARS);
+    assert.equal(drawn.text.length + drawn.more, points.length);
+    assert.ok(points.startsWith(drawn.text));
+    assert.ok(usdaTokens(drawn.text).length < MAX_LINE_CHARS, "no more elements than a row can hold");
   });
 });
 

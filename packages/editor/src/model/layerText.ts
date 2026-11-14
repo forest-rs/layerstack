@@ -18,6 +18,25 @@ export const MAX_TEXT_BYTES = 4 * 1024 * 1024;
  */
 const MAX_EDITS = 1000;
 
+/**
+ * The most characters of one line drawn: a mesh's points or indices are one
+ * line of USDA, a million characters and more, and drawing every token of
+ * it holds the page for minutes.
+ */
+export const MAX_LINE_CHARS = 2000;
+
+/** A line as drawn: its first {@link MAX_LINE_CHARS} characters, and how many more it has. */
+export interface DrawnLine {
+  readonly text: string;
+  /** The characters left out; 0 when the line is drawn whole. */
+  readonly more: number;
+}
+
+/** `line` as the Text tab draws it ({@link DrawnLine}). */
+export function drawnLine(line: string): DrawnLine {
+  return line.length <= MAX_LINE_CHARS ? { text: line, more: 0 } : { text: line.slice(0, MAX_LINE_CHARS), more: line.length - MAX_LINE_CHARS };
+}
+
 /** Which lines of a text changed against the text before it. */
 export interface LineChanges {
   /** Indices of lines that are new or changed, ascending. */

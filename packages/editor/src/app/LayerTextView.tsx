@@ -12,7 +12,7 @@ import type { Layer } from "@forest-rs/layerstack";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { type LayerTextRead, MAX_TEXT_BYTES } from "../model/layerText.ts";
+import { drawnLine, type LayerTextRead, MAX_TEXT_BYTES } from "../model/layerText.ts";
 import { type UsdaTokenKind, usdaTokens } from "../model/usdaSyntax.ts";
 import type { EditorStore } from "../store.ts";
 import { useRevision } from "./context.ts";
@@ -202,6 +202,8 @@ function Lines({ read, focus }: { read: LayerTextRead; focus: number | null }) {
   const rows = [];
   for (let line = first; line < last; line++) {
     const removedHere = removedBefore.has(line) || (line === lines.length - 1 && removedBefore.has(lines.length));
+    // A line too long to draw (a mesh's arrays) shows its start, and says how much more there is.
+    const drawn = drawnLine(lines[line]!);
     rows.push(
       <div
         key={line}
@@ -212,11 +214,12 @@ function Lines({ read, focus }: { read: LayerTextRead; focus: number | null }) {
           {line + 1}
         </span>
         <span className="pr-4 whitespace-pre">
-          {usdaTokens(lines[line]!).map((token, at) => (
+          {usdaTokens(drawn.text).map((token, at) => (
             <span key={at} className={COLOURS[token.kind]}>
               {token.text}
             </span>
           ))}
+          {drawn.more > 0 && <span className="text-muted-foreground italic"> … {drawn.more.toLocaleString()} more characters on this line; export the layer for all of it</span>}
         </span>
       </div>,
     );

@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Stage } from "@forest-rs/layerstack";
 import { searchPrims } from "../src/model/primSearch.ts";
-import { initialValue, movedTarget, propertyActions, propertyNameProblem, schemaStart, targetOpinion, usdaValueText, valueTypeGroups, withoutTarget, withTarget } from "../src/model/propertyOps.ts";
+import { editTime, initialValue, movedTarget, propertyActions, propertyNameProblem, schemaStart, targetOpinion, usdaValueText, valueTypeGroups, withoutTarget, withTarget } from "../src/model/propertyOps.ts";
 import { formatValue } from "../src/model/values.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
@@ -601,6 +601,13 @@ over "P"
   assert.equal(store.removeProperty("/P.bar"), undefined);
   assert.equal(stage.layerSpec(weak, "/P.bar"), null);
   assert.equal(stage.layerSpec(stage.root, "/P.bar")?.type, "attribute");
+});
+
+test("a keyed field's edit goes at the time when it is committed, not the time its row was drawn at", () => {
+  // A row with one sample holds still, so it is not drawn again as the time moves: drawn at 0, committed at 20.
+  assert.equal(editTime(0, 20), 20);
+  assert.equal(editTime(null, 20), null, "a field that edits the default still does");
+  assert.equal(editTime(5, undefined), 5);
 });
 
 test("a property name is identifiers joined by colons, and not one the prim has", () => {

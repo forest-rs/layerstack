@@ -10,6 +10,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { Attribute } from "@forest-rs/layerstack";
 import { cn } from "@/lib/utils";
+import { editTime } from "../model/propertyOps.ts";
 import { NOT_A_NUMBER, parseNumber } from "../model/refusal.ts";
 import { releaseValue, type Shown } from "../model/values.ts";
 
@@ -150,11 +151,12 @@ export function CommitNumber({
  * The editor of `attribute`'s value: its value presented in the `accept`
  * view (`presentations/values.tsx` registers the built-ins, by the value's
  * type), authoring the default, or with `at` (an animated attribute, at
- * the current time) a sample there.
+ * the current time) a sample there. The sample goes at the time when the
+ * edit is committed, read then ({@link editTime}).
  */
 export function ValueField({ store, attribute, shown, at }: { store: EditorStore; attribute: Attribute; shown: Shown; at: number | null }) {
   const context = presentationContext(store);
   if (context === null) return null;
   const typeName = attribute.typeName ?? shown.value?.type ?? "";
-  return <Present object={{ kind: "value", attribute, typeName, shown, at }} context={context} accept={(value) => store.setValue(attribute.path, value, at)} />;
+  return <Present object={{ kind: "value", attribute, typeName, shown, at }} context={context} accept={(value) => store.setValue(attribute.path, value, editTime(at, store.time))} />;
 }

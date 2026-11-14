@@ -163,13 +163,123 @@ test("a layer whose edits were undone is read again from the source, with nothin
     store.notices.map((notice) => notice.message.slice(0, 40)),
     ["plain.usda has unsaved edits: save or un", "the undo history (1 step) was forgotten:"],
   );
-  // Every layer read again leaves none out for edits that were undone.
+  // Reading every layer again spares the history: a layer an undone step still writes is left, and said to be.
   store.setValue("/World.size", { type: "double", value: 3 });
   await h.settle(store.undo());
   files["plain.usda"] = '#usda 1.0\ndef Xform "World"\n{\n    double size = 7\n}\n';
   const all = await h.settle(store.reload(null));
-  assert.deepEqual(all.skipped, []);
+  assert.deepEqual([all.reloaded, all.skipped, all.undone, all.forgotten], [[], [], [root], 0]);
+  assert.equal(store.session!.history.canRedo, true);
+  assert.match(store.notices.at(-1)!.message, /edits undone but still in the undo history.*plain\.usda; reload one alone/);
+  // Asked for alone, it is read, and the history forgotten.
+  assert.deepEqual((await h.settle(store.reload(root))).reloaded, [root]);
   assert.deepEqual(stage.attribute("/World.size")?.get(), { kind: "scalar", type: "double", value: 7 });
+});
+
+/** A root with a sublayer, each holding a size: files a test rewrites as another program would. */
+function twoLayers(): Record<string, string> {
+  return {
+    "top.usda": '#usda 1.0\n(\n    subLayers = [@./under.usda@]\n)\ndef Xform "World"\n{\n    double size = 1\n}\n',
+    "under.usda": '#usda 1.0\nover "World"\n{\n    double depth = 1\n}\n',
+  };
+}
+const size = (value: number) => ({ type: "double", value }) as const;
+
+test("saved, changed in the source, read again and saved again: only what is edited since is written", async () => {
+  const h = await harness();
+  const files = twoLayers();
+  await h.open(sampleSource("top.usda", files));
+  const { store } = h;
+  const session = store.session!;
+  const root = session.stage.root;
+  store.setValue("/World.size", size(2));
+  const saved = await h.settle(store.save());
+  assert.deepEqual(saved?.written.map((layer) => layer.identifier), ["top.usda"]);
+  // The file is where the save put it; then another program adds to it.
+  files["top.usda"] = `${text(saved!.written[0]!.bytes)}\ndef Xform "Added"\n{\n}\n`;
+  const report = await h.settle(store.reload(null));
+  assert.deepEqual(report.reloaded, [root]);
+  assert.equal(report.forgotten, 1, "the step that set the size wrote the layer read again");
+  assert.deepEqual(report.skipped, []);
+  assert.ok(session.stage.prim("/Added") !== null);
+  assert.deepEqual(store.dirtyLayers(), [], "read again, it has nothing to save");
+  assert.deepEqual((await h.settle(store.save()))?.written, []);
+  // An edit after the reload is saved on top of what the other program wrote.
+  store.setValue("/World.size", size(3));
+  assert.deepEqual(store.dirtyLayers(), [root]);
+  const again = await h.settle(store.save());
+  assert.deepEqual(again?.written.map((layer) => layer.identifier), ["top.usda"]);
+  assert.match(text(again!.written[0]!.bytes), /double size = 3[\s\S]*def Xform "Added"/);
+  // Undone after the save, it differs from the save again.
+  await h.settle(store.undo());
+  assert.deepEqual(store.dirtyLayers(), [root]);
+});
+
+test("two layers edited, one undone, saved, then read again: the undone one is neither written nor left out", async () => {
+  const h = await harness();
+  const files = twoLayers();
+  await h.open(sampleSource("top.usda", files));
+  const { store } = h;
+  const session = store.session!;
+  const root = session.stage.root;
+  const under = session.layerNamed("under.usda");
+  store.setValue("/World.size", size(2));
+  store.setTarget(under);
+  store.setValue("/World.depth", size(2));
+  store.setTarget(undefined);
+  await h.settle(store.undo());
+  const saved = await h.settle(store.save());
+  assert.deepEqual(saved?.written.map((layer) => layer.identifier), ["top.usda"], "the sublayer's edit was undone");
+  files["top.usda"] = text(saved!.written[0]!.bytes);
+  assert.ok(session.stage.isDirty(under), "the save did not touch it");
+  // Reading every layer again leaves it, as its redo step would be lost with it: the undone edit can still be redone.
+  const same = await h.settle(store.reload(null));
+  assert.deepEqual([same.reloaded, same.skipped, same.undone, same.forgotten], [[], [], [under], 0]);
+  assert.equal(session.history.canRedo, true);
+  await h.settle(store.redo());
+  assert.deepEqual(store.dirtyLayers(), [under]);
+  await h.settle(store.undo());
+  assert.deepEqual(store.dirtyLayers(), []);
+  // The sublayer changes in the source: asked for alone, it is read, and the step that would redo into it is forgotten.
+  files["under.usda"] = '#usda 1.0\nover "World"\n{\n    double depth = 8\n}\n';
+  const read = await h.settle(store.reload(under));
+  assert.equal(read.refusal, null);
+  assert.deepEqual(read.reloaded, [under]);
+  assert.equal(read.forgotten, 2);
+  assert.deepEqual(session.stage.attribute("/World.depth")?.get(), { kind: "scalar", type: "double", value: 8 });
+  assert.deepEqual(session.stage.attribute("/World.size")?.get(), { kind: "scalar", type: "double", value: 2 }, "the root keeps what was saved");
+  assert.deepEqual(store.dirtyLayers(), []);
+  assert.equal(root.identifier, "top.usda");
+});
+
+test("a layer with unsaved edits when a reload forgets the history stays edited, and is not read again", async () => {
+  const h = await harness();
+  const files = twoLayers();
+  await h.open(sampleSource("top.usda", files));
+  const { store } = h;
+  const session = store.session!;
+  const root = session.stage.root;
+  const under = session.layerNamed("under.usda");
+  store.setValue("/World.size", size(2));
+  store.setTarget(under);
+  store.setValue("/World.depth", size(2));
+  store.setTarget(undefined);
+  await h.settle(store.undo());
+  // The sublayer (edits undone) changes in the source; the root has an unsaved edit.
+  files["under.usda"] = '#usda 1.0\nover "World"\n{\n    double depth = 8\n}\n';
+  const all = await h.settle(store.reload(null));
+  assert.deepEqual([all.reloaded, all.skipped, all.undone, all.forgotten], [[], [root], [under], 0]);
+  const report = await h.settle(store.reload(under));
+  assert.deepEqual(report.reloaded, [under]);
+  assert.equal(report.forgotten, 2);
+  assert.deepEqual(store.dirtyLayers(), [root], "no step says so any more, and it is still unsaved");
+  // Asked for alone, it is still refused, not counted as undone.
+  assert.match((await h.settle(store.reload(root))).refusal ?? "", /has unsaved edits/);
+  assert.ok(session.stage.isDirty(root));
+  const saved = await h.settle(store.save());
+  assert.deepEqual(saved?.written.map((layer) => layer.identifier), ["top.usda"]);
+  assert.match(text(saved!.written[0]!.bytes), /double size = 2/);
+  assert.deepEqual(store.dirtyLayers(), []);
 });
 
 test("a layer exports as USDA text or USDC binary, and stays edited", async () => {
@@ -408,7 +518,7 @@ test("a flatten says which asset path of the session layer it could not anchor, 
   assert.equal(store.exportFlattened("usda")?.lossless, true);
 });
 
-test("an edit asked for while a package is being made goes where edits went when it was asked for", { todo: "queued edits read the target when they run: owned by review-property-ops" }, async () => {
+test("an edit asked for while a package is being made goes where edits went when it was asked for", async () => {
   const h = await harness();
   const source = sampleSource();
   await h.open(source);

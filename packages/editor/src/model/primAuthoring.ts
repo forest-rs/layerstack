@@ -265,13 +265,15 @@ export interface SchemaSite {
  * arc's layers at its site, `CompositionArc.layers`; a relocate reads
  * none), and which of them edits write: `target` is where an edit of the
  * prim is written (its layer and spec path), and the index returned is
- * its site's, -1 when it is none of them (a variant not selected).
+ * its site's, -1 when it is none of them (a variant not selected), when
+ * `own` is the spec it holds there: what it applies it can still remove,
+ * though the prim does not compose it.
  */
 export function schemaSites(
   arcs: readonly Pick<CompositionArc, "arc" | "site" | "layers">[],
   target: { readonly layer: Layer; readonly specPath: string } | null,
   read: (layer: Layer, path: string) => PrimSpec | null,
-): { readonly sites: SchemaSite[]; readonly target: number } {
+): { readonly sites: SchemaSite[]; readonly target: number; readonly own: PrimSpec | null } {
   const sites: SchemaSite[] = [];
   let at = -1;
   for (const arc of arcs) {
@@ -281,7 +283,7 @@ export function schemaSites(
       sites.push({ layer, spec: read(layer, arc.site) });
     }
   }
-  return { sites, target: at };
+  return { sites, target: at, own: at < 0 && target !== null ? read(target.layer, target.specPath) : null };
 }
 
 /**
@@ -309,9 +311,9 @@ export type SchemaRemoval =
   | { readonly kind: "stronger"; readonly layer: Layer };
 
 /** What removing `row` where edits go does ({@link SchemaRemoval}), over the specs its prim composes from ({@link schemaSites}). */
-export function schemaRemoval(row: Pick<AppliedSchema, "applied" | "authored">, sites: readonly SchemaSite[], target: number): SchemaRemoval {
+export function schemaRemoval(row: Pick<AppliedSchema, "applied" | "authored">, sites: readonly SchemaSite[], target: number, own: PrimSpec | null = null): SchemaRemoval {
   if (!row.authored) return { kind: "builtIn" };
-  if (target >= 0 && appliesSchema(sites[target]!.spec, row.applied)) return { kind: "remove" };
+  if (appliesSchema(target >= 0 ? sites[target]!.spec : own, row.applied)) return { kind: "remove" };
   const at = sites.findIndex((site, index) => index !== target && appliesSchema(site.spec, row.applied));
   if (at < 0) return { kind: "delete", layer: null };
   // A target the prim does not compose (a variant not selected) takes nothing away: as weak as can be.

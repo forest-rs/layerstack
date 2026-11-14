@@ -42,7 +42,7 @@ export function AppliedSchemasSection({ store, prim }: { store: EditorStore; pri
   const session = store.session;
   const site = session === null ? null : targetSite(session.stage, session.target, prim.path);
   const read = rows.some((row) => row.authored) ? schemaSites(prim.compositionArcs(), site, (layer, path) => store.authoredSpec(layer, path)?.spec ?? null) : null;
-  const removals = new Map(rows.map((row) => [row.applied, schemaRemoval(row, read?.sites ?? [], read?.target ?? -1)]));
+  const removals = new Map(rows.map((row) => [row.applied, schemaRemoval(row, read?.sites ?? [], read?.target ?? -1, read?.own ?? null)]));
   return (
     <Section
       title="Applied schemas"

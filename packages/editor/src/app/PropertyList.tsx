@@ -169,7 +169,7 @@ export function PropertyList({ store, stage, prim }: { store: EditorStore; stage
           )}
           <Button variant="ghost" size="xs" isDisabled={readOnly} onPress={() => setAdding(true)} aria-label="Add a property: an attribute or a relationship, where edits go">
             <HugeiconsIcon icon={PlusSignIcon} data-icon="inline-start" />
-            Add
+            Add…
           </Button>
         </span>
       }

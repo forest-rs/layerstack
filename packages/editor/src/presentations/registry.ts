@@ -167,6 +167,10 @@ export interface Command<K extends PresentedKind = PresentedKind> {
   readonly label?: (object: Presented<K>, context: PresentationContext) => string;
   /** Whether it applies to this object now; always when absent. */
   readonly applies?: (object: Presented<K>, context: PresentationContext) => boolean;
+  /** Whether it can run on this object now: one that applies and cannot is offered disabled. Always when absent. */
+  readonly enabled?: (object: Presented<K>, context: PresentationContext) => boolean;
+  /** Why it cannot run now, said under the menu's items with it disabled; `null` (or absent) when nothing is said. */
+  readonly refusal?: (object: Presented<K>, context: PresentationContext) => string | null;
   /** Runs it. Edits go through the store, as any. */
   readonly run: (object: Presented<K>, context: PresentationContext) => void;
 }

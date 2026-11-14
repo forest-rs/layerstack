@@ -291,7 +291,7 @@ nothing more.
   author: one the spec edits go to applies is removed there, one only a
   weaker layer applies offers **Delete here**, which says that it removes
   what that layer applies, and one a stronger layer applies names that
-  layer, as a delete where edits go would not take it; **Apply** lists the API schemas
+  layer, as a delete where edits go would not take it; **Apply…** lists the API schemas
   that can apply to the prim (by `canOnlyApplyTo`, grouped, with a line
   on what each is for), asks a multiple-apply schema's instance name
   (checked against `allowedInstanceNames` and those applied), and shows
@@ -301,16 +301,21 @@ nothing more.
   and strength, and **Unbind** authors an empty binding, which also blocks
   what ancestors bind. **Metadata** edits `documentation` and shows
   `customData` and `assetInfo` key by key (read, not edited: a dictionary
-  composes key by key across layers). "Bind a material…", "Duplicate" and
-  "Move to…" are commands on every prim path. A duplicate copies the
+  composes key by key across layers). A prim's actions (add a child,
+  duplicate, move, bind a material, load payloads, rename, delete) are
+  one list, with one wording, in its "⋯" and in the context menu of its
+  path wherever it is shown, an action that cannot run where edits go
+  listed disabled with why. Header buttons that open a dialog end in an
+  ellipsis, with an icon before them (**Add…**, **Apply…**, **Bind…**).
+  A duplicate copies the
   prim's spec within the edit target's layer (`copySpec`); when that layer
   has none, the editor names the layers that do, with **Edit there** and
   **Duplicate there**. A move or delete that leaves paths naming the old
   place (in a variant no prim selects) says how many in a notice, which
   brings the Health tab forward, where they are listed, each live. While edits go through an arc
-  or inside a variant, moving (by **Move to…** or a drag) is not offered,
-  as rename and delete are not, and neither is a duplicate whose copy the
-  target does not map; the menu says why, and so does the tree under its
+  or inside a variant, moving (by **Move to…** or a drag), rename and
+  delete cannot run, and neither can a duplicate whose copy the target
+  does not map: both menus list them disabled and say why, and so does the tree under its
   rows while a prim is dragged, and after Delete on a row is refused. Every edit says the layer it
   goes to.
 - **Authoring properties.** Each property's name in the inspector is
@@ -327,7 +332,7 @@ nothing more.
   selected) is said under its field, the winning layer live, with
   **Edit there**, which makes that opinion's edit target where edits go;
   a field shows what the stage reads once its edit is made, not what was
-  typed. **Add** in the Properties header adds an attribute (a name in
+  typed. **Add…** in the Properties header adds an attribute (a name in
   namespaces; a value type from the runtime's registry, grouped by shape
   and role with the legacy types left out, scalar or array; varying or
   uniform), created with a starting value of its

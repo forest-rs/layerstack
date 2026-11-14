@@ -144,7 +144,8 @@ export function Live<K extends PresentedKind>({
 /**
  * The commands that apply to `object`, as a menu at `triggerRef` (what a
  * context menu on a presented object opens): choosing one runs it, and
- * either closes the menu (`onClose`). Read when it opens.
+ * either closes the menu (`onClose`). One that cannot run now is listed
+ * disabled, and why is said under the items. Read when it opens.
  */
 export function CommandMenu<K extends PresentedKind>({
   object,
@@ -157,8 +158,16 @@ export function CommandMenu<K extends PresentedKind>({
   triggerRef: React.RefObject<Element | null>;
   onClose: () => void;
 }) {
-  const [offered] = useState(() => commands.forObject(object, context));
+  const [offered] = useState(() =>
+    commands.forObject(object, context).map((command) => ({
+      command,
+      label: command.label?.(object, context) ?? command.title,
+      enabled: command.enabled?.(object, context) ?? true,
+      refusal: command.refusal?.(object, context) ?? null,
+    })),
+  );
   if (offered.length === 0) return null;
+  const reasons = [...new Set(offered.flatMap((each) => (each.refusal === null ? [] : [each.refusal])))];
   return (
     <Popover
       triggerRef={triggerRef}
@@ -171,17 +180,27 @@ export function CommandMenu<K extends PresentedKind>({
         aria-label="Commands"
         autoFocus="first"
         className="outline-hidden"
+        disabledKeys={offered.filter((each) => !each.enabled).map((each) => each.command.id)}
         onAction={(key) => {
-          offered.find((command) => command.id === key)?.run(object, context);
+          offered.find((each) => each.command.id === key)?.command.run(object, context);
           onClose();
         }}
       >
-        {offered.map((command) => (
-          <MenuItem key={command.id} id={command.id} className="cursor-default rounded-md px-2 py-1 text-xs outline-hidden data-focused:bg-foreground/10">
-            {command.label?.(object, context) ?? command.title}
+        {offered.map(({ command, label }) => (
+          <MenuItem
+            key={command.id}
+            id={command.id}
+            className="cursor-default rounded-md px-2 py-1 text-xs outline-hidden data-disabled:opacity-50 data-focused:bg-foreground/10"
+          >
+            {label}
           </MenuItem>
         ))}
       </Menu>
+      {reasons.map((reason) => (
+        <p key={reason} className="max-w-64 px-2 py-1 text-[11px] text-muted-foreground">
+          {reason}
+        </p>
+      ))}
     </Popover>
   );
 }

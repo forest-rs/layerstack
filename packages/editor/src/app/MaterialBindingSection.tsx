@@ -7,6 +7,8 @@
 // shader's inputs; "Bind…" picks a material to bind and "Unbind" blocks
 // it, each where edits go and saying what it authors.
 import type { Prim, Stage } from "@forest-rs/layerstack";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { PaintBoardIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { materialSummary } from "../model/materials.ts";
 import { primOfProperty } from "./presentations/objects.tsx";
@@ -37,6 +39,7 @@ export function MaterialBindingSection({ store, stage, prim }: { store: EditorSt
       aside={
         <span className="flex items-center gap-1">
           <Button variant="ghost" size="xs" isDisabled={readOnly} onPress={() => askPrim({ kind: "bind", path: prim.path })}>
+            <HugeiconsIcon icon={PaintBoardIcon} data-icon="inline-start" />
             Bind…
           </Button>
           {binding !== null && (

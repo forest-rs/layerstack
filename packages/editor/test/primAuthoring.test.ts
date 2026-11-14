@@ -33,6 +33,7 @@ import {
   typeGroups,
   typeMatches,
 } from "../src/model/primAuthoring.ts";
+import { primActions, PROXY_REFUSAL, refusals } from "../src/model/primActions.ts";
 import { targetSite } from "../src/model/propertyOps.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
@@ -420,4 +421,47 @@ test("through an arc, a move is refused before it is tried, and so is a duplicat
   assert.equal(store.duplicate("/World/Robot/Body"), undefined);
   assert.notEqual(stage.prim("/World/Robot/Body1"), null);
   assert.equal(steps(), 1);
+});
+
+test("a prim's actions are one list, one wording, for its menu and its path's context menu, a refused one disabled with why", async () => {
+  const { store, stage } = await opened();
+  const at = (path: string) => primActions(stage, path, store.session!.target);
+  const titles = (path: string) => at(path).map((action) => [action.title, action.enabled]);
+  // Where edits go is the root: everything on the rock, and Move up only where it is not first.
+  assert.deepEqual(titles("/World/Rock").map(([title]) => title), [
+    "Add a child prim…",
+    "Duplicate",
+    "Move to…",
+    "Move up",
+    "Move down",
+    "Bind a material…",
+    "Rename…",
+    "Delete",
+  ]);
+  assert.deepEqual(refusals(at("/World/Rock")), []);
+  const first = stage.children("/World")[0]!;
+  assert.equal(at(first).find((action) => action.id === "moveUp")?.enabled, false, "the first sibling moves up no further");
+  assert.deepEqual(refusals(at(first)), [], "which needs no sentence");
+  // Inside a variant: rename, delete and move are listed disabled, with why; the duplicate's copy is mapped there.
+  store.editInsideVariant("/World/Robot", "finish", "painted");
+  const inside = at("/World/Robot");
+  assert.deepEqual(
+    inside.filter((action) => !action.enabled).map((action) => action.id),
+    ["moveTo", "rename", "delete"],
+  );
+  assert.equal(inside.find((action) => action.id === "delete")?.title, "Delete", "the same wording, disabled");
+  assert.equal(refusals(inside).length, 1);
+  assert.match(refusals(inside)[0]!, /Renaming and deleting edit the opinions of the stage's own layer stack/);
+  // Through the robot's reference, a duplicate of the rock is not one the target maps.
+  store.setTarget(stage.prim("/World/Robot")!.compositionArcs().find((arc) => arc.arc === "references")!.editTarget());
+  const rock = at("/World/Rock");
+  assert.equal(rock.find((action) => action.id === "duplicate")?.enabled, false);
+  assert.ok(refusals(rock).some((why) => /does not map \/World\/Rock1/.test(why)));
+  // An instance proxy: listed, and read-only.
+  const proxy = stage.children("/World/Beacons/North")[0]!;
+  assert.ok(at(proxy).every((action) => !action.enabled));
+  assert.deepEqual(refusals(at(proxy)), [PROXY_REFUSAL]);
+  // The pseudo-root takes a child alone.
+  assert.deepEqual(at("/").map((action) => action.id), ["add"]);
+  assert.deepEqual(at("/Nowhere"), []);
 });

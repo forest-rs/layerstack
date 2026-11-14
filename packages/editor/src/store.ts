@@ -723,16 +723,18 @@ export class EditorStore {
 
   /**
    * Clears the attribute at `path` where edits go: its default (a value or
-   * a block) and, when the samples the stage reads are the target's, those
-   * samples, so its value falls back to weaker opinions or the schema's
+   * a block) and every sample the target's layer holds of it
+   * (`UsdAttribute::Clear`), read by the stage or hidden by a stronger
+   * opinion, so its value falls back to weaker opinions or the schema's
    * fallback. Returns why it was refused (the target holds none of them),
    * as {@link EditorStore.apply} does.
    */
   clearValue(path: string): string | undefined {
     return this.#edit(`clear ${path}`, (session) => {
       const attribute = session.stage.attribute(path);
-      const samples = attribute === null ? [] : targetOpinion(session.stage, attribute, session.target).samples;
-      return session.clearValue(path, samples);
+      const own = attribute === null ? null : targetOpinion(session.stage, attribute, session.target);
+      // With no sample there, the default alone is cleared: the block that takes samples would author a spec to refuse by.
+      return session.clearValue(path, own !== null && own.samples.length > 0);
     });
   }
 

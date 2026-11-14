@@ -84,6 +84,25 @@ over "World"
             3: 6,
         }
     }
+
+    def Scope "Switch" (
+        variants = {
+            string mode = "on"
+        }
+        prepend variantSets = "mode"
+    )
+    {
+        variantSet "mode" = {
+            "on" {
+                double level.timeSamples = {
+                    0: 1,
+                    10: 2,
+                    20: 3,
+                }
+
+            }
+        }
+    }
 }
 `,
   "part.usda": `#usda 1.0
@@ -134,6 +153,64 @@ test("removing a relationship is offered where the target's layer holds its spec
   stage.apply([{ type: "setTargets", path: "/World/Ball.proxyPrim", targets: [] }]);
   assert.equal(stage.relationship("/World/Ball.proxyPrim")!.custom, false);
   assert.equal(propertyActions(stage, "/World/Ball.proxyPrim", session.target, 0).remove, true);
+});
+
+test("what a weaker layer holds under a stronger opinion is still its own to clear, key and remove", async () => {
+  const { h, store, stage, session, under } = await stacked();
+  const path = "/World/Notes.level";
+  const spec = () => stage.layerSpec(under, path);
+  const held = () => {
+    const read = spec();
+    return read?.type === "attribute" ? [read.default, read.timeSamples] : null;
+  };
+  store.setTarget(under);
+  assert.equal(valueOf(stage, path, 12), 1, "the root's default wins at every time");
+  assert.deepEqual(held(), ["value", [1, 3]]);
+  // The sublayer is read at (offset = 10; scale = 2): its sample at 1 is at stage time 12.
+  assert.deepEqual(targetOpinion(stage, stage.attribute(path)!, under).samples, [1, 3], "its own samples, in its own time");
+  assert.deepEqual(propertyActions(stage, path, session.target, 12), { clear: true, block: true, remove: true, key: false, deleteKey: true, lastKey: false });
+  assert.deepEqual(propertyActions(stage, path, session.target, 13), { clear: true, block: true, remove: true, key: true, deleteKey: false, lastKey: false });
+  assert.equal(store.deleteKey(path, 12), undefined);
+  assert.deepEqual(held(), ["value", [3]]);
+  // Clear takes the default and the samples, as UsdAttribute::Clear does: nothing of its value is left behind, hidden.
+  assert.equal(store.clearValue(path), undefined);
+  assert.deepEqual(held(), [null, null]);
+  assert.equal(session.history.nextUndo?.label, `clear ${path}`);
+  // Its spec is still there, and still the layer's to remove.
+  assert.deepEqual(propertyActions(stage, path, session.target, 12), { clear: false, block: true, remove: true, key: true, deleteKey: false, lastKey: false });
+  assert.equal(store.clearValue(path), "under.usda has no value of /World/Notes.level to clear");
+  assert.equal(store.removeProperty(path), undefined);
+  assert.equal(spec(), null);
+  await h.settle(store.undo());
+  await h.settle(store.undo());
+  assert.deepEqual(held(), ["value", [3]], "one step back: the default and the sample together");
+  await h.settle(store.undo());
+  assert.deepEqual(held(), ["value", [1, 3]]);
+});
+
+test("clearing through a variant in a sublayer read at an offset clears every sample the variant holds", async () => {
+  const { h, store, stage, session, under } = await stacked();
+  const path = "/World/Switch.level";
+  // Composed through the sublayer's (offset = 10; scale = 2).
+  assert.deepEqual(stage.attribute(path)!.timeSamples(), [10, 30, 50]);
+  const inside = stage.prim("/World/Switch")!.variantEditTarget("mode", "on", under);
+  // A variant's own target maps time as it is (UsdEditTarget::ForLocalDirectVariant): the stage's times are not its layer's.
+  assert.equal(inside.mapTime(30), 30);
+  store.setTarget(inside);
+  const samples = () => {
+    const spec = stage.layerSpec(under, inside.mapPath(path)!);
+    return spec?.type === "attribute" ? spec.timeSamples : null;
+  };
+  assert.deepEqual(samples(), [0, 10, 20]);
+  // A key is offered for deleting where the target would delete one.
+  assert.equal(propertyActions(stage, path, session.target, 20).deleteKey, true);
+  assert.equal(propertyActions(stage, path, session.target, 30).deleteKey, false);
+  assert.equal(store.clearValue(path), undefined);
+  assert.equal(samples(), null, "none left behind");
+  assert.deepEqual(stage.attribute(path)?.timeSamples() ?? [], []);
+  await h.settle(store.undo());
+  assert.deepEqual(samples(), [0, 10, 20]);
+  assert.deepEqual(store.notices, []);
 });
 
 test("clearing a value falls back to the schema's, is one undoable step, and clearing nothing is refused", async () => {

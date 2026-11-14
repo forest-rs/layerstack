@@ -35,7 +35,9 @@ const NOTHING: readonly string[] = [];
  * inherit); `first` lists those paths (of the type, matching the text,
  * within the search's limit or not) ahead of everything, marked with
  * `firstNote` (the materials the scene binds already); `footer` is
- * shown above the buttons (a binding's purpose and strength).
+ * shown above the buttons (a binding's purpose and strength). When
+ * `onPick` returns why the choice was refused, the dialog stays open and
+ * says it.
  */
 export function PrimPicker({
   stage,
@@ -63,10 +65,11 @@ export function PrimPicker({
   first?: readonly string[];
   firstNote?: string;
   footer?: React.ReactNode;
-  onPick: (path: string) => void;
+  onPick: (path: string) => string | undefined | void;
   onClose: () => void;
 }) {
   const [text, setText] = useState("");
+  const [refusal, setRefusal] = useState<string | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
   // Keyed by the paths left out and put first, not the arrays the caller built this render.
   const excluded = exclude.join("\n");
@@ -85,9 +88,11 @@ export function PrimPicker({
   const taken = (path: string) => exclude.includes(path);
   const prim = chosen === null ? null : stage.prim(chosen);
   const propertyNames = useMemo(() => (prim === null ? [] : [...prim.attributeNames(), ...prim.relationshipNames()].sort()), [prim]);
+  // A choice that is refused keeps the dialog, with why: another can be made.
   const pick = (path: string) => {
-    onPick(path);
-    onClose();
+    const refused = onPick(path);
+    if (typeof refused === "string") setRefusal(refused);
+    else onClose();
   };
   const kind = type ?? "prim";
   return (
@@ -151,6 +156,11 @@ export function PrimPicker({
         </div>
       )}
       {footer}
+      {refusal !== null && (
+        <p role="alert" className="text-[11px] text-destructive">
+          {refusal}
+        </p>
+      )}
       <DialogFooter>
         <Button variant="outline" onPress={onClose}>
           Cancel

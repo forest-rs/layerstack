@@ -238,7 +238,6 @@ function BindMaterialDialog({ store, stage, path, onClose }: { store: EditorStor
   const [strength, setStrength] = useState<BindingStrength>("weakerThanDescendants");
   // The materials the draws bind: what the scene already uses, at no cost of a search.
   const bound = useMemo(() => [...store.scene.materials.keys()].sort(), [store]);
-  const current = stage.prim(path)?.boundMaterial()?.material ?? null;
   return (
     <PrimPicker
       stage={stage}
@@ -250,7 +249,6 @@ function BindMaterialDialog({ store, stage, path, onClose }: { store: EditorStor
         </>
       }
       type="Material"
-      exclude={current === null ? [] : [current]}
       first={bound}
       firstNote="bound in the scene"
       footer={
@@ -315,8 +313,8 @@ function MoveToDialog({ store, stage, path, onClose }: { store: EditorStore; sta
               size="sm"
               className="self-start"
               onPress={() => {
-                store.moveTo(path, "/");
-                onClose();
+                // Refused (the root has a prim of its name): the notice says why, and the dialog stays for another choice.
+                if (store.moveTo(path, "/") === undefined) onClose();
               }}
             >
               Move it to the root

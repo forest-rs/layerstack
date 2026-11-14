@@ -540,3 +540,29 @@ test("a sublayer's offset is into its parent's time: the stage composes the offs
   await h.settle(store.undo());
   assert.equal(inheritedFrom("timeCodesPerSecond", store.stageMetadataSources()), null);
 });
+
+test("a missing asset is not said to be wanted by a prim whose arc to it has gone", async () => {
+  const h = await harness();
+  const files = {
+    "top.usda": `#usda 1.0\ndef "A" (\n    references = @./x.usda@\n)\n{\n}\n\ndef "C" (\n    references = @./x.usda@\n)\n{\n}\n`,
+  };
+  await h.open(sampleSource("top.usda", files));
+  const { store } = h;
+  assert.deepEqual(
+    store.health!.missing.map((asset) => [asset.identifier, asset.prims]),
+    [["x.usda", ["/A", "/C"]]],
+  );
+  // /A's reference is removed: no asset loop runs (the asset is known to be absent), and /A composes clean.
+  assert.equal(store.apply("remove the reference of /A", [{ type: "removeReference", path: "/A", asset: "./x.usda" }]), undefined);
+  const health = store.health!;
+  assert.deepEqual(
+    health.groups.map((group) => group.prim),
+    ["/C"],
+  );
+  assert.deepEqual(
+    health.missing.map((asset) => [asset.identifier, asset.prims]),
+    [["x.usda", ["/C"]]],
+  );
+  await h.settle(store.undo());
+  assert.deepEqual(store.health!.missing[0]!.prims, ["/A", "/C"]);
+});

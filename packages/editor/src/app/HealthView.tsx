@@ -108,7 +108,7 @@ export function HealthView() {
                   {asset.prims.length > 0 && (
                     <>
                       {" "}
-                      · composed without it:{" "}
+                      · seen composed without it:{" "}
                       {asset.prims.slice(0, 6).map((prim, at) => (
                         <span key={prim}>
                           {at > 0 && ", "}

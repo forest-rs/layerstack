@@ -578,6 +578,79 @@ fn asset_paths_are_anchored_by_default_and_kept_as_authored_on_request() {
     );
 }
 
+/// Accepting an asset path that cannot be anchored keeps the loss in the
+/// report and still anchors every path that can be, each on its own, as
+/// OpenUSD's flatten resolves each value
+/// (`Usd_FlattenAccess::ResolveValueForFlatten`, `pxr/usd/usd/stage.cpp`).
+/// AOUSD Core §9.4.
+#[test]
+fn accepting_an_unanchored_asset_path_reports_it_and_anchors_the_others() {
+    /// Knows where the asset layer is, and not the root layer.
+    struct AssetOnly;
+    impl AssetResolver for AssetOnly {
+        fn resolve(
+            &mut self,
+            _: &str,
+            _: Option<LayerId>,
+            _: &crate::interner::TokenInterner,
+            _: &crate::path::PathInterner,
+        ) -> Result<crate::asset::ResolvedAsset, crate::asset::AssetResolveError> {
+            Err(crate::asset::AssetResolveError::NotFound)
+        }
+        fn resolved_path(&self, id: LayerId) -> Option<&str> {
+            (id == LayerId(2)).then_some("/assets/trees/asset.usda")
+        }
+    }
+    let asset_type = || PropertyType::parse("asset").unwrap();
+    let textures = |store: &mut InMemoryStore, spec: &mut PrimSpec| {
+        let bark = store.tokens.intern("bark");
+        spec.set_property(
+            bark,
+            PropertySpec::typed_attribute(asset_type())
+                .with_default(Value::Asset("./bark.png".into())),
+        );
+        // An opinion of the root layer, which has no location.
+        let leaf = store.tokens.intern("leaf");
+        let tree = store.path("/World/Tree");
+        let mut over = store.layers[&LayerId(1)].prims[&tree].clone();
+        over.set_property(
+            leaf,
+            PropertySpec::typed_attribute(asset_type())
+                .with_default(Value::Asset("./leaf.png".into())),
+        );
+        store
+            .layers
+            .get_mut(&LayerId(1))
+            .unwrap()
+            .insert_prim(tree, over);
+    };
+    let requirements = FlattenRequirements::default();
+    let refused = flatten_edited_with(LayerOffset::IDENTITY, &AssetOnly, &requirements, textures);
+    let Err(FlattenError::Refused(refusal)) = refused else {
+        panic!("refused: the leaf cannot be anchored");
+    };
+    let relaxed = requirements.accepting(&refusal.unmet);
+    assert_eq!(relaxed.asset_paths, AssetPaths::AnchoredWherePossible);
+    let flat = flatten_edited_with(LayerOffset::IDENTITY, &AssetOnly, &relaxed, textures)
+        .expect("the loss is accepted");
+    assert!(!flat.report.is_lossless());
+    let lost: Vec<String> = flat.report.lost().map(ToString::to_string).collect();
+    assert_eq!(lost.len(), 1, "{lost:?}");
+    assert!(lost[0].starts_with("/World/Tree.leaf: lost:"), "{lost:?}");
+    let findings: Vec<String> = flat
+        .report
+        .findings
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert!(
+        findings.iter().any(|finding| finding
+            == "/World/Tree.bark: transformed: @./bark.png@ anchored as \
+                @/assets/trees/bark.png@ (layer 2, /Asset.bark)"),
+        "{findings:#?}"
+    );
+}
+
 #[test]
 fn the_flattened_layer_verifies_against_the_stage() {
     let mut store = InMemoryStore::default();

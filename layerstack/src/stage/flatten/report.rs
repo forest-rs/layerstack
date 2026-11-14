@@ -41,12 +41,14 @@ pub struct FlattenRequirements {
 
 impl FlattenRequirements {
     /// These requirements relaxed just enough to accept `unmet`, the
-    /// unmet requirements of a refused flatten: exact animation or
-    /// anchoring is given up when `unmet` names it, and, since every unmet
-    /// requirement is a loss, losses no remaining requirement names are
-    /// accepted ([`LossPolicy::RefuseRequired`]). Nothing else changes.
-    /// Flattening the same stage again with the result succeeds and
-    /// reports the same losses.
+    /// unmet requirements of a refused flatten: exact animation is given
+    /// up when `unmet` names it, anchoring is asked only of the asset
+    /// paths that can be anchored ([`AssetPaths::AnchoredWherePossible`]),
+    /// and, since every unmet requirement is a loss, losses no remaining
+    /// requirement names are accepted ([`LossPolicy::RefuseRequired`]).
+    /// Nothing else changes. Flattening the same stage again with the
+    /// result succeeds, reports the same losses and writes every other
+    /// asset path as the refused flatten would have.
     #[must_use]
     pub fn accepting(&self, unmet: &[UnmetRequirement]) -> Self {
         let mut relaxed = *self;
@@ -54,7 +56,9 @@ impl FlattenRequirements {
             relaxed.losses = LossPolicy::RefuseRequired;
             match unmet.requirement {
                 Requirement::ExactAnimation => relaxed.exact_animation = false,
-                Requirement::AnchoredAssetPaths => relaxed.asset_paths = AssetPaths::AsAuthored,
+                Requirement::AnchoredAssetPaths => {
+                    relaxed.asset_paths = AssetPaths::AnchoredWherePossible;
+                }
                 Requirement::NoLoss => {}
             }
         }
@@ -105,6 +109,15 @@ pub enum AssetPaths {
     /// [`AssetResolver::anchor_asset_path`]: crate::AssetResolver::anchor_asset_path
     #[default]
     Anchored,
+    /// Anchored as [`AssetPaths::Anchored`] anchors them, each on its own
+    /// as OpenUSD's flatten resolves each value
+    /// (`Usd_FlattenAccess::ResolveValueForFlatten`), except that an asset
+    /// path the resolver cannot anchor is written as authored and reported
+    /// as a loss ([`Loss::UnanchoredAssetPath`]) without refusing the
+    /// flatten: one path relative to a layer with no location (an
+    /// anonymous session layer) does not leave every other path
+    /// unanchored.
+    AnchoredWherePossible,
     /// As authored. A relative path keeps meaning what it meant only while
     /// the flattened layer sits beside the layer that authored it; every
     /// asset path is reported as an external dependency.

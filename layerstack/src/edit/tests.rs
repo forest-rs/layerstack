@@ -2922,6 +2922,71 @@ fn sublayer_edits_reject_lists_composition_could_not_use() {
     assert_eq!(reason(&mut store, &txn), Rejection::SublayerCycle(ROCK));
 }
 
+/// A layer read from a file may list one layer under two asset paths, or
+/// a sublayer that reaches it: OpenUSD checks the paths an edit adds
+/// (`SdfListEditor::_ValidateEdit`), and `SdfLayer::SetSubLayerOffset`
+/// sets an offset by index, so such a list is still edited.
+#[test]
+fn sublayer_edits_keep_what_the_list_already_repeats() {
+    let mut store = rocks();
+    let named = |layer: LayerId, asset: &str| SublayerEntry {
+        asset: Some(asset.into()),
+        ..SublayerEntry::new(layer)
+    };
+    // As a reader leaves it: `./sub.usda` and `sub.usda` are one layer,
+    // and the asset lists the scene back.
+    store
+        .layer_mut(ROCK)
+        .unwrap()
+        .sublayers_mut()
+        .push(named(SCENE, "./scene.usda"));
+    let held = vec![
+        named(SCENE_SUB, "./sub.usda"),
+        named(SCENE_SUB, "sub.usda"),
+        named(ROCK, "./rock.usda"),
+    ];
+    *store.layer_mut(SCENE).unwrap().sublayers_mut() = held.clone();
+    let list = |store: &InMemoryStore| store.layers[&SCENE].sublayers.clone();
+
+    // The second alias's offset, alone.
+    let offset = LayerOffset {
+        offset: 7.0,
+        scale: 1.0,
+    };
+    let mut txn = Transaction::new();
+    txn.set_sublayer_offset(SCENE, 1, offset);
+    let undo_offset = txn.apply(&mut store).expect("an offset adds no path");
+    assert_eq!(list(&store)[1].offset, offset);
+    assert_eq!(list(&store)[0], held[0]);
+
+    // A reorder of the same entries.
+    let mut reordered = list(&store);
+    reordered.swap(1, 2);
+    let mut txn = Transaction::new();
+    txn.set_sublayers(SCENE, reordered.clone());
+    let undo_order = txn.apply(&mut store).expect("a reorder adds no path");
+    assert_eq!(list(&store), reordered);
+    undo_order.apply(&mut store).unwrap();
+    undo_offset.apply(&mut store).unwrap();
+    assert_eq!(list(&store), held);
+
+    // What an edit adds is still checked: a third name for the layer, and a path listed already.
+    for entry in [
+        named(SCENE_SUB, "../set/sub.usda"),
+        named(LayerId::UNRESOLVED, "sub.usda"),
+    ] {
+        let mut txn = Transaction::new();
+        txn.insert_sublayer(SCENE, 3, entry);
+        match txn.apply(&mut store) {
+            Err(EditError::Rejected { reason, .. }) => {
+                assert_eq!(reason, Rejection::DuplicateSublayer(3));
+            }
+            other => panic!("expected a rejection, got {other:?}"),
+        }
+    }
+    assert_eq!(list(&store), held);
+}
+
 #[test]
 fn relocate_edits_reject_entries_composition_would_ignore() {
     use crate::{InvalidRelocationReason as R, Relocate};

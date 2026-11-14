@@ -21,7 +21,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { ancestorsOf, layerStack, offsetText, offsetUsda, type StackRow } from "../model/layerStack.ts";
+import { ancestorsOf, layerStack, offsetText, offsetUsda, reloadText, type StackRow } from "../model/layerStack.ts";
 import type { EditorStore, ReloadReport } from "../store.ts";
 import { useEditorStore, useRevision } from "./context.ts";
 import { layerName } from "./format.ts";
@@ -142,14 +142,7 @@ function StackHeader({ store }: { store: EditorStore }) {
     setReport(await store.reload(null));
     setBusy(false);
   };
-  const said =
-    report === null
-      ? null
-      : report.refusal !== null
-        ? report.refusal
-        : report.reloaded.length === 0
-          ? `Nothing changed in the source${report.skipped.length > 0 ? `; ${report.skipped.length} with unsaved edits left as they are` : ""}.`
-          : `Read again: ${report.reloaded.map((layer) => layerName(layer.identifier)).join(", ")}${report.skipped.length > 0 ? `; ${report.skipped.length} with unsaved edits left as they are` : ""}.`;
+  const said = report === null ? null : (report.refusal ?? reloadText(report, layerName));
   return (
     <div className="flex flex-col gap-1 px-2 pt-1">
       <div className="flex items-start gap-2">
@@ -162,11 +155,14 @@ function StackHeader({ store }: { store: EditorStore }) {
             {busy ? <Spinner className="size-3" data-icon="inline-start" /> : <HugeiconsIcon icon={Refresh01Icon} data-icon="inline-start" />}
             Reload
           </Button>
-          <Tooltip>Read every layer again from the source: files changed on disk come in, and only what changed recomposes. A layer with unsaved edits is left as it is.</Tooltip>
+          <Tooltip>
+            Read every layer again from the source: files changed on disk come in, and only what changed recomposes. A layer with unsaved edits is left as it is. Not an edit: when a
+            layer the undo history changed is read again, the history is forgotten.
+          </Tooltip>
         </TooltipTrigger>
       </div>
       {said !== null && (
-        <p role="status" className={cn("text-[11px]", report?.refusal !== null ? "text-destructive" : "text-muted-foreground")}>
+        <p role="status" className={cn("text-[11px]", report?.refusal !== null || report.failed.length > 0 || report.gone.length > 0 ? "text-destructive" : "text-muted-foreground")}>
           {said}
         </p>
       )}

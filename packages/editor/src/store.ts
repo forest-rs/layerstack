@@ -1213,7 +1213,7 @@ export class EditorStore {
    */
   async reload(layer: Layer | null): Promise<ReloadReport> {
     const label = layer === null ? "reload from source" : `reload ${layerLabel(layer)}`;
-    let report: ReloadReport = { reloaded: [], skipped: [], refusal: null };
+    let report: ReloadReport = { reloaded: [], skipped: [], failed: [], gone: [], forgotten: 0, refusal: null };
     const refusal = await this.#fetchingEdit(label, async (session, signal) => {
       const stage = session.stage;
       const asked = layer === null ? stage.layers().filter((each) => !each.anonymous && !stage.isMuted(each)) : [layer];
@@ -1224,8 +1224,17 @@ export class EditorStore {
         throw new Error(`${layerLabel(layer)} ${why} before reading it again from the source`);
       }
       const reading = asked.filter((each) => !skipped.includes(each));
-      const result = reading.length === 0 ? null : await session.reload(reading, signal);
-      report = { reloaded: result?.reloaded ?? [], skipped, refusal: null };
+      // Reading every layer again, what the stage found missing is looked for again too: a file made since is read.
+      const retry = layer === null ? stage.status().unresolved.flatMap((asset) => (asset.identifier === null ? [] : [asset.identifier])) : [];
+      const read = reading.length === 0 && retry.length === 0 ? null : await session.reload(reading, retry, signal);
+      const result = read?.result ?? null;
+      const failed = (result?.failures ?? []).map((failure) => failure.assetPath);
+      report = { reloaded: result?.reloaded ?? [], skipped, failed, gone: read?.gone ?? [], forgotten: read?.forgotten ?? 0, refusal: null };
+      if (report.forgotten > 0) {
+        this.#shadow = null;
+        this.#notices.add(label, `the undo history (${report.forgotten} ${report.forgotten === 1 ? "step" : "steps"}) was forgotten: a layer it changed was read again, and a reload cannot be undone`, null);
+      }
+      for (const identifier of report.gone) this.#notices.add(label, `${identifier} is no longer in the source: kept as it was read`, "io.not_found");
       if (skipped.length > 0) {
         this.#notices.add(label, `not read again, having unsaved edits: ${skipped.map(layerLabel).join(", ")}`, "io.dirty_reload");
       }
@@ -2067,6 +2076,12 @@ export interface ReloadReport {
   readonly reloaded: readonly Layer[];
   /** The layers left out for their unsaved edits. */
   readonly skipped: readonly Layer[];
+  /** The asset paths of the layers whose new content could not be read (malformed): each keeps what it had. */
+  readonly failed: readonly string[];
+  /** The identifiers of the layers the source no longer has: each keeps what it read. */
+  readonly gone: readonly string[];
+  /** How many undo and redo steps were forgotten, a layer one of them changed having been read again. */
+  readonly forgotten: number;
   /** Why the reload was refused, or failed; `null` when it ran. */
   readonly refusal: string | null;
 }

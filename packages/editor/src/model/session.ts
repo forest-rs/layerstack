@@ -85,6 +85,16 @@ function stepsBetween(then: readonly HistoryStep[], now: readonly HistoryStep[])
   return [...then.slice(shared), ...now.slice(shared)];
 }
 
+/** What {@link Session.reload} did. */
+export interface Reloaded {
+  /** What the stage read again (`Stage.reloadLayers`). */
+  readonly result: ReloadResult;
+  /** The identifiers of the layers asked for that the source no longer has: each keeps what it read. */
+  readonly gone: readonly string[];
+  /** How many undo and redo steps were forgotten, a layer one of them writes having been read again; 0 when the history is kept. */
+  readonly forgotten: number;
+}
+
 /** A prim or property that moved: where it was, and where it is. */
 export interface PathMove {
   readonly from: string;
@@ -241,8 +251,10 @@ export class Session implements Disposable {
   readonly #moves = new WeakMap<HistoryStep, PathMove>();
   /** The steps a move or a delete made: what {@link Session.lastNamespaceEdit} looks for. */
   readonly #namespaceSteps = new WeakSet<HistoryStep>();
-  /** Where the history stood when the scene opened: the saved point of every layer not saved since. */
-  readonly #opened: HistoryPoint;
+  /** Where the history stood when the scene opened (or was last forgotten): the saved point of every layer not saved since. */
+  #opened: HistoryPoint;
+  /** The layers (by id) with unsaved edits when the history was forgotten ({@link Session.reload}): no step says so any more. */
+  readonly #editedThen = new Set<Layer["id"]>();
   /** Where the history stood when each layer (by id) was last saved, for {@link Session.isEdited}. */
   readonly #savedAt = new Map<Layer["id"], HistoryPoint>();
   #cause = "open";
@@ -506,19 +518,37 @@ export class Session implements Disposable {
    * content names that the stage has not read is then supplied. A layer
    * gone from the source keeps its content. Throws `io.dirty_reload` when
    * one has unsaved edits, with nothing read: the caller leaves those out.
+   *
+   * `retry` are the identifiers of assets the stage found missing
+   * (`StageStatus.unresolved`): each is fetched again too, and one the
+   * source has now is supplied, so the reload composes it, as OpenUSD's
+   * `PcpCache::Reload` tries invalid sublayers and assets again. The
+   * stage keeps an asset's absence once told of it, and asks for it no
+   * more: nothing else would ever fetch it.
+   *
+   * A layer read again is not what the steps of the history changed: a
+   * step that restores what it wrote there is stale (`history.stale`),
+   * and the history never skips a step, so no undo would get past it. A
+   * reload is not an edit and cannot be undone (`UsdStage::Reload`), so
+   * when it read a layer some step writes, the history is forgotten
+   * ({@link Reloaded.forgotten}); the layers with unsaved edits stay
+   * edited.
    */
-  async reload(layers: readonly Layer[], signal?: AbortSignal): Promise<ReloadResult> {
+  async reload(layers: readonly Layer[], retry: readonly string[] = [], signal?: AbortSignal): Promise<Reloaded> {
     const cause = layers.length === 1 ? `reload ${layers[0]!.identifier ?? "the session layer"}` : `reload ${layers.length} layers`;
     this.#cause = cause;
     // A package member is read with its package: the package's bytes are what the source holds.
-    const identifiers = [
-      ...new Set(layers.flatMap((layer) => (layer.identifier === null ? [] : [layer.identifier.includes("[") ? layer.identifier.slice(0, layer.identifier.indexOf("[")) : layer.identifier]))),
-    ];
+    const packageOf = (identifier: string) => (identifier.includes("[") ? identifier.slice(0, identifier.indexOf("[")) : identifier);
+    const held = new Set(layers.flatMap((layer) => (layer.identifier === null ? [] : [packageOf(layer.identifier)])));
+    const identifiers = [...new Set([...held, ...retry.map(packageOf)])];
     const fetched = await unlessAborted(Promise.all(identifiers.map((identifier) => this.#fetch(identifier, signal))), signal);
+    const gone: string[] = [];
     identifiers.forEach((identifier, index) => {
       const bytes = fetched[index] ?? null;
-      // Gone from the source: the layer keeps what it read.
+      // Gone from the source: the layer keeps what it read. Missing still: nothing to say.
       if (bytes === null) {
+        if (!held.has(identifier)) return;
+        gone.push(identifier);
         this.#log("fetch", identifier, "not found, kept as read");
         return;
       }
@@ -527,8 +557,21 @@ export class Session implements Disposable {
     });
     const result = this.stage.reloadLayers(layers);
     this.#logLoad(result);
+    const read = new Set(result.reloaded.map((layer) => layer.id));
+    const steps = [...this.history.undoSteps, ...this.history.redoSteps];
+    const forgotten = steps.some((step) => step.layers.some((layer) => read.has(layer.id))) ? steps.length : 0;
+    if (forgotten > 0) this.#forgetHistory();
     await this.supplyUnavailable(cause, undefined, signal);
-    return result;
+    return { result, gone, forgotten };
+  }
+
+  /** Forgets every undo and redo step (`UndoHistory.reset`): the stage keeps every edit, and the layers with unsaved edits stay edited. */
+  #forgetHistory(): void {
+    const edited = this.dirtyLayers();
+    this.history.reset();
+    this.#opened = this.#historyPoint();
+    this.#savedAt.clear();
+    for (const layer of edited) this.#editedThen.add(layer.id);
   }
 
   /**
@@ -770,7 +813,7 @@ export class Session implements Disposable {
       if (error instanceof LayerstackError && error.code === "layer.unknown") return false;
       throw error;
     }
-    if (this.history.groupDepth > 0) return true;
+    if (this.history.groupDepth > 0 || this.#editedThen.has(layer.id)) return true;
     const saved = this.#savedAt.get(layer.id) ?? this.#opened;
     if (this.history.isAt(saved.mark)) return false;
     return stepsBetween(saved.steps, this.history.undoSteps).some((step) => step.layers.some((written) => written.id === layer.id));
@@ -791,7 +834,10 @@ export class Session implements Disposable {
     const result = this.stage.save();
     this.saved = result.written.map(({ identifier, bytes }) => ({ identifier, bytes }));
     const point = this.#historyPoint();
-    for (const { layer } of result.written) this.#savedAt.set(layer.id, point);
+    for (const { layer } of result.written) {
+      this.#savedAt.set(layer.id, point);
+      this.#editedThen.delete(layer.id);
+    }
     return result;
   }
 

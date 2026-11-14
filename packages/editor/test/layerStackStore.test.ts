@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Layer, Stage } from "@forest-rs/layerstack";
-import { layerStack } from "../src/model/layerStack.ts";
+import { layerStack, reloadText } from "../src/model/layerStack.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
 /** A layer with one root prim, `name`, to add as a sublayer. */
@@ -402,4 +402,113 @@ test("the default prim is authored in the root layer with edits going to a sessi
   // Other fields still go to the session layer in front of it.
   assert.equal(store.setStageMetadata("metersPerUnit", { type: "double", value: 1 }), undefined);
   assert.ok(packagedSession.stage.layerSpec(packagedSession.sessionLayer!, "/").fields.includes("metersPerUnit"));
+});
+
+test("reloading a layer the undo history changed forgets the history, which could not be undone past it, and keeps unsaved layers edited", async () => {
+  const h = await harness();
+  const files: Record<string, string> = {
+    "stacked.usda": `#usda 1.0\n(\n    subLayers = [\n        @./extra.usda@\n    ]\n)\n\ndef "A"\n{\n}\n`,
+    "extra.usda": layerWith("B"),
+  };
+  await h.open(sampleSource("stacked.usda", files));
+  const { store } = h;
+  const session = store.session!;
+  const stage = session.stage;
+  const extra = session.layerNamed("extra.usda");
+
+  // An edit of the sublayer, saved; then one of the root, not saved.
+  store.setTarget(extra);
+  assert.equal(store.definePrim("/", "D", null), undefined);
+  session.save();
+  store.setTarget(stage.root);
+  assert.equal(store.definePrim("/", "R", null), undefined);
+  assert.equal(store.isEdited(extra), false);
+  assert.equal(store.isEdited(stage.root), true);
+
+  // The sublayer's file changes on disk (what the save wrote is not what is there now) and is read again.
+  files["extra.usda"] = layerWith("B", "C");
+  const report = await h.settle(store.reload(extra));
+  assert.equal(report.refusal, null);
+  assert.deepEqual(report.reloaded, [extra]);
+  assert.equal(stage.prim("/D"), null, "the layer is the file's now");
+  assert.notEqual(stage.prim("/C"), null);
+
+  // "define /D" restores what the file no longer has: undo could never get past it. The history is forgotten, and said to be.
+  assert.equal(report.forgotten, 2);
+  assert.deepEqual(session.history.undoSteps, []);
+  assert.deepEqual(session.history.redoSteps, []);
+  assert.match(store.notices.at(-1)!.message, /the undo history \(2 steps\) was forgotten/);
+  const notices = store.notices.length;
+  await h.settle(store.undo());
+  assert.equal(store.notices.slice(notices).some((notice) => /stale/.test(notice.message)), false, "no undo is refused as stale for ever");
+  // The root's edit is still there, and still to save.
+  assert.notEqual(stage.prim("/R"), null);
+  assert.equal(store.isEdited(stage.root), true);
+  assert.equal(store.isEdited(extra), false);
+  assert.deepEqual(store.dirtyLayers(), [stage.root]);
+
+  // Edits made after it undo as ever, back to where the reload left the stage.
+  assert.equal(store.definePrim("/", "S", null), undefined);
+  await h.settle(store.undo());
+  assert.equal(stage.prim("/S"), null);
+  assert.equal(store.isEdited(stage.root), true);
+  session.save();
+  assert.equal(store.isEdited(stage.root), false);
+
+  // A reload that reads no layer a step changed keeps the history.
+  assert.equal(store.definePrim("/", "T", null), undefined);
+  files["extra.usda"] = layerWith("B");
+  const kept = await h.settle(store.reload(extra));
+  assert.equal(kept.forgotten, 0);
+  assert.equal(session.history.nextUndo!.label, "define typeless /T");
+});
+
+test("reloading every layer reads a file that was missing and is there now, and says which it could not read or no longer finds", async () => {
+  const h = await harness();
+  const files: Record<string, string | undefined> = {
+    "top.usda": `#usda 1.0\n(\n    subLayers = [\n        @./late.usda@,\n        @./extra.usda@\n    ]\n)\n\ndef "Use" (\n    references = @./asset.usda@</Asset>\n)\n{\n}\n`,
+    "extra.usda": layerWith("B"),
+  };
+  const source = sampleSource("top.usda", files as Record<string, string>);
+  await h.open(source);
+  const { store } = h;
+  const session = store.session!;
+  const stage = session.stage;
+  assert.deepEqual(
+    store.health!.missing.map((asset) => asset.identifier),
+    ["late.usda", "asset.usda"],
+  );
+  assert.ok(store.health!.errorPrims.has("/Use"));
+
+  // Both files are made; no layer the stage holds changed.
+  files["late.usda"] = layerWith("Late");
+  files["asset.usda"] = `#usda 1.0\ndef "Asset"\n{\n    def "Part"\n    {\n    }\n}\n`;
+  const report = await h.settle(store.reload(null));
+  assert.equal(report.refusal, null);
+  assert.ok(source.asked.filter((identifier) => identifier === "late.usda").length >= 2, "the missing sublayer is fetched again");
+  assert.notEqual(stage.prim("/Late"), null);
+  assert.notEqual(stage.prim("/Use/Part"), null);
+  assert.deepEqual(store.health!.missing, []);
+  assert.equal(store.health!.count, 0);
+  assert.equal(session.history.nextUndo, null);
+
+  // One file becomes malformed and another goes: neither is "nothing changed".
+  files["extra.usda"] = `#usda 1.0\ndef "B" {`;
+  delete files["late.usda"];
+  const troubled = await h.settle(store.reload(null));
+  assert.deepEqual(troubled.failed, ["extra.usda"]);
+  assert.deepEqual(troubled.gone, ["late.usda"]);
+  assert.deepEqual(troubled.reloaded, []);
+  assert.notEqual(stage.prim("/B"), null, "kept as it was read");
+  assert.notEqual(stage.prim("/Late"), null, "kept as it was read");
+  assert.equal(
+    reloadText(troubled, (identifier) => identifier ?? ""),
+    "Could not be read, kept as before: extra.usda; no longer in the source, kept as read: late.usda.",
+  );
+  assert.ok(store.notices.some((notice) => /late\.usda is no longer in the source/.test(notice.message)));
+  assert.equal(reloadText({ reloaded: [], skipped: [], failed: [], gone: [], forgotten: 0 }, String), "Nothing changed in the source.");
+  assert.equal(
+    reloadText({ reloaded: [{ identifier: "a.usda" }], skipped: [1], failed: [], gone: [], forgotten: 1 }, String),
+    "Read again: a.usda; 1 with unsaved edits left as they are; the undo history was forgotten (1 step).",
+  );
 });

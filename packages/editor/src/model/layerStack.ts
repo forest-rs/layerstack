@@ -336,3 +336,35 @@ export function ancestorsOf<L>(rows: readonly StackRow<L>[], row: StackRow<L>): 
   }
   return out;
 }
+
+/** What a reload did, as {@link reloadText} says it: the layers by identifier. */
+export interface ReloadSummary {
+  readonly reloaded: readonly { readonly identifier: string | null }[];
+  readonly skipped: readonly unknown[];
+  /** The asset paths of the layers whose new content could not be read. */
+  readonly failed: readonly string[];
+  /** The identifiers of the layers the source no longer has. */
+  readonly gone: readonly string[];
+  /** The undo and redo steps forgotten. */
+  readonly forgotten: number;
+}
+
+/**
+ * What a reload did, in a sentence or a few: the layers read again, or
+ * that nothing changed only when nothing did; a layer whose new content
+ * could not be read or that the source no longer has is said, not passed
+ * over as unchanged; then the layers left for their unsaved edits and the
+ * undo history forgotten.
+ */
+export function reloadText(report: ReloadSummary, name: (identifier: string | null) => string): string {
+  const troubled = report.failed.length > 0 || report.gone.length > 0;
+  const parts = [
+    report.reloaded.length > 0 ? `Read again: ${report.reloaded.map((layer) => name(layer.identifier)).join(", ")}` : troubled ? null : "Nothing changed in the source",
+    report.failed.length > 0 ? `could not be read, kept as before: ${report.failed.join(", ")}` : null,
+    report.gone.length > 0 ? `no longer in the source, kept as read: ${report.gone.map(name).join(", ")}` : null,
+    report.skipped.length > 0 ? `${report.skipped.length} with unsaved edits left as they are` : null,
+    report.forgotten > 0 ? `the undo history was forgotten (${report.forgotten} ${report.forgotten === 1 ? "step" : "steps"})` : null,
+  ].filter((part) => part !== null);
+  const text = parts.join("; ");
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
+}

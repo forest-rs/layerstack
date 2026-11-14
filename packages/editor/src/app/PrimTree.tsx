@@ -182,7 +182,7 @@ export function PrimTree() {
       const drop = dropOf(store, path, event.target);
       if (drop === null || path === null) return;
       if (drop.kind === "reorder") {
-        store.apply(`move ${nameOf(path)} in ${drop.parent}`, [{ type: "setChildrenReorder", path: drop.parent, order: drop.order }]);
+        store.reorderChildren(drop.parent, drop.order, `move ${nameOf(path)} in ${drop.parent}`);
         return;
       }
       // The prim dropped is selected, which opens the rows down to it.

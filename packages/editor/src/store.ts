@@ -1079,7 +1079,31 @@ export class EditorStore {
     const parent = parentOf(path);
     const order = siblingOrder(stage.children(parent).map(nameOf), nameOf(path), direction);
     if (order === null) return undefined;
-    return this.apply(`move ${nameOf(path)} ${direction < 0 ? "up" : "down"} in ${parent}`, [{ type: "setChildrenReorder", path: parent, order }]);
+    return this.reorderChildren(parent, order, `move ${nameOf(path)} ${direction < 0 ? "up" : "down"} in ${parent}`);
+  }
+
+  /**
+   * Authors `order`, every child of the prim at `parent` named, as its
+   * `reorder nameChildren` in the edit target
+   * (`UsdPrim::SetChildrenReorder`). A layer's reorder orders the
+   * children known where it is authored, its own and weaker opinions',
+   * and a stronger layer's reorder is applied after it (AOUSD Core §11,
+   * child order; OpenUSD's `PcpComposeSiteChildNames`), so one authored in
+   * a weaker sublayer or through an arc may leave the composed order as
+   * it was. It is then refused, saying so, with nothing authored.
+   */
+  reorderChildren(parent: string, order: readonly string[], label = `reorder the children of ${parent}`): string | undefined {
+    return this.#edit(label, (session) =>
+      session.applyShowing(
+        label,
+        [{ type: "setChildrenReorder", path: parent, order }],
+        () => {
+          const composed = session.stage.children(parent).map(nameOf);
+          return composed.length === order.length && composed.every((name, index) => name === order[index]);
+        },
+        `The children of ${parent} do not take that order from ${session.targetName}: a reorder there orders only the children known there, and a stronger layer's children and order are applied after it. Nothing was authored: make a stronger layer where edits go.`,
+      ),
+    );
   }
 
   /**

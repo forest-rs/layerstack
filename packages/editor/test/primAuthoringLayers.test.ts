@@ -167,6 +167,20 @@ test("where a prim's opinions are: the layers that hold a spec of it, not the ro
   assert.deepEqual(names(stage, "/World/Keep1"), ["Base", "Roof"]);
 });
 
+test("the eye on a prim whose visibility has one time sample authors the sample, not a default the sample hides", async () => {
+  const { h, store, stage } = await opened();
+  store.seek(10);
+  assert.deepEqual(stage.visibilities(["/World/Blink"], { time: 10 }), ["invisible"]);
+  assert.equal(store.setVisibility("/World/Blink", true), undefined);
+  assert.deepEqual(stage.visibilities(["/World/Blink"], { time: 10 }), ["inherited"], "it is visible at the time it was made visible at");
+  const spec = stage.layerSpec(stage.root, "/World/Blink.visibility");
+  assert.ok(spec?.type === "attribute");
+  assert.equal(spec.default, null, "no default was authored beside the sample");
+  assert.deepEqual(spec.timeSamples, [10]);
+  await h.settle(store.undo());
+  assert.deepEqual(stage.visibilities(["/World/Blink"], { time: 10 }), ["invisible"]);
+});
+
 test("a duplicate inside a variant is refused before it is tried, as itself and not as a missing spec", async () => {
   const { store, stage, steps } = await opened();
   store.editInsideVariant("/World/Shed", "look", "red");

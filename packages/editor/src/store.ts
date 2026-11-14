@@ -1085,11 +1085,13 @@ export class EditorStore {
   /**
    * Makes the prim at `path` invisible, or visible again (`inherited`):
    * its `visibility` where edits go, at the current time when the
-   * attribute has samples there.
+   * attribute has a time sample: one sample is enough, though the value
+   * then does not vary, since a sample is read before a default at every
+   * time and a default authored beside it would change nothing.
    */
   setVisibility(path: string, visible: boolean): string | undefined {
     const attribute = this.session?.stage.attribute(`${path}.visibility`) ?? null;
-    const at = attribute?.mightBeTimeVarying() === true ? (this.time ?? null) : null;
+    const at = attribute !== null && attribute.sampleCount() > 0 ? (this.time ?? null) : null;
     return this.setValue(`${path}.visibility`, { type: "token", value: visible ? "inherited" : "invisible" }, at);
   }
 

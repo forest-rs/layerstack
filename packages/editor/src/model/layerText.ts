@@ -6,7 +6,7 @@
 // against the text read before it. This is what an edit authored, in the
 // layer it went to: the opinion as USDA. Large layers are cut at
 // `MAX_TEXT_BYTES`, so a page never holds more text than it can show.
-import type { Layer, Stage } from "@forest-rs/layerstack";
+import type { HistoryStep, Layer, Stage } from "@forest-rs/layerstack";
 
 /** The most bytes of a layer's text read: past this the text is cut at a line, and says so. */
 export const MAX_TEXT_BYTES = 4 * 1024 * 1024;
@@ -61,6 +61,13 @@ export interface LayerTextRead {
   readonly truncated: boolean;
   /** What changed since the text read before this one; nothing for the first read. */
   readonly changes: LineChanges;
+  /**
+   * How many steps of the history that write the layer lie between the two
+   * reads `changes` compares (undone or new): 1 when it is what the last change
+   * did, more when the layer was not read between changes (the Text tab
+   * was not shown), 0 when the reads were not given the history.
+   */
+  readonly steps: number;
   /** How long exporting and reading it took, in milliseconds. */
   readonly ms: number;
 }
@@ -167,8 +174,16 @@ export class LayerTexts {
   readonly #reads = new WeakMap<Stage, Map<bigint, LayerTextRead>>();
   readonly #decoder = new TextDecoder();
 
-  /** `layer` of `stage` as USDA text (`Stage.exportLayer`), with what changed since it was last read. Throws what the export throws. */
-  read(stage: Stage, layer: Layer): LayerTextRead {
+  /** The history's undo steps at each layer's last read. */
+  readonly #history = new WeakMap<LayerTextRead, readonly HistoryStep[]>();
+
+  /**
+   * `layer` of `stage` as USDA text (`Stage.exportLayer`), with what
+   * changed since it was last read, and across how many steps of
+   * `history` (the undo steps as they stand, oldest first). Throws what
+   * the export throws.
+   */
+  read(stage: Stage, layer: Layer, history: readonly HistoryStep[] = []): LayerTextRead {
     const start = performance.now();
     const bytes = stage.exportLayer(layer, "usda");
     const truncated = bytes.byteLength > MAX_TEXT_BYTES;
@@ -184,8 +199,15 @@ export class LayerTexts {
     const last = byLayer.get(layer.id);
     const same = last !== undefined && last.lines.length === lines.length && last.lines.every((line, index) => line === lines[index]);
     const changes = last === undefined ? NO_CHANGES : same ? last.changes : lineChanges(last.lines, lines);
-    const read: LayerTextRead = { layer, lines: same ? last.lines : lines, bytes: bytes.byteLength, truncated, changes, ms: performance.now() - start };
+    // The steps both reads share are passed over: those undone since and those new since are what lies between.
+    const then = last === undefined ? history : (this.#history.get(last) ?? []);
+    let shared = 0;
+    while (shared < then.length && shared < history.length && then[shared] === history[shared]) shared++;
+    const between = [...then.slice(shared), ...history.slice(shared)].filter((step) => step.layers.some((written) => written.id === layer.id));
+    const steps = last === undefined ? 0 : same ? last.steps : between.length;
+    const read: LayerTextRead = { layer, lines: same ? last.lines : lines, bytes: bytes.byteLength, truncated, changes, steps, ms: performance.now() - start };
     byLayer.set(layer.id, read);
+    this.#history.set(read, history);
     return read;
   }
 

@@ -144,7 +144,7 @@ function TextBody({ read, note }: { read: LayerTextRead; note: string | null }) 
         ) : (
           <>
             <span className="text-foreground">
-              The last change: {added.length > 0 && `${added.length} ${added.length === 1 ? "line" : "lines"} new or changed`}
+              {read.steps > 1 ? `The last ${read.steps} changes, since this text was last read` : "The last change"}: {added.length > 0 && `${added.length} ${added.length === 1 ? "line" : "lines"} new or changed`}
               {added.length > 0 && removed > 0 && ", "}
               {removed > 0 && `${removed} ${removed === 1 ? "line" : "lines"} gone`}
             </span>

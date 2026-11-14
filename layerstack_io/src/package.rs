@@ -81,8 +81,22 @@ pub struct PreparedPackage {
     plan: Option<LocalizationPlan>,
     report: DependencyReport,
     udim_work: UdimDiscoveryWork,
+    /// Where each layer of the candidate was read from.
+    catalog: Catalog,
 }
 impl PreparedPackage {
+    /// The identifier `layer` was read from: a layer of the document, or
+    /// one the preparation read for the package that the document does not
+    /// hold, such as the layer an unselected variant references, which a
+    /// dependency's source ([`DependencyReport::dependencies`]) may name.
+    /// `None` for a layer with no identifier, or one the candidate does
+    /// not hold.
+    ///
+    /// Spec: AOUSD Core §16 (packages). OpenUSD's localization visits
+    /// every variant's layers (`UsdUtils_LocalizationContext::_ProcessLayer`).
+    pub fn identifier(&self, layer: LayerId) -> Option<&str> {
+        self.catalog.source(layer).map(|source| &*source.identifier)
+    }
     /// All authored uses, inclusion decisions and unresolved reasons.
     pub fn report(&self) -> &DependencyReport {
         &self.report
@@ -556,6 +570,7 @@ impl<B: Storage> StageDocument<B> {
             plan,
             report,
             udim_work: discovery.work(),
+            catalog,
         })
     }
     /// Writes an inspected candidate using its own interners. Original source

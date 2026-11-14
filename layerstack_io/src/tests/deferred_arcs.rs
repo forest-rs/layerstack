@@ -5,7 +5,7 @@
 //! loaded only when composition reaches them (AOUSD Core §10.3.2.5).
 
 use super::*;
-use layerstack::{AssetUse, CompositionError};
+use layerstack::{AssetUse, CompositionError, asset_dependencies::DependencyTarget};
 
 /// A model whose variant set `look` selects `a`; each branch references
 /// its own asset.
@@ -535,4 +535,49 @@ fn edit_results_name_the_assets_a_transaction_asks_for() {
         Value::Int(1),
     );
     assert!(matches!(doc.apply(&edit), Err(ApplyError::Edit(_))));
+}
+
+/// A package names every variant's layers (OpenUSD's localization visits
+/// each branch, `UsdUtils_LocalizationContext::_ProcessLayer`), so it reads
+/// the layer of a branch the stage does not select into its own candidate.
+/// A dependency that layer authors and the host has not supplied is
+/// reported from a layer the document does not hold, which the candidate
+/// names by identifier (AOUSD Core §16).
+#[test]
+fn a_package_names_the_unread_layer_whose_dependency_is_unresolved() {
+    let a = look("a");
+    let b = "#usda 1.0\ndef \"Look\" {\n asset image = @./b.png@\n}\n";
+    let backend = Memory::with(&[("model.usda", MODEL), ("a.usda", &a), ("b.usda", b)]);
+    let mut doc = StageDocument::open(backend, "model.usda", StageOptions::default()).unwrap();
+    assert!(!read(&doc, "b.usda"), "not selected, so not read");
+    let root = doc.stage.stage().root_layer().unwrap();
+    let package = doc
+        .prepare_package(
+            root,
+            "model.usda",
+            PackagePreparationLimits::default(),
+            |_| PackageInclusion::Include,
+        )
+        .unwrap();
+    assert!(package.plan().is_none(), "the image is not there");
+    let unresolved: Vec<_> = package
+        .report()
+        .dependencies
+        .iter()
+        .filter(|dependency| {
+            dependency
+                .targets
+                .iter()
+                .any(|target| matches!(target, DependencyTarget::Unresolved(_)))
+        })
+        .collect();
+    assert_eq!(unresolved.len(), 1, "{unresolved:?}");
+    let layer = unresolved[0].source.layer;
+    assert!(
+        !doc.store().contains_layer(layer),
+        "read for the package alone"
+    );
+    assert_eq!(doc.identifier(layer), None);
+    assert_eq!(package.identifier(layer), Some("b.usda"));
+    assert_eq!(package.identifier(root), Some("model.usda"));
 }

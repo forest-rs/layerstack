@@ -62,7 +62,7 @@ pub(crate) fn edit_sublayers(
     if sublayers == current {
         return Ok(());
     }
-    check_sublayers(store, id, &sublayers)?;
+    check_sublayers(store, id, &current, &sublayers)?;
     journal.run(
         store,
         Raw::Sublayers {
@@ -77,22 +77,47 @@ pub(crate) fn edit_sublayers(
 /// does not hold, or makes a cycle: a sublayer that is `id`, or whose own
 /// sublayers reach it.
 ///
+/// What `current`, the list the layer holds, already has is not the
+/// edit's to reject: a layer read from a file may list one layer under
+/// two asset paths (`./a.usda` and `a.usda`), or a sublayer that reaches
+/// it, which composition reports and lives with. An edit that keeps such
+/// entries (another entry's offset, a reorder, removing an unrelated one)
+/// is checked only for what it adds; otherwise no edit could touch the
+/// list at all, not even to repair it one step at a time.
+///
 /// Spec: AOUSD Core §10.3.1 (sublayers form a layer stack). OpenUSD:
-/// `SdfSubLayerTypePolicy` rejects empty and repeated paths; a cycle is
-/// composed as `PcpErrorSublayerCycle`.
+/// `SdfSubLayerTypePolicy` rejects empty and repeated paths when one is
+/// authored (`SdfListEditor::_ValidateEdit` checks the items an edit
+/// adds), and `SdfLayer::SetSubLayerOffset` sets the offset at an index
+/// without looking at the paths; a cycle is composed as
+/// `PcpErrorSublayerCycle`.
 fn check_sublayers(
     store: &dyn LayerStore,
     id: LayerId,
+    current: &[SublayerEntry],
     sublayers: &[SublayerEntry],
 ) -> Result<(), Rejection> {
+    // An entry is the same sublayer whatever offset it is read through,
+    // and is kept as many times as the layer lists it: one more is added.
+    let same = |a: &SublayerEntry, b: &SublayerEntry| a.layer == b.layer && a.asset == b.asset;
+    let listed = |index: usize| {
+        let entry = &sublayers[index];
+        let so_far = sublayers[..=index]
+            .iter()
+            .filter(|e| same(e, entry))
+            .count();
+        so_far <= current.iter().filter(|e| same(e, entry)).count()
+    };
     for (index, entry) in sublayers.iter().enumerate() {
         if entry.asset.as_deref() == Some("") {
             return Err(Rejection::EmptySublayerAsset(index));
         }
         let earlier = &sublayers[..index];
-        let repeated = earlier.iter().any(|other| {
-            (entry.layer != LayerId::UNRESOLVED && other.layer == entry.layer)
-                || (entry.asset.is_some() && other.asset == entry.asset)
+        let kept = listed(index);
+        let repeated = earlier.iter().enumerate().any(|(at, other)| {
+            !(kept && listed(at))
+                && ((entry.layer != LayerId::UNRESOLVED && other.layer == entry.layer)
+                    || (entry.asset.is_some() && other.asset == entry.asset))
         });
         if repeated {
             return Err(Rejection::DuplicateSublayer(index));
@@ -103,7 +128,7 @@ fn check_sublayers(
         if store.layer(entry.layer).is_none() {
             return Err(Rejection::NoSuchLayer(entry.layer));
         }
-        if reaches(store, entry.layer, id) {
+        if !kept && reaches(store, entry.layer, id) {
             return Err(Rejection::SublayerCycle(entry.layer));
         }
     }

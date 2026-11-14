@@ -167,7 +167,11 @@ export function stagePathOf(target: Pick<EditTarget, "prim" | "site"> | null, sp
  * prim at `prim` (`UsdReferences::RemoveReference` and its siblings): its
  * item leaves the layer's lists and is added to the deleted items, which
  * removes it from weaker layers too. An internal path is given as the
- * stage path the target writes there ({@link stagePathOf}).
+ * stage path the target writes there ({@link stagePathOf}). A reference
+ * or payload is named with the layer offset the layer authors for it,
+ * which is part of what the item is (OpenUSD's
+ * `SdfReference::operator==`): of two arcs to one asset and prim at
+ * different offsets, the one at this offset is removed.
  */
 export function removeArcEdit(prim: string, arc: AuthoredArc, target: Pick<EditTarget, "prim" | "site"> | null): Edit {
   const primPath = arc.primPath === null ? null : arc.asset === null ? stagePathOf(target, arc.primPath) : arc.primPath;
@@ -179,6 +183,7 @@ export function removeArcEdit(prim: string, arc: AuthoredArc, target: Pick<EditT
     path: prim,
     ...(arc.asset === null ? {} : { asset: arc.asset }),
     ...(primPath === null ? {} : { primPath }),
+    ...(arc.offset === 0 && arc.scale === 1 ? {} : { layerOffset: { offset: arc.offset, scale: arc.scale } }),
   };
 }
 
@@ -239,8 +244,16 @@ export function relativeAsset(from: string | null, to: string): string {
 
 // Which layer authors a composed arc.
 
-/** What {@link findAuthoring} reads of a composed arc. */
-export type ArcRecord = Pick<CompositionArc, "arc" | "site" | "layerStack" | "layers" | "implied" | "parent">;
+/**
+ * What {@link findAuthoring} reads of a composed arc. Its offset to stage
+ * times, and the offset each of its layers is read at (its edit target's
+ * in that layer), tell apart items that differ by layer offset alone;
+ * without them such items are told apart by their order.
+ */
+export type ArcRecord = Pick<CompositionArc, "arc" | "site" | "layerStack" | "layers" | "implied" | "parent"> & {
+  readonly layerOffset?: CompositionArc["layerOffset"];
+  readonly editTarget?: (layer: Layer) => Pick<EditTarget, "layerOffset">;
+};
 
 /** Where a composed arc is authored: the layer, the spec there, and the item. */
 export interface ArcSource {
@@ -287,12 +300,56 @@ export function findAuthoring(arcs: readonly ArcRecord[], index: number, specsOf
   if (arc === undefined || arc.parent === null || arc.implied || fieldOfArc(arc.arc) === null) return null;
   const parent = arcs[arc.parent];
   if (parent === undefined) return null;
-  for (const layer of parent.layers) {
-    const spec = specsOf(layer)?.specs.get(parent.site);
-    const item = spec?.arcs.find((each) => itemComposes(each, layer, arc, parent));
-    if (item !== undefined) return { layer, specPath: parent.site, item, parent: arc.parent };
+  // Each arc beneath the same one takes an item of its own, the arcs in
+  // their order: two arcs to one asset and prim are two items (they
+  // differ by layer offset, or one names the default prim), and the
+  // second is not the first's.
+  const taken = new Set<AuthoredArc>();
+  for (let at = 0; at <= index; at++) {
+    const each = arcs[at]!;
+    if (each.parent !== arc.parent || each.implied || each.arc !== arc.arc) continue;
+    const found = bestItem(each, parent, taken, specsOf);
+    if (at === index) return found === null ? null : { ...found, specPath: parent.site, parent: arc.parent };
+    if (found !== null) taken.add(found.item);
   }
   return null;
+}
+
+/**
+ * The item that authors `arc` beneath `parent`, among those that compose
+ * it ({@link itemComposes}) in the parent's layers: one at the arc's own
+ * layer offset before one at another, one not `taken` by an earlier arc
+ * before one that is, then the strongest layer's, the first in its list.
+ */
+function bestItem(arc: ArcRecord, parent: ArcRecord, taken: ReadonlySet<AuthoredArc>, specsOf: (layer: Layer) => LayerSpecs | null): { readonly layer: Layer; readonly item: AuthoredArc } | null {
+  let best: { readonly layer: Layer; readonly item: AuthoredArc; readonly score: number } | null = null;
+  for (const layer of parent.layers) {
+    const spec = specsOf(layer)?.specs.get(parent.site);
+    if (spec === undefined) continue;
+    const base = readAt(parent, layer);
+    for (const item of spec.arcs) {
+      if (!itemComposes(item, layer, arc, parent)) continue;
+      const score = (atOffset(item, base, arc) ? 2 : 0) + (taken.has(item) ? 0 : 1);
+      if (best === null || score > best.score) best = { layer, item, score };
+    }
+  }
+  return best;
+}
+
+/** The offset `layer` of `arc`'s stack is read at, to stage times; `null` when the arc does not say. */
+function readAt(arc: ArcRecord, layer: Layer): { readonly offset: number; readonly scale: number } | null {
+  try {
+    return arc.editTarget?.(layer).layerOffset ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Whether `item`, authored in a layer read at `base`, gives `arc` its offset to stage times (true when either is not known). */
+function atOffset(item: AuthoredArc, base: { readonly offset: number; readonly scale: number } | null, arc: ArcRecord): boolean {
+  if (base === null || arc.layerOffset === undefined) return true;
+  const near = (a: number, b: number) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
+  return near(arc.layerOffset.offset, base.offset + base.scale * item.offset) && near(arc.layerOffset.scale, base.scale * item.scale);
 }
 
 /**
@@ -341,7 +398,7 @@ export function uncomposedHere(
   const authored = specsOf(spec.layer)?.specs.get(spec.specPath);
   if (authored === undefined) return [];
   // By what the item says and where, not by object: each read of a layer is its own.
-  const key = (item: AuthoredArc) => `${item.line}\n${item.field}\n${item.asset}\n${item.primPath}`;
+  const key = (item: AuthoredArc) => `${item.line}\n${item.field}\n${item.asset}\n${item.primPath}\n${item.offset}\n${item.scale}`;
   const composed = new Set<string>();
   arcs.forEach((_, index) => {
     const source = findAuthoring(arcs, index, specsOf);

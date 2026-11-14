@@ -131,6 +131,11 @@ test("an arc that makes a cycle is listed as making one, matched to its error by
   // An inherit of its own descendant.
   await h.settle(store.addArc("/World/Robot", { kind: "inherit", asset: null, primPath: "/World/Robot/Body", position: "backOfPrepend", offset: 0, scale: 1 }).done);
   assert.equal(why("/World/Robot").kind, "cycle");
+  // A specialize of its own descendant, which the error spells `specializes`.
+  await h.settle(store.addArc("/World/Beacons", { kind: "specialize", asset: null, primPath: "/World/Beacons/North", position: "backOfPrepend", offset: 0, scale: 1 }).done);
+  const specialize = why("/World/Beacons");
+  assert.equal(specialize.kind, "cycle");
+  assert.match(specialize.text, /-> specializes \/World\/Beacons\/North in @scene\.usda@\.$/);
   // A cycle error of another arc does not explain this one.
   assert.equal(uncomposedWhy({ field: "references", asset: null, primPath: "/World/Other" }, "scene.usda", stage.status().compositionErrors, false).kind, "unknown");
 });

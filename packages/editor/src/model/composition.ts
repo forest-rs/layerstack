@@ -481,8 +481,11 @@ export interface UncomposedWhy {
   readonly text: string;
 }
 
-/** One hop of an arc cycle as a composition error spells it: `reference /World in @scene.usda@`. */
-const CYCLE_HOP = /(reference|payload|inherit|specialize) (\/\S*) in @([^@]*)@/g;
+/**
+ * One hop of an arc cycle as a composition error spells it: `reference
+ * /World in @scene.usda@`; a specialize is spelled `specializes` there.
+ */
+const CYCLE_HOP = /(reference|payload|inherit|specialize)s? (\/\S*) in @([^@]*)@/g;
 
 /** Whether the identifier a cycle hop names is the layer `asset`, authored in `anchor`, names. */
 function namesLayer(identifier: string, anchor: string | null, asset: string): boolean {

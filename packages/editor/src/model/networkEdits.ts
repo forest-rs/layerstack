@@ -99,6 +99,20 @@ export function newShaderPath(stage: Stage, container: string, definition: Shade
   return container === "/" ? `/${name}` : `${container}/${name}`;
 }
 
+/**
+ * `path`, or, when a prim is there on `stage`, the path beside it of its
+ * name (less a number it ends with) made unique among its siblings: where
+ * a shader asked for at `path` goes once another has taken it.
+ */
+export function freeShaderPath(stage: Stage, path: string): string {
+  if (stage.prim(path) === null) return path;
+  const slash = path.lastIndexOf("/");
+  const container = slash <= 0 ? "/" : path.slice(0, slash);
+  const taken = new Set(stage.children(container).map((child) => child.slice(child.lastIndexOf("/") + 1)));
+  const name = uniqueName(path.slice(slash + 1).replace(/\d+$/, "") || path.slice(slash + 1), taken);
+  return container === "/" ? `/${name}` : `${container}/${name}`;
+}
+
 /** The edits that define a shader of the id `id` (`info:id`) at `path`, placed at `position` (authored units) when given. */
 export function addShaderEdits(path: string, id: string, position: readonly [number, number] | null): Edit[] {
   const edits: Edit[] = [

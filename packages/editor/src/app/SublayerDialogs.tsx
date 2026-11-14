@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
-import { IDENTITY, type LayerOffset, offsetUsda, type SublayerEntry, sublayerCandidates, sublayerIndex } from "../model/layerStack.ts";
+import { IDENTITY, type LayerOffset, offsetMeaning, offsetUsda, type SublayerEntry, sublayerCandidates, sublayerIndex } from "../model/layerStack.ts";
 import { parseNumber } from "../model/refusal.ts";
 import type { EditorStore } from "../store.ts";
 import { layerName } from "./format.ts";
@@ -53,8 +53,8 @@ function SublayersUsda({ sublayers, marked }: { sublayers: readonly SublayerEntr
   );
 }
 
-/** Offset and scale fields; `onChange` hears the offset, or `null` while either is not a number (or the scale not positive). */
-function OffsetFields({ initial, onChange }: { initial: LayerOffset; onChange: (offset: LayerOffset | null) => void }) {
+/** Offset and scale fields for a sublayer of `parent` (its name); `onChange` hears the offset, or `null` while either is not a number (or the scale not positive). */
+function OffsetFields({ initial, parent, onChange }: { initial: LayerOffset; parent: string; onChange: (offset: LayerOffset | null) => void }) {
   const [offset, setOffset] = useState(String(initial.offset));
   const [scale, setScale] = useState(String(initial.scale));
   const parsedOffset = parseNumber(offset);
@@ -74,9 +74,7 @@ function OffsetFields({ initial, onChange }: { initial: LayerOffset; onChange: (
         </label>
       </div>
       <span className={cn("text-[11px]", valid ? "text-muted-foreground" : "text-destructive")}>
-        {valid
-          ? `A sample at time t in the sublayer is read at stage time ${parsedScale === 1 ? "t" : `${parsedScale} × t`}${parsedOffset === 0 ? "" : ` + ${parsedOffset}`}.`
-          : "The offset is a number, the scale a number above 0."}
+        {valid ? offsetMeaning({ offset: parsedOffset, scale: parsedScale }, parent) : "The offset is a number, the scale a number above 0."}
       </span>
     </div>
   );
@@ -235,7 +233,7 @@ export function AddSublayerDialog({
             ))}
           </SelectContent>
         </Select>
-        <OffsetFields initial={IDENTITY} onChange={setOffset} />
+        <OffsetFields initial={IDENTITY} parent={name} onChange={setOffset} />
         <SublayersUsda sublayers={after} marked={asset === null || offset === null ? null : index} />
         {refused !== null && (
           <span role="alert" className="text-[11px] text-destructive">
@@ -283,7 +281,7 @@ export function SublayerOffsetDialog({ store, parent, index: listed, asset, onCl
           Offset of <span className="font-mono">@{entry.asset}@</span>
         </DialogTitle>
         <DialogDescription>
-          Authored in {name}'s <code>subLayers</code> as one undoable edit: the times of the sublayer, and of the layers beneath it, are read through it.
+          Authored in {name}'s <code>subLayers</code> as one undoable edit: the times of the sublayer, and of the layers beneath it, are read through it into {name}'s.
         </DialogDescription>
       </DialogHeader>
       <form
@@ -294,7 +292,7 @@ export function SublayerOffsetDialog({ store, parent, index: listed, asset, onCl
         className="flex flex-col gap-2"
       >
         <DialogSubmit />
-        <OffsetFields initial={entry.layerOffset} onChange={setOffset} />
+        <OffsetFields initial={entry.layerOffset} parent={name} onChange={setOffset} />
         <SublayersUsda sublayers={after} marked={index} />
         {refused !== null && (
           <span role="alert" className="text-[11px] text-destructive">

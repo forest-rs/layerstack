@@ -21,7 +21,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { ancestorsOf, layerStack, offsetText, offsetUsda, reloadText, type StackRow } from "../model/layerStack.ts";
+import { ancestorsOf, layerStack, offsetMeaning, offsetText, offsetUsda, reloadText, type StackRow } from "../model/layerStack.ts";
 import type { EditorStore, ReloadReport } from "../store.ts";
 import { useEditorStore, useRevision } from "./context.ts";
 import { layerName } from "./format.ts";
@@ -255,7 +255,7 @@ function StackRowView({
         {row.state === "unread" && <Badge variant={missing ? "destructive" : "outline"}>{missing ? "missing" : "not read"}</Badge>}
         {row.state === "cycle" && <Badge variant="destructive">cycle</Badge>}
         {offset !== null && (
-          <Badge variant="outline" className="font-mono" title={`Read through ${offset}: a sample at t in it is at ${row.offset.scale === 1 ? "t" : `${row.offset.scale}t`}${row.offset.offset === 0 ? "" : ` + ${row.offset.offset}`} on the stage`}>
+          <Badge variant="outline" className="font-mono" title={`Read through ${offset}. ${offsetMeaning(row.offset, parentName ?? "its parent")}`}>
             {offset}
           </Badge>
         )}

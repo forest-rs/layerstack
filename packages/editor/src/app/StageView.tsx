@@ -18,7 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { NOT_A_NUMBER, parseNumber } from "../model/refusal.ts";
-import { defaultPrimPath, type FieldSource, rootOnly, STAGE_FIELDS, type StageField, UNIT_PRESETS, unitPreset } from "../model/stageMetadata.ts";
+import { defaultPrimPath, type FieldSource, inheritedFrom, rootOnly, STAGE_FIELDS, type StageField, UNIT_PRESETS, unitPreset } from "../model/stageMetadata.ts";
 import { formatNumber } from "../model/values.ts";
 import type { EditorStore } from "../store.ts";
 import { useEditorStore, useRevision } from "./context.ts";
@@ -74,6 +74,8 @@ export function StageView() {
         {STAGE_FIELDS.map((field) => {
           const source = sources.get(field.key) ?? "fallback";
           const holder = sourceLayer(source);
+          const inherited = inheritedFrom(field.key, sources);
+          const lender = inherited === null ? null : sourceLayer(inherited.source);
           return (
             <div key={field.key} className="flex flex-col gap-1 border-b px-3 py-2">
               <div className="flex items-baseline gap-2">
@@ -96,7 +98,12 @@ export function StageView() {
                   commit={(value) => commit(field.key, value)}
                 />
                 <span className="flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
-                  {holder === null ? (
+                  {holder === null && inherited !== null && lender !== null ? (
+                    <>
+                      <span className="shrink-0">No layer authors it: it is the {inherited.key} of</span>
+                      {context === null ? layerName(lender.identifier) : <Present object={{ kind: "layer", layer: lender }} context={context} />}
+                    </>
+                  ) : holder === null ? (
                     field.key === "defaultPrim" || field.key === "documentation" ? (
                       "No layer authors it."
                     ) : (

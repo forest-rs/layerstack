@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Layer, Stage } from "@forest-rs/layerstack";
 import { layerStack, reloadText } from "../src/model/layerStack.ts";
+import { inheritedFrom } from "../src/model/stageMetadata.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
 /** A layer with one root prim, `name`, to add as a sublayer. */
@@ -511,4 +512,31 @@ test("reloading every layer reads a file that was missing and is there now, and 
     reloadText({ reloaded: [{ identifier: "a.usda" }], skipped: [1], failed: [], gone: [], forgotten: 1 }, String),
     "Read again: a.usda; 1 with unsaved edits left as they are; the undo history was forgotten (1 step).",
   );
+});
+
+test("a sublayer's offset is into its parent's time: the stage composes the offsets above it and the layers' rates", async () => {
+  const h = await harness();
+  const files = {
+    "top.usda": `#usda 1.0\n(\n    subLayers = [\n        @./a.usda@ (offset = 10; scale = 2),\n        @./fast.usda@\n    ]\n    framesPerSecond = 30\n    timeCodesPerSecond = 24\n)\n`,
+    "a.usda": `#usda 1.0\n(\n    subLayers = [\n        @./b.usda@ (offset = 5; scale = 3)\n    ]\n)\n`,
+    "b.usda": `#usda 1.0\ndef "B"\n{\n    double x.timeSamples = {\n        1: 1,\n    }\n}\n`,
+    "fast.usda": `#usda 1.0\n(\n    timeCodesPerSecond = 48\n)\ndef "Fast"\n{\n    double x.timeSamples = {\n        48: 1,\n    }\n}\n`,
+  };
+  await h.open(sampleSource("top.usda", files));
+  const { store } = h;
+  const stage = store.session!.stage;
+  const times = (path: string) => stage.attribute(path)!.timeSamples();
+  // b's row authors (offset = 5; scale = 3): 3 × 1 + 5 = 8 in a's time, which the stage reads at 2 × 8 + 10.
+  assert.deepEqual(stage.sublayers(store.session!.layerNamed("a.usda")), [{ asset: "./b.usda", layerOffset: { offset: 5, scale: 3 } }]);
+  assert.deepEqual(times("/B.x"), [26]);
+  // No offset is authored for the 48 a second layer under the 24 a second root, and its second is still the stage's.
+  assert.deepEqual(times("/Fast.x"), [24]);
+
+  // The stage's rate, with none authored, is the root's frame rate, and the tab's sources say so.
+  assert.equal(store.clearStageMetadata("timeCodesPerSecond", stage.root), undefined);
+  assert.deepEqual(stage.metadata("timeCodesPerSecond"), { kind: "scalar", type: "double", value: 30 });
+  assert.equal(store.stageMetadataSources().get("timeCodesPerSecond"), "fallback");
+  assert.deepEqual(inheritedFrom("timeCodesPerSecond", store.stageMetadataSources()), { key: "framesPerSecond", source: "root" });
+  await h.settle(store.undo());
+  assert.equal(inheritedFrom("timeCodesPerSecond", store.stageMetadataSources()), null);
 });

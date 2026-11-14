@@ -55,5 +55,16 @@ export function rowAfterRemoval(paths: readonly string[], removed: string): stri
   return at > 0 ? paths[at - 1]! : null;
 }
 
+/**
+ * What the tree says under its rows when a drag or a key was refused:
+ * `move` while a prim is dragged that cannot go to another parent, and
+ * `delete` after Delete on a row was refused (`why`, the store's
+ * refusal), so a refusal is said where the rows are, not only as a
+ * notice in another tab.
+ */
+export function treeRefusal(action: "move" | "delete", why: string): string {
+  return `${action === "move" ? "Not moved to another parent" : "Not deleted"}: ${why}`;
+}
+
 /** How long the tree's type-to-find search lasts after a letter, in milliseconds (react-aria's). */
 export const TYPEAHEAD_MS = 1000;

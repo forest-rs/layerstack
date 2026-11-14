@@ -342,8 +342,11 @@ nothing more.
   and fallback. A relationship's targets are edited in place: each one
   moved earlier or later or removed, and one added from the prim picker
   (a Find field over the stage's prims, narrowed to a schema where the
-  caller wants one, and a chosen prim's properties), each change one
-  `SetTargets` edit. Each operation is one undoable step where edits go,
+  caller wants one, and a chosen prim's properties). Adding or removing
+  one is `AddTarget` or `RemoveTarget` where edits go, so the targets
+  other layers give stay theirs (one a stronger layer adds is said to be
+  a target still); moving one authors the list in its new order as the
+  layer's explicit targets (`SetTargets`). Each operation is one undoable step where edits go,
   in Changes and History; one that would change nothing is refused, and
   says why.
 - **Authoring composition.** The inspector's **Composition** section

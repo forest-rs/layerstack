@@ -4,14 +4,18 @@
 // A relationship's targets as the inspector edits them: each target live
 // (a click selects or explains it), moved earlier or later, or removed,
 // and a target added from the prim picker, a prim or one of its
-// properties. Each change authors the whole list as the relationship's
-// explicit targets where edits go (`UsdRelationship::SetTargets`), one
-// undoable edit; a refusal is said beneath the list.
+// properties. Adding or removing one is that edit where edits go
+// (`UsdRelationship::AddTarget`, `RemoveTarget`): what weaker layers give
+// stays theirs, and is not copied into the layer written. Moving one
+// authors the whole list in its new order as the relationship's explicit
+// targets (`SetTargets`), the only way a layer orders them, which stops
+// it following weaker layers' targets. Each is one undoable edit; a
+// refusal is said beneath the list.
 import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowDown01Icon, ArrowUp01Icon, Cancel01Icon, PlusSignIcon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
-import { movedTarget, withoutTarget, withTarget } from "../model/propertyOps.ts";
+import { movedTarget } from "../model/propertyOps.ts";
 import type { EditorStore } from "../store.ts";
 import { PrimPicker } from "./PrimPicker.tsx";
 import { Present, presentationContext } from "./presentations/Present.tsx";
@@ -31,7 +35,8 @@ export function RelationshipTargets({ store, path, targets, readOnly }: { store:
   const [picking, setPicking] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
   const stage = store.session?.stage;
-  const author = (next: readonly string[]) => setRefused(store.setTargets(path, next) ?? null);
+  const said = (refusal: string | undefined) => setRefused(refusal ?? null);
+  const author = (next: readonly string[]) => said(store.setTargets(path, next));
   const name = path.slice(path.lastIndexOf(".") + 1);
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
@@ -45,15 +50,21 @@ export function RelationshipTargets({ store, path, targets, readOnly }: { store:
             <span className="flex shrink-0 opacity-0 group-focus-within/target:opacity-100 group-hover/target:opacity-100">
               {targets.length > 1 && (
                 <>
-                  <Button variant="ghost" size="icon-xs" aria-label={`Move ${target} earlier`} isDisabled={index === 0} onPress={() => author(movedTarget(targets, index, -1))}>
+                  <Button variant="ghost" size="icon-xs" aria-label={`Move ${target} earlier, authoring the targets as an explicit list`} isDisabled={index === 0} onPress={() => author(movedTarget(targets, index, -1))}>
                     <HugeiconsIcon icon={ArrowUp01Icon} />
                   </Button>
-                  <Button variant="ghost" size="icon-xs" aria-label={`Move ${target} later`} isDisabled={index === targets.length - 1} onPress={() => author(movedTarget(targets, index, 1))}>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={`Move ${target} later, authoring the targets as an explicit list`}
+                    isDisabled={index === targets.length - 1}
+                    onPress={() => author(movedTarget(targets, index, 1))}
+                  >
                     <HugeiconsIcon icon={ArrowDown01Icon} />
                   </Button>
                 </>
               )}
-              <Button variant="ghost" size="icon-xs" aria-label={`Remove the target ${target}`} onPress={() => author(withoutTarget(targets, target))}>
+              <Button variant="ghost" size="icon-xs" aria-label={`Remove the target ${target}`} onPress={() => said(store.removeTarget(path, target))}>
                 <HugeiconsIcon icon={Cancel01Icon} />
               </Button>
             </span>
@@ -75,10 +86,10 @@ export function RelationshipTargets({ store, path, targets, readOnly }: { store:
         <PrimPicker
           stage={stage}
           title={`Add a target to ${name}`}
-          description="A prim, or one of its properties. The relationship's targets are authored where edits go, as its explicit list."
+          description="A prim, or one of its properties. It is added where edits go, to that layer's targets: ahead of those weaker layers give, which stay theirs."
           properties
           exclude={targets}
-          onPick={(picked) => author(withTarget(targets, picked))}
+          onPick={(picked) => said(store.addTarget(path, picked))}
           onClose={() => setPicking(false)}
         />
       )}

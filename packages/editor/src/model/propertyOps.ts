@@ -10,7 +10,7 @@
 // time. The store's property operations and the inspector's commands
 // decide from these what applies.
 import type { Attribute, EditTarget, Explanation, Layer, LayerSpec, Opinion, Stage, ValueInput, ValueTypeInfo } from "@forest-rs/layerstack";
-import { releaseValue } from "./values.ts";
+import { formatNumber, isQuaternion, realFirst, releaseValue } from "./values.ts";
 
 /** Where edits go, as the session holds it: a layer of the stage's stack, an edit target, or `undefined` for the stage's edit layer. */
 export type Target = Layer | EditTarget | undefined;
@@ -313,8 +313,10 @@ export function valueTypeGroups(types: readonly ValueTypeInfo[]): ValueTypeGroup
 /**
  * The value a new attribute of `typeName` starts with, so it is shown
  * ready to edit: an empty array, `false`, empty text, zeros, an identity
- * matrix or rotation (a quaternion's real part is first, as USDA writes
- * it). `null` for a type it does not know.
+ * matrix or rotation. A quaternion is given as the bindings take one,
+ * imaginary part first (`[i, j, k, r]`), so the identity is
+ * `[0, 0, 0, 1]`, which USDA writes real part first, `(1, 0, 0, 0)`.
+ * `null` for a type it does not know.
  */
 export function initialValue(typeName: string): ValueInput | null {
   if (typeName.endsWith("[]")) {
@@ -333,10 +335,31 @@ export function initialValue(typeName: string): ValueInput | null {
     const size = Number(matrix[1]);
     return { type: typeName, value: Array.from({ length: size }, (_, row) => Array.from({ length: size }, (_, column) => (row === column ? 1 : 0))) };
   }
-  if (/^quat[hfd]$/.test(typeName)) return { type: typeName, value: [1, 0, 0, 0] };
+  if (isQuaternion(typeName)) return { type: typeName, value: [0, 0, 0, 1] };
   const tuple = /([234])[hfdi]?$/.exec(typeName);
   if (tuple !== null) return { type: typeName, value: new Array<number>(Number(tuple[1])).fill(0) };
   return null;
+}
+
+/**
+ * A value to author as the layer's USDA writes it after the attribute's
+ * name (`0`, `(0, 0, 0)`, `""`, `@@`, `[]`, `( (1, 0), (0, 1) )`): what
+ * the Add property dialog shows will be authored. A quaternion is written
+ * real part first, a `bool` as `0` or `1`, an asset path between `@`.
+ * Empty for a value it has no text for (a dictionary, an array read from
+ * the stage).
+ */
+export function usdaValueText(input: ValueInput | null): string {
+  if (input === null || !("value" in input)) return "";
+  const { type } = input;
+  const value = input.value as unknown;
+  const one = (scalar: unknown): string =>
+    typeof scalar === "string" ? (type.startsWith("asset") ? `@${scalar}@` : JSON.stringify(scalar)) : typeof scalar === "boolean" ? (scalar ? "1" : "0") : typeof scalar === "number" ? formatNumber(scalar) : String(scalar);
+  const tuple = (items: readonly unknown[]): string => `(${items.map(one).join(", ")})`;
+  if (ArrayBuffer.isView(value) || (Array.isArray(value) && type.endsWith("[]"))) return (value as ArrayLike<unknown>).length === 0 ? "[]" : "";
+  if (!Array.isArray(value)) return one(value);
+  if (value.some(Array.isArray)) return `( ${value.map((row: unknown) => tuple(row as unknown[])).join(", ")} )`;
+  return tuple(isQuaternion(type) ? realFirst(value) : value);
 }
 
 /** `targets` with `path` added at the end; unchanged when it is there already. */

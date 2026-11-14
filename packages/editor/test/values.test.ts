@@ -39,10 +39,10 @@ describe("half-float values", () => {
   it("read as their values, not their bits", () => {
     assert.equal(text("one"), "0.5");
     assert.equal(text("three"), "(1, 2, 0.5)");
-    assert.equal(text("turn"), "(0, 0, 0, 1)", "a quaternion reads [i, j, k, r]");
+    assert.equal(text("turn"), "(1, 0, 0, 0)", "a quaternion is shown as USDA writes it, real part first, though it is read [i, j, k, r]");
     assert.equal(text("ones"), "[0.5, 1, -2] (3 elements)");
     assert.equal(text("threes"), "[(1, 2, 0.5)] (1 element)");
-    assert.equal(text("turns"), "[(0, 0, 0, 1), (0, 0.707031, 0, 0.707031)] (2 elements)");
+    assert.equal(text("turns"), "[(1, 0, 0, 0), (0.707031, 0, 0.707031, 0)] (2 elements)");
     assert.equal(text("tints"), "[(0.25, 0.5, 1)] (1 element)");
     assert.equal(text("floats"), "[0.5, 1] (2 elements)");
   });

@@ -10,7 +10,7 @@
 // stronger layer's selection still wins, it says so and offers to select
 // it in that layer), or removes the set from the
 // layer edits go to when that layer holds it, else names the layer that
-// does and offers to edit there. "+ Variant set" adds a set with its
+// does and offers to edit there. "+ Variant set…" adds a set with its
 // first variant. Each edit is one undoable step where edits go.
 // AOUSD Core §7.3.6 (variant sets), §7.6.2.3.5 (`variantSetNames`).
 import { useState } from "react";
@@ -55,7 +55,7 @@ export function VariantsSection({ store, prim }: { store: EditorStore; prim: Pri
       aside={
         <Button variant="ghost" size="xs" isDisabled={blocked !== null} onPress={() => setOpen({ kind: "variant", set: null })} aria-label="Add a variant set">
           <HugeiconsIcon icon={PlusSignIcon} data-icon="inline-start" />
-          Variant set
+          Variant set…
         </Button>
       }
     >

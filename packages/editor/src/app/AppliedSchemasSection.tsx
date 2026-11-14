@@ -47,7 +47,7 @@ export function AppliedSchemasSection({ store, prim }: { store: EditorStore; pri
       aside={
         <Button variant="ghost" size="xs" isDisabled={readOnly} onPress={() => askPrim({ kind: "applySchema", path: prim.path })} aria-label="Apply an API schema, where edits go">
           <HugeiconsIcon icon={PlusSignIcon} data-icon="inline-start" />
-          Apply
+          Apply…
         </Button>
       }
     >

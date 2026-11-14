@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Layer, UnpackagedAsset } from "@forest-rs/layerstack";
-import { fileName, fileNames, isPackage, isSaveKey, packageWants, saveKeyOpens, sessionLayerReason, suppliable } from "../src/model/files.ts";
+import { fileName, fileNames, isPackage, isSaveKey, openConfirmation, packageWants, saveKeyOpens, sessionLayerReason, suppliable } from "../src/model/files.ts";
 import { drawnLine, lineChanges, MAX_LINE_CHARS } from "../src/model/layerText.ts";
 import { usdaTokens } from "../src/model/usdaSyntax.ts";
 
@@ -115,6 +115,24 @@ describe("the lines a change touched", () => {
     const before = ["head", "a", "b", "c", "tail"];
     const after = ["head", "x", "y", "z", "tail"];
     assert.deepEqual(lineChanges(before, after, 1), { added: [1, 2, 3], removedBefore: [4], removed: 3 });
+  });
+});
+
+describe("opening another scene over unsaved work", () => {
+  it("says how many layers lose their edits, and what the one button does", () => {
+    const one = openConfirmation("rocks.usda", 1);
+    assert.equal(one.title, "Open rocks.usda and lose what is not saved?");
+    assert.match(one.what, /^One layer has edits that are not saved\. Opening another scene discards them/);
+    assert.equal(one.confirm, "Open rocks.usda and discard its edits");
+    const three = openConfirmation("rocks.usda", 3);
+    assert.match(three.what, /^3 layers have edits that are not saved/);
+    assert.equal(three.confirm, "Open rocks.usda and discard their edits");
+  });
+
+  it("says a save is still writing when no layer has edits", () => {
+    const writing = openConfirmation("rocks.usda", 0);
+    assert.match(writing.what, /^A save is still writing its files/);
+    assert.equal(writing.confirm, "Open rocks.usda now");
   });
 });
 

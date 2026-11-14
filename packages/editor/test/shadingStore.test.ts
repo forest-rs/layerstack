@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readNetwork } from "../src/model/network.ts";
 import { nodeMenu, portMenu, unshownConnection } from "../src/model/networkEdits.ts";
-import { groupInputs } from "../src/model/shadingInputs.ts";
+import { groupInputs, inputEditTime } from "../src/model/shadingInputs.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
 const CHECKER = "/World/Looks/Checker";
@@ -277,9 +277,7 @@ test("two shaders added while an action fetches are two shaders, each where it w
   assert.deepEqual(store.notices, []);
 });
 
-// Expected to pass once queued edits keep where edits went when they were asked for: a defect of the
-// store's shared queue (an edit reads the target when it runs), fixed there for every edit, not here.
-test("a connection asked for while an action fetches is authored where edits went when it was asked for", { todo: true }, async () => {
+test("a connection asked for while an action fetches is authored where edits went when it was asked for", async () => {
   const h = await harness();
   const source = sampleSource();
   await h.open(source);
@@ -328,4 +326,42 @@ def Material "Stone"
   assert.equal(own(), true);
   await h.settle(store.undo());
   assert.equal(own(), false);
+});
+
+test("an input with one sample is edited as a sample at the time now, not as a default under it", async () => {
+  const h = await harness();
+  await h.open(
+    sampleSource("keyed.usda", {
+      "keyed.usda": `#usda 1.0
+(
+    startTimeCode = 0
+    endTimeCode = 24
+)
+def Material "M"
+{
+    float inputs:gain.timeSamples = {
+        0: 0.5,
+    }
+    float inputs:plain = 0.5
+}
+`,
+    }),
+  );
+  const { store } = h;
+  const stage = store.session!.stage;
+  const gain = "/M.inputs:gain";
+  // One sample: the value holds still, so the row is not an animated one.
+  assert.deepEqual(stage.valuesMightBeTimeVarying([gain]), [false]);
+  store.setTime(12);
+  assert.equal(inputEditTime(stage, gain, store.time), 12);
+  assert.equal(inputEditTime(stage, "/M.inputs:plain", store.time), null, "an input without samples edits its default");
+  assert.equal(inputEditTime(stage, "/M.inputs:none", store.time), null);
+  assert.equal(store.setShaderInput(gain, { type: "float", value: 0.25 }, inputEditTime(stage, gain, store.time)), undefined);
+  const spec = stage.layerSpec(stage.root, gain);
+  assert.deepEqual(spec?.type === "attribute" ? [spec.default, spec.timeSamples] : null, [null, [0, 12]]);
+  const value = stage.attribute(gain)?.get(12) ?? null;
+  assert.equal(value?.kind === "scalar" ? value.value : null, 0.25, "and it shows");
+  // The time is read when the edit is committed: after the time moves, the next edit is there.
+  store.setTime(20);
+  assert.equal(inputEditTime(stage, gain, store.time), 20);
 });

@@ -845,10 +845,19 @@ export class Session implements Disposable {
    * Saves the dirty layers: their bytes are the host's to persist
    * ({@link Session.saved}). A save of the stage leaves the session layer
    * (export it, `Stage.exportLayer`) and muted layers dirty.
+   *
+   * Only the layers with unsaved edits ({@link Session.isEdited}) are
+   * written: `Stage.save` also writes a layer whose edits were undone
+   * (dirty to the stage, as to `SdfLayer::IsDirty`), which holds what its
+   * file holds, so its bytes are dropped rather than handed on to replace
+   * a file the save was never said to touch.
    */
   save(): SaveResult {
     this.#cause = "save";
-    const result = this.stage.save();
+    const edited = new Set(this.dirtyLayers().map((layer) => layer.id));
+    const all = this.stage.save();
+    const written = all.written.filter(({ layer }) => edited.has(layer.id));
+    const result: SaveResult = { ...all, written, bytes: written.reduce((sum, { bytes }) => sum + bytes.byteLength, 0) };
     this.saved = result.written.map(({ identifier, bytes }) => ({ identifier, bytes }));
     const point = this.#historyPoint();
     for (const { layer } of result.written) {

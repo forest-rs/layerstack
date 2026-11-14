@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { fileName, fileNames, flattenConfirmation, packageConfirmation, type SaveEntry } from "../model/files.ts";
+import { fileName, fileNames, flattenConfirmation, isSaveKey, packageConfirmation, type SaveEntry, saveKeyOpens } from "../model/files.ts";
 import type { EditorStore } from "../store.ts";
 import { useEditorStore, useRevision } from "./context.ts";
 import { download, downloadAll, exportLayerFile } from "./download.ts";
@@ -62,9 +62,11 @@ export function FileMenu() {
   // ⌘S saves, as anywhere; the page asks before it is left with edits not saved.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "s" || event.shiftKey || event.altKey) return;
+      if (!isSaveKey(event)) return;
       event.preventDefault();
-      if (store.session !== null) setDialog({ kind: "save" });
+      // Over a dialog (this menu's or any other), it does nothing: a save is asked for from the editor, not from inside a question.
+      const modal = document.querySelector('[data-slot="dialog-overlay"], [role="alertdialog"]') !== null;
+      if (saveKeyOpens(event, store.session !== null, modal)) setDialog({ kind: "save" });
     };
     const onLeave = (event: BeforeUnloadEvent) => {
       if (!store.unsaved) return;

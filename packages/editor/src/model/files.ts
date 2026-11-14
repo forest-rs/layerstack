@@ -47,6 +47,30 @@ export function packageConfirmation(result: Pick<PackageResult, "bytes" | "layer
     : { title: `Export the stage as ${name}`, what: `${what}${holds}`, confirm: `Download ${name}` };
 }
 
+/** A key press, as much of it as the save shortcut reads. */
+export interface KeyPress {
+  readonly key: string;
+  readonly metaKey: boolean;
+  readonly ctrlKey: boolean;
+  readonly shiftKey: boolean;
+  readonly altKey: boolean;
+}
+
+/** Whether `press` is the save shortcut: ⌘S, or Ctrl+S. The page takes it from the browser, whatever it then does. */
+export function isSaveKey(press: KeyPress): boolean {
+  return (press.metaKey || press.ctrlKey) && press.key.toLowerCase() === "s" && !press.shiftKey && !press.altKey;
+}
+
+/**
+ * Whether the save shortcut opens the save's confirmation: with a scene
+ * open (`scene`) and no modal dialog showing (`modal`), the File menu's
+ * own included. Over a dialog it does nothing: a second dialog is not
+ * stacked on the one the person is answering.
+ */
+export function saveKeyOpens(press: KeyPress, scene: boolean, modal: boolean): boolean {
+  return isSaveKey(press) && scene && !modal;
+}
+
 /** What a save does with one dirty layer. */
 export type SaveDisposition =
   /** Written to its identifier. */

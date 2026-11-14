@@ -58,7 +58,7 @@ import {
   unrepairedMessage,
 } from "./model/primAuthoring.ts";
 import { releaseValue } from "./model/values.ts";
-import { addShaderEdits, connectEdits, connectLabel, disconnectEdits, disconnectLabel } from "./model/networkEdits.ts";
+import { addShaderEdits, connectEdits, connectLabel, disconnectEdits, disconnectLabel, unshownConnection } from "./model/networkEdits.ts";
 import type { HealthReport } from "./model/health.ts";
 import { IDENTITY, type LayerOffset, movedSublayers, offsetUsda, sublayerIndex } from "./model/layerStack.ts";
 import type { PathMove, Session } from "./model/session.ts";
@@ -1105,11 +1105,16 @@ export class EditorStore {
    * Connects the shading input or output at `destination` to read
    * `source` (`UsdShadeConnectableAPI::ConnectToSource`, replacing what
    * it read), creating either when only its shader's definition has it.
-   * Returns why the stage refused it, as {@link EditorStore.apply} does.
+   * Returns why the stage refused it, as {@link EditorStore.apply} does;
+   * a connection authored that a stronger opinion hides is a notice.
    */
   connect(destination: string, source: string): string | undefined {
     const label = connectLabel(destination, source);
-    return this.#edit(label, (session) => session.apply(label, connectEdits(session.stage, destination, source)));
+    return this.#edit(
+      label,
+      (session) => session.apply(label, connectEdits(session.stage, destination, source)),
+      () => this.#unshown(label, destination, source, true),
+    );
   }
 
   /**
@@ -1119,7 +1124,19 @@ export class EditorStore {
    */
   disconnect(destination: string, source: string | null): string | undefined {
     const label = disconnectLabel(destination, source);
-    return this.#edit(label, (session) => session.apply(label, disconnectEdits(destination, source)));
+    return this.#edit(
+      label,
+      (session) => session.apply(label, disconnectEdits(destination, source)),
+      () => this.#unshown(label, destination, source, false),
+    );
+  }
+
+  /** A notice that the connection edit `action` made does not show (`unshownConnection`), when it does not. */
+  #unshown(action: string, destination: string, source: string | null, connected: boolean): boolean {
+    const stage = this.session?.stage;
+    const hidden = stage === undefined ? null : unshownConnection(stage, destination, source, connected);
+    if (hidden !== null) this.#notices.add(action, hidden, null);
+    return false;
   }
 
   /**

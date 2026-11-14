@@ -71,6 +71,7 @@ import {
   nodeMenu,
   type Point,
   portMenu,
+  unshownConnection,
 } from "../model/networkEdits.ts";
 import { fitView, MAX_SCALE, MIN_SCALE, PADDING, resizedView, type View, type ViewOrigin } from "../model/graphView.ts";
 import { keepPlaces, type Place } from "../model/networkPlaces.ts";
@@ -422,20 +423,26 @@ function Graph({
 
   function connect(destination: string, source: string): void {
     const refusal = store.connect(destination, source);
+    const hidden = refusal === undefined ? unshownConnection(store.session!.stage, destination, source, true) : null;
     setNote(
       refusal !== undefined
         ? { tone: "error", text: `Not connected: ${refusal}` }
-        : { tone: "info", text: `${shortPort(network, destination)} reads ${shortPort(network, source)}: authored ${connectAttribute(destination)} in ${editsGo(store)}` },
+        : hidden !== null
+          ? { tone: "error", text: `Authored in ${editsGo(store)}, and it does not show: ${hidden}` }
+          : { tone: "info", text: `${shortPort(network, destination)} reads ${shortPort(network, source)}: authored ${connectAttribute(destination)} in ${editsGo(store)}` },
     );
   }
 
   function disconnect(destination: string, source: string | null): void {
     const refusal = store.disconnect(destination, source);
+    const hidden = refusal === undefined ? unshownConnection(store.session!.stage, destination, source, false) : null;
     setSelectedEdge(null);
     setNote(
       refusal !== undefined
         ? { tone: "error", text: `Not disconnected: ${refusal}` }
-        : {
+        : hidden !== null
+          ? { tone: "error", text: `Authored in ${editsGo(store)}, and it does not show: ${hidden}` }
+          : {
             tone: "info",
             text: `${shortPort(network, destination)} ${source === null ? "reads nothing" : `no longer reads ${shortPort(network, source)}`}: authored ${connectAttribute(destination)} in ${editsGo(store)}`,
           },

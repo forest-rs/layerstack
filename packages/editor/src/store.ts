@@ -128,6 +128,8 @@ export class EditorStore {
   readonly #notices: Notices;
   readonly #frameNotes: FrameNotes;
   readonly #files: FileState;
+  /** How many saves are handing their bytes on ({@link EditorStore.persisting}). */
+  #persisting = 0;
   readonly #reports = new StageReports();
   /** The session whose metadata {@link EditorStore.#readStage} last read, and the change records it had then. */
   #read: { session: Session | null; changes: number } = { session: null, changes: 0 };
@@ -1794,8 +1796,25 @@ export class EditorStore {
    * `beforeunload` asks.
    */
   get unsaved(): boolean {
+    if (this.#persisting > 0) return true;
     if (this.status.kind === "lost") return false;
     return this.dirtyLayers().length > 0;
+  }
+
+  /**
+   * Runs `work`, which saves and then hands the saved bytes on (writes
+   * them into a folder, downloads them), counting the page as having
+   * something to lose until it settles: {@link EditorStore.save} counts a
+   * layer saved once the stage has written its bytes, before any file
+   * holds them, and a page left in between would lose them.
+   */
+  async persisting<T>(work: () => Promise<T>): Promise<T> {
+    this.#persisting += 1;
+    try {
+      return await work();
+    } finally {
+      this.#persisting -= 1;
+    }
   }
 
   /** The dirty layers and what a save does with each ({@link planSave}), the written ones first. */

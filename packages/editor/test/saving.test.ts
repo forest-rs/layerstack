@@ -112,6 +112,30 @@ test("a save writes only the layers its confirmation lists, not one whose edits 
   assert.deepEqual(store.dirtyLayers(), []);
 });
 
+test("the page has something to lose until a save's bytes are handed on, not only until the stage wrote them", async () => {
+  const h = await harness();
+  await h.open(sampleSource());
+  const { store } = h;
+  store.setValue("/World/Robot.visibility", HIDE_ROBOT);
+  // A write into a folder that has not finished: the stage counts the layer saved, and no file holds it yet.
+  let written = () => {};
+  const writing = new Promise<void>((resolve) => (written = resolve));
+  const saving = store.persisting(async () => {
+    const result = await store.save();
+    await writing;
+    return result;
+  });
+  await h.turn();
+  assert.deepEqual(store.dirtyLayers(), [], "saved, to the stage");
+  assert.equal(store.unsaved, true, "leaving now would lose the bytes");
+  written();
+  assert.deepEqual((await h.settle(saving))?.written.map((layer) => layer.identifier), ["scene.usda"]);
+  assert.equal(store.unsaved, false);
+  // A write that fails ends the wait all the same.
+  await assert.rejects(store.persisting(() => Promise.reject(new Error("the disk is full"))));
+  assert.equal(store.unsaved, false);
+});
+
 test("a layer whose edits were undone is read again from the source, with nothing to save first", async () => {
   const h = await harness();
   const files: Record<string, string> = { "plain.usda": '#usda 1.0\ndef Xform "World"\n{\n    double size = 1\n}\n' };

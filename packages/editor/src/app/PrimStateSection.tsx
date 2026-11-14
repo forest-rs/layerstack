@@ -4,16 +4,16 @@
 // The inspector's State section: what the prim is (its type, specifier and
 // kind) and whether it is active and instanceable, each changed where
 // edits go. The values shown are composed (a stronger layer's opinion may
-// be what is read); an edit authors the edit target's spec, and "Clear"
-// takes the edit target's opinion of active or instanceable away, so
-// weaker layers' show again.
+// be what is read); an edit authors the edit target's spec, and "Clear",
+// offered only when that spec holds one, takes its opinion of active or
+// instanceable away, so weaker layers' show again.
 import type { Prim } from "@forest-rs/layerstack";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip";
-import { kindChoices } from "../model/primAuthoring.ts";
+import { holdsField, kindChoices } from "../model/primAuthoring.ts";
 import type { EditorStore } from "../store.ts";
 import { primIcon } from "./icons.ts";
 import { askPrim } from "./primDialogRequests.ts";
@@ -32,8 +32,8 @@ export function PrimStateSection({ store, prim }: { store: EditorStore; prim: Pr
   const kind = kindValue?.kind === "scalar" && kindValue.value !== "" ? String(kindValue.value) : null;
   const instanceable = prim.metadata("instanceable");
   const isInstanceable = instanceable?.kind === "scalar" && instanceable.value === true;
-  // A composed opinion of each, in some layer: what "Clear" may take away where edits go.
-  const activeAuthored = prim.metadata("active") !== null;
+  // What the spec edits go to holds itself: all "Clear" can take away there.
+  const own = store.targetSpec(prim.path);
   const root = prim.path === "/";
   return (
     <Section title="State">
@@ -65,6 +65,7 @@ export function PrimStateSection({ store, prim }: { store: EditorStore; prim: Pr
           aria-label="Kind"
           value={kind ?? NO_KIND}
           isDisabled={readOnly || root}
+          disabledKeys={holdsField(own, "kind") ? [] : [NO_KIND]}
           onChange={(key) => {
             if (key === null || key === (kind ?? NO_KIND)) return;
             attempt(() => store.setKind(prim.path, key === NO_KIND ? null : String(key)));
@@ -78,7 +79,11 @@ export function PrimStateSection({ store, prim }: { store: EditorStore; prim: Pr
             <SelectItem id={NO_KIND} textValue="none">
               <span className="flex flex-col">
                 <span>none</span>
-                <span className="text-[10px] whitespace-normal text-muted-foreground">Clears {where}'s kind: not part of the model hierarchy unless a weaker layer says so.</span>
+                <span className="text-[10px] whitespace-normal text-muted-foreground">
+                  {holdsField(own, "kind")
+                    ? `Clears ${where}'s kind: not part of the model hierarchy unless a weaker layer says so.`
+                    : `${where} authors no kind to clear${kind === null ? "" : `: ${kind} is another layer's`}.`}
+                </span>
               </span>
             </SelectItem>
             {kindChoices(kind).map((choice) => (
@@ -101,7 +106,7 @@ export function PrimStateSection({ store, prim }: { store: EditorStore; prim: Pr
           isSelected={prim.active}
           onChange={(on) => attempt(() => store.apply(`${on ? "activate" : "deactivate"} ${prim.path}`, [{ type: "setActive", path: prim.path, active: on }]))}
         />
-        <ClearOpinion shown={activeAuthored && !readOnly} label={`Clear ${where}'s opinion of active`} onPress={() => attempt(() => store.clearPrimOpinion(prim.path, "active"))} />
+        <ClearOpinion shown={holdsField(own, "active") && !readOnly} label={`Clear ${where}'s opinion of active`} onPress={() => attempt(() => store.clearPrimOpinion(prim.path, "active"))} />
 
         <span>Instanceable</span>
         <Switch
@@ -111,7 +116,7 @@ export function PrimStateSection({ store, prim }: { store: EditorStore; prim: Pr
           isSelected={isInstanceable}
           onChange={(on) => attempt(() => store.apply(`set ${prim.path} instanceable ${on}`, [{ type: "setInstanceable", path: prim.path, instanceable: on }]))}
         />
-        <ClearOpinion shown={instanceable !== null && !readOnly} label={`Clear ${where}'s opinion of instanceable`} onPress={() => attempt(() => store.clearPrimOpinion(prim.path, "instanceable"))} />
+        <ClearOpinion shown={holdsField(own, "instanceable") && !readOnly} label={`Clear ${where}'s opinion of instanceable`} onPress={() => attempt(() => store.clearPrimOpinion(prim.path, "instanceable"))} />
         <RefusalNote refusal={refusal} />
       </div>
       <p className="mt-1.5 text-[11px] text-muted-foreground">
@@ -123,7 +128,7 @@ export function PrimStateSection({ store, prim }: { store: EditorStore; prim: Pr
   );
 }
 
-/** "Clear" beside a switch whose value some layer authors: takes the edit target's opinion away. */
+/** "Clear" beside a switch whose value the spec edits go to holds: takes that opinion away. */
 function ClearOpinion({ shown, label, onPress }: { shown: boolean; label: string; onPress: () => void }) {
   if (!shown) return <span />;
   return (

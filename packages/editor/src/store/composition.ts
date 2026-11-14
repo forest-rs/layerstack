@@ -9,7 +9,7 @@
 // layer's default and root prims. The actions that author run on the
 // store (`../store.ts`), in its turn, as any edit.
 import type { HistoryStep, Layer, Layerstack } from "@forest-rs/layerstack";
-import { type AuthoredSpec, type LayerSummary, layerSummary as summarizeLayer, type SpecsOf, specReader, summarizeBytes } from "../model/layerSpecs.ts";
+import { type LayerSummary, layerSummary as summarizeLayer, SpecCache, summarizeBytes } from "../model/layerSpecs.ts";
 import type { Session } from "../model/session.ts";
 import type { SceneSource } from "../model/sources.ts";
 
@@ -44,19 +44,17 @@ export const SUMMARY_BYTES = 16 * 1024 ** 2;
 export class CompositionState {
   /** The last composition edit made, whichever step is newest now. */
   edit: CompositionEdit | null = null;
-  #specs: { readonly session: Session | null; readonly stamp: string; readonly read: SpecsOf } | null = null;
+  #specs: { readonly session: Session; readonly stamp: string; readonly cache: SpecCache } | null = null;
 
   /**
-   * The prim or variant spec `layer` of `session` holds at `path` (in the
-   * layer's own namespace), with its arcs, read once per `stamp` (a change
-   * of the stage): the same object each time it is asked until then.
-   * `null` when the layer holds none there. Throws what `Stage.layerSpec`
-   * throws.
+   * The layers' specs of `session` as read since `stamp` (a change of the
+   * stage): each layer and path read once, the same object each time it
+   * is asked until the stamp moves on.
    */
-  spec(session: Session, stamp: string, layer: Layer, path: string): AuthoredSpec | null {
+  specs(session: Session, stamp: string): SpecCache {
     let specs = this.#specs;
-    if (specs === null || specs.session !== session || specs.stamp !== stamp) this.#specs = specs = { session, stamp, read: specReader(session.stage) };
-    return specs.read(layer, path);
+    if (specs === null || specs.session !== session || specs.stamp !== stamp) this.#specs = specs = { session, stamp, cache: new SpecCache(session.stage) };
+    return specs.cache;
   }
 }
 

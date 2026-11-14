@@ -28,6 +28,7 @@ import type {
   Layer,
   LayerFormat,
   Layerstack,
+  LayerSpec,
   LoadOutcome,
   LoadPolicy,
   PackageResult,
@@ -40,9 +41,9 @@ import { describeTarget, type NamespaceAction, namespaceRefusal, type NewArc, ne
 import type { ViewportScene, ViewportUpdate } from "./model/draws.ts";
 import { planSave, type SaveEntry } from "./model/files.ts";
 import { indexOfId, type InstancerColumns, toggled } from "./model/instancer.ts";
-import type { AuthoredArc, AuthoredSpec, LayerSummary } from "./model/layerSpecs.ts";
+import type { AuthoredArc, AuthoredSpec, LayerSummary, SpecCache } from "./model/layerSpecs.ts";
 import type { LayerTextRead } from "./model/layerText.ts";
-import { type Shadow, shadowOf, targetOpinion } from "./model/propertyOps.ts";
+import { type Shadow, shadowOf, targetOpinion, targetSite } from "./model/propertyOps.ts";
 import {
   childPath,
   freeSiblingName,
@@ -1375,27 +1376,54 @@ export class EditorStore {
   }
 
   /**
-   * The prim or variant spec `layer` itself holds at `path`, in the
-   * layer's own namespace (`Stage.layerSpec`), with its arcs as list op
-   * items (`model/layerSpecs.ts`): read once per change of the stage, the
-   * same object until then, and never on a time change. `null` when the
-   * layer holds none there, or the path is not a spec path (a read the
-   * panels make while they render says nothing more).
+   * What `layer` itself holds at `path`, in the layer's own namespace
+   * (`Stage.layerSpec`): read once per change of the stage, the same
+   * object until then, and never on a time change. `null` when the layer
+   * holds no spec there, or the path is not a spec path (a read the panels
+   * make while they render says nothing more).
+   */
+  layerSpec(layer: Layer, path: string): LayerSpec | null {
+    return this.#specRead((specs) => specs.spec(layer, path));
+  }
+
+  /**
+   * The prim or variant spec `layer` itself holds at `path`, with its arcs
+   * as list op items (`model/layerSpecs.ts`), read as
+   * {@link EditorStore.layerSpec} reads.
    */
   authoredSpec(layer: Layer, path: string): AuthoredSpec | null {
+    return this.#specRead((specs) => specs.prim(layer, path));
+  }
+
+  /** {@link EditorStore.authoredSpec}, as the readers of `model/composition.ts` take it. */
+  readonly specsOf = (layer: Layer, path: string): AuthoredSpec | null => this.authoredSpec(layer, path);
+
+  /**
+   * The spec where an edit of `path` (a prim or property path of the
+   * stage) is written now: the edit target's layer at the path it maps
+   * `path` to, as {@link EditorStore.layerSpec} reads it. `null` when that
+   * layer holds none there, or the target does not map `path`. What says
+   * whether a Clear or Remove there has anything to take away.
+   */
+  targetSpec(path: string): LayerSpec | null {
+    const session = this.session;
+    if (session === null) return null;
+    const site = targetSite(session.stage, session.target, path);
+    return site === null ? null : this.layerSpec(site.layer, site.specPath);
+  }
+
+  /** Reads the stage's specs as of this change; a module lost while reading is the store's to report. */
+  #specRead<T>(read: (specs: SpecCache) => T | null): T | null {
     const session = this.session;
     if (session === null || this.status.kind === "lost") return null;
     const stamp = `${this.signals.revision("history")}:${this.signals.revision("composition")}`;
     try {
-      return this.#composition.spec(session, stamp, layer, path);
+      return read(this.#composition.specs(session, stamp));
     } catch (error) {
       this.lose(error);
       return null;
     }
   }
-
-  /** {@link EditorStore.authoredSpec}, as the readers of `model/composition.ts` take it. */
-  readonly specsOf = (layer: Layer, path: string): AuthoredSpec | null => this.authoredSpec(layer, path);
 
   /** The layers an arc can be pointed at: those the source lists and those the stage holds, by identifier, sorted. */
   async arcLayers(): Promise<string[]> {

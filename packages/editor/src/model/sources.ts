@@ -231,6 +231,32 @@ export function filesSource(label: string, files: ReadonlyMap<string, File>, roo
 /** The file extensions of layers a stage can open as its root. */
 export const LAYER_EXTENSIONS = [".usd", ".usda", ".usdc", ".usdz"] as const;
 
+/** What the page's `?scene=` asks for ({@link sceneChoice}). */
+export type SceneChoice =
+  /** No `?scene=`, or the sample's name: the sample. */
+  | { readonly kind: "sample" }
+  /** In development, a layer's path under the local scene directory. */
+  | { readonly kind: "local"; readonly path: string }
+  /** Nothing the page can open: the open fails, and says why, rather than open the sample unasked. */
+  | { readonly kind: "refused"; readonly label: string; readonly message: string };
+
+/**
+ * What `?scene=` (`wanted`, `null` when absent) asks for: the sample (by
+ * its name, `sample`), in development (`dev`) a layer's path under the
+ * local scene directory, or nothing the page can open, which is a failed
+ * open saying why.
+ */
+export function sceneChoice(wanted: string | null, sample: string, dev: boolean): SceneChoice {
+  if (wanted === null || wanted === sample) return { kind: "sample" };
+  if (!dev) return { kind: "refused", label: wanted, message: `?scene= names a scene only on the development server, where it is a layer's path under the local scene directory; here it can name only ${sample}.` };
+  if (isLayer(wanted)) return { kind: "local", path: wanted };
+  return {
+    kind: "refused",
+    label: wanted,
+    message: `?scene= names ${sample} or a layer's path under the local scene directory, ending in ${LAYER_EXTENSIONS.join(", ")}: "${wanted}" is neither.`,
+  };
+}
+
 /** Whether `name` is a layer a stage can open. */
 export function isLayer(name: string): boolean {
   const lower = name.toLowerCase();

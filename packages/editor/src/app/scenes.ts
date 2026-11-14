@@ -5,7 +5,7 @@
 // local directory the dev server serves (`LAYERSTACK_SCENES`, see
 // `vite.config.ts`; never in a build), a directory the person picks, and
 // files they drop.
-import { directorySource, filesSource, httpSource, isLayer, LISTED_DEPTH, LISTED_LAYERS, listedLayers, type SceneSource } from "../model/sources.ts";
+import { directorySource, filesSource, httpSource, isLayer, LISTED_DEPTH, LISTED_LAYERS, listedLayers, sceneChoice, type SceneSource } from "../model/sources.ts";
 
 /** A scene the editor can open by name. */
 export interface SceneEntry {
@@ -70,11 +70,15 @@ export async function localScenes(): Promise<SceneEntry[]> {
   }));
 }
 
-/** The scene `?scene=` names: the sample by default, or in development a layer's path under the local scene directory. */
-export async function initialSource(): Promise<SceneSource> {
-  const wanted = new URLSearchParams(location.search).get("scene");
-  // In development, any layer under the local scene directory, listed or not.
-  if (wanted !== null && wanted !== SAMPLE.label && import.meta.env.DEV && isLayer(wanted)) return localScene(wanted);
+/**
+ * The scene `?scene=` names (`sceneChoice`): the sample by default, or in
+ * development any layer's path under the local scene directory, listed
+ * or not; or, for a name that is neither, why it cannot be opened.
+ */
+export function initialSource(): SceneSource | { readonly label: string; readonly message: string } {
+  const choice = sceneChoice(new URLSearchParams(location.search).get("scene"), SAMPLE.label, import.meta.env.DEV);
+  if (choice.kind === "local") return localScene(choice.path);
+  if (choice.kind === "refused") return { label: choice.label, message: choice.message };
   return SAMPLE.source();
 }
 

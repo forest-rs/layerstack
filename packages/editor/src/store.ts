@@ -363,6 +363,16 @@ export class EditorStore {
   }
 
   /**
+   * Says that the scene `label` could not be opened, for `message`, as a
+   * failed open does (the failed-open card while nothing is open), with
+   * nothing tried: a `?scene=` that names no scene the page can open.
+   */
+  failOpen(label: string, message: string): void {
+    if (this.status.kind === "lost") return;
+    this.#setStatus({ kind: "failed", label, message });
+  }
+
+  /**
    * Stops what the overlay shows. An open: its fetches are aborted and
    * what it made is freed, and the editor keeps the scene it had. A
    * payload load: its fetches are aborted, the payloads go back to how

@@ -22,7 +22,10 @@ async function start(): Promise<void> {
   // editor the same way: its instance is dead.
   window.addEventListener("error", (event) => store.lose(event.error));
   window.addEventListener("unhandledrejection", (event) => store.lose(event.reason));
-  void store.open(await initialSource());
+  // A `?scene=` that names nothing openable is a failed open, said as one, not the sample opened unasked.
+  const initial = initialSource();
+  if ("fetch" in initial) void store.open(initial);
+  else store.failOpen(initial.label, initial.message);
 
   createRoot(document.getElementById("root")!).render(
     <StrictMode>

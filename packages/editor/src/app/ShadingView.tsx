@@ -72,6 +72,7 @@ import {
   type Point,
   portMenu,
 } from "../model/networkEdits.ts";
+import { fitView, MAX_SCALE, MIN_SCALE, PADDING, resizedView, type View, type ViewOrigin } from "../model/graphView.ts";
 import { keepPlaces, type Place } from "../model/networkPlaces.ts";
 import { shaderDefinition } from "../model/shaderDefinitions.ts";
 import type { EditorStore } from "../store.ts";
@@ -205,18 +206,6 @@ function AddShaderButton({ onAdd }: { onAdd: (id: string) => void }) {
   );
 }
 
-/** Where the drawing is: its translation and zoom. */
-interface View {
-  readonly x: number;
-  readonly y: number;
-  readonly scale: number;
-}
-
-const MIN_SCALE = 0.05;
-const MAX_SCALE = 2.5;
-/** The smallest zoom a first view uses: below it names cannot be read. */
-const READABLE = 0.8;
-const PADDING = 24;
 /** How long a note about the last action stays, in milliseconds. */
 const NOTE_MS = 5000;
 
@@ -266,6 +255,8 @@ function Graph({
 }) {
   const frame = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<View | null>(null);
+  // How the view in place was chosen: by the editor (fitted again when the frame changes size), or `null` once the person moved it.
+  const origin = useRef<ViewOrigin>(null);
   const pan = useRef<{ x: number; y: number; view: View; moved: boolean } | null>(null);
   const [gesture, setGesture] = useState<Gesture>({ kind: "idle" });
   const gestureRef = useRef<Gesture>(gesture);
@@ -287,24 +278,45 @@ function Graph({
     return () => clearTimeout(timer);
   }, [note]);
 
-  /** The view that fits the whole drawing, or with `readable` the one that keeps names legible around `focus`. */
-  const fit = (readable: boolean, focus: PlacedNode | null): View | null => {
+  /**
+   * Makes the view the one that fits the whole drawing, or with `readable`
+   * the one that keeps names legible around `focus` (`fitView`), as the
+   * editor's choice: fitted again when the frame changes size.
+   */
+  const fit = (readable: boolean, focus: PlacedNode | null): void => {
     const box = frame.current?.getBoundingClientRect();
-    if (box === undefined || box.width === 0) return null;
-    const whole = Math.min((box.width - 2 * PADDING) / layout.width, (box.height - 2 * PADDING) / layout.height, 1);
-    const scale = Math.max(MIN_SCALE, readable ? Math.max(whole, READABLE) : whole);
-    if (scale === whole || focus === null) {
-      return { scale, x: (box.width - layout.width * scale) / 2, y: Math.max(PADDING, (box.height - layout.height * scale) / 2) };
-    }
-    // Centred on the node, its title kept in the frame.
-    const y = Math.max(box.height / 2 - (focus.y + focus.height / 2) * scale, PADDING - focus.y * scale);
-    return { scale, x: box.width / 2 - (focus.x + focus.width / 2) * scale, y };
+    const next = box === undefined ? null : fitView(box, layout, readable, focus);
+    if (next === null) return;
+    origin.current = { readable, focus: focus?.node.key ?? null };
+    setView(next);
+  };
+  /** Makes `next` the view, as the person moved it: a change of the frame's size leaves it. */
+  const moveView = (next: View) => {
+    origin.current = null;
+    setView(next);
   };
 
   // The first view: legible, on the selected shader or the material's outputs.
   useEffect(() => {
-    if (view === null) setView(fit(true, selected ?? outputs));
+    if (view === null) fit(true, selected ?? outputs);
   });
+  // The frame grows as the bottom panel opens on this tab, after the first view is chosen at its first,
+  // smaller size: a view the editor chose is fitted again to the frame's size; one the person moved stays.
+  const refit = useRef<(box: { width: number; height: number }) => void>(() => {});
+  refit.current = (box) => {
+    const next = resizedView(origin.current, box, layout, (key) => layout.nodes.find((placed) => placed.node.key === key) ?? null);
+    if (next !== null) setView(next);
+  };
+  useEffect(() => {
+    const element = frame.current;
+    if (element === null) return;
+    const observer = new ResizeObserver((entries) => {
+      const box = entries.at(-1)?.contentRect;
+      if (box !== undefined) refit.current(box);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   // A wheel zooms about the pointer; the listener is not passive, so the page does not scroll.
   useEffect(() => {
@@ -315,6 +327,7 @@ function Graph({
       const box = element.getBoundingClientRect();
       const px = event.clientX - box.left;
       const py = event.clientY - box.top;
+      origin.current = null;
       setView((current) => {
         if (current === null) return current;
         const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, current.scale * Math.exp(-event.deltaY * 0.0015)));
@@ -358,7 +371,7 @@ function Graph({
     if (box === undefined || view === null) return;
     const dx = at.left < box.left + PADDING ? box.left + PADDING - at.left : at.right > box.right - PADDING ? box.right - PADDING - at.right : 0;
     const dy = at.top < box.top + PADDING ? box.top + PADDING - at.top : at.bottom > box.bottom - PADDING ? box.bottom - PADDING - at.bottom : 0;
-    if (dx !== 0 || dy !== 0) setView({ ...view, x: view.x + dx, y: view.y + dy });
+    if (dx !== 0 || dy !== 0) moveView({ ...view, x: view.x + dx, y: view.y + dy });
   };
 
   /** A point of the frame (pixels from its top left) in the drawing. */
@@ -655,10 +668,10 @@ function Graph({
         <span className="ml-auto" />
         <AddShaderButton onAdd={(id) => addAt(id, centre())} />
         {options}
-        <Button variant="ghost" size="xs" onPress={() => setView(fit(false, null))}>
+        <Button variant="ghost" size="xs" onPress={() => fit(false, null)}>
           Fit
         </Button>
-        <Button variant="ghost" size="xs" onPress={() => setView(fit(true, selected ?? outputs))}>
+        <Button variant="ghost" size="xs" onPress={() => fit(true, selected ?? outputs)}>
           {selected === null ? "Outputs" : "Selected"}
         </Button>
       </div>
@@ -702,7 +715,7 @@ function Graph({
           const dy = event.clientY - start.y;
           if (!start.moved && Math.hypot(dx, dy) < 3) return;
           start.moved = true;
-          setView({ ...start.view, x: start.view.x + dx, y: start.view.y + dy });
+          moveView({ ...start.view, x: start.view.x + dx, y: start.view.y + dy });
         }}
         onPointerUp={(event) => {
           if (gestureRef.current.kind !== "idle") {
@@ -724,7 +737,7 @@ function Graph({
           openMenu(event.target as Element, inFrame(event));
         }}
         onDoubleClick={(event) => {
-          if ((event.target as Element).closest("[data-control], [data-node]") === null) setView(fit(false, null));
+          if ((event.target as Element).closest("[data-control], [data-node]") === null) fit(false, null);
         }}
         onKeyDown={onKey}
         onFocus={(event) => {

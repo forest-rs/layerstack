@@ -411,8 +411,8 @@ export function treeDrop(path: string, target: string, position: "on" | "before"
  * The computed visibility of each row shown (`Stage.visibilities`, `null`
  * when not `Imageable`), told apart: `invisible` where the prim's own
  * opinion (or a weaker layer's) hides it, `hidden` where an ancestor
- * does, and `visible`. Read from the parents' computed visibility, which
- * the rows have, so telling them apart costs no read.
+ * does, and `visible`. Read from the ancestors' computed visibility,
+ * which the rows have, so telling them apart costs no read.
  */
 export type RowVisibility = "visible" | "invisible" | "hidden";
 
@@ -423,9 +423,24 @@ export function rowVisibilities(paths: readonly string[], computed: readonly (st
     const visibility = computed[index];
     if (visibility === null || visibility === undefined) return;
     if (visibility !== "invisible") out.set(path, "visible");
-    else out.set(path, out.get(parentOf(path)) === "invisible" || out.get(parentOf(path)) === "hidden" ? "hidden" : "invisible");
+    else out.set(path, hiddenAbove(path, out) ? "hidden" : "invisible");
   });
   return out;
+}
+
+/**
+ * Whether an ancestor of `path` in `rows` is not visible. Visibility is
+ * inherited through prims that are not `Imageable` (a typeless group has
+ * no row here), as `UsdGeomImageable::ComputeVisibility` walks every
+ * ancestor, so the nearest ancestor with a row decides, not the parent
+ * alone.
+ */
+function hiddenAbove(path: string, rows: ReadonlyMap<string, RowVisibility>): boolean {
+  for (let at = parentOf(path); at !== "/"; at = parentOf(at)) {
+    const above = rows.get(at);
+    if (above !== undefined) return above !== "visible";
+  }
+  return false;
 }
 
 /** The nearest ancestor of `path` whose own visibility hides it (`invisible` in `rows`); `null` when none is shown. */

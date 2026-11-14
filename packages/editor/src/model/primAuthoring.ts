@@ -10,7 +10,6 @@
 // cannot be made, a sibling order with one child moved, and where a
 // prim's opinions are when the edit target has none to copy.
 import type { ArcKind, CompositionArc, EditTarget, Layer, LayerSpec, Prim, PrimSpec, SchemaInfo, Stage } from "@forest-rs/layerstack";
-import { releaseValue } from "./values.ts";
 
 /** A prim name as USD takes it: an identifier. */
 export const PRIM_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -461,49 +460,38 @@ export function hiddenBy(path: string, rows: ReadonlyMap<string, RowVisibility>)
 /** A layer or an edit target through an arc, where a prim has opinions. */
 export interface OpinionSite {
   readonly layer: Layer;
-  /** The target that writes there; `null` when none does (a value clip's layer). */
+  /** The target that writes there; `null` when none does (a relocation's source). */
   readonly editTarget: EditTarget | null;
   /** The arc that reaches it; `null` for the stage's own layer stack. */
   readonly arc: ArcKind | null;
 }
 
-/** How many of a prim's authored attributes {@link opinionSites} explains. */
-const SITE_SAMPLES = 12;
-
 /**
- * Where the prim at `path` has opinions, strongest first: the layers its
- * authored attributes' opinions are in (`Attribute.explain`, up to a
- * dozen attributes), else, with none authored, the root layer of each arc
- * it composes from. What says where a copy could be made when the edit
- * target has no spec of it.
+ * Where the prim at `path` has opinions, strongest first: each layer that
+ * holds a spec of it, in its own layer stack and in the stack of every
+ * arc it composes from (`Stage.layerSpec` of each arc's site in each of
+ * the arc's layers), with the target that writes there. What says where
+ * a copy could be made when the edit target has no spec of it: a copy
+ * reads one layer's spec, so a layer is named only when it holds one.
  */
 export function opinionSites(stage: Stage, path: string): OpinionSite[] {
   const prim = stage.prim(path);
   if (prim === null) return [];
   const sites: OpinionSite[] = [];
-  const add = (site: OpinionSite) => {
-    if (!sites.some((each) => each.layer === site.layer && each.editTarget === site.editTarget)) sites.push(site);
-  };
-  let explained = 0;
-  for (const name of prim.attributeNames()) {
-    if (explained >= SITE_SAMPLES) break;
-    const attribute = prim.attribute(name);
-    if (attribute === null || !attribute.authored) continue;
-    explained++;
-    const explanation = attribute.explain();
-    if (explanation === null) continue;
-    for (const opinion of explanation.opinions) add({ layer: opinion.layer, editTarget: opinion.editTarget, arc: opinion.arc === "local" ? null : opinion.arc });
-    releaseValue(explanation.value);
-  }
-  if (sites.length > 0) return sites;
+  const seen = new Set<string>();
   for (const arc of prim.compositionArcs()) {
-    let target: EditTarget | null = null;
-    try {
-      target = arc.editTarget();
-    } catch {
-      // A relocation's source, which no edit goes through.
+    for (const layer of arc.layers) {
+      const key = `${layer.id} ${arc.site}`;
+      if (seen.has(key) || stage.layerSpec(layer, arc.site) === null) continue;
+      seen.add(key);
+      let target: EditTarget | null = null;
+      try {
+        target = arc.editTarget(layer);
+      } catch {
+        // A relocation's source, which no edit goes through.
+      }
+      sites.push({ layer, editTarget: target, arc: arc.arc === "local" ? null : arc.arc });
     }
-    add({ layer: arc.layerStack, editTarget: target, arc: arc.arc === "local" ? null : arc.arc });
   }
   return sites;
 }

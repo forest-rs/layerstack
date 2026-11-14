@@ -295,6 +295,25 @@ test("the Text tab reads a layer as USDA and marks the lines the last edit chang
   assert.deepEqual(undone.changes.added, []);
   assert.ok(undone.changes.removed >= 1 && undone.changes.removedBefore.length > 0);
 
+  assert.equal(after.steps, 1, "what the last change did");
+  assert.equal(undone.steps, 1);
+
+  // Two edits with no read between them (the tab not shown) are marked as two changes, not as the last one.
+  store.setValue("/World/Robot.visibility", HIDE_ROBOT);
+  store.setValue("/World/Beacons/North.visibility", HIDE_ROBOT);
+  // An edit of another layer between the reads is none of this layer's.
+  store.setTarget(store.session!.layerNamed("library.usda"));
+  store.setValue("/World/Robot.visibility", { type: "token", value: "inherited" });
+  store.setTarget(undefined);
+  const both = store.layerText(root);
+  assert.ok(typeof both !== "string");
+  assert.ok(both.changes.added.length >= 2);
+  assert.equal(both.steps, 2, "the marks are two changes' lines");
+  // Read again with nothing changed, they are still those two.
+  const kept = store.layerText(root);
+  assert.ok(typeof kept !== "string");
+  assert.equal(kept.steps, 2);
+
   // Showing another layer brings the tab forward.
   const library = store.session!.stage.layers().find((layer) => layer.identifier === "library.usda")!;
   store.showBottomTab("explain");

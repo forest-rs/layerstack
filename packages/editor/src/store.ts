@@ -1896,7 +1896,7 @@ export class EditorStore {
     const session = this.session;
     if (session === null) return "Nothing is open.";
     try {
-      return this.#files.texts.read(session.stage, layer);
+      return this.#files.texts.read(session.stage, layer, session.history.undoSteps);
     } catch (error) {
       if (this.lose(error)) return "The module was lost.";
       return error instanceof Error ? error.message : String(error);

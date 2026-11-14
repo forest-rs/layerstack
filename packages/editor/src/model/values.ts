@@ -15,10 +15,30 @@ export function formatNumber(value: number | bigint): string {
   return String(Number(value.toPrecision(6)));
 }
 
+/** Whether `type` is a quaternion (`quath`, `quatf`, `quatd`) or an array of them. */
+export function isQuaternion(type: string): boolean {
+  return /^quat[hfd](\[\])?$/.test(type);
+}
+
+/**
+ * A quaternion's components as USDA writes them, real part first
+ * (`(r, i, j, k)`), from the order the bindings read and take one in,
+ * imaginary part first (`[i, j, k, r]`, as `GfQuatd` is laid out).
+ */
+export function realFirst<T>(components: readonly T[]): T[] {
+  return components.length === 4 ? [components[3]!, components[0]!, components[1]!, components[2]!] : [...components];
+}
+
+/** {@link realFirst} undone: `(r, i, j, k)` as the bindings take it, `[i, j, k, r]`. */
+export function imaginaryFirst<T>(components: readonly T[]): T[] {
+  return components.length === 4 ? [components[1]!, components[2]!, components[3]!, components[0]!] : [...components];
+}
+
 /**
  * A value in USDA-like text: `2`, `(0.8, 0.2, 0.1)`, `"text"`,
- * `[(-1, -1, -1), (1, 1, 1)] (2 elements)`. An array is read through a view of
- * the module's memory, with no copy; the caller still owns the value.
+ * `[(-1, -1, -1), (1, 1, 1)] (2 elements)`, a quaternion real part first
+ * as USDA writes it. An array is read through a view of the module's
+ * memory, with no copy; the caller still owns the value.
  */
 export function formatValue(value: Value | null): string {
   if (value === null) return "none";
@@ -30,7 +50,7 @@ export function formatValue(value: Value | null): string {
           ? String(value.value)
           : formatNumber(value.value);
     case "tuple":
-      return `(${value.value.map(formatNumber).join(", ")})`;
+      return `(${(isQuaternion(value.type) ? realFirst(value.value) : value.value).map(formatNumber).join(", ")})`;
     case "array": {
       const { array } = value;
       const view = array.view();
@@ -41,7 +61,7 @@ export function formatValue(value: Value | null): string {
           const scalar = scalarAt(array, view, element * array.components + component);
           scalars.push(typeof scalar === "string" ? JSON.stringify(scalar) : formatNumber(scalar as number | bigint));
         }
-        shown.push(array.components === 1 ? (scalars[0] ?? "") : `(${scalars.join(", ")})`);
+        shown.push(array.components === 1 ? (scalars[0] ?? "") : `(${(isQuaternion(array.type) ? realFirst(scalars) : scalars).join(", ")})`);
       }
       const more = array.length > SHOWN_ELEMENTS ? ", ..." : "";
       return `[${shown.join(", ")}${more}] (${array.length} element${array.length === 1 ? "" : "s"})`;

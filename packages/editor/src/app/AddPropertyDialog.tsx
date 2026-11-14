@@ -18,8 +18,7 @@ import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogSubmit, Di
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { initialValue, propertyNameProblem, valueTypeGroups, withoutTarget, withTarget } from "../model/propertyOps.ts";
-import { formatNumber } from "../model/values.ts";
+import { initialValue, propertyNameProblem, usdaValueText, valueTypeGroups, withoutTarget, withTarget } from "../model/propertyOps.ts";
 import type { EditorStore } from "../store.ts";
 import { PrimPicker } from "./PrimPicker.tsx";
 import { TargetPath } from "./RelationshipTargets.tsx";
@@ -29,16 +28,6 @@ type Kind = "attribute" | "relationship";
 
 /** The most schema-defined names offered at once. */
 const PICKS = 12;
-
-/** A value to author as USDA writes it: `0`, `(0, 0, 0)`, `""`, `[]`. */
-function usdaText(input: ValueInput | null): string {
-  if (input === null || !("value" in input)) return "";
-  const value = input.value as unknown;
-  const one = (scalar: unknown): string => (typeof scalar === "string" ? JSON.stringify(scalar) : typeof scalar === "number" ? formatNumber(scalar) : String(scalar));
-  if (ArrayBuffer.isView(value) || (Array.isArray(value) && input.type.endsWith("[]"))) return "[]";
-  if (Array.isArray(value)) return `(${value.map((item: unknown) => (Array.isArray(item) ? `(${item.map(one).join(", ")})` : one(item))).join(", ")})`;
-  return one(value);
-}
 
 /** A schema-defined attribute's fallback as a value to author: kept when it holds nothing in the module (a scalar or tuple), else the type's starting value. */
 function fallbackOf(attribute: Attribute): ValueInput | null {
@@ -104,7 +93,7 @@ export function AddPropertyDialog({ store, prim, onClose }: { store: EditorStore
   };
   const usda =
     kind === "attribute"
-      ? `${defined === undefined ? "custom " : ""}${variability === "uniform" ? "uniform " : ""}${typeName} ${name || "name"}${value === null ? "" : ` = ${usdaText(value)}`}`
+      ? `${defined === undefined ? "custom " : ""}${variability === "uniform" ? "uniform " : ""}${typeName} ${name || "name"}${value === null ? "" : ` = ${usdaValueText(value)}`}`
       : `${definedRelationships.includes(name) ? "" : "custom "}rel ${name || "name"} = ${targets.length === 0 ? "None" : targets.length === 1 ? `<${targets[0]}>` : `[${targets.map((target) => `<${target}>`).join(", ")}]`}`;
   const option = ({ isSelected }: { isSelected: boolean }) => buttonVariants({ variant: isSelected ? "secondary" : "ghost", size: "sm" });
   const smallOption = ({ isSelected }: { isSelected: boolean }) => buttonVariants({ variant: isSelected ? "secondary" : "ghost", size: "xs" });

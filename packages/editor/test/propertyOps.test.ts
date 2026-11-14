@@ -12,7 +12,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Stage } from "@forest-rs/layerstack";
 import { searchPrims } from "../src/model/primSearch.ts";
-import { initialValue, movedTarget, propertyActions, propertyNameProblem, targetOpinion, valueTypeGroups, withoutTarget, withTarget } from "../src/model/propertyOps.ts";
+import { initialValue, movedTarget, propertyActions, propertyNameProblem, targetOpinion, usdaValueText, valueTypeGroups, withoutTarget, withTarget } from "../src/model/propertyOps.ts";
+import { formatValue } from "../src/model/values.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
 /** The scalar value of the attribute at `path`; `null` when it has none. */
@@ -426,6 +427,7 @@ test("every value type offered can be created with its starting value, scalar an
   assert.ok(offered.includes("color3f") && offered.includes("pathExpression") && offered.includes("frame4d"));
   assert.ok(!offered.some((name) => name.endsWith("[]") || name === "opaque" || name === "group" || name === "Transform"), "scalars, holding a value, not legacy");
   assert.deepEqual(groups.find(({ group }) => group === "Colors")?.types.map((type) => type.name), ["color3h", "color3f", "color3d", "color4h", "color4f", "color4d"]);
+  const previews = new Map<string, string>();
   for (const { types } of groups) {
     for (const scalar of types) {
       for (const typeName of [scalar.name, scalar.arrayType!]) {
@@ -434,14 +436,30 @@ test("every value type offered can be created with its starting value, scalar an
         assert.notEqual(value, null, typeName);
         stage.apply([{ type: "createAttribute", path: `/World/Top.types:${name}`, typeName, value: value! }]);
         assert.equal(stage.attribute(`/World/Top.types:${name}`)!.typeName, typeName);
+        previews.set(`custom ${typeName} types:${name}`, usdaValueText(value));
       }
     }
   }
+  // What the dialog says will be authored is what the layer's USDA then reads, for every type.
+  const authored = new Map(
+    new TextDecoder()
+      .decode(stage.exportLayer(stage.root, "usda"))
+      .split("\n")
+      .filter((line) => line.includes(" types:"))
+      .map((line) => line.trim().split(" = ") as [string, string]),
+  );
+  assert.equal(authored.size, previews.size);
+  for (const [declaration, preview] of previews) assert.equal(preview, authored.get(declaration), declaration);
   const identity = stage.attribute("/World/Top.types:matrix4d")!.get();
   assert.deepEqual(identity?.kind === "tuple" ? identity.value : null, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-  // A quaternion's real part first, as USDA writes it: the identity rotation.
-  const rotation = stage.attribute("/World/Top.types:quatd")!.get();
-  assert.deepEqual(rotation, { kind: "tuple", type: "quatd", value: [1, 0, 0, 0] });
+  // A quaternion starts as the identity rotation: real part 1, which USDA writes first and the bindings read last.
+  for (const quaternion of ["quath", "quatf", "quatd"]) {
+    assert.equal(authored.get(`custom ${quaternion} types:${quaternion}`), "(1, 0, 0, 0)");
+    const rotation = stage.attribute(`/World/Top.types:${quaternion}`)!.get();
+    assert.deepEqual(rotation, { kind: "tuple", type: quaternion, value: [0, 0, 0, 1] });
+    // And the inspector shows it as USDA writes it.
+    assert.equal(formatValue(rotation), "(1, 0, 0, 0)");
+  }
 });
 
 test("what is offered on a property is what would change something where edits go", async () => {

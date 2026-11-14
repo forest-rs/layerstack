@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { type ColorLike, colorLike, colorLikeCue } from "../../model/colorLike.ts";
 import { NOT_A_NUMBER, parseNumber } from "../../model/refusal.ts";
-import { formatNumber, leadingNumbers, releaseValue } from "../../model/values.ts";
+import { formatNumber, imaginaryFirst, isQuaternion, leadingNumbers, realFirst, releaseValue } from "../../model/values.ts";
 import { hexToLinear, linearToHex, swatchCss, swatches } from "../../presentations/color.ts";
 import { type AcceptProps, type PresentationContext, type PresentProps, registerCommand, registerPresentation, type ValueObject } from "../../presentations/registry.ts";
 import { allowedTokens, CommitField } from "../fields.tsx";
@@ -50,9 +50,13 @@ function ValueText(props: PresentProps<"value">) {
  * what the value is for (`cue`) has a dashed picker that says why.
  */
 function TupleFields({ props, accept, color, cue }: { props: PresentProps<"value">; accept: (value: ValueInput) => string | void; color: boolean; cue?: string }) {
-  const channels = tupleOf(props);
-  if (channels === null || channels.length > 4) return <ValueText {...props} />;
+  const read = tupleOf(props);
+  if (read === null || read.length > 4) return <ValueText {...props} />;
   const type = props.object.typeName;
+  // A quaternion's fields are in USDA's order, real part first, as its text beside them is; the bindings read and take it imaginary part first.
+  const quaternion = isQuaternion(type) && read.length === 4;
+  const channels = quaternion ? realFirst(read) : read;
+  const authored = (next: readonly number[]) => (quaternion ? imaginaryFirst(next) : next);
   const label = labelOf(props);
   return (
     <div className="flex w-full items-center gap-1">
@@ -70,14 +74,14 @@ function TupleFields({ props, accept, color, cue }: { props: PresentProps<"value
       {channels.map((channel, index) => (
         <CommitField
           key={index}
-          label={`${label} ${index}`}
+          label={`${label} ${quaternion ? ["real", "i", "j", "k"][index] : index}`}
           numeric
           value={formatNumber(channel)}
           className="w-0 flex-1"
           onCommit={(text) => {
             const number = parseNumber(text);
             if (number === null) return NOT_A_NUMBER;
-            return accept({ type, value: channels.map((old, at) => (at === index ? number : old)) });
+            return accept({ type, value: authored(channels.map((old, at) => (at === index ? number : old))) });
           }}
         />
       ))}

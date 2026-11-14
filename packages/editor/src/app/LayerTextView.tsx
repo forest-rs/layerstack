@@ -53,6 +53,8 @@ export function LayerTextView({ store }: { store: EditorStore }) {
   countRender("LayerTextView");
   // Edits, undo and redo change the text; `view` the layer shown.
   const revision = useRevision(store, "composition", "history", "view");
+  // Where edits go is said beside the layer ("edits go here"): another target says it anew, with nothing read again.
+  useRevision(store, "target");
   const layer = store.textLayer;
   const stage = store.session?.stage;
   const [refreshed, setRefreshed] = useState(0);

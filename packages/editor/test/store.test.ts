@@ -614,6 +614,57 @@ test("an edit asked for while an action fetches runs after it, and a refusal is 
   );
 });
 
+test("edits asked for while an action fetches are written where edits went when they were asked for", async () => {
+  const h = await harness();
+  const source = sampleSource("scene.usda", { "extra.usda": '#usda 1.0\n\ndef Scope "Extra"\n{\n}\n' });
+  await h.open(source);
+  const { store } = h;
+  const session = store.session!;
+  const stage = session.stage;
+  const root = stage.root;
+  const library = session.layerNamed("library.usda");
+  const release = source.hold("assets/chrome.usda");
+  const variant = store.selectVariant("/World/Robot", "finish", "chrome");
+  await h.until(() => source.askedFor("assets/chrome.usda") > 0, "the variant's fetch");
+
+  // Asked for with edits going to the root: a value, a prim, a shader, a sublayer, a save.
+  assert.equal(store.setValue("/World/Top.size", { type: "double", value: 3 }), undefined);
+  assert.equal(store.setValue("/World/Top.size", { type: "double", value: 4 }, 12), undefined);
+  assert.equal(store.definePrim("/World", "Late", "Scope"), undefined);
+  assert.equal(store.addShader("/World/Looks/Checker/Reader2", "UsdPrimvarReader_float2"), undefined);
+  const sublayer = store.insertSublayer(root, "./extra.usda", 1);
+  const save = store.save();
+  assert.equal(store.queued, 6);
+  // Then the toolbar is pointed at the sublayer, which takes effect at once.
+  store.setTarget(library);
+  assert.equal(session.target, library);
+  // And one more, asked for with edits going there.
+  assert.equal(store.definePrim("/World", "Later", "Scope"), undefined);
+  release();
+  await h.settle(variant);
+  await h.settle(sublayer);
+  const saved = await h.settle(save);
+  await h.until(() => store.running === null && store.queued === 0, "the edits behind the variant");
+  assert.deepEqual(store.notices, []);
+
+  const authors = (path: string) => [root, library].filter((layer) => stage.layerSpec(layer, path) !== null).map((layer) => layer.identifier);
+  assert.equal(valueOf(stage, "/World/Top.size"), 3, "the root's opinion, which shows");
+  const size = stage.layerSpec(root, "/World/Top.size");
+  assert.deepEqual(size?.type === "attribute" ? size.timeSamples : null, [12], "at the time it was asked at");
+  assert.deepEqual(authors("/World/Top.size"), ["scene.usda"]);
+  assert.deepEqual(authors("/World/Late"), ["scene.usda"]);
+  assert.deepEqual(authors("/World/Looks/Checker/Reader2"), ["scene.usda"]);
+  assert.deepEqual(authors("/World/Later"), ["library.usda"], "asked for after the change, so written there");
+  assert.deepEqual(stage.sublayers(root).map((each) => each.asset), ["./library.usda", "./extra.usda"], "a sublayer edit names its layer");
+  assert.deepEqual(saved?.written.map((layer) => layer.identifier), ["scene.usda"], "the save took what was asked for before it, not what came after");
+  assert.equal(session.target, library, "where edits go stays as chosen");
+  assert.equal(store.shadow, null, "no note names the wrong layer");
+  // Each is one step, undone in the layer it was written to.
+  await h.settle(store.undo());
+  assert.equal(stage.prim("/World/Later"), null);
+  assert.equal(session.target, library);
+});
+
 test("jumping between keys pauses and lands on the selected prim's keys", async () => {
   const h = await harness();
   await h.open(sampleSource());

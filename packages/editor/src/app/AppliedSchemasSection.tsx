@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/button";
 import { API_SCHEMA_NOTES, appliedSchemaRows, authoredApiSchemas, type SchemaRemoval, schemaRemoval, schemaSites } from "../model/primAuthoring.ts";
 import { targetSite } from "../model/propertyOps.ts";
 import type { EditorStore } from "../store.ts";
-import { useStoreSelector } from "./context.ts";
+import { useRevision, useStoreSelector } from "./context.ts";
 import { askPrim } from "./primDialogRequests.ts";
 import { editsGoTo, RefusalNote, useRefusal } from "./primAuthoringParts.tsx";
 import { Section } from "./Section.tsx";
@@ -33,6 +33,8 @@ function layerName(layer: { readonly identifier: string | null } | null): string
 export function AppliedSchemasSection({ store, prim }: { store: EditorStore; prim: Prim }) {
   const [refusal, attempt] = useRefusal();
   const revealed = useStoreSelector(store, ["history"], (at) => at.revealed);
+  // What removing a schema does depends on where edits go: read again when they go elsewhere.
+  useRevision(store, "target");
   const rows = appliedSchemaRows(prim.appliedSchemas(), authoredApiSchemas(prim));
   const readOnly = prim.instanceProxy;
   const where = editsGoTo(store);

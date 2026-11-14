@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { holdsField } from "../model/primAuthoring.ts";
 import { formatValue, releaseValue } from "../model/values.ts";
 import type { EditorStore } from "../store.ts";
+import { useRevision } from "./context.ts";
 import { editsGoTo, RefusalNote, useRefusal } from "./primAuthoringParts.tsx";
 import { Section } from "./Section.tsx";
 
@@ -61,6 +62,8 @@ export function PrimMetadataSection({ store, prim }: { store: EditorStore; prim:
 
 /** The documentation field: a text area, saved where edits go, or cleared there. */
 function Documentation({ store, prim, documentation }: { store: EditorStore; prim: Prim; documentation: string | null }) {
+  // Clear is offered for what the spec edits go to holds: read again when they go elsewhere.
+  useRevision(store, "target");
   const [text, setText] = useState(documentation ?? "");
   const [refusal, attempt] = useRefusal();
   const changed = text !== (documentation ?? "");

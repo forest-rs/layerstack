@@ -52,6 +52,7 @@ import {
   nameOf,
   noSpecToCopy,
   opinionSites,
+  opinionsNotCopied,
   parentOf,
   type PrimSpecifier,
   type SchemaReveal,
@@ -1055,7 +1056,15 @@ export class EditorStore {
           throw Object.assign(new Error(noSpecToCopy(path, session.targetName, opinionSites(session.stage, path))), { code: "edit.rejected.no_such_spec" });
         }
       },
-      () => this.#selection.select(to),
+      () => {
+        // A copy is of one layer's spec: what other layers say of the prim is not in it, and the copy differs from what was seen.
+        const session = this.session;
+        const left = session === null ? [] : opinionsNotCopied(session.stage, path, to);
+        if (session !== null && left.length > 0) {
+          this.#notices.add(`duplicate ${path}`, `${to} copies what ${session.targetName} holds of ${path}. Its opinions in ${left.join(", ")} are not in the copy, which differs by them.`, null);
+        }
+        return this.#selection.select(to);
+      },
     );
   }
 

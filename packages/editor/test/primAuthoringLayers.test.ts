@@ -306,6 +306,28 @@ test("the eye says so when a stronger layer's visibility still decides", async (
   assert.equal(store.notices.length, said);
 });
 
+test("a duplicate of a prim other layers also have opinions of says what the copy lacks", async () => {
+  const { store, stage } = await opened();
+  // Only the root layer says anything of the ball: the copy is the ball.
+  assert.equal(store.duplicate("/World/Ball"), undefined);
+  assert.equal(store.notices.length, 0);
+  // The sublayer gives the pebble its radius and a child: the root layer's spec, which is what is copied, has neither.
+  assert.equal(store.duplicate("/World/Pebble"), undefined);
+  assert.equal(store.selection, "/World/Pebble1");
+  assert.deepEqual(stage.attribute("/World/Pebble.radius")!.get(), { kind: "scalar", type: "double", value: 3 });
+  assert.deepEqual(stage.attribute("/World/Pebble1.radius")!.get(), { kind: "scalar", type: "double", value: 1 });
+  assert.deepEqual([names(stage, "/World/Pebble"), names(stage, "/World/Pebble1")], [["Chip"], []]);
+  assert.equal(
+    store.notices.at(-1)?.message,
+    "/World/Pebble1 copies what root.usda holds of /World/Pebble. Its opinions in weak.usda are not in the copy, which differs by them.",
+  );
+  // A referenced prim's copy keeps the reference its spec authors, and so the asset's opinions.
+  const said = store.notices.length;
+  assert.equal(store.duplicate("/World/Tower"), undefined);
+  assert.deepEqual(names(stage, "/World/Tower1"), ["Base", "Roof", "Flag"]);
+  assert.equal(store.notices.length, said);
+});
+
 test("a duplicate inside a variant is refused before it is tried, as itself and not as a missing spec", async () => {
   const { store, stage, steps } = await opened();
   store.editInsideVariant("/World/Shed", "look", "red");

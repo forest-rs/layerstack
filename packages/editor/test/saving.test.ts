@@ -261,6 +261,28 @@ test("a save leaves the session layer, and says it is the session layer", async 
   assert.equal(store.unsaved, false);
 });
 
+test("with edits going to a session layer, a move still changes the root's layers, and a save writes them", async () => {
+  const h = await harness();
+  h.store.setEditLayerChoice("session");
+  await h.open(sampleSource());
+  const { store } = h;
+  // A value goes to the session layer alone.
+  store.setValue("/World/Robot.visibility", HIDE_ROBOT);
+  assert.deepEqual(store.savePlan().map((entry) => entry.disposition), ["session"]);
+  // A move renames the prim in every layer of the stack that holds it (`UsdNamespaceEditor`): what the Open menu says of this choice.
+  assert.equal(store.move("/World/Robot", "/World/Robot2"), undefined);
+  assert.deepEqual(
+    store.savePlan().map((entry) => [entry.layer.identifier, entry.disposition]),
+    [
+      ["scene.usda", "write"],
+      ["library.usda", "write"],
+      [null, "session"],
+    ],
+  );
+  const result = await h.settle(store.save());
+  assert.deepEqual(result?.written.map((layer) => layer.identifier).sort(), ["library.usda", "scene.usda"]);
+});
+
 test("a save leaves a sublayer of the session layer, and its confirmation says so", async () => {
   const h = await harness();
   h.store.setEditLayerChoice("session");

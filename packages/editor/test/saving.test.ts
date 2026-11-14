@@ -85,6 +85,33 @@ test("each layer counts as unsaved only while a step since its save writes it", 
   assert.deepEqual(store.dirtyLayers(), []);
 });
 
+test("a save writes only the layers its confirmation lists, not one whose edits were undone", async () => {
+  const h = await harness();
+  await h.open(sampleSource());
+  const { store } = h;
+  const session = store.session!;
+  const root = session.stage.root;
+  // The root is edited and undone: dirty to the stage, with nothing to save.
+  store.setValue("/World/Robot.visibility", HIDE_ROBOT);
+  await h.settle(store.undo());
+  store.setTarget(session.layerNamed("library.usda"));
+  assert.equal(store.setValue("/World/Robot.visibility", { type: "token", value: "inherited" }), undefined);
+  assert.ok(session.stage.isDirty(root));
+  assert.deepEqual(store.savePlan().map((entry) => entry.layer.identifier), ["library.usda"], "what the confirmation lists");
+
+  const result = await h.settle(store.save());
+  assert.deepEqual(result?.written.map((layer) => layer.identifier), ["library.usda"], "the root's file is not replaced");
+  assert.equal(result?.bytes, result?.written[0]!.bytes.byteLength);
+  assert.deepEqual(session.saved.map((file) => file.identifier), ["library.usda"]);
+  assert.deepEqual(store.dirtyLayers(), []);
+  // The undone edit, redone, is unsaved again; the library's is not.
+  store.setTarget(undefined);
+  await h.settle(store.undo());
+  assert.deepEqual(store.dirtyLayers().map((layer) => layer.identifier), ["library.usda"]);
+  await h.settle(store.redo());
+  assert.deepEqual(store.dirtyLayers(), []);
+});
+
 test("a layer exports as USDA text or USDC binary, and stays edited", async () => {
   const h = await harness();
   await h.open(sampleSource());

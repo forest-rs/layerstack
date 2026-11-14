@@ -151,6 +151,18 @@ export function withinBounds(value: ValueInput, bounds: InputBounds): ValueInput
   return { type: value.type, value: clampToBounds(value.value, bounds) };
 }
 
+/**
+ * The time an edit of the input at `path` is authored at: `now` (the
+ * time when the edit is committed) when its value has time samples, else
+ * `null`, its default. One sample is enough: the value does not vary, so
+ * the row is not an animated one, yet a default authored under the sample
+ * would not show (as the property list's keyed fields, `editTime`).
+ */
+export function inputEditTime(stage: Stage, path: string, now: number | undefined): number | null {
+  if (now === undefined || stage.attribute(path) === null) return null;
+  return stage.valueSourcesMightBeTimeVarying([path])[0] === true ? now : null;
+}
+
 /** The range a slider covers: the soft bounds where both are given, else the hard ones; `null` without both ends. */
 export function sliderRange(bounds: InputBounds): readonly [number, number] | null {
   const min = bounds.softMin ?? bounds.min;

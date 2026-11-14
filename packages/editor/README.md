@@ -456,7 +456,10 @@ nothing more.
   prim does not author, in italics with their fallback; the stage has no
   shader registry, so the editor keeps these definitions in one table.
   An edit authors through `setShaderInput`, which creates the input on
-  its first edit. A connected input is a live link to its source, and
+  its first edit; an input with time samples, even one, is edited as a
+  sample at the current time (a default under it would not show), and a
+  number is held to the input's `uimin` and `uimax`, here and on the
+  graph's rows. A connected input is a live link to its source, and
   one that reads a `UsdUVTexture` shows the image as a thumbnail with its
   file (a click shows it in the asset view), `sourceColorSpace` and wrap
   modes. A dot marks the inputs the prim sets itself, as opposed to those
@@ -491,7 +494,10 @@ nothing more.
   authored. Dragging from an output's row to an input's connects them
   (`ConnectToSource`, replacing what the input read); while dragging, the
   inputs that could read it are lit, amber where the types differ (USD
-  connects any types; the renderer decides what it reads), and those
+  connects any types; the renderer decides what it reads) or where the
+  connection crosses a container's boundary other than through its
+  interface (`CanConnect` does not take it; `ConnectToSource` authors
+  it), and those
   that could not are dimmed, with why (a port reading itself, a
   connection already there, a cycle, named). Dropping on a node asks
   which of its inputs. A curve is selected by a click and disconnected
@@ -506,7 +512,10 @@ nothing more.
   go to). Nodes stay where
   they were drawn across an edit. Connections that name nothing (a
   dashed stub and a cross) and cycles (a dashed red curve) are marked on
-  the curve and the port, with the reason. The keyboard reaches all of
+  the curve and the port, with the reason; one that names nothing is
+  disconnected from its port's menu or with Delete, as any other. A
+  connection or disconnection that a stronger layer hides is said not to
+  show, with what the port still reads. The keyboard reaches all of
   it: the arrow keys move between nodes and their rows (left and right
   follow a row's connection), Enter selects or explains, Shift+F10 opens
   the focused row's, node's or curve's menu ("Connect to…" lists the

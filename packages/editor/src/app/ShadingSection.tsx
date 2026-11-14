@@ -21,7 +21,7 @@ import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import { enclosingMaterial, primOf } from "../model/network.ts";
 import { shaderDefinition } from "../model/shaderDefinitions.ts";
-import { clampToBounds, groupInputs, type ShadingInput, type ShadingInputGroup, sliderRange } from "../model/shadingInputs.ts";
+import { clampToBounds, groupInputs, inputEditTime, type ShadingInput, type ShadingInputGroup, sliderRange } from "../model/shadingInputs.ts";
 import { formatNumber } from "../model/values.ts";
 import type { EditorStore } from "../store.ts";
 import { useTime } from "./context.ts";
@@ -262,7 +262,7 @@ function InputValue({ store, input, at }: { store: EditorStore; input: ShadingIn
         value={number}
         range={range}
         integer={/^u?int/.test(type)}
-        onCommit={(next) => store.setShaderInput(input.path, { type, value: clampToBounds(next, input.bounds) }, at)}
+        onCommit={(next) => store.setShaderInput(input.path, { type, value: clampToBounds(next, input.bounds) }, inputEditTime(attribute.stage, input.path, store.time))}
       />
     );
   }

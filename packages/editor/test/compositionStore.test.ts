@@ -140,6 +140,81 @@ test("an arc that makes a cycle is listed as making one, matched to its error by
   assert.equal(uncomposedWhy({ field: "references", asset: null, primPath: "/World/Other" }, "scene.usda", stage.status().compositionErrors, false).kind, "unknown");
 });
 
+test("a cycle is an arc's only when it leaves the spec that authors the arc: not another stack's hop to a prim of the same path", async () => {
+  // The root references an asset whose prim /A references itself (a cycle, of the asset's), and deletes the internal
+  // reference to its own /A that the sublayer adds: that one composes nothing because it is deleted, not for a cycle.
+  const h = await harness();
+  await h.open(
+    sampleSource("cycles.usda", {
+      "cycles.usda": `#usda 1.0
+(
+    subLayers = [
+        @./cycles_weak.usda@
+    ]
+)
+
+def Xform "P" (
+    delete references = </A>
+    prepend references = @./cycles_asset.usda@</A>
+)
+{
+}
+
+def Xform "A"
+{
+}
+`,
+      "cycles_weak.usda": `#usda 1.0
+
+over "P" (
+    prepend references = </A>
+)
+{
+}
+`,
+      "cycles_asset.usda": `#usda 1.0
+
+def Xform "A" (
+    prepend references = </A>
+)
+{
+}
+`,
+    }),
+  );
+  const store = h.store;
+  const stage = store.session!.stage;
+  const weak = store.session!.layerNamed("cycles_weak.usda");
+  const issues = stage.status().compositionErrors.filter((issue) => issue.prim === "/P");
+  assert.match(issues[0]!.message, /\/P in @cycles\.usda@ -> reference \/A in @cycles_asset\.usda@ -> reference \/A in @cycles_asset\.usda@$/);
+  const [item, ...rest] = uncomposedHere(stage.prim("/P")!.compositionArcs(), weak, "/P", store.specsOf);
+  assert.ok(item !== undefined && rest.length === 0);
+  assert.deepEqual([item.asset, item.primPath], [null, "/A"]);
+  assert.equal(uncomposedWhy(item, weak.identifier, issues, false, "/P").kind, "unknown", "the asset's own cycle is not this arc's");
+  // The hop that is the asset's own arc, read at its spec there, is.
+  assert.equal(uncomposedWhy(item, "cycles_asset.usda", issues, false, "/A").kind, "cycle");
+});
+
+test("a cycle is matched to an arc authored inside a variant, and through a reference, by the prim its spec is of", async () => {
+  const { h, store, stage } = await opened();
+  const why = (prim: string) => {
+    const target = store.session!.target!;
+    assert.ok("kind" in target);
+    const issues = stage.status().compositionErrors.filter((issue) => issue.prim === prim);
+    const [item, ...rest] = uncomposedHere(stage.prim(prim)!.compositionArcs(), target, prim, store.specsOf);
+    assert.ok(item !== undefined && rest.length === 0, `one arc of ${prim} composes nothing`);
+    return uncomposedWhy(item, target.layer.identifier, issues, false, target.mapPath(prim));
+  };
+  store.editInsideVariant("/World/Robot", "finish", "painted");
+  await h.settle(store.addArc("/World/Robot", reference(null, "/World/Robot")).done);
+  assert.equal(store.session!.target && "kind" in store.session!.target ? store.session!.target.mapPath("/World/Robot") : null, "/World/Robot{finish=painted}");
+  assert.equal(why("/World/Robot").kind, "cycle");
+  await h.settle(store.undo());
+  store.setTarget(stage.prim("/World/Robot")!.compositionArcs().find((arc) => arc.arc === "references")!.editTarget());
+  await h.settle(store.addArc("/World/Robot/Body", reference(null, "/World/Robot")).done);
+  assert.equal(why("/World/Robot/Body").kind, "cycle", "authored </Robot> at /Robot/Body in the asset");
+});
+
 test("an added arc the stage refuses returns why at once and changes nothing", async () => {
   const { store, stage, steps } = await opened();
   const robot = stage.prim("/World/Robot")!.compositionArcs().find((arc) => arc.arc === "references")!;

@@ -10,7 +10,7 @@
 // what will be authored, in USDA, and where; a refusal is said in it.
 import { useMemo, useState } from "react";
 import { Header, ListBox, ListBoxItem, ListBoxSection, ToggleButton, ToggleButtonGroup } from "react-aria-components";
-import type { Attribute, Prim, ValueInput } from "@forest-rs/layerstack";
+import type { Prim } from "@forest-rs/layerstack";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { PlusSignIcon } from "@hugeicons/core-free-icons";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -18,7 +18,7 @@ import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogSubmit, Di
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { initialValue, propertyNameProblem, usdaValueText, valueTypeGroups, withoutTarget, withTarget } from "../model/propertyOps.ts";
+import { initialValue, propertyNameProblem, schemaStart, usdaValueText, valueTypeGroups, withoutTarget, withTarget } from "../model/propertyOps.ts";
 import type { EditorStore } from "../store.ts";
 import { PrimPicker } from "./PrimPicker.tsx";
 import { TargetPath } from "./RelationshipTargets.tsx";
@@ -28,14 +28,6 @@ type Kind = "attribute" | "relationship";
 
 /** The most schema-defined names offered at once. */
 const PICKS = 12;
-
-/** A schema-defined attribute's fallback as a value to author: kept when it holds nothing in the module (a scalar or tuple), else the type's starting value. */
-function fallbackOf(attribute: Attribute): ValueInput | null {
-  const value = attribute.get();
-  if (value?.kind === "scalar" || value?.kind === "tuple") return value;
-  if (value?.kind === "array") value.array.release();
-  return attribute.typeName === null ? null : initialValue(attribute.typeName);
-}
 
 /** The dialog that adds a property to `prim`, opened from the inspector's Properties section. */
 export function AddPropertyDialog({ store, prim, onClose }: { store: EditorStore; prim: Prim; onClose: () => void }) {
@@ -75,7 +67,9 @@ export function AddPropertyDialog({ store, prim, onClose }: { store: EditorStore
   const defined = kind === "attribute" ? definedAttributes.get(name) : undefined;
   const typeName = defined?.typeName ?? (array ? (scalarType?.arrayType ?? `${scalar}[]`) : scalar);
   const variability = defined?.variability ?? (uniform ? "uniform" : "varying");
-  const value = defined === undefined ? initialValue(typeName) : fallbackOf(defined);
+  // A schema's attribute starts at its fallback, read once for the name chosen.
+  const start = useMemo(() => (defined === undefined ? null : schemaStart(defined)), [defined]);
+  const value = start === null ? initialValue(typeName) : start.value;
   const problem = propertyNameProblem(name, taken[kind]);
   const picks = (kind === "attribute" ? [...definedAttributes.keys()] : definedRelationships).filter((each) => each !== name && each.toLowerCase().includes(name.toLowerCase())).sort();
   const groups = valueTypes
@@ -158,7 +152,12 @@ export function AddPropertyDialog({ store, prim, onClose }: { store: EditorStore
         {kind === "attribute" && defined !== undefined && (
           <p className="text-[11px] text-muted-foreground">
             Its schema defines <span className="font-mono text-foreground">{name}</span> as {variability === "uniform" ? "uniform " : ""}
-            <span className="font-mono text-foreground">{typeName}</span>: adding it authors its fallback, to edit.
+            <span className="font-mono text-foreground">{typeName}</span>
+            {start?.fallback === true
+              ? value === null
+                ? ": adding it declares it here with no value, so its fallback still shows."
+                : ": adding it authors its fallback, to edit."
+              : ", with no fallback: adding it authors the value below, to edit."}
           </p>
         )}
         {kind === "attribute" && defined === undefined && (

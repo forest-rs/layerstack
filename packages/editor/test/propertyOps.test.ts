@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Stage } from "@forest-rs/layerstack";
 import { searchPrims } from "../src/model/primSearch.ts";
-import { initialValue, movedTarget, propertyActions, propertyNameProblem, targetOpinion, usdaValueText, valueTypeGroups, withoutTarget, withTarget } from "../src/model/propertyOps.ts";
+import { initialValue, movedTarget, propertyActions, propertyNameProblem, schemaStart, targetOpinion, usdaValueText, valueTypeGroups, withoutTarget, withTarget } from "../src/model/propertyOps.ts";
 import { formatValue } from "../src/model/values.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
@@ -310,6 +310,34 @@ test("creating an attribute authors its spec and starting value, marks it, and r
   assert.equal(store.notices.length, 2);
   await h.settle(store.undo());
   assert.equal(stage.attribute("/World/Top.notes:label"), null);
+});
+
+test("adding an attribute its schema defines authors the schema's fallback, an array's too, and is not custom", async () => {
+  const { h, store, stage } = await opened();
+  const line = (name: string) =>
+    new TextDecoder()
+      .decode(stage.exportLayer(stage.root, "usda"))
+      .split("\n")
+      .find((each) => each.includes(` ${name} = `) || each.endsWith(` ${name}`))
+      ?.trim();
+  // A Sphere's extent falls back to its two corners: authoring an empty array over them would lose its bounds.
+  const extent = stage.attribute("/World/Rock.extent")!;
+  assert.equal(extent.authored, false);
+  const start = schemaStart(extent);
+  assert.equal(start.fallback, true);
+  assert.equal(usdaValueText(start.value), "[(-1, -1, -1), (1, 1, 1)]");
+  assert.equal(store.createAttribute(extent.path, extent.typeName!, extent.variability, start.value ?? undefined), undefined);
+  assert.equal(line("extent"), "float3[] extent = [(-1, -1, -1), (1, 1, 1)]", "as the dialog said, and not custom");
+  assert.equal(formatValue(stage.attribute(extent.path)!.get()), "[(-1, -1, -1), (1, 1, 1)] (2 elements)");
+  await h.settle(store.undo());
+  assert.equal(stage.attribute(extent.path)!.authored, false);
+  // A scalar fallback is authored as it is.
+  const purpose = schemaStart(stage.attribute("/World/Rock.purpose")!);
+  assert.deepEqual([purpose.fallback, usdaValueText(purpose.value)], [true, '"default"']);
+  // One the schema gives no fallback starts at its type's starting value, and is said to.
+  const opacity = schemaStart(stage.attribute("/World/Rock.primvars:displayOpacity")!);
+  assert.deepEqual([opacity.fallback, usdaValueText(opacity.value)], [false, "[]"]);
+  assert.deepEqual(store.notices, []);
 });
 
 test("a relationship's targets are created, reordered and undone as edits where edits go", async () => {

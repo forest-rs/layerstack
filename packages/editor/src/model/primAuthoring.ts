@@ -530,6 +530,15 @@ export interface OpinionSite {
 }
 
 /**
+ * Whether a layer holds a spec at a spec path: `Stage.layerSpec` by
+ * default; a view passes the store's reader (`EditorStore.authoredSpec`),
+ * which reads each spec once per change of the stage. Inside an action
+ * the stage itself is read: the store's reader is as of the last change
+ * told to the views.
+ */
+export type SpecHeld = (layer: Layer, site: string) => boolean;
+
+/**
  * Where the prim at `path` has opinions, strongest first: each layer that
  * holds a spec of it, in its own layer stack and in the stack of every
  * arc it composes from (`Stage.layerSpec` of each arc's site in each of
@@ -537,7 +546,7 @@ export interface OpinionSite {
  * a copy could be made when the edit target has no spec of it: a copy
  * reads one layer's spec, so a layer is named only when it holds one.
  */
-export function opinionSites(stage: Stage, path: string): OpinionSite[] {
+export function opinionSites(stage: Stage, path: string, holds: SpecHeld = (layer, site) => stage.layerSpec(layer, site) !== null): OpinionSite[] {
   const prim = stage.prim(path);
   if (prim === null) return [];
   const sites: OpinionSite[] = [];
@@ -545,7 +554,7 @@ export function opinionSites(stage: Stage, path: string): OpinionSite[] {
   for (const arc of prim.compositionArcs()) {
     for (const layer of arc.layers) {
       const key = `${layer.id} ${arc.site}`;
-      if (seen.has(key) || stage.layerSpec(layer, arc.site) === null) continue;
+      if (seen.has(key) || !holds(layer, arc.site)) continue;
       seen.add(key);
       let target: EditTarget | null = null;
       try {
@@ -571,7 +580,7 @@ export interface CopySite extends OpinionSite {
 }
 
 /** The {@link opinionSites} of the prim at `path` that edits can go to, each with whether its duplicate can be made there. */
-export function copySites(stage: Stage, path: string): CopySite[] {
+export function copySites(stage: Stage, path: string, holds?: SpecHeld): CopySite[] {
   const to = copyPath(stage, path);
   const writes = (target: EditTarget) => copyRefusal(target.kind === "layer" ? target.layer : target, to) === null;
   // A target through an arc on the prim's parent writes the same layer and maps what is beside the prim too.
@@ -588,7 +597,7 @@ export function copySites(stage: Stage, path: string): CopySite[] {
     }
     return null;
   };
-  return opinionSites(stage, path).flatMap((site) => {
+  return opinionSites(stage, path, holds).flatMap((site) => {
     if (site.editTarget === null || site.layer.readOnly) return [];
     const target = writes(site.editTarget) ? site.editTarget : through(site.layer);
     return [{ ...site, editTarget: target ?? site.editTarget, copies: target !== null }];

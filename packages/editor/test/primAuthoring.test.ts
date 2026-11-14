@@ -459,9 +459,8 @@ test("two duplicates asked for while an action fetches make two copies, each of 
   assert.notEqual(stage.prim("/World/Rock1"), null);
 });
 
-// Owned by the review of property operations (`review-property-ops`), which fixes it once in the store's shared
-// edit path: an edit queued behind a fetch goes where edits go when it runs, not where they went when it was asked for.
-test("a kind set while an action fetches is authored where edits went when it was asked for", { todo: "fixed with the store's queued edits, in the property operations review" }, async () => {
+// The store's shared edit path writes an edit where edits went when it was asked for: a prim edit goes by it.
+test("a kind set while an action fetches is authored where edits went when it was asked for", async () => {
   const h = await harness();
   const source = sampleSource();
   await h.open(source);

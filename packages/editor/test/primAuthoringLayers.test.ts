@@ -9,7 +9,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Layer, Stage } from "@forest-rs/layerstack";
-import { bindingRows, copyPath, copyRefusal, copySites, nameOf, opinionSites } from "../src/model/primAuthoring.ts";
+import { appliedSchemaRows, authoredApiSchemas, bindingRows, copyPath, copyRefusal, copySites, nameOf, opinionSites, schemaRemoval, schemaSites } from "../src/model/primAuthoring.ts";
+import { targetSite } from "../src/model/propertyOps.ts";
 import { primActions } from "../src/model/primActions.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
@@ -326,6 +327,38 @@ test("a duplicate of a prim other layers also have opinions of says what the cop
   assert.equal(store.duplicate("/World/Tower"), undefined);
   assert.deepEqual(names(stage, "/World/Tower1"), ["Base", "Roof", "Flag"]);
   assert.equal(store.notices.length, said);
+});
+
+test("removing a schema a stronger layer applies, with edits going to a weaker one, is said to remove nothing", async () => {
+  const { store, stage, weak } = await opened();
+  const world = stage.prim("/World")!;
+  const row = appliedSchemaRows(world.appliedSchemas(), authoredApiSchemas(world)).find((each) => each.applied === "MaterialBindingAPI")!;
+  const removal = () => {
+    const read = schemaSites(world.compositionArcs(), targetSite(stage, store.session!.target, "/World"), (layer, path) => store.authoredSpec(layer, path)?.spec ?? null);
+    return schemaRemoval(row, read.sites, read.target, read.own);
+  };
+  // The root layer applies it: with edits going there, Remove takes it away.
+  assert.equal(removal().kind, "remove");
+  // With edits going to the sublayer, a delete there is under the root's list, which still adds it: said, not offered.
+  store.setTarget(weak);
+  const weaker = removal();
+  assert.equal(weaker.kind, "stronger");
+  assert.equal(weaker.kind === "stronger" ? weaker.layer.identifier : null, "root.usda");
+  // What the edit would have done: a delete in the sublayer, and the prim has the schema still.
+  assert.equal(store.removeSchema("/World", "MaterialBindingAPI"), undefined);
+  const spec = stage.layerSpec(weak, "/World");
+  assert.deepEqual(spec?.type === "prim" ? spec.apiSchemas?.deleted : null, ["MaterialBindingAPI"]);
+  assert.ok(stage.prim("/World")!.hasAPI("MaterialBindingAPI"));
+});
+
+test("the sites of a duplicate read through the store's spec reader are those read from the stage", async () => {
+  const { store, stage } = await opened();
+  const held = (layer: Layer, site: string) => store.authoredSpec(layer, site) !== null;
+  for (const path of ["/World/Group", "/World/Keep", "/World/Tower/Base", "/World/Pebble", "/World/Shed/Door"]) {
+    const through = copySites(stage, path, held).map((site) => [site.layer.identifier, site.arc, site.copies]);
+    assert.deepEqual(through, copySites(stage, path).map((site) => [site.layer.identifier, site.arc, site.copies]), path);
+    assert.ok(through.length > 0, path);
+  }
 });
 
 test("a duplicate inside a variant is refused before it is tried, as itself and not as a missing spec", async () => {

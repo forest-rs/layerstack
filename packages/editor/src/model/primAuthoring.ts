@@ -353,7 +353,8 @@ export function childPath(parent: string, name: string): string {
 export function freeSiblingName(name: string, taken: ReadonlySet<string>): string {
   const match = /^(.*?)(\d+)$/.exec(name);
   const base = match === null ? name : match[1]!;
-  for (let index = match === null ? 1 : Number(match[2]) + 1; ; index++) {
+  // Counted as integers of any size: a suffix past 2^53 does not count on as a number.
+  for (let index = match === null ? 1n : BigInt(match[2]!) + 1n; ; index++) {
     const candidate = `${base}${index}`;
     if (!taken.has(candidate)) return candidate;
   }

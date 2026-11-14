@@ -283,7 +283,7 @@ function Authoring({ store, arc, source, here }: { store: EditorStore; arc: Comp
   const usda = arcUsda(source.item.op, source.item.field, authoredItemText(source.item));
   return (
     <span className="flex min-w-0 flex-wrap items-center gap-x-1">
-      {here ? <span className="text-foreground">authored where edits go:</span> : <span>authored in</span>}
+      {here ? <span className="text-foreground">authored where edits go:</span> : source.ancestor === null ? <span>authored in</span> : <span>authored on its ancestor {source.ancestor} in</span>}
       {!here && <Present object={{ kind: "layer", layer: source.layer }} context={context} />}
       {!here && variantOfSite(source.specPath) !== null && <span>inside {source.specPath.slice(source.specPath.lastIndexOf("{"))}</span>}
       <code className="truncate font-mono" title={usda}>
@@ -332,7 +332,7 @@ function ArcMenu({
             Remove the {noun} (from {authoring})
           </DropdownMenuItem>
         )}
-        {source !== null && !here && there !== null && (
+        {source !== null && !here && there !== null && source.ancestor === null && (
           <DropdownMenuItem onAction={() => editThrough(store, there)}>Edit where it is authored, to remove it ({authoring})</DropdownMenuItem>
         )}
         {source !== null && (

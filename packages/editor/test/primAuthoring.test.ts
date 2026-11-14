@@ -315,6 +315,33 @@ test("an applied schema is removed where edits go apply it, deleted there when o
   assert.deepEqual(sub.apiSchemas?.prepended, ["ShadowAPI"]);
 });
 
+test("a schema a variant not selected applies is removed there when edits go inside it, though the prim's own application is what composes", async () => {
+  const { store, stage } = await opened();
+  const removal = () => {
+    const prim = stage.prim("/World/Robot")!;
+    const read = schemaSites(prim.compositionArcs(), targetSite(stage, store.session!.target, "/World/Robot"), (layer, at) => store.authoredSpec(layer, at)?.spec ?? null);
+    const row = appliedSchemaRows(prim.appliedSchemas(), authoredApiSchemas(prim)).find((each) => each.applied === "MotionAPI")!;
+    return { read, removal: schemaRemoval(row, read.sites, read.target, read.own) };
+  };
+  const chrome = () => stage.layerSpec(stage.root, "/World/Robot{finish=chrome}");
+  // The root applies it on the robot, and so does its chrome variant, which is not selected.
+  assert.equal(store.applySchema("/World/Robot", "MotionAPI"), undefined);
+  store.editInsideVariant("/World/Robot", "finish", "chrome");
+  assert.equal(removal().read.target, -1, "the prim composes nothing of chrome");
+  assert.deepEqual(removal().removal, { kind: "stronger", layer: stage.root }, "chrome applies none yet: the root's is not its to take");
+  assert.equal(store.applySchema("/World/Robot", "MotionAPI"), undefined);
+  const before = chrome();
+  assert.ok(before !== null && before.type === "variant");
+  assert.deepEqual(before.apiSchemas?.prepended, ["MotionAPI"]);
+  assert.deepEqual(removal().removal, { kind: "remove" }, "its own application is its to remove");
+  assert.equal(store.removeSchema("/World/Robot", "MotionAPI"), undefined);
+  const after = chrome();
+  assert.ok(after !== null && after.type === "variant");
+  assert.deepEqual(after.apiSchemas?.prepended, []);
+  assert.equal(stage.prim("/World/Robot")!.hasAPI("MotionAPI"), true, "the root's application stays");
+  assert.equal(removal().removal.kind, "stronger");
+});
+
 test("applying an API schema shows what it brought; removing it; a multiple-apply schema without a name refused", async () => {
   const { h, store, stage, steps } = await opened();
   assert.equal(store.applySchema("/World/Rock", "ShapingAPI"), undefined);

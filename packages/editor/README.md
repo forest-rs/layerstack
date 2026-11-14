@@ -58,26 +58,37 @@ nothing more.
   is a badge. Visibility is read for every row at once, when the rows or
   the paused time change, not per row nor while playing.
 - **Saving and exporting.** The **File** menu counts the layers with
-  unsaved edits, and the page asks before it is left while there are any.
+  unsaved edits, and the page asks before it is left while there are any,
+  or while a save is still writing its files; another scene opened over
+  them asks first too, listing the layers that would lose their edits.
   A layer whose edits are undone back to where it was saved or read no
   longer counts, though the stage still reads it dirty, as OpenUSD does.
-  **Save** (⌘S) lists every edited layer and what a save does with it,
-  then, on one confirmation, writes each to the identifier it was read
-  from (`Stage.save`): back into the folder it was opened from when the
-  person allows the page to write there (asked at that moment), else as
-  downloads. A layer exports as `.usda` or `.usdc` (`Stage.exportLayer`;
+  **Save** (⌘S, when no dialog is open) lists every edited layer and what
+  a save does with it, as the stage stands until it is confirmed, then,
+  on one confirmation, writes exactly the layers it listed as written,
+  each to the identifier it was read from (`Stage.save` of that layer):
+  back into the folder it was opened from when the person allows the
+  page to write there (asked at that moment), else as downloads, each
+  under the name the list gave it. A layer whose edits were undone is not
+  written. A layer exports as `.usda` or `.usdc` (`Stage.exportLayer`;
   also its own commands, wherever a layer is shown), the composed stage
-  as one flattened layer (`Stage.exportFlattened`; a flatten that loses
-  something lists what), or as a `.usdz` package
+  as one flattened layer (`Stage.exportFlattened`: every asset path that
+  can be is anchored to the layer that authors it, and one that cannot,
+  a path relative to the session layer, is written as authored and
+  listed with whatever else the flatten loses), or as a `.usdz` package
   (`Stage.exportPackage`), for which the editor fetches what the stage
-  never read (a variant's layers, textures, every tile of a UDIM set) and
-  lists what it still could not. Each export is confirmed as a save is:
+  never read (a variant's layers and what they name, textures, every tile
+  of a UDIM set) and lists what it still could not, with the layer that
+  names each. Each export is confirmed as a save is:
   what will be written first (its name and size, what it loses or leaves
   out), then one button that downloads it. The **Open** menu can put the next
   scene's edits in a session layer in front of its root; a `.usdz` root,
   which is read-only, is always edited so, and the edit target says why.
-  A save leaves the session layer, which is never part of the root: it is
-  kept by exporting it, and a package lists it as left out.
+  A save leaves the session layer and its sublayers, which are never
+  part of the root, as OpenUSD's does, and says so of each: they are kept
+  by exporting them, and a package lists the session layer as left out.
+  With edits going to a session layer, a move, rename or delete still
+  changes the root's layers that hold the prim, which a save then writes.
 - **Layers.** The stage's own layer stack as a tree in strength order,
   stronger above weaker: the session layer, then the root, each layer's
   sublayers beneath it in the order it lists them, numbered, each with
@@ -95,7 +106,10 @@ nothing more.
   offers the rest, **Reload from source** among it. **Reload** reads every
   layer again from the source (`Stage.reloadLayers`), so files changed on
   disk come in and only what changed recomposes; a layer with unsaved
-  edits is left as it is, and one asked for alone is refused. Reloading
+  edits is left as it is, and one asked for alone is refused. A layer
+  whose edits were all undone is read when asked for alone; among all it
+  is left while the undo history still holds those edits, and the tab
+  says so. Reloading
   every layer also looks again for the assets that were missing, and the
   tab says which layers could not be read or are gone. A reload is not an
   edit: when it reads a layer the undo history changed, the history is
@@ -124,9 +138,12 @@ nothing more.
   File menu), read again after each edit, undo and redo. The lines the
   last change added or changed are marked, where lines went is marked,
   and the view scrolls to the change, so the opinion an edit authored is
-  there to read. Lines are drawn as they scroll into view; a layer over
-  4 MB of text shows its first 4 MB and says so, and one whose read is
-  slow is read again on **Refresh** rather than after every edit.
+  there to read; when the layer was not read between changes (the tab
+  was not shown), the tab says how many changes its marks cover. Lines
+  are drawn as they scroll into view, and a very long line (a mesh's
+  points) to its first 2000 characters, with how many more it has; a
+  layer over 4 MB of text shows its first 4 MB and says so, and one whose
+  read is slow is read again on **Refresh** rather than after every edit.
 - **Cameras.** The free camera and the stage's own; choosing one looks
   through it, its view and projection as `GfFrustum` computes them.
 - **Opening.** While a scene opens, the viewport says what the open is

@@ -407,7 +407,8 @@ await stage.resolve(source);
   in its own format and returns `written: { layer, identifier, bytes }[]`
   for you to persist; the layers are clean afterwards, and the saved bytes
   are what the stage reads those identifiers from from then on. The session
-  layer is anonymous, so it is never saved (`anonymous` lists it); a package
+  layer is anonymous, so it is never saved (`anonymous` lists it), and a
+  save of the stage leaves its sublayers too, as OpenUSD's does; a package
   member fails with `io.read_only`. A dirty layer the stage mutes or no
   longer composes (an asset edited through a reference since removed) is
   left dirty and listed in `skipped`; `save(layer)` writes it. Exports copy and change nothing:
@@ -416,10 +417,16 @@ await stage.resolve(source);
   layer with no arcs and its asset paths anchored to the layers authoring
   them, as OpenUSD flattens (`lossless`, and `lost` for anything a layer
   cannot hold; `./x.png` in `set/a.usda` is written `./set/x.png`,
-  relative to the host's root, where the flattened layer belongs), and
+  relative to the host's root, where the flattened layer belongs; a path
+  that cannot be anchored, one relative to the anonymous session layer,
+  is written as authored and listed in `lost`, the others still
+  anchored), and
   `exportPackage()` a USDZ of the root and everything it
   depends on, unsaved edits included (`bytes` is `null`, with `unresolved`
-  saying why, while a dependency is not supplied; the session layer is
+  saying why, while a dependency is not supplied: each names the asset
+  path, the `identifier` of the layer authoring it, and that `layer`, or
+  `null` for one the packager read that the stage does not hold, the
+  layer a variant not selected references; the session layer is
   `omitted`).
 - **Transfer is measured.** `layerstack.transfer()` reports the bytes copied
   in (sources) and out (array copies, saved and exported bytes), the views

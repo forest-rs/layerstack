@@ -40,7 +40,8 @@ const REFUSED_MS = 2500;
  * reads after the edit, so an edit a stronger opinion hides does not look
  * as if it took. `onCommit` returns why the input was refused, if it was:
  * the field then marks itself invalid for a moment, with the reason as its
- * title and for assistive technology.
+ * title and for assistive technology, unless its caller says the reason
+ * itself (`saysRefusal`: a line under the row), when it only marks itself.
  */
 export function CommitField({
   value,
@@ -49,6 +50,7 @@ export function CommitField({
   label,
   numeric = false,
   disabled = false,
+  saysRefusal = false,
 }: {
   value: string;
   onCommit: (text: string) => string | void;
@@ -56,6 +58,7 @@ export function CommitField({
   label: string;
   numeric?: boolean;
   disabled?: boolean;
+  saysRefusal?: boolean;
 }) {
   // What is typed and not yet committed; `null` shows `value`.
   const [draft, setDraft] = useState<string | null>(null);
@@ -76,8 +79,8 @@ export function CommitField({
         disabled={disabled}
         inputMode={numeric ? "decimal" : undefined}
         aria-invalid={refused !== null ? true : undefined}
-        aria-describedby={refused !== null ? reason : undefined}
-        title={refused ?? undefined}
+        aria-describedby={refused !== null && !saysRefusal ? reason : undefined}
+        title={saysRefusal ? undefined : (refused ?? undefined)}
         onChange={(event) => setDraft(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === "Enter") event.currentTarget.blur();
@@ -107,7 +110,7 @@ export function CommitField({
           className,
         )}
       />
-      {refused !== null && (
+      {refused !== null && !saysRefusal && (
         <span id={reason} role="alert" className="sr-only">
           {refused}
         </span>

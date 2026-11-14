@@ -5,7 +5,7 @@
 // (A stage's refusal is returned by the store's edit: `store.test.ts`.)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { parseNumber } from "../src/model/refusal.ts";
+import { NOT_A_NUMBER, parseNumber, rowRefusal } from "../src/model/refusal.ts";
 
 describe("parseNumber", () => {
   it("accepts finite numbers", () => {
@@ -15,5 +15,12 @@ describe("parseNumber", () => {
   });
   it("refuses empty, words and non-finite numbers", () => {
     for (const text of ["", "  ", "abc", "Infinity", "NaN", "1,5"]) assert.equal(parseNumber(text), null, text);
+  });
+});
+
+describe("a refusal said under its row", () => {
+  it("names the field and why, under the row that caused it, until a commit is taken", () => {
+    assert.deepEqual(rowRefusal("translate", "Translate X", NOT_A_NUMBER), { row: "translate", text: "Translate X: Not a number" });
+    assert.equal(rowRefusal("translate", "Translate X", undefined), null);
   });
 });

@@ -56,6 +56,9 @@ export function FileMenu() {
   const [dialog, setDialog] = useState<FileDialog | null>(null);
   const session = store.session;
   const dirty = store.dirtyLayers();
+  // A dialog is of the scene it was opened on: another scene opened behind it (a file dropped on the page) closes it,
+  // so an export made of the last scene is not offered under this one's name.
+  useEffect(() => setDialog(null), [session]);
   // ⌘S saves, as anywhere; the page asks before it is left with edits not saved.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -82,8 +85,11 @@ export function FileMenu() {
     if (result !== null) setDialog({ kind: "flatten", format, result });
   };
   const pack = async () => {
+    const of = store.session;
     setDialog({ kind: "package", result: null });
     const result = await store.exportPackage();
+    // Another scene opened while it was made: its package is not this scene's to offer.
+    if (store.session !== of) return;
     if (result === null) {
       setDialog(null);
       return;

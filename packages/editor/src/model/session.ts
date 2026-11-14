@@ -25,7 +25,7 @@ import type {
   ValueInput,
 } from "@forest-rs/layerstack";
 import { addArcEdit, type NewArc, newArcLabel, removeArcEdit, removeArcLabel } from "./composition.ts";
-import { packageWants, sessionLayerReason, UNSAVABLE_ROOT } from "./files.ts";
+import { packageWants, planSave, sessionLayerReason, UNSAVABLE_ROOT } from "./files.ts";
 import type { AuthoredArc } from "./layerSpecs.ts";
 import { LoopRecorder } from "./timeline.ts";
 
@@ -844,20 +844,31 @@ export class Session implements Disposable {
   /**
    * Saves the dirty layers: their bytes are the host's to persist
    * ({@link Session.saved}). A save of the stage leaves the session layer
-   * (export it, `Stage.exportLayer`) and muted layers dirty.
+   * (export it, `Stage.exportLayer`), its sublayers and muted layers
+   * dirty.
    *
-   * Only the layers with unsaved edits ({@link Session.isEdited}) are
-   * written: `Stage.save` also writes a layer whose edits were undone
-   * (dirty to the stage, as to `SdfLayer::IsDirty`), which holds what its
-   * file holds, so its bytes are dropped rather than handed on to replace
-   * a file the save was never said to touch.
+   * What it does is what {@link planSave} says of the layers with unsaved
+   * edits ({@link Session.isEdited}), layer by layer (`Stage.save(layer)`),
+   * so the confirmation and the save cannot differ. A save of the whole
+   * stage would also write a layer whose edits were undone (dirty to the
+   * stage, as to `SdfLayer::IsDirty`): a file nobody changed written
+   * again from the stage, and a layer the stage then counts as read from
+   * bytes its source never got, which a reload would take for a change.
+   * Such a layer is left as it is.
    */
   save(): SaveResult {
     this.#cause = "save";
-    const edited = new Set(this.dirtyLayers().map((layer) => layer.id));
-    const all = this.stage.save();
-    const written = all.written.filter(({ layer }) => edited.has(layer.id));
-    const result: SaveResult = { ...all, written, bytes: written.reduce((sum, { bytes }) => sum + bytes.byteLength, 0) };
+    const written: SaveResult["written"][number][] = [];
+    const failures: SaveResult["failures"][number][] = [];
+    const skipped: SaveResult["skipped"][number][] = [];
+    for (const { layer, disposition } of planSave(this.stage, this.dirtyLayers(), this.sessionLayer)) {
+      if (disposition === "muted") skipped.push({ layer, reason: "muted" });
+      if (disposition !== "write" && disposition !== "readOnly") continue;
+      const one = this.stage.save(layer);
+      written.push(...one.written);
+      failures.push(...one.failures);
+    }
+    const result: SaveResult = { written, failures, anonymous: [], skipped, bytes: written.reduce((sum, { bytes }) => sum + bytes.byteLength, 0) };
     this.saved = result.written.map(({ identifier, bytes }) => ({ identifier, bytes }));
     const point = this.#historyPoint();
     for (const { layer } of result.written) {
@@ -873,11 +884,17 @@ export class Session implements Disposable {
    * held when it was read or saved, and the stage would still refuse to
    * read it again (`io.dirty_reload`), with nothing for a save to write.
    * The stage's save of it is what clears that, its bytes dropped: the
-   * source has them. Returns whether the stage now reads it clean.
+   * source has them. The stage then takes the source's bytes for a
+   * change and reads the layer, which forgets the history when a step
+   * writes it ({@link Session.reload}); with `sparing`, a layer a step
+   * of the history writes is left dirty instead, so that reading every
+   * layer again does not forget the history for a file that may not have
+   * changed. Returns whether the stage now reads it clean.
    */
-  settleUndone(layer: Layer): boolean {
+  settleUndone(layer: Layer, sparing = false): boolean {
     if (!this.stage.isDirty(layer)) return true;
     if (this.isEdited(layer) || layer.anonymous) return false;
+    if (sparing && [...this.history.undoSteps, ...this.history.redoSteps].some((step) => step.layers.some((written) => written.id === layer.id))) return false;
     return this.stage.save(layer).written.length === 1;
   }
 

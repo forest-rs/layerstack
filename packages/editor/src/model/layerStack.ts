@@ -355,6 +355,8 @@ export function ancestorsOf<L>(rows: readonly StackRow<L>[], row: StackRow<L>): 
 export interface ReloadSummary {
   readonly reloaded: readonly { readonly identifier: string | null }[];
   readonly skipped: readonly unknown[];
+  /** The layers left for edits that were undone and are still in the undo history. */
+  readonly undone?: readonly unknown[];
   /** The asset paths of the layers whose new content could not be read. */
   readonly failed: readonly string[];
   /** The identifiers of the layers the source no longer has. */
@@ -377,6 +379,7 @@ export function reloadText(report: ReloadSummary, name: (identifier: string | nu
     report.failed.length > 0 ? `could not be read, kept as before: ${report.failed.join(", ")}` : null,
     report.gone.length > 0 ? `no longer in the source, kept as read: ${report.gone.map(name).join(", ")}` : null,
     report.skipped.length > 0 ? `${report.skipped.length} with unsaved edits left as they are` : null,
+    (report.undone?.length ?? 0) > 0 ? `${report.undone!.length} with undone edits still in the undo history left as they are (reload one alone to read it)` : null,
     report.forgotten > 0 ? `the undo history was forgotten (${report.forgotten} ${report.forgotten === 1 ? "step" : "steps"})` : null,
   ].filter((part) => part !== null);
   const text = parts.join("; ");

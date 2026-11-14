@@ -1293,22 +1293,25 @@ export class EditorStore {
    */
   async reload(layer: Layer | null): Promise<ReloadReport> {
     const label = layer === null ? "reload from source" : `reload ${layerLabel(layer)}`;
-    let report: ReloadReport = { reloaded: [], skipped: [], failed: [], gone: [], forgotten: 0, refusal: null };
+    let report: ReloadReport = { reloaded: [], skipped: [], undone: [], failed: [], gone: [], forgotten: 0, refusal: null };
     const refusal = await this.#fetchingEdit(label, async (session, signal) => {
       const stage = session.stage;
       const asked = layer === null ? stage.layers().filter((each) => !each.anonymous && !stage.isMuted(each)) : [layer];
       // The stage reads no dirty layer again (`io.dirty_reload`): one whose edits were all undone is counted unchanged first.
-      const skipped = asked.filter((each) => !session.settleUndone(each));
+      // Among all, one the history still writes is left: reading it would forget the history, its file changed or not.
+      const left = asked.filter((each) => !session.settleUndone(each, layer === null));
+      const skipped = left.filter((each) => session.isEdited(each));
+      const undone = left.filter((each) => !skipped.includes(each));
       if (layer !== null && skipped.length > 0) {
         throw new Error(`${layerLabel(layer)} has unsaved edits: save or undo them before reading it again from the source`);
       }
-      const reading = asked.filter((each) => !skipped.includes(each));
+      const reading = asked.filter((each) => !left.includes(each));
       // Reading every layer again, what the stage found missing is looked for again too: a file made since is read.
       const retry = layer === null ? stage.status().unresolved.flatMap((asset) => (asset.identifier === null ? [] : [asset.identifier])) : [];
       const read = reading.length === 0 && retry.length === 0 ? null : await session.reload(reading, retry, signal);
       const result = read?.result ?? null;
       const failed = (result?.failures ?? []).map((failure) => failure.assetPath);
-      report = { reloaded: result?.reloaded ?? [], skipped, failed, gone: read?.gone ?? [], forgotten: read?.forgotten ?? 0, refusal: null };
+      report = { reloaded: result?.reloaded ?? [], skipped, undone, failed, gone: read?.gone ?? [], forgotten: read?.forgotten ?? 0, refusal: null };
       if (report.forgotten > 0) {
         this.#shadow = null;
         this.#notices.add(label, `the undo history (${report.forgotten} ${report.forgotten === 1 ? "step" : "steps"}) was forgotten: a layer it changed was read again, and a reload cannot be undone`, null);
@@ -1316,6 +1319,9 @@ export class EditorStore {
       for (const identifier of report.gone) this.#notices.add(label, `${identifier} is no longer in the source: kept as it was read`, "io.not_found");
       if (skipped.length > 0) {
         this.#notices.add(label, `not read again, having unsaved edits: ${skipped.map(layerLabel).join(", ")}`, "io.dirty_reload");
+      }
+      if (undone.length > 0) {
+        this.#notices.add(label, `not read again, their edits undone but still in the undo history, which reading them forgets: ${undone.map(layerLabel).join(", ")}; reload one alone to read it`, "io.dirty_reload");
       }
       for (const failure of result?.failures ?? []) this.#notices.add(label, `${failure.assetPath} was not read again: ${failure.message}`, failure.code);
     });
@@ -2172,6 +2178,8 @@ export interface ReloadReport {
   readonly reloaded: readonly Layer[];
   /** The layers left out for their unsaved edits. */
   readonly skipped: readonly Layer[];
+  /** The layers left out, of all, for edits that were undone and that the undo history still holds: read alone, each is read and the history forgotten. */
+  readonly undone: readonly Layer[];
   /** The asset paths of the layers whose new content could not be read (malformed): each keeps what it had. */
   readonly failed: readonly string[];
   /** The identifiers of the layers the source no longer has: each keeps what it read. */

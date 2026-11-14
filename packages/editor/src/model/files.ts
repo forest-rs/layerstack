@@ -72,8 +72,9 @@ export interface SaveEntry {
  * What a save of `stage` does with each of its `dirty` layers
  * (`Stage.save`: the session layer, its sublayers and muted layers are
  * left, a package member fails), the written ones first. `session` is the session layer,
- * when the stage has one. A layer the stage no longer composes is found
- * only by the save itself (`SaveResult.skipped`).
+ * when the stage has one. The save does exactly this, layer by layer
+ * (`Session.save`), so a layer the stage holds and no longer composes,
+ * which a save of the whole stage would leave, is written with the rest.
  */
 export function planSave(stage: Stage, dirty: readonly Layer[], session: Layer | null): SaveEntry[] {
   // The session layer's stack, as the Layers tab shows it beneath the session layer.

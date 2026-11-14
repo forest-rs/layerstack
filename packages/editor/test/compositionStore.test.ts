@@ -11,7 +11,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { AuthoredReference, Stage } from "@forest-rs/layerstack";
-import { authoredHere, findAuthoring, mapping, type NewArc, newArcUsda, selectionTarget, strongerSelection, uncomposedHere, variantSetSource } from "../src/model/composition.ts";
+import { authoredHere, findAuthoring, mapping, type NewArc, newArcUsda, selectionTarget, strongerSelection, uncomposedHere, uncomposedWhy, variantSetSource } from "../src/model/composition.ts";
 import { targetSite } from "../src/model/propertyOps.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
@@ -110,6 +110,28 @@ test("a missing asset is a notice and is listed beside the arcs, and removing it
   assert.equal(store.removeArc("/World/Rock", listed[0]!), undefined);
   assert.deepEqual(stage.status().compositionErrors, []);
   assert.equal(store.session!.history.nextUndo?.label, "remove reference @./missing.usda@ from /World/Rock");
+});
+
+test("an arc that makes a cycle is listed as making one, matched to its error by its site and asset", async () => {
+  const { h, store, stage } = await opened();
+  const why = (prim: string) => {
+    const issues = stage.status().compositionErrors.filter((issue) => issue.prim === prim);
+    const [item, ...rest] = uncomposedHere(stage.prim(prim)!.compositionArcs(), stage.root, prim, store.specsOf);
+    assert.ok(item !== undefined && rest.length === 0, `one arc of ${prim} composes nothing`);
+    return uncomposedWhy(item, stage.root.identifier, issues, false);
+  };
+  // An internal reference to its own ancestor, and a reference through the layer's own file to itself.
+  await h.settle(store.addArc("/World/Rock", reference(null, "/World")).done);
+  const internal = why("/World/Rock");
+  assert.equal(internal.kind, "cycle");
+  assert.match(internal.text, /^It makes a cycle, so the stage ignores it: \/World\/Rock in @scene\.usda@ -> reference \/World in @scene\.usda@\.$/);
+  await h.settle(store.addArc("/World/Top", reference("./scene.usda", "/World/Top")).done);
+  assert.equal(why("/World/Top").kind, "cycle", "its asset is authored ./scene.usda, named @scene.usda@ in the error");
+  // An inherit of its own descendant.
+  await h.settle(store.addArc("/World/Robot", { kind: "inherit", asset: null, primPath: "/World/Robot/Body", position: "backOfPrepend", offset: 0, scale: 1 }).done);
+  assert.equal(why("/World/Robot").kind, "cycle");
+  // A cycle error of another arc does not explain this one.
+  assert.equal(uncomposedWhy({ field: "references", asset: null, primPath: "/World/Other" }, "scene.usda", stage.status().compositionErrors, false).kind, "unknown");
 });
 
 test("an added arc the stage refuses returns why at once and changes nothing", async () => {

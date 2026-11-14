@@ -34,6 +34,7 @@ import {
   selectionTarget,
   targetRoute,
   uncomposedHere,
+  uncomposedWhy,
   variantOfSite,
 } from "../model/composition.ts";
 import type { AuthoredArc } from "../model/layerSpecs.ts";
@@ -352,9 +353,10 @@ function nesting(arcs: readonly { readonly parent: number | null }[], index: num
 }
 
 /**
- * Arcs the spec edits go to authors that compose nothing, with why: the
- * composition error that names them (a missing asset), an asset not
- * fetched yet, or a stronger opinion that deletes them.
+ * Arcs the spec edits go to authors that compose nothing, with why
+ * (`uncomposedWhy`): a cycle they make, the composition error that names
+ * their asset (a missing one), an asset not fetched yet, or a stronger
+ * opinion that deletes them.
  */
 function Uncomposed({
   store,
@@ -382,9 +384,8 @@ function Uncomposed({
       <span className="text-[11px] text-muted-foreground">Authored where edits go, composing nothing:</span>
       {items.map((item) => {
         const text = arcItemText(item.asset, item.primPath);
-        const issue = issues.find((each) => each.message.includes(text) || (item.asset !== null && each.message.includes(`@${item.asset}@`)));
         const pending = item.asset !== null && waiting.some((asset) => asset.assetPath === item.asset && asset.anchor === layer);
-        const why = issue?.message ?? (pending ? "Its asset is not fetched yet." : "A stronger opinion removes it, or what it names is not there.");
+        const why = uncomposedWhy(item, layer.identifier, issues, pending).text;
         const key = `uncomposed:${item.index}`;
         return (
           <div key={key} role="group" aria-label={`${kindOf(item.field)} ${text}`} className="flex flex-col gap-0.5 rounded-md bg-amber-500/10 px-2 py-1 text-[11px] text-amber-800 dark:text-amber-300">

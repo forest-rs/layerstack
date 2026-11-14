@@ -818,6 +818,45 @@ export class EditorStore {
     );
   }
 
+  /**
+   * Adds `target` to the relationship at `path`'s targets where edits go,
+   * as `UsdRelationship::AddTarget` does: weaker layers' targets stay
+   * theirs, and are not copied into the layer written. Makes it the
+   * property explained. Returns why it was refused.
+   */
+  addTarget(path: string, target: string): string | undefined {
+    return this.#edit(`add target ${target} to ${path}`, (session) => session.addTarget(path, target), () => this.#explained(path));
+  }
+
+  /**
+   * Removes `target` from the relationship at `path`'s targets where edits
+   * go, as `UsdRelationship::RemoveTarget` does. A target a stronger layer
+   * adds is still one after it, and a notice says so: the removal is in
+   * the layer, and shows once that layer's opinion is gone. Returns why
+   * it was refused.
+   */
+  removeTarget(path: string, target: string): string | undefined {
+    const label = `remove target ${target} from ${path}`;
+    return this.#edit(
+      label,
+      (session) => session.removeTarget(path, target),
+      () => {
+        const session = this.session;
+        if (session?.stage.relationship(path)?.targets().includes(target) === true) {
+          this.#notices.add(label, `${target} is still a target of ${path}: an opinion stronger than ${session.targetName} adds it. The removal is authored in ${session.targetName}.`, null);
+        }
+        return this.#explained(path);
+      },
+    );
+  }
+
+  /** Makes `path` the property explained; returns whether that changed. */
+  #explained(path: string): boolean {
+    if (this.#selection.property === path) return false;
+    this.#selection.property = path;
+    return true;
+  }
+
   /** Reads whether the edit of `path` at `time` just made shows ({@link EditorStore.shadow}); the selection is unchanged. */
   #shadowed(path: string, time: number | null): boolean {
     const session = this.session;

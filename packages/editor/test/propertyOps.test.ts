@@ -67,6 +67,7 @@ def Xform "World"
             0: 1,
             10: 2,
         }
+        prepend rel pins = </World/Ball>
     }
 }
 `,
@@ -89,6 +90,11 @@ over "World"
             1: 5,
             3: 6,
         }
+        custom rel links = [
+            </World/Ball>,
+            </World/Part>,
+        ]
+        custom rel pins = </World/Part>
     }
 
     def Scope "Switch" (
@@ -315,6 +321,60 @@ test("creating an attribute authors its spec and starting value, marks it, and r
   assert.equal(store.notices.length, 2);
   await h.settle(store.undo());
   assert.equal(stage.attribute("/World/Top.notes:label"), null);
+});
+
+test("adding or removing one target leaves the other layers' targets theirs, as AddTarget and RemoveTarget do", async () => {
+  const { h, store, stage, root, under } = await stacked();
+  const targets = (path: string) => stage.relationship(path)!.targets();
+  const authored = (layer: typeof root, path: string) => {
+    const spec = stage.layerSpec(layer, path);
+    return spec?.type === "relationship" ? spec.targets : null;
+  };
+  // The sublayer's list, edited from the root: the root says only what it adds and takes away.
+  const links = "/World/Notes.links";
+  assert.deepEqual(targets(links), ["/World/Ball", "/World/Part"]);
+  assert.equal(store.addTarget(links, "/World/Notes"), undefined);
+  assert.deepEqual(targets(links), ["/World/Notes", "/World/Ball", "/World/Part"]);
+  assert.deepEqual([authored(root, links)?.explicit, authored(root, links)?.prepended], [null, ["/World/Notes"]], "not the sublayer's two copied into an explicit list");
+  assert.equal(store.property, links);
+  assert.equal(store.removeTarget(links, "/World/Ball"), undefined);
+  assert.deepEqual(targets(links), ["/World/Notes", "/World/Part"]);
+  assert.deepEqual(authored(root, links)?.deleted, ["/World/Ball"]);
+  assert.deepEqual(authored(under, links)?.explicit, ["/World/Ball", "/World/Part"], "the sublayer is as it was");
+  const notices = store.notices.length;
+  await h.settle(store.undo());
+  await h.settle(store.undo());
+  assert.deepEqual(targets(links), ["/World/Ball", "/World/Part"]);
+  assert.equal(authored(root, links), null);
+
+  // The root prepends a target to the sublayer's; edits go to the sublayer.
+  const pins = "/World/Notes.pins";
+  store.setTarget(under);
+  assert.deepEqual(targets(pins), ["/World/Ball", "/World/Part"]);
+  assert.equal(store.addTarget(pins, "/World/Notes"), undefined);
+  assert.deepEqual(authored(under, pins)?.explicit, ["/World/Part", "/World/Notes"], "the root's target is not written into the sublayer");
+  assert.deepEqual(targets(pins), ["/World/Ball", "/World/Part", "/World/Notes"]);
+  // Its own target goes; the root's cannot go from here, and that is said rather than passed over.
+  assert.equal(store.removeTarget(pins, "/World/Part"), undefined);
+  assert.deepEqual(targets(pins), ["/World/Ball", "/World/Notes"]);
+  assert.equal(store.notices.length, notices);
+  store.removeTarget(pins, "/World/Ball");
+  assert.deepEqual(targets(pins), ["/World/Ball", "/World/Notes"]);
+  assert.deepEqual(authored(under, pins)?.explicit, ["/World/Notes"]);
+  assert.match(store.notices.at(-1)!.message, /\/World\/Ball is still a target of \/World\/Notes\.pins|changes nothing in under\.usda/);
+});
+
+test("a target removed where a stronger layer adds it is said to be a target still", async () => {
+  const { store, stage, root, under } = await stacked();
+  // The sublayer's opinion is list edits, so a removal there is authored (a delete), though the root's prepend still gives the target.
+  stage.apply([{ type: "clearTargets", path: "/World/Notes.pins" }, { type: "addTarget", path: "/World/Notes.pins", target: "/World/Part" }], under);
+  store.setTarget(under);
+  assert.equal(store.removeTarget("/World/Notes.pins", "/World/Ball"), undefined);
+  const spec = stage.layerSpec(under, "/World/Notes.pins");
+  assert.deepEqual(spec?.type === "relationship" ? spec.targets?.deleted : null, ["/World/Ball"]);
+  assert.deepEqual(stage.relationship("/World/Notes.pins")!.targets(), ["/World/Ball", "/World/Part"]);
+  assert.match(store.notices.at(-1)!.message, /\/World\/Ball is still a target of \/World\/Notes\.pins/);
+  void root;
 });
 
 test("adding an attribute its schema defines authors the schema's fallback, an array's too, and is not custom", async () => {

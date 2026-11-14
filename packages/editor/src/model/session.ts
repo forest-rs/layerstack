@@ -577,6 +577,26 @@ export class Session implements Disposable {
   }
 
   /**
+   * Adds `target` to the relationship at `path`'s targets where edits go
+   * (`UsdRelationship::AddTarget`): to the layer's explicit list when it
+   * has one, else prepended to what weaker layers give, which stays theirs.
+   * Throws when it changed nothing (the layer adds it there already).
+   */
+  addTarget(path: string, target: string): EditReceipt {
+    return this.#changing(`add target ${target} to ${path}`, [{ type: "addTarget", path, target }], `${this.#targetName} has ${target} among the targets it gives ${path} already`);
+  }
+
+  /**
+   * Removes `target` from the relationship at `path`'s targets where edits
+   * go (`UsdRelationship::RemoveTarget`): out of the layer's own list, or
+   * deleted there from what weaker layers give. Throws when it changed
+   * nothing.
+   */
+  removeTarget(path: string, target: string): EditReceipt {
+    return this.#changing(`remove target ${target} from ${path}`, [{ type: "removeTarget", path, target }], `removing ${target} from ${path} changes nothing in ${this.#targetName}: it is not in the list there, or is removed there already`);
+  }
+
+  /**
    * Adds `arc` to the prim at `prim` where edits go, as one undoable
    * action (`UsdReferences::AddReference` and its siblings). An asset the
    * stage has not read is then unavailable until it is supplied

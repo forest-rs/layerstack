@@ -18,7 +18,7 @@
 //   network places its nodes (`ui:nodegraph:node:pos`), a position there.
 import type { Edit, Stage } from "@forest-rs/layerstack";
 import { type Candidate, destinationsFor, findPort, isDestination, isSource, nodeName, type PortRef, portName, sourcesFor } from "./connections.ts";
-import { type NetworkLayout, type NetworkNode, primOf, type ShadingNetwork } from "./network.ts";
+import { type NetworkLayout, type NetworkNode, type NetworkPort, primOf, type ShadingNetwork } from "./network.ts";
 import { definedInput, definedOutput, SHADER_DEFINITIONS, type ShaderDefinition, shaderDefinition } from "./shaderDefinitions.ts";
 
 /** The attribute where an authored node position is (`UsdUINodeGraphNodeAPI`'s `ui:nodegraph:node:pos`). */
@@ -214,15 +214,20 @@ function connectEntries(network: ShadingNetwork, ref: PortRef): MenuEntry[] {
   return entries;
 }
 
-/** The disconnect items of a destination port: one per source, or one for its only source. */
+/** The sources the port's `.connect` names: those it reads, then those that name nothing, which are authored all the same. */
+export function connectedSources(port: NetworkPort): string[] {
+  return [...port.connections, ...port.invalid];
+}
+
+/** The disconnect items of a destination port: one per source (one that names nothing too), or one for its only source. */
 function disconnectEntries(ref: PortRef): MenuEntry[] {
-  const sources = ref.port.connections;
+  const sources = connectedSources(ref.port);
   const namespace = ref.port.kind === "input" ? "inputs" : "outputs";
   const authors = `authors ${ref.node.name}.${namespace}:${ref.port.name}.connect without it`;
   if (sources.length === 1) return [{ id: "disconnect", label: "Disconnect", detail: authors, action: { kind: "disconnect", destination: ref.port.path, source: sources[0]! } }];
   return sources.map((source) => ({
     id: `disconnect ${source}`,
-    label: `Disconnect from ${source.slice(source.lastIndexOf("/") + 1)}`,
+    label: `Disconnect from ${source.slice(source.lastIndexOf("/") + 1)}${ref.port.invalid.includes(source) ? " (names nothing)" : ""}`,
     detail: authors,
     action: { kind: "disconnect", destination: ref.port.path, source },
   }));

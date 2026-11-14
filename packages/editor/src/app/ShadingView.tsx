@@ -62,6 +62,7 @@ import {
   addShaderEntries,
   authoredPlace,
   backgroundMenu,
+  connectedSources,
   connectionsOf,
   dropMenu,
   dropTitle,
@@ -600,10 +601,11 @@ function Graph({
         }
         if (current.port !== null) {
           const ref = findPort(network, current.port);
-          if (ref === null || !isDestination(network, ref) || ref.port.connections.length === 0) {
+          const sources = ref === null || !isDestination(network, ref) ? [] : connectedSources(ref.port);
+          if (ref === null || sources.length === 0) {
             setNote({ tone: "error", text: `${shortPort(network, current.port)} reads nothing to disconnect` });
-          } else if (ref.port.connections.length === 1) {
-            disconnect(ref.port.path, ref.port.connections[0]!);
+          } else if (sources.length === 1) {
+            disconnect(ref.port.path, sources[0]!);
           } else {
             openMenu(target, at);
           }

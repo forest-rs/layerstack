@@ -287,11 +287,11 @@ function RemoveSetDialog({ store, prim, set, onClose }: { store: EditorStore; pr
   const [refused, setRefused] = useState<string | null>(null);
   const target = currentTarget(store);
   const arcs = prim.compositionArcs();
-  const held = variantSetSource(arcs, set, (layer) => store.layerSpecs(layer));
+  const held = variantSetSource(arcs, set, store.specsOf);
   const spec = target === null ? null : mapping(target, prim.path).specPath;
   const targetLayer = target === null ? null : "kind" in target ? target.layer : target;
   const here = held !== null && targetLayer === held.layer && spec === held.specPath;
-  const variants = held === null ? [] : (store.layerSpecs(held.layer)?.specs.get(held.specPath)?.variantSets.get(set) ?? []);
+  const variants = held === null ? [] : (store.authoredSpec(held.layer, held.specPath)?.spec.variantSets.find((each) => each.name === set)?.variants ?? []);
   const layerName = (held?.layer.identifier ?? targetLayer?.identifier) ?? "the session layer";
   let there: EditTarget | null = null;
   if (held !== null && !here) {

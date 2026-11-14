@@ -103,7 +103,7 @@ test("a missing asset is a notice and is listed beside the arcs, and removing it
   assert.equal(store.notices[0]!.code, "composition.unresolved_asset");
   assert.match(store.notices[0]!.message, /@\.\/missing\.usda@/);
   const arcs = stage.prim("/World/Rock")!.compositionArcs();
-  const read = (layer: Parameters<typeof store.layerSpecs>[0]) => store.layerSpecs(layer);
+  const read = store.specsOf;
   const listed = uncomposedHere(arcs, stage.root, "/World/Rock", read);
   assert.deepEqual(listed.map((arc) => arc.asset), ["./missing.usda"]);
   assert.equal(store.removeArc("/World/Rock", listed[0]!), undefined);
@@ -142,7 +142,7 @@ test("cancelling the fetch of an added arc takes the arc back", async () => {
 test("removing an arc the edit layer authors is one step, undone and redone", async () => {
   const { h, store, stage } = await opened();
   const arcs = stage.prim("/World/Rock")!.compositionArcs();
-  const source = findAuthoring(arcs, arcs.findIndex((arc) => arc.arc === "inherits"), (layer) => store.layerSpecs(layer))!;
+  const source = findAuthoring(arcs, arcs.findIndex((arc) => arc.arc === "inherits"), store.specsOf)!;
   assert.equal(source.layer, stage.root);
   assert.equal(store.removeArc("/World/Rock", source.item), undefined);
   assert.equal(stage.prim("/World/Rock")!.compositionArcs().some((arc) => arc.arc === "inherits"), false);
@@ -178,13 +178,13 @@ test("a variant set added with its first variant, a variant added, edited inside
   const purpose = stage.attribute("/World/Rock.purpose")!.get();
   assert.equal(purpose?.kind === "scalar" ? purpose.value : null, "proxy");
   assert.equal(store.shadow, null);
-  assert.ok(store.layerSpecs(stage.root)!.specs.has("/World/Rock{size=large}"));
+  assert.notEqual(store.authoredSpec(stage.root, "/World/Rock{size=large}"), null);
   store.setTarget(undefined);
 
   // Removing the set removes its variants and the selection here; the name stays listed, as OpenUSD leaves it.
   assert.equal(store.removeVariantSet("/World/Rock", "size"), undefined);
   assert.deepEqual(rock(), [{ name: "size", selection: null, variants: [] }]);
-  assert.equal(store.layerSpecs(stage.root)!.specs.get("/World/Rock")!.variantSets.has("size"), false);
+  assert.deepEqual(store.authoredSpec(stage.root, "/World/Rock")!.spec.variantSets, []);
   await h.settle(store.undo());
   assert.equal(rock()[0]!.selection, "large");
   // A layer that holds no such set refuses.
@@ -235,12 +235,34 @@ test("a rename or delete through a variant or an arc says why before it is tried
   assert.equal(store.compositionEdit, null);
 });
 
-test("a layer's specs are read once per change of the stage", async () => {
+test("a layer's spec is read once per change of the stage, never on a time change, and no layer is exported for it", async () => {
   const { store, stage } = await opened();
-  const first = store.layerSpecs(stage.root);
-  assert.equal(store.layerSpecs(stage.root), first);
+  const reads: string[] = [];
+  const layerSpec = stage.layerSpec.bind(stage);
+  stage.layerSpec = ((layer, path) => {
+    reads.push(path);
+    return layerSpec(layer, path);
+  }) as typeof stage.layerSpec;
+  let exports = 0;
+  const exportLayer = stage.exportLayer.bind(stage);
+  stage.exportLayer = ((layer, format) => {
+    exports++;
+    return exportLayer(layer, format);
+  }) as typeof stage.exportLayer;
+  const first = store.authoredSpec(stage.root, "/World/Robot");
+  assert.equal(first?.spec.path, "/World/Robot");
+  assert.equal(store.authoredSpec(stage.root, "/World/Robot"), first);
+  store.setTime(12);
+  assert.equal(store.authoredSpec(stage.root, "/World/Robot"), first, "a time change reads nothing again");
+  assert.deepEqual(reads, ["/World/Robot"], "one spec read, of the one spec asked for");
+  // The section's reads of the robot: each arc's authoring, what composes nothing, what is deleted.
+  const arcs = stage.prim("/World/Robot")!.compositionArcs();
+  arcs.forEach((_, index) => findAuthoring(arcs, index, store.specsOf));
+  uncomposedHere(arcs, stage.root, "/World/Robot", store.specsOf);
+  assert.equal(exports, 0, "no layer is written as text for it");
   assert.equal(store.setValue("/World/Rock.radius", { type: "double", value: 3 }), undefined);
-  assert.notEqual(store.layerSpecs(stage.root), first);
+  assert.notEqual(store.authoredSpec(stage.root, "/World/Robot"), first, "read again after an edit");
+  assert.equal(exports, 0);
 });
 
 test("the layers an arc can name, and a layer's default and root prims, read or not", async () => {
@@ -278,7 +300,7 @@ test("of two arcs to one asset and prim that differ by layer offset, the one rem
         assert.deepEqual(pileOffsets(stage, field), both);
 
         // Each composed arc is read as the item that authors it: the one at its own offset.
-        const read = (layer: Parameters<typeof store.layerSpecs>[0]) => store.layerSpecs(layer);
+        const read = store.specsOf;
         const arcs = stage.prim("/World/Pile")!.compositionArcs();
         const composed = arcs.flatMap((each, index) => (each.arc === "local" ? [] : [{ arc: each, source: findAuthoring(arcs, index, read) }]));
         assert.deepEqual(composed.map(({ arc: each }) => [each.layerOffset.offset, each.layerOffset.scale]), [[0, 1], [offset, scale]]);
@@ -305,7 +327,7 @@ test("of two references to one asset, to its default prim and to another prim, e
   assert.equal(store.definePrim("/World", "Pile", "Xform"), undefined);
   await h.settle(store.addArc("/World/Pile", reference("./assets/props.usda")).done);
   await h.settle(store.addArc("/World/Pile", reference("./assets/props.usda", "/Props/Crate")).done);
-  const read = (layer: Parameters<typeof store.layerSpecs>[0]) => store.layerSpecs(layer);
+  const read = store.specsOf;
   const arcs = stage.prim("/World/Pile")!.compositionArcs();
   // An item with no prim path composes any site, so the second arc must not be read as the first's item.
   const sources = arcs.flatMap((arc, index) => (arc.arc === "references" ? [[arc.site, findAuthoring(arcs, index, read)?.item.primPath]] : []));
@@ -361,7 +383,7 @@ test("the USDA an added inherit or internal reference is shown to author is what
 
 test("a variant set nested in a variant is found in that variant's branch, to remove it there", async () => {
   const { store, stage } = await opened();
-  const read = (layer: Parameters<typeof store.layerSpecs>[0]) => store.layerSpecs(layer);
+  const read = store.specsOf;
   assert.equal(store.addVariant("/World/Rock", "look", "mossy", true), undefined);
   store.editInsideVariant("/World/Rock", "look", "mossy");
   assert.equal(store.addVariant("/World/Rock", "wear", "worn", true), undefined);
@@ -380,7 +402,7 @@ test("a variant set nested in a variant is found in that variant's branch, to re
 
 test("an arc a prim composes through an ancestor is read as authored on that ancestor", async () => {
   const { store, stage } = await opened();
-  const read = (layer: Parameters<typeof store.layerSpecs>[0]) => store.layerSpecs(layer);
+  const read = store.specsOf;
   // The body is in the robot's asset because /World/Robot references it: no layer authors an arc on the body itself.
   const arcs = stage.prim("/World/Robot/Body")!.compositionArcs();
   const index = arcs.findIndex((arc) => arc.arc === "references");
@@ -415,7 +437,7 @@ test("through a reference read at an offset, the arc removed is the one at the o
   };
   assert.deepEqual(authored(), { prepended: [0, 24], deleted: [] }, "authored as given, not mapped through the target's offset");
   const arcs = stage.prim("/World/Pile/Crate")!.compositionArcs();
-  const chrome = arcs.flatMap((arc, index) => (arc.layerStack.identifier === "assets/chrome.usda" ? [{ arc, source: findAuthoring(arcs, index, (layer) => store.layerSpecs(layer)) }] : []));
+  const chrome = arcs.flatMap((arc, index) => (arc.layerStack.identifier === "assets/chrome.usda" ? [{ arc, source: findAuthoring(arcs, index, store.specsOf) }] : []));
   // To stage times: the asset's offset (10, scale 2) over each item's.
   assert.deepEqual(chrome.map(({ arc }) => arc.layerOffset), [{ offset: 10, scale: 2 }, { offset: 58, scale: 2 }]);
   assert.deepEqual(chrome.map(({ source }) => source?.item.offset), [0, 24]);

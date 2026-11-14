@@ -2,15 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 // What the store keeps for authoring composition: the last composition
-// edit (what the inspector offers to show in its layer's text), what each
-// layer authors about composition, read from its text once per change of
-// the stage (`../model/layerSpecs.ts`), and what an arc can be pointed at:
-// the layers the source lists and the stage holds, and a layer's default
-// and root prims. The actions that author run on the store
-// (`../store.ts`), in its turn, as any edit.
+// edit (what the inspector offers to show in its layer's text), the specs
+// the inspector asks for, each read once per change of the stage
+// (`Stage.layerSpec`, `../model/layerSpecs.ts`), and what an arc can be
+// pointed at: the layers the source lists and the stage holds, and a
+// layer's default and root prims. The actions that author run on the
+// store (`../store.ts`), in its turn, as any edit.
 import type { HistoryStep, Layer, Layerstack } from "@forest-rs/layerstack";
-import { type LayerSpecs, type LayerSummary, readLayerSpecs, summarizeBytes, summaryOf } from "../model/layerSpecs.ts";
-import type { LayerTextRead } from "../model/layerText.ts";
+import { type AuthoredSpec, type LayerSummary, layerSummary as summarizeLayer, type SpecsOf, specReader, summarizeBytes } from "../model/layerSpecs.ts";
 import type { Session } from "../model/session.ts";
 import type { SceneSource } from "../model/sources.ts";
 
@@ -41,34 +40,23 @@ export interface Authoring {
 /** The most bytes of a layer the stage has not read that are read for its default and root prims alone. */
 export const SUMMARY_BYTES = 16 * 1024 ** 2;
 
-/** The store's composition state: the last composition edit, and the layers' specs as read. */
+/** The store's composition state: the last composition edit, and the specs read since the stage last changed. */
 export class CompositionState {
   /** The last composition edit made, whichever step is newest now. */
   edit: CompositionEdit | null = null;
-  #specs: { session: Session | null; stamp: string; read: Map<Layer, LayerSpecs | null>; large: Set<Layer> } = {
-    session: null,
-    stamp: "",
-    read: new Map(),
-    large: new Set(),
-  };
+  #specs: { readonly session: Session | null; readonly stamp: string; readonly read: SpecsOf } | null = null;
 
   /**
-   * What `layer` of `session` authors about composition, read through
-   * `read` (its text) once per `stamp` (a change of the stage); `null`
-   * when its text is too large to read whole (the Text tab's limit; such
-   * a layer is not written as text for this again), or cannot be written.
+   * The prim or variant spec `layer` of `session` holds at `path` (in the
+   * layer's own namespace), with its arcs, read once per `stamp` (a change
+   * of the stage): the same object each time it is asked until then.
+   * `null` when the layer holds none there. Throws what `Stage.layerSpec`
+   * throws.
    */
-  specs(session: Session, stamp: string, layer: Layer, read: (layer: Layer) => LayerTextRead | string): LayerSpecs | null {
-    if (this.#specs.session !== session) this.#specs = { session, stamp, read: new Map(), large: new Set() };
-    else if (this.#specs.stamp !== stamp) this.#specs = { ...this.#specs, stamp, read: new Map() };
-    if (this.#specs.large.has(layer)) return null;
-    const cached = this.#specs.read.get(layer);
-    if (cached !== undefined) return cached;
-    const text = read(layer);
-    if (typeof text !== "string" && text.truncated) this.#specs.large.add(layer);
-    const specs = typeof text === "string" || text.truncated ? null : readLayerSpecs(text.lines.join("\n"));
-    this.#specs.read.set(layer, specs);
-    return specs;
+  spec(session: Session, stamp: string, layer: Layer, path: string): AuthoredSpec | null {
+    let specs = this.#specs;
+    if (specs === null || specs.session !== session || specs.stamp !== stamp) this.#specs = specs = { session, stamp, read: specReader(session.stage) };
+    return specs.read(layer, path);
   }
 }
 
@@ -80,23 +68,14 @@ export async function arcLayers(session: Session, source: SceneSource | null): P
 }
 
 /**
- * The default prim and root prims of the layer `identifier`: from its
- * specs (`specsOf`) when the stage holds it, else read from `source` (a
- * layer over {@link SUMMARY_BYTES} is not, and the summary says why).
- * Throws what the module throws.
+ * The default prim and root prims of the layer `identifier`: its own
+ * specs when the stage holds it, else read from `source` (a layer over
+ * {@link SUMMARY_BYTES} is not, and the summary says why). Throws what the
+ * module throws.
  */
-export async function layerSummary(
-  session: Session,
-  source: SceneSource,
-  layerstack: Layerstack,
-  identifier: string,
-  specsOf: (layer: Layer) => LayerSpecs | null,
-): Promise<LayerSummary> {
+export async function layerSummary(session: Session, source: SceneSource, layerstack: Layerstack, identifier: string): Promise<LayerSummary> {
   const held = session.stage.layers().find((layer) => layer.identifier === identifier);
-  if (held !== undefined) {
-    const specs = specsOf(held);
-    return specs === null ? { kind: "unread", reason: `${identifier} is too large to read for its prims here.` } : summaryOf(specs);
-  }
+  if (held !== undefined) return summarizeLayer(session.stage, held);
   const size = await source.size(identifier);
   if (size !== null && size > SUMMARY_BYTES) return { kind: "unread", reason: `${identifier} is ${(size / 1024 ** 2).toFixed(1)} MB: too large to read for its prims alone.` };
   const bytes = await source.fetch(identifier);

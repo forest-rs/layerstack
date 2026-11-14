@@ -334,9 +334,12 @@ nothing more.
 - **Authoring composition.** The inspector's **Composition** section
   lists the arcs a prim composes from, strongest first, each arc's layer
   and spec live, and says where its edits go now (`/World/Robot → /Robot
-  in assets/robot.usda` through the robot's reference). The stage does not
-  say which layer authored an arc, so the editor reads it from the layers'
-  text: an arc the layer edits go to authors can be removed there (its
+  in assets/robot.usda` through the robot's reference). The composed arcs
+  do not say which layer authored each, so the editor reads each layer's
+  own spec at the site the arc is read beneath (`Stage.layerSpec`: one
+  spec lookup per layer, once per change, whatever the layer's size, no
+  layer written as text), and its ancestors' for an arc authored above
+  the prim: an arc the layer edits go to authors can be removed there (its
   item leaves the list and is deleted from weaker layers', as
   `RemoveReference` does); one authored elsewhere names that layer, live,
   and offers to edit there. Any arc offers to edit through it

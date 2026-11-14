@@ -1,21 +1,23 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-// The pure pieces of authoring composition: what a layer's USDA authors
-// about arcs and variant sets, which layer authors each arc the stage
-// composes (and so whether it can be removed where edits go), the USDA an
-// added arc authors, asset paths relative to a layer, where an edit
-// target writes a prim, and the names USD takes. Read over the sample
-// scene opened in Node, as the inspector reads it.
+// The pure pieces of authoring composition: what a layer's spec authors
+// about arcs and variant sets (read with `Stage.layerSpec`), which layer
+// authors each arc the stage composes (and so whether it can be removed
+// where edits go), the USDA an added arc authors, asset paths relative to
+// a layer, where an edit target writes a prim, and the names USD takes.
+// Read over the sample scene opened in Node, as the inspector reads it.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { type Layer, loadLayerstack, type Stage } from "@forest-rs/layerstack";
+import { loadLayerstack, type Stage } from "@forest-rs/layerstack";
 import {
   addArcEdit,
   anchorAsset,
   arcItemText,
+  arcUsda,
   authoredHere,
+  authoredItemText,
   deletedHere,
   describeTarget,
   findAuthoring,
@@ -34,7 +36,7 @@ import {
   variantSetNameProblem,
   variantSetSource,
 } from "../src/model/composition.ts";
-import { type LayerSpecs, readLayerSpecs } from "../src/model/layerSpecs.ts";
+import { layerSummary, type SpecsOf, specReader, summarizeBytes } from "../src/model/layerSpecs.ts";
 
 const SCENE = new URL("../public/scene/", import.meta.url);
 
@@ -54,13 +56,15 @@ async function sample(): Promise<Stage> {
   return stage;
 }
 
-/** Each layer's specs as the inspector reads them: its exported text. */
-function specsOf(stage: Stage): (layer: Layer) => LayerSpecs {
-  return (layer) => readLayerSpecs(new TextDecoder().decode(stage.exportLayer(layer, "usda")));
+/**
+ * Each layer's specs as the inspector reads them: `Stage.layerSpec`, read
+ * again for each call, as the store reads again after each change.
+ */
+function specsOf(stage: Stage): SpecsOf {
+  return (layer, path) => specReader(stage)(layer, path);
 }
 
-test("a layer's specs: arcs as list ops, variant sets and their variants, selections, default and root prims", () => {
-  const specs = readLayerSpecs(`#usda 1.0
+const LAYER = `#usda 1.0
 (
     defaultPrim = "World"
     doc = """A layer
@@ -82,14 +86,10 @@ def Xform "World" (
         }
     )
     {
-        double3 xformOp:translate = (-4, 2, 0)
         double radius.timeSamples = {
             0: 1,
             12: 2,
         }
-        color3f[] primvars:displayColor = [(0.3, 0.3, 0.32)] (
-            interpolation = "constant"
-        )
     }
 
     def Xform "Robot" (
@@ -109,8 +109,6 @@ def Xform "World" (
             "chrome" (
                 prepend references = @./assets/chrome.usda@
             ) {
-                rel mirrors = </World/Robot>
-
                 def "Trim" (
                     inherits = </Shape>
                 )
@@ -128,23 +126,23 @@ class "Shape"
 {
     double radius = 2
 }
-`);
-  assert.equal(specs.defaultPrim, "World");
-  assert.deepEqual(specs.roots, [
-    { name: "World", specifier: "def", typeName: "Xform" },
-    { name: "Shape", specifier: "class", typeName: null },
-  ]);
-  const rock = specs.specs.get("/World/Rock")!;
+`;
+
+test("a spec's arcs as list op items, each list apart, its variant sets and selections; a layer's default and root prims", async () => {
+  const layerstack = await loadLayerstack();
+  const bytes = new TextEncoder().encode(LAYER);
+  using stage = layerstack.open({ identifier: "layer.usda", bytes });
+  const read = specReader(stage);
+  const rock = read(stage.root, "/World/Rock")!;
   assert.deepEqual(
-    rock.arcs.map((arc) => [arc.field, arc.op, arc.asset, arc.primPath]),
+    rock.arcs.map((arc) => [arc.field, arc.op, arc.asset, arc.primPath, arc.index]),
     [
-      ["inherits", "explicit", null, "/Shape"],
-      ["references", "delete", "./x.usda", null],
+      ["references", "delete", "./x.usda", null, 0],
+      ["inherits", "explicit", null, "/Shape", 1],
     ],
-    "a dictionary's strings are not read as specs",
   );
-  assert.equal(specs.specs.has("/World/Fake"), false);
-  const robot = specs.specs.get("/World/Robot")!;
+  assert.equal(read(stage.root, "/World/Fake"), null, "a dictionary's strings are no spec");
+  const robot = read(stage.root, "/World/Robot")!;
   assert.deepEqual(
     robot.arcs.map((arc) => [arc.field, arc.op, arc.asset, arc.primPath, arc.offset, arc.scale]),
     [
@@ -154,17 +152,33 @@ class "Shape"
       ["specializes", "prepend", null, "/Shape", 0, 1],
     ],
   );
-  assert.deepEqual([...robot.selections], [["finish", "painted"]]);
-  assert.deepEqual(robot.variantSetNames, [{ op: "prepend", names: ["finish", "look"] }]);
-  assert.deepEqual([...robot.variantSets], [["finish", ["chrome", "painted"]]]);
-  const chrome = specs.specs.get("/World/Robot{finish=chrome}")!;
-  assert.equal(chrome.specifier, null);
+  // The line each shows is built from the item: what the layer's text says.
+  assert.deepEqual(
+    robot.arcs.map((arc) => arcUsda(arc.op, arc.field, authoredItemText(arc))),
+    [
+      "prepend references = @./assets/robot.usda@",
+      "prepend references = @./assets/beacon.usda@</Beacon> (offset = 10; scale = 2)",
+      "append payload = </World/Rock>",
+      "prepend specializes = </Shape>",
+    ],
+  );
+  assert.deepEqual([...robot.spec.variantSelections!], [["finish", "painted"]]);
+  assert.deepEqual(robot.spec.variantSetNames?.prepended, ["finish", "look"]);
+  assert.deepEqual(robot.spec.variantSets, [{ name: "finish", variants: ["chrome", "painted"] }]);
+  const chrome = read(stage.root, "/World/Robot{finish=chrome}")!;
+  assert.equal(chrome.spec.type, "variant");
   assert.deepEqual(chrome.arcs.map((arc) => arc.asset), ["./assets/chrome.usda"]);
-  assert.deepEqual(specs.specs.get("/World/Robot{finish=chrome}Trim")!.arcs.map((arc) => arc.primPath), ["/Shape"]);
-  assert.ok(specs.specs.has("/World/Robot{finish=painted}"));
-  assert.ok(specs.specs.has("/Shape"));
-  // Lines are where the text has them, for the Text tab to show.
-  assert.equal(robot.arcs[1]!.line, 35);
+  assert.deepEqual(read(stage.root, "/World/Robot{finish=chrome}Trim")!.arcs.map((arc) => arc.primPath), ["/Shape"]);
+  assert.notEqual(read(stage.root, "/World/Robot{finish=painted}"), null);
+  assert.equal(read(stage.root, "/World/Robot.color"), null, "a property's spec is no prim's");
+  // Read once: the same object, so an arc taken by one composed arc is the same item for the next.
+  assert.equal(read(stage.root, "/World/Robot"), robot);
+
+  const summary = { kind: "read", defaultPrim: "World", roots: [{ name: "World", specifier: "def", typeName: "Xform" }, { name: "Shape", specifier: "class", typeName: null }] };
+  assert.deepEqual(layerSummary(stage, stage.root), summary);
+  // A layer the stage has not read, from its bytes: as text or as a crate.
+  assert.deepEqual(summarizeBytes(layerstack, "layer.usda", bytes), summary);
+  assert.deepEqual(summarizeBytes(layerstack, "layer.usdc", stage.exportLayer(stage.root, "usdc")), summary);
 });
 
 test("which layer authors each composed arc, and whether it can be removed where edits go", async () => {
@@ -244,7 +258,7 @@ test("the edits and USDA of an added arc, and its removal", () => {
   assert.throws(() => addArcEdit("/World/New", { ...inherit, primPath: null }));
   assert.equal(arcItemText("./a.usda", null, 0, 0.5), "@./a.usda@ (scale = 0.5)");
 
-  const authored = { field: "references", op: "prepend", asset: null, primPath: "/Robot/Head", offset: 0, scale: 1, line: 0 } as const;
+  const authored = { field: "references", op: "prepend", asset: null, primPath: "/Robot/Head", offset: 0, scale: 1, index: 0 } as const;
   // An internal path in a referenced layer is given as the stage path that writes there.
   assert.deepEqual(removeArcEdit("/World/Robot/Body", authored, { prim: "/World/Robot", site: "/Robot" }), {
     type: "removeReference",

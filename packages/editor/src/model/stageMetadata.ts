@@ -30,7 +30,12 @@ export interface StageField {
 export const STAGE_FIELDS: readonly StageField[] = [
   { key: "upAxis", label: "Up axis", type: "token", about: "The axis that points up: Y or Z (UsdGeomGetStageUpAxis). The viewport orbits about it." },
   { key: "metersPerUnit", label: "Meters per unit", type: "double", about: "How long one unit of the scene is, in meters (UsdGeomGetStageMetersPerUnit)." },
-  { key: "defaultPrim", label: "Default prim", type: "token", about: "The root prim a reference or payload to this layer without a prim path brings in." },
+  {
+    key: "defaultPrim",
+    label: "Default prim",
+    type: "token",
+    about: "The prim a reference or payload to this layer without a prim path brings in. Read from the root layer alone, so authored there whatever layer edits go to (UsdStage::SetDefaultPrim).",
+  },
   { key: "startTimeCode", label: "Start time code", type: "double", about: "The first time code of the stage's animation: where the timeline starts." },
   { key: "endTimeCode", label: "End time code", type: "double", about: "The last time code of the stage's animation: where the timeline ends." },
   { key: "timeCodesPerSecond", label: "Time codes per second", type: "double", about: "How many time codes make a second: what playback runs at, and what scales time across a reference to a layer with another rate." },
@@ -78,9 +83,34 @@ export type FieldSource =
   /** Neither does: the value is the field's fallback (`upAxis` Y, `metersPerUnit` 0.01, rates 24), or there is none. */
   | "fallback";
 
+/**
+ * Whether `key` is read from the root layer alone. `defaultPrim` is: a
+ * reference or payload without a prim path takes the default prim of the
+ * layer it names, and no session layer comes with that layer
+ * (`_EvalRefOrPayloadArcs` in OpenUSD's `pcp/primIndex.cpp`), so
+ * `UsdStage::GetDefaultPrim` reads the root layer and `SetDefaultPrim`
+ * writes it, whatever the edit target; an opinion in the session layer
+ * names nothing.
+ */
+export function rootOnly(key: string): boolean {
+  return key === "defaultPrim";
+}
+
+/**
+ * The prim a `defaultPrim` of `value` names: a root prim by name
+ * (`World`), or, as OpenUSD has read it since 23.11
+ * (`SdfLayer::GetDefaultPrimAsPath`), a prim by its path, with or without
+ * the leading slash (`World/Robot`). `null` for one that is no prim path.
+ */
+export function defaultPrimPath(value: string): string | null {
+  const names = (value.startsWith("/") ? value.slice(1) : value).split("/");
+  // Names as a path spells them: no empty one, and none of what a path gives another meaning (`.`, `:`, `{`, `[`, `<`, space).
+  return names.every((name) => /^[^\s/.:{}[\]<>]+$/u.test(name)) ? `/${names.join("/")}` : null;
+}
+
 /** Which layer the stage reads `key` from, given the fields the session layer's and the root's pseudo-roots author. */
 export function fieldSource(key: string, session: ReadonlySet<string> | null, root: ReadonlySet<string>): FieldSource {
-  if (session?.has(key) === true) return "session";
+  if (session?.has(key) === true && !rootOnly(key)) return "session";
   return root.has(key) ? "root" : "fallback";
 }
 

@@ -62,7 +62,7 @@ import { addShaderEdits, connectEdits, connectLabel, disconnectEdits, disconnect
 import type { HealthReport } from "./model/health.ts";
 import { IDENTITY, type LayerOffset, movedSublayers, offsetUsda, sublayerIndex } from "./model/layerStack.ts";
 import type { PathMove, Session } from "./model/session.ts";
-import { type FieldSource, type MetadataPlacement, metadataLayer } from "./model/stageMetadata.ts";
+import { type FieldSource, type MetadataPlacement, metadataLayer, rootOnly } from "./model/stageMetadata.ts";
 import { StageReports } from "./store/reports.ts";
 import type { SceneSource } from "./model/sources.ts";
 import { ActionQueue } from "./store/actions.ts";
@@ -1269,10 +1269,18 @@ export class EditorStore {
    * Returns why the stage refused it.
    */
   setStageMetadata(key: string, value: ValueInput): string | undefined {
-    const layer = this.metadataPlacement()?.layer;
-    if (layer === undefined) return undefined;
+    const placed = this.metadataPlacement()?.layer;
+    const root = this.session?.stage.root;
+    if (placed === undefined || root === undefined) return undefined;
+    // A field read from the root alone (`defaultPrim`) is authored there, or not at all.
+    const layer = rootOnly(key) ? root : placed;
     const label = `set ${key} in ${layerLabel(layer)}`;
-    return this.#edit(label, (session) => session.applyIn(label, layer, [{ type: "setLayerMetadata", key, value }]));
+    return this.#edit(label, (session) => {
+      if (layer !== placed && layer.readOnly) {
+        throw new Error(`${key} is read from the root layer alone, and ${layerLabel(layer)} is read-only: an opinion in ${layerLabel(placed)} would name nothing`);
+      }
+      return session.applyIn(label, layer, [{ type: "setLayerMetadata", key, value }]);
+    });
   }
 
   /**

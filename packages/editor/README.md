@@ -127,7 +127,9 @@ nothing more.
   read is announced, not a frozen page. Below that are what has arrived
   and the time taken, and **Cancel** stops it: the fetches in flight are
   aborted, nothing more is fetched or read, what the open had made is
-  freed, and the editor keeps the scene it had. Once
+  freed, and the editor keeps the scene it had. An open that fails with
+  nothing open says which scene and why in the viewport, and opens the
+  sample from there. Once
   the scene is drawn, a corner note counts the textures still loading and
   the decodes in flight. Textures are decoded and scaled in a few workers,
   off the page's thread, and the draws waiting on them are restyled a

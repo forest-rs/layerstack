@@ -460,7 +460,7 @@ function PackageDialog({ store, result, onClose }: { store: EditorStore; result:
           <ul className="flex max-h-60 flex-col gap-1 overflow-y-auto">
             {result.unresolved.map((dependency, index) => (
               <li key={index}>
-                <span className="font-mono text-[11px]">@{dependency.assetPath}@</span> <span className="text-muted-foreground">in {layerName(dependency.layer.identifier)}: {dependency.reason}</span>
+                <span className="font-mono text-[11px]">@{dependency.assetPath}@</span> <span className="text-muted-foreground">in {layerName(dependency.identifier)}: {dependency.reason}</span>
               </li>
             ))}
           </ul>

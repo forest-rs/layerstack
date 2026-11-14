@@ -2220,8 +2220,14 @@ export interface FlattenResult {
 
 /** A dependency {@link Stage.exportPackage} could not package. */
 export interface UnpackagedAsset {
-  /** The layer that authors it. */
-  readonly layer: Layer;
+  /**
+   * The layer that authors it; `null` for a layer the packager read that
+   * the stage does not hold: the layer a variant not selected references,
+   * which a package holds as OpenUSD's does and the stage never composed.
+   */
+  readonly layer: Layer | null;
+  /** The identifier the authoring layer was read from, a layer the stage does not hold included; `null` for an anonymous layer. */
+  readonly identifier: string | null;
   /** The asset path as authored. */
   readonly assetPath: string;
   /** Why it could not be packaged (not supplied yet, confirmed absent, ...). */

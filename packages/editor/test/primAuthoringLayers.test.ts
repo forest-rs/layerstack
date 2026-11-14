@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Layer, Stage } from "@forest-rs/layerstack";
-import { copyPath, copyRefusal, copySites, nameOf, opinionSites } from "../src/model/primAuthoring.ts";
+import { bindingRows, copyPath, copyRefusal, copySites, nameOf, opinionSites } from "../src/model/primAuthoring.ts";
 import { primActions } from "../src/model/primActions.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
@@ -214,6 +214,64 @@ test("a reorder that the stage would not compose is refused with nothing authore
   assert.deepEqual(names(stage, "/World/Tower"), ["Roof", "Base", "Flag"]);
   // A drop between siblings goes the same way.
   assert.match(store.reorderChildren("/World/Tower", ["Flag", "Roof", "Base"])!, /do not take that order/);
+});
+
+test("unbinding does not block a binding the prim inherits, and the section offers it only for the prim's own", async () => {
+  const { store, stage, steps } = await opened();
+  // The ball inherits the world's binding: not its own, so there is no Unbind for it.
+  const inherited = bindingRows(stage.prim("/World/Ball")!);
+  assert.deepEqual(
+    inherited.map((row) => [row.purpose, row.binding.material, row.binding.relationship, row.own]),
+    [["", "/World/Stone", "/World.material:binding", false]],
+  );
+  // What the button did: an empty binding on the ball, which is not bound, so the ancestor's still decides
+  // (`UsdShadeMaterialBindingAPI::ComputeBoundMaterial`; usd-core 26.11 gives the same).
+  assert.equal(store.unbindMaterial("/World/Ball"), undefined);
+  assert.equal(stage.prim("/World/Ball")!.boundMaterial()?.material, "/World/Stone");
+  assert.deepEqual(bindingRows(stage.prim("/World/Ball")!).map((row) => row.own), [false]);
+  // Its own binding is one Unbind empties: it is then bound as its ancestors are.
+  store.bindMaterial("/World/Ball", "/World/Moss");
+  assert.deepEqual(
+    bindingRows(stage.prim("/World/Ball")!).map((row) => [row.binding.material, row.own]),
+    [["/World/Moss", true]],
+  );
+  store.unbindMaterial("/World/Ball");
+  assert.equal(stage.prim("/World/Ball")!.boundMaterial()?.material, "/World/Stone");
+  assert.equal(steps(), 3);
+});
+
+test("a binding for one purpose is listed with the all-purpose one, and unbound apart from it", async () => {
+  const { h, store, stage } = await opened();
+  assert.equal(store.bindMaterial("/World/Pebble", "/World/Moss", { purpose: "preview", strength: "strongerThanDescendants" }), undefined);
+  const authored = stage.layerSpec(stage.root, "/World/Pebble.material:binding:preview");
+  assert.ok(authored?.type === "relationship");
+  assert.deepEqual(authored.targets?.explicit, ["/World/Moss"]);
+  assert.ok(authored.fields.includes("bindMaterialAs"));
+  // For all purposes the world's binding still decides; a renderer drawing for preview uses the pebble's own.
+  assert.deepEqual(
+    bindingRows(stage.prim("/World/Pebble")!).map((row) => [row.purpose, row.binding.material, row.own, row.binding.strength]),
+    [
+      ["", "/World/Stone", false, "weakerThanDescendants"],
+      ["preview", "/World/Moss", true, "strongerThanDescendants"],
+    ],
+  );
+  // Unbound for that purpose alone.
+  assert.equal(store.unbindMaterial("/World/Pebble", "preview"), undefined);
+  assert.deepEqual(
+    bindingRows(stage.prim("/World/Pebble")!).map((row) => [row.purpose, row.binding.material]),
+    [["", "/World/Stone"]],
+  );
+  await h.settle(store.undo());
+  assert.equal(bindingRows(stage.prim("/World/Pebble")!).length, 2);
+  // A prim nothing binds for all purposes still shows what binds it for one.
+  await h.settle(store.undo());
+  store.removeProperty("/World.material:binding");
+  store.bindMaterial("/World/Pebble", "/World/Moss", { purpose: "full" });
+  assert.equal(stage.prim("/World/Pebble")!.boundMaterial(), null);
+  assert.deepEqual(
+    bindingRows(stage.prim("/World/Pebble")!).map((row) => [row.purpose, row.binding.material, row.own]),
+    [["full", "/World/Moss", true]],
+  );
 });
 
 test("the eye on a prim whose visibility has one time sample authors the sample, not a default the sample hides", async () => {

@@ -9,7 +9,7 @@
 // (what a Clear there takes away), a free sibling name for a duplicate, a reparent's destination and why it
 // cannot be made, a sibling order with one child moved, and where a
 // prim's opinions are when the edit target has none to copy.
-import type { ArcKind, CompositionArc, EditTarget, Layer, LayerSpec, Prim, PrimSpec, SchemaInfo, Stage } from "@forest-rs/layerstack";
+import type { ArcKind, CompositionArc, EditTarget, Layer, LayerSpec, MaterialBinding, Prim, PrimSpec, SchemaInfo, Stage } from "@forest-rs/layerstack";
 import { describeTarget, mapThrough, namespaceRefusal } from "./composition.ts";
 
 /** A prim name as USD takes it: an identifier. */
@@ -340,6 +340,47 @@ export function authoredApiSchemas(prim: Prim): string[] {
   } finally {
     if (value.kind === "array") value.array.release();
   }
+}
+
+/** The material purposes a binding is authored for besides all purposes (`UsdShadeTokens->preview`, `full`). */
+export const BINDING_PURPOSES: readonly string[] = ["preview", "full"];
+
+/** A binding that decides a prim's material, as the Material section lists it. */
+export interface BindingRow {
+  /** The purpose it binds for: `""` for all purposes, else `preview` or `full`. */
+  readonly purpose: string;
+  readonly binding: MaterialBinding;
+  /**
+   * Whether it is the prim's own direct binding, which Unbind there
+   * empties. One inherited from an ancestor or bound through a
+   * collection is not: an empty binding on the prim is not bound, so
+   * `ComputeBoundMaterial` goes on to the ancestors and the prim stays
+   * bound as it was.
+   */
+  readonly own: boolean;
+}
+
+/**
+ * The bindings that decide `prim`'s material: the one for all purposes
+ * (`ComputeBoundMaterial()`), then one for each of
+ * {@link BINDING_PURPOSES} that a binding of that purpose decides, which
+ * a renderer drawing for that purpose uses in place of the first. A
+ * purpose that falls back to the all-purpose binding is not listed
+ * again.
+ */
+export function bindingRows(prim: Pick<Prim, "path" | "boundMaterial">): BindingRow[] {
+  const row = (purpose: string, binding: MaterialBinding): BindingRow => ({
+    purpose,
+    binding,
+    own: binding.kind === "direct" && binding.relationship.slice(0, binding.relationship.indexOf(".")) === prim.path,
+  });
+  const all = prim.boundMaterial();
+  const rows = all === null ? [] : [row("", all)];
+  for (const purpose of BINDING_PURPOSES) {
+    const binding = prim.boundMaterial({ purpose });
+    if (binding !== null && binding.purpose === purpose) rows.push(row(purpose, binding));
+  }
+  return rows;
 }
 
 /** The last element of a prim path (`Rock` of `/World/Rock`). */

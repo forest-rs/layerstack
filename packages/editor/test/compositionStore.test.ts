@@ -11,7 +11,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { AuthoredReference, Stage } from "@forest-rs/layerstack";
-import { authoredHere, findAuthoring, type NewArc, uncomposedHere } from "../src/model/composition.ts";
+import { authoredHere, findAuthoring, mapping, type NewArc, uncomposedHere, variantSetSource } from "../src/model/composition.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
 /** A reference to add, as the dialog makes it. */
@@ -315,6 +315,25 @@ test("of two references to one asset, to its default prim and to another prim, e
   const crate = findAuthoring(arcs, arcs.findIndex((arc) => arc.site === "/Props/Crate"), read)!;
   assert.equal(store.removeArc("/World/Pile", crate.item), undefined);
   assert.deepEqual(stage.prim("/World/Pile")!.compositionArcs().filter((arc) => arc.arc === "references").map((arc) => arc.site), ["/Props"]);
+});
+
+test("a variant set nested in a variant is found in that variant's branch, to remove it there", async () => {
+  const { store, stage } = await opened();
+  const read = (layer: Parameters<typeof store.layerSpecs>[0]) => store.layerSpecs(layer);
+  assert.equal(store.addVariant("/World/Rock", "look", "mossy", true), undefined);
+  store.editInsideVariant("/World/Rock", "look", "mossy");
+  assert.equal(store.addVariant("/World/Rock", "wear", "worn", true), undefined);
+  const arcs = stage.prim("/World/Rock")!.compositionArcs();
+  const held = variantSetSource(arcs, "wear", read);
+  assert.ok(held !== null, "the layer that holds the nested set is found");
+  assert.equal(held.layer, stage.root);
+  assert.equal(held.specPath, "/World/Rock{look=mossy}");
+  // The arc that reads it gives the target that edits there: where edits go now.
+  const there = stage.prim("/World/Rock")!.compositionArcs()[held.arc]!.editTarget(held.layer);
+  assert.equal(there.mapPath("/World/Rock"), held.specPath);
+  assert.equal(mapping(store.session!.target!, "/World/Rock").specPath, held.specPath);
+  assert.equal(store.removeVariantSet("/World/Rock", "wear"), undefined);
+  assert.equal(variantSetSource(stage.prim("/World/Rock")!.compositionArcs(), "wear", read), null);
 });
 
 test("an arc a prim composes through an ancestor is read as authored on that ancestor", async () => {

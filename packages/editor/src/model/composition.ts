@@ -453,9 +453,10 @@ export function deletedHere(target: Layer | TargetLike, prim: string, specsOf: (
 
 /**
  * The layer and spec that hold the variant set `set` of a prim, among
- * the specs its arcs read (its own layers, a reference's asset), strongest
- * first, and the arc that reads it (its edit target edits there); `null`
- * when no readable layer holds the set's spec.
+ * the specs its arcs read (its own layers, a selected variant's branch
+ * for a set nested in it, a reference's asset), strongest first, and the
+ * arc that reads it (its edit target edits there); `null` when no
+ * readable layer holds the set's spec.
  */
 export function variantSetSource(
   arcs: readonly ArcRecord[],
@@ -463,7 +464,7 @@ export function variantSetSource(
   specsOf: (layer: Layer) => LayerSpecs | null,
 ): { readonly layer: Layer; readonly specPath: string; readonly arc: number } | null {
   for (const [index, arc] of arcs.entries()) {
-    if (arc.arc === "variants" || arc.arc === "relocates") continue;
+    if (arc.arc === "relocates") continue;
     for (const layer of arc.layers) {
       if (specsOf(layer)?.specs.get(arc.site)?.variantSets.has(set) === true) return { layer, specPath: arc.site, arc: index };
     }

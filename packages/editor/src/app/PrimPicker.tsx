@@ -72,14 +72,17 @@ export function PrimPicker({
   const excluded = exclude.join("\n");
   const firsts = first.join("\n");
   const matches = useMemo(() => {
-    const shown = (path: string) => !exclude.includes(path) && hide?.(path) !== true;
+    // With properties to choose, a prim chosen already is still listed: its properties are reached through it.
+    const shown = (path: string) => (properties || !exclude.includes(path)) && hide?.(path) !== true;
     const needle = text.trim().toLowerCase();
     const ahead = first.filter((path) => shown(path) && path.slice(path.lastIndexOf("/") + 1).toLowerCase().includes(needle) && stage.prim(path) !== null);
     const found = searchPrims(stage, { text, limit: LISTED + exclude.length + ahead.length, ...(type === undefined ? {} : { type }) }).filter((path) => shown(path) && !ahead.includes(path));
     const ordered = prefer === undefined ? found : [...found.filter(prefer), ...found.filter((path) => !prefer(path))];
     return [...ahead, ...ordered].slice(0, LISTED);
     // `hide` is the caller's for the dialog's life: not a key.
-  }, [stage, text, type, excluded, firsts, prefer]);
+  }, [stage, text, type, excluded, firsts, prefer, properties]);
+  /** Whether the prim at `path` is chosen already (listed only for its properties). */
+  const taken = (path: string) => exclude.includes(path);
   const prim = chosen === null ? null : stage.prim(chosen);
   const propertyNames = useMemo(() => (prim === null ? [] : [...prim.attributeNames(), ...prim.relationshipNames()].sort()), [prim]);
   const pick = (path: string) => {
@@ -103,7 +106,7 @@ export function PrimPicker({
           const [key] = keys === "all" ? [] : [...keys];
           setChosen(key === undefined ? null : String(key));
         }}
-        onAction={(key) => pick(String(key))}
+        onAction={(key) => (taken(String(key)) ? setChosen(String(key)) : pick(String(key)))}
         renderEmptyState={() => (
           <p className="px-2 py-1 text-xs text-muted-foreground">
             {text.trim() === "" ? `The stage has no ${kind} to choose${exclude.length > 0 ? " that is not chosen already" : ""}.` : `No ${kind} is named like that.`}
@@ -121,7 +124,7 @@ export function PrimPicker({
                 <span className="truncate font-mono text-[10px] text-muted-foreground">{path}</span>
               </span>
               <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
-                {firstNote !== undefined && first.includes(path) ? firstNote : `${found?.specifier === "class" ? "class " : ""}${found?.typeName ?? ""}`}
+                {taken(path) ? "chosen already" : firstNote !== undefined && first.includes(path) ? firstNote : `${found?.specifier === "class" ? "class " : ""}${found?.typeName ?? ""}`}
               </span>
             </ListBoxItem>
           );
@@ -152,8 +155,8 @@ export function PrimPicker({
         <Button variant="outline" onPress={onClose}>
           Cancel
         </Button>
-        <Button isDisabled={chosen === null} onPress={() => chosen !== null && pick(chosen)}>
-          {chosen === null ? `Choose a ${kind}` : `Choose ${chosen.slice(chosen.lastIndexOf("/") + 1)}`}
+        <Button isDisabled={chosen === null || taken(chosen)} onPress={() => chosen !== null && !taken(chosen) && pick(chosen)}>
+          {chosen === null ? `Choose a ${kind}` : taken(chosen) ? "Choose one of its properties" : `Choose ${chosen.slice(chosen.lastIndexOf("/") + 1)}`}
         </Button>
       </DialogFooter>
     </Dialog>

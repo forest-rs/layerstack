@@ -357,7 +357,7 @@ test("connections that name nothing, and cycles, are found with their reasons", 
     "/M/Loop.outputs:r -> /M/Surface.inputs:roughness",
     "/M/Surface.outputs:out -> /M/Loop.inputs:st",
   ]);
-  assert.equal(cycles.get("/M.inputs:a -> /M.inputs:b"), "it is on a cycle: M inputs → M inputs");
+  assert.equal(cycles.get("/M.inputs:a -> /M.inputs:b"), "it is on a cycle: M.a → M.b → M.a");
   assert.equal(cycles.get("/M/Surface.outputs:out -> /M/Loop.inputs:st"), "it is on a cycle: Surface → Loop → Surface");
   const issues = readIssues(stage, network);
   const diffuse = issues.get("/M/Surface.inputs:diffuseColor") ?? [];

@@ -35,7 +35,7 @@ import {
   uncomposedHere,
   variantOfSite,
 } from "../model/composition.ts";
-import type { AuthoredArc, LayerSpecs } from "../model/layerSpecs.ts";
+import type { AuthoredArc } from "../model/layerSpecs.ts";
 import type { EditorStore } from "../store.ts";
 import { AddArcDialog } from "./AddArcDialog.tsx";
 import { useRevision } from "./context.ts";
@@ -76,7 +76,7 @@ export function CompositionSection({ store, prim }: { store: EditorStore; prim: 
   if (context === null || target === null) return null;
   const stage = context.stage;
   const arcs = prim.compositionArcs();
-  const specsOf = (layer: Layer): LayerSpecs | null => store.layerSpecs(layer);
+  const specsOf = store.specsOf;
   const where = mapping(target, prim.path);
   const blocked = compositionBlock(store, prim);
   const uncomposed = uncomposedHere(arcs, target, prim.path, specsOf);
@@ -109,7 +109,7 @@ export function CompositionSection({ store, prim }: { store: EditorStore; prim: 
         <div className="mt-2 flex flex-col gap-0.5 text-[11px] text-muted-foreground">
           <span>Deleted here, so no weaker layer adds them:</span>
           {deleted.map((item) => (
-            <code key={item.line} className="truncate font-mono text-[10px]">
+            <code key={item.index} className="truncate font-mono text-[10px]">
               {arcUsda(item.op, item.field, authoredItemText(item))}
             </code>
           ))}
@@ -279,7 +279,7 @@ function Authoring({ store, arc, source, here }: { store: EditorStore; arc: Comp
   if (arc.arc === "variants") return <span>the variant selected</span>;
   if (arc.arc === "relocates") return <span>relocated here; its source's specs do not contribute</span>;
   if (arc.implied) return <span>implied: a class arc authored inside what it references</span>;
-  if (source === null) return <span>authored in a layer too large to read here</span>;
+  if (source === null) return <span>no spec of the layers it is read beneath authors it</span>;
   const usda = arcUsda(source.item.op, source.item.field, authoredItemText(source.item));
   return (
     <span className="flex min-w-0 flex-wrap items-center gap-x-1">
@@ -384,7 +384,7 @@ function Uncomposed({
         const issue = issues.find((each) => each.message.includes(text) || (item.asset !== null && each.message.includes(`@${item.asset}@`)));
         const pending = item.asset !== null && waiting.some((asset) => asset.assetPath === item.asset && asset.anchor === layer);
         const why = issue?.message ?? (pending ? "Its asset is not fetched yet." : "A stronger opinion removes it, or what it names is not there.");
-        const key = `uncomposed:${item.line}`;
+        const key = `uncomposed:${item.index}`;
         return (
           <div key={key} role="group" aria-label={`${kindOf(item.field)} ${text}`} className="flex flex-col gap-0.5 rounded-md bg-amber-500/10 px-2 py-1 text-[11px] text-amber-800 dark:text-amber-300">
             <div className="flex min-w-0 items-center gap-1.5">

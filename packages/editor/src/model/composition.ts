@@ -3,15 +3,16 @@
 
 // Authoring composition, with no DOM: the edits that add and remove a
 // prim's arcs and variant sets, the USDA each authors, which layer
-// authors each arc the stage composes (from the layers' specs,
-// `layerSpecs.ts`) and so whether it can be removed where edits go, where
-// an edit target writes a prim, and which names USD takes. The inspector's
+// authors each arc the stage composes (from each layer's own spec at the
+// site an arc reads, `layerSpecs.ts`) and so whether it can be removed
+// where edits go, where an edit target writes a prim, and which names USD
+// takes. The inspector's
 // Composition and Variants sections (`../app/CompositionSection.tsx`,
 // `../app/VariantsSection.tsx`) and the store's actions read these.
 // AOUSD Core §10 (composition arcs: LIVRPS), §12.4 (list ops), §7.3.6
 // (variant sets), §7.6.2 (prim spec fields).
 import type { ArcKind, CompositionArc, Edit, EditTarget, Layer, ListPosition } from "@forest-rs/layerstack";
-import type { ArcField, AuthoredArc, LayerSpecs, ListOpKind } from "./layerSpecs.ts";
+import type { ArcField, AuthoredArc, ListOpKind, SpecsOf } from "./layerSpecs.ts";
 
 /** An arc the inspector adds: a reference, a payload, an inherit or a specialize. */
 export type NewArcKind = "reference" | "payload" | "inherit" | "specialize";
@@ -329,11 +330,12 @@ export function itemComposes(item: AuthoredArc, layer: Layer, arc: ArcRecord, pa
 /**
  * The layer that authors the composed arc `arcs[index]`, strongest first
  * among the layers of the arc it is authored beneath, read through
- * `specsOf` (`null` for a layer that could not be read); `null` for the
- * prim's own opinions, a variant, a relocate, an implied arc (authored on
- * the class arc it is implied from), or an arc no readable layer authors.
+ * `specsOf` at the site that arc reads (and its ancestors' sites, for an
+ * arc authored above the prim); `null` for the prim's own opinions, a
+ * variant, a relocate, an implied arc (authored on the class arc it is
+ * implied from), or an arc no layer authors at those sites.
  */
-export function findAuthoring(arcs: readonly ArcRecord[], index: number, specsOf: (layer: Layer) => LayerSpecs | null): ArcSource | null {
+export function findAuthoring(arcs: readonly ArcRecord[], index: number, specsOf: SpecsOf): ArcSource | null {
   const arc = arcs[index];
   if (arc === undefined || arc.parent === null || arc.implied || fieldOfArc(arc.arc) === null) return null;
   if (arcs[arc.parent] === undefined) return null;
@@ -357,7 +359,7 @@ export function findAuthoring(arcs: readonly ArcRecord[], index: number, specsOf
 }
 
 /** The item that authors `arcs[index]` at the sites the arcs give ({@link findAuthoring} walks them up). */
-function authoredAt(arcs: readonly ArcRecord[], index: number, specsOf: (layer: Layer) => LayerSpecs | null): Omit<ArcSource, "ancestor"> | null {
+function authoredAt(arcs: readonly ArcRecord[], index: number, specsOf: SpecsOf): Omit<ArcSource, "ancestor"> | null {
   const arc = arcs[index]!;
   const parent = arcs[arc.parent!]!;
   // Each arc beneath the same one takes an item of its own, the arcs in
@@ -381,11 +383,11 @@ function authoredAt(arcs: readonly ArcRecord[], index: number, specsOf: (layer: 
  * layer offset before one at another, one not `taken` by an earlier arc
  * before one that is, then the strongest layer's, the first in its list.
  */
-function bestItem(arc: ArcRecord, parent: ArcRecord, taken: ReadonlySet<AuthoredArc>, specsOf: (layer: Layer) => LayerSpecs | null): { readonly layer: Layer; readonly item: AuthoredArc } | null {
+function bestItem(arc: ArcRecord, parent: ArcRecord, taken: ReadonlySet<AuthoredArc>, specsOf: SpecsOf): { readonly layer: Layer; readonly item: AuthoredArc } | null {
   let best: { readonly layer: Layer; readonly item: AuthoredArc; readonly score: number } | null = null;
   for (const layer of parent.layers) {
-    const spec = specsOf(layer)?.specs.get(parent.site);
-    if (spec === undefined) continue;
+    const spec = specsOf(layer, parent.site);
+    if (spec === null) continue;
     const base = readAt(parent, layer);
     for (const item of spec.arcs) {
       if (!itemComposes(item, layer, arc, parent)) continue;
@@ -451,14 +453,14 @@ export function uncomposedHere(
   arcs: readonly ArcRecord[],
   target: Layer | TargetLike,
   prim: string,
-  specsOf: (layer: Layer) => LayerSpecs | null,
+  specsOf: SpecsOf,
 ): AuthoredArc[] {
   const spec = targetSpec(target, prim);
   if (spec === null) return [];
-  const authored = specsOf(spec.layer)?.specs.get(spec.specPath);
-  if (authored === undefined) return [];
-  // By what the item says and where, not by object: each read of a layer is its own.
-  const key = (item: AuthoredArc) => `${item.line}\n${item.field}\n${item.asset}\n${item.primPath}\n${item.offset}\n${item.scale}`;
+  const authored = specsOf(spec.layer, spec.specPath);
+  if (authored === null) return [];
+  // By the item's place in its spec, not by object: a reader need not give the same objects twice.
+  const key = (item: AuthoredArc) => `${item.index}\n${item.field}\n${item.op}`;
   const composed = new Set<string>();
   arcs.forEach((_, index) => {
     const source = findAuthoring(arcs, index, specsOf);
@@ -468,10 +470,10 @@ export function uncomposedHere(
 }
 
 /** The arcs the spec edits of `prim` go to deletes (`delete references = ...`): composing nothing, by design. */
-export function deletedHere(target: Layer | TargetLike, prim: string, specsOf: (layer: Layer) => LayerSpecs | null): AuthoredArc[] {
+export function deletedHere(target: Layer | TargetLike, prim: string, specsOf: SpecsOf): AuthoredArc[] {
   const spec = targetSpec(target, prim);
   if (spec === null) return [];
-  return specsOf(spec.layer)?.specs.get(spec.specPath)?.arcs.filter((item) => item.op === "delete") ?? [];
+  return specsOf(spec.layer, spec.specPath)?.arcs.filter((item) => item.op === "delete") ?? [];
 }
 
 /**
@@ -479,17 +481,17 @@ export function deletedHere(target: Layer | TargetLike, prim: string, specsOf: (
  * the specs its arcs read (its own layers, a selected variant's branch
  * for a set nested in it, a reference's asset), strongest first, and the
  * arc that reads it (its edit target edits there); `null` when no
- * readable layer holds the set's spec.
+ * layer holds the set's spec at a site an arc reads.
  */
 export function variantSetSource(
   arcs: readonly ArcRecord[],
   set: string,
-  specsOf: (layer: Layer) => LayerSpecs | null,
+  specsOf: SpecsOf,
 ): { readonly layer: Layer; readonly specPath: string; readonly arc: number } | null {
   for (const [index, arc] of arcs.entries()) {
     if (arc.arc === "relocates") continue;
     for (const layer of arc.layers) {
-      if (specsOf(layer)?.specs.get(arc.site)?.variantSets.has(set) === true) return { layer, specPath: arc.site, arc: index };
+      if (specsOf(layer, arc.site)?.spec.variantSets.some((each) => each.name === set) === true) return { layer, specPath: arc.site, arc: index };
     }
   }
   return null;

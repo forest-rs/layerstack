@@ -40,7 +40,7 @@ import { describeTarget, type NamespaceAction, namespaceRefusal, type NewArc, ne
 import type { ViewportScene, ViewportUpdate } from "./model/draws.ts";
 import { planSave, type SaveEntry } from "./model/files.ts";
 import { indexOfId, type InstancerColumns, toggled } from "./model/instancer.ts";
-import type { AuthoredArc, LayerSpecs, LayerSummary } from "./model/layerSpecs.ts";
+import type { AuthoredArc, AuthoredSpec, LayerSummary } from "./model/layerSpecs.ts";
 import type { LayerTextRead } from "./model/layerText.ts";
 import { type Shadow, shadowOf, targetOpinion } from "./model/propertyOps.ts";
 import {
@@ -130,7 +130,7 @@ export class EditorStore {
   #read: { session: Session | null; changes: number } = { session: null, changes: 0 };
   /** The last value edit that does not show ({@link EditorStore.shadow}). */
   #shadow: Shadow | null = null;
-  /** The last composition edit, and what the layers author about composition ({@link EditorStore.layerSpecs}). */
+  /** The last composition edit, and the specs read since the stage last changed ({@link EditorStore.authoredSpec}). */
   readonly #composition = new CompositionState();
   #frame = 0;
   /** The channels {@link EditorStore.#bumpSoon} bumps at the next frame. */
@@ -1369,17 +1369,27 @@ export class EditorStore {
   }
 
   /**
-   * What `layer` authors about composition (`model/layerSpecs.ts`), read
-   * from its text once per change of the stage; `null` when its text is
-   * too large to read whole (the Text tab's limit; such a layer is not
-   * written as text for this again), or cannot be written.
+   * The prim or variant spec `layer` itself holds at `path`, in the
+   * layer's own namespace (`Stage.layerSpec`), with its arcs as list op
+   * items (`model/layerSpecs.ts`): read once per change of the stage, the
+   * same object until then, and never on a time change. `null` when the
+   * layer holds none there, or the path is not a spec path (a read the
+   * panels make while they render says nothing more).
    */
-  layerSpecs(layer: Layer): LayerSpecs | null {
+  authoredSpec(layer: Layer, path: string): AuthoredSpec | null {
     const session = this.session;
-    if (session === null) return null;
+    if (session === null || this.status.kind === "lost") return null;
     const stamp = `${this.signals.revision("history")}:${this.signals.revision("composition")}`;
-    return this.#composition.specs(session, stamp, layer, (read) => this.layerText(read));
+    try {
+      return this.#composition.spec(session, stamp, layer, path);
+    } catch (error) {
+      this.lose(error);
+      return null;
+    }
   }
+
+  /** {@link EditorStore.authoredSpec}, as the readers of `model/composition.ts` take it. */
+  readonly specsOf = (layer: Layer, path: string): AuthoredSpec | null => this.authoredSpec(layer, path);
 
   /** The layers an arc can be pointed at: those the source lists and those the stage holds, by identifier, sorted. */
   async arcLayers(): Promise<string[]> {
@@ -1396,7 +1406,7 @@ export class EditorStore {
     const source = this.source;
     if (session === null || source === null) return { kind: "unread", reason: "Nothing is open." };
     try {
-      return await layerSummary(session, source, this.layerstack, identifier, (layer) => this.layerSpecs(layer));
+      return await layerSummary(session, source, this.layerstack, identifier);
     } catch (error) {
       if (this.lose(error)) return { kind: "unread", reason: "The module was lost." };
       return { kind: "unread", reason: error instanceof Error ? error.message : String(error) };

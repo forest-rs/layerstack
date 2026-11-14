@@ -139,6 +139,8 @@ test("names, moves and orders", () => {
   assert.equal(freeSiblingName("Rock", new Set(["Rock"])), "Rock1");
   assert.equal(freeSiblingName("Rock", new Set(["Rock", "Rock1"])), "Rock2");
   assert.equal(freeSiblingName("Rock7", new Set(["Rock7"])), "Rock8");
+  // A suffix no number counts on from: the name after it, not the same one for ever.
+  assert.equal(freeSiblingName("Rock9007199254740992", new Set(["Rock9007199254740992"])), "Rock9007199254740993");
   assert.equal(primNameProblem("Rock", "/World", new Set()), null);
   assert.match(primNameProblem("Rock", "/World", new Set(["Rock"]))!, /already has a child Rock/);
   assert.match(primNameProblem("a b", "/World", new Set())!, /letter or _/);

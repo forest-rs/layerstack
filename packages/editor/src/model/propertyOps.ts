@@ -137,6 +137,16 @@ function specAt(stage: Stage, site: TargetSite | null): LayerSpec | null {
 }
 
 /**
+ * Whether `spec` is a property spec, of either kind: what Remove takes
+ * (`UsdPrim::RemoveProperty` removes the target's property spec, whatever
+ * it is). A weaker layer may hold an attribute where the stage composes a
+ * stronger layer's relationship of the same name, and the reverse.
+ */
+function holdsProperty(spec: LayerSpec | null): boolean {
+  return spec !== null && (spec.type === "attribute" || spec.type === "relationship");
+}
+
+/**
  * What the property operations would do to the property at `path` now,
  * written through `target`, at `time` (`undefined` when the stage has no
  * time range: nothing is keyed). Nothing applies on an instance proxy,
@@ -151,7 +161,7 @@ export function propertyActions(stage: Stage, path: string, target: Target, time
     const attribute = stage.attribute(path);
     if (attribute === null) {
       if (stage.relationship(path) === null) return NONE;
-      return { ...NONE, remove: specAt(stage, targetSite(stage, target, path))?.type === "relationship" };
+      return { ...NONE, remove: holdsProperty(specAt(stage, targetSite(stage, target, path))) };
     }
     const own = targetOpinion(stage, attribute, target);
     const spec = specAt(stage, own.site);
@@ -166,7 +176,7 @@ export function propertyActions(stage: Stage, path: string, target: Target, time
     return {
       clear,
       block: own.site !== null && own.any && !(own.default === "block" && own.samples.length === 0),
-      remove: spec?.type === "attribute",
+      remove: holdsProperty(spec),
       key: own.site !== null && key,
       deleteKey,
       lastKey:

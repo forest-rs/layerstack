@@ -256,8 +256,13 @@ export function editTime(rendered: number | null, now: number | undefined): numb
   return rendered === null ? null : (now ?? rendered);
 }
 
-/** A property name as USD takes it: identifiers joined by `:` (`radius`, `primvars:displayColor`). */
-const PROPERTY_NAME = /^[A-Za-z_][A-Za-z0-9_]*(:[A-Za-z_][A-Za-z0-9_]*)*$/;
+/**
+ * A property name as USD takes it: identifiers joined by `:` (`radius`,
+ * `primvars:displayColor`). An identifier is `_` or a Unicode `XID_Start`
+ * character, then `XID_Continue` characters (`größe`, `重さ`), as
+ * OpenUSD's `SdfPath::IsValidNamespacedIdentifier` checks it.
+ */
+const PROPERTY_NAME = /^[\p{XID_Start}_]\p{XID_Continue}*(:[\p{XID_Start}_]\p{XID_Continue}*)*$/u;
 
 /**
  * Why `name` cannot name a new property among `taken` (the prim's

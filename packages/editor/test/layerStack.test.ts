@@ -19,6 +19,7 @@ import {
   relativeAsset,
   type SublayerEntry,
   sublayerCandidates,
+  sublayerIndex,
 } from "../src/model/layerStack.ts";
 import { fieldSource, metadataLayer, unitPreset, UNIT_PRESETS } from "../src/model/stageMetadata.ts";
 
@@ -161,6 +162,20 @@ describe("the layer stack", () => {
     assert.deepEqual(movedSublayers(list, 0, 1), [entry("./b.usda"), entry("./a.usda", 1), entry("./c.usda")]);
     assert.equal(movedSublayers(list, 0, -1), null);
     assert.equal(movedSublayers(list, 2, 1), null);
+  });
+
+  it("finds the sublayer a row named where it is now, by its asset path when the index names another", () => {
+    const list = [entry("./a.usda", 1), entry("./b.usda"), entry("./c.usda")];
+    assert.equal(sublayerIndex(list, 1, "./b.usda"), 1);
+    // One was inserted in front, or removed, since the row was built.
+    assert.equal(sublayerIndex(list, 0, "./b.usda"), 1);
+    assert.equal(sublayerIndex(list, 5, "./c.usda"), 2);
+    // Gone: no other is taken for it.
+    assert.equal(sublayerIndex(list, 1, "./d.usda"), -1);
+    // Listed twice (a file may): the index tells them apart while it still names one, and nothing does once it does not.
+    const twice = [entry("./a.usda"), entry("./b.usda"), entry("./a.usda", 4)];
+    assert.equal(sublayerIndex(twice, 2, "./a.usda"), 2);
+    assert.equal(sublayerIndex(twice, 1, "./a.usda"), -1);
   });
 
   it("offers the source's layers as sublayers, saying why one cannot be added", () => {

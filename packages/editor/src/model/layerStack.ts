@@ -240,6 +240,22 @@ export function layerStack<L extends { readonly identifier: string | null }>(inp
 }
 
 /**
+ * Where the sublayer a row named is in `sublayers` now. A row names its
+ * sublayer by the asset path its parent authored and the index it had
+ * when the tree was built, and the edits address `subLayers` by index
+ * (`SdfLayer::RemoveSubLayerPath(int)`, `SetSubLayerOffset`), so an
+ * action that ran in between (an insert whose fetch was still running,
+ * an undo) leaves the index naming another sublayer. The index when the
+ * asset is still there; else where the asset is, when one entry authors
+ * it; else -1: the sublayer is gone, or cannot be told from another.
+ */
+export function sublayerIndex(sublayers: readonly SublayerEntry[], index: number, asset: string): number {
+  if (sublayers[index]?.asset === asset) return index;
+  const first = sublayers.findIndex((entry) => entry.asset === asset);
+  return first >= 0 && sublayers.findIndex((entry, at) => at > first && entry.asset === asset) < 0 ? first : -1;
+}
+
+/**
  * A layer's sublayers with the one at `index` moved by `by` places
  * (negative: stronger, toward the front), offsets kept: what
  * `setSublayers` authors to reorder them. `null` when it would leave the

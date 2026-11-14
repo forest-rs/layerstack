@@ -60,7 +60,7 @@ import {
 import { releaseValue } from "./model/values.ts";
 import { addShaderEdits, connectEdits, connectLabel, disconnectEdits, disconnectLabel } from "./model/networkEdits.ts";
 import type { HealthReport } from "./model/health.ts";
-import { IDENTITY, type LayerOffset, movedSublayers, offsetUsda } from "./model/layerStack.ts";
+import { IDENTITY, type LayerOffset, movedSublayers, offsetUsda, sublayerIndex } from "./model/layerStack.ts";
 import type { PathMove, Session } from "./model/session.ts";
 import { type FieldSource, type MetadataPlacement, metadataLayer } from "./model/stageMetadata.ts";
 import { StageReports } from "./store/reports.ts";
@@ -1163,35 +1163,43 @@ export class EditorStore {
     );
   }
 
-  /** Removes `parent`'s sublayer at `index`, with its offset. Resolves why the stage refused it. */
-  removeSublayer(parent: Layer, index: number): Promise<string | undefined> {
-    const asset = this.session?.stage.sublayers(parent)[index]?.asset ?? `#${index}`;
+  // A sublayer is named by the asset path `parent` authors for it and the
+  // index it had when the caller read `parent`'s sublayers: the edits
+  // address `subLayers` by index, and the action runs in its turn, after
+  // whatever was running (an insert still fetching, an undo) changed the
+  // list, so the index is found again when it runs ({@link sublayerNow}).
+
+  /** Removes `parent`'s sublayer `asset` (at `index` when read), with its offset. Resolves why the stage refused it, or that it is no longer listed. */
+  removeSublayer(parent: Layer, index: number, asset: string): Promise<string | undefined> {
     const label = `remove sublayer @${asset}@ from ${layerLabel(parent)}`;
-    return this.#fetchingEdit(label, (session, signal) => session.editSublayers(label, parent, [{ type: "removeSublayer", index }], signal));
+    return this.#fetchingEdit(label, (session, signal) => session.editSublayers(label, parent, [{ type: "removeSublayer", index: sublayerNow(session, parent, index, asset) }], signal));
   }
 
   /**
-   * Moves `parent`'s sublayer at `index` by `by` places (negative:
-   * stronger), authoring its sublayers reordered (`setSublayers`).
-   * Resolves why the stage refused it, or why it cannot move that far.
+   * Moves `parent`'s sublayer `asset` (at `index` when read) by `by`
+   * places (negative: stronger), authoring its sublayers reordered
+   * (`setSublayers`). Resolves why the stage refused it, or why it cannot
+   * move that far.
    */
-  moveSublayer(parent: Layer, index: number, by: number): Promise<string | undefined> {
-    const sublayers = this.session?.stage.sublayers(parent) ?? [];
-    const asset = sublayers[index]?.asset ?? `#${index}`;
+  moveSublayer(parent: Layer, index: number, by: number, asset: string): Promise<string | undefined> {
     const label = `make @${asset}@ ${by < 0 ? "stronger" : "weaker"} in ${layerLabel(parent)}`;
     return this.#fetchingEdit(label, async (session, signal) => {
-      const moved = movedSublayers(session.stage.sublayers(parent), index, by);
+      const moved = movedSublayers(session.stage.sublayers(parent), sublayerNow(session, parent, index, asset), by);
       if (moved === null) throw new Error(`@${asset}@ is the ${by < 0 ? "strongest" : "weakest"} sublayer of ${layerLabel(parent)} already`);
       return session.editSublayers(label, parent, [{ type: "setSublayers", sublayers: moved.map(({ asset, layerOffset }) => ({ asset, layerOffset: { ...layerOffset } })) }], signal);
     });
   }
 
-  /** Authors `offset` for `parent`'s sublayer at `index` (`SdfLayer::SetSubLayerOffset`). Resolves why the stage refused it. */
-  setSublayerOffset(parent: Layer, index: number, offset: LayerOffset): Promise<string | undefined> {
-    const asset = this.session?.stage.sublayers(parent)[index]?.asset ?? `#${index}`;
+  /** Authors `offset` for `parent`'s sublayer `asset` (at `index` when read; `SdfLayer::SetSubLayerOffset`). Resolves why the stage refused it, or that it is no longer listed. */
+  setSublayerOffset(parent: Layer, index: number, offset: LayerOffset, asset: string): Promise<string | undefined> {
     const label = `set the offset of @${asset}@ in ${layerLabel(parent)}`;
     return this.#fetchingEdit(label, (session, signal) =>
-      session.editSublayers(label, parent, [{ type: "setSublayerOffset", index, layerOffset: { offset: offset.offset, scale: offset.scale } }], signal),
+      session.editSublayers(
+        label,
+        parent,
+        [{ type: "setSublayerOffset", index: sublayerNow(session, parent, index, asset), layerOffset: { offset: offset.offset, scale: offset.scale } }],
+        signal,
+      ),
     );
   }
 
@@ -2058,6 +2066,17 @@ export interface ReloadReport {
 /** A layer as an action's label names it: its identifier, or the session layer. */
 function layerLabel(layer: Layer): string {
   return layer.identifier ?? "the session layer";
+}
+
+/**
+ * The index `parent`'s sublayer `asset` has now, read at `index` when the
+ * caller's tree was built ({@link sublayerIndex}); throws when the list
+ * changed since so that it is gone, or cannot be told from another.
+ */
+function sublayerNow(session: Session, parent: Layer, index: number, asset: string): number {
+  const now = sublayerIndex(session.stage.sublayers(parent), index, asset);
+  if (now < 0) throw new Error(`${layerLabel(parent)}'s sublayers changed since: @${asset}@ is not one of them now, or is listed twice; nothing was changed`);
+  return now;
 }
 
 /** Throws why `action` on `path` cannot go where edits go ({@link namespaceRefusal}), before it is tried. */

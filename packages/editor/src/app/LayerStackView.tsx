@@ -81,8 +81,8 @@ export function LayerStackView() {
             refusal={refused?.key === row.key ? refused.message : null}
             onAdd={() => setOpen({ kind: "add", row })}
             onOffset={() => setOpen({ kind: "offset", row })}
-            onMove={(by) => row.parent !== null && act(row, store.moveSublayer(row.parent, row.index, by))}
-            onRemove={() => row.parent !== null && act(row, store.removeSublayer(row.parent, row.index))}
+            onMove={(by) => row.parent !== null && row.asset !== null && act(row, store.moveSublayer(row.parent, row.index, by, row.asset))}
+            onRemove={() => row.parent !== null && row.asset !== null && act(row, store.removeSublayer(row.parent, row.index, row.asset))}
           />
         ))}
       </ol>
@@ -126,7 +126,9 @@ export function LayerStackView() {
           onClose={() => setOpen(null)}
         />
       )}
-      {open?.kind === "offset" && open.row.parent !== null && <SublayerOffsetDialog store={store} parent={open.row.parent} index={open.row.index} onClose={() => setOpen(null)} />}
+      {open?.kind === "offset" && open.row.parent !== null && open.row.asset !== null && (
+        <SublayerOffsetDialog store={store} parent={open.row.parent} index={open.row.index} asset={open.row.asset} onClose={() => setOpen(null)} />
+      )}
     </div>
   );
 }

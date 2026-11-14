@@ -38,17 +38,17 @@ test("a sublayer is added, made stronger, given an offset and removed, each one 
     ["scene.usda"],
   );
 
-  assert.equal(await h.settle(store.moveSublayer(root, 1, -1)), undefined);
+  assert.equal(await h.settle(store.moveSublayer(root, 1, -1, "./extra.usda")), undefined);
   assert.deepEqual(sublayersOf(stage, root), ["./extra.usda", "./library.usda"]);
   // The strongest cannot move stronger: said, and nothing recorded.
   const steps = session.history.undoSteps.length;
-  assert.match((await h.settle(store.moveSublayer(root, 0, -1)))!, /the strongest sublayer of scene\.usda already/);
+  assert.match((await h.settle(store.moveSublayer(root, 0, -1, "./extra.usda")))!, /the strongest sublayer of scene\.usda already/);
   assert.equal(session.history.undoSteps.length, steps);
 
-  assert.equal(await h.settle(store.setSublayerOffset(root, 0, { offset: 10, scale: 2 })), undefined);
+  assert.equal(await h.settle(store.setSublayerOffset(root, 0, { offset: 10, scale: 2 }, "./extra.usda")), undefined);
   assert.deepEqual(sublayersOf(stage, root), ["./extra.usda+10x2", "./library.usda"]);
 
-  assert.equal(await h.settle(store.removeSublayer(root, 0)), undefined);
+  assert.equal(await h.settle(store.removeSublayer(root, 0, "./extra.usda")), undefined);
   assert.deepEqual(sublayersOf(stage, root), ["./library.usda"]);
   assert.equal(stage.prim("/Extra"), null);
 
@@ -65,6 +65,53 @@ test("a sublayer is added, made stronger, given an offset and removed, each one 
   await h.settle(store.redo());
   assert.notEqual(stage.prim("/Extra"), null);
   assert.deepEqual(store.notices.map((notice) => notice.action), ["make @./extra.usda@ stronger in scene.usda"]);
+});
+
+test("a sublayer edit queued behind one that changes the list acts on the sublayer its row named, not on what took its index", async () => {
+  const h = await harness();
+  const source = sampleSource("scene.usda", { "extra.usda": layerWith("Extra"), "more.usda": layerWith("More") });
+  await h.open(source);
+  const { store } = h;
+  const session = store.session!;
+  const stage = session.stage;
+  const root = stage.root;
+  const authored = () => stage.layerSpec(root, "/").sublayers.map(({ asset, layerOffset }) => [asset, layerOffset.offset, layerOffset.scale]);
+
+  // A sublayer is added in front, and its fetch is slow: the Layers tab still shows `./library.usda` alone, at index 0.
+  const release = source.hold("extra.usda");
+  const adding = store.insertSublayer(root, "./extra.usda", 0);
+  await h.until(() => source.askedFor("extra.usda") > 0, "the new sublayer being asked for");
+  // Its row's menu sets its offset, then removes it: both wait their turn behind the insert.
+  const offsetting = store.setSublayerOffset(root, 0, { offset: 10, scale: 2 }, "./library.usda");
+  const removing = store.removeSublayer(root, 0, "./library.usda");
+  release();
+  assert.equal(await h.settle(adding), undefined);
+  assert.equal(await h.settle(offsetting), undefined);
+  assert.equal(await h.settle(removing), undefined);
+  assert.deepEqual(authored(), [["./extra.usda", 0, 1]]);
+  assert.equal(session.history.nextUndo!.label, "remove sublayer @./library.usda@ from scene.usda");
+
+  // Undone, it is back where it was with its offset; a move named before the undo of the offset still moves it.
+  await h.settle(store.undo());
+  assert.deepEqual(authored(), [
+    ["./extra.usda", 0, 1],
+    ["./library.usda", 10, 2],
+  ]);
+  assert.deepEqual(stage.sublayers(root), stage.layerSpec(root, "/").sublayers);
+  assert.equal(await h.settle(store.moveSublayer(root, 0, -1, "./library.usda")), undefined);
+  assert.deepEqual(authored(), [
+    ["./library.usda", 10, 2],
+    ["./extra.usda", 0, 1],
+  ]);
+
+  // One that is gone by the time its turn comes is refused, and nothing is recorded or removed in its place.
+  const steps = session.history.undoSteps.length;
+  const first = store.removeSublayer(root, 0, "./library.usda");
+  const second = store.removeSublayer(root, 0, "./library.usda");
+  assert.equal(await h.settle(first), undefined);
+  assert.match((await h.settle(second))!, /scene\.usda's sublayers changed since: @\.\/library\.usda@ is not one of them now/);
+  assert.deepEqual(authored(), [["./extra.usda", 0, 1]]);
+  assert.equal(session.history.undoSteps.length, steps + 1);
 });
 
 test("a sublayer the stage refuses says why; one the source lacks is authored, and the health reports it missing", async () => {

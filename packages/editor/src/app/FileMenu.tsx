@@ -198,6 +198,7 @@ interface SaveOutcome {
 const DISPOSITION: Record<SaveEntry["disposition"], string> = {
   write: "",
   session: "the session layer: not part of the root, so not saved; export it to keep its edits",
+  sessionSublayer: "a sublayer of the session layer: not part of the root, so not saved; export it to keep its edits",
   readOnly: "read-only (a package member): cannot be saved",
   muted: "muted: a save leaves it",
 };
@@ -291,6 +292,13 @@ function SaveDialog({ store, onClose }: { store: EditorStore; onClose: () => voi
               {layerName(skipped.layer.identifier)} <span className="font-sans">left dirty: {skipped.reason === "muted" ? "it is muted" : "the stage no longer uses it"}</span>
             </li>
           ))}
+          {plan
+            .filter((entry) => entry.disposition === "sessionSublayer")
+            .map((entry) => (
+              <li key={String(entry.layer.id)} className="text-muted-foreground">
+                {layerName(entry.layer.identifier)} <span className="font-sans">left edited: a sublayer of the session layer, which a save leaves; export it</span>
+              </li>
+            ))}
         </ul>
         {phase.folderNote !== null && <p className="text-muted-foreground">{phase.folderNote}</p>}
         <DialogFooter>

@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
-import { IDENTITY, type LayerOffset, offsetUsda, type SublayerEntry, sublayerCandidates } from "../model/layerStack.ts";
+import { IDENTITY, type LayerOffset, offsetUsda, type SublayerEntry, sublayerCandidates, sublayerIndex } from "../model/layerStack.ts";
 import { parseNumber } from "../model/refusal.ts";
 import type { EditorStore } from "../store.ts";
 import { layerName } from "./format.ts";
@@ -256,10 +256,11 @@ export function AddSublayerDialog({
   );
 }
 
-/** The dialog that changes the offset `parent` reads its sublayer at `index` through. */
-export function SublayerOffsetDialog({ store, parent, index, onClose }: { store: EditorStore; parent: Layer; index: number; onClose: () => void }) {
+/** The dialog that changes the offset `parent` reads its sublayer `asset` through: the one at `index` in the tree the row was in, found where it is now. */
+export function SublayerOffsetDialog({ store, parent, index: listed, asset, onClose }: { store: EditorStore; parent: Layer; index: number; asset: string; onClose: () => void }) {
   const stage = store.session?.stage;
   const sublayers = useMemo(() => stage?.sublayers(parent) ?? [], [stage, parent]);
+  const index = sublayerIndex(sublayers, listed, asset);
   const entry = sublayers[index];
   const [offset, setOffset] = useState<LayerOffset | null>(entry?.layerOffset ?? IDENTITY);
   const [busy, setBusy] = useState(false);
@@ -270,7 +271,7 @@ export function SublayerOffsetDialog({ store, parent, index, onClose }: { store:
   const save = async () => {
     if (offset === null) return;
     setBusy(true);
-    const why = await store.setSublayerOffset(parent, index, offset);
+    const why = await store.setSublayerOffset(parent, index, offset, entry.asset);
     setBusy(false);
     if (why === undefined) onClose();
     else setRefused(why);

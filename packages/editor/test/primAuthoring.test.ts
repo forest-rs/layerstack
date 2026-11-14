@@ -457,6 +457,14 @@ test("a prim's actions are one list, one wording, for its menu and its path's co
   const rock = at("/World/Rock");
   assert.equal(rock.find((action) => action.id === "duplicate")?.enabled, false);
   assert.ok(refusals(rock).some((why) => /does not map \/World\/Rock1/.test(why)));
+  // Nor is its parent, where its place among its siblings is authored: the store refuses the move, so it is not offered.
+  assert.match(store.reorderChild("/World/Rock", 1)!, /does not map \/World/);
+  for (const id of ["moveUp", "moveDown"] as const) assert.equal(rock.find((action) => action.id === id)?.enabled, false, id);
+  assert.ok(refusals(rock).some((why) => /\/World is not written through .*its children's order is authored on it\.$/.test(why)));
+  // Beneath the robot the target maps the parent: its children move.
+  const body = at("/World/Robot/Body");
+  assert.equal(body.find((action) => action.id === "moveDown")?.enabled, true);
+  assert.equal(store.reorderChild("/World/Robot/Body", 1), undefined);
   // An instance proxy: listed, and read-only.
   const proxy = stage.children("/World/Beacons/North")[0]!;
   assert.ok(at(proxy).every((action) => !action.enabled));

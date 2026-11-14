@@ -8,11 +8,12 @@
 // where edits go now is listed disabled with why, said before it is
 // tried: an instance proxy is read-only, a rename, delete or move edits
 // the stage's own layer stack (`namespaceRefusal`), a duplicate's copy
-// must be one the target maps, and an inactive prim loads no payloads. (A
+// must be one the target maps, a move among siblings is authored on the
+// parent, which the target must map, and an inactive prim loads no payloads. (A
 // sibling at its end is disabled for Move up or down with nothing said:
 // the rows show it.)
 import type { Stage } from "@forest-rs/layerstack";
-import { namespaceRefusal } from "./composition.ts";
+import { mapping, mapThrough, namespaceRefusal } from "./composition.ts";
 import { childPath, freeSiblingName, nameOf, parentOf } from "./primAuthoring.ts";
 import type { Target } from "./propertyOps.ts";
 
@@ -80,8 +81,10 @@ export function primActions(stage: Stage, path: string, target: Target): PrimAct
     const copy = namespaceRefusal(target, "define", childPath(parent, freeSiblingName(nameOf(path), new Set(siblings))));
     add("duplicate", "edit", proxy ?? copy);
     add("moveTo", "edit", proxy ?? namespace);
-    add("moveUp", "edit", proxy, proxy === null && at > 0);
-    add("moveDown", "edit", proxy, proxy === null && at >= 0 && at < siblings.length - 1);
+    // A place among siblings is the parent's child order, authored on the parent: the target must map it.
+    const order = proxy ?? (target !== undefined && "kind" in target && mapThrough(target, parent) === null ? `${mapping(target, parent).text}: its children's order is authored on it.` : null);
+    add("moveUp", "edit", order, order === null && at > 0);
+    add("moveDown", "edit", order, order === null && at >= 0 && at < siblings.length - 1);
     add("bind", "edit", proxy);
   }
   const loadable = proxy === null && (prim.hasAuthoredPayloads || stage.findLoadable(path).length > 0 || stage.loadRules().length > 0);

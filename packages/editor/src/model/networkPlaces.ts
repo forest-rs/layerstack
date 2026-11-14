@@ -16,6 +16,23 @@ export interface Place {
   readonly y: number;
 }
 
+/**
+ * Whether a node both networks have was given another authored position
+ * (`ui:nodegraph:node:pos`), or gained or lost one, between `before` and
+ * `after` (each a network's positions by node key): a drawing that
+ * follows authored positions is then laid out again, not kept. A node
+ * added or deleted is not one moved.
+ */
+export function repositioned(before: ReadonlyMap<string, readonly [number, number]>, after: ReadonlyMap<string, readonly [number, number]>, nodes: ReadonlySet<string>): boolean {
+  for (const key of nodes) {
+    const old = before.get(key);
+    const now = after.get(key);
+    if (old === undefined && now === undefined) continue;
+    if (old === undefined || now === undefined || old[0] !== now[0] || old[1] !== now[1]) return true;
+  }
+  return false;
+}
+
 /** Whether `a` and `b` overlap, with the gap between nodes kept. */
 function overlaps(a: PlacedNode, b: PlacedNode): boolean {
   return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height + GRAPH.nodeGap && b.y < a.y + a.height + GRAPH.nodeGap;

@@ -1092,7 +1092,17 @@ export class EditorStore {
   setVisibility(path: string, visible: boolean): string | undefined {
     const attribute = this.session?.stage.attribute(`${path}.visibility`) ?? null;
     const at = attribute !== null && attribute.sampleCount() > 0 ? (this.time ?? null) : null;
-    return this.setValue(`${path}.visibility`, { type: "token", value: visible ? "inherited" : "invisible" }, at);
+    const before = this.#shadow;
+    const refusal = this.setValue(`${path}.visibility`, { type: "token", value: visible ? "inherited" : "invisible" }, at);
+    // The eye is pressed on a row, where nothing else says the edit does not show: the inspector says so only for the prim selected.
+    const shadow = this.#shadow;
+    if (refusal === undefined && shadow !== null && shadow !== before && shadow.path === `${path}.visibility`) {
+      const why = shadow.composed
+        ? `the opinion of ${layerLabel(shadow.layer)} at ${shadow.specPath} is stronger`
+        : "the stage does not compose where edits go";
+      this.#notices.add(`make ${path} ${visible ? "visible" : "invisible"}`, `${path} is still ${visible ? "invisible" : "visible"}: its visibility is authored in ${this.session?.targetName ?? "the edit layer"}, but ${why}.`, null);
+    }
+    return refusal;
   }
 
   /** Authors the prim at `path`'s `documentation`, or with `""` clears the edit target's. */

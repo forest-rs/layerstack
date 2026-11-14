@@ -181,6 +181,24 @@ test("the eye on a prim whose visibility has one time sample authors the sample,
   assert.deepEqual(stage.visibilities(["/World/Blink"], { time: 10 }), ["invisible"]);
 });
 
+test("the eye says so when a stronger layer's visibility still decides", async () => {
+  const { store, stage, weak } = await opened();
+  // The root layer says the hall is visible; edits then go to the weaker sublayer.
+  store.setVisibility("/World/Hall", true);
+  assert.deepEqual(stage.visibilities(["/World/Hall"]), ["inherited"]);
+  assert.equal(store.notices.length, 0);
+  store.setTarget(weak);
+  assert.equal(store.setVisibility("/World/Hall", false), undefined);
+  assert.deepEqual(stage.visibilities(["/World/Hall"]), ["inherited"], "the press changed nothing that shows");
+  assert.equal(store.notices.at(-1)?.message, "/World/Hall is still visible: its visibility is authored in weak.usda, but the opinion of root.usda at /World/Hall.visibility is stronger.");
+  // One that shows says nothing.
+  store.setTarget(undefined);
+  const said = store.notices.length;
+  store.setVisibility("/World/Hall", false);
+  assert.deepEqual(stage.visibilities(["/World/Hall"]), ["invisible"]);
+  assert.equal(store.notices.length, said);
+});
+
 test("a duplicate inside a variant is refused before it is tried, as itself and not as a missing spec", async () => {
   const { store, stage, steps } = await opened();
   store.editInsideVariant("/World/Shed", "look", "red");

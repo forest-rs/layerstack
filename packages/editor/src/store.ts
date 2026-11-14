@@ -130,6 +130,8 @@ export class EditorStore {
   readonly #files: FileState;
   /** How many saves are handing their bytes on ({@link EditorStore.persisting}). */
   #persisting = 0;
+  /** The scene asked for while there was unsaved work ({@link EditorStore.requestOpen}). */
+  #openAsked: SceneSource | null = null;
   readonly #reports = new StageReports();
   /** The session whose metadata {@link EditorStore.#readStage} last read, and the change records it had then. */
   #read: { session: Session | null; changes: number } = { session: null, changes: 0 };
@@ -364,6 +366,44 @@ export class EditorStore {
     // A lost module opens nothing.
     if (this.status.kind === "lost") return;
     await this.#opener.open(source);
+  }
+
+  /**
+   * The scene asked for with {@link EditorStore.requestOpen} while there
+   * was unsaved work, waiting to be confirmed; `null` when none is.
+   */
+  get openAsked(): SceneSource | null {
+    return this.#openAsked;
+  }
+
+  /**
+   * Opens `source` as the person asks for another scene: at once when
+   * nothing would be lost ({@link EditorStore.unsaved}), else it is held
+   * ({@link EditorStore.openAsked}) until {@link EditorStore.confirmOpen}
+   * or {@link EditorStore.cancelOpen}: opening frees the scene and its
+   * unsaved edits, which leaving the page asks about and this did not.
+   */
+  async requestOpen(source: SceneSource): Promise<void> {
+    if (this.status.kind === "lost") return;
+    if (!this.unsaved) return this.open(source);
+    this.#openAsked = source;
+    this.signals.bump("status");
+  }
+
+  /** Opens the scene held by {@link EditorStore.requestOpen}, the unsaved edits of the one open let go. */
+  async confirmOpen(): Promise<void> {
+    const source = this.#openAsked;
+    if (source === null) return;
+    this.#openAsked = null;
+    this.signals.bump("status");
+    await this.open(source);
+  }
+
+  /** Lets go of the scene held by {@link EditorStore.requestOpen}: the one open stays, with its edits. */
+  cancelOpen(): void {
+    if (this.#openAsked === null) return;
+    this.#openAsked = null;
+    this.signals.bump("status");
   }
 
   /**

@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { FolderOpenIcon, Redo02Icon, Undo02Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuGroup,
@@ -28,6 +28,8 @@ import { SceneBrowser } from "./SceneBrowser.tsx";
 import { TargetPicker } from "./TargetPicker.tsx";
 import { countRender } from "./renders.ts";
 import { EditLayerChoiceGroup, FileMenu } from "./FileMenu.tsx";
+import { openConfirmation } from "../model/files.ts";
+import { layerName } from "./format.ts";
 
 /** Roots to choose between, and how to open the one chosen. */
 interface Choice {
@@ -98,6 +100,38 @@ function MemoryFigure({ store }: { store: EditorStore }) {
   return <>{formatBytes(memoryBytes(store))} memory</>;
 }
 
+/**
+ * Asks before another scene replaces one with unsaved work
+ * (`EditorStore.requestOpen`): the layers whose edits would be lost, then
+ * one button that opens it, as leaving the page asks.
+ */
+function OpenAskedDialog({ store }: { store: EditorStore }) {
+  const asked = store.openAsked;
+  const lost = asked === null ? [] : store.savePlan();
+  const words = asked === null ? null : openConfirmation(asked.label, lost.length);
+  return (
+    <Dialog isOpen={asked !== null} onOpenChange={(open) => open || store.cancelOpen()} className="sm:max-w-lg">
+      <DialogHeader>
+        <DialogTitle>{words?.title}</DialogTitle>
+        <DialogDescription>{words?.what}</DialogDescription>
+      </DialogHeader>
+      <ul className="flex max-h-60 flex-col gap-1 overflow-y-auto font-mono text-[11px]">
+        {lost.map((entry) => (
+          <li key={String(entry.layer.id)}>{layerName(entry.layer.identifier)}</li>
+        ))}
+      </ul>
+      <DialogFooter>
+        <Button variant="outline" onPress={() => store.cancelOpen()}>
+          Keep this scene
+        </Button>
+        <Button variant="destructive" onPress={() => void store.confirmOpen()}>
+          {words?.confirm}
+        </Button>
+      </DialogFooter>
+    </Dialog>
+  );
+}
+
 /** How many draws are shown. */
 const drawnCount = (store: EditorStore) => store.scene.items.reduce((count, view) => count + (view.item.hidden ? 0 : 1), 0);
 
@@ -113,7 +147,7 @@ export function Toolbar() {
     void localScenes().then(setLocal);
   }, []);
   const offer = (title: string, roots: readonly string[], open: (root: string) => SceneSource) => {
-    if (roots.length === 1) void store.open(open(roots[0]!));
+    if (roots.length === 1) void store.requestOpen(open(roots[0]!));
     else if (roots.length > 1) setChoice({ title, roots, open });
   };
   // A drop anywhere opens what was dropped: a folder, or its files.
@@ -154,7 +188,7 @@ export function Toolbar() {
         </Button>
         <DropdownMenu className="min-w-72">
           <DropdownMenuGroup>
-            <DropdownMenuItem onAction={() => void store.open(SAMPLE.source())}>The sample scene</DropdownMenuItem>
+            <DropdownMenuItem onAction={() => void store.requestOpen(SAMPLE.source())}>The sample scene</DropdownMenuItem>
             <DropdownMenuItem onAction={() => void pickFolder()} isDisabled={!("showDirectoryPicker" in window)}>
               A folder on this computer…
             </DropdownMenuItem>
@@ -182,7 +216,7 @@ export function Toolbar() {
               <DropdownMenuGroup>
                 <DropdownMenuLabel>Local scenes</DropdownMenuLabel>
                 {local.map((entry) => (
-                  <DropdownMenuItem key={entry.label} onAction={() => void store.open(entry.source())}>
+                  <DropdownMenuItem key={entry.label} onAction={() => void store.requestOpen(entry.source())}>
                     {entry.label}
                   </DropdownMenuItem>
                 ))}
@@ -226,7 +260,8 @@ export function Toolbar() {
           </span>
         )}
       </div>
-      <SceneBrowser isOpen={browsing} onClose={() => setBrowsing(false)} onOpen={(source) => void store.open(source)} />
+      <OpenAskedDialog store={store} />
+      <SceneBrowser isOpen={browsing} onClose={() => setBrowsing(false)} onOpen={(source) => void store.requestOpen(source)} />
       <Dialog isOpen={choice !== null} onOpenChange={(open) => open || setChoice(null)} className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{choice?.title}</DialogTitle>
@@ -241,7 +276,7 @@ export function Toolbar() {
               onPress={() => {
                 const picked = choice;
                 setChoice(null);
-                void store.open(picked.open(root));
+                void store.requestOpen(picked.open(root));
               }}
             >
               {root}

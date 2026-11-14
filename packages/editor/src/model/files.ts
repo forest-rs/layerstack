@@ -33,6 +33,22 @@ export function flattenConfirmation(result: Pick<FlattenResult, "lost">, name: s
 }
 
 /**
+ * The confirmation of opening the scene `label` over one with unsaved
+ * work: `lost` layers have edits not saved, which the dialog lists, or
+ * none do and a save is still writing its files. Opening discards them.
+ */
+export function openConfirmation(label: string, lost: number): ExportConfirmation {
+  return {
+    title: `Open ${label} and lose what is not saved?`,
+    what:
+      lost === 0
+        ? "A save is still writing its files. Opening another scene now may leave them unwritten: wait for the save to finish."
+        : `${lost === 1 ? "One layer has" : `${lost} layers have`} edits that are not saved. Opening another scene discards them: save them, or export a layer a save leaves, to keep them.`,
+    confirm: lost === 0 ? `Open ${label} now` : `Open ${label} and discard ${lost === 1 ? "its edits" : "their edits"}`,
+  };
+}
+
+/**
  * The confirmation of the stage as a package, `name`, of `size`
  * (`Stage.exportPackage`, made before it is confirmed, as what it holds
  * is known only then): what it holds, that it leaves the session layer's

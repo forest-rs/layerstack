@@ -136,6 +136,46 @@ test("the page has something to lose until a save's bytes are handed on, not onl
   assert.equal(store.unsaved, false);
 });
 
+test("another scene asked for over unsaved work is held until it is confirmed, and opens at once over none", async () => {
+  const h = await harness();
+  await h.open(sampleSource());
+  const { store } = h;
+  const first = store.session!;
+  const other = sampleSource("plain.usda", { "plain.usda": '#usda 1.0\ndef Xform "Other"\n{\n}\n' });
+  store.setValue("/World/Robot.visibility", HIDE_ROBOT);
+  const status = store.signals.revision("status");
+  await h.settle(store.requestOpen(other));
+  assert.equal(store.session, first, "the scene and its edit are still here");
+  assert.equal(store.openAsked, other);
+  assert.ok(store.signals.revision("status") > status, "the dialog hears of it");
+  assert.deepEqual(store.savePlan().map((entry) => entry.layer.identifier), ["scene.usda"], "what the dialog lists as lost");
+  assert.deepEqual(other.asked, [], "nothing of the other scene was read");
+  // Kept: the scene stays, and nothing is held any more.
+  store.cancelOpen();
+  assert.equal(store.openAsked, null);
+  assert.equal(store.session, first);
+  assert.deepEqual(store.dirtyLayers().map((layer) => layer.identifier), ["scene.usda"]);
+  // Asked again and confirmed: the other scene opens, the edit gone with the first.
+  await h.settle(store.requestOpen(other));
+  await h.settle(store.confirmOpen());
+  assert.equal(store.openAsked, null);
+  assert.equal(store.session!.root, "plain.usda");
+  assert.equal(store.unsaved, false);
+  // With nothing to lose, it opens at once.
+  await h.settle(store.requestOpen(sampleSource()));
+  assert.equal(store.openAsked, null);
+  assert.equal(store.session!.root, "scene.usda");
+  // A save still writing its files is something to lose too.
+  let written = () => {};
+  const writing = store.persisting(() => new Promise<void>((resolve) => (written = resolve)));
+  await h.settle(store.requestOpen(other));
+  assert.equal(store.openAsked, other);
+  assert.deepEqual(store.savePlan(), []);
+  store.cancelOpen();
+  written();
+  await h.settle(writing);
+});
+
 test("a layer whose edits were undone is read again from the source, with nothing to save first", async () => {
   const h = await harness();
   const files: Record<string, string> = { "plain.usda": '#usda 1.0\ndef Xform "World"\n{\n    double size = 1\n}\n' };

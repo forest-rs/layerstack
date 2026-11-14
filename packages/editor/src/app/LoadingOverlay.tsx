@@ -55,7 +55,7 @@ export function LoadingOverlay() {
           <p className="text-xs break-words text-destructive">{status.message}</p>
           <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
             <span className="min-w-0 flex-1">Open another scene from the toolbar, or drop its files here.</span>
-            <Button variant="outline" size="xs" onPress={() => void store.open(SAMPLE.source())}>
+            <Button variant="outline" size="xs" onPress={() => void store.requestOpen(SAMPLE.source())}>
               Open the sample
             </Button>
           </div>

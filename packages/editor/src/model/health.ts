@@ -32,7 +32,16 @@ export interface HealthAsset<L> {
   readonly identifier: string | null;
   /** Why it contributes nothing: the read failure's code (`io.not_found`); `null` when it is waiting to be supplied, or no read failed. */
   readonly reason: string | null;
-  /** The prims composed without it, as the asset loop recorded the stage naming them (`/` for the stage's own layer stack). */
+  /**
+   * The prims composed without it, as the asset loop recorded the stage
+   * naming them when it asked for the asset (`/` for the stage's own
+   * layer stack). For a missing asset, those of them that still have a
+   * composition error: the loop's record is of every run, and a prim
+   * whose arc has gone since no longer wants the asset. Not every prim
+   * that wants it now: the stage asks for an asset it knows is absent no
+   * more, so a prim that came to name it later is in no run's record (its
+   * error is in {@link HealthReport.groups}).
+   */
   readonly prims: readonly string[];
 }
 
@@ -116,7 +125,9 @@ export function healthReport<L>(input: HealthInput<L>): HealthReport<L> {
     .map(([prim, issues]) => ({ prim, issues }))
     .sort((a, b) => (a.prim === null ? -1 : b.prim === null ? 1 : comparePaths(a.prim, b.prim)));
   const errorPrims = new Set(input.errors.flatMap((issue) => (issue.prim === null ? [] : [issue.prim])));
-  const missing = input.unresolved.map((asset) => ({ ...asset, prims: primsOf(input.wanting, asset.identifier) }));
+  const stackError = input.errors.some((issue) => issue.prim === null);
+  const wantsStill = (prim: string) => (prim === "/" ? stackError : errorPrims.has(prim));
+  const missing = input.unresolved.map((asset) => ({ ...asset, prims: primsOf(input.wanting, asset.identifier).filter(wantsStill) }));
   const waiting = input.unavailable.map((asset) => ({ ...asset, prims: primsOf(input.wanting, asset.identifier, asset.prims) }));
   const unrepaired = input.lastNamespaceEdit?.unrepaired.length ?? 0;
   const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;

@@ -285,19 +285,21 @@ describe("health", () => {
   it("names the prims composed without a missing asset from the loop's record, and counts what waits and what was left unrepaired", () => {
     const wanting = wantingPrims([
       { assets: [{ identifier: "assets/gone.usda", prims: ["/World/B"] }] },
-      { assets: [{ identifier: "assets/gone.usda", prims: ["/World/A", "/World/B"] }, { identifier: "x.usda", prims: [] }] },
+      { assets: [{ identifier: "assets/gone.usda", prims: ["/World/A", "/World/B", "/World/Was"] }, { identifier: "x.usda", prims: [] }] },
     ]);
-    assert.deepEqual(wanting.get("assets/gone.usda"), ["/World/B", "/World/A"]);
+    assert.deepEqual(wanting.get("assets/gone.usda"), ["/World/B", "/World/A", "/World/Was"]);
     const report = healthReport<FakeLayer>({
       ...empty,
       wanting,
+      // /World/Was wanted the asset in an earlier run and has no error now: its arc is gone.
+      errors: ["/World/A", "/World/B"].map((prim) => ({ code: "composition.unresolved_asset", message: "m", prim })),
       unresolved: [{ assetPath: "./assets/gone.usda", anchor: root, usedBy: "reference", identifier: "assets/gone.usda", reason: "io.not_found" }],
       unavailable: [{ assetPath: "./later.usda", anchor: root, usedBy: "sublayer", identifier: "later.usda", reason: null, prims: ["/"] }],
       lastNamespaceEdit: { label: "move /World/A to /World/C", unrepaired: [{ layer: root, spec: "/Other", field: "targets", path: "/World/A" }] },
     });
     assert.deepEqual(report.missing[0]!.prims, ["/World/A", "/World/B"]);
     assert.deepEqual(report.waiting[0]!.prims, ["/"]);
-    assert.equal(report.count, 2);
+    assert.equal(report.count, 4);
   });
 
   it("says what an error code is in words", () => {

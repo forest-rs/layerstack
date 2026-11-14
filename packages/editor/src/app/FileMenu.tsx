@@ -207,12 +207,16 @@ const DISPOSITION: Record<SaveEntry["disposition"], string> = {
  * it, then where the files go; once confirmed, what was written.
  */
 function SaveDialog({ store, onClose }: { store: EditorStore; onClose: () => void }) {
-  const [plan] = useState(() => store.savePlan());
+  // The plan follows the stage until the save is confirmed: an edit a field commits as the dialog takes the focus from it is listed.
+  useRevision(store, "history");
+  const [confirmed, setConfirmed] = useState<SaveEntry[] | null>(null);
+  const plan = confirmed ?? store.savePlan();
   const [phase, setPhase] = useState<"confirm" | "saving" | SaveOutcome>("confirm");
   const writable = store.source?.writable ?? null;
   const writing = plan.filter((entry) => entry.disposition === "write");
   const session = plan.find((entry) => entry.disposition === "session") ?? null;
   const run = async (intoFolder: boolean) => {
+    setConfirmed(plan);
     setPhase("saving");
     // Asked first, while the press still counts as the person's: a browser asks only then.
     let folderNote: string | null = null;

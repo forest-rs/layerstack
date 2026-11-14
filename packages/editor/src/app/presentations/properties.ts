@@ -69,7 +69,10 @@ export function registerPropertyCommands(): void {
     kind: "propertyPath",
     type: "propertyPath",
     title: "Delete the key at the current frame",
-    label: (_object, context) => `Delete the key at frame ${formatTime(context.time ?? 0)} in ${where(context)}`,
+    label: (object, context) =>
+      actions(object.path, context).lastKey
+        ? `Delete the key at frame ${formatTime(context.time ?? 0)} in ${where(context)}: its only opinion there, so its spec stays empty (Remove takes it)`
+        : `Delete the key at frame ${formatTime(context.time ?? 0)} in ${where(context)}`,
     applies: (object, context) => actions(object.path, context).deleteKey,
     run: (object, { store, time }) => {
       if (time !== undefined) store.deleteKey(object.path, time);

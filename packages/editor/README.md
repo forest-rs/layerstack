@@ -319,7 +319,9 @@ nothing more.
   default, and of the samples the stage reads when they are the edit
   target's, so weaker opinions show), block it (`UsdAttribute::Block`),
   key it at the current frame or delete the key there, or remove its
-  spec. An edit a stronger opinion hides (or one through a variant not
+  spec, offered exactly when the layer edits go to holds one. Deleting a
+  key that is the spec's only opinion says that the spec stays, empty,
+  for Remove to take; nothing more is removed than was asked. An edit a stronger opinion hides (or one through a variant not
   selected) is said under its field, the winning layer live, with
   **Edit there**, which makes that opinion's edit target where edits go;
   a field shows what the stage reads once its edit is made, not what was

@@ -210,27 +210,27 @@ test("what is offered on a property is what would change something where edits g
   const { store, stage } = await opened();
   const at = (path: string, time: number | undefined = 10) => propertyActions(stage, path, store.session!.target, time);
   // Authored in the edit layer: everything but deleting a key that is not there.
-  assert.deepEqual(at("/World/Top.size"), { clear: true, block: true, remove: true, key: true, deleteKey: false });
+  assert.deepEqual(at("/World/Top.size"), { clear: true, block: true, remove: true, key: true, deleteKey: false, lastKey: false });
   // No range: nothing is keyed.
   assert.equal(propertyActions(stage, "/World/Top.size", undefined, undefined).key, false);
   // Animated in the edit layer, at a sample's time: its key is deleted, not added.
-  assert.deepEqual(at("/World/Top.xformOp:rotateY", 48), { clear: true, block: true, remove: true, key: false, deleteKey: true });
+  assert.deepEqual(at("/World/Top.xformOp:rotateY", 48), { clear: true, block: true, remove: true, key: false, deleteKey: true, lastKey: false });
   // Only its schema's fallback: nothing to clear, block or remove, but a value to key.
-  assert.deepEqual(at("/World/Top.purpose"), { clear: false, block: false, remove: false, key: false, deleteKey: false });
-  assert.deepEqual(at("/World/Top.visibility"), { clear: false, block: false, remove: false, key: true, deleteKey: false });
+  assert.deepEqual(at("/World/Top.purpose"), { clear: false, block: false, remove: false, key: false, deleteKey: false, lastKey: false });
+  assert.deepEqual(at("/World/Top.visibility"), { clear: false, block: false, remove: false, key: true, deleteKey: false, lastKey: false });
   // A uniform one is not keyed.
   assert.equal(at("/World/Top.doubleSided").key, false);
   // From the sublayer, through an inherit: blocked or keyed here, not cleared or removed here.
-  assert.deepEqual(at("/World/Rock.radius"), { clear: false, block: true, remove: false, key: true, deleteKey: false });
+  assert.deepEqual(at("/World/Rock.radius"), { clear: false, block: true, remove: false, key: true, deleteKey: false, lastKey: false });
   // With the sublayer as the target, the class's opinion is still not its own spec: the rock's is /World/Rock.radius there.
   store.setTarget(store.session!.layerNamed("library.usda"));
   assert.equal(at("/World/Rock.radius").clear, false);
   store.setTarget(undefined);
   // Blocked here already: not blocked again.
   store.blockValue("/World/Rock.radius");
-  assert.deepEqual(at("/World/Rock.radius"), { clear: true, block: false, remove: true, key: true, deleteKey: false });
+  assert.deepEqual(at("/World/Rock.radius"), { clear: true, block: false, remove: true, key: true, deleteKey: false, lastKey: false });
   // Relationships: a custom one or one with targets can be removed; a schema's empty one cannot.
-  assert.deepEqual(at("/World/Spot.collection:lightLink:includes"), { clear: false, block: false, remove: true, key: false, deleteKey: false });
+  assert.deepEqual(at("/World/Spot.collection:lightLink:includes"), { clear: false, block: false, remove: true, key: false, deleteKey: false, lastKey: false });
   assert.equal(at("/World/Top.proxyPrim").remove, false);
   // An instance proxy's properties are its prototype's.
   const proxy = stage.children("/World/Beacons/North")[0]!;
@@ -238,6 +238,33 @@ test("what is offered on a property is what would change something where edits g
   assert.deepEqual(Object.values(at(`${proxy}.visibility`)).some(Boolean), false);
   // Not a property path.
   assert.deepEqual(Object.values(at("/World/Top")).some(Boolean), false);
+});
+
+test("Remove is offered exactly when the layer edits go to holds the property's spec, the empty one a deleted last key leaves included", async () => {
+  const { store, stage } = await opened();
+  const at = (path: string, time: number | undefined = 10) => propertyActions(stage, path, store.session!.target, time);
+  // The lamp's aim is the sublayer's: with edits in the root, the root has no spec of it to remove.
+  assert.equal(stage.relationship("/World/Lamp.aim")!.targets().length, 1);
+  assert.equal(at("/World/Lamp.aim").remove, false);
+  store.setTarget(store.session!.layerNamed("library.usda"));
+  assert.equal(at("/World/Lamp.aim").remove, true, "the sublayer holds it");
+  store.setTarget(undefined);
+
+  // Keyed in the root, where it had no spec: that key is all the spec holds.
+  assert.equal(store.key("/World/Top.visibility", 10), undefined);
+  assert.deepEqual(at("/World/Top.visibility"), { clear: true, block: true, remove: true, key: false, deleteKey: true, lastKey: true });
+  // A key of an attribute the root also gives a default is not its last opinion there.
+  assert.equal(store.key("/World/Top.size", 10), undefined);
+  assert.equal(at("/World/Top.size").lastKey, false);
+  // Deleting the last key leaves the spec, empty: nothing to clear, and Remove takes it.
+  assert.equal(store.deleteKey("/World/Top.visibility", 10), undefined);
+  const spec = stage.layerSpec(stage.root, "/World/Top.visibility");
+  assert.ok(spec !== null && spec.type === "attribute");
+  assert.deepEqual([spec.default, spec.timeSamples], [null, null], "no default, no samples");
+  assert.deepEqual(at("/World/Top.visibility"), { clear: false, block: false, remove: true, key: true, deleteKey: false, lastKey: false });
+  assert.equal(store.removeProperty("/World/Top.visibility"), undefined);
+  assert.equal(stage.layerSpec(stage.root, "/World/Top.visibility"), null);
+  assert.equal(at("/World/Top.visibility").remove, false);
 });
 
 test("a property name is identifiers joined by colons, and not one the prim has", () => {

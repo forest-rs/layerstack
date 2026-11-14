@@ -23,8 +23,8 @@ import {
   childPath,
   holdsField,
   instanceNameProblem,
+  copySites,
   nameOf,
-  opinionSites,
   parentOf,
   primNameProblem,
   type PrimSpecifier,
@@ -71,10 +71,16 @@ export function PrimDialogHost() {
   }
 }
 
-/** Duplicates the prim at `path`, and when the edit target has no spec of it, says where its opinions are. */
+/**
+ * Duplicates the prim at `path`, and when the edit target has no spec of
+ * it, says where its opinions are. Any other refusal (a target that does
+ * not map the copy, or writes inside a variant) is its notice alone: the
+ * dialog is for a spec that is missing.
+ */
 export function duplicatePrim(store: EditorStore, path: string): void {
   const refusal = store.duplicate(path);
-  if (refusal !== undefined) askPrim({ kind: "copyRefused", path, refusal });
+  const notice = store.notices.at(-1);
+  if (refusal !== undefined && notice?.message === refusal && notice.code === "edit.rejected.no_such_spec") askPrim({ kind: "copyRefused", path, refusal });
 }
 
 /** Defines a child of `parent`: a type (or none), a specifier, a name not taken. */
@@ -500,7 +506,7 @@ function targetOf(target: EditTarget): Layer | EditTarget {
  * and "Duplicate there".
  */
 function CopyRefusedDialog({ store, stage, path, refusal, onClose }: { store: EditorStore; stage: Stage; path: string; refusal: string; onClose: () => void }) {
-  const sites = useMemo(() => opinionSites(stage, path).filter((site) => site.editTarget !== null && !site.layer.readOnly), [stage, path]);
+  const sites = useMemo(() => copySites(stage, path), [stage, path]);
   return (
     <Dialog isOpen onOpenChange={(isOpen) => isOpen || onClose()} className="sm:max-w-md">
       <DialogHeader>
@@ -521,27 +527,31 @@ function CopyRefusedDialog({ store, stage, path, refusal, onClose }: { store: Ed
                 variant="outline"
                 size="xs"
                 onPress={() => {
-                  store.setTarget(targetOf(site.editTarget!));
+                  store.setTarget(targetOf(site.editTarget));
                   onClose();
                 }}
               >
                 Edit there
               </Button>
-              <Button
-                size="xs"
-                onPress={() => {
-                  store.setTarget(targetOf(site.editTarget!));
-                  onClose();
-                  duplicatePrim(store, path);
-                }}
-              >
-                Duplicate there
-              </Button>
+              {/* Only where the copy can be written: an arc on the prim itself maps nothing beside it, and no copy is made inside a variant. */}
+              {site.copies && (
+                <Button
+                  size="xs"
+                  onPress={() => {
+                    store.setTarget(targetOf(site.editTarget));
+                    onClose();
+                    duplicatePrim(store, path);
+                  }}
+                >
+                  Duplicate there
+                </Button>
+              )}
             </li>
           ))}
         </ul>
       )}
-      {sites.some((site) => site.arc !== null) && (
+      {sites.length > 0 && <p className="text-[11px] text-muted-foreground">Either makes that layer where edits go, until another is chosen.</p>}
+      {sites.some((site) => site.arc !== null && site.copies) && (
         <p className="text-[11px] text-muted-foreground">A copy through an arc is made in that asset: every prim that composes it gets the copy.</p>
       )}
       <DialogFooter>

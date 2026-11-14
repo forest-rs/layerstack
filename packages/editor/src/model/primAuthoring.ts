@@ -10,6 +10,7 @@
 // cannot be made, a sibling order with one child moved, and where a
 // prim's opinions are when the edit target has none to copy.
 import type { ArcKind, CompositionArc, EditTarget, Layer, LayerSpec, Prim, PrimSpec, SchemaInfo, Stage } from "@forest-rs/layerstack";
+import { describeTarget, mapThrough, namespaceRefusal } from "./composition.ts";
 
 /** A prim name as USD takes it: an identifier. */
 export const PRIM_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -367,6 +368,27 @@ export function freeSiblingName(name: string, taken: ReadonlySet<string>): strin
   }
 }
 
+/** Where a duplicate of the prim at `path` goes: beside it, under a name none of its parent's composed children has. */
+export function copyPath(stage: Pick<Stage, "children">, path: string): string {
+  const parent = parentOf(path);
+  return childPath(parent, freeSiblingName(nameOf(path), new Set(stage.children(parent).map(nameOf))));
+}
+
+/**
+ * Why a duplicate to `to` cannot be made through `target`, said before it
+ * is tried; `null` when it can be tried. Through an arc the target must
+ * map the copy's path, as for a prim defined there (`namespaceRefusal`);
+ * and the stage copies no spec inside a variant
+ * (`edit.rejected.variant_copy`), so a target that writes there is
+ * refused whatever it maps.
+ */
+export function copyRefusal(target: Parameters<typeof namespaceRefusal>[0], to: string): string | null {
+  const mapped = namespaceRefusal(target, "define", to);
+  if (mapped !== null || target === undefined || !("kind" in target) || target.kind === "layer") return mapped;
+  if (mapThrough(target, to)?.includes("{") !== true) return null;
+  return `Edits go to ${describeTarget(target)}, and a copy is not made inside a variant: make a layer where edits go first.`;
+}
+
 /** Why the prim at `path` cannot move under `parent`, whose children are named `taken`; `null` when it can. */
 export function moveProblem(path: string, parent: string, taken: ReadonlySet<string>): string | null {
   if (path === "/") return "The pseudo-root does not move.";
@@ -494,6 +516,42 @@ export function opinionSites(stage: Stage, path: string): OpinionSite[] {
     }
   }
   return sites;
+}
+
+/** A site a duplicate could be made at, and whether one can: edits can go there, and a copy beside the prim is one its target writes. */
+export interface CopySite extends OpinionSite {
+  readonly editTarget: EditTarget;
+  /**
+   * Whether a duplicate made with this where edits go is not refused
+   * before it is tried ({@link copyRefusal}): `false` through an arc on
+   * the prim itself, which maps nothing beside it, and inside a variant.
+   */
+  readonly copies: boolean;
+}
+
+/** The {@link opinionSites} of the prim at `path` that edits can go to, each with whether its duplicate can be made there. */
+export function copySites(stage: Stage, path: string): CopySite[] {
+  const to = copyPath(stage, path);
+  const writes = (target: EditTarget) => copyRefusal(target.kind === "layer" ? target.layer : target, to) === null;
+  // A target through an arc on the prim's parent writes the same layer and maps what is beside the prim too.
+  const above = stage.prim(parentOf(path))?.compositionArcs() ?? [];
+  const through = (layer: Layer): EditTarget | null => {
+    for (const arc of above) {
+      if (!arc.layers.includes(layer)) continue;
+      try {
+        const target = arc.editTarget(layer);
+        if (mapThrough(target, path) !== null && writes(target)) return target;
+      } catch {
+        // A relocation's source, which no edit goes through.
+      }
+    }
+    return null;
+  };
+  return opinionSites(stage, path).flatMap((site) => {
+    if (site.editTarget === null || site.layer.readOnly) return [];
+    const target = writes(site.editTarget) ? site.editTarget : through(site.layer);
+    return [{ ...site, editTarget: target ?? site.editTarget, copies: target !== null }];
+  });
 }
 
 /** The sentence a copy refused for want of a spec says (`edit.rejected.no_such_spec`). */

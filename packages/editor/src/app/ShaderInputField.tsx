@@ -9,6 +9,7 @@
 // `EditorStore.setShaderInput`, which creates the input on its first edit
 // (`UsdShadeConnectableAPI::CreateInput`).
 import type { DefinedInput } from "../model/shaderDefinitions.ts";
+import { inputBounds, withinBounds } from "../model/shadingInputs.ts";
 import { shown } from "../model/values.ts";
 import type { EditorStore } from "../store.ts";
 import { Present, presentationContext } from "./presentations/Present.tsx";
@@ -39,12 +40,14 @@ export function ShaderInputField({
   const read = attribute?.get(time) ?? null;
   // An input with no value (or none authored) shows what a renderer reads: the definition's fallback.
   const value = read === null && definition !== null ? shown(definition.fallback) : shown(read);
+  // A number typed here is held to the input's hard bounds (`uimin`, `uimax`), as the inspector's slider holds it.
+  const port = attribute === null ? null : context.stage.port(path);
   const typeName = attribute?.typeName ?? definition?.typeName ?? value.value?.type ?? "";
   return (
     <Present
       object={{ kind: "value", attribute, typeName, shown: value, at, label: name, allowedTokens: definition?.allowedTokens ?? null }}
       context={context}
-      accept={(next) => store.setShaderInput(path, next, at)}
+      accept={(next) => store.setShaderInput(path, port === null ? next : withinBounds(next, inputBounds(port.sdrMetadata)), at)}
     />
   );
 }

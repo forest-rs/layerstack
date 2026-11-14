@@ -8,7 +8,7 @@ import { test } from "node:test";
 import { loadLayerstack } from "@forest-rs/layerstack";
 import { connectedOnly, hasAuthoredLayout, layoutNetwork, networkRoot, readNetwork, type ShadingNetwork } from "../src/model/network.ts";
 import { readOpenPbr } from "../src/model/openpbr.ts";
-import { clampToBounds, groupInputs, sliderRange } from "../src/model/shadingInputs.ts";
+import { clampToBounds, groupInputs, inputBounds, sliderRange, withinBounds } from "../src/model/shadingInputs.ts";
 
 const LAYER = `#usda 1.0
 class "base"
@@ -108,6 +108,20 @@ test("inputs are grouped, labelled and ordered by their metadata", () => {
   assert.deepEqual(sliderRange(roughness.bounds), [0, 0.8]);
   assert.equal(clampToBounds(1.5, roughness.bounds), 1);
   assert.equal(sliderRange({ min: null, max: 1, softMin: null, softMax: null }), null);
+});
+
+test("a number typed for a bounded input is held to its hard bounds wherever it is typed", () => {
+  // What the shared field (the graph's row, and the inspector's without a slider) authors: read from the port, not from a slider.
+  const bounds = inputBounds(stage.port("/Stone.inputs:roughness")!.sdrMetadata);
+  assert.deepEqual(bounds, { min: 0, max: 1, softMin: null, softMax: 0.8 });
+  assert.deepEqual(withinBounds({ type: "float", value: 1.5 }, bounds), { type: "float", value: 1 });
+  assert.deepEqual(withinBounds({ type: "float", value: 0.9 }, bounds), { type: "float", value: 0.9 }, "past the soft range, within the hard one");
+  // One hard bound alone, which gives no slider, still holds.
+  assert.deepEqual(withinBounds({ type: "float", value: -2 }, { min: 0, max: null, softMin: null, softMax: null }), { type: "float", value: 0 });
+  // What is not a number is as it was.
+  const color = { type: "color3f", value: [2, 2, 2] };
+  assert.equal(withinBounds(color, bounds), color);
+  assert.deepEqual(inputBounds(stage.port("/Stone.inputs:color")!.sdrMetadata), { min: null, max: null, softMin: null, softMax: null });
 });
 
 test("an OpenPBR surface reads its image through the interface", () => {

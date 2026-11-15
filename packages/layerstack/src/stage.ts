@@ -1464,7 +1464,7 @@ export class Stage implements Disposable {
    * if (spec?.type === "prim" && spec.active !== null) {
    *   // the layer edits go to authors `active`: offer Clear
    * }
-   * spec?.type === "prim" && spec.references?.prepended; // [{ asset: "./robot.usda", primPath: null, layerOffset: { offset: 0, scale: 1 } }]
+   * spec?.type === "prim" && spec.references?.prepended; // [{ asset: "./robot.usda", primPath: null, layerOffset: { offset: 0, scale: 1 }, customData: null }]
    * stage.layerSpec(stage.root, "/").fields; // ["defaultPrim", "upAxis"]
    * ```
    */
@@ -1476,7 +1476,7 @@ export class Stage implements Disposable {
       throw new LayerstackError("argument.invalid", "layerSpec", "expected a path string");
     }
     const record = this.#call("layerSpec", (native) => native.layerSpec(layer.id, path)) as Row | null;
-    return record === null ? null : decodeLayerSpec(record);
+    return record === null ? null : decodeLayerSpec(this.layerstack, record);
   }
 
   /**
@@ -3688,12 +3688,19 @@ function same<T>(value: T): T {
   return value;
 }
 
-function decodeReference([asset, primPath, offset, scale]: [string | null, string | null, number, number]): AuthoredReference {
-  return { asset, primPath, layerOffset: { offset, scale } };
+/** A reference or payload item of a list op record: `[asset, primPath, offset, scale, customData]`. */
+type ReferenceRow = [string | null, string | null, number, number, unknown];
+
+function decodeReference(layerstack: Layerstack, [asset, primPath, offset, scale, data]: ReferenceRow): AuthoredReference {
+  const customData = decodeValue(layerstack, data);
+  if (customData !== null && customData.kind !== "dictionary") {
+    throw new LayerstackError("value.decode", "layerSpec", "a reference's custom data did not decode as a dictionary");
+  }
+  return { asset, primPath, layerOffset: { offset, scale }, customData };
 }
 
 /** The spec a `layerSpec` record describes (`layer_spec.rs`). */
-function decodeLayerSpec(record: Row): LayerSpec {
+function decodeLayerSpec(layerstack: Layerstack, record: Row): LayerSpec {
   const [type, path, fields] = record as [LayerSpec["type"], string, string[]];
   const rest = record.slice(3);
   switch (type) {
@@ -3711,7 +3718,8 @@ function decodeLayerSpec(record: Row): LayerSpec {
     }
     case "prim":
     case "variant": {
-      type References = ListOpRow<[string | null, string | null, number, number]> | null;
+      type References = ListOpRow<ReferenceRow> | null;
+      const reference = (row: ReferenceRow): AuthoredReference => decodeReference(layerstack, row);
       const [
         specifier,
         typeName,
@@ -3757,8 +3765,8 @@ function decodeLayerSpec(record: Row): LayerSpec {
         active,
         instanceable,
         documentation,
-        references: decodeListOp(references, decodeReference),
-        payloads: decodeListOp(payloads, decodeReference),
+        references: decodeListOp(references, reference),
+        payloads: decodeListOp(payloads, reference),
         inherits: decodeListOp(inherits, same),
         specializes: decodeListOp(specializes, same),
         apiSchemas: decodeListOp(apiSchemas, same),

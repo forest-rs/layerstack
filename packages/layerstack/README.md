@@ -161,7 +161,12 @@ await stage.resolve(source);
   `connections`) and `relationship` (`targets`). Every kind lists the
   `fields` it authors by their OpenUSD keys, the names `primFields` uses.
   Values are not read, so nothing is decoded; nothing is composed or
-  exported either. The path is in the layer's namespace: a stage path for
+  exported either. The one exception is a reference's `customData`, which
+  is part of which item of the list it is: a reference item reads as its
+  `asset`, `primPath`, `layerOffset` and `customData` (`null` without
+  any, and for a payload, which has none), the four OpenUSD's
+  `SdfReference::operator==` compares, so two references that differ by
+  their custom data alone read apart. The path is in the layer's namespace: a stage path for
   a layer of the stage's own stack, else mapped through the target that
   writes there (`target.mapPath(path)`), which spells a path inside a
   variant with its selection (`/World/Robot{finish=painted}Decal`).
@@ -171,7 +176,7 @@ await stage.resolve(source);
   const height = stage.layerSpec(target.layer, target.mapPath("/World/Robot.height")!);
   height?.type === "attribute" && height.default; // "value": robot.usda authors it, so Clear there removes it
   const robot = stage.layerSpec(stage.root, "/World/Robot");
-  robot?.type === "prim" && robot.references?.prepended; // [{ asset: "./robot.usda", primPath: null, layerOffset: { offset: 0, scale: 1 } }]
+  robot?.type === "prim" && robot.references?.prepended; // [{ asset: "./robot.usda", primPath: null, layerOffset: { offset: 0, scale: 1 }, customData: null }]
   stage.layerSpec(stage.root, "/").fields; // ["defaultPrim", "upAxis"]: the root authors these
   ```
 - **Paths are text**: `/World/Rock` for prims, `/World/Rock.size` for
@@ -304,7 +309,14 @@ await stage.resolve(source);
   `addConnection` edit the target layer's list op, so a layer adds to
   what weaker layers author where `setTargets` replaces it. `copySpec`
   duplicates a prim (or property) spec within the target layer, to a
-  new path. Sublayer edits name a place in `stage.sublayers(layer)`
+  new path. `removeReference` and `removePayload` name the arc in full:
+  its `asset`, `primPath` and `layerOffset`, and for a reference its
+  `customData` (each absent one the default: identity, none), so of two
+  references that differ only by offset or custom data the one named
+  leaves, and naming one no list holds deletes it and leaves the others,
+  as OpenUSD's `RemoveReference` does. `addReference` takes `customData`
+  too, so what `layerSpec` reads can be authored; a payload has none, and
+  an edit that gives one is refused. Sublayer edits name a place in `stage.sublayers(layer)`
   (strongest first); an inserted sublayer the stage has not read is
   unavailable until supplied, as an added reference's asset is: `await
   stage.resolve(source)` after.

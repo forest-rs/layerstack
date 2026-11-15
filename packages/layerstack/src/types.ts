@@ -1151,8 +1151,10 @@ export interface ListOp<T> {
 
 /**
  * A reference or payload as a list op authors it (OpenUSD's
- * `SdfReference`, `SdfPayload`), in the authoring layer's terms. AOUSD
- * Core §10.3.2.1–§10.3.2.2.
+ * `SdfReference`, `SdfPayload`), in the authoring layer's terms. Its
+ * fields are what makes it the item it is: two items of a list differ in
+ * at least one of them, and a {@link RemoveArcEdit} names one by all of
+ * them. AOUSD Core §10.3.2.1–§10.3.2.2.
  */
 export interface AuthoredReference {
   /** The asset path as authored (`./robot.usda`), anchored at the authoring layer; `null` for an internal arc (`</World/Spare>`). */
@@ -1161,6 +1163,13 @@ export interface AuthoredReference {
   readonly primPath: string | null;
   /** The layer offset across the arc: identity when none is authored. */
   readonly layerOffset: { readonly offset: number; readonly scale: number };
+  /**
+   * A reference's custom data (`@./robot.usda@ (customData = { int v = 1 })`,
+   * OpenUSD's `SdfReference::GetCustomData`), read as
+   * {@link Prim.metadata} reads a dictionary; `null` without any, and
+   * always for a payload, which has none. AOUSD Core §16.2.17.5.
+   */
+  readonly customData: Extract<Value, { readonly kind: "dictionary" }> | null;
 }
 
 /** A listener of {@link Stage.onChange}. */
@@ -1539,26 +1548,52 @@ export interface AddArcEdit {
   readonly position?: ListPosition;
   /** Time offset and scale across the arc; identity by default. */
   readonly layerOffset?: LayerOffsetInput;
+  /**
+   * A reference's custom data (OpenUSD's `SdfReference::SetCustomData`):
+   * a {@link DictionaryInput}, or the {@link AuthoredReference.customData}
+   * of a reference read from a layer. None by default, and `null` or an
+   * empty dictionary is none. A payload has no custom data: an
+   * `addPayload` with one is refused (`argument.invalid`). AOUSD Core
+   * §16.2.17.5.
+   */
+  readonly customData?: ReferenceCustomDataInput | null;
 }
 
 /**
+ * The custom data of the reference an {@link AddArcEdit} authors or a
+ * {@link RemoveArcEdit} names: a dictionary to author, or the one read
+ * with an {@link AuthoredReference}.
+ */
+export type ReferenceCustomDataInput = DictionaryInput | Extract<Value, { readonly kind: "dictionary" }>;
+
+/**
  * `UsdReferences::RemoveReference` / `UsdPayloads::RemovePayload`: removes
- * the arc naming `asset` and `primPath` at `layerOffset` from the target
- * layer's lists, and adds it to the deleted items, which removes it from
- * weaker layers too.
+ * the arc naming `asset` and `primPath` at `layerOffset`, with
+ * `customData` for a reference, from the target layer's lists, and adds
+ * it to the deleted items, which removes it from weaker layers too.
  *
- * An arc is its asset path, its prim path and its layer offset together,
- * as OpenUSD's `SdfReference::operator==` and `SdfPayload::operator==`
- * compare them: two arcs to one asset and prim at different offsets are
- * two items of the list, and the removal takes the one at `layerOffset`
- * (an {@link AuthoredReference} read with {@link Stage.layerSpec} carries
- * all three). Without `layerOffset` it names the arc at the identity
- * offset, as a default `SdfLayerOffset` does; when no list holds the arc
- * named, the others stay and the one named is deleted (`delete references
- * = @./robot.usda@ (offset = 24)`), as OpenUSD authors it. A reference's
- * custom data, which no edit authors, is not part of what is named.
- * AOUSD Core §10.3.2.1 (reference fields), §12.3.2.1 (layer offsets),
- * §12.4 (list ops).
+ * A reference is its asset path, its prim path, its layer offset and its
+ * custom data together, as OpenUSD's `SdfReference::operator==` compares
+ * them, and a payload the first three (`SdfPayload::operator==`): two
+ * arcs to one asset and prim at different offsets, or two references
+ * that differ by their custom data alone, are two items of the list, and
+ * the removal takes the one named in full (an {@link AuthoredReference}
+ * read with {@link Stage.layerSpec} carries all four). Without
+ * `layerOffset` it names the arc at the identity offset, and without
+ * `customData` the reference that has none, as a default `SdfReference`
+ * does; when no list holds the arc named, the others stay and the one
+ * named is deleted (`delete references = @./robot.usda@ (offset = 24)`),
+ * as OpenUSD authors it. AOUSD Core §10.3.2.1 (reference fields),
+ * §12.3.2.1 (layer offsets), §12.4 (list ops), §16.2.17.5 (reference
+ * custom data).
+ *
+ * ```ts
+ * const spec = stage.layerSpec(stage.root, "/World/Robot");
+ * const second = spec?.type === "prim" ? spec.references?.prepended[1] : undefined;
+ * if (second !== undefined && second.asset !== null && second.primPath !== null) {
+ *   stage.apply([{ type: "removeReference", path: "/World/Robot", asset: second.asset, primPath: second.primPath, layerOffset: second.layerOffset, customData: second.customData }]);
+ * }
+ * ```
  */
 export interface RemoveArcEdit {
   readonly type: "removeReference" | "removePayload";
@@ -1567,6 +1602,14 @@ export interface RemoveArcEdit {
   readonly primPath?: string;
   /** The layer offset of the arc to remove; identity by default. */
   readonly layerOffset?: LayerOffsetInput;
+  /**
+   * The custom data of the reference to remove, compared entry by entry
+   * (keys in any order, each value of the same type and equal); none by
+   * default, and `null` or an empty dictionary is none. A payload has no
+   * custom data: a `removePayload` with one is refused
+   * (`argument.invalid`).
+   */
+  readonly customData?: ReferenceCustomDataInput | null;
 }
 
 /**

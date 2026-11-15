@@ -210,8 +210,33 @@ fn encode_array(
     ]))
 }
 
+/// The value type name of a list of text elements all of one kind
+/// (`asset[]` for `SdfAssetPath`s); `None` for an empty list, or one of
+/// mixed or other elements, whose elements name no one type.
+fn text_list_type_name(items: &[Value]) -> Option<&'static str> {
+    let name = |item: &Value| match item {
+        Value::Asset(_) => Some("asset[]"),
+        Value::PathExpression(_) => Some("pathExpression[]"),
+        Value::String(_) => Some("string[]"),
+        Value::Token(_) => Some("token[]"),
+        _ => None,
+    };
+    let first = name(items.first()?)?;
+    items[1..]
+        .iter()
+        .all(|item| name(item) == Some(first))
+        .then_some(first)
+}
+
 /// A list no buffer holds: text elements (an `asset[]`) as a text array,
 /// anything else element by element.
+///
+/// Without a declared type (a dictionary's entry), a text list is named
+/// by its elements, as a buffer-backed array is by its buffer: an
+/// `asset[]` entry reads as `asset[]`, and sent back as read it decodes
+/// to the list it was, so a dictionary holding one compares equal to
+/// itself (a reference's custom data names the reference, OpenUSD's
+/// `SdfReference::operator==`). AOUSD Core §6.2–§6.3, §16.2.17.5.
 fn encode_list(
     items: &[Value],
     type_name: Option<&str>,
@@ -227,7 +252,11 @@ fn encode_list(
             _ => None,
         })
         .collect();
-    let name = String::from(type_name.unwrap_or("list"));
+    let name = String::from(
+        type_name
+            .or_else(|| text_list_type_name(items))
+            .unwrap_or("list"),
+    );
     if let Some(text) = text {
         return Ok(Wire::List(vec![
             Wire::Text(name),
@@ -956,6 +985,72 @@ mod tests {
                     Wire::List(vec![Wire::text("intListOp"), Wire::text("x")]),
                 ])]),
             ])
+        );
+    }
+
+    /// A dictionary's `asset[]` entry, a list no buffer holds and with no
+    /// declared type beside it, reads under the name its elements give,
+    /// and what was read decodes to the list it was: a reference's custom
+    /// data holding one names that reference (OpenUSD's
+    /// `SdfReference::operator==` compares the custom data). An empty
+    /// list, or a mixed one, names no type. AOUSD Core §6.2–§6.3,
+    /// §16.2.17.5.
+    #[test]
+    fn a_text_list_without_a_declared_type_is_named_by_its_elements() {
+        let tokens = TokenInterner::default();
+        let record = |type_name: &str, items: &[&str]| {
+            Wire::List(vec![
+                Wire::text(type_name),
+                Wire::text("a"),
+                Wire::text("string"),
+                Wire::Number(1.0),
+                Wire::Number(items.len() as f64),
+                Wire::List(items.iter().map(|item| Wire::text(*item)).collect()),
+            ])
+        };
+        let assets = Value::Array(vec![
+            Value::Asset(Arc::from("./a.usda")),
+            Value::Asset(Arc::from("./b.usda")),
+        ]);
+        assert_eq!(
+            encode(&assets, None, &tokens).unwrap().unwrap(),
+            record("asset[]", &["./a.usda", "./b.usda"])
+        );
+        assert_eq!(
+            decode(
+                &input(
+                    "asset[]",
+                    InputData::Text(vec!["./a.usda".into(), "./b.usda".into()])
+                ),
+                &tokens
+            )
+            .unwrap(),
+            assets,
+            "sent back as read, it is the list it was"
+        );
+        let expressions = Value::Array(vec![Value::PathExpression(Arc::from("//Rock"))]);
+        assert_eq!(
+            encode(&expressions, None, &tokens).unwrap().unwrap(),
+            record("pathExpression[]", &["//Rock"])
+        );
+        // A declared type names it, whatever the elements.
+        assert_eq!(
+            encode(&assets, Some("asset[]"), &tokens).unwrap().unwrap(),
+            record("asset[]", &["./a.usda", "./b.usda"])
+        );
+        let mixed = Value::Array(vec![
+            Value::Asset(Arc::from("./a.usda")),
+            Value::String(Arc::from("a")),
+        ]);
+        assert_eq!(
+            encode(&mixed, None, &tokens).unwrap().unwrap(),
+            record("list", &["./a.usda", "a"])
+        );
+        assert_eq!(
+            encode(&Value::Array(vec![]), None, &tokens)
+                .unwrap()
+                .unwrap(),
+            record("list", &[])
         );
     }
 

@@ -11,7 +11,7 @@
 // `../app/VariantsSection.tsx`) and the store's actions read these.
 // AOUSD Core §10 (composition arcs: LIVRPS), §12.4 (list ops), §7.3.6
 // (variant sets), §7.6.2 (prim spec fields).
-import type { ArcKind, CompositionArc, Edit, EditTarget, Layer, ListPosition } from "@forest-rs/layerstack";
+import type { ArcKind, CompositionArc, Edit, EditTarget, Layer, ListPosition, Value } from "@forest-rs/layerstack";
 import type { ArcField, AuthoredArc, ListOpKind, SpecsOf } from "./layerSpecs.ts";
 
 /** An arc the inspector adds: a reference, a payload, an inherit or a specialize. */
@@ -391,15 +391,15 @@ function authoredAt(arcs: readonly ArcRecord[], index: number, specsOf: SpecsOf)
   const parent = arcs[arc.parent!]!;
   // Each arc beneath the same one takes an item of its own, the arcs in
   // their order: two arcs to one asset and prim are two items (they
-  // differ by layer offset, or one names the default prim), and the
-  // second is not the first's.
-  const taken = new Set<AuthoredArc>();
+  // differ by layer offset or custom data, or one names the default
+  // prim), and the second is not the first's.
+  const taken = new Map<AuthoredArc, Layer>();
   for (let at = 0; at <= index; at++) {
     const each = arcs[at]!;
     if (each.parent !== arc.parent || each.implied || each.arc !== arc.arc) continue;
     const found = bestItem(each, parent, taken, specsOf);
     if (at === index) return found === null ? null : { ...found, specPath: parent.site, parent: arc.parent! };
-    if (found !== null) taken.add(found.item);
+    if (found !== null) taken.set(found.item, found.layer);
   }
   return null;
 }
@@ -409,20 +409,65 @@ function authoredAt(arcs: readonly ArcRecord[], index: number, specsOf: SpecsOf)
  * it ({@link itemComposes}) in the parent's layers: one at the arc's own
  * layer offset before one at another, one not `taken` by an earlier arc
  * before one that is, then the strongest layer's, the first in its list.
+ *
+ * An item is taken when an earlier arc took it or took the same item
+ * ({@link sameItem}) of its layer: a list op may hold one reference in
+ * several of its lists (`add` and `prepend`), and composition takes it
+ * once, so the next arc is another reference's, not its second listing.
  */
-function bestItem(arc: ArcRecord, parent: ArcRecord, taken: ReadonlySet<AuthoredArc>, specsOf: SpecsOf): { readonly layer: Layer; readonly item: AuthoredArc } | null {
+function bestItem(arc: ArcRecord, parent: ArcRecord, taken: ReadonlyMap<AuthoredArc, Layer>, specsOf: SpecsOf): { readonly layer: Layer; readonly item: AuthoredArc } | null {
   let best: { readonly layer: Layer; readonly item: AuthoredArc; readonly score: number } | null = null;
   for (const layer of parent.layers) {
     const spec = specsOf(layer, parent.site);
     if (spec === null) continue;
     const base = readAt(parent, layer);
+    const here = [...taken].flatMap(([item, at]) => (at === layer ? [item] : []));
     for (const item of spec.arcs) {
       if (!itemComposes(item, layer, arc, parent)) continue;
-      const score = (atOffset(item, base, arc) ? 2 : 0) + (taken.has(item) ? 0 : 1);
+      const free = !here.some((other) => sameItem(other, item));
+      const score = (atOffset(item, base, arc) ? 2 : 0) + (free ? 1 : 0);
       if (best === null || score > best.score) best = { layer, item, score };
     }
   }
   return best;
+}
+
+/**
+ * Whether two arcs a layer authors are one item: the same kind of arc to
+ * the same asset and prim, and for a reference or payload at the same
+ * layer offset with the same custom data, which together are what
+ * OpenUSD's `SdfReference::operator==` compares. The list they are in is
+ * not part of it.
+ */
+export function sameItem(a: AuthoredArc, b: AuthoredArc): boolean {
+  if (a === b) return true;
+  return a.field === b.field && a.asset === b.asset && a.primPath === b.primPath && a.offset === b.offset && a.scale === b.scale && sameValue(a.customData, b.customData);
+}
+
+/**
+ * Whether two values read from layers are the same: the same type and
+ * scalars, a NaN the same as itself, and a dictionary's entries in any
+ * order, as a dictionary has none. A value the bindings do not represent
+ * is never known to be the same as another.
+ */
+function sameValue(a: Value | null, b: Value | null): boolean {
+  if (a === null || b === null) return a === b;
+  if (a.type !== b.type) return false;
+  const all = (x: ArrayLike<unknown>, y: ArrayLike<unknown>) => x.length === y.length && Array.prototype.every.call(x, (each: unknown, index: number) => Object.is(each, y[index]));
+  switch (a.kind) {
+    case "scalar":
+      return b.kind === "scalar" && Object.is(a.value, b.value);
+    case "tuple":
+      return b.kind === "tuple" && all(a.value, b.value);
+    case "array":
+      return b.kind === "array" && a.array.length === b.array.length && all(a.array.copy(), b.array.copy());
+    case "dictionary":
+      return b.kind === "dictionary" && a.value.size === b.value.size && [...a.value].every(([key, value]) => b.value.has(key) && sameValue(value, b.value.get(key) ?? null));
+    case "list":
+      return b.kind === "list" && a.value.length === b.value.length && a.value.every((value, index) => sameValue(value, b.value[index] ?? null));
+    case "opaque":
+      return false;
+  }
 }
 
 /** The offset `layer` of `arc`'s stack is read at, to stage times; `null` when the arc does not say. */

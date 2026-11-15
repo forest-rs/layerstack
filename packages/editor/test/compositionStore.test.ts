@@ -692,3 +692,45 @@ def "Robot" (
     assert.deepEqual(authored(), after, "redo");
   }
 });
+
+test("a reference a spec lists twice is one composed arc's, and the next arc's row is the next reference, not its second listing", async () => {
+  // A list op holds one reference in two of its lists (`add` and
+  // `prepend`, or `prepend` and `append`), and composition takes it once:
+  // the second composed arc is the other reference, which differs by its
+  // custom data alone, and Remove on its row removes that one.
+  const one = "@./a.usda@</A> (customData = {int v = 1})";
+  const two = "@./a.usda@</A> (customData = {int v = 2})";
+  const part = `#usda 1.0\ndef "A" {\n    int count = 3\n}\n`;
+  const v = (item: AuthoredReference): unknown => {
+    const value = item.customData?.value.get("v");
+    return value?.kind === "scalar" ? value.value : null;
+  };
+  for (const lists of [
+    `add references = ${one}\n    prepend references = ${one}\n    append references = ${two}`,
+    `prepend references = ${one}\n    append references = [${one}, ${two}]`,
+  ]) {
+    const h = await harness();
+    await h.open(sampleSource("pair.usda", { "pair.usda": `#usda 1.0\ndef "Robot" (\n    ${lists}\n) {\n}\n`, "a.usda": part }));
+    const store = h.store;
+    const stage = store.session!.stage;
+    const authored = () => {
+      const spec = stage.layerSpec(stage.root, "/Robot");
+      assert.ok(spec !== null && spec.type === "prim" && spec.references !== null);
+      const { added, prepended, appended, deleted } = spec.references;
+      return [...added, ...prepended, ...appended].map(v).concat(deleted.map((item) => `deleted ${v(item)}`));
+    };
+    assert.deepEqual(authored(), [1, 1, 2]);
+    const arcs = stage.prim("/Robot")!.compositionArcs();
+    const rows = arcs.flatMap((arc, index) => (arc.arc === "references" ? [findAuthoring(arcs, index, store.specsOf)!.item] : []));
+    assert.deepEqual(rows.map((item) => authoredItemText(item)), [one, two].map((text) => text.replace("{int v = ", "{ v = ").replace("})", " })")), lists);
+    assert.deepEqual(
+      uncomposedHere(arcs, stage.root, "/Robot", store.specsOf).map((item) => authoredItemText(item)),
+      [one.replace("{int v = ", "{ v = ").replace("})", " })")],
+      "the second reference composes, so it is not listed as composing nothing: only the first's other listing is",
+    );
+    assert.equal(store.removeArc("/Robot", rows[1]!), undefined);
+    assert.deepEqual(authored(), [1, 1, "deleted 2"], "the second row's reference is the one removed");
+    await h.settle(store.undo());
+    assert.deepEqual(authored(), [1, 1, 2]);
+  }
+});

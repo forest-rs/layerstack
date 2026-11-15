@@ -11,7 +11,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { AuthoredReference, Stage } from "@forest-rs/layerstack";
-import { authoredHere, findAuthoring, mapping, type NewArc, newArcUsda, outrankingTarget, selectionTarget, strongerSelection, uncomposedHere, uncomposedWhy, variantSetSource } from "../src/model/composition.ts";
+import { authoredHere, authoredItemText, findAuthoring, mapping, type NewArc, newArcUsda, outrankingTarget, selectionTarget, strongerSelection, uncomposedHere, uncomposedWhy, variantSetSource } from "../src/model/composition.ts";
 import { targetSite } from "../src/model/propertyOps.ts";
 import { harness, sampleSource } from "./support/storeHarness.ts";
 
@@ -641,4 +641,54 @@ test("through a reference read at an offset, the arc removed is the one at the o
   assert.deepEqual(chrome.map(({ source }) => source?.item.offset), [0, 24]);
   assert.equal(store.removeArc("/World/Pile/Crate", chrome[1]!.source!.item), undefined);
   assert.deepEqual(authored(), { prepended: [0], deleted: [24] });
+});
+
+test("of references that differ only by their custom data, each arc's row names its own item and the store removes the one its row gives", async () => {
+  // OpenUSD: `SdfReference::operator==` compares the custom data too, so the
+  // three are three items, and `UsdReferences::RemoveReference` of the
+  // second authors `prepend [{v = 1}, <none>]`, `delete [{v = 2}]`.
+  const pair = `#usda 1.0
+def "Robot" (
+    prepend references = [
+        @./a.usda@</A> (customData = {int v = 1}),
+        @./a.usda@</A> (customData = {int v = 2}),
+        @./a.usda@</A>
+    ]
+) {
+}
+`;
+  const part = `#usda 1.0\ndef "A" {\n    int count = 3\n}\n`;
+  const v = (item: AuthoredReference): unknown => {
+    const value = item.customData?.value.get("v");
+    return value?.kind === "scalar" ? value.value : null;
+  };
+  const all = [1, 2, null];
+  for (const row of [0, 1, 2]) {
+    const h = await harness();
+    await h.open(sampleSource("pair.usda", { "pair.usda": pair, "a.usda": part }));
+    const store = h.store;
+    const stage = store.session!.stage;
+    const authored = () => {
+      const spec = stage.layerSpec(stage.root, "/Robot");
+      assert.ok(spec !== null && spec.type === "prim");
+      return { prepended: spec.references?.prepended.map(v), deleted: spec.references?.deleted.map(v) };
+    };
+    assert.deepEqual(authored(), { prepended: all, deleted: [] });
+    const arcs = stage.prim("/Robot")!.compositionArcs();
+    const rows = arcs.flatMap((arc, index) => (arc.arc === "references" ? [findAuthoring(arcs, index, store.specsOf)!.item] : []));
+    assert.deepEqual(
+      rows.map((item) => authoredItemText(item)),
+      ["@./a.usda@</A> (customData = { v = 1 })", "@./a.usda@</A> (customData = { v = 2 })", "@./a.usda@</A>"],
+      "each row says which it is",
+    );
+    assert.deepEqual(uncomposedHere(arcs, stage.root, "/Robot", store.specsOf), []);
+
+    assert.equal(store.removeArc("/Robot", rows[row]!), undefined);
+    const after = { prepended: all.filter((_, index) => index !== row), deleted: [all[row]] };
+    assert.deepEqual(authored(), after, `the row clicked is the item removed: row ${row}`);
+    await h.settle(store.undo());
+    assert.deepEqual(authored(), { prepended: all, deleted: [] }, "undo: all three, in order");
+    await h.settle(store.redo());
+    assert.deepEqual(authored(), after, "redo");
+  }
 });

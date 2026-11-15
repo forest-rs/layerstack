@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { EditReceipt, LayerstackError, UndoHistory, loadLayerstack } from "../dist/index.js";
-import type { Changes, Edit, Layerstack, Stage, Value } from "../dist/index.js";
+import type { AuthoredReference, Changes, Edit, Layerstack, Stage, Value } from "../dist/index.js";
 import { mockSource, usdz } from "./fixtures.ts";
 
 const layerstack: Layerstack = await loadLayerstack();
@@ -519,11 +519,17 @@ def "Robot" (
       "three items: custom data is part of what a reference is",
     );
     assert.deepEqual(stage.attribute("/World/Rock.count")?.get(), { kind: "scalar", type: "int", value: 3 });
-    // What was read is what an add authors: the first again moves nothing and adds nothing.
+    // What was read is what an add authors: the first again adds nothing,
+    // and moves that item to the back of the prepended ones, where the add
+    // puts it (OpenUSD 26.11's `AddReference` of `{v = 1}` to prepended
+    // `{v = 1}`, `{v = 2}` leaves `{v = 2}`, `{v = 1}`).
     stage.apply([{ type: "addReference", ...arc, customData: spec.references!.prepended[0]!.customData }]).release();
     const again = stage.layerSpec(stage.root, "/World/Rock");
     assert.ok(again !== null && again.type === "prim");
-    assert.equal(again.references?.prepended.length, 3);
+    assert.deepEqual(
+      again.references?.prepended.map((each) => (each.customData === null ? null : [...each.customData.value.keys()])),
+      [["v"], null, ["note", "v"]],
+    );
 
     const before = stage.exportLayer(stage.root, "usda");
     const payload = { path: "/World/Rock", asset: "./spare.usda", primPath: "/Part", customData: note };
@@ -536,6 +542,105 @@ def "Robot" (
     const withPayload = stage.layerSpec(stage.root, "/World/Rock");
     assert.ok(withPayload !== null && withPayload.type === "prim");
     assert.deepEqual(withPayload.payloads?.prepended, [{ asset: "./spare.usda", primPath: "/Part", layerOffset: { offset: 0, scale: 1 }, customData: null }]);
+  });
+
+  it("removeReference with the custom data layerSpec read removes that reference, whatever the custom data holds, from USDA and from USDC", () => {
+    // Each line is a reference of its own to OpenUSD 26.11 (its text
+    // parser refuses equal items in one list): an `int` 1 is not a
+    // `double` 1, a `string` not a `token` or an `asset`, and a
+    // dictionary differs by an entry however deep.
+    const entries = [
+      "int i = 1",
+      "double i = 1",
+      "float i = 1",
+      "half i = 1",
+      "int64 i = 1",
+      "uint i = 1",
+      "uchar i = 1",
+      "bool i = 1",
+      "timecode i = 1",
+      "double i = nan",
+      "double i = inf",
+      "float i = 0.1",
+      "uint64 i = 18446744073709551615",
+      'string i = "a \\"quoted\\" one"',
+      'token i = "a \\"quoted\\" one"',
+      "asset i = @./x.usda@",
+      'string i = "./x.usda"',
+      "dictionary i = {}",
+      "dictionary i = {int z = 1; int a = 2; dictionary m = {int q = 1; int b = 2}}",
+      "dictionary i = {int z = 1; int a = 2; dictionary m = {int q = 1; int b = 3}}",
+      "int[] i = [1, 2, 3]",
+      "double[] i = [1, 2, 3]",
+      "float[] i = [1, 2, 3]",
+      'string[] i = ["a", "b"]',
+      'token[] i = ["a", "b"]',
+      "asset[] i = [@a@, @b@]",
+      "asset[] i = [@a@, @c@]",
+      "double3 i = (1, 2, 3)",
+      "float3 i = (1, 2, 3)",
+      "int3 i = (1, 2, 3)",
+      "half3 i = (1, 2, 3)",
+      "matrix4d i = ((1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1))",
+      "quatf i = (1, 0, 0, 0)",
+      "quatd i = (1, 0, 0, 0)",
+      "double3[] i = [(1, 2, 3), (4, 5, 6)]",
+      "float3[] i = [(1, 2, 3), (4, 5, 6)]",
+      "int z = 1; int a = 2",
+    ];
+    const items = [...entries.map((entry) => `@./a.usda@</A> (customData = {${entry}})`), "@./a.usda@</A>"];
+    const usda = text.encode(`#usda 1.0\ndef "Robot" (\n    prepend references = [\n        ${items.join(",\n        ")}\n    ]\n) {\n}\n`);
+    let usdc: Uint8Array;
+    {
+      using stage = layerstack.open({ identifier: "types.usda", bytes: usda });
+      usdc = stage.exportLayer(stage.root, "usdc") as Uint8Array;
+    }
+    /** A value as text that tells any two of the values above apart; a dictionary's entries by key, as they have no order. */
+    const show = (value: Value | null): string => {
+      if (value === null) return "null";
+      switch (value.kind) {
+        case "scalar":
+          return `${value.type} ${String(value.value)}`;
+        case "tuple":
+          return `${value.type} (${value.value.join(", ")})`;
+        case "array":
+          return `${value.type} [${[...(value.array.copy() as Iterable<unknown>)].join(", ")}]`;
+        case "dictionary":
+          return `{${[...value.value]
+            .sort(([a], [b]) => (a < b ? -1 : 1))
+            .map(([key, entry]) => `${key}: ${show(entry)}`)
+            .join("; ")}}`;
+        default:
+          return `${value.kind} ${value.type}`;
+      }
+    };
+    const read = (stage: Stage): { prepended: readonly AuthoredReference[]; deleted: readonly AuthoredReference[] } => {
+      const spec = stage.layerSpec(stage.root, "/Robot");
+      assert.ok(spec !== null && spec.type === "prim" && spec.references !== null);
+      return spec.references;
+    };
+    for (const [identifier, bytes] of [
+      ["types.usda", usda],
+      ["types.usdc", usdc],
+    ] as const) {
+      for (let index = 0; index < items.length; index += 1) {
+        using stage = layerstack.open({ identifier, bytes });
+        const before = read(stage).prepended;
+        assert.equal(before.length, items.length, `${identifier}: each is an item of its own`);
+        const named = before[index]!;
+        const what = `${identifier}: ${items[index]}`;
+        stage
+          .apply([{ type: "removeReference", path: "/Robot", asset: named.asset!, primPath: named.primPath!, layerOffset: named.layerOffset, customData: named.customData }])
+          .release();
+        const after = read(stage);
+        assert.deepEqual(
+          after.prepended.map((each) => show(each.customData)),
+          before.filter((_, at) => at !== index).map((each) => show(each.customData)),
+          `${what}: the others stay, in order`,
+        );
+        assert.deepEqual(after.deleted.map((each) => show(each.customData)), [show(named.customData)], `${what}: it is the one deleted`);
+      }
+    }
   });
 
   it("setVariantSelection, setActive, setInstanceable and setKind", async () => {

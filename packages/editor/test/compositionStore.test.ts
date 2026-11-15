@@ -686,6 +686,8 @@ def "Robot" (
     assert.equal(store.removeArc("/Robot", rows[row]!), undefined);
     const after = { prepended: all.filter((_, index) => index !== row), deleted: [all[row]] };
     assert.deepEqual(authored(), after, `the row clicked is the item removed: row ${row}`);
+    // The step says which of the three it removed.
+    assert.equal(store.session!.history.nextUndo?.label, `remove reference ${authoredItemText(rows[row]!)} from /Robot`);
     await h.settle(store.undo());
     assert.deepEqual(authored(), { prepended: all, deleted: [] }, "undo: all three, in order");
     await h.settle(store.redo());

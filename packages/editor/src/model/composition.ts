@@ -97,10 +97,12 @@ function number(value: number): string {
 const NOTED_ENTRIES = 3;
 
 /**
- * A reference's custom data in brief, enough to tell two references to
- * one asset and prim apart: its first entries by key, a scalar with its
- * value and any other value elided (`{ note = "left", v = 2, … }`). Not
- * USDA: the layer's text has the dictionary in full.
+ * A reference's custom data in brief: its first entries by key, a scalar
+ * with its value and any other value elided (`{ note = "left", v = 2, … }`).
+ * It tells apart two references to one asset and prim whose custom data
+ * differs in a scalar among those entries; two that differ only in a
+ * value's type, inside a nested value or in a later entry read alike
+ * here. Not USDA: the layer's text has the dictionary in full.
  */
 export function customDataNote(customData: NonNullable<AuthoredArc["customData"]>): string {
   const keys = [...customData.value.keys()].sort();

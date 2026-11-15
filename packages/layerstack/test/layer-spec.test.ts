@@ -175,9 +175,9 @@ describe("layer specs", () => {
       instanceable: null,
       documentation: "A robot",
       references: listOp({
-        prepended: [{ asset: "./robot.usda", primPath: null, layerOffset: { offset: 5, scale: 2 } }],
-        appended: [{ asset: null, primPath: "/World/Spare", layerOffset: { offset: 0, scale: 1 } }],
-        deleted: [{ asset: "./old.usda", primPath: null, layerOffset: { offset: 0, scale: 1 } }],
+        prepended: [{ asset: "./robot.usda", primPath: null, layerOffset: { offset: 5, scale: 2 }, customData: null }],
+        appended: [{ asset: null, primPath: "/World/Spare", layerOffset: { offset: 0, scale: 1 }, customData: null }],
+        deleted: [{ asset: "./old.usda", primPath: null, layerOffset: { offset: 0, scale: 1 }, customData: null }],
       }),
       payloads: null,
       inherits: listOp({ added: ["/World/Base"], ordered: ["/World/Base", "/World/Other"] }),
@@ -230,7 +230,7 @@ describe("layer specs", () => {
     assert.equal(painted.type, "variant");
     assert.equal(painted.specifier, null);
     assert.deepEqual(painted.fields, ["payload"]);
-    assert.deepEqual(painted.payloads, listOp({ prepended: [{ asset: "./paint.usda", primPath: "/Paint", layerOffset: { offset: 0, scale: 1 } }] }));
+    assert.deepEqual(painted.payloads, listOp({ prepended: [{ asset: "./paint.usda", primPath: "/Paint", layerOffset: { offset: 0, scale: 1 }, customData: null }] }));
     assert.deepEqual(painted.primChildren, ["Decal"]);
     assert.deepEqual(painted.properties, ["color"]);
     assert.equal(prim(stage.layerSpec(stage.root, "/World/Robot{finish=painted}Decal")).specifier, "def");
@@ -305,7 +305,7 @@ describe("layer specs", () => {
       { type: "setKind", path: "/World/Spare", kind: "component" },
     ]);
     const after = prim(stage.layerSpec(stage.root, "/World/Spare"));
-    assert.deepEqual(after.references, listOp({ appended: [{ asset: "./robot.usda", primPath: null, layerOffset: { offset: 0, scale: 1 } }] }));
+    assert.deepEqual(after.references, listOp({ appended: [{ asset: "./robot.usda", primPath: null, layerOffset: { offset: 0, scale: 1 }, customData: null }] }));
     assert.equal(after.kind, "component");
     assert.deepEqual(after.fields, ["kind", "references", "specifier", "typeName"]);
     receipt.undo();

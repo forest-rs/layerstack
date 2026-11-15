@@ -7,7 +7,7 @@ import { nativeOf } from "./arrays.js";
 import type { ArrayHost, NativeArrayHandle } from "./arrays.js";
 import { LayerstackError } from "./errors.js";
 import type { ErrorCode } from "./errors.js";
-import type { Edit, LayerOffsetInput, ListPosition, RotationOrder, ValueInput } from "./types.js";
+import type { AddArcEdit, Edit, LayerOffsetInput, ListPosition, RemoveArcEdit, RotationOrder, ValueInput } from "./types.js";
 
 /** The native batch the generated glue exports (`layerstack_wasm::EditBatch`). Not for app use. */
 export interface NativeEditBatch extends Disposable {
@@ -47,6 +47,7 @@ export interface NativeEditBatch extends Disposable {
     position: string,
     offset: number,
     scale: number,
+    customData: number | null | undefined,
   ): void;
   removeArc(
     payload: boolean,
@@ -55,6 +56,7 @@ export interface NativeEditBatch extends Disposable {
     primPath: string | null | undefined,
     offset: number,
     scale: number,
+    customData: number | null | undefined,
   ): void;
   setVariantSelection(path: string, set: string, variant?: string | null): void;
   setActive(path: string, active: boolean): void;
@@ -284,6 +286,7 @@ function lowerEdit(batch: NativeEditBatch, edit: Edit, host: ArrayHost): void {
         listPosition(edit.position),
         offset,
         scale,
+        referenceCustomData(batch, edit, host),
       );
       return;
     }
@@ -297,6 +300,7 @@ function lowerEdit(batch: NativeEditBatch, edit: Edit, host: ArrayHost): void {
         optionalText(edit.primPath, "primPath"),
         offset,
         scale,
+        referenceCustomData(batch, edit, host),
       );
       return;
     }
@@ -461,6 +465,24 @@ function lowerEdit(batch: NativeEditBatch, edit: Edit, host: ArrayHost): void {
     default:
       fail(`unknown edit type \`${String((edit as { type?: unknown }).type)}\``);
   }
+}
+
+/**
+ * The value slot of the custom data of the reference `edit` authors or
+ * names; `undefined` for none. A reference alone has custom data
+ * (OpenUSD's `SdfReference`; an `SdfPayload` is an asset path, a prim
+ * path and a layer offset), so a payload edit with one is refused.
+ */
+function referenceCustomData(batch: NativeEditBatch, edit: AddArcEdit | RemoveArcEdit, host: ArrayHost): number | undefined {
+  const customData: unknown = edit.customData;
+  if (customData === undefined || customData === null) return undefined;
+  if (edit.type === "addPayload" || edit.type === "removePayload") {
+    fail("a payload has no custom data: only a reference carries `customData`");
+  }
+  if (typeof customData !== "object" || (customData as { type?: unknown }).type !== "dictionary") {
+    throw new EditFailure("value.kind", "a reference's `customData` is a dictionary: { type: \"dictionary\", value: { ... } }");
+  }
+  return encodeDictionary(batch, (customData as { value?: unknown }).value, host, 0);
 }
 
 /** How deep dictionaries may nest in one value, as the module allows. */

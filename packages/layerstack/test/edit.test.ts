@@ -408,6 +408,136 @@ describe("edit kinds", () => {
     assert.deepEqual(stage.attribute("/World/Rock.count")?.get(), { kind: "scalar", type: "int", value: 3 }, "the reference at offset 24 still composes");
   });
 
+  /** A layer whose two references to one asset, prim and offset differ by their custom data alone. */
+  const pair = `#usda 1.0
+def "Robot" (
+    references = [@./a.usda@</A> (customData = {int v = 1}), @./a.usda@</A> (customData = {int v = 2})]
+) {
+}
+`;
+
+  /** The `v` of the custom data of each explicit and each deleted reference of `/Robot` (`null` without custom data). */
+  function robotReferences(stage: Stage): { explicit: unknown[] | undefined; deleted: unknown[] | undefined } {
+    const spec = stage.layerSpec(stage.root, "/Robot");
+    assert.ok(spec !== null && spec.type === "prim");
+    const v = (arc: { customData: { value: ReadonlyMap<string, Value | null> } | null }): unknown => {
+      if (arc.customData === null) return null;
+      assert.deepEqual([...arc.customData.value.keys()], ["v"]);
+      const value = arc.customData.value.get("v");
+      assert.ok(value?.kind === "scalar" && value.type === "int");
+      return value.value;
+    };
+    return { explicit: spec.references?.explicit?.map(v), deleted: spec.references?.deleted.map(v) };
+  }
+
+  it("removeReference takes the reference with the custom data named, of two that differ by it alone", async () => {
+    // OpenUSD 26.11: `SdfReference::operator==` compares the custom data,
+    // and `RemoveReference` of `{v = 2}` leaves `[{v = 1}]`.
+    for (const [gone, kept] of [
+      [1, 0],
+      [0, 1],
+    ] as const) {
+      using stage = layerstack.open({ identifier: "pair.usda", bytes: text.encode(pair) });
+      const spec = stage.layerSpec(stage.root, "/Robot");
+      assert.ok(spec !== null && spec.type === "prim");
+      const authored = spec.references?.explicit;
+      assert.ok(authored !== null && authored !== undefined);
+      assert.deepEqual(
+        authored.map((arc) => ({ ...arc, customData: arc.customData === null ? null : [...arc.customData.value] })),
+        [1, 2].map((v) => ({
+          asset: "./a.usda",
+          primPath: "/A",
+          layerOffset: { offset: 0, scale: 1 },
+          customData: [["v", { kind: "scalar", type: "int", value: v }]],
+        })),
+        "each reads with its own custom data",
+      );
+      const both = { explicit: [1, 2], deleted: [] };
+      assert.deepEqual(robotReferences(stage), both);
+      const named = authored[gone]!;
+      // The reference as it was read names itself.
+      const receipt = stage.apply([
+        { type: "removeReference", path: "/Robot", asset: named.asset!, primPath: named.primPath!, layerOffset: named.layerOffset, customData: named.customData },
+      ]);
+      const after = { explicit: [kept + 1], deleted: [] };
+      assert.deepEqual(robotReferences(stage), after, `removing {v = ${gone + 1}} keeps {v = ${kept + 1}} with its custom data`);
+      const redo = receipt.undo();
+      assert.deepEqual(robotReferences(stage), both, "undo brings both back in order");
+      redo.undo().release();
+      assert.deepEqual(robotReferences(stage), after, "redo");
+    }
+  });
+
+  it("removeReference with custom data no reference has leaves those authored", () => {
+    // OpenUSD 26.11's `RemoveReference` of `{v = 3}`, and of a reference
+    // without custom data, beside prepended `{v = 1}` and `{v = 2}`: both
+    // stay, and the one named is deleted with its custom data.
+    const prepended = pair.replace("references =", "prepend references =");
+    const arc = { path: "/Robot", asset: "./a.usda", primPath: "/A" };
+    const read = (stage: Stage): unknown => {
+      const spec = stage.layerSpec(stage.root, "/Robot");
+      assert.ok(spec !== null && spec.type === "prim");
+      const v = (each: { customData: { value: ReadonlyMap<string, Value | null> } | null }): unknown => {
+        const value = each.customData?.value.get("v");
+        return value?.kind === "scalar" ? value.value : null;
+      };
+      return { prepended: spec.references?.prepended.map(v), deleted: spec.references?.deleted.map(v) };
+    };
+    for (const [customData, deleted] of [
+      [{ type: "dictionary", value: { v: { type: "int", value: 3 } } }, 3],
+      [undefined, null],
+      [null, null],
+      [{ type: "dictionary", value: {} }, null],
+    ] as const) {
+      using stage = layerstack.open({ identifier: "pair.usda", bytes: text.encode(prepended) });
+      stage.apply([{ type: "removeReference", ...arc, ...(customData === undefined ? {} : { customData }) }]).release();
+      assert.deepEqual(read(stage), { prepended: [1, 2], deleted: [deleted] }, JSON.stringify(customData));
+    }
+  });
+
+  it("addReference authors custom data, and a payload takes none", async () => {
+    using stage = await openScene();
+    const arc = { path: "/World/Rock", asset: "./spare.usda", primPath: "/Part" };
+    const note = { type: "dictionary", value: { note: { type: "string", value: "left" }, v: { type: "int", value: 1 } } } as const;
+    stage.apply([
+      { type: "addReference", ...arc, customData: note },
+      { type: "addReference", ...arc, customData: { type: "dictionary", value: { v: { type: "int", value: 2 } } } },
+      { type: "addReference", ...arc },
+    ]).release();
+    const spec = stage.layerSpec(stage.root, "/World/Rock");
+    assert.ok(spec !== null && spec.type === "prim");
+    assert.deepEqual(
+      spec.references?.prepended.map((each) => (each.customData === null ? null : [...each.customData.value])),
+      [
+        [
+          ["note", { kind: "scalar", type: "string", value: "left" }],
+          ["v", { kind: "scalar", type: "int", value: 1 }],
+        ],
+        [["v", { kind: "scalar", type: "int", value: 2 }]],
+        null,
+      ],
+      "three items: custom data is part of what a reference is",
+    );
+    assert.deepEqual(stage.attribute("/World/Rock.count")?.get(), { kind: "scalar", type: "int", value: 3 });
+    // What was read is what an add authors: the first again moves nothing and adds nothing.
+    stage.apply([{ type: "addReference", ...arc, customData: spec.references!.prepended[0]!.customData }]).release();
+    const again = stage.layerSpec(stage.root, "/World/Rock");
+    assert.ok(again !== null && again.type === "prim");
+    assert.equal(again.references?.prepended.length, 3);
+
+    const before = stage.exportLayer(stage.root, "usda");
+    const payload = { path: "/World/Rock", asset: "./spare.usda", primPath: "/Part", customData: note };
+    assert.equal(failure(() => stage.apply([{ type: "addPayload", ...payload }])).code, "argument.invalid");
+    assert.equal(failure(() => stage.apply([{ type: "removePayload", ...payload }])).code, "argument.invalid");
+    assert.equal(failure(() => stage.apply([{ type: "addReference", ...arc, customData: { type: "int", value: 1 } } as unknown as Edit])).code, "value.kind");
+    assert.deepEqual(stage.exportLayer(stage.root, "usda"), before, "a refused edit changes nothing");
+    // `null` is no custom data, which a payload edit may say.
+    stage.apply([{ type: "addPayload", ...payload, customData: null }]).release();
+    const withPayload = stage.layerSpec(stage.root, "/World/Rock");
+    assert.ok(withPayload !== null && withPayload.type === "prim");
+    assert.deepEqual(withPayload.payloads?.prepended, [{ asset: "./spare.usda", primPath: "/Part", layerOffset: { offset: 0, scale: 1 }, customData: null }]);
+  });
+
   it("setVariantSelection, setActive, setInstanceable and setKind", async () => {
     using variant = await roundTrip(
       [{ type: "setVariantSelection", path: "/World", set: "shade", variant: null }],

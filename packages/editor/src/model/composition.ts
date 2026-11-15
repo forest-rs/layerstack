@@ -191,9 +191,14 @@ export function newArcLabel(prim: string, arc: NewArc): string {
   return `add ${arc.kind} ${external ? arcItemText(arc.asset, arc.primPath) : arcItemText(null, arc.primPath)} to ${prim}`;
 }
 
-/** The label of removing `arc` from `prim`. */
+/**
+ * The label of removing `arc` from `prim`, the item named as its line
+ * names it ({@link authoredItemText}): of two references to one asset and
+ * prim, the step says which it removed
+ * (`remove reference @./robot.usda@ (customData = { v = 2 }) from /World/Robot`).
+ */
 export function removeArcLabel(prim: string, arc: AuthoredArc): string {
-  return `remove ${kindOf(arc.field)} ${arcItemText(arc.asset, arc.primPath)} from ${prim}`;
+  return `remove ${kindOf(arc.field)} ${authoredItemText(arc)} from ${prim}`;
 }
 
 /**

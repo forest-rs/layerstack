@@ -1394,6 +1394,18 @@ fn lower_one(
                 layer_offset(*offset, *scale)?,
             )?;
             arc.custom_data = arc_custom_data(batch, store, *payload, *custom_data)?;
+            // An arc the target's list already holds is added as it is
+            // held, so that the add moves that item instead of authoring a
+            // second one. An internal arc names a stage path, which the
+            // transaction maps: as for a removal, the held item stands in
+            // for it only where the target maps the prim to itself.
+            let path_id = prim(path)?;
+            let internal = asset.as_deref().is_none_or(str::is_empty);
+            if (!internal || scope.target.maps_to_itself(path_id, store.paths()))
+                && let Some(held) = held_arc(scope, path_id, *payload, &arc)
+            {
+                arc = held;
+            }
             if *payload {
                 txn.add_payload(at_prim, arc, position);
             } else {
@@ -1975,15 +1987,7 @@ fn authored_arc(
     payload: bool,
     wanted: &Reference,
 ) -> Option<Reference> {
-    let asset = |arc: &Reference| -> Option<String> {
-        match arc.source() {
-            ReferenceSource::Layer { asset, .. } => asset.map(ToString::to_string),
-            ReferenceSource::Asset { path, .. } | ReferenceSource::Unresolved { path } => {
-                Some(path.to_string())
-            }
-            ReferenceSource::Expression { text, .. } => Some(text.to_string()),
-        }
-    };
+    let asset = authored_asset;
     let wanted_asset = asset(wanted);
     let paths = scope.store.paths();
     let layer = scope.target.layer();
@@ -2035,6 +2039,73 @@ fn authored_arc(
         }
     }
     None
+}
+
+/// The asset path an arc was authored with (an expression's text for an
+/// expression arc); `None` for an internal arc.
+fn authored_asset(arc: &Reference) -> Option<String> {
+    match arc.source() {
+        ReferenceSource::Layer { asset, .. } => asset.map(ToString::to_string),
+        ReferenceSource::Asset { path, .. } | ReferenceSource::Unresolved { path } => {
+            Some(path.to_string())
+        }
+        ReferenceSource::Expression { text, .. } => Some(text.to_string()),
+    }
+}
+
+/// The item of the target layer's own list on `path` that is the arc
+/// `wanted` in full (its asset path as authored, its target, its layer
+/// offset and its custom data), as that list holds it; `None` when the
+/// list holds no such item.
+///
+/// An add of an arc a list already holds moves that item to where the
+/// add puts it and authors no second one (OpenUSD's
+/// `UsdReferences::AddReference`, through `Usd_InsertListItem`; a list
+/// holding one item twice is one OpenUSD's text parser refuses to read).
+/// The list finds the item by equality, which covers how the arc was
+/// resolved: an item whose asset the importer resolved as it read the
+/// layer (a layer referencing itself by its asset path) is not equal to
+/// the same arc built from the asset path alone, so the add names the
+/// item as it is held. Only the target layer at the spec path the target
+/// maps `path` to is searched: an asset path is anchored at the layer
+/// that authors it, and an add writes nowhere else.
+///
+/// Spec: AOUSD Core §10.3.2.1 (reference fields), §12.3.2.1 (layer
+/// offsets), §12.4 (list ops), §16.2.17.5 (reference custom data).
+fn held_arc(
+    scope: &Scope<'_>,
+    path: PathId,
+    payload: bool,
+    wanted: &Reference,
+) -> Option<Reference> {
+    let paths = scope.store.paths();
+    let site = scope.target.map_to_spec_path(path, paths)?;
+    let list = authored_arcs(
+        scope.store.layer(scope.target.layer())?,
+        &site,
+        paths,
+        payload,
+    )?;
+    let wanted_asset = authored_asset(wanted);
+    list.explicit
+        .iter()
+        .flatten()
+        .chain(&list.prepend)
+        .chain(&list.append)
+        .chain(&list.add)
+        .chain(&list.delete)
+        .filter(|item| {
+            item.target == wanted.target
+                && item.layer_offset == wanted.layer_offset
+                && authored_asset(item) == wanted_asset
+        })
+        .find(|item| {
+            // The item with the custom data wanted is the item itself.
+            let mut named = (*item).clone();
+            named.custom_data.clone_from(&wanted.custom_data);
+            named == **item
+        })
+        .cloned()
 }
 
 /// The references (or payloads) the prim or variant spec at `site` in
@@ -3527,6 +3598,87 @@ def "Spare" (
             assert_eq!((error.code, error.edit), ("value.kind", Some(0)));
         }
         assert_eq!(text(&stage, target), before, "nothing applied");
+    }
+
+    /// Adding a reference the layer already holds adds no second item: it
+    /// moves the one held to where the add puts it, as OpenUSD's
+    /// `UsdReferences::AddReference` does (`Usd_InsertListItem`; OpenUSD
+    /// 26.11 leaves prepended `{v = 2}`, `{v = 1}` for `{v = 1}` added at
+    /// the back of `{v = 1}`, `{v = 2}`, and its text parser refuses a
+    /// list holding an item twice). That holds for an item whose asset the
+    /// importer resolved as it read the layer (a layer referencing itself
+    /// by its asset path), which the list records by the layer it found.
+    /// AOUSD Core §10.3.2.1, §12.4, §16.2.17.5.
+    #[test]
+    fn adding_a_reference_the_layer_holds_resolved_moves_it() {
+        const SELF: &str = r#"#usda 1.0
+def "A" {
+}
+def "Robot" (
+    prepend references = [
+        @./scene.usda@</A> (customData = {int v = 1}),
+        @./scene.usda@</A> (customData = {int v = 2})
+    ]
+) {
+}
+"#;
+        let prepended = |stage: &Stage| -> Vec<Option<i32>> {
+            let store = stage.document().store();
+            let site = SpecPath::from_prim_path(store.try_path("/Robot").unwrap());
+            authored_arcs(
+                store.layer(root(stage)).unwrap(),
+                &site,
+                store.paths(),
+                false,
+            )
+            .unwrap()
+            .prepend
+            .iter()
+            .map(|arc| match arc.custom_data.as_slice() {
+                [] => None,
+                [(_, FieldValue::Value(Value::Int(v)))] => Some(*v),
+                other => panic!("unexpected custom data: {other:?}"),
+            })
+            .collect()
+        };
+        let add = |stage: &mut Stage, v: Option<i32>, position: &str| {
+            let mut batch = EditBatch::new();
+            let custom_data = v.map(|v| custom_v(&mut batch, v));
+            batch.add_arc(
+                false,
+                "/Robot".into(),
+                Some("./scene.usda".into()),
+                Some("/A".into()),
+                position.into(),
+                0.0,
+                1.0,
+                custom_data,
+            );
+            let target = root(stage);
+            stage.apply(target.0, &mut batch).unwrap()
+        };
+        let mut stage = Stage::open(
+            "scene.usda",
+            SELF.as_bytes().to_vec(),
+            false,
+            false,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
+        assert_eq!(prepended(&stage), [Some(1), Some(2)]);
+        let mut receipt = add(&mut stage, Some(1), "backOfPrepend");
+        assert_eq!(prepended(&stage), [Some(2), Some(1)], "moved, not added");
+        let mut redo = stage.undo(&mut receipt).unwrap();
+        assert_eq!(prepended(&stage), [Some(1), Some(2)], "undo");
+        stage.undo(&mut redo).unwrap();
+        assert_eq!(prepended(&stage), [Some(2), Some(1)], "redo");
+        // Where it already is, nothing changes.
+        add(&mut stage, Some(2), "frontOfPrepend");
+        assert_eq!(prepended(&stage), [Some(2), Some(1)]);
+        // Other custom data, and none, are other references.
+        add(&mut stage, Some(3), "backOfPrepend");
+        add(&mut stage, None, "frontOfPrepend");
+        assert_eq!(prepended(&stage), [None, Some(2), Some(1), Some(3)]);
     }
 
     #[test]

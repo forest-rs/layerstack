@@ -237,6 +237,47 @@ test("an arc authored where edits go that composes nothing is listed: a missing 
   stage.free();
 });
 
+test("two references that differ only by their custom data are two rows, and the one removed is the one named", async () => {
+  // Custom data is part of which item a reference is (OpenUSD's
+  // `SdfReference::operator==`): without it the two rows read alike, and
+  // removing the second removed the first.
+  const layerstack = await loadLayerstack();
+  const pair = `#usda 1.0
+def "Robot" (
+    prepend references = [
+        @./a.usda@</A> (customData = {int v = 1}),
+        @./a.usda@</A> (customData = {string note = "left"; int v = 2; double3 at = (1, 2, 3); dictionary more = {int deep = 1}})
+    ]
+    prepend payload = @./a.usda@</A>
+) {
+}
+`;
+  const stage = layerstack.open({ identifier: "pair.usda", bytes: new TextEncoder().encode(pair) });
+  const lines = () =>
+    specsOf(stage)(stage.root, "/Robot")!.arcs.map((arc) => arcUsda(arc.op, arc.field, authoredItemText(arc)));
+  const both = [
+    "prepend references = @./a.usda@</A> (customData = { v = 1 })",
+    'prepend references = @./a.usda@</A> (customData = { at = …, more = …, note = "left", … })',
+    "prepend payload = @./a.usda@</A>",
+  ];
+  assert.deepEqual(lines(), both, "each row says its custom data, briefly");
+  const [first, second, payload] = specsOf(stage)(stage.root, "/Robot")!.arcs;
+  assert.equal(payload!.customData, null, "a payload has none");
+  // The edit names the item by its custom data, as it was read.
+  const edit = removeArcEdit("/Robot", second!, null);
+  assert.deepEqual(edit, { type: "removeReference", path: "/Robot", asset: "./a.usda", primPath: "/A", customData: second!.customData });
+  assert.deepEqual(removeArcEdit("/Robot", payload!, null), { type: "removePayload", path: "/Robot", asset: "./a.usda", primPath: "/A" });
+  const receipt = stage.apply([edit]);
+  assert.deepEqual(lines(), [both[1]!.replace("prepend", "delete"), both[0], both[2]], "the second leaves, and the first stays with its custom data");
+  const redo = receipt.undo();
+  assert.deepEqual(lines(), both, "undo: both, in order");
+  redo.undo().release();
+  // The first, removed by its own custom data, leaves the second.
+  stage.apply([removeArcEdit("/Robot", first!, null)]).release();
+  assert.deepEqual(specsOf(stage)(stage.root, "/Robot")!.arcs.filter((arc) => arc.op !== "delete").map((arc) => arc.field), ["payload"]);
+  stage.free();
+});
+
 test("the edits and USDA of an added arc, and its removal", () => {
   const reference = { kind: "reference", asset: "./assets/chrome.usda", primPath: "/Chrome", position: "backOfPrepend", offset: 10, scale: 2 } as const;
   assert.deepEqual(addArcEdit("/World/New", reference), {
@@ -258,7 +299,7 @@ test("the edits and USDA of an added arc, and its removal", () => {
   assert.throws(() => addArcEdit("/World/New", { ...inherit, primPath: null }));
   assert.equal(arcItemText("./a.usda", null, 0, 0.5), "@./a.usda@ (scale = 0.5)");
 
-  const authored = { field: "references", op: "prepend", asset: null, primPath: "/Robot/Head", offset: 0, scale: 1, index: 0 } as const;
+  const authored = { field: "references", op: "prepend", asset: null, primPath: "/Robot/Head", offset: 0, scale: 1, customData: null, index: 0 } as const;
   // An internal path in a referenced layer is given as the stage path that writes there.
   assert.deepEqual(removeArcEdit("/World/Robot/Body", authored, { prim: "/World/Robot", site: "/Robot" }), {
     type: "removeReference",

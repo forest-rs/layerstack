@@ -386,8 +386,11 @@ nothing more.
   layer written as text), and its ancestors' for an arc authored above
   the prim: an arc the layer edits go to authors can be removed there (its
   item leaves the list and is deleted from weaker layers', as
-  `RemoveReference` does); one authored elsewhere names that layer, live,
-  and offers to edit there. Any arc offers to edit through it
+  `RemoveReference` does; the item is named in full, by its asset, prim,
+  layer offset and, for a reference, its custom data, which its line
+  shows in brief, so of two references that differ only by their custom
+  data the one removed is the one clicked); one authored elsewhere names
+  that layer, live, and offers to edit there. Any arc offers to edit through it
   (`CompositionArc.editTarget`), which the toolbar's target then names by
   its arc and layer. **Add** authors a reference or payload (the layer
   chosen from those the scene's source lists and the stage holds, offered

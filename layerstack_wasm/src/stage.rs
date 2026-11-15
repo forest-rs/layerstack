@@ -4892,6 +4892,7 @@ def "World" (
             Some("/Ball".into()),
             0.0,
             1.0,
+            None,
         );
         stage.apply(root.0, &mut batch).unwrap();
         let record = stage.save(None).unwrap();
@@ -5709,6 +5710,7 @@ def "Lone" (
             "backOfPrepend".into(),
             0.0,
             1.0,
+            None,
         );
         let root = stage.document().stage().stage().root_layer().unwrap();
         stage.apply(root.0, &mut batch).unwrap();
@@ -5807,6 +5809,7 @@ def "Lone" (
             "frontOfPrepend".into(),
             0.0,
             1.0,
+            None,
         );
         let root = stage.document().stage().stage().root_layer().unwrap();
         stage.apply(root.0, &mut batch).unwrap();

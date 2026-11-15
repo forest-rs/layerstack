@@ -18,6 +18,7 @@
 use alloc::{
     format,
     string::{String, ToString},
+    sync::Arc,
     vec::Vec,
 };
 
@@ -115,6 +116,8 @@ pub(crate) enum EditInput {
         scales: Vec<f64>,
     },
     /// `UsdReferences::AddReference` / `UsdPayloads::AddPayload`.
+    /// `custom_data` is the value slot of a reference's custom data
+    /// dictionary; a payload has none.
     AddArc {
         payload: bool,
         path: String,
@@ -123,8 +126,11 @@ pub(crate) enum EditInput {
         position: String,
         offset: f64,
         scale: f64,
+        custom_data: Option<u32>,
     },
     /// `UsdReferences::RemoveReference` / `UsdPayloads::RemovePayload`.
+    /// `custom_data` is the value slot of the custom data dictionary of
+    /// the reference to remove; a payload has none.
     RemoveArc {
         payload: bool,
         path: String,
@@ -132,6 +138,7 @@ pub(crate) enum EditInput {
         prim_path: Option<String>,
         offset: f64,
         scale: f64,
+        custom_data: Option<u32>,
     },
     /// `UsdInherits::AddInherit`, or `UsdSpecializes::AddSpecialize`
     /// with `specialize`.
@@ -516,7 +523,11 @@ impl EditBatch {
     }
 
     /// Pushes an `addPayload` edit when `payload`, else an
-    /// `addReference` edit.
+    /// `addReference` edit. `custom_data` is the slot of a `dictionary`
+    /// value, the reference's custom data (OpenUSD's
+    /// `SdfReference::GetCustomData`); none authors a reference without
+    /// any, and a payload, which has no custom data, with one is refused
+    /// when the batch is applied.
     #[wasm_bindgen(js_name = addArc)]
     pub fn add_arc(
         &mut self,
@@ -527,6 +538,7 @@ impl EditBatch {
         position: String,
         offset: f64,
         scale: f64,
+        custom_data: Option<u32>,
     ) {
         self.edits.push(EditInput::AddArc {
             payload,
@@ -536,13 +548,17 @@ impl EditBatch {
             position,
             offset,
             scale,
+            custom_data,
         });
     }
 
     /// Pushes a `removePayload` edit when `payload`, else a
     /// `removeReference` edit: of the arc to `asset` and `prim_path` at
-    /// the layer offset `offset` and `scale`, which is part of what the
-    /// arc is (OpenUSD's `SdfReference::operator==`).
+    /// the layer offset `offset` and `scale` with the custom data in the
+    /// `dictionary` slot `custom_data` (none is a reference without any),
+    /// all of which are part of what the arc is (OpenUSD's
+    /// `SdfReference::operator==`). A payload, which has no custom data,
+    /// with one is refused when the batch is applied.
     #[wasm_bindgen(js_name = removeArc)]
     pub fn remove_arc(
         &mut self,
@@ -552,6 +568,7 @@ impl EditBatch {
         prim_path: Option<String>,
         offset: f64,
         scale: f64,
+        custom_data: Option<u32>,
     ) {
         self.edits.push(EditInput::RemoveArc {
             payload,
@@ -560,6 +577,7 @@ impl EditBatch {
             prim_path,
             offset,
             scale,
+            custom_data,
         });
     }
 
@@ -1365,15 +1383,17 @@ fn lower_one(
             position,
             offset,
             scale,
+            custom_data,
         } => {
             let at_prim = at.prim(prim(path)?);
             let position = list_position(position)?;
-            let arc = arc(
+            let mut arc = arc(
                 scope,
                 asset.as_deref(),
                 prim_path.as_deref(),
                 layer_offset(*offset, *scale)?,
             )?;
+            arc.custom_data = arc_custom_data(batch, store, *payload, *custom_data)?;
             if *payload {
                 txn.add_payload(at_prim, arc, position);
             } else {
@@ -1387,14 +1407,16 @@ fn lower_one(
             prim_path,
             offset,
             scale,
+            custom_data,
         } => {
             let path_id = prim(path)?;
-            let built = arc(
+            let mut built = arc(
                 scope,
                 asset.as_deref(),
                 prim_path.as_deref(),
                 layer_offset(*offset, *scale)?,
             )?;
+            built.custom_data = arc_custom_data(batch, store, *payload, *custom_data)?;
             // An internal arc names a stage path, which the transaction maps;
             // the authored item, in the layer's namespace, stands in for it
             // only where the target maps the prim to itself.
@@ -1703,6 +1725,43 @@ fn list_position(name: &str) -> Result<ListPosition, Error> {
     })
 }
 
+/// The custom data of the reference an add or remove names: the entries
+/// of the `dictionary` in the value slot `slot`, or none without a slot,
+/// as a default `SdfReference` has none. Custom data is the fourth part
+/// of a reference, beside its asset path, prim path and layer offset; a
+/// payload has only those three, so custom data for one is refused.
+///
+/// Spec: AOUSD Core §10.3.2.1 (reference fields), §10.3.2.2 (payload
+/// fields), §16.2.17.5 (reference custom data).
+///
+/// # Errors
+///
+/// `argument.invalid` for a payload's; `value.kind` for a value that is
+/// not a `dictionary`; the errors of [`value::decode_slot`].
+fn arc_custom_data(
+    batch: &EditBatch,
+    store: &InMemoryStore,
+    payload: bool,
+    slot: Option<u32>,
+) -> Result<Vec<(Arc<str>, FieldValue)>, Error> {
+    let Some(slot) = slot else {
+        return Ok(Vec::new());
+    };
+    if payload {
+        return Err(Error::new(
+            "argument.invalid",
+            "a payload has no custom data: only a reference carries `customData`",
+        ));
+    }
+    match value::decode_slot(&batch.values, slot, store.tokens())? {
+        Value::Dictionary(entries) => Ok(entries),
+        _ => Err(Error::new(
+            "value.kind",
+            "a reference's `customData` is a `dictionary`",
+        )),
+    }
+}
+
 /// A layer offset of an arc or sublayer: a finite offset and a finite,
 /// positive scale.
 ///
@@ -1884,19 +1943,26 @@ fn arc(
     Ok(arc)
 }
 
-/// The arc a layer of the target's layer stack authors on `path` that
-/// is the one `wanted` names (its asset path as authored, its target and
-/// its layer offset), as it is authored: a removal must name the authored
-/// item, which records how the arc was resolved, not only what was
-/// written. Two arcs to one asset and prim at different offsets are two
-/// items (OpenUSD's `SdfReference::operator==` and
-/// `SdfPayload::operator==` compare the layer offset), so an arc at
-/// another offset is never taken for the one wanted. A reference's custom
-/// data, which no edit here authors or names, does not tell items apart:
-/// among those that match, one without custom data is preferred.
+/// The arc `wanted` names (its asset path as authored, its target, its
+/// layer offset and its custom data), as a layer of the target's layer
+/// stack authors an arc to that asset, target and offset on `path`: a
+/// removal must name the authored item, which records how the arc was
+/// resolved, not only what was written.
+///
+/// An arc is all four together. Two arcs to one asset and prim at
+/// different offsets, or two references that differ by their custom data
+/// alone, are two items (OpenUSD's `SdfReference::operator==` compares
+/// the asset path, prim path, layer offset and custom data;
+/// `SdfPayload::operator==` the first three, a payload having no custom
+/// data), so an arc at another offset is never taken for the one wanted,
+/// and the arc returned always carries the custom data wanted: the item
+/// that has it when a list holds one, else the arc as it would be
+/// authored beside the one found, which no list holds and a removal
+/// therefore only adds to the deleted items, as OpenUSD's
+/// `UsdReferences::RemoveReference` does.
 ///
 /// Spec: AOUSD Core §10.3.2.1 (reference fields), §12.3.2.1 (layer
-/// offsets), §12.4 (list ops).
+/// offsets), §12.4 (list ops), §16.2.17.5 (reference custom data).
 ///
 /// The target layer is searched first, then the other layers of its
 /// stack, at the spec path the target maps `path` to (`/Robot` through a
@@ -1939,25 +2005,32 @@ fn authored_arc(
             else {
                 continue;
             };
-            let same = || {
-                list.explicit
-                    .iter()
-                    .flatten()
-                    .chain(&list.prepend)
-                    .chain(&list.append)
-                    .chain(&list.add)
-                    .chain(&list.delete)
-                    .filter(|arc| {
-                        arc.target == wanted.target
-                            && arc.layer_offset == wanted.layer_offset
-                            && asset(arc) == wanted_asset
-                    })
-            };
-            let found = same()
-                .find(|arc| arc.custom_data.is_empty())
-                .or_else(|| same().next());
-            if let Some(found) = found {
-                return Some(found.clone());
+            let items = list
+                .explicit
+                .iter()
+                .flatten()
+                .chain(&list.prepend)
+                .chain(&list.append)
+                .chain(&list.add)
+                .chain(&list.delete)
+                .filter(|arc| {
+                    arc.target == wanted.target
+                        && arc.layer_offset == wanted.layer_offset
+                        && asset(arc) == wanted_asset
+                });
+            // Each item as it would be with the custom data wanted: the
+            // first that is an item of the list, else the first.
+            let mut beside = None;
+            for item in items {
+                let mut named = item.clone();
+                named.custom_data.clone_from(&wanted.custom_data);
+                if named == *item {
+                    return Some(named);
+                }
+                beside.get_or_insert(named);
+            }
+            if beside.is_some() {
+                return beside;
             }
         }
     }
@@ -3093,6 +3166,7 @@ def "Spare" (
             "frontOfPrepend".into(),
             0.0,
             1.0,
+            None,
         );
         round_trip(batch, |stage| {
             assert_eq!(
@@ -3109,6 +3183,7 @@ def "Spare" (
             "backOfAppend".into(),
             0.0,
             1.0,
+            None,
         );
         let stage = round_trip(batch, |stage| {
             assert_eq!(
@@ -3126,6 +3201,7 @@ def "Spare" (
             Some("/Part".into()),
             0.0,
             1.0,
+            None,
         );
         round_trip(batch, |stage| {
             assert_eq!(stage.get("/Spare.count", None).unwrap(), Wire::Null);
@@ -3185,6 +3261,7 @@ def "Spare" (
                             "backOfPrepend".into(),
                             offset,
                             scale,
+                            None,
                         );
                     }
                     stage.apply(target.0, &mut batch).unwrap();
@@ -3207,6 +3284,7 @@ def "Spare" (
                         Some("/Part".into()),
                         offset,
                         scale,
+                        None,
                     );
                     let mut receipt = stage.apply(target.0, &mut batch).unwrap();
                     let after = rock_arcs(&stage, payload);
@@ -3243,6 +3321,7 @@ def "Spare" (
             "backOfPrepend".into(),
             24.0,
             1.0,
+            None,
         );
         batch.remove_arc(
             false,
@@ -3251,6 +3330,7 @@ def "Spare" (
             Some("/Part".into()),
             0.0,
             1.0,
+            None,
         );
         stage.apply(target.0, &mut batch).unwrap();
         assert_eq!(
@@ -3260,6 +3340,193 @@ def "Spare" (
                 "prepend references = @./spare.usda@</Part> (offset = 24)"
             ]
         );
+    }
+
+    /// The slot of a custom data dictionary `{int v = <v>}` in `batch`.
+    fn custom_v(batch: &mut EditBatch, v: i32) -> u32 {
+        let slot = numbers(batch, "int", &[f64::from(v)]);
+        batch.value_dictionary("dictionary".into(), vec!["v".into()], vec![slot])
+    }
+
+    /// Pushes onto `batch` the reference of `/World/Rock` to
+    /// `@./spare.usda@</Part>` with the custom data `{int v = <v>}`, or
+    /// without any: added at the back of the prepended items when `add`,
+    /// else removed.
+    fn rock_reference(batch: &mut EditBatch, add: bool, v: Option<i32>) {
+        let custom_data = v.map(|v| custom_v(batch, v));
+        let (path, asset, prim_path) = (
+            "/World/Rock".into(),
+            Some("./spare.usda".into()),
+            Some("/Part".into()),
+        );
+        if add {
+            let position = "backOfPrepend".into();
+            batch.add_arc(
+                false,
+                path,
+                asset,
+                prim_path,
+                position,
+                0.0,
+                1.0,
+                custom_data,
+            );
+        } else {
+            batch.remove_arc(false, path, asset, prim_path, 0.0, 1.0, custom_data);
+        }
+    }
+
+    /// The prepended and the deleted references of `/World/Rock` in the
+    /// root layer, each as the `v` of its custom data (`None` without any).
+    #[derive(Debug, PartialEq)]
+    struct RockReferences {
+        prepended: Vec<Option<i32>>,
+        deleted: Vec<Option<i32>>,
+    }
+
+    fn rock_references(stage: &Stage) -> RockReferences {
+        let store = stage.document().store();
+        let site = SpecPath::from_prim_path(store.try_path("/World/Rock").unwrap());
+        let list = authored_arcs(
+            store.layer(root(stage)).unwrap(),
+            &site,
+            store.paths(),
+            false,
+        )
+        .unwrap();
+        let v = |arc: &Reference| match arc.custom_data.as_slice() {
+            [] => None,
+            [(key, FieldValue::Value(Value::Int(v)))] if &**key == "v" => Some(*v),
+            other => panic!("unexpected custom data: {other:?}"),
+        };
+        RockReferences {
+            prepended: list.prepend.iter().map(v).collect(),
+            deleted: list.delete.iter().map(v).collect(),
+        }
+    }
+
+    /// Two references to one asset, prim and layer offset that differ by
+    /// their custom data alone are two items, and a removal takes the one
+    /// whose custom data it names: OpenUSD's `SdfReference::operator==`
+    /// compares the custom data, and `UsdReferences::RemoveReference`
+    /// removes the item equal to the one given (OpenUSD 26.11 leaves
+    /// `prepend [{v = 1}]`, `delete [{v = 2}]` for the second of the pair).
+    /// AOUSD Core §10.3.2.1, §12.4, §16.2.17.5.
+    #[test]
+    fn removing_a_reference_takes_the_one_with_its_custom_data() {
+        for (gone, kept) in [(2, 1), (1, 2)] {
+            let mut stage = open();
+            let target = root(&stage);
+            let mut batch = EditBatch::new();
+            rock_reference(&mut batch, true, Some(1));
+            rock_reference(&mut batch, true, Some(2));
+            stage.apply(target.0, &mut batch).unwrap();
+            let both = RockReferences {
+                prepended: vec![Some(1), Some(2)],
+                deleted: vec![],
+            };
+            assert_eq!(rock_references(&stage), both, "two items, as authored");
+
+            let mut batch = EditBatch::new();
+            rock_reference(&mut batch, false, Some(gone));
+            let mut receipt = stage.apply(target.0, &mut batch).unwrap();
+            let after = RockReferences {
+                prepended: vec![Some(kept)],
+                deleted: vec![Some(gone)],
+            };
+            assert_eq!(
+                rock_references(&stage),
+                after,
+                "the one named leaves, deleted with its custom data, and the other stays"
+            );
+            let mut redo = stage.undo(&mut receipt).unwrap();
+            assert_eq!(rock_references(&stage), both, "undo: both, in order");
+            stage.undo(&mut redo).unwrap();
+            assert_eq!(rock_references(&stage), after, "redo");
+        }
+    }
+
+    /// A removal whose custom data no item has deletes the reference it
+    /// names, custom data included, and leaves the others; without custom
+    /// data it names the reference that has none, as a default
+    /// `SdfReference` does. OpenUSD 26.11's `RemoveReference` authors
+    /// `delete [{v = 3}]` and `delete [{}]` beside the untouched pair.
+    #[test]
+    fn removing_a_reference_with_other_custom_data_leaves_those_authored() {
+        for named in [Some(3), None] {
+            let mut stage = open();
+            let target = root(&stage);
+            let mut batch = EditBatch::new();
+            rock_reference(&mut batch, true, Some(1));
+            rock_reference(&mut batch, true, Some(2));
+            rock_reference(&mut batch, false, named);
+            stage.apply(target.0, &mut batch).unwrap();
+            assert_eq!(
+                rock_references(&stage),
+                RockReferences {
+                    prepended: vec![Some(1), Some(2)],
+                    deleted: vec![named],
+                }
+            );
+        }
+        // An empty dictionary is no custom data.
+        let mut stage = open();
+        let target = root(&stage);
+        let mut batch = EditBatch::new();
+        rock_reference(&mut batch, true, None);
+        let empty = batch.value_dictionary("dictionary".into(), vec![], vec![]);
+        batch.remove_arc(
+            false,
+            "/World/Rock".into(),
+            Some("./spare.usda".into()),
+            Some("/Part".into()),
+            0.0,
+            1.0,
+            Some(empty),
+        );
+        stage.apply(target.0, &mut batch).unwrap();
+        assert_eq!(
+            rock_references(&stage),
+            RockReferences {
+                prepended: vec![],
+                deleted: vec![None],
+            }
+        );
+    }
+
+    /// A payload has no custom data (`SdfPayload` is an asset path, a prim
+    /// path and a layer offset), and custom data is a dictionary.
+    #[test]
+    fn custom_data_is_a_dictionary_and_only_a_reference_has_it() {
+        let mut stage = open();
+        let target = root(&stage);
+        let before = text(&stage, target);
+        for add in [true, false] {
+            let mut batch = EditBatch::new();
+            let custom_data = Some(custom_v(&mut batch, 1));
+            let (path, asset) = ("/World/Rock".into(), Some("./spare.usda".into()));
+            if add {
+                let position = "backOfPrepend".into();
+                batch.add_arc(true, path, asset, None, position, 0.0, 1.0, custom_data);
+            } else {
+                batch.remove_arc(true, path, asset, None, 0.0, 1.0, custom_data);
+            }
+            let error = stage.apply(target.0, &mut batch).unwrap_err();
+            assert_eq!((error.code, error.edit), ("argument.invalid", Some(0)));
+
+            let mut batch = EditBatch::new();
+            let number = numbers(&mut batch, "int", &[1.0]);
+            let (path, asset) = ("/World/Rock".into(), Some("./spare.usda".into()));
+            if add {
+                let position = "backOfPrepend".into();
+                batch.add_arc(false, path, asset, None, position, 0.0, 1.0, Some(number));
+            } else {
+                batch.remove_arc(false, path, asset, None, 0.0, 1.0, Some(number));
+            }
+            let error = stage.apply(target.0, &mut batch).unwrap_err();
+            assert_eq!((error.code, error.edit), ("value.kind", Some(0)));
+        }
+        assert_eq!(text(&stage, target), before, "nothing applied");
     }
 
     #[test]
@@ -3773,6 +4040,7 @@ def Xform "Robot" {
             "backOfPrepend".into(),
             0.0,
             1.0,
+            None,
         );
         // A root prim path is authored as given (OpenUSD's `_TranslatePath`).
         batch.add_arc(
@@ -3783,6 +4051,7 @@ def Xform "Robot" {
             "backOfAppend".into(),
             0.0,
             1.0,
+            None,
         );
         batch.remove_arc(
             false,
@@ -3791,6 +4060,7 @@ def Xform "Robot" {
             Some("/World/Robot/Head".into()),
             0.0,
             1.0,
+            None,
         );
         // An external arc is removed as the asset authors it.
         batch.remove_arc(
@@ -3800,6 +4070,7 @@ def Xform "Robot" {
             None,
             0.0,
             1.0,
+            None,
         );
         stage.apply_through(&target, &mut batch).unwrap();
         let after = text(&stage, robot);
@@ -3927,6 +4198,7 @@ def Xform "Robot" {
             None,
             0.0,
             1.0,
+            None,
         );
         stage.apply_through(&target, &mut batch).unwrap();
         let after = text(&stage, scene);

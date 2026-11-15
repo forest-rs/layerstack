@@ -28,7 +28,7 @@ use layerstack::{
     VariantSpec, get_field,
 };
 
-use crate::{error::Error, stage::Stage, wire::Wire};
+use crate::{error::Error, stage::Stage, value, wire::Wire};
 
 /// A prim spec or a variant spec: the two hold the same kinds of fields
 /// (AOUSD Core §7.6.7: a variant spec contributes prim spec fields).
@@ -214,7 +214,8 @@ impl Stage {
     ///   `instanceable`, `documentation`, then the list ops `references`,
     ///   `payload`, `inheritPaths`, `specializes`, `apiSchemas`,
     ///   `variantSetNames` (each `null` when not authored; a reference or
-    ///   payload item is `[asset, primPath, offset, scale]`), the variant
+    ///   payload item is `[asset, primPath, offset, scale, customData]`,
+    ///   as [`Self::reference_item`] encodes it), the variant
     ///   selections `[[set, variant], ...]` sorted by set (`null` for
     ///   none), the variant sets `[[set, [variant, ...]], ...]` in
     ///   authored order, child prim names and property names in authored
@@ -430,9 +431,18 @@ impl Stage {
     }
 
     /// A reference or payload item authored in the layer `authoring`:
-    /// `[asset, primPath, offset, scale]`, `asset` as authored (`null` for
-    /// an internal arc; the identifier of the layer for an arc built
-    /// natively by layer alone) and `primPath` `null` for the default prim.
+    /// `[asset, primPath, offset, scale, customData]`, `asset` as authored
+    /// (`null` for an internal arc; the identifier of the layer for an arc
+    /// built natively by layer alone), `primPath` `null` for the default
+    /// prim, and `customData` a reference's custom data as a `dictionary`
+    /// value record (`null` without any, and for a payload, which has
+    /// none). The four are what OpenUSD's `SdfReference::operator==`
+    /// compares, so two items that differ in any of them read apart. The
+    /// custom data is the one value a spec record decodes: it is part of
+    /// which item this is, and small.
+    ///
+    /// Spec: AOUSD Core §10.3.2.1 (reference fields), §16.2.17.5
+    /// (reference custom data).
     fn reference_item(&self, authoring: LayerId, item: &Reference) -> Wire {
         let store = self.document().store();
         let target_layer = match item.source() {
@@ -448,11 +458,25 @@ impl Stage {
             ReferenceTarget::Prim(path) => Wire::Text(store.paths().display(path, store.tokens())),
             ReferenceTarget::DefaultPrim => Wire::Null,
         };
+        let custom_data = if item.custom_data.is_empty() {
+            Wire::Null
+        } else {
+            // Entries that do not decode leave the dictionary opaque.
+            value::encode(
+                &Value::Dictionary(item.custom_data.clone()),
+                None,
+                store.tokens(),
+            )
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| value::opaque("dictionary"))
+        };
         Wire::List(vec![
             Wire::text_or_null(asset),
             prim_path,
             Wire::Number(item.layer_offset.offset),
             Wire::Number(item.layer_offset.scale),
+            custom_data,
         ])
     }
 }
@@ -643,6 +667,7 @@ def Xform "World" (
             Wire::text_or_null(prim),
             Wire::Number(offset),
             Wire::Number(scale),
+            Wire::Null,
         ])
     }
 
@@ -945,6 +970,80 @@ def Xform "World" (
         }
         let error = stage.layer_spec(u64::MAX, "/").unwrap_err();
         assert_eq!(error.code, "layer.unknown");
+    }
+
+    /// Two references that differ by their custom data alone are two
+    /// items (OpenUSD's `SdfReference::operator==` compares it), and each
+    /// reads with its own; one without any, and a payload, which has none,
+    /// read `null`. AOUSD Core §10.3.2.1, §16.2.17.5.
+    #[test]
+    fn a_reference_item_carries_its_custom_data() {
+        const PAIR: &str = r#"#usda 1.0
+def "Robot" (
+    prepend references = [
+        @./a.usda@</A> (customData = {int v = 1}),
+        @./a.usda@</A> (customData = {string note = "spare"; int v = 2}),
+        @./a.usda@</A>
+    ]
+    prepend payload = @./a.usda@</A>
+) {
+}
+"#;
+        let stage = Stage::open(
+            "pair.usda",
+            PAIR.as_bytes().to_vec(),
+            false,
+            false,
+            BROWSER_LIMITS,
+        )
+        .unwrap();
+        let spec = stage.layer_spec(root(&stage), "/Robot").unwrap();
+        let fields = list(&spec);
+        let entry = |key: &str, type_name: &str, value: Wire| {
+            Wire::List(vec![
+                text(key),
+                Wire::List(vec![text(type_name), text("s"), value]),
+            ])
+        };
+        let item = |custom_data: Option<Vec<Wire>>| {
+            Wire::List(vec![
+                text("./a.usda"),
+                text("/A"),
+                Wire::Number(0.0),
+                Wire::Number(1.0),
+                custom_data.map_or(Wire::Null, |entries| {
+                    Wire::List(vec![text("dictionary"), text("d"), Wire::List(entries)])
+                }),
+            ])
+        };
+        assert_eq!(
+            fields[9],
+            op(
+                None,
+                Lists {
+                    prepended: vec![
+                        item(Some(vec![entry("v", "int", Wire::Number(1.0))])),
+                        item(Some(vec![
+                            entry("note", "string", text("spare")),
+                            entry("v", "int", Wire::Number(2.0)),
+                        ])),
+                        item(None),
+                    ],
+                    ..Lists::none()
+                }
+            )
+        );
+        assert_eq!(
+            fields[10],
+            op(
+                None,
+                Lists {
+                    prepended: vec![item(None)],
+                    ..Lists::none()
+                }
+            ),
+            "a payload has no custom data"
+        );
     }
 
     #[test]

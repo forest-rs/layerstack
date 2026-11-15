@@ -1387,24 +1387,43 @@ pub struct Reference {
     pub(crate) deferred: bool,
 }
 
+/// Whether two dictionaries hold the same entries: the same keys, in any
+/// order, each with the same value, and a value that is itself a
+/// dictionary compared the same way at any depth. A dictionary has no
+/// entry order (OpenUSD's `VtDictionary` is a map sorted by key, and its
+/// `operator==` compares the entries), while one read from text keeps the
+/// order it was written in. Other values compare as authored state, bit
+/// for bit.
+///
+/// Spec: AOUSD Core §6.2 (dictionary), §16.2.17.5 (reference custom data).
+fn same_entries(a: &[(Arc<str>, FieldValue)], b: &[(Arc<str>, FieldValue)]) -> bool {
+    use crate::edit::same::Same;
+    a.len() == b.len()
+        && a.iter().all(|(key, value)| {
+            b.iter()
+                .find(|(other, _)| other == key)
+                .is_some_and(|(_, other)| match (value, other) {
+                    (
+                        FieldValue::Value(Value::Dictionary(value)),
+                        FieldValue::Value(Value::Dictionary(other)),
+                    ) => same_entries(value, other),
+                    _ => value.same(other),
+                })
+        })
+}
+
 // Reference list identity must be reflexive even for metadata NaNs, just as
-// LayerOffset compares authored bits. AOUSD Core §10.3.2.1, §16.2.17.5.
+// LayerOffset compares authored bits, and custom data is a dictionary, whose
+// entries have no order at any depth (OpenUSD's `SdfReference::operator==`
+// compares the `VtDictionary`). AOUSD Core §10.3.2.1, §16.2.17.5.
 impl PartialEq for Reference {
     fn eq(&self, other: &Self) -> bool {
-        use crate::edit::same::Same;
         self.layer == other.layer
             && self.deferred == other.deferred
             && self.target == other.target
             && self.asset == other.asset
             && self.layer_offset == other.layer_offset
-            && self.custom_data.len() == other.custom_data.len()
-            && self.custom_data.iter().all(|(k, v)| {
-                other
-                    .custom_data
-                    .iter()
-                    .find(|(key, _)| key == k)
-                    .is_some_and(|(_, value)| v.same(value))
-            })
+            && same_entries(&self.custom_data, &other.custom_data)
     }
 }
 impl Eq for Reference {}
@@ -5818,6 +5837,73 @@ mod tests {
         assert_eq!(localized.layer_offset, at(2.0));
         assert_eq!(localized.custom_data.len(), 1);
         assert!(!localized.is_unresolved());
+    }
+
+    /// A reference's custom data is a dictionary, which has no entry
+    /// order at any depth: OpenUSD's `SdfReference::operator==` compares
+    /// `VtDictionary`s, maps sorted by key, so `RemoveReference` of
+    /// `{dictionary m = {int b = 2; int q = 1}}` removes the item a layer
+    /// writes `{dictionary m = {int q = 1; int b = 2}}` (OpenUSD 26.11),
+    /// and a stronger layer's delete written one way removes a weaker
+    /// layer's item written the other. A differing value, however deep,
+    /// is another reference. AOUSD Core §10.3.2.1, §16.2.17.5.
+    #[test]
+    fn references_compare_nested_custom_data_in_any_key_order() {
+        let int = |v: i32| FieldValue::from(Value::Int(v));
+        let nested =
+            |entries: Vec<(&'static str, FieldValue)>| FieldValue::from(Value::dictionary(entries));
+        let reference = |custom_data: Vec<(&'static str, FieldValue)>| {
+            Reference::with_asset_default_prim(LayerId(2), "./a.usda").with_custom_data(
+                custom_data
+                    .into_iter()
+                    .map(|(key, value)| (Arc::from(key), value))
+                    .collect(),
+            )
+        };
+        let written = reference(vec![
+            ("z", int(1)),
+            (
+                "i",
+                nested(vec![
+                    ("z", int(1)),
+                    ("m", nested(vec![("q", int(1)), ("b", int(2))])),
+                ]),
+            ),
+        ]);
+        let sorted = reference(vec![
+            (
+                "i",
+                nested(vec![
+                    ("m", nested(vec![("b", int(2)), ("q", int(1))])),
+                    ("z", int(1)),
+                ]),
+            ),
+            ("z", int(1)),
+        ]);
+        assert_eq!(written, sorted);
+        assert_eq!(sorted, written);
+        let other = reference(vec![
+            (
+                "i",
+                nested(vec![
+                    ("m", nested(vec![("b", int(3)), ("q", int(1))])),
+                    ("z", int(1)),
+                ]),
+            ),
+            ("z", int(1)),
+        ]);
+        assert_ne!(written, other, "a value two dictionaries deep differs");
+        let fewer = reference(vec![
+            ("i", nested(vec![("m", nested(vec![("b", int(2))]))])),
+            ("z", int(1)),
+        ]);
+        assert_ne!(written, fewer);
+        // Still reflexive for a NaN, at any depth.
+        let nan = reference(vec![(
+            "i",
+            nested(vec![("n", FieldValue::from(Value::Double(f64::NAN)))]),
+        )]);
+        assert_eq!(nan, nan.clone());
     }
     use alloc::format;
     use alloc::sync::Arc;

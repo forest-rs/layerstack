@@ -93,19 +93,44 @@ function number(value: number): string {
   return Number.isInteger(value) ? String(value) : String(Number(value.toPrecision(12)));
 }
 
-/** An arc item as USDA writes it: `@./robot.usda@</Robot> (offset = 10; scale = 2)`, `</Shape>`. */
-export function arcItemText(asset: string | null, primPath: string | null, offset = 0, scale = 1): string {
+/** How many entries of a reference's custom data {@link customDataNote} names. */
+const NOTED_ENTRIES = 3;
+
+/**
+ * A reference's custom data in brief, enough to tell two references to
+ * one asset and prim apart: its first entries by key, a scalar with its
+ * value and any other value elided (`{ note = "left", v = 2, … }`). Not
+ * USDA: the layer's text has the dictionary in full.
+ */
+export function customDataNote(customData: NonNullable<AuthoredArc["customData"]>): string {
+  const keys = [...customData.value.keys()].sort();
+  const entries = keys.slice(0, NOTED_ENTRIES).map((key) => {
+    const value = customData.value.get(key);
+    const scalar = value?.kind === "scalar" ? value.value : undefined;
+    const text = scalar === undefined ? "…" : typeof scalar === "string" ? JSON.stringify(scalar) : typeof scalar === "number" ? number(scalar) : String(scalar);
+    return `${key} = ${text}`;
+  });
+  if (keys.length > NOTED_ENTRIES) entries.push("…");
+  return `{ ${entries.join(", ")} }`;
+}
+
+/**
+ * An arc item as USDA writes it: `@./robot.usda@</Robot> (offset = 10; scale = 2)`, `</Shape>`;
+ * a reference's custom data in brief ({@link customDataNote}): `@./robot.usda@ (customData = { v = 1 })`.
+ */
+export function arcItemText(asset: string | null, primPath: string | null, offset = 0, scale = 1, customData: AuthoredArc["customData"] = null): string {
   const parts: string[] = [];
   if (offset !== 0) parts.push(`offset = ${number(offset)}`);
   if (scale !== 1) parts.push(`scale = ${number(scale)}`);
+  if (customData !== null) parts.push(`customData = ${customDataNote(customData)}`);
   const at = asset === null ? "" : `@${asset}@`;
   const path = primPath === null ? "" : `<${primPath}>`;
   return `${at}${path}${parts.length === 0 ? "" : ` (${parts.join("; ")})`}`;
 }
 
-/** An authored arc's item as USDA writes it. */
+/** An authored arc's item as USDA writes it, a reference's custom data in brief: what tells it from the other items of its list. */
 export function authoredItemText(arc: AuthoredArc): string {
-  return arcItemText(arc.asset, arc.primPath, arc.offset, arc.scale);
+  return arcItemText(arc.asset, arc.primPath, arc.offset, arc.scale, arc.customData);
 }
 
 /** One arc list op entry as USDA writes it: `prepend references = @./robot.usda@`. */
@@ -193,9 +218,10 @@ export function stagePathOf(target: Pick<EditTarget, "prim" | "site"> | null, sp
  * removes it from weaker layers too. An internal path is given as the
  * stage path the target writes there ({@link stagePathOf}). A reference
  * or payload is named with the layer offset the layer authors for it,
- * which is part of what the item is (OpenUSD's
- * `SdfReference::operator==`): of two arcs to one asset and prim at
- * different offsets, the one at this offset is removed.
+ * and a reference with its custom data, which are part of what the item
+ * is (OpenUSD's `SdfReference::operator==`): of two arcs to one asset
+ * and prim at different offsets, or with different custom data, the one
+ * given is removed.
  */
 export function removeArcEdit(prim: string, arc: AuthoredArc, target: Pick<EditTarget, "prim" | "site"> | null): Edit {
   const primPath = arc.primPath === null ? null : arc.asset === null ? stagePathOf(target, arc.primPath) : arc.primPath;
@@ -208,6 +234,7 @@ export function removeArcEdit(prim: string, arc: AuthoredArc, target: Pick<EditT
     ...(arc.asset === null ? {} : { asset: arc.asset }),
     ...(primPath === null ? {} : { primPath }),
     ...(arc.offset === 0 && arc.scale === 1 ? {} : { layerOffset: { offset: arc.offset, scale: arc.scale } }),
+    ...(arc.field === "references" && arc.customData !== null ? { customData: arc.customData } : {}),
   };
 }
 

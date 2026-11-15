@@ -31,6 +31,14 @@ export interface AuthoredArc {
   /** The layer offset across a reference or payload; identity when none is authored. */
   readonly offset: number;
   readonly scale: number;
+  /**
+   * A reference's custom data, as the layer authors it; `null` without
+   * any, and for a payload or a class arc, which have none. It is part of
+   * which item a reference is (OpenUSD's `SdfReference::operator==`
+   * compares it): two references to one asset, prim and offset that
+   * differ by it are two items.
+   */
+  readonly customData: AuthoredReference["customData"];
   /** Its place among the arcs of its spec ({@link AuthoredSpec.arcs}): what tells two equal items of one spec apart. */
   readonly index: number;
 }
@@ -59,14 +67,20 @@ const LISTS: readonly (readonly [keyof ListOp<unknown>, ListOpKind])[] = [
 /** The arcs `spec` authors, as {@link AuthoredSpec.arcs} lists them. */
 export function arcsOf(spec: PrimSpec): AuthoredArc[] {
   const arcs: AuthoredArc[] = [];
-  const add = <T>(field: ArcField, op: ListOp<T> | null, item: (value: T) => Pick<AuthoredArc, "asset" | "primPath" | "offset" | "scale">) => {
+  const add = <T>(field: ArcField, op: ListOp<T> | null, item: (value: T) => Pick<AuthoredArc, "asset" | "primPath" | "offset" | "scale" | "customData">) => {
     if (op === null) return;
     for (const [list, kind] of LISTS) {
       for (const value of (op[list] as readonly T[] | null) ?? []) arcs.push({ field, op: kind, ...item(value), index: arcs.length });
     }
   };
-  const reference = (value: AuthoredReference) => ({ asset: value.asset, primPath: value.primPath, offset: value.layerOffset.offset, scale: value.layerOffset.scale });
-  const path = (value: string) => ({ asset: null, primPath: value, offset: 0, scale: 1 });
+  const reference = (value: AuthoredReference) => ({
+    asset: value.asset,
+    primPath: value.primPath,
+    offset: value.layerOffset.offset,
+    scale: value.layerOffset.scale,
+    customData: value.customData,
+  });
+  const path = (value: string) => ({ asset: null, primPath: value, offset: 0, scale: 1, customData: null });
   add("references", spec.references, reference);
   add("payload", spec.payloads, reference);
   add("inherits", spec.inherits, path);

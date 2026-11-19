@@ -577,7 +577,7 @@ pub(crate) fn decode_text_index(
 
 /// The element count an array value's payload declares, read without
 /// decoding the elements; `None` when the payload cannot be read.
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", test))]
 pub(crate) fn array_len(rep: &RawValueRep, data: &[u8], version: CrateVersion) -> Option<u64> {
     let offset = payload_offset_usize(rep, data).ok()?;
     if offset == 0 {

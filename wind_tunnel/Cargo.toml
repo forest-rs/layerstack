@@ -131,6 +131,10 @@ name = "package_loading"
 harness = false
 
 [[bench]]
+name = "relationship_read"
+harness = false
+
+[[bench]]
 name = "usda_import"
 harness = false
 

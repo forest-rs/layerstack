@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 /// Builds a namespace with two targets per leaf, one prim and one property.
-pub(super) fn fixture(depth: usize) -> (layerstack::InMemoryStore, layerstack::Layer) {
+pub(super) fn fixture(
+    depth: usize,
+    leaf_count: usize,
+) -> (layerstack::InMemoryStore, layerstack::Layer) {
     use layerstack::{
         InMemoryStore, Layer, LayerId, ListOp, PrimSpec, PropertyPath, PropertySpec, TargetPath,
     };
@@ -23,7 +26,7 @@ pub(super) fn fixture(depth: usize) -> (layerstack::InMemoryStore, layerstack::L
         parent.push_str("Group");
     }
     let relation = store.tokens().intern("links");
-    let leaves: Vec<_> = (0..2048)
+    let leaves: Vec<_> = (0..leaf_count)
         .map(|i| {
             let name = format!("Leaf{i}");
             (

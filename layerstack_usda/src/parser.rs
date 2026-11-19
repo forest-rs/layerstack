@@ -2725,6 +2725,16 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         let start = self.current_span().start;
         self.builder.start_node(SyntaxKind::PathRef, start);
 
+        if !LOSSLESS
+            && self.peek() == Some(TokenKind::LeftAngle)
+            && self.tokens.plain_path(self.pos, start)
+        {
+            self.seek(self.pos + 2);
+            self.line_break = false;
+            self.builder.finish_node(self.current_span().start);
+            return;
+        }
+
         if self.peek() == Some(TokenKind::LeftAngle) {
             self.bump(); // <
         }

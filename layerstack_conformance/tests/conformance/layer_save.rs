@@ -228,6 +228,19 @@ fn corpus_saves_as_expected_in_both_formats() {
         assert_eq!(usda, expected, "{name}: saved USDA");
 
         let usdc = layer.save_usdc().unwrap_or_else(|e| panic!("{name}: {e}"));
+        let doc = layerstack_usda::save::usdc_document(&layer.layer, &layer.tokens, &layer.paths)
+            .unwrap();
+        assert_eq!(
+            usdc,
+            layerstack_usdc::writer::write_document(&doc).unwrap(),
+            "{name}: streamed spec bodies preserve crate order and field encodings"
+        );
+        let specs = layerstack_usdc::writer::document::document_specs(&doc).unwrap();
+        assert_eq!(
+            usdc,
+            layerstack_usdc::writer::write_crate(&specs).unwrap(),
+            "{name}: field interning preserves the raw spec encoding"
+        );
         let from_usdc = Imported::usdc(&usdc).save_usda().unwrap();
         assert_eq!(from_usdc, usda, "{name}: USDC reads back as the USDA");
         let retained = Imported::usdc_retained(usdc.into()).save_usda().unwrap();

@@ -12,8 +12,8 @@
 //! [`write_document`] is such a caller: it lowers an authored
 //! [`layerstack_usda::writer::Document`] to the specs OpenUSD's text parser
 //! stores for the same document's USDA. [`save_usdc`] saves an authored
-//! [`layerstack::Layer`] through that document, by the same lowering as its
-//! USDA ([`layerstack_usda::save`]).
+//! [`layerstack::Layer`] one spec body at a time using the shared authored
+//! layer traversal ([`layerstack_usda::save`]).
 //!
 //! # Format
 //!
@@ -63,6 +63,7 @@ pub mod document;
 mod encode;
 mod error;
 mod path;
+mod specs;
 #[cfg(test)]
 mod tests;
 

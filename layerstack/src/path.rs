@@ -530,6 +530,12 @@ impl PathInterner {
         self.intern_segments(&segments)
     }
 
+    /// Looks up an interned child of `parent` without adding a path.
+    #[must_use]
+    pub fn lookup_child(&self, parent: PathId, name: TokenId) -> Option<PathId> {
+        self.lookup_joined(parent, &[name])
+    }
+
     /// Interns the path of `parent`'s child prim `name`, as
     /// [`Self::intern`] interns `parent`'s path joined with `name`, without
     /// building that path first.

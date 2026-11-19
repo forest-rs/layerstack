@@ -115,12 +115,19 @@ use smallvec::SmallVec;
 
 use layerstack::float_text;
 
+mod borrowed;
+pub(crate) use borrowed::CheckedNames;
+mod prepared;
+pub use prepared::PreparedUsda;
+use prepared::TextBody;
+pub(crate) use prepared::{Layout, TextOutput, TextString};
 mod walk;
 
 use walk::{Step, VariantOrder, walk};
 
 pub use layerstack::{Specifier, Variability};
 
+const HEADER_PREFIX: &str = "#usda 1.";
 const INDENT: &str = "    ";
 
 // ── Document model ──────────────────────────────────────────────────────
@@ -189,7 +196,7 @@ impl Document {
     /// See [`Self::to_usda`].
     pub fn write_usda(&self, out: &mut String) -> Result<(), WriteError> {
         self.validate_text()?;
-        Writer::new(out).document(self);
+        Writer::new(out).document(self, text_version(self));
         Ok(())
     }
 
@@ -209,23 +216,8 @@ impl Document {
     /// See [`Self::to_usda`], and [`WriteError::Sink`].
     pub fn write_usda_to<W: fmt::Write + ?Sized>(&self, sink: &mut W) -> Result<(), WriteError> {
         self.validate_text()?;
-        let mut buffer = String::with_capacity(SPILL_BYTES + SPILL_SLACK);
-        let mut sink = StrSink(sink);
-        let mut spill = Spill {
-            sink: &mut sink,
-            failed: false,
-        };
-        let mut w = Writer {
-            out: &mut buffer,
-            spill: Some(&mut spill),
-        };
-        w.document(self);
-        w.flush();
-        if w.spill.is_some_and(|spill| spill.failed) {
-            Err(WriteError::Sink)
-        } else {
-            Ok(())
-        }
+        let minor = text_version(self);
+        Writer::stream(sink, |w| w.document(self, minor))
     }
 
     /// [`Self::validate`] plus the checks only text needs: text cannot
@@ -1683,8 +1675,7 @@ impl core::error::Error for WriteError {}
 /// Unicode XID tables the lexer also uses, so written names always re-parse
 /// here and in OpenUSD (`pxr/usd/sdf/path.cpp`, `_IsValidIdentifier`).
 pub fn is_identifier(name: &str) -> bool {
-    let mut chars = name.chars();
-    chars.next().is_some_and(crate::ident::is_start) && chars.all(crate::ident::is_continue)
+    layerstack::ident::is_identifier(name)
 }
 
 /// Whether `name` is a variant name: identifier characters, `|` and `-`,
@@ -1969,7 +1960,7 @@ fn validate_text_prims(prims: &[Prim]) -> Result<(), WriteError> {
 
 /// [`validate_text_prims`] for one prim spec or variant's prim spec at
 /// `path`, apart from its child prims and variant sets.
-fn validate_text_body(body: &Prim, path: &str) -> Result<(), WriteError> {
+pub(crate) fn validate_text_body(body: &Prim, path: &str) -> Result<(), WriteError> {
     text_metadata(&body.metadata, path)?;
     for arc in body
         .references
@@ -1977,18 +1968,21 @@ fn validate_text_body(body: &Prim, path: &str) -> Result<(), WriteError> {
         .chain(&body.payloads)
         .flat_map(ListOp::items)
     {
-        text_dictionary(&arc.custom_data, &alloc::format!("{path}#references"), "")?;
+        if !arc.custom_data.is_empty() {
+            text_dictionary(&arc.custom_data, &alloc::format!("{path}#references"), "")?;
+        }
     }
     for property in &body.properties {
         let (name, metadata) = match property {
             Property::Attribute(attribute) => (&attribute.name, &attribute.metadata),
             Property::Relationship(relationship) => (&relationship.name, &relationship.metadata),
         };
-        let location = alloc::format!("{path}.{name}");
-        text_metadata(metadata, &location)?;
+        if !metadata.is_empty() {
+            text_metadata(metadata, &[path, ".", name].concat())?;
+        }
         if let Property::Attribute(attribute) = property {
             for (_, entries) in &attribute.spline_custom_data {
-                text_dictionary(entries, &alloc::format!("{location}#spline"), "")?;
+                text_dictionary(entries, &alloc::format!("{path}.{name}#spline"), "")?;
             }
         }
     }
@@ -2006,14 +2000,14 @@ fn validate_text_body(body: &Prim, path: &str) -> Result<(), WriteError> {
         let Property::Attribute(attribute) = property else {
             continue;
         };
-        let location = alloc::format!("{path}.{}", attribute.name);
+        let location = || [path, ".", &attribute.name].concat();
         if let Some(spline) = attribute.spline.as_deref()
             && spline
                 .knots
                 .iter()
                 .any(|knot| knot.curve_type != spline.default_curve_type)
         {
-            return Err(WriteError::KnotCurveType { path: location });
+            return Err(WriteError::KnotCurveType { path: location() });
         }
         if let Some(spline) = attribute.spline.as_deref() {
             let mut recomputed = spline.clone();
@@ -2026,7 +2020,7 @@ fn validate_text_body(body: &Prim, path: &str) -> Result<(), WriteError> {
                         && (a.post_tan_width.to_bits() != b.post_tan_width.to_bits()
                             || a.post_tan_slope.to_bits() != b.post_tan_slope.to_bits()))
             }) {
-                return Err(WriteError::StaleAutoEaseTangent { path: location });
+                return Err(WriteError::StaleAutoEaseTangent { path: location() });
             }
         }
 
@@ -2045,7 +2039,7 @@ fn validate_text_body(body: &Prim, path: &str) -> Result<(), WriteError> {
                 && (attribute.type_name == "timecode[]") != matches!(&**element, Value::TimeCode(_))
             {
                 return Err(WriteError::TypeMismatch {
-                    path: location,
+                    path: location(),
                     type_name: attribute.type_name.clone(),
                 });
             }
@@ -2056,7 +2050,7 @@ fn validate_text_body(body: &Prim, path: &str) -> Result<(), WriteError> {
 
 /// Refuses a dictionary entry holding a list op in `metadata`, the
 /// metadata of the object at `path`: see [`WriteError::DictionaryListOp`].
-fn text_metadata(metadata: &[Metadatum], path: &str) -> Result<(), WriteError> {
+pub(crate) fn text_metadata(metadata: &[Metadatum], path: &str) -> Result<(), WriteError> {
     for entry in metadata {
         if let Value::Dictionary(entries) = &entry.value {
             text_dictionary(entries, &alloc::format!("{path}#{}", entry.key), "")?;
@@ -2613,13 +2607,15 @@ fn text_version(doc: &Document) -> u8 {
     let mut minor = value_text_version::metadata(&doc.metadata);
     let Ok(()) = walk(&doc.prims, VariantOrder::Authored, |step, _, _| {
         if let Step::Prim { prim: spec, .. } | Step::Variant { variant: spec, .. } = step {
-            minor = minor
-                .max(spline_text_version(spec))
-                .max(value_text_version::in_spec(spec));
+            minor = minor.max(body_text_version(spec));
         }
         Ok::<(), core::convert::Infallible>(())
     });
     minor
+}
+
+pub(crate) fn body_text_version(prim: &Prim) -> u8 {
+    spline_text_version(prim).max(value_text_version::in_spec(prim))
 }
 
 /// Minimum USDA version for the splines of one prim spec or variant,
@@ -2657,7 +2653,7 @@ fn spline_text_version(prim: &Prim) -> u8 {
 /// whose only array edits are numeric is `#usda 1.0`; a `duration`
 /// attribute declared without a value, or with a spline, writes no value
 /// and needs no newer version.
-mod value_text_version {
+pub(crate) mod value_text_version {
     use super::{ListOp, Metadatum, Prim, Property, Reference, Value};
 
     fn in_value(value: &Value) -> u8 {
@@ -2677,7 +2673,7 @@ mod value_text_version {
         }
     }
     /// The version metadata entries need.
-    pub(super) fn metadata(metadata: &[Metadatum]) -> u8 {
+    pub(crate) fn metadata(metadata: &[Metadatum]) -> u8 {
         metadata
             .iter()
             .map(|m| in_value(&m.value))
@@ -2977,12 +2973,57 @@ impl<'o> Writer<'o> {
 }
 
 impl Writer<'_> {
+    fn stream<W: fmt::Write + ?Sized>(
+        sink: &mut W,
+        emit: impl FnOnce(&mut Writer<'_>),
+    ) -> Result<(), WriteError> {
+        let mut buffer = String::with_capacity(SPILL_BYTES + SPILL_SLACK);
+        let mut sink = StrSink(sink);
+        let mut spill = Spill {
+            sink: &mut sink,
+            failed: false,
+        };
+        let mut w = Writer {
+            out: &mut buffer,
+            spill: Some(&mut spill),
+        };
+        emit(&mut w);
+        w.flush();
+        if w.spill.is_some_and(|spill| spill.failed) {
+            Err(WriteError::Sink)
+        } else {
+            Ok(())
+        }
+    }
+
     /// Hands the buffered text on once there is enough of it. Called
     /// between items (array elements, time samples, properties, prims),
     /// never inside one.
     fn spill(&mut self) {
         if self.out.len() >= SPILL_BYTES {
             self.flush();
+        }
+    }
+
+    /// Streams a single large token or string in UTF-8 pieces. Small
+    /// fragments share the normal buffer until the next spill point.
+    fn text(&mut self, text: &str) {
+        if text.len() < SPILL_SLACK || self.spill.is_none() {
+            self.out.push_str(text);
+            return;
+        }
+        let mut rest = text;
+        while !rest.is_empty() {
+            let room = SPILL_BYTES.saturating_sub(self.out.len());
+            let mut end = room.min(rest.len());
+            while !rest.is_char_boundary(end) {
+                end -= 1;
+            }
+            self.out.push_str(&rest[..end]);
+            rest = &rest[end..];
+            if !rest.is_empty() {
+                self.flush();
+            }
         }
     }
 
@@ -3001,10 +3042,17 @@ impl Writer<'_> {
     /// writes it: the header with the comment first, the other fields
     /// sorted by name, then relocates; `reorder rootPrims`; the root prims
     /// in document order.
-    fn document(&mut self, doc: &Document) {
+    fn document(&mut self, doc: &Document, minor: u8) {
+        self.header(doc, minor);
+        self.prims(&doc.prims);
+        self.out.push('\n');
+    }
+
+    fn header(&mut self, doc: &Document, minor: u8) {
         // §16.2.18.1: the layer header.
-        let minor = text_version(doc);
-        self.out.push_str(&alloc::format!("#usda 1.{minor}\n"));
+        self.out.push_str(HEADER_PREFIX);
+        self.display(&minor);
+        self.out.push('\n');
         if doc.default_prim.is_some()
             || doc.metadata.iter().any(is_written_on_layer)
             || !doc.sublayers.is_empty()
@@ -3076,8 +3124,6 @@ impl Writer<'_> {
             self.out.push('\n');
             self.reorder("rootPrims", order, 0);
         }
-        self.prims(&doc.prims);
-        self.out.push('\n');
     }
 
     /// The root prims `prims` and every spec below them, as
@@ -3091,47 +3137,39 @@ impl Writer<'_> {
         let Ok(()) = walk(prims, VariantOrder::ByName, |step, _, depth| {
             match step {
                 Step::Prim { prim, index, .. } => {
-                    if depth == 0 || index > 0 {
-                        self.out.push('\n');
-                    }
-                    self.prim(prim, depth);
+                    self.open_body(
+                        prim.into(),
+                        Layout {
+                            depth,
+                            variant: false,
+                            blank_before: depth == 0 || index > 0,
+                            children: !prim.children.is_empty(),
+                        },
+                    );
                 }
-                Step::LeavePrim => {
-                    self.indent(depth);
-                    self.out.push_str("}\n");
-                }
-                Step::Set { set, .. } => {
-                    self.indent(depth);
-                    self.out.push_str("variantSet ");
-                    self.string(&set.name);
-                    self.out.push_str(" = {\n");
-                }
-                Step::LeaveSet => {
-                    self.indent(depth);
-                    self.out.push_str("}\n");
-                }
-                Step::Variant { variant, .. } => {
-                    self.indent(depth);
-                    self.string(&variant.name);
-                    self.prim_metadata(variant, depth);
-                    self.out.push_str(" {\n");
-                    self.prim_body(variant, depth + 1);
-                }
-                // A blank line closes each variant (`Sdf_WriteVariant`).
-                Step::LeaveVariant => {
-                    self.out.push('\n');
-                    self.indent(depth);
-                    self.out.push_str("}\n");
-                }
+                Step::Variant { variant, .. } => self.open_body(
+                    variant.into(),
+                    Layout {
+                        depth,
+                        variant: true,
+                        blank_before: false,
+                        children: !variant.children.is_empty(),
+                    },
+                ),
+                Step::Set { set, .. } => self.open_set(&set.name, depth),
+                Step::LeavePrim | Step::LeaveSet => self.close(depth, false),
+                Step::LeaveVariant => self.close(depth, true),
             }
             Ok::<(), core::convert::Infallible>(())
         });
     }
 
     fn indent(&mut self, depth: usize) {
-        for _ in 0..depth {
-            self.out.push_str(INDENT);
+        const EIGHT: &str = "                                ";
+        for _ in 0..depth / 8 {
+            self.out.push_str(EIGHT);
         }
+        self.out.push_str(&EIGHT[..(depth % 8) * INDENT.len()]);
     }
 
     /// The metadata section of a property: the comment first, then the
@@ -3171,15 +3209,15 @@ impl Writer<'_> {
             Value::Int64ListOp(op) => return self.list_op(key, op, depth, |w, x| w.display(x)),
             Value::UInt64ListOp(op) => return self.list_op(key, op, depth, |w, x| w.display(x)),
             Value::UnregisteredListOp(op) => {
-                return self.list_op(key, op, depth, |w, text| w.out.push_str(text));
+                return self.list_op(key, op, depth, |w, text| w.text(text));
             }
             _ => {}
         }
         self.indent(depth);
-        self.out.push_str(key);
+        self.text(key);
         self.out.push_str(" = ");
         if let Some(identifier) = bare_identifier(entry) {
-            self.out.push_str(identifier);
+            self.text(identifier);
         } else {
             match (key, &entry.value) {
                 ("prefixSubstitutions" | "suffixSubstitutions", Value::Dictionary(entries)) => {
@@ -3205,7 +3243,7 @@ impl Writer<'_> {
     ) {
         self.list_op_statements(op, depth, |w, keyword, items| {
             w.out.push_str(keyword);
-            w.out.push_str(key);
+            w.text(key);
             w.out.push_str(" = ");
             if items.is_empty() && keyword.is_empty() {
                 w.out.push_str("None");
@@ -3217,26 +3255,73 @@ impl Writer<'_> {
 
     /// §16.2.17: `specifier [type] "name" [( metadata )] {` and the start
     /// of the body ([`Self::prim_body`]); [`Self::prims`] writes the rest.
-    fn prim(&mut self, prim: &Prim, depth: usize) {
+    fn open_body(&mut self, body: TextBody<'_>, layout: Layout) {
+        self.open_header(
+            body.name,
+            body.type_name,
+            body.specifier,
+            body.fields,
+            layout,
+        );
+        self.prim_body(body, layout.depth + 1, layout.children);
+    }
+
+    fn open_header(
+        &mut self,
+        name: &str,
+        type_name: Option<&str>,
+        specifier: Option<Specifier>,
+        fields: Option<&Prim>,
+        layout: Layout,
+    ) {
+        let Layout {
+            depth,
+            variant,
+            blank_before,
+            children: _,
+        } = layout;
         self.spill();
-        self.indent(depth);
-        self.out.push_str(match prim.specifier {
-            Some(Specifier::Def) => "def ",
-            Some(Specifier::Over) | None => "over ",
-            Some(Specifier::Class) => "class ",
-        });
-        // `__AnyType__` (`SdfTokens->AnyTypeToken`) is written untyped, as
-        // `Sdf_WritePrimPreamble` writes it (`pxr/usd/sdf/fileIO_Common.h`).
-        if let Some(type_name) = prim.type_name.as_deref().filter(|t| *t != "__AnyType__") {
-            self.out.push_str(type_name);
-            self.out.push(' ');
+        if blank_before {
+            self.out.push('\n');
         }
-        self.string(&prim.name);
-        self.prim_metadata(prim, depth);
-        self.out.push('\n');
         self.indent(depth);
+        if !variant {
+            self.out.push_str(match specifier {
+                Some(Specifier::Def) => "def ",
+                Some(Specifier::Over) | None => "over ",
+                Some(Specifier::Class) => "class ",
+            });
+            if let Some(type_name) = type_name.filter(|&t| t != "__AnyType__") {
+                self.text(type_name);
+                self.out.push(' ');
+            }
+        }
+        self.string(name);
+        if let Some(fields) = fields {
+            self.prim_metadata(fields, depth);
+        }
+        if variant {
+            self.out.push(' ');
+        } else {
+            self.out.push('\n');
+            self.indent(depth);
+        }
         self.out.push_str("{\n");
-        self.prim_body(prim, depth + 1);
+    }
+
+    fn open_set(&mut self, name: &str, depth: usize) {
+        self.indent(depth);
+        self.out.push_str("variantSet ");
+        self.string(name);
+        self.out.push_str(" = {\n");
+    }
+
+    fn close(&mut self, depth: usize, variant: bool) {
+        if variant {
+            self.out.push('\n');
+        }
+        self.indent(depth);
+        self.out.push_str("}\n");
     }
 
     /// ` ( metadata )` after a prim or variant name, when there is any, as
@@ -3357,27 +3442,27 @@ impl Writer<'_> {
     /// properties and the children. [`Self::prims`] writes the child prims
     /// (the `primChildren` field) and variant sets (`variantSetChildren`)
     /// after them, in document order.
-    fn prim_body(&mut self, prim: &Prim, depth: usize) {
-        if let Some(order) = &prim.property_order {
+    fn prim_body(&mut self, body: TextBody<'_>, depth: usize, has_children: bool) {
+        if let Some(order) = body.fields.and_then(|p| p.property_order.as_ref()) {
             self.reorder("properties", order, depth);
         }
-        if let Some(order) = &prim.prim_order {
+        if let Some(order) = body.fields.and_then(|p| p.prim_order.as_ref()) {
             self.reorder("nameChildren", order, depth);
         }
-        let in_order = prim.properties.is_sorted_by(|a, b| {
+        let in_order = body.properties.is_sorted_by(|a, b| {
             property_order(&property_key(a), &property_key(b)) != Ordering::Greater
         });
         if in_order {
-            for property in &prim.properties {
+            for property in body.properties {
                 self.property(property, depth);
             }
         } else {
-            self.sorted_properties(&prim.properties, depth);
+            self.sorted_properties(body.properties, depth);
         }
         // A blank line between the properties and the children (and, in
         // `Self::prims`, between children); none before or between variant
         // sets.
-        if !prim.properties.is_empty() && !prim.children.is_empty() {
+        if !body.properties.is_empty() && has_children {
             self.out.push('\n');
         }
     }
@@ -3415,7 +3500,7 @@ impl Writer<'_> {
     ) {
         self.list_op_statements(op, depth, |w, keyword, items| {
             w.out.push_str(keyword);
-            w.out.push_str(key);
+            w.text(key);
             w.out.push_str(" = ");
             match items {
                 [] => w.out.push_str("None"),
@@ -3507,7 +3592,7 @@ impl Writer<'_> {
     /// `<path>`; validation guarantees plain identifiers.
     fn path(&mut self, path: &str) {
         self.out.push('<');
-        self.out.push_str(path);
+        self.text(path);
         self.out.push('>');
     }
 
@@ -3521,7 +3606,7 @@ impl Writer<'_> {
         }
         self.indent(depth);
         self.out.push_str("reorder ");
-        self.out.push_str(key);
+        self.text(key);
         self.out.push_str(" = ");
         self.names(names);
         self.out.push('\n');
@@ -3668,9 +3753,9 @@ impl Writer<'_> {
         if attribute.variability == Variability::Uniform {
             self.out.push_str("uniform ");
         }
-        self.out.push_str(&attribute.type_name);
+        self.text(&attribute.type_name);
         self.out.push(' ');
-        self.out.push_str(&attribute.name);
+        self.text(&attribute.name);
     }
 
     /// §16.2.16.7: `[custom] rel name [= targets] [( metadata )]`, then
@@ -3696,7 +3781,7 @@ impl Writer<'_> {
                 self.out.push_str("varying ");
             }
             self.out.push_str("rel ");
-            self.out.push_str(&relationship.name);
+            self.text(&relationship.name);
             if let Some(targets) = explicit {
                 self.out.push_str(" = ");
                 self.targets(targets, depth);
@@ -3716,7 +3801,7 @@ impl Writer<'_> {
                     w.out.push_str("varying ");
                 }
                 w.out.push_str("rel ");
-                w.out.push_str(&relationship.name);
+                w.text(&relationship.name);
                 w.out.push_str(" = ");
                 w.targets(targets, depth);
             });
@@ -3730,7 +3815,7 @@ impl Writer<'_> {
                 self.out.push_str("varying ");
             }
             self.out.push_str("rel ");
-            self.out.push_str(&relationship.name);
+            self.text(&relationship.name);
             self.out.push_str(".default = ");
             self.path(default);
             self.indent(depth);
@@ -3744,14 +3829,18 @@ impl Writer<'_> {
     /// statement's. Validation guarantees each path is plain identifiers,
     /// so it needs no escaping.
     fn targets(&mut self, targets: &[String], depth: usize) {
+        self.target_list(targets, depth, |w, t| w.path(t));
+    }
+
+    fn target_list<T>(&mut self, targets: &[T], depth: usize, mut path: impl FnMut(&mut Self, &T)) {
         match targets {
             [] => self.out.push_str("None"),
-            [one] => self.path(one),
+            [one] => path(self, one),
             _ => {
                 self.out.push_str("[\n");
                 for target in targets {
                     self.indent(depth + 1);
-                    self.path(target);
+                    path(self, target);
                     self.out.push_str(",\n");
                 }
                 self.indent(depth);
@@ -3764,7 +3853,7 @@ impl Writer<'_> {
         match value {
             // The recorded text, as `Sdf_FileIOUtility` writes an
             // `SdfUnregisteredValue` (`pxr/usd/sdf/fileIO_Common.cpp`).
-            Value::Unregistered(text) => self.out.push_str(text),
+            Value::Unregistered(text) => self.text(text),
             Value::ArrayEdit { instructions, .. } => {
                 self.out.push_str("edit [");
                 for (i, op) in instructions.iter().enumerate() {
@@ -4066,9 +4155,17 @@ impl Writer<'_> {
         self.out.push(')');
     }
 
-    fn array<T>(&mut self, items: &[T], mut item: impl FnMut(&mut Self, &T)) {
+    fn array<T>(&mut self, items: &[T], item: impl FnMut(&mut Self, &T)) {
+        self.array_items(items.iter(), item);
+    }
+
+    fn array_items<T>(
+        &mut self,
+        items: impl Iterator<Item = T>,
+        mut item: impl FnMut(&mut Self, T),
+    ) {
         self.out.push('[');
-        for (i, x) in items.iter().enumerate() {
+        for (i, x) in items.enumerate() {
             if i > 0 {
                 self.out.push_str(", ");
             }
@@ -4083,6 +4180,14 @@ impl Writer<'_> {
     /// text holds a double quote and no single quote, and triple quotes
     /// around text with a line break, which is then written as it is.
     fn string(&mut self, s: &str) {
+        if s.bytes()
+            .all(|b| b >= b' ' && !matches!(b, b'"' | b'\\' | 0x7f))
+        {
+            self.out.push('"');
+            self.text(s);
+            self.out.push('"');
+            return;
+        }
         let quote = if s.contains('"') && !s.contains('\'') {
             '\''
         } else {
@@ -4095,9 +4200,13 @@ impl Writer<'_> {
             }
         };
         open(self.out);
-        for c in s.chars() {
+        let mut start = 0;
+        for (i, c) in s.char_indices() {
+            if c != quote && c != '\\' && (c >= ' ' && c != '\u{7f}' || triple && c == '\n') {
+                continue;
+            }
+            self.text(&s[start..i]);
             match c {
-                '\n' if triple => self.out.push('\n'),
                 '\n' => self.out.push_str("\\n"),
                 '\r' => self.out.push_str("\\r"),
                 '\t' => self.out.push_str("\\t"),
@@ -4106,12 +4215,14 @@ impl Writer<'_> {
                     self.out.push('\\');
                     self.out.push(c);
                 }
-                c if u32::from(c) < 0x20 || c == '\u{7F}' => {
+                c => {
                     let _ = write!(self.out, "\\x{:02x}", u32::from(c));
                 }
-                c => self.out.push(c),
             }
+            self.spill();
+            start = i + c.len_utf8();
         }
+        self.text(&s[start..]);
         open(self.out);
     }
 
@@ -4124,7 +4235,7 @@ impl Writer<'_> {
             .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
             && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
         {
-            self.out.push_str(key);
+            self.text(key);
         } else {
             self.string(key);
         }
@@ -4137,18 +4248,18 @@ impl Writer<'_> {
     fn asset(&mut self, path: &str) {
         if !path.contains('@') {
             self.out.push('@');
-            self.out.push_str(path);
+            self.text(path);
             self.out.push('@');
             return;
         }
         self.out.push_str("@@@");
         let mut rest = path;
         while let Some(at) = rest.find("@@@") {
-            self.out.push_str(&rest[..at]);
+            self.text(&rest[..at]);
             self.out.push_str("\\@@@");
             rest = &rest[at + 3..];
         }
-        self.out.push_str(rest);
+        self.text(rest);
         self.out.push_str("@@@");
     }
 }

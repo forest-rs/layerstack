@@ -150,10 +150,9 @@ struct Packer<'a> {
     /// Token index of each string (`_strings`).
     strings: Vec<u32>,
     string_index: HashMap<String, u32>,
-    /// Each path, `None` for the empty path (`SdfPath()`), which has an
-    /// index but no place in the path tree.
-    paths: Vec<Option<CratePath>>,
-    path_index: HashMap<CratePath, u32>,
+    /// Each nonempty path owns one entry with its file index and element token.
+    path_index: HashMap<CratePath<'a>, (u32, u32)>,
+    /// The empty path has a file index but no entry in the path tree.
     empty_path_index: Option<u32>,
     /// `(token index, value representation)` of each field.
     fields: Vec<(u32, u64)>,
@@ -178,7 +177,6 @@ impl<'a> Packer<'a> {
             token_index: HashMap::new(),
             strings: Vec::new(),
             string_index: HashMap::new(),
-            paths: Vec::new(),
             path_index: HashMap::new(),
             empty_path_index: None,
             fields: Vec::new(),
@@ -227,47 +225,55 @@ impl<'a> Packer<'a> {
     ///
     /// `_AddPath` recurses; here the paths still to add wait on a heap
     /// stack, as a namespace has no depth limit.
-    fn path(&mut self, path: &CratePath) -> Result<u32, UsdcWriteError> {
-        if let Some(&i) = self.path_index.get(path) {
-            return Ok(i);
+    fn path(&mut self, path: CratePath<'a>) -> Result<u32, UsdcWriteError> {
+        enum Step<'a> {
+            Enter(CratePath<'a>),
+            Store(CratePath<'a>),
         }
-        enum Step {
-            /// Add the path, after what it needs.
-            Enter(CratePath),
-            /// Add the path itself, what it needs being added.
-            Leave(CratePath),
-        }
-        // Entered and not yet left: `_AddPath` finds such a path present.
-        // They are the path's ancestors and targets being added, a few, so
-        // a vector rather than a set.
-        let mut entered: Vec<CratePath> = Vec::new();
-        let mut steps = alloc::vec![Step::Enter(path.clone())];
-        while let Some(step) = steps.pop() {
-            match step {
+        // The usual spec already has its parent in the table. Keep the slow
+        // path iterative for an unseen ancestor or a bracketed target.
+        let mut pending = SmallVec::<[Step<'_>; 4]>::new();
+        let mut step = Step::Enter(path);
+        loop {
+            let path = match step {
                 Step::Enter(path) => {
-                    if self.path_index.contains_key(&path) || entered.contains(&path) {
+                    if let Some(&(i, _)) = self.path_index.get(&path) {
+                        match pending.pop() {
+                            Some(next) => {
+                                step = next;
+                                continue;
+                            }
+                            None => return Ok(i),
+                        }
+                    }
+                    let parent = path.parent().filter(|p| !self.path_index.contains_key(p));
+                    let target = path
+                        .target()
+                        .filter(|p| !self.path_index.contains_key(*p))
+                        .cloned();
+                    if parent.is_some() || target.is_some() {
+                        pending.push(Step::Store(path));
+                        pending.extend(parent.map(Step::Enter));
+                        pending.extend(target.map(Step::Enter));
+                        step = pending.pop().expect("a dependency");
                         continue;
                     }
-                    entered.push(path.clone());
-                    let parent = path.parent();
-                    let target = path.target().cloned();
-                    steps.push(Step::Leave(path));
-                    // Popped last to first: the target, then the parent.
-                    steps.extend(parent.map(Step::Enter));
-                    steps.extend(target.map(Step::Enter));
+                    path
                 }
-                Step::Leave(path) => {
-                    self.token(&path.element_token())?;
-                    let i = index(self.paths.len())?;
-                    self.paths.push(Some(path.clone()));
-                    if let Some(at) = entered.iter().position(|p| *p == path) {
-                        entered.swap_remove(at);
-                    }
-                    self.path_index.insert(path, i);
-                }
+                Step::Store(path) => path,
+            };
+            let token = self.token(&path.element_token())?;
+            let i = index(self.path_count())?;
+            self.path_index.insert(path, (i, token));
+            match pending.pop() {
+                Some(next) => step = next,
+                None => return Ok(i),
             }
         }
-        Ok(self.path_index[path])
+    }
+
+    fn path_count(&self) -> usize {
+        self.path_index.len() + usize::from(self.empty_path_index.is_some())
     }
 
     /// `_AddPath(SdfPath())`: the empty path, a reference or payload's
@@ -278,8 +284,7 @@ impl<'a> Packer<'a> {
         if let Some(i) = self.empty_path_index {
             return Ok(i);
         }
-        let i = index(self.paths.len())?;
-        self.paths.push(None);
+        let i = index(self.path_count())?;
         self.empty_path_index = Some(i);
         Ok(i)
     }
@@ -658,7 +663,7 @@ impl<'a> Packer<'a> {
                     _ => false,
                 } =>
             {
-                let none = Reference {
+                static NONE: Reference = Reference {
                     asset: String::new(),
                     prim_path: String::new(),
                     offset: 0.0,
@@ -666,7 +671,7 @@ impl<'a> Packer<'a> {
                     custom_data: Vec::new(),
                 };
                 let mut bytes = Vec::new();
-                self.reference(items.first().unwrap_or(&none), &[], true, site, &mut bytes)?;
+                self.reference(items.first().unwrap_or(&NONE), &[], true, site, &mut bytes)?;
                 self.blob(T::Payload, 0, bytes, false)?
             }
             Value::PayloadListOp(op) => {
@@ -1177,9 +1182,9 @@ impl<'a> Packer<'a> {
     }
 
     /// A path list op item: the index of an absolute path.
-    fn path_text(&mut self, text: &str) -> Result<u32, UsdcWriteError> {
+    fn path_text(&mut self, text: &'a str) -> Result<u32, UsdcWriteError> {
         let path = CratePath::parse(text)?;
-        self.path(&path)
+        self.path(path)
     }
 
     fn dictionary_inline(
@@ -1204,7 +1209,7 @@ impl<'a> Packer<'a> {
     /// authored typed `customData`.
     fn reference(
         &mut self,
-        arc: &Reference,
+        arc: &'a Reference,
         custom_data: &'a [(String, Value)],
         payload: bool,
         site: Site<'_>,
@@ -1369,19 +1374,15 @@ impl<'a> Packer<'a> {
         // encoded count, then the coded path indexes, element tokens and
         // jumps of the tree in `SdfPath` order.
         let start = self.out.len();
-        let mut sorted: Vec<(&CratePath, u32, u32)> = Vec::with_capacity(self.paths.len());
-        for (i, path) in self.paths.iter().enumerate() {
-            let Some(path) = path else {
-                continue;
-            };
-            let token = self.token_index[&*path.element_token()];
-            #[allow(clippy::cast_possible_truncation, reason = "path table is u32-indexed")]
-            sorted.push((path, i as u32, token));
-        }
+        let mut sorted: Vec<_> = self
+            .path_index
+            .iter()
+            .map(|(path, &(index, token))| (path, index, token))
+            .collect();
         sort::sort_by(&mut sorted, |a, b| a.0.cmp(b.0));
         let tree = path_tree(&sorted);
         let mut paths = Vec::new();
-        paths.extend_from_slice(&(self.paths.len() as u64).to_le_bytes());
+        paths.extend_from_slice(&(self.path_count() as u64).to_le_bytes());
         paths.extend_from_slice(&(sorted.len() as u64).to_le_bytes());
         for column in [&tree.path_indexes, &tree.element_tokens, &tree.jumps] {
             paths.extend_from_slice(&checked_ints(column, IntWidth::W32)?);
@@ -1432,8 +1433,8 @@ impl<'a> Packer<'a> {
 /// A list op item stored as the `u32` index `add` gives its text.
 fn text_item<'a, 'input: 'a>(
     site: Site<'a>,
-    add: fn(&mut Packer<'input>, &str) -> Result<u32, UsdcWriteError>,
-) -> impl Fn(&mut Packer<'input>, &String, &mut Vec<u8>) -> Result<(), UsdcWriteError> + 'a {
+    add: fn(&mut Packer<'input>, &'input str) -> Result<u32, UsdcWriteError>,
+) -> impl Fn(&mut Packer<'input>, &'input String, &mut Vec<u8>) -> Result<(), UsdcWriteError> + 'a {
     move |packer, text, out| {
         site.check_text(text)?;
         out.extend_from_slice(&add(packer, text)?.to_le_bytes());
@@ -1834,9 +1835,9 @@ fn ts_spline_data(spline: &layerstack::spline::SplineData) -> Vec<u8> {
 /// Checks the specs' paths, forms, parents and field names, and returns
 /// them in `Sdf_CrateData::Save` order: prim paths (the pseudo-root first)
 /// in `SdfPath` order, then property paths grouped by name.
-fn prepare(specs: &[Spec]) -> Result<Vec<(CratePath, &Spec)>, UsdcWriteError> {
+fn prepare(specs: &[Spec]) -> Result<Vec<(CratePath<'_>, &Spec)>, UsdcWriteError> {
     // Looked up only, so hashed.
-    let mut forms: HashMap<CratePath, SpecForm> = HashMap::new();
+    let mut forms: HashMap<CratePath<'_>, SpecForm> = HashMap::new();
     let mut prepared = Vec::with_capacity(specs.len());
     for spec in specs {
         let path = CratePath::parse(&spec.path)?;
@@ -1917,7 +1918,7 @@ fn prepare(specs: &[Spec]) -> Result<Vec<(CratePath, &Spec)>, UsdcWriteError> {
     }
     sort::sort_by(&mut prepared, |(a, _), (b, _)| {
         // Spec property paths are prim property paths: a name each.
-        match (a.property.first(), b.property.first()) {
+        match (a.property, b.property) {
             (None, None) => a.cmp(b),
             (None, Some(_)) => core::cmp::Ordering::Less,
             (Some(_), None) => core::cmp::Ordering::Greater,
@@ -1933,7 +1934,7 @@ fn prepare(specs: &[Spec]) -> Result<Vec<(CratePath, &Spec)>, UsdcWriteError> {
 pub(super) fn write(specs: &[Spec]) -> Result<Vec<u8>, UsdcWriteError> {
     let prepared = prepare(specs)?;
     let mut packer = Packer::new();
-    for (path, spec) in &prepared {
+    for (path, spec) in prepared {
         let mut fields = Vec::with_capacity(spec.fields.len());
         for field in &spec.fields {
             let token = packer.token(&field.name)?;

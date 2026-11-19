@@ -4,14 +4,11 @@
 //! Saving an authored [`Layer`]: the one lowering route from the layer
 //! model to the writers.
 //!
-//! [`usdc_document`] lowers a [`Layer`] to the authored [`Document`] the
-//! crate writer in `layerstack_usdc` serializes (`layerstack_usdc::save_usdc`),
-//! and [`usda_document`] to the one [`save_usda`] writes with
-//! [`Document::to_usda`], which differs only in leaving out a dictionary
-//! entry with no value. Every source field is read in this one place, so USDA and USDC cannot select
-//! different slots of the same layer; the crate lowering of a [`Document`]
-//! is itself defined as what OpenUSD's text parser stores for that
-//! document's USDA.
+//! A shared namespace walk reads every authored field for both formats.
+//! [`usda_document`] and [`usdc_document`] collect its output into a
+//! [`Document`]. The text writer omits dictionary entries with no value.
+//! The crate writer consumes each spec body as the walk produces it and
+//! stores fields as OpenUSD's text parser would store them.
 //!
 //! This saves the authored layer as it is, not a composed stage: nothing is
 //! resolved, flattened or packaged. Asset paths are written as authored,
@@ -120,7 +117,7 @@ use crate::writer::{
     WriteError,
 };
 
-/// Lowers an authored layer to the [`Document`] both writers serialize.
+/// Returns the validated [`Document`] corresponding to an authored layer.
 ///
 /// `tokens` and `paths` are the interners the layer's identifiers belong
 /// to. The whole layer is checked first; on success the returned document
@@ -149,12 +146,14 @@ fn lower(
     paths: &PathInterner,
     skip_empty_entries: bool,
 ) -> Result<Document, SaveError> {
-    let doc = Lowering {
+    let mut builder = namespace::DocumentBuilder::default();
+    Lowering {
         tokens,
         paths,
         skip_empty_entries,
     }
-    .layer(layer)?;
+    .layer(layer, &mut builder)?;
+    let doc = builder.document;
     doc.validate().map_err(SaveError::Document)?;
     Ok(doc)
 }
@@ -400,7 +399,7 @@ impl Lowering<'_> {
     // ── Layer ───────────────────────────────────────────────────────
 
     /// Spec: AOUSD Core §7.6.1 (layer spec fields).
-    fn layer(&self, layer: &Layer) -> Result<Document, SaveError> {
+    fn layer(&self, layer: &Layer, sink: &mut impl namespace::Sink) -> Result<(), SaveError> {
         let mut doc = Document::new();
         doc.default_prim = layer.default_prim().map(|t| self.name(t));
         doc.relocates = layer.has_relocates().then(|| {
@@ -436,7 +435,10 @@ impl Lowering<'_> {
                 return invalid("/", Invalid::PseudoRootOpinions);
             }
             doc.prim_order = spec.prim_order().map(|o| self.names(o));
-            doc.prims = self.prims(layer, &spec.authored_children, &mut visited)?;
+            sink.root(doc, &spec.authored_children);
+            self.prims(layer, &spec.authored_children, &mut visited, sink)?;
+        } else {
+            sink.root(doc, &[]);
         }
 
         // Every prim spec, outside variants or inside one, must have been
@@ -459,7 +461,7 @@ impl Lowering<'_> {
         if let Some(path) = unlisted.into_iter().next() {
             return invalid(path, Invalid::UnlistedPrim);
         }
-        Ok(doc)
+        Ok(())
     }
 
     fn names(&self, names: &[TokenId]) -> Vec<String> {
@@ -505,9 +507,9 @@ impl Lowering<'_> {
         layer: &'l Layer,
         roots: &[TokenId],
         visited: &mut Visited,
-    ) -> Result<Vec<Prim>, SaveError> {
+        sink: &mut impl namespace::Sink,
+    ) -> Result<(), SaveError> {
         let root = Path::root();
-        let mut lowered = Vec::with_capacity(roots.len());
         let mut stack: Vec<Task<'l>> = Vec::new();
         for &name in roots {
             let parent = Parent {
@@ -515,9 +517,7 @@ impl Lowering<'_> {
                 shown: "/",
                 sites: &[],
             };
-            stack.push(Task::Spec(Box::new(
-                self.prim(layer, parent, name, visited)?,
-            )));
+            stack.push(Task::Spec(self.prim(layer, parent, name, visited, sink)?));
             while let Some(task) = stack.last_mut() {
                 match task {
                     Task::Spec(spec) => {
@@ -528,8 +528,8 @@ impl Lowering<'_> {
                                 shown: &spec.shown,
                                 sites: &spec.sites,
                             };
-                            let child = self.prim(layer, parent, child, visited)?;
-                            stack.push(Task::Spec(Box::new(child)));
+                            let child = self.prim(layer, parent, child, visited, sink)?;
+                            stack.push(Task::Spec(child));
                         } else if let Some(&(&set, set_spec)) = spec.sets.get(spec.next_set) {
                             spec.next_set += 1;
                             let mut variants: Vec<(TokenId, &'l VariantSpec)> = set_spec
@@ -544,22 +544,20 @@ impl Lowering<'_> {
                             sort::sort_by(&mut variants, |a, b| {
                                 self.tokens.resolve(a.0).cmp(self.tokens.resolve(b.0))
                             });
+                            sink.set(&spec.shown, self.tokens.resolve(set), &variants);
                             stack.push(Task::Set(SetTask {
                                 set,
                                 variants,
                                 next: 0,
-                                lowered: Vec::new(),
                             }));
                         } else {
                             let Some(Task::Spec(done)) = stack.pop() else {
                                 unreachable!("the spec on top")
                             };
-                            let prim = self.finish(*done)?;
-                            match stack.last_mut() {
-                                Some(Task::Spec(owner)) => owner.prim.children.push(prim),
-                                Some(Task::Set(set)) => set.lowered.push(prim),
-                                None => lowered.push(prim),
+                            if let Some(error) = done.set_names_error {
+                                return Err(error);
                             }
+                            sink.leave();
                         }
                     }
                     Task::Set(set) => {
@@ -578,25 +576,17 @@ impl Lowering<'_> {
                                 sites: &owner.sites,
                             };
                             let variant =
-                                self.variant(layer, owner.host, at, set_name, name, variant)?;
-                            stack.push(Task::Spec(Box::new(variant)));
+                                self.variant(layer, owner.host, at, set_name, name, variant, sink)?;
+                            stack.push(Task::Spec(variant));
                         } else {
-                            let Some(Task::Set(done)) = stack.pop() else {
-                                unreachable!("the set on top")
-                            };
-                            let Some(Task::Spec(owner)) = stack.last_mut() else {
-                                unreachable!("a set below its spec")
-                            };
-                            owner.sets_lowered.push(VariantSet {
-                                name: self.name(done.set),
-                                variants: done.lowered,
-                            });
+                            stack.pop();
+                            sink.leave();
                         }
                     }
                 }
             }
         }
-        Ok(lowered)
+        Ok(())
     }
 
     /// Starts lowering the prim spec named `name` below `parent`, in the
@@ -612,6 +602,7 @@ impl Lowering<'_> {
         parent: Parent<'_>,
         name: TokenId,
         visited: &mut Visited,
+        sink: &mut impl namespace::Sink,
     ) -> Result<SpecTask<'l>, SaveError> {
         let path = parent.path.join(&[name]);
         let shown = child_display(parent.shown, self.tokens.resolve(name));
@@ -622,7 +613,7 @@ impl Lowering<'_> {
         else {
             return invalid(shown, Invalid::MissingChildSpec);
         };
-        visited.insert((id, parent.sites.to_vec()));
+        let duplicate = !visited.insert((id, parent.sites.to_vec()));
 
         let mut prim = Prim::new(
             WriterSpecifier::Over,
@@ -657,47 +648,50 @@ impl Lowering<'_> {
         }
         prim.property_order = spec.property_order().map(|o| self.names(o));
         prim.prim_order = spec.prim_order().map(|o| self.names(o));
-        for entry in &spec.properties {
-            prim.properties.push(self.property(entry, &shown)?);
-        }
-        Ok(SpecTask {
+        prim.properties = spec
+            .properties
+            .iter()
+            .map(|entry| self.property(entry, &shown))
+            .collect::<Result<_, _>>()?;
+        let set_names_error = self
+            .set_names(&mut prim, &shown, spec.variant_set_names())
+            .err();
+        let sets: Vec<_> = spec.variant_sets().iter().collect();
+        sink.body(
+            &shown,
             prim,
+            false,
+            duplicate,
+            &spec.authored_children,
+            &sets,
+        );
+        Ok(SpecTask {
+            set_names_error,
             path,
             shown,
             sites: parent.sites.to_vec(),
             host: id,
             children: &spec.authored_children,
             next_child: 0,
-            sets: spec.variant_sets().iter().collect(),
+            sets,
             next_set: 0,
-            sets_lowered: Vec::new(),
-            set_names: spec.variant_set_names(),
         })
     }
 
-    /// Finishes a prim spec or variant whose child prims and variant sets
-    /// are lowered: its `variantSets` list op, as authored (`None` when it
-    /// is not).
-    ///
-    /// The list op and the set specs are written apart, as OpenUSD keeps
-    /// them (`variantSetNames` and `variantSetChildren`): a set spec the
-    /// list op does not name is written without being listed, and a listed
-    /// set without a spec is listed only. Sets are written in the layer's
-    /// order, OpenUSD's `variantSetChildren` (`Sdf_WritePrimVariantSets`),
-    /// each with at least one variant, and variants by name, as
-    /// `Sdf_WriteVariantSet` sorts them.
-    ///
-    /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set
-    /// specs), §7.6.2.3.5 (`variantSetNames`), §7.6.6–§7.6.7.
-    fn finish(&self, task: SpecTask<'_>) -> Result<Prim, SaveError> {
-        let mut prim = task.prim;
-        if is_authored(task.set_names) {
-            let path = format!("{}#variantSetNames", task.shown);
-            prim.variant_set_names =
-                Some(self.list_op(task.set_names, &path, |set| Ok(self.name(*set)))?);
+    /// A set spec and an authored list of set names are independent fields.
+    /// Preserve the original lowering error order: an invalid list is reported
+    /// when leaving the spec, after checking its child and variant specs.
+    fn set_names(
+        &self,
+        prim: &mut Prim,
+        shown: &str,
+        names: &LayerListOp<TokenId>,
+    ) -> Result<(), SaveError> {
+        if is_authored(names) {
+            let path = format!("{shown}#variantSetNames");
+            prim.variant_set_names = Some(self.list_op(names, &path, |set| Ok(self.name(*set)))?);
         }
-        prim.variant_sets = task.sets_lowered;
-        Ok(prim)
+        Ok(())
     }
 
     /// Sets a prim's or variant's composition arcs.
@@ -770,6 +764,7 @@ impl Lowering<'_> {
         set: TokenId,
         name: TokenId,
         variant: &'l VariantSpec,
+        sink: &mut impl namespace::Sink,
     ) -> Result<SpecTask<'l>, SaveError> {
         let shown = branch_display(
             owner.shown,
@@ -794,21 +789,26 @@ impl Lowering<'_> {
         prim.variant_selections = self.selections(&variant.variant_selections);
         prim.property_order = variant.property_order.as_ref().map(|o| self.names(o));
         prim.prim_order = variant.prim_order.as_ref().map(|o| self.names(o));
-        for entry in &variant.properties {
-            prim.properties.push(self.property(entry, &shown)?);
-        }
+        prim.properties = variant
+            .properties
+            .iter()
+            .map(|entry| self.property(entry, &shown))
+            .collect::<Result<_, _>>()?;
+        let set_names_error = self
+            .set_names(&mut prim, &shown, &variant.variant_set_names)
+            .err();
+        let sets: Vec<_> = variant.variant_sets.iter().collect();
+        sink.body(&shown, prim, true, false, &variant.authored_children, &sets);
         Ok(SpecTask {
-            prim,
+            set_names_error,
             path: owner.path.clone(),
             shown,
             sites,
             host,
             children: &variant.authored_children,
             next_child: 0,
-            sets: variant.variant_sets.iter().collect(),
+            sets,
             next_set: 0,
-            sets_lowered: Vec::new(),
-            set_names: &variant.variant_set_names,
         })
     }
 
@@ -1336,8 +1336,8 @@ struct Parent<'a> {
 /// finished: the [`Prim`] lowered so far, and where its child prims and
 /// variant sets are written.
 struct SpecTask<'l> {
-    /// Everything but the child prims and variant sets.
-    prim: Prim,
+    /// A malformed set names list is reported after visiting the children.
+    set_names_error: Option<SaveError>,
     /// The namespace path of the prim spec (a variant's is its prim's).
     path: Path,
     /// The variant-qualified display path (`/A{v=x}`).
@@ -1352,10 +1352,6 @@ struct SpecTask<'l> {
     /// The variant sets, and the next to lower.
     sets: Vec<(&'l TokenId, &'l VariantSetSpec)>,
     next_set: usize,
-    /// The variant sets lowered so far.
-    sets_lowered: Vec<VariantSet>,
-    /// The `variantSetNames` list op.
-    set_names: &'l LayerListOp<TokenId>,
 }
 
 /// A variant set [`Lowering::prims`] is lowering: its variants by name,
@@ -1364,13 +1360,11 @@ struct SetTask<'l> {
     set: TokenId,
     variants: Vec<(TokenId, &'l VariantSpec)>,
     next: usize,
-    lowered: Vec<Prim>,
 }
 
-/// A spec or set [`Lowering::prims`] has entered; a spec boxed, as it
-/// holds a whole [`Prim`].
+/// A spec or set whose children are still being visited.
 enum Task<'l> {
-    Spec(Box<SpecTask<'l>>),
+    Spec(SpecTask<'l>),
     Set(SetTask<'l>),
 }
 
@@ -1464,6 +1458,10 @@ pub(crate) fn push_element(array: &mut Value, element: Value) -> bool {
     }
     true
 }
+
+mod namespace;
+#[doc(hidden)]
+pub use namespace::{LayerSpec, visit_layer_specs};
 
 #[cfg(test)]
 mod tests;

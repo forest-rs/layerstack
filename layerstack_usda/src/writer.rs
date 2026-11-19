@@ -293,7 +293,7 @@ impl Document {
                     prim,
                     siblings,
                     index,
-                } => prim.validate(path, &siblings[..index]),
+                } => prim.validate(path, siblings[..index].iter().any(|p| p.name == prim.name)),
                 Step::Set {
                     set,
                     siblings,
@@ -457,16 +457,16 @@ impl Prim {
             || self.variant_set_names.is_some()
     }
 
-    /// Validates the prim spec at `path`, after the `earlier` of its
-    /// siblings, apart from its child prims and variant sets.
-    fn validate(&self, path: &str, earlier: &[Self]) -> Result<(), WriteError> {
+    /// Validates the prim body at `path`. The namespace walk supplies whether
+    /// an earlier sibling has the same name.
+    pub(crate) fn validate(&self, path: &str, duplicate: bool) -> Result<(), WriteError> {
         if !is_identifier(&self.name) {
             return Err(WriteError::InvalidName {
                 path: path.into(),
                 name: self.name.clone(),
             });
         }
-        if earlier.iter().any(|sibling| sibling.name == self.name) {
+        if duplicate {
             return Err(WriteError::Duplicate { path: path.into() });
         }
         if let Some(type_name) = &self.type_name
@@ -608,12 +608,7 @@ impl VariantSet {
     /// Validates the set at `path` (`/P{v=}`), after the `earlier` sets of
     /// its spec, apart from its variants.
     fn validate(&self, path: &str, earlier: &[Self]) -> Result<(), WriteError> {
-        if !is_variant_identifier(&self.name) {
-            return Err(WriteError::InvalidName {
-                path: path.into(),
-                name: self.name.clone(),
-            });
-        }
+        validate_set_name(&self.name, path)?;
         if earlier.iter().any(|sibling| sibling.name == self.name) {
             return Err(WriteError::Duplicate { path: path.into() });
         }
@@ -624,9 +619,24 @@ impl VariantSet {
     }
 }
 
+pub(crate) fn validate_set_name(name: &str, path: &str) -> Result<(), WriteError> {
+    if is_variant_identifier(name) {
+        Ok(())
+    } else {
+        Err(WriteError::InvalidName {
+            path: path.into(),
+            name: name.into(),
+        })
+    }
+}
+
 /// Validates the variant at `path` (`/P{v=x}`), after the `earlier`
 /// variants of its set, apart from its child prims and variant sets.
-fn validate_variant(variant: &Prim, path: &str, earlier: &[Prim]) -> Result<(), WriteError> {
+pub(crate) fn validate_variant(
+    variant: &Prim,
+    path: &str,
+    earlier: &[Prim],
+) -> Result<(), WriteError> {
     if !is_variant_name(&variant.name) {
         return Err(WriteError::InvalidName {
             path: path.into(),

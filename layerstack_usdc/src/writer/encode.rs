@@ -14,13 +14,14 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::hash::BuildHasher;
+use core::ops::Range;
 use layerstack::sort;
 
-use hashbrown::HashMap;
+use hashbrown::{DefaultHashBuilder, HashMap, HashTable};
 use smallvec::SmallVec;
 
 use super::array_dedup::{Array, ArrayDedup};
-use super::compress::{IntWidth, LZ4_MAX_TOTAL_INPUT, compressed_ints, lz4_compress};
+use super::compress::{IntWidth, LZ4_MAX_TOTAL_INPUT, append_compressed, encode_integers};
 use super::error::UsdcWriteError;
 use super::path::{CratePath, Element, path_tree};
 use super::specs::Specs;
@@ -143,13 +144,13 @@ struct Packer<'a> {
     arrays: ArrayDedup<'a>,
     /// Last sorted map of each size: a borrowed fast path before child packing.
     dictionaries: HashMap<usize, (SortedDictionary<'a>, u64)>,
-    tokens: Vec<String>,
-    /// The index of each token, string, path, field and field set: looked
-    /// up only, so hashed, which compiles less than ordered maps.
-    token_index: HashMap<String, u32>,
+    /// NUL-terminated TOKENS data, accumulated in first-use order.
+    token_text: Vec<u8>,
+    token_index: HashTable<(Range<usize>, u32)>,
+    hasher: DefaultHashBuilder,
     /// Token index of each string (`_strings`).
     strings: Vec<u32>,
-    string_index: HashMap<String, u32>,
+    string_index: HashMap<u32, u32>,
     /// Each nonempty path owns one entry with its file index and element token.
     path_index: HashMap<CratePath<'a>, (u32, u32)>,
     /// The empty path has a file index but no entry in the path tree.
@@ -159,7 +160,7 @@ struct Packer<'a> {
     field_index: HashMap<(u32, u64), u32>,
     /// Field indexes, each set terminated by `u32::MAX` (`FieldIndex()`).
     fieldsets: Vec<u32>,
-    fieldset_index: HashMap<Vec<u32>, u32>,
+    fieldset_index: HashTable<Range<usize>>,
     /// `(path index, field set index, spec form)`.
     specs: Vec<(u32, u32, u32)>,
     /// The `SdfUnregisteredValue` holding each held value's representation.
@@ -173,8 +174,9 @@ impl<'a> Packer<'a> {
     fn new() -> Self {
         let mut packer = Self {
             out: alloc::vec![0; BOOTSTRAP_SIZE],
-            tokens: Vec::new(),
-            token_index: HashMap::new(),
+            token_text: Vec::new(),
+            token_index: HashTable::new(),
+            hasher: DefaultHashBuilder::default(),
             strings: Vec::new(),
             string_index: HashMap::new(),
             path_index: HashMap::new(),
@@ -182,7 +184,7 @@ impl<'a> Packer<'a> {
             fields: Vec::new(),
             field_index: HashMap::new(),
             fieldsets: Vec::new(),
-            fieldset_index: HashMap::new(),
+            fieldset_index: HashTable::new(),
             specs: Vec::new(),
             blobs: HashMap::default(),
             unregistered: HashMap::default(),
@@ -198,24 +200,34 @@ impl<'a> Packer<'a> {
 
     /// `_AddToken`.
     fn token(&mut self, text: &str) -> Result<u32, UsdcWriteError> {
-        if let Some(&i) = self.token_index.get(text) {
-            return Ok(i);
+        let bytes = text.as_bytes();
+        let hash = self.hasher.hash_one(bytes);
+        if let Some((_, i)) = self
+            .token_index
+            .find(hash, |(r, _)| &self.token_text[r.clone()] == bytes)
+        {
+            return Ok(*i);
         }
-        let i = index(self.tokens.len())?;
-        self.tokens.push(text.into());
-        self.token_index.insert(text.into(), i);
+        let i = index(self.token_index.len())?;
+        let start = self.token_text.len();
+        self.token_text.extend_from_slice(bytes);
+        let span = start..self.token_text.len();
+        self.token_text.push(0);
+        self.token_index.insert_unique(hash, (span, i), |(r, _)| {
+            self.hasher.hash_one(&self.token_text[r.clone()])
+        });
         Ok(i)
     }
 
     /// `_AddString`: a string is stored as a token and indexed separately.
     fn string(&mut self, text: &str) -> Result<u32, UsdcWriteError> {
-        if let Some(&i) = self.string_index.get(text) {
+        let token = self.token(text)?;
+        if let Some(&i) = self.string_index.get(&token) {
             return Ok(i);
         }
-        let token = self.token(text)?;
         let i = index(self.strings.len())?;
         self.strings.push(token);
-        self.string_index.insert(text.into(), i);
+        self.string_index.insert(token, i);
         Ok(i)
     }
 
@@ -302,13 +314,21 @@ impl<'a> Packer<'a> {
 
     /// `_AddFieldSet`.
     fn fieldset(&mut self, fields: &[u32]) -> Result<u32, UsdcWriteError> {
-        if let Some(&i) = self.fieldset_index.get(fields) {
-            return Ok(i);
+        let hash = self.hasher.hash_one(fields);
+        if let Some(span) = self
+            .fieldset_index
+            .find(hash, |r| &self.fieldsets[r.clone()] == fields)
+        {
+            return index(span.start);
         }
-        let i = index(self.fieldsets.len())?;
+        let start = self.fieldsets.len();
+        let i = index(start)?;
         self.fieldsets.extend_from_slice(fields);
+        let span = start..self.fieldsets.len();
         self.fieldsets.push(u32::MAX);
-        self.fieldset_index.insert(fields.to_vec(), i);
+        self.fieldset_index.insert_unique(hash, span, |r| {
+            self.hasher.hash_one(&self.fieldsets[r.clone()])
+        });
         Ok(i)
     }
 
@@ -1025,7 +1045,7 @@ impl<'a> Packer<'a> {
             }
             return self.array_blob(ty, ARRAY_BIT, &bytes, false);
         }
-        bytes.extend_from_slice(&checked_ints(values, width)?);
+        write_ints(&mut bytes, values, width)?;
         self.array_blob(ty, ARRAY_BIT | COMPRESSED_BIT, &bytes, false)
     }
 
@@ -1060,7 +1080,7 @@ impl<'a> Packer<'a> {
         });
         if integral.is_some() {
             bytes.push(b'i');
-            bytes.extend_from_slice(&checked_ints(&ints, IntWidth::W32)?);
+            write_ints(&mut bytes, &ints, IntWidth::W32)?;
             return self.array_blob(ty, ARRAY_BIT | COMPRESSED_BIT, &bytes, false);
         }
         drop(ints);
@@ -1095,7 +1115,7 @@ impl<'a> Packer<'a> {
         for &j in &lut {
             bytes.extend_from_slice(&element(j));
         }
-        bytes.extend_from_slice(&checked_ints(&indexes, IntWidth::W32)?);
+        write_ints(&mut bytes, &indexes, IntWidth::W32)?;
         self.array_blob(ty, ARRAY_BIT | COMPRESSED_BIT, &bytes, false)
     }
 
@@ -1296,16 +1316,23 @@ impl<'a> Packer<'a> {
                 continue;
             }
             bytes.extend_from_slice(&(list.len() as u64).to_le_bytes());
-            // Sorted, a repeat sits next to its first copy.
-            let mut encodings = Vec::with_capacity(list.len());
-            for x in list {
-                let mut encoded = Vec::new();
-                item(self, x, &mut encoded)?;
-                bytes.extend_from_slice(&encoded);
-                encodings.push(encoded);
+            if let [single] = list {
+                item(self, single, &mut bytes)?;
+                continue;
             }
-            sort::sort_unstable(&mut encodings);
-            if encodings.windows(2).any(|pair| pair[0] == pair[1]) {
+            // Compare spans in the encoded list. Items are written only once,
+            // including references with variable-length custom data.
+            let mut spans = Vec::with_capacity(list.len());
+            for x in list {
+                let start = bytes.len();
+                item(self, x, &mut bytes)?;
+                spans.push(start..bytes.len());
+            }
+            sort::sort_unstable_by(&mut spans, |a, b| bytes[a.clone()].cmp(&bytes[b.clone()]));
+            if spans
+                .windows(2)
+                .any(|pair| bytes[pair[0].clone()] == bytes[pair[1].clone()])
+            {
                 return Err(site.list_op("an item repeats within a list"));
             }
         }
@@ -1322,16 +1349,9 @@ impl<'a> Packer<'a> {
         // TOKENS (`_WriteTokens`): count, uncompressed size, compressed
         // size, LZ4 of the NUL-terminated token strings.
         let start = self.out.len();
-        let mut text = Vec::new();
-        for token in &self.tokens {
-            text.extend_from_slice(token.as_bytes());
-            text.push(0);
-        }
-        let compressed = checked_lz4(&text)?;
-        self.put_u64(self.tokens.len());
-        self.put_u64(text.len());
-        self.put_u64(compressed.len());
-        self.out.extend_from_slice(&compressed);
+        self.put_u64(self.token_index.len());
+        self.put_u64(self.token_text.len());
+        write_lz4(&mut self.out, &self.token_text)?;
         sections.push((toc::TOKENS, start, self.out.len()));
 
         // STRINGS: count, then token indexes.
@@ -1348,12 +1368,9 @@ impl<'a> Packer<'a> {
         let start = self.out.len();
         self.put_u64(self.fields.len());
         let tokens: Vec<i64> = self.fields.iter().map(|f| i64::from(f.0)).collect();
-        let coded = checked_ints(&tokens, IntWidth::W32)?;
-        self.out.extend_from_slice(&coded);
+        write_ints(&mut self.out, &tokens, IntWidth::W32)?;
         let reps: Vec<u8> = self.fields.iter().flat_map(|f| f.1.to_le_bytes()).collect();
-        let compressed = checked_lz4(&reps)?;
-        self.put_u64(compressed.len());
-        self.out.extend_from_slice(&compressed);
+        write_lz4(&mut self.out, &reps)?;
         sections.push((toc::FIELDS, start, self.out.len()));
 
         // FIELDSETS (`_WriteFieldSets`): count, then coded field indexes
@@ -1366,8 +1383,7 @@ impl<'a> Packer<'a> {
             .iter()
             .map(|&f| i64::from(f as i32))
             .collect();
-        let coded = checked_ints(&sets, IntWidth::W32)?;
-        self.out.extend_from_slice(&coded);
+        write_ints(&mut self.out, &sets, IntWidth::W32)?;
         sections.push((toc::FIELDSETS, start, self.out.len()));
 
         // PATHS (`_WritePaths`, `_WriteCompressedPathData`): path count,
@@ -1381,27 +1397,24 @@ impl<'a> Packer<'a> {
             .collect();
         sort::sort_by(&mut sorted, |a, b| a.0.cmp(b.0));
         let tree = path_tree(&sorted);
-        let mut paths = Vec::new();
-        paths.extend_from_slice(&(self.path_count() as u64).to_le_bytes());
-        paths.extend_from_slice(&(sorted.len() as u64).to_le_bytes());
+        let count = sorted.len();
+        let path_count = self.path_count();
+        self.put_u64(path_count);
+        self.put_u64(count);
         for column in [&tree.path_indexes, &tree.element_tokens, &tree.jumps] {
-            paths.extend_from_slice(&checked_ints(column, IntWidth::W32)?);
+            write_ints(&mut self.out, column, IntWidth::W32)?;
         }
-        self.out.extend_from_slice(&paths);
         sections.push((toc::PATHS, start, self.out.len()));
 
         // SPECS (`_WriteSpecs`): count, then coded path indexes, field set
         // indexes and spec forms.
         let start = self.out.len();
         self.put_u64(self.specs.len());
-        let columns: [Vec<i64>; 3] = [
-            self.specs.iter().map(|s| i64::from(s.0)).collect(),
-            self.specs.iter().map(|s| i64::from(s.1)).collect(),
-            self.specs.iter().map(|s| i64::from(s.2)).collect(),
-        ];
-        for column in &columns {
-            let coded = checked_ints(column, IntWidth::W32)?;
-            self.out.extend_from_slice(&coded);
+        let mut column = Vec::with_capacity(self.specs.len());
+        for field in [|(p, _, _)| p, |(_, f, _)| f, |(_, _, s)| s] {
+            column.clear();
+            column.extend(self.specs.iter().map(|&s| i64::from(field(s))));
+            write_ints(&mut self.out, &column, IntWidth::W32)?;
         }
         sections.push((toc::SPECS, start, self.out.len()));
 
@@ -1452,14 +1465,15 @@ fn le_item<T: Copy, const N: usize>(
     }
 }
 
-fn checked_lz4(input: &[u8]) -> Result<Vec<u8>, UsdcWriteError> {
+fn write_lz4(out: &mut Vec<u8>, input: &[u8]) -> Result<(), UsdcWriteError> {
     if input.len() as u64 > LZ4_MAX_TOTAL_INPUT {
         return Err(UsdcWriteError::TooLarge);
     }
-    Ok(lz4_compress(input))
+    append_compressed(out, input);
+    Ok(())
 }
 
-fn checked_ints(values: &[i64], width: IntWidth) -> Result<Vec<u8>, UsdcWriteError> {
+fn write_ints(out: &mut Vec<u8>, values: &[i64], width: IntWidth) -> Result<(), UsdcWriteError> {
     // The coded form is at most one extra integer plus two bits per value.
     let bytes = match width {
         IntWidth::W32 => 4,
@@ -1468,7 +1482,8 @@ fn checked_ints(values: &[i64], width: IntWidth) -> Result<Vec<u8>, UsdcWriteErr
     if (values.len() as u64 + 1) * (bytes + 1) > LZ4_MAX_TOTAL_INPUT {
         return Err(UsdcWriteError::TooLarge);
     }
-    Ok(compressed_ints(values, width))
+    append_compressed(out, &encode_integers(values, width));
+    Ok(())
 }
 
 // ── Element helpers ─────────────────────────────────────────────────────

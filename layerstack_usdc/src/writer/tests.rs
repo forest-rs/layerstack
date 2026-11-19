@@ -1231,13 +1231,15 @@ fn rejects_invalid_input() {
         ),
         "repeated item"
     );
-    assert!(
-        matches!(
-            bad_value(Value::PathListOp(ListOp::explicit(vec!["relative".into()]))),
-            UsdcWriteError::InvalidPath { .. }
-        ),
-        "target paths are absolute"
-    );
+    for invalid in ["", "relative", "/A//B", "/A.bad."] {
+        assert!(
+            matches!(
+                bad_value(Value::PathListOp(ListOp::explicit(vec![invalid.into()]))),
+                UsdcWriteError::InvalidPath { .. }
+            ),
+            "{invalid:?}"
+        );
+    }
     let mut specs = layer_with(&[("x", Value::Int(1))]);
     specs[2].fields.push(Field::new("default", Value::Int(2)));
     let duplicate = err(specs);

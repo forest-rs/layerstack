@@ -148,16 +148,22 @@ impl<'a> CratePath<'a> {
     /// and property identifiers have already passed the shared XID checks.
     /// Variant syntax still goes through the crate grammar.
     pub(super) fn authored(text: &'a str) -> Result<Self, UsdcWriteError> {
-        if text.contains('{') {
-            return Self::parse(text);
+        Self::ordinary(text).map_or_else(|| Self::parse(text), Ok)
+    }
+
+    /// Splits a candidate ordinary path for lookup against validated keys.
+    /// A miss still requires parsing when the source is untrusted.
+    pub(super) fn ordinary(text: &'a str) -> Option<Self> {
+        if !text.starts_with('/') || text.contains('{') {
+            return None;
         }
         if text == "/" {
-            return Ok(Self::root());
+            return Some(Self::root());
         }
         let (names, property) = text
             .split_once('.')
             .map_or((text, None), |(p, n)| (p, Some(n)));
-        Ok(Self {
+        Some(Self {
             prim: PrimPart {
                 names,
                 suffix: Vec::new(),
@@ -321,7 +327,7 @@ impl<'a> CratePath<'a> {
     /// stores it: the property name for a prim property path, otherwise
     /// the element's text (`SdfPath::GetElementToken`: `B`, `{v=x}`,
     /// `[/C]`, `.mapper[/C]`, `.d`, empty for the root).
-    pub(crate) fn element_token(&self) -> Cow<'_, str> {
+    pub(crate) fn element_token(&self) -> Cow<'a, str> {
         if self.is_prim_property() {
             return Cow::Borrowed(self.property.expect("a prim property"));
         }

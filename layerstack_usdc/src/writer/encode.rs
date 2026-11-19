@@ -137,6 +137,66 @@ fn index(len: usize) -> Result<u32, UsdcWriteError> {
 
 type SortedDictionary<'a> = SmallVec<[&'a (String, Value); 8]>;
 
+struct PathEntry<'a> {
+    path: CratePath<'a>,
+    file: Option<(u32, u32)>,
+}
+
+/// A slot identifies a path throughout preparation and packing. File indexes
+/// are separate: OpenUSD assigns them on first use, including uses in fields.
+#[derive(Default)]
+struct Paths<'a> {
+    entries: Vec<PathEntry<'a>>,
+    slots: HashTable<usize>,
+    hasher: DefaultHashBuilder,
+    namespace: Vec<usize>,
+    file_count: usize,
+}
+
+impl<'a> Paths<'a> {
+    fn find(&self, path: &CratePath<'a>) -> Option<usize> {
+        self.slots
+            .find(self.hasher.hash_one(path), |&i| {
+                self.entries[i].path == *path
+            })
+            .copied()
+    }
+
+    fn intern(&mut self, path: CratePath<'a>) -> usize {
+        let hash = self.hasher.hash_one(&path);
+        if let Some(&i) = self.slots.find(hash, |&i| self.entries[i].path == path) {
+            return i;
+        }
+        let i = self.entries.len();
+        self.entries.push(PathEntry { path, file: None });
+        self.slots
+            .insert_unique(hash, i, |&i| self.hasher.hash_one(&self.entries[i].path));
+        i
+    }
+
+    fn tree(&mut self) -> super::path::PathTree {
+        // Extra target paths can fall anywhere in the tree. The original
+        // namespace is already sorted; a stable sort merges its sorted run.
+        if self.namespace.len() < self.entries.len() {
+            self.namespace
+                .extend(self.namespace.len()..self.entries.len());
+            sort::sort_by(&mut self.namespace, |&a, &b| {
+                self.entries[a].path.cmp(&self.entries[b].path)
+            });
+        }
+        let sorted: Vec<_> = self
+            .namespace
+            .iter()
+            .map(|&i| {
+                let entry = &self.entries[i];
+                let (index, token) = entry.file.expect("every path was packed");
+                (&entry.path, index, token)
+            })
+            .collect();
+        path_tree(&sorted)
+    }
+}
+
 /// The tables and value data of a file being written.
 struct Packer<'a> {
     /// Bootstrap placeholder, then value data, then sections.
@@ -152,7 +212,7 @@ struct Packer<'a> {
     strings: Vec<u32>,
     string_index: HashMap<u32, u32>,
     /// Each nonempty path owns one entry with its file index and element token.
-    path_index: HashMap<CratePath<'a>, (u32, u32)>,
+    paths: Paths<'a>,
     /// The empty path has a file index but no entry in the path tree.
     empty_path_index: Option<u32>,
     /// `(token index, value representation)` of each field.
@@ -171,7 +231,7 @@ struct Packer<'a> {
 }
 
 impl<'a> Packer<'a> {
-    fn new() -> Self {
+    fn new(paths: Paths<'a>) -> Self {
         let mut packer = Self {
             out: alloc::vec![0; BOOTSTRAP_SIZE],
             token_text: Vec::new(),
@@ -179,7 +239,7 @@ impl<'a> Packer<'a> {
             hasher: DefaultHashBuilder::default(),
             strings: Vec::new(),
             string_index: HashMap::new(),
-            path_index: HashMap::new(),
+            paths,
             empty_path_index: None,
             fields: Vec::new(),
             field_index: HashMap::new(),
@@ -237,55 +297,34 @@ impl<'a> Packer<'a> {
     ///
     /// `_AddPath` recurses; here the paths still to add wait on a heap
     /// stack, as a namespace has no depth limit.
-    fn path(&mut self, path: CratePath<'a>) -> Result<u32, UsdcWriteError> {
-        enum Step<'a> {
-            Enter(CratePath<'a>),
-            Store(CratePath<'a>),
-        }
-        // The usual spec already has its parent in the table. Keep the slow
-        // path iterative for an unseen ancestor or a bracketed target.
-        let mut pending = SmallVec::<[Step<'_>; 4]>::new();
-        let mut step = Step::Enter(path);
-        loop {
-            let path = match step {
-                Step::Enter(path) => {
-                    if let Some(&(i, _)) = self.path_index.get(&path) {
-                        match pending.pop() {
-                            Some(next) => {
-                                step = next;
-                                continue;
-                            }
-                            None => return Ok(i),
-                        }
-                    }
-                    let parent = path.parent().filter(|p| !self.path_index.contains_key(p));
-                    let target = path
-                        .target()
-                        .filter(|p| !self.path_index.contains_key(*p))
-                        .cloned();
-                    if parent.is_some() || target.is_some() {
-                        pending.push(Step::Store(path));
-                        pending.extend(parent.map(Step::Enter));
-                        pending.extend(target.map(Step::Enter));
-                        step = pending.pop().expect("a dependency");
-                        continue;
-                    }
-                    path
+    fn path(&mut self, slot: usize) -> Result<u32, UsdcWriteError> {
+        let mut pending = SmallVec::<[usize; 8]>::new();
+        pending.push(slot);
+        while let Some(&i) = pending.last() {
+            if self.paths.entries[i].file.is_some() {
+                pending.pop();
+                continue;
+            }
+            let path = &self.paths.entries[i].path;
+            let parent = path.parent();
+            let target = path.target().cloned();
+            let before = pending.len();
+            for path in parent.into_iter().chain(target) {
+                let dep = self.paths.intern(path);
+                if self.paths.entries[dep].file.is_none() {
+                    pending.push(dep);
                 }
-                Step::Store(path) => path,
-            };
-            let token = self.token(&path.element_token())?;
-            let i = index(self.path_count())?;
-            self.path_index.insert(path, (i, token));
-            match pending.pop() {
-                Some(next) => step = next,
-                None => return Ok(i),
+            }
+            if pending.len() == before {
+                let name = self.paths.entries[i].path.element_token();
+                let token = self.token(&name)?;
+                let id = index(self.paths.file_count)?;
+                self.paths.file_count += 1;
+                self.paths.entries[i].file = Some((id, token));
+                pending.pop();
             }
         }
-    }
-
-    fn path_count(&self) -> usize {
-        self.path_index.len() + usize::from(self.empty_path_index.is_some())
+        Ok(self.paths.entries[slot].file.expect("path was packed").0)
     }
 
     /// `_AddPath(SdfPath())`: the empty path, a reference or payload's
@@ -296,7 +335,8 @@ impl<'a> Packer<'a> {
         if let Some(i) = self.empty_path_index {
             return Ok(i);
         }
-        let i = index(self.path_count())?;
+        let i = index(self.paths.file_count)?;
+        self.paths.file_count += 1;
         self.empty_path_index = Some(i);
         Ok(i)
     }
@@ -1203,8 +1243,15 @@ impl<'a> Packer<'a> {
 
     /// A path list op item: the index of an absolute path.
     fn path_text(&mut self, text: &'a str) -> Result<u32, UsdcWriteError> {
-        let path = CratePath::parse(text)?;
-        self.path(path)
+        // Matching a known spec also proves the target spelling is valid.
+        // Unknown targets still pass the complete crate path grammar.
+        if let Some(path) = CratePath::ordinary(text)
+            && let Some(slot) = self.paths.find(&path)
+        {
+            return self.path(slot);
+        }
+        let slot = self.paths.intern(CratePath::parse(text)?);
+        self.path(slot)
     }
 
     fn dictionary_inline(
@@ -1390,17 +1437,9 @@ impl<'a> Packer<'a> {
         // encoded count, then the coded path indexes, element tokens and
         // jumps of the tree in `SdfPath` order.
         let start = self.out.len();
-        let mut sorted: Vec<_> = self
-            .path_index
-            .iter()
-            .map(|(path, &(index, token))| (path, index, token))
-            .collect();
-        sort::sort_by(&mut sorted, |a, b| a.0.cmp(b.0));
-        let tree = path_tree(&sorted);
-        let count = sorted.len();
-        let path_count = self.path_count();
-        self.put_u64(path_count);
-        self.put_u64(count);
+        let tree = self.paths.tree();
+        self.put_u64(self.paths.file_count);
+        self.put_u64(tree.path_indexes.len());
         for column in [&tree.path_indexes, &tree.element_tokens, &tree.jumps] {
             write_ints(&mut self.out, column, IntWidth::W32)?;
         }
@@ -1821,14 +1860,17 @@ fn ts_spline_data(spline: &layerstack::spline::SplineData) -> Vec<u8> {
 /// Checks the specs' paths, forms, parents and field names, and returns
 /// them in `Sdf_CrateData::Save` order: prim paths (the pseudo-root first)
 /// in `SdfPath` order, then property paths grouped by name.
-fn prepare<S: Specs + ?Sized>(specs: &S) -> Result<Vec<(CratePath<'_>, usize)>, UsdcWriteError> {
-    // Looked up only, so hashed.
-    let mut forms = (!S::VALIDATED_NAMESPACE).then(|| HashMap::with_capacity(specs.len()));
+fn prepare<S: Specs + ?Sized>(specs: &S) -> Result<(Paths<'_>, Vec<usize>), UsdcWriteError> {
+    let mut paths = Paths {
+        entries: Vec::with_capacity(specs.len()),
+        slots: HashTable::with_capacity(specs.len()),
+        ..Paths::default()
+    };
     let mut names = hashbrown::HashSet::new();
-    let mut prepared = Vec::with_capacity(specs.len());
+    let mut ordinary = true;
     for i in 0..specs.len() {
         let (text, form) = specs.header(i);
-        let path = if let Some(forms) = &mut forms {
+        let path = if !S::VALIDATED_NAMESPACE {
             let path = CratePath::parse(text)?;
             let last = path.last_element();
             let fits = match form {
@@ -1854,13 +1896,14 @@ fn prepare<S: Specs + ?Sized>(specs: &S) -> Result<Vec<(CratePath<'_>, usize)>, 
                     form,
                 });
             }
-            if forms.insert(path.clone(), form).is_some() {
-                return Err(UsdcWriteError::DuplicateSpec { path: text.into() });
-            }
             path
         } else {
             CratePath::authored(text)?
         };
+        if paths.intern(path) != i {
+            return Err(UsdcWriteError::DuplicateSpec { path: text.into() });
+        }
+        ordinary &= !text.contains('{');
         names.clear();
         for (_, field) in specs.fields(i) {
             if field.name.is_empty() {
@@ -1879,23 +1922,23 @@ fn prepare<S: Specs + ?Sized>(specs: &S) -> Result<Vec<(CratePath<'_>, usize)>, 
                 });
             }
         }
-        prepared.push((path, i));
     }
-    if let Some(forms) = forms {
-        if !forms.contains_key(&CratePath::root()) {
+    if !S::VALIDATED_NAMESPACE {
+        if paths.find(&CratePath::root()).is_none() {
             return Err(UsdcWriteError::MissingPseudoRoot);
         }
         // A prim, variant set or property belongs to a prim or variant (a root
         // prim to the pseudo-root); a variant to its variant set.
-        for (path, i) in &prepared {
-            let (text, form) = specs.header(*i);
+        for (i, entry) in paths.entries.iter().enumerate() {
+            let path = &entry.path;
+            let (text, form) = specs.header(i);
             let owner = match form {
                 SpecForm::Variant => path.variant_set(),
                 _ => path.parent(),
             };
             if let Some(owner) = owner {
                 let ok = matches!(
-                    (forms.get(&owner), form),
+                    (paths.find(&owner).map(|i| specs.header(i).1), form),
                     (Some(SpecForm::Prim | SpecForm::Variant), _)
                         | (Some(SpecForm::PseudoRoot), SpecForm::Prim)
                         | (Some(SpecForm::VariantSet), SpecForm::Variant)
@@ -1906,28 +1949,40 @@ fn prepare<S: Specs + ?Sized>(specs: &S) -> Result<Vec<(CratePath<'_>, usize)>, 
             }
         }
     }
-    sort::sort_by(&mut prepared, |(a, _), (b, _)| {
-        // Spec property paths are prim property paths: a name each.
-        match (a.property, b.property) {
-            (None, None) => a.cmp(b),
-            (None, Some(_)) => core::cmp::Ordering::Less,
-            (Some(_), None) => core::cmp::Ordering::Greater,
-            (Some(x), Some(y)) => x.cmp(y).then_with(|| a.cmp(b)),
-        }
+    paths.namespace = (0..specs.len()).collect();
+    if ordinary {
+        // For ordinary spec paths both separators ('.', '/') sort before
+        // identifier bytes, exactly where Sdf orders property and child nodes.
+        sort::sort_by(&mut paths.namespace, |&a, &b| {
+            specs.header(a).0.cmp(specs.header(b).0)
+        });
+    } else {
+        sort::sort_by(&mut paths.namespace, |&a, &b| {
+            paths.entries[a].path.cmp(&paths.entries[b].path)
+        });
+    }
+    let mut order = paths.namespace.clone();
+    // A stable grouping by property name preserves namespace order within
+    // each group, including the initial group of prim and variant specs.
+    sort::sort_by(&mut order, |&a, &b| {
+        paths.entries[a]
+            .path
+            .property
+            .cmp(&paths.entries[b].path.property)
     });
-    Ok(prepared)
+    Ok((paths, order))
 }
 
 /// `CrateFile::_Write` over specs packed as `Sdf_CrateData::Save` packs
 /// them: per spec, each field's name token and value, then the spec's
 /// path, then its field set.
 pub(super) fn write(specs: &(impl Specs + ?Sized)) -> Result<Vec<u8>, UsdcWriteError> {
-    let prepared = prepare(specs)?;
-    let mut packer = Packer::new();
+    let (paths, order) = prepare(specs)?;
+    let mut packer = Packer::new(paths);
     let mut packed_fields = alloc::vec![u32::MAX; specs.retained_field_count()];
     let mut version = CrateVersion::NEW_FILE_DEFAULT;
     let mut fields = Vec::new();
-    for (path, i) in prepared {
+    for i in order {
         let (text, form) = specs.header(i);
         let values = specs.fields(i);
         fields.clear();
@@ -1952,7 +2007,7 @@ pub(super) fn write(specs: &(impl Specs + ?Sized)) -> Result<Vec<u8>, UsdcWriteE
             }
             fields.push(id);
         }
-        let path_index = packer.path(path)?;
+        let path_index = packer.path(i)?;
         let fieldset = packer.fieldset(&fields)?;
         packer
             .specs
@@ -1973,7 +2028,7 @@ mod blob_tests {
                 "samples".into(),
                 Value::TimeSamples(alloc::vec![(0.0, array.clone()), (1.0, array.clone())])
             ),])));
-        let mut packer = Packer::new();
+        let mut packer = Packer::new(Paths::default());
         let site = Site {
             path: "/Root",
             field: "customData",
@@ -1988,7 +2043,7 @@ mod blob_tests {
 
     #[test]
     fn collision_candidates_are_verified_against_output() {
-        let mut packer = Packer::new();
+        let mut packer = Packer::new(Paths::default());
         let first_bytes = [1, 2, 3, 4];
         let second_bytes = [1, 2, 3, 5];
         let first = packer.blob(ValueType::Vec2h, 0, first_bytes, true).unwrap();

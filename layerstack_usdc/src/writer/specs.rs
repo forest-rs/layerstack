@@ -14,7 +14,8 @@ use super::{Field, Spec, SpecForm, Value};
 
 /// A lowering writes the fields of the last spec it opened, in authored order.
 pub(super) trait SpecSink {
-    fn begin(&mut self, path: &str, form: SpecForm);
+    fn begin(&mut self, path: impl Into<String>, form: SpecForm);
+    fn path(&self) -> &str;
     fn field(&mut self, name: impl AsRef<str> + Into<String>, value: Value);
     fn metadata(&mut self, field: Field) {
         self.field(field.name, field.value);
@@ -22,8 +23,11 @@ pub(super) trait SpecSink {
 }
 
 impl SpecSink for Vec<Spec> {
-    fn begin(&mut self, path: &str, form: SpecForm) {
+    fn begin(&mut self, path: impl Into<String>, form: SpecForm) {
         self.push(Spec::new(path, form));
+    }
+    fn path(&self) -> &str {
+        &self.last().expect("an open spec").path
     }
     fn field(&mut self, name: impl AsRef<str> + Into<String>, value: Value) {
         self.last_mut()
@@ -97,12 +101,16 @@ fn scalar(value: &Value) -> Option<Scalar<'_>> {
 }
 
 impl SpecSink for LayerSpecs {
-    fn begin(&mut self, path: &str, form: SpecForm) {
+    fn begin(&mut self, path: impl Into<String>, form: SpecForm) {
         self.headers.push(Header {
             path: path.into(),
             form,
             first_field: self.occurrences.len(),
         });
+    }
+
+    fn path(&self) -> &str {
+        &self.headers.last().expect("an open spec").path
     }
 
     fn field(&mut self, name: impl AsRef<str> + Into<String>, value: Value) {

@@ -818,7 +818,7 @@ impl Lowering<'_> {
     /// spec fields).
     fn property(&self, entry: &PropertyEntry, prim: &str) -> Result<Property, SaveError> {
         let name = self.name(entry.name);
-        let path = format!("{prim}.{name}");
+        let path = [prim, ".", &name].concat();
         let spec = &entry.spec;
         let targets = match &spec.targets {
             Some(op) => Some(self.target_list(op, &path)?),
@@ -1384,9 +1384,9 @@ static NO_PATHS: SparseListOp<PathId> = SparseListOp::new();
 /// `/A{v=x}`): a prim inside a variant follows its selection directly.
 fn child_display(parent: &str, name: &str) -> String {
     if parent.ends_with('}') {
-        format!("{parent}{name}")
+        [parent, name].concat()
     } else {
-        format!("{}/{name}", parent.trim_end_matches('/'))
+        [parent.trim_end_matches('/'), "/", name].concat()
     }
 }
 

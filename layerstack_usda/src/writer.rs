@@ -484,8 +484,7 @@ impl Prim {
     /// apart from their child prims and variant sets; `path` names the
     /// spec (`/P` or `/P{v=x}`).
     fn validate_body(&self, path: &str) -> Result<(), WriteError> {
-        let path = String::from(path);
-        validate_metadata(&self.metadata, &mut Vec::new(), &path)?;
+        validate_metadata(&self.metadata, &mut Vec::new(), path)?;
         // An arc list with no edits is a field an edit emptied, written
         // with no statements as OpenUSD writes it.
         for (key, arcs) in [
@@ -495,9 +494,9 @@ impl Prim {
             let Some(op) = arcs.as_ref().filter(|op| **op != ListOp::default()) else {
                 continue;
             };
-            validate_arc_list(op, &path, key)?;
+            validate_arc_list(op, path, key)?;
             for target in op.items() {
-                validate_prim_path(target, &path)?;
+                validate_prim_path(target, path)?;
             }
         }
         for (key, arcs) in [
@@ -507,27 +506,27 @@ impl Prim {
             let Some(op) = arcs.as_ref().filter(|op| **op != ListOp::default()) else {
                 continue;
             };
-            validate_arc_list(op, &path, key)?;
+            validate_arc_list(op, path, key)?;
             for arc in op.items() {
                 if let Some(asset) = &arc.asset {
-                    validate_asset_path(asset, &path)?;
+                    validate_asset_path(asset, path)?;
                 }
                 if let Some(target) = &arc.prim_path {
-                    validate_prim_path(target, &path)?;
+                    validate_prim_path(target, path)?;
                 }
-                validate_layer_offset(arc.offset, &path)?;
+                validate_layer_offset(arc.offset, path)?;
                 if key == "payload" && !arc.custom_data.is_empty() {
-                    return Err(WriteError::PayloadCustomData { path: path.clone() });
+                    return Err(WriteError::PayloadCustomData { path: path.into() });
                 }
-                validate_value(&Value::Dictionary(arc.custom_data.clone()), &path)?;
+                validate_value(&Value::Dictionary(arc.custom_data.clone()), path)?;
             }
         }
-        validate_order(self.property_order.as_deref(), &path, is_property_name)?;
-        validate_order(self.prim_order.as_deref(), &path, is_identifier)?;
-        let mut property_names: Vec<&str> = Vec::new();
+        validate_order(self.property_order.as_deref(), path, is_property_name)?;
+        validate_order(self.prim_order.as_deref(), path, is_identifier)?;
+        let mut property_names = SmallVec::<[&str; 8]>::new();
         for property in &self.properties {
             let name = property.name();
-            let prop_path = alloc::format!("{path}.{name}");
+            let prop_path = [path, ".", name].concat();
             if !is_property_name(name) {
                 return Err(WriteError::InvalidName {
                     path: prop_path,
@@ -543,7 +542,7 @@ impl Prim {
                 Property::Relationship(relationship) => relationship.validate(&prop_path)?,
             }
         }
-        self.validate_variant_fields(&path)
+        self.validate_variant_fields(path)
     }
 
     /// Validates the variant selections and the `variantSets` list op:
@@ -554,18 +553,17 @@ impl Prim {
     ///
     /// Spec: AOUSD Core §7.6.2.3.4, §7.6.2.3.5.
     fn validate_variant_fields(&self, path: &str) -> Result<(), WriteError> {
-        let key = alloc::format!("{path}#variants");
         let mut selected: Vec<&str> = Vec::new();
         for (set, variant) in &self.variant_selections {
             if !is_variant_selection(variant) {
                 return Err(WriteError::InvalidName {
-                    path: key,
+                    path: alloc::format!("{path}#variants"),
                     name: variant.clone(),
                 });
             }
             if selected.contains(&set.as_str()) {
                 return Err(WriteError::Duplicate {
-                    path: alloc::format!("{key}/{set}"),
+                    path: alloc::format!("{path}#variants/{set}"),
                 });
             }
             selected.push(set);

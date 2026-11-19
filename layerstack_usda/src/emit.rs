@@ -76,6 +76,26 @@ use crate::numeric::{convert_scalar, dimensioned_value, element_type_hint};
 use crate::writer::is_identifier;
 use layerstack::value_type::ValueType;
 
+/// Preserve the first occurrence of a child without a quadratic scan
+/// under wide prims. A short child list needs no separate index.
+#[derive(Default)]
+struct ChildNames(Option<HashSet<TokenId>>);
+
+impl ChildNames {
+    fn append(&mut self, children: &mut Vec<TokenId>, name: TokenId) {
+        let fresh = if children.len() < 16 {
+            !children.contains(&name)
+        } else {
+            self.0
+                .get_or_insert_with(|| children.iter().copied().collect())
+                .insert(name)
+        };
+        if fresh {
+            children.push(name);
+        }
+    }
+}
+
 /// Result of emitting a single USDA layer.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -462,6 +482,7 @@ impl EmitCtx<'_> {
         self.emit_prim_metadata(&prim.metadata, prim_path, outer_variant_sites, &mut spec);
 
         // Process prim body children.
+        let mut child_names = ChildNames::default();
         for child in &prim.children {
             match child {
                 ast::PrimChild::Attribute(attr) => {
@@ -480,9 +501,7 @@ impl EmitCtx<'_> {
                         continue;
                     }
                     let child_name = self.tokens.intern(&child_prim.name);
-                    if !spec.authored_children.contains(&child_name) {
-                        spec.authored_children.push(child_name);
-                    }
+                    child_names.append(&mut spec.authored_children, child_name);
                     let place = PrimPlace {
                         parent: path_id,
                         name: child_name,
@@ -1089,47 +1108,7 @@ impl EmitCtx<'_> {
     ) {
         let name_tok = self.tokens.intern(rel.name);
         let listop = rel.targets.as_ref().map(|targets| {
-            // Spec: `SdfSchema::IsValidRelationshipTargetPath`.
-            let targets: Vec<Cow<'_, str>> = targets
-                .iter()
-                .copied()
-                .filter_map(|target| {
-                    // `<>` names no target; OpenUSD refuses it before it
-                    // anchors a relative path.
-                    if target.is_empty() {
-                        self.reject(
-                            rel.span,
-                            String::from(
-                                "Relationship target paths must be absolute prim, property or \
-                                 mapper paths: <>",
-                            ),
-                        );
-                        return None;
-                    }
-                    let absolute = (!has_prim_variant_selection(target))
-                        .then(|| self.variant_anchored(target, anchor, sites))
-                        .flatten()
-                        .map(|absolute| anchor_relative_brackets(target, absolute));
-                    if absolute.is_none() {
-                        self.reject(
-                            rel.span,
-                            format!(
-                                "Relationship target paths cannot contain variant \
-                                 selections: <{target}>"
-                            ),
-                        );
-                    }
-                    absolute
-                })
-                .collect();
-            let targets: Vec<&str> = targets.iter().map(|target| &**target).collect();
-            let target_paths = self.target_paths(
-                &targets,
-                anchor,
-                rel.span,
-                "Relationship target paths must be absolute prim, property or mapper paths",
-                true,
-            );
+            let target_paths = self.relationship_targets(targets, anchor, sites, rel.span);
             self.check_empty_edit(rel.span, "targetPaths", rel.op, target_paths.is_empty());
             self.check_duplicates(rel.span, "targetPaths", &target_paths);
             let mut listop = ListOp::default();
@@ -1291,6 +1270,7 @@ impl EmitCtx<'_> {
             );
 
             // Process branch children.
+            let mut child_names = ChildNames::default();
             for child in &branch.children {
                 match child {
                     ast::PrimChild::Attribute(attr) => {
@@ -1309,9 +1289,7 @@ impl EmitCtx<'_> {
                             continue;
                         }
                         let child_tok = self.tokens.intern(&child_prim.name);
-                        if !variant_spec.authored_children.contains(&child_tok) {
-                            variant_spec.authored_children.push(child_tok);
-                        }
+                        child_names.append(&mut variant_spec.authored_children, child_tok);
                         // The branch owns the child's prim spec (`/P{v=x}C`),
                         // which `Layer::insert_prim` keeps apart from the
                         // specs at the same path outside this branch.
@@ -1748,7 +1726,7 @@ impl EmitCtx<'_> {
             })
             .collect();
         let target_paths = self.target_paths(
-            &targets,
+            targets,
             anchor,
             conn.span,
             "Connection paths must be absolute prim or property paths",
@@ -1907,6 +1885,59 @@ impl EmitCtx<'_> {
         Some(Cow::Owned(absolute_path(rest, &base).into_owned()))
     }
 
+    /// Resolve variant-relative targets before reporting target-shape errors,
+    /// preserving diagnostic order for mixed lists. Absolute paths with no
+    /// selections are ready for the target grammar as written.
+    fn relationship_targets(
+        &mut self,
+        targets: &[&str],
+        anchor: &str,
+        sites: &[VariantSelectionSite],
+        span: Span,
+    ) -> Vec<TargetPath> {
+        const REFUSAL: &str =
+            "Relationship target paths must be absolute prim, property or mapper paths";
+        if targets
+            .iter()
+            .all(|t| t.starts_with('/') && !t.contains('{'))
+        {
+            return self.target_paths(targets.iter().copied(), anchor, span, REFUSAL, true);
+        }
+        let targets: Vec<Cow<'_, str>> = targets
+            .iter()
+            .copied()
+            .filter_map(|target| {
+                // `<>` names no target; OpenUSD refuses it before it
+                // anchors a relative path.
+                if target.is_empty() {
+                    self.reject(span, format!("{REFUSAL}: <>"));
+                    return None;
+                }
+                let absolute = (!has_prim_variant_selection(target))
+                    .then(|| self.variant_anchored(target, anchor, sites))
+                    .flatten()
+                    .map(|absolute| anchor_relative_brackets(target, absolute));
+                if absolute.is_none() {
+                    self.reject(
+                        span,
+                        format!(
+                            "Relationship target paths cannot contain variant \
+                             selections: <{target}>"
+                        ),
+                    );
+                }
+                absolute
+            })
+            .collect();
+        self.target_paths(
+            targets.iter().map(AsRef::as_ref),
+            anchor,
+            span,
+            REFUSAL,
+            true,
+        )
+    }
+
     /// Parses relationship or connection targets; relative paths resolve
     /// against the prim path `anchor`, and unparsable ones are reported.
     ///
@@ -1916,16 +1947,16 @@ impl EmitCtx<'_> {
     /// refused with `refusal`, OpenUSD's message for the field
     /// (`SdfSchema::IsValidRelationshipTargetPath`,
     /// `IsValidAttributeConnectionPath`).
-    fn target_paths(
+    fn target_paths<'t>(
         &mut self,
-        targets: &[&str],
+        targets: impl IntoIterator<Item = &'t str>,
         anchor: &str,
         span: Span,
         refusal: &str,
         mappers: bool,
     ) -> Vec<TargetPath> {
         targets
-            .iter()
+            .into_iter()
             .filter_map(|target| {
                 let absolute = absolute_path(target, anchor);
                 if target.is_empty() || absolute == "/" {
@@ -2723,6 +2754,20 @@ mod tests {
     }
     use layerstack::interner::TokenInterner;
     use layerstack::path::PathInterner;
+
+    #[test]
+    fn wide_child_list_preserves_first_occurrences_across_the_index_threshold() {
+        let tokens = TokenInterner::default();
+        let names: Vec<_> = (0..32).map(|i| tokens.intern(format!("C{i}"))).collect();
+        let mut children = Vec::new();
+        let mut seen = ChildNames::default();
+        for &name in &names {
+            seen.append(&mut children, name);
+            seen.append(&mut children, names[0]);
+            seen.append(&mut children, name);
+        }
+        assert_eq!(children, names);
+    }
 
     /// Stub resolver that assigns incrementing layer IDs.
     struct StubResolver {

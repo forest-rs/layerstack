@@ -6,7 +6,19 @@
 
 use super::*;
 
-pub(super) trait Sink {
+pub(super) trait Sink<'a> {
+    /// Consume an ordinary prim directly when this destination can represent
+    /// all of its opinions. Other prims follow the general lowering below.
+    fn borrow_prim(
+        &mut self,
+        _: &'a PrimSpec,
+        _: TokenId,
+        _: &'a TokenInterner,
+        _: &'a PathInterner,
+    ) -> bool {
+        false
+    }
+
     fn root(&mut self, root: Document, children: &[TokenId]);
     fn body(
         &mut self,
@@ -32,20 +44,23 @@ pub(super) struct DocumentBuilder {
     open: Vec<Open>,
 }
 
-impl Sink for DocumentBuilder {
-    fn root(&mut self, root: Document, _: &[TokenId]) {
+impl Sink<'_> for DocumentBuilder {
+    fn root(&mut self, mut root: Document, children: &[TokenId]) {
+        root.prims.reserve_exact(children.len());
         self.document = root;
     }
 
     fn body(
         &mut self,
         _: &str,
-        prim: Prim,
+        mut prim: Prim,
         _: bool,
         _: bool,
-        _: &[TokenId],
-        _: &[(&TokenId, &VariantSetSpec)],
+        children: &[TokenId],
+        sets: &[(&TokenId, &VariantSetSpec)],
     ) {
+        prim.children.reserve_exact(children.len());
+        prim.variant_sets.reserve_exact(sets.len());
         self.open.push(Open::Prim(Box::new(prim)));
     }
 
@@ -123,7 +138,7 @@ struct CheckedSpecs<'a, F> {
     validation: Result<(), WriteError>,
 }
 
-impl<F: FnMut(LayerSpec<'_>)> Sink for CheckedSpecs<'_, F> {
+impl<F: FnMut(LayerSpec<'_>)> Sink<'_> for CheckedSpecs<'_, F> {
     fn root(&mut self, root: Document, children: &[TokenId]) {
         self.validation = root.validate();
         if self.validation.is_ok() {
@@ -191,4 +206,129 @@ impl<F: FnMut(LayerSpec<'_>)> Sink for CheckedSpecs<'_, F> {
     }
 
     fn leave(&mut self) {}
+}
+
+pub(super) struct TextBuilder<O> {
+    names: crate::writer::CheckedNames,
+    open: Vec<bool>,
+    after_sibling: bool,
+    output: O,
+    shared: Result<(), WriteError>,
+    text: Result<(), WriteError>,
+    minor: u8,
+}
+
+impl<O: Default> TextBuilder<O> {
+    pub(super) fn new() -> Self {
+        Self {
+            output: O::default(),
+            names: crate::writer::CheckedNames::default(),
+            open: Vec::new(),
+            after_sibling: false,
+            shared: Ok(()),
+            text: Ok(()),
+            minor: 0,
+        }
+    }
+
+    fn open_body(&mut self, variant: bool, children: bool) -> crate::writer::Layout {
+        let depth = self.open.len();
+        let layout = crate::writer::Layout {
+            depth,
+            variant,
+            blank_before: !variant && (depth == 0 || self.after_sibling),
+            children,
+        };
+        self.open.push(variant);
+        self.after_sibling = false;
+        layout
+    }
+
+    pub(super) fn finish<'a>(self) -> Result<O::Finished, SaveError>
+    where
+        O: crate::writer::TextOutput<'a>,
+    {
+        self.shared.and(self.text).map_err(SaveError::Document)?;
+        Ok(self.output.finish(self.minor))
+    }
+}
+
+impl<'a, O: crate::writer::TextOutput<'a>> Sink<'a> for TextBuilder<O> {
+    fn borrow_prim(
+        &mut self,
+        spec: &'a PrimSpec,
+        name: TokenId,
+        tokens: &'a TokenInterner,
+        paths: &'a PathInterner,
+    ) -> bool {
+        if self.shared.is_err() || self.text.is_err() {
+            return false;
+        }
+        let Some(body) =
+            self.names
+                .borrow_prim(spec, name, tokens, paths, self.output.declarations())
+        else {
+            return false;
+        };
+        let layout = self.open_body(false, !spec.authored_children.is_empty());
+        self.output.borrowed(body, layout);
+        true
+    }
+
+    fn root(&mut self, root: Document, _: &[TokenId]) {
+        self.shared = root.validate();
+        self.text = crate::writer::text_metadata(&root.metadata, "/");
+        self.minor = crate::writer::value_text_version::metadata(&root.metadata);
+        if self.shared.is_ok() && self.text.is_ok() {
+            self.output.root(root);
+        }
+    }
+
+    fn body(
+        &mut self,
+        path: &str,
+        prim: Prim,
+        variant: bool,
+        duplicate: bool,
+        children: &[TokenId],
+        _: &[(&TokenId, &VariantSetSpec)],
+    ) {
+        if self.shared.is_ok() {
+            self.shared = if variant {
+                crate::writer::validate_variant(&prim, path, &[])
+            } else {
+                prim.validate(path, duplicate)
+            };
+        }
+        if self.text.is_ok() {
+            self.text = crate::writer::validate_text_body(&prim, path);
+        }
+        if self.shared.is_err() || self.text.is_err() {
+            return;
+        }
+        self.minor = self.minor.max(crate::writer::body_text_version(&prim));
+        let layout = self.open_body(variant, !children.is_empty());
+        self.output.body(prim, layout);
+    }
+
+    fn set(&mut self, owner: &str, name: &str, _: &[(TokenId, &VariantSpec)]) {
+        if self.shared.is_ok() {
+            self.shared = crate::writer::validate_set_name(name, &branch_display(owner, name, ""));
+        }
+        if self.shared.is_err() || self.text.is_err() {
+            return;
+        }
+        self.output.set(name, self.open.len());
+        self.open.push(false);
+        self.after_sibling = false;
+    }
+
+    fn leave(&mut self) {
+        if self.shared.is_err() || self.text.is_err() {
+            return;
+        }
+        let variant = self.open.pop().expect("paired with an opening spec");
+        self.output.leave(self.open.len(), variant);
+        self.after_sibling = true;
+    }
 }

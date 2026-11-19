@@ -6,7 +6,9 @@
 //!
 //! A shared namespace walk reads every authored field for both formats.
 //! [`usda_document`] and [`usdc_document`] collect its output into a
-//! [`Document`]. The text writer omits dictionary entries with no value.
+//! [`Document`]. [`save_usda`] emits checked prims directly into its result.
+//! [`prepare_usda`] records them in write order for a streaming destination.
+//! The text writer omits dictionary entries with no value.
 //! The crate writer consumes each spec body as the walk produces it and
 //! stores fields as OpenUSD's text parser would store them.
 //!
@@ -175,9 +177,7 @@ pub fn save_usda(
     tokens: &TokenInterner,
     paths: &PathInterner,
 ) -> Result<String, SaveError> {
-    usda_document(layer, tokens, paths)?
-        .to_usda()
-        .map_err(SaveError::Document)
+    lower_text::<crate::writer::TextString<'_>>(layer, tokens, paths)
 }
 
 /// Saves an authored layer as USDA text into `sink`, a piece at a time:
@@ -197,8 +197,8 @@ pub fn save_usda_to<W: fmt::Write + ?Sized>(
     paths: &PathInterner,
     sink: &mut W,
 ) -> Result<(), SaveError> {
-    usda_document(layer, tokens, paths)?
-        .write_usda_to(sink)
+    prepare_usda(layer, tokens, paths)?
+        .write_to(sink)
         .map_err(SaveError::from_usda)
 }
 
@@ -221,6 +221,38 @@ pub fn usda_document(
     let doc = lower(layer, tokens, paths, true)?;
     doc.validate_text_specs().map_err(SaveError::Document)?;
     Ok(doc)
+}
+
+pub use crate::writer::PreparedUsda;
+
+/// Checks the authored layer and determines the USDA header version before
+/// a caller opens a destination. The prepared writer borrows the layer
+/// and its interners and can be streamed repeatedly with [`PreparedUsda::write_to`].
+///
+/// # Errors
+///
+/// See [`save_usda`].
+pub fn prepare_usda<'a>(
+    layer: &'a Layer,
+    tokens: &'a TokenInterner,
+    paths: &'a PathInterner,
+) -> Result<PreparedUsda<'a>, SaveError> {
+    lower_text::<PreparedUsda<'_>>(layer, tokens, paths)
+}
+
+fn lower_text<'a, O: crate::writer::TextOutput<'a>>(
+    layer: &'a Layer,
+    tokens: &'a TokenInterner,
+    paths: &'a PathInterner,
+) -> Result<O::Finished, SaveError> {
+    let mut sink = namespace::TextBuilder::<O>::new();
+    Lowering {
+        tokens,
+        paths,
+        skip_empty_entries: true,
+    }
+    .layer(layer, &mut sink)?;
+    sink.finish()
 }
 
 /// Why an authored layer could not be saved.
@@ -387,7 +419,7 @@ enum Site<'t> {
     Metadata,
 }
 
-impl Lowering<'_> {
+impl<'l> Lowering<'l> {
     fn name(&self, token: TokenId) -> String {
         String::from(self.tokens.resolve(token))
     }
@@ -399,7 +431,11 @@ impl Lowering<'_> {
     // ── Layer ───────────────────────────────────────────────────────
 
     /// Spec: AOUSD Core §7.6.1 (layer spec fields).
-    fn layer(&self, layer: &Layer, sink: &mut impl namespace::Sink) -> Result<(), SaveError> {
+    fn layer(
+        &self,
+        layer: &'l Layer,
+        sink: &mut impl namespace::Sink<'l>,
+    ) -> Result<(), SaveError> {
         let mut doc = Document::new();
         doc.default_prim = layer.default_prim().map(|t| self.name(t));
         doc.relocates = layer.has_relocates().then(|| {
@@ -428,22 +464,36 @@ impl Lowering<'_> {
         }
 
         let root = self.paths.lookup(&Path::root());
-        let mut visited = Visited::new();
+        let mut visited = Visited {
+            prims: HashSet::with_capacity(layer.prims().len()),
+            variants: HashSet::new(),
+        };
         if let Some((root, spec)) = root.and_then(|id| Some((id, layer.prim(id)?))) {
-            visited.insert((root, Vec::new()));
+            visited.prims.insert(root);
             if !is_children_only(spec) {
                 return invalid("/", Invalid::PseudoRootOpinions);
             }
             doc.prim_order = spec.prim_order().map(|o| self.names(o));
             sink.root(doc, &spec.authored_children);
-            self.prims(layer, &spec.authored_children, &mut visited, sink)?;
+            self.prims(layer, root, &spec.authored_children, &mut visited, sink)?;
         } else {
             sink.root(doc, &[]);
         }
 
         // Every prim spec, outside variants or inside one, must have been
         // reached from the pseudo-root through the children lists.
-        let mut unlisted: Vec<String> = layer
+        // Every visited site resolved to an existing spec. Equal counts
+        // prove coverage; only an incomplete namespace needs a missing path.
+        let total = layer.prims().len()
+            + layer
+                .variant_prims()
+                .iter()
+                .map(|(_, specs)| specs.len())
+                .sum::<usize>();
+        if visited.prims.len() + visited.variants.len() == total {
+            return Ok(());
+        }
+        let unlisted = layer
             .prims()
             .iter()
             .chain(
@@ -453,12 +503,17 @@ impl Lowering<'_> {
                     .flat_map(|(path, specs)| specs.iter().map(move |spec| (path, spec))),
             )
             .filter(|(path, spec)| {
-                !visited.contains(&(**path, spec.outer_variant_sites().to_vec()))
+                if spec.outer_variant_sites().is_empty() {
+                    !visited.prims.contains(*path)
+                } else {
+                    !visited
+                        .variants
+                        .contains(&(**path, spec.outer_variant_sites().to_vec()))
+                }
             })
             .map(|(path, spec)| self.spec_display(*path, spec.outer_variant_sites()))
-            .collect();
-        sort::sort(&mut unlisted);
-        if let Some(path) = unlisted.into_iter().next() {
+            .min();
+        if let Some(path) = unlisted {
             return invalid(path, Invalid::UnlistedPrim);
         }
         Ok(())
@@ -471,6 +526,9 @@ impl Lowering<'_> {
     /// The variant-qualified path of the prim spec at `path` inside the
     /// branches `sites` (`/A{v=x}B`), as OpenUSD names it.
     fn spec_display(&self, path: PathId, sites: &[VariantSelectionSite]) -> String {
+        if sites.is_empty() {
+            return self.display(path);
+        }
         let segments = self.paths.resolve(path).segments();
         let mut out = String::new();
         for (i, &segment) in segments.iter().enumerate() {
@@ -502,19 +560,19 @@ impl Lowering<'_> {
     ///
     /// Spec: AOUSD Core §7.3.5–§7.3.6 (prim, variant set and variant
     /// specs).
-    fn prims<'l>(
+    fn prims(
         &self,
         layer: &'l Layer,
+        root: PathId,
         roots: &[TokenId],
         visited: &mut Visited,
-        sink: &mut impl namespace::Sink,
+        sink: &mut impl namespace::Sink<'l>,
     ) -> Result<(), SaveError> {
-        let root = Path::root();
         let mut stack: Vec<Task<'l>> = Vec::new();
         for &name in roots {
             let parent = Parent {
-                path: &root,
-                shown: "/",
+                path: root,
+                shown: Some("/"),
                 sites: &[],
             };
             stack.push(Task::Spec(self.prim(layer, parent, name, visited, sink)?));
@@ -524,8 +582,8 @@ impl Lowering<'_> {
                         if let Some(&child) = spec.children.get(spec.next_child) {
                             spec.next_child += 1;
                             let parent = Parent {
-                                path: &spec.path,
-                                shown: &spec.shown,
+                                path: spec.host,
+                                shown: spec.shown.as_deref(),
                                 sites: &spec.sites,
                             };
                             let child = self.prim(layer, parent, child, visited, sink)?;
@@ -544,7 +602,11 @@ impl Lowering<'_> {
                             sort::sort_by(&mut variants, |a, b| {
                                 self.tokens.resolve(a.0).cmp(self.tokens.resolve(b.0))
                             });
-                            sink.set(&spec.shown, self.tokens.resolve(set), &variants);
+                            sink.set(
+                                spec.shown.as_deref().expect("variant set owner"),
+                                self.tokens.resolve(set),
+                                &variants,
+                            );
                             stack.push(Task::Set(SetTask {
                                 set,
                                 variants,
@@ -571,8 +633,8 @@ impl Lowering<'_> {
                                 unreachable!("a set below its spec")
                             };
                             let at = Parent {
-                                path: &owner.path,
-                                shown: &owner.shown,
+                                path: owner.host,
+                                shown: owner.shown.as_deref(),
                                 sites: &owner.sites,
                             };
                             let variant =
@@ -596,25 +658,47 @@ impl Lowering<'_> {
     ///
     /// Spec: AOUSD Core §7.6.2 (prim spec fields), §7.3.6 (variant specs
     /// contain prim specs).
-    fn prim<'l>(
+    fn prim(
         &self,
         layer: &'l Layer,
         parent: Parent<'_>,
         name: TokenId,
         visited: &mut Visited,
-        sink: &mut impl namespace::Sink,
+        sink: &mut impl namespace::Sink<'l>,
     ) -> Result<SpecTask<'l>, SaveError> {
-        let path = parent.path.join(&[name]);
-        let shown = child_display(parent.shown, self.tokens.resolve(name));
+        let shown = || {
+            let name = self.tokens.resolve(name);
+            match parent.shown {
+                Some(base) => child_display(base, name),
+                None => child_display(&self.spec_display(parent.path, parent.sites), name),
+            }
+        };
         let Some((id, spec)) = self
             .paths
-            .lookup(&path)
+            .lookup_child(parent.path, name)
             .and_then(|id| Some((id, layer.prim_spec_in(id, parent.sites)?)))
         else {
-            return invalid(shown, Invalid::MissingChildSpec);
+            return invalid(shown(), Invalid::MissingChildSpec);
         };
-        let duplicate = !visited.insert((id, parent.sites.to_vec()));
+        let duplicate = if parent.sites.is_empty() {
+            !visited.prims.insert(id)
+        } else {
+            !visited.variants.insert((id, parent.sites.to_vec()))
+        };
 
+        if !duplicate && sink.borrow_prim(spec, name, self.tokens, self.paths) {
+            return Ok(SpecTask {
+                set_names_error: None,
+                shown: None,
+                sites: parent.sites.to_vec(),
+                host: id,
+                children: &spec.authored_children,
+                next_child: 0,
+                sets: Vec::new(),
+                next_set: 0,
+            });
+        }
+        let shown = shown();
         let mut prim = Prim::new(
             WriterSpecifier::Over,
             spec.type_name.map(|t| self.name(t)),
@@ -667,8 +751,7 @@ impl Lowering<'_> {
         );
         Ok(SpecTask {
             set_names_error,
-            path,
-            shown,
+            shown: Some(shown),
             sites: parent.sites.to_vec(),
             host: id,
             children: &spec.authored_children,
@@ -756,7 +839,7 @@ impl Lowering<'_> {
         clippy::too_many_arguments,
         reason = "the variant, its set and where it is written"
     )]
-    fn variant<'l>(
+    fn variant(
         &self,
         layer: &Layer,
         host: PathId,
@@ -764,10 +847,10 @@ impl Lowering<'_> {
         set: TokenId,
         name: TokenId,
         variant: &'l VariantSpec,
-        sink: &mut impl namespace::Sink,
+        sink: &mut impl namespace::Sink<'l>,
     ) -> Result<SpecTask<'l>, SaveError> {
         let shown = branch_display(
-            owner.shown,
+            owner.shown.expect("variant set owner"),
             self.tokens.resolve(set),
             self.tokens.resolve(name),
         );
@@ -801,8 +884,7 @@ impl Lowering<'_> {
         sink.body(&shown, prim, true, false, &variant.authored_children, &sets);
         Ok(SpecTask {
             set_names_error,
-            path: owner.path.clone(),
-            shown,
+            shown: Some(shown),
             sites,
             host,
             children: &variant.authored_children,
@@ -1320,15 +1402,18 @@ fn is_children_only(spec: &PrimSpec) -> bool {
 }
 
 /// The prim specs reached so far, by path and branch context.
-type Visited = HashSet<(PathId, Vec<VariantSelectionSite>)>;
+struct Visited {
+    prims: HashSet<PathId>,
+    variants: HashSet<(PathId, Vec<VariantSelectionSite>)>,
+}
 
 /// Where a prim spec or variant is written: the namespace path of the prim
 /// spec it belongs to, its variant-qualified display path, and the variant
 /// branches enclosing it.
 #[derive(Clone, Copy)]
 struct Parent<'a> {
-    path: &'a Path,
-    shown: &'a str,
+    path: PathId,
+    shown: Option<&'a str>,
     sites: &'a [VariantSelectionSite],
 }
 
@@ -1338,10 +1423,8 @@ struct Parent<'a> {
 struct SpecTask<'l> {
     /// A malformed set names list is reported after visiting the children.
     set_names_error: Option<SaveError>,
-    /// The namespace path of the prim spec (a variant's is its prim's).
-    path: Path,
     /// The variant-qualified display path (`/A{v=x}`).
-    shown: String,
+    shown: Option<String>,
     /// The variant branches enclosing the spec's child prims.
     sites: Vec<VariantSelectionSite>,
     /// The prim hosting the spec's variant sets.

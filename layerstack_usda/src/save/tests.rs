@@ -73,10 +73,16 @@ impl Imported {
     /// the same text.
     fn save(&self) -> Result<String, SaveError> {
         let text = save_usda(&self.layer, &self.tokens, &self.paths);
+        let document = usda_document(&self.layer, &self.tokens, &self.paths)
+            .and_then(|doc| doc.to_usda().map_err(SaveError::Document));
+        assert_eq!(text, document, "document writer");
         let mut streamed = Pieces::default();
         let result = save_usda_to(&self.layer, &self.tokens, &self.paths, &mut streamed);
         match &text {
-            Ok(text) => assert_eq!(&streamed.text, text, "streamed text"),
+            Ok(text) => {
+                result.unwrap();
+                assert_eq!(&streamed.text, text, "streamed text");
+            }
             Err(error) => {
                 assert_eq!(result.as_ref(), Err(error), "streamed error");
                 assert!(streamed.text.is_empty(), "nothing streamed before an error");
@@ -91,12 +97,14 @@ impl Imported {
 struct Pieces {
     text: String,
     pieces: usize,
+    largest: usize,
 }
 
 impl fmt::Write for Pieces {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         self.text.push_str(s);
         self.pieces += 1;
+        self.largest = self.largest.max(s.len());
         Ok(())
     }
 }
@@ -153,6 +161,31 @@ fn streams_the_text_save_usda_returns_in_pieces() {
     .unwrap();
     assert!(streamed.pieces > 4, "{} pieces", streamed.pieces);
     assert_eq!(streamed.text, text);
+}
+
+#[test]
+fn prepared_text_can_replay_large_utf8_values_in_bounded_pieces() {
+    let mut layer = Imported::new(
+        r#"#usda 1.0
+def "World" {
+    string message = ""
+    rel links = [</World.message>, </World/É>]
+    int item10 = 10
+    int item2 = 2
+    def "É" (active = false) {}
+}
+"#,
+    );
+    let value = ["猫é".repeat(80_000), "\t\n\"".into(), "℘".repeat(70_000)].concat();
+    layer.property("/World.message").default = Some(LayerValue::string(value));
+    let expected = layer.save().unwrap();
+    let prepared = prepare_usda(&layer.layer, &layer.tokens, &layer.paths).unwrap();
+    for _ in 0..2 {
+        let mut sink = Pieces::default();
+        prepared.write_to(&mut sink).unwrap();
+        assert_eq!(sink.text, expected);
+        assert!(sink.largest <= 64 * 1024 + 4096, "{}", sink.largest);
+    }
 }
 
 #[test]

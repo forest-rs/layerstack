@@ -37,6 +37,13 @@ pub fn is_continue(c: char) -> bool {
 /// OpenUSD: `SdfPath::IsValidIdentifier`.
 #[must_use]
 pub fn is_identifier(text: &str) -> bool {
+    if text.is_ascii() {
+        let Some((&first, rest)) = text.as_bytes().split_first() else {
+            return false;
+        };
+        return (first == b'_' || first.is_ascii_alphabetic())
+            && rest.iter().all(|&b| b == b'_' || b.is_ascii_alphanumeric());
+    }
     let mut chars = text.chars();
     chars.next().is_some_and(is_start) && chars.all(is_continue)
 }

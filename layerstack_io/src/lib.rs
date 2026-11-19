@@ -2158,7 +2158,7 @@ impl<B: Storage> StageDocument<B> {
         let (tokens, paths) = (&self.store.tokens(), &self.store.paths());
         if format == Format::Usda {
             let document =
-                layerstack_usda::save::usda_document(layer, tokens, paths).map_err(save_error)?;
+                layerstack_usda::save::prepare_usda(layer, tokens, paths).map_err(save_error)?;
             return self
                 .storage
                 .write_streamed(identifier, &mut |sink| write_usda(&document, sink))
@@ -2180,7 +2180,7 @@ impl<B: Storage> StageDocument<B> {
         let (tokens, paths) = (&self.store.tokens(), &self.store.paths());
         let bytes = match format {
             Format::Usda => {
-                let document = layerstack_usda::save::usda_document(layer, tokens, paths)
+                let document = layerstack_usda::save::prepare_usda(layer, tokens, paths)
                     .map_err(save_error)?;
                 return write_usda(&document, sink);
             }
@@ -3239,14 +3239,14 @@ fn strict_rejection(identifier: &str, diagnostics: &[MemberDiagnostic]) -> IoErr
 fn localization_error(error: layerstack_usdz::localize::LocalizationError) -> IoError {
     caused(IoCause::Localization(error))
 }
-/// Streams `document`'s USDA text into `sink`; a failed write fails with
+/// Streams the prepared USDA text into `sink`; a failed write fails with
 /// the sink's error.
 fn write_usda(
-    document: &layerstack_usda::writer::Document,
+    document: &layerstack_usda::save::PreparedUsda<'_>,
     sink: &mut dyn ByteSink,
 ) -> Result<(), IoError> {
     let mut text = TextSink { sink, error: None };
-    document.write_usda_to(&mut text).map_err(|error| {
+    document.write_to(&mut text).map_err(|error| {
         text.error
             .take()
             .unwrap_or_else(|| save_error(layerstack_usda::save::SaveError::Document(error)))

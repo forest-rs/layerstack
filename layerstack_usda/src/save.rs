@@ -686,7 +686,10 @@ impl<'l> Lowering<'l> {
             !visited.variants.insert((id, parent.sites.to_vec()))
         };
 
-        if !duplicate && sink.borrow_prim(spec, name, self.tokens, self.paths) {
+        if !duplicate
+            && parent.sites.is_empty()
+            && sink.borrow_prim(spec, id, name, self.tokens, self.paths)
+        {
             return Ok(SpecTask {
                 set_names_error: None,
                 shown: None,
@@ -1543,6 +1546,8 @@ pub(crate) fn push_element(array: &mut Value, element: Value) -> bool {
 }
 
 mod namespace;
+#[doc(hidden)]
+pub use crate::writer::borrowed::{Declaration, Payload};
 #[doc(hidden)]
 pub use namespace::{LayerSpec, visit_layer_specs};
 

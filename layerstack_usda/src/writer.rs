@@ -115,7 +115,7 @@ use smallvec::SmallVec;
 
 use layerstack::float_text;
 
-mod borrowed;
+pub(crate) mod borrowed;
 pub(crate) use borrowed::CheckedNames;
 mod prepared;
 pub use prepared::PreparedUsda;
@@ -2997,8 +2997,7 @@ impl Writer<'_> {
     }
 
     /// Hands the buffered text on once there is enough of it. Called
-    /// between items (array elements, time samples, properties, prims),
-    /// never inside one.
+    /// between items and while quoting long text.
     fn spill(&mut self) {
         if self.out.len() >= SPILL_BYTES {
             self.flush();
@@ -3008,7 +3007,12 @@ impl Writer<'_> {
     /// Streams a single large token or string in UTF-8 pieces. Small
     /// fragments share the normal buffer until the next spill point.
     fn text(&mut self, text: &str) {
-        if text.len() < SPILL_SLACK || self.spill.is_none() {
+        if self.spill.is_none() {
+            self.out.push_str(text);
+            return;
+        }
+        if text.len() < SPILL_SLACK {
+            self.spill();
             self.out.push_str(text);
             return;
         }
@@ -4257,6 +4261,7 @@ impl Writer<'_> {
         while let Some(at) = rest.find("@@@") {
             self.text(&rest[..at]);
             self.out.push_str("\\@@@");
+            self.spill();
             rest = &rest[at + 3..];
         }
         self.text(rest);

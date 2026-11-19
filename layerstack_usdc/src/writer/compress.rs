@@ -13,44 +13,35 @@ use hashbrown::HashMap;
 /// Largest input one LZ4 block may hold (`LZ4_MAX_INPUT_SIZE`).
 const LZ4_MAX_INPUT_SIZE: usize = 0x7E00_0000;
 
-/// Compresses `input` with `TfFastCompression`'s framing.
-///
-/// Input that fits one LZ4 block is written as a `0` byte followed by the
-/// block. Larger input is split into `LZ4_MAX_INPUT_SIZE` chunks: a chunk
-/// count byte, then each chunk as an `int32` compressed size and its block.
-pub(crate) fn lz4_compress(input: &[u8]) -> Vec<u8> {
-    lz4_compress_chunked(input, LZ4_MAX_INPUT_SIZE)
+/// Appends a size-prefixed `TfFastCompression` block. Only the current LZ4
+/// block needs scratch space. The caller can append several columns to one
+/// destination without retaining the framed columns separately.
+pub(super) fn append_compressed(out: &mut Vec<u8>, input: &[u8]) {
+    let size_at = out.len();
+    out.extend_from_slice(&0_u64.to_le_bytes());
+    append_chunks(out, input, LZ4_MAX_INPUT_SIZE);
+    let size = (out.len() - size_at - 8) as u64;
+    out[size_at..size_at + 8].copy_from_slice(&size.to_le_bytes());
 }
 
-fn lz4_compress_chunked(input: &[u8], max_chunk: usize) -> Vec<u8> {
+fn append_chunks(out: &mut Vec<u8>, input: &[u8], max_chunk: usize) {
     if input.len() <= max_chunk {
-        let mut out = Vec::with_capacity(1 + lz4_flex::block::get_maximum_output_size(input.len()));
         out.push(0);
         out.extend_from_slice(&lz4_flex::compress(input));
-        return out;
+        return;
     }
     let chunks = input.chunks(max_chunk);
-    // At most 127 chunks: callers reject larger input first
-    // (`LZ4_MAX_TOTAL_INPUT`, `TfFastCompression::GetMaxInputSize`).
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "callers bound the input to 127 chunks"
-    )]
-    let mut out = alloc::vec![chunks.len() as u8];
+    // Callers bound the input to 127 chunks. Each compressed chunk fits i32.
+    out.push(u8::try_from(chunks.len()).expect("at most 127 chunks"));
     for chunk in chunks {
         let block = lz4_flex::compress(chunk);
-        #[allow(
-            clippy::cast_possible_truncation,
-            clippy::cast_possible_wrap,
-            reason = "an LZ4 block of at most LZ4_MAX_INPUT_SIZE bytes fits i32"
-        )]
-        out.extend_from_slice(&(block.len() as i32).to_le_bytes());
+        let size = i32::try_from(block.len()).expect("bounded LZ4 block");
+        out.extend_from_slice(&size.to_le_bytes());
         out.extend_from_slice(&block);
     }
-    out
 }
 
-/// The largest input [`lz4_compress`] accepts (127 chunks,
+/// The largest input [`append_compressed`] accepts (127 chunks,
 /// `TfFastCompression::GetMaxInputSize`).
 pub(crate) const LZ4_MAX_TOTAL_INPUT: u64 = 127 * LZ4_MAX_INPUT_SIZE as u64;
 
@@ -161,17 +152,6 @@ pub(crate) fn encode_integers(values: &[i64], width: IntWidth) -> Vec<u8> {
 /// Appends the low `bytes` bytes of `v`, little-endian.
 fn push_int(out: &mut Vec<u8>, v: i64, bytes: usize) {
     out.extend_from_slice(&v.to_le_bytes()[..bytes]);
-}
-
-/// Integer-codes and LZ4-compresses `values`, prefixed by the compressed
-/// size as a `u64`: the layout `read_compressed_ints` reads, and what
-/// OpenUSD's `_WriteCompressedInts` and structural section writers emit.
-pub(crate) fn compressed_ints(values: &[i64], width: IntWidth) -> Vec<u8> {
-    let compressed = lz4_compress(&encode_integers(values, width));
-    let mut out = Vec::with_capacity(8 + compressed.len());
-    out.extend_from_slice(&(compressed.len() as u64).to_le_bytes());
-    out.extend_from_slice(&compressed);
-    out
 }
 
 #[cfg(test)]
@@ -291,17 +271,21 @@ mod tests {
     #[test]
     fn compressed_ints_read_back() {
         let values: Vec<i64> = (0..1000).map(|i| (i * 7) % 13 - 6).collect();
-        let bytes = compressed_ints(&values, IntWidth::W32);
+        let mut bytes = Vec::new();
+        append_compressed(&mut bytes, &encode_integers(&values, IntWidth::W32));
         let (decoded, consumed) = read_compressed_ints(&bytes, values.len(), 4).unwrap();
         assert_eq!(decoded, values, "values");
         assert_eq!(consumed, bytes.len(), "size prefix covers the payload");
-        assert!(compressed_ints(&[], IntWidth::W32).len() > 8, "empty input");
+        let start = bytes.len();
+        append_compressed(&mut bytes, &[]);
+        assert!(bytes.len() - start > 8, "empty input");
     }
 
     #[test]
     fn single_chunk_framing() {
         let input = b"hello hello hello hello hello hello";
-        let framed = lz4_compress(input);
+        let mut framed = Vec::new();
+        append_chunks(&mut framed, input, LZ4_MAX_INPUT_SIZE);
         assert_eq!(framed[0], 0, "one-chunk marker");
         assert_eq!(lz4_decompress(&framed, input.len()).unwrap(), input);
     }
@@ -309,7 +293,8 @@ mod tests {
     #[test]
     fn multi_chunk_framing() {
         let input: Vec<u8> = (0..1000_u32).map(|i| (i % 251) as u8).collect();
-        let framed = lz4_compress_chunked(&input, 300);
+        let mut framed = Vec::new();
+        append_chunks(&mut framed, &input, 300);
         assert_eq!(framed[0], 4, "chunk count");
         // Decode per `TfFastCompression::DecompressFromBuffer`.
         let mut out = vec![];

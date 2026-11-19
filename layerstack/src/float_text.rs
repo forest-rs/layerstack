@@ -55,8 +55,10 @@ pub fn push_double(out: &mut String, v: f64) {
     let bits = v.to_bits() & !(1 << 63);
     if POSITIONAL_F64.contains(&bits) && (bits >> 52) + u64::from(bits.trailing_zeros()) < 1050 {
         push_display(out, v);
+    } else if let Some(integer) = small_integer(v, 1e15) {
+        push_integer(out, integer);
     } else {
-        push_shortest(out, v, v, 1e15, 17);
+        push_shortest(out, v, v, 17);
     }
 }
 
@@ -71,8 +73,10 @@ pub fn push_float(out: &mut String, v: f32) {
     let bits = v.to_bits() & !(1 << 31);
     if POSITIONAL_F32.contains(&bits) && (bits >> 23) + bits.trailing_zeros() < 136 {
         push_display(out, v);
+    } else if let Some(integer) = small_integer(f64::from(v), 16_777_216.0) {
+        push_integer(out, integer);
     } else {
-        push_shortest(out, f64::from(v), v, 16_777_216.0, 9);
+        push_shortest(out, f64::from(v), v, 9);
     }
 }
 
@@ -86,16 +90,13 @@ const POSITIONAL_F32: core::ops::Range<u32> =
 /// The fewest digits that read back as `v`, `wide` as a `f64`, of at most
 /// `digits` digits, as double-conversion's `ToShortest` writes them.
 ///
-/// An integer below `integers` is its digits: below 10^15 for a `double`,
-/// written positionally, whose steps there are at most 1/8, so that no
-/// shorter decimal reads back as it; below 2^24 for a `float`, whose steps
-/// there are at most 1. Otherwise Rust's `Display` has the digits and the
-/// layout wherever they are surely positional and no tie can break them
+/// The caller has handled small exact integers. Rust's `Display` has the
+/// digits and layout wherever they are surely positional and no tie can break them
 /// apart ([`may_tie`]); the rest is laid out here from Rust's exponent
 /// form, a tie broken to the even candidate.
 #[cold]
 #[inline(never)]
-fn push_shortest<T>(out: &mut String, wide: f64, v: T, integers: f64, digits: u32)
+fn push_shortest<T>(out: &mut String, wide: f64, v: T, digits: u32)
 where
     T: fmt::Display + fmt::LowerExp,
 {
@@ -107,11 +108,6 @@ where
         return;
     };
     let magnitude = wide.abs();
-    if q >= 0 && magnitude < integers {
-        // `k << q` is below 10^15.
-        let integer = i64::try_from(k << q).unwrap_or(i64::MAX);
-        return push_integer(out, if wide < 0.0 { -integer } else { integer });
-    }
     if is_positional(magnitude) && !may_tie(k, q, digits) {
         return push_display(out, v);
     }
@@ -250,6 +246,38 @@ fn small_integer(v: f64, limit: f64) -> Option<i64> {
 }
 
 fn push_integer(out: &mut String, v: i64) {
+    // One or two decimal pairs cover small integral samples without
+    // constructing a formatter for each element of a numeric array.
+    const PAIRS: &str = concat!(
+        "00010203040506070809",
+        "10111213141516171819",
+        "20212223242526272829",
+        "30313233343536373839",
+        "40414243444546474849",
+        "50515253545556575859",
+        "60616263646566676869",
+        "70717273747576777879",
+        "80818283848586878889",
+        "90919293949596979899",
+    );
+    if let Ok(n) = u16::try_from(v.unsigned_abs())
+        && n < 10_000
+    {
+        if v < 0 {
+            out.push('-');
+        }
+        let pair = |n: u16| {
+            let i = usize::from(n) * 2;
+            &PAIRS[i..i + 2]
+        };
+        let leading = if n >= 100 { n / 100 } else { n };
+        let digits = pair(leading);
+        out.push_str(if leading < 10 { &digits[1..] } else { digits });
+        if n >= 100 {
+            out.push_str(pair(n % 100));
+        }
+        return;
+    }
     let _ = write!(out, "{v}");
 }
 
@@ -551,6 +579,24 @@ mod tests {
         let mut out = String::new();
         push_time_code(&mut out, v);
         out
+    }
+
+    #[test]
+    fn integral_samples_keep_their_shortest_spelling_at_digit_boundaries() {
+        for magnitude in [
+            0, 9, 10, 99, 100, 999, 1000, 9999, 10_000, 16_777_215, 16_777_216,
+        ] {
+            for v in [magnitude, -magnitude] {
+                let expected = alloc::format!("{v}");
+                #[allow(
+                    clippy::cast_precision_loss,
+                    reason = "every integer through 2^24 is exact"
+                )]
+                let single = v as f32;
+                assert_eq!(float(single), expected);
+                assert_eq!(double(f64::from(v)), expected);
+            }
+        }
     }
 
     /// OpenUSD 26.08's text for these values (`ExportToString` of

@@ -144,6 +144,29 @@ impl<'a> CratePath<'a> {
         }
     }
 
+    /// An ordinary spec path produced by the checked layer walk. Its prim
+    /// and property identifiers have already passed the shared XID checks.
+    /// Variant syntax still goes through the crate grammar.
+    pub(super) fn authored(text: &'a str) -> Result<Self, UsdcWriteError> {
+        if text.contains('{') {
+            return Self::parse(text);
+        }
+        if text == "/" {
+            return Ok(Self::root());
+        }
+        let (names, property) = text
+            .split_once('.')
+            .map_or((text, None), |(p, n)| (p, Some(n)));
+        Ok(Self {
+            prim: PrimPart {
+                names,
+                suffix: Vec::new(),
+            },
+            property,
+            below: Vec::new(),
+        })
+    }
+
     /// Parses `/`, `/A/B`, `/A{v=x}B`, `/A{v=}`, `/A/B.prop:name`, or a
     /// path below a property such as `/A.b[/C].d` or `/A.b.mapper[/C]`.
     ///

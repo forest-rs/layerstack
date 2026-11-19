@@ -11,7 +11,6 @@
 //!
 //! Spec: AOUSD Core §16.3.
 
-use alloc::collections::BTreeSet;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::hash::BuildHasher;
@@ -24,6 +23,7 @@ use super::array_dedup::{Array, ArrayDedup};
 use super::compress::{IntWidth, LZ4_MAX_TOTAL_INPUT, compressed_ints, lz4_compress};
 use super::error::UsdcWriteError;
 use super::path::{CratePath, Element, path_tree};
+use super::specs::Specs;
 use super::{ListOp, Permission, Reference, Spec, Specifier, Value, Variability};
 use crate::toc;
 use crate::value_type::{SpecForm, ValueType};
@@ -301,14 +301,14 @@ impl<'a> Packer<'a> {
     }
 
     /// `_AddFieldSet`.
-    fn fieldset(&mut self, fields: Vec<u32>) -> Result<u32, UsdcWriteError> {
-        if let Some(&i) = self.fieldset_index.get(&fields) {
+    fn fieldset(&mut self, fields: &[u32]) -> Result<u32, UsdcWriteError> {
+        if let Some(&i) = self.fieldset_index.get(fields) {
             return Ok(i);
         }
         let i = index(self.fieldsets.len())?;
-        self.fieldsets.extend_from_slice(&fields);
+        self.fieldsets.extend_from_slice(fields);
         self.fieldsets.push(u32::MAX);
-        self.fieldset_index.insert(fields, i);
+        self.fieldset_index.insert(fields.to_vec(), i);
         Ok(i)
     }
 
@@ -1560,63 +1560,54 @@ fn half_to_f32(bits: u16) -> f32 {
 
 // ── Entry points ────────────────────────────────────────────────────────
 
-/// Whether `value` (or anything nested in it) is a `timecode`.
-fn has_timecode(value: &Value) -> bool {
-    match value {
-        Value::TimeCode(_) | Value::TimeCodeArray(_) => true,
-        Value::Dictionary(entries) => entries.iter().any(|(_, v)| has_timecode(v)),
-        Value::UnregisteredValue(inner) => has_timecode(inner),
-        Value::TimeSamples(samples) => samples.iter().any(|(_, v)| has_timecode(v)),
-        _ => false,
-    }
-}
-
-/// Whether `value` (or anything nested in it) is a `duration`.
-fn has_duration(value: &Value) -> bool {
-    match value {
-        Value::Duration(_) | Value::DurationArray(_) => true,
-        Value::ArrayEdit { literals, .. } => has_duration(literals),
-        Value::Dictionary(entries) => entries.iter().any(|(_, v)| has_duration(v)),
-        Value::UnregisteredValue(inner) => has_duration(inner),
-        Value::TimeSamples(samples) => samples.iter().any(|(_, v)| has_duration(v)),
-        _ => false,
-    }
-}
-
 /// `RequestWriteVersionUpgrade`: start from OpenUSD's default and move to
 /// the version a value needs (`Write(GfTimeCode)`, `Write(GfDuration)`,
 /// `Write(TsSpline)`).
 pub(super) fn required_version(specs: &[Spec]) -> CrateVersion {
-    let mut version = CrateVersion::NEW_FILE_DEFAULT;
-    for field in specs.iter().flat_map(|s| &s.fields) {
-        if has_array_edit(&field.value) {
-            version = version.max(CrateVersion::ARRAY_EDITS);
-        }
-        if let Value::Spline(s, _) = &field.value {
-            let required = match ts_format(s) {
-                4 => CrateVersion::DURATIONS,
-                3 => CrateVersion::SPLINE_LOOP_BOUNDARY_AND_TIMECODE,
-                2 => CrateVersion::SPLINE_TANGENT_ALGORITHMS,
-                _ => CrateVersion::SPLINES,
-            };
-            version = version.max(required);
-        }
-        // Each relocate requests the version (`Write(SdfRelocate)`,
-        // `pxr/usd/sdf/crateFile.cpp`), so an empty map does not.
-        if matches!(&field.value, Value::Relocates(entries) if !entries.is_empty()) {
-            version = version.max(CrateVersion::new(0, 11, 0));
-        }
-        if has_path_expression(&field.value) {
-            version = version.max(CrateVersion::new(0, 10, 0));
-        }
-        if has_timecode(&field.value) {
-            version = version.max(CrateVersion::TIMECODES);
-        }
-        if has_duration(&field.value) {
-            version = version.max(CrateVersion::DURATIONS);
-        }
+    specs
+        .iter()
+        .flat_map(|s| &s.fields)
+        .map(|f| value_version(&f.value))
+        .max()
+        .unwrap_or(CrateVersion::NEW_FILE_DEFAULT)
+}
+
+fn value_version(value: &Value) -> CrateVersion {
+    match value {
+        Value::Spline(s, _) => match ts_format(s) {
+            4 => CrateVersion::DURATIONS,
+            3 => CrateVersion::SPLINE_LOOP_BOUNDARY_AND_TIMECODE,
+            2 => CrateVersion::SPLINE_TANGENT_ALGORITHMS,
+            _ => CrateVersion::SPLINES,
+        },
+        Value::Relocates(entries) if !entries.is_empty() => CrateVersion::new(0, 11, 0),
+        _ => nested_version(value),
     }
-    version
+}
+
+// Versioned scalar, array and edit types also occur in dictionaries and
+// samples. Check all of them in a single descent.
+fn nested_version(value: &Value) -> CrateVersion {
+    match value {
+        Value::Duration(_) | Value::DurationArray(_) => CrateVersion::DURATIONS,
+        Value::TimeCode(_) | Value::TimeCodeArray(_) => CrateVersion::TIMECODES,
+        Value::PathExpression(_) | Value::PathExpressionArray(_) => CrateVersion::new(0, 10, 0),
+        Value::ArrayEdit { literals, .. } => {
+            CrateVersion::ARRAY_EDITS.max(nested_version(literals))
+        }
+        Value::Dictionary(entries) => entries
+            .iter()
+            .map(|(_, v)| nested_version(v))
+            .max()
+            .unwrap_or(CrateVersion::NEW_FILE_DEFAULT),
+        Value::TimeSamples(samples) => samples
+            .iter()
+            .map(|(_, v)| nested_version(v))
+            .max()
+            .unwrap_or(CrateVersion::NEW_FILE_DEFAULT),
+        Value::UnregisteredValue(inner) => nested_version(inner),
+        _ => CrateVersion::NEW_FILE_DEFAULT,
+    }
 }
 
 fn array_len(value: &Value) -> Option<usize> {
@@ -1655,26 +1646,6 @@ fn array_len(value: &Value) -> Option<usize> {
         Value::Matrix4dArray(v) => v.len(),
         _ => return None,
     })
-}
-
-fn has_array_edit(value: &Value) -> bool {
-    match value {
-        Value::ArrayEdit { .. } => true,
-        Value::Dictionary(entries) => entries.iter().any(|(_, v)| has_array_edit(v)),
-        Value::TimeSamples(samples) => samples.iter().any(|(_, v)| has_array_edit(v)),
-        Value::UnregisteredValue(v) => has_array_edit(v),
-        _ => false,
-    }
-}
-
-fn has_path_expression(value: &Value) -> bool {
-    match value {
-        Value::PathExpression(_) | Value::PathExpressionArray(_) => true,
-        Value::Dictionary(entries) => entries.iter().any(|(_, value)| has_path_expression(value)),
-        Value::TimeSamples(samples) => samples.iter().any(|(_, value)| has_path_expression(value)),
-        Value::UnregisteredValue(value) => has_path_expression(value),
-        _ => false,
-    }
 }
 
 /// Whether `spline` is a default `TsSpline`, which OpenUSD inlines.
@@ -1835,84 +1806,88 @@ fn ts_spline_data(spline: &layerstack::spline::SplineData) -> Vec<u8> {
 /// Checks the specs' paths, forms, parents and field names, and returns
 /// them in `Sdf_CrateData::Save` order: prim paths (the pseudo-root first)
 /// in `SdfPath` order, then property paths grouped by name.
-fn prepare(specs: &[Spec]) -> Result<Vec<(CratePath<'_>, &Spec)>, UsdcWriteError> {
+fn prepare<S: Specs + ?Sized>(specs: &S) -> Result<Vec<(CratePath<'_>, usize)>, UsdcWriteError> {
     // Looked up only, so hashed.
-    let mut forms: HashMap<CratePath<'_>, SpecForm> = HashMap::new();
+    let mut forms = (!S::VALIDATED_NAMESPACE).then(|| HashMap::with_capacity(specs.len()));
+    let mut names = hashbrown::HashSet::new();
     let mut prepared = Vec::with_capacity(specs.len());
-    for spec in specs {
-        let path = CratePath::parse(&spec.path)?;
-        let last = path.last_element();
-        let fits = match spec.form {
-            SpecForm::PseudoRoot => path.is_root(),
-            SpecForm::Prim => matches!(last, Some(Element::Prim(_))),
-            SpecForm::VariantSet => {
-                matches!(last, Some(Element::Variant { variant, .. }) if variant.is_empty())
-            }
-            SpecForm::Variant => {
-                matches!(last, Some(Element::Variant { variant, .. }) if !variant.is_empty())
-            }
-            SpecForm::Attribute | SpecForm::Relationship => path.is_prim_property(),
-            form => {
-                return Err(UsdcWriteError::UnsupportedSpecForm {
-                    path: spec.path.clone(),
+    for i in 0..specs.len() {
+        let (text, form) = specs.header(i);
+        let path = if let Some(forms) = &mut forms {
+            let path = CratePath::parse(text)?;
+            let last = path.last_element();
+            let fits = match form {
+                SpecForm::PseudoRoot => path.is_root(),
+                SpecForm::Prim => matches!(last, Some(Element::Prim(_))),
+                SpecForm::VariantSet => {
+                    matches!(last, Some(Element::Variant { variant, .. }) if variant.is_empty())
+                }
+                SpecForm::Variant => {
+                    matches!(last, Some(Element::Variant { variant, .. }) if !variant.is_empty())
+                }
+                SpecForm::Attribute | SpecForm::Relationship => path.is_prim_property(),
+                form => {
+                    return Err(UsdcWriteError::UnsupportedSpecForm {
+                        path: text.into(),
+                        form,
+                    });
+                }
+            };
+            if !fits {
+                return Err(UsdcWriteError::SpecPathMismatch {
+                    path: text.into(),
                     form,
                 });
             }
+            if forms.insert(path.clone(), form).is_some() {
+                return Err(UsdcWriteError::DuplicateSpec { path: text.into() });
+            }
+            path
+        } else {
+            CratePath::authored(text)?
         };
-        if !fits {
-            return Err(UsdcWriteError::SpecPathMismatch {
-                path: spec.path.clone(),
-                form: spec.form,
-            });
-        }
-        if forms.insert(path.clone(), spec.form).is_some() {
-            return Err(UsdcWriteError::DuplicateSpec {
-                path: spec.path.clone(),
-            });
-        }
-        let mut names = BTreeSet::new();
-        for field in &spec.fields {
+        names.clear();
+        for (_, field) in specs.fields(i) {
             if field.name.is_empty() {
-                return Err(UsdcWriteError::InvalidFieldName {
-                    path: spec.path.clone(),
-                });
+                return Err(UsdcWriteError::InvalidFieldName { path: text.into() });
             }
             if field.name.contains('\0') {
                 return Err(UsdcWriteError::NulInText {
-                    path: spec.path.clone(),
+                    path: text.into(),
                     field: field.name.clone(),
                 });
             }
             if !names.insert(field.name.as_str()) {
                 return Err(UsdcWriteError::DuplicateField {
-                    path: spec.path.clone(),
+                    path: text.into(),
                     field: field.name.clone(),
                 });
             }
         }
-        prepared.push((path, spec));
+        prepared.push((path, i));
     }
-    if !forms.contains_key(&CratePath::root()) {
-        return Err(UsdcWriteError::MissingPseudoRoot);
-    }
-    // A prim, variant set or property belongs to a prim or variant (a root
-    // prim to the pseudo-root); a variant to its variant set.
-    for (path, spec) in &prepared {
-        let owner = match spec.form {
-            SpecForm::Variant => path.variant_set(),
-            _ => path.parent(),
-        };
-        if let Some(owner) = owner {
-            let ok = matches!(
-                (forms.get(&owner), spec.form),
-                (Some(SpecForm::Prim | SpecForm::Variant), _)
-                    | (Some(SpecForm::PseudoRoot), SpecForm::Prim)
-                    | (Some(SpecForm::VariantSet), SpecForm::Variant)
-            );
-            if !ok {
-                return Err(UsdcWriteError::MissingParent {
-                    path: spec.path.clone(),
-                });
+    if let Some(forms) = forms {
+        if !forms.contains_key(&CratePath::root()) {
+            return Err(UsdcWriteError::MissingPseudoRoot);
+        }
+        // A prim, variant set or property belongs to a prim or variant (a root
+        // prim to the pseudo-root); a variant to its variant set.
+        for (path, i) in &prepared {
+            let (text, form) = specs.header(*i);
+            let owner = match form {
+                SpecForm::Variant => path.variant_set(),
+                _ => path.parent(),
+            };
+            if let Some(owner) = owner {
+                let ok = matches!(
+                    (forms.get(&owner), form),
+                    (Some(SpecForm::Prim | SpecForm::Variant), _)
+                        | (Some(SpecForm::PseudoRoot), SpecForm::Prim)
+                        | (Some(SpecForm::VariantSet), SpecForm::Variant)
+                );
+                if !ok {
+                    return Err(UsdcWriteError::MissingParent { path: text.into() });
+                }
             }
         }
     }
@@ -1931,27 +1906,44 @@ fn prepare(specs: &[Spec]) -> Result<Vec<(CratePath<'_>, &Spec)>, UsdcWriteError
 /// `CrateFile::_Write` over specs packed as `Sdf_CrateData::Save` packs
 /// them: per spec, each field's name token and value, then the spec's
 /// path, then its field set.
-pub(super) fn write(specs: &[Spec]) -> Result<Vec<u8>, UsdcWriteError> {
+pub(super) fn write(specs: &(impl Specs + ?Sized)) -> Result<Vec<u8>, UsdcWriteError> {
     let prepared = prepare(specs)?;
     let mut packer = Packer::new();
-    for (path, spec) in prepared {
-        let mut fields = Vec::with_capacity(spec.fields.len());
-        for field in &spec.fields {
+    let mut packed_fields = alloc::vec![u32::MAX; specs.retained_field_count()];
+    let mut version = CrateVersion::NEW_FILE_DEFAULT;
+    let mut fields = Vec::new();
+    for (path, i) in prepared {
+        let (text, form) = specs.header(i);
+        let values = specs.fields(i);
+        fields.clear();
+        fields.reserve(values.len());
+        for (slot, field) in values {
+            if let Some(i) = slot
+                && packed_fields[i] != u32::MAX
+            {
+                fields.push(packed_fields[i]);
+                continue;
+            }
+            version = version.max(value_version(&field.value));
             let token = packer.token(&field.name)?;
             let site = Site {
-                path: &spec.path,
+                path: text,
                 field: &field.name,
             };
             let value_rep = packer.pack(&field.value, site)?;
-            fields.push(packer.field(token, value_rep)?);
+            let id = packer.field(token, value_rep)?;
+            if let Some(i) = slot {
+                packed_fields[i] = id;
+            }
+            fields.push(id);
         }
         let path_index = packer.path(path)?;
-        let fieldset = packer.fieldset(fields)?;
+        let fieldset = packer.fieldset(&fields)?;
         packer
             .specs
-            .push((path_index, fieldset, u32::from(spec.form as u8)));
+            .push((path_index, fieldset, u32::from(form as u8)));
     }
-    packer.finish(required_version(specs))
+    packer.finish(version)
 }
 
 #[cfg(test)]

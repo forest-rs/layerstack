@@ -211,11 +211,75 @@ fn bench_layer_save(c: &mut Criterion) {
     group.finish();
 }
 
+/// The same relationship work under short and long namespace prefixes.
+/// Each leaf targets both an authored neighbour and a property on another leaf.
+fn bench_relationship_save(c: &mut Criterion) {
+    use layerstack::{
+        InMemoryStore, Layer, LayerId, ListOp, PrimSpec, PropertyPath, PropertySpec, TargetPath,
+    };
+    let mut group = c.benchmark_group("usdc_relationship_save");
+    for depth in [1, 16] {
+        let store = InMemoryStore::default();
+        let mut layer = Layer::new(LayerId(1));
+        let child = store.tokens().intern("Group");
+        let mut parent = String::from("/");
+        for level in 0..depth {
+            let spec = if level == 0 {
+                PrimSpec::default()
+            } else {
+                PrimSpec::def()
+            };
+            layer.insert_prim(store.path(&parent), spec.with_children(vec![child]));
+            if level != 0 {
+                parent.push('/');
+            }
+            parent.push_str("Group");
+        }
+        let relation = store.tokens().intern("links");
+        let leaves: Vec<_> = (0..2048)
+            .map(|i| {
+                let name = format!("Leaf{i}");
+                (
+                    store.tokens().intern(&name),
+                    store.path(&format!("{parent}/{name}")),
+                )
+            })
+            .collect();
+        layer.insert_prim(
+            store.path(&parent),
+            PrimSpec::def().with_children(leaves.iter().map(|&(n, _)| n).collect()),
+        );
+        for (i, &(_, path)) in leaves.iter().enumerate() {
+            let next = leaves[(i + 1) % leaves.len()].1;
+            let previous = leaves[(i + leaves.len() - 1) % leaves.len()].1;
+            let targets = ListOp::explicit(vec![
+                TargetPath::Prim(next),
+                TargetPath::Property(PropertyPath::new(previous, relation)),
+            ]);
+            layer.insert_prim(
+                path,
+                PrimSpec::def()
+                    .with_property(relation, PropertySpec::relationship().with_targets(targets)),
+            );
+        }
+        group.bench_function(BenchmarkId::new("depth", depth), |b| {
+            b.iter(|| {
+                black_box(
+                    layerstack_usdc::save_usdc(black_box(&layer), store.tokens(), store.paths())
+                        .unwrap(),
+                )
+            });
+        });
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_write,
     bench_numeric_write,
     bench_integer_write,
-    bench_layer_save
+    bench_layer_save,
+    bench_relationship_save
 );
 criterion_main!(benches);

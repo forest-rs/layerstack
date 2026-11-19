@@ -544,14 +544,16 @@ impl<'a> PrimSpecs<'a> {
     /// replacing any there, and returns its place: the number of paths
     /// spelled before it.
     fn insert(&mut self, index: u32, key: PrimKey<'a>, spec: Box<PrimSpec>) -> usize {
-        let at = match self.by_key.get(&key) {
-            Some(&at) => {
+        use hashbrown::hash_map::Entry;
+        let at = match self.by_key.entry(key) {
+            Entry::Occupied(entry) => {
+                let at = *entry.get();
                 self.specs[at] = spec;
                 at
             }
-            None => {
+            Entry::Vacant(entry) => {
                 let at = self.specs.len();
-                self.by_key.insert(key, at);
+                entry.insert(at);
                 self.specs.push(spec);
                 self.placed.push(index);
                 at
@@ -592,16 +594,10 @@ impl<'a> PrimSpecs<'a> {
         self.specs.get_mut(place).map(|spec| &mut **spec)
     }
 
-    /// The path table index each spec was first placed with, in the order
-    /// of [`PrimSpecs::into_specs`].
-    fn placed(&self) -> &[u32] {
-        &self.placed
-    }
-
-    /// The specs, in the order their paths were first spelled.
-    #[expect(clippy::vec_box, reason = "the specs move into the layer boxed")]
-    fn into_specs(self) -> Vec<Box<PrimSpec>> {
-        self.specs
+    /// Moves the first path index and the assembled spec at each place
+    /// out together, releasing the lookup tables before layer insertion.
+    fn into_placed(self) -> impl ExactSizeIterator<Item = (u32, Box<PrimSpec>)> {
+        self.placed.into_iter().zip(self.specs)
     }
 }
 
@@ -857,33 +853,17 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         // layer's map grows once.
         // Each spec is taken by the first spec spelling its path, which
         // placed it, so the specs are in the file's order of those specs.
-        let placed: Vec<(u32, bool, Option<PathId>)> = prim_specs_map
-            .placed()
-            .iter()
-            .map(|&index| {
-                let branch = self.in_branch_of(SpecName::Entry(index));
-                let path = if branch {
-                    None
-                } else {
-                    self.prim_path_at(index)
-                };
-                (index, branch, path)
-            })
-            .collect();
         let mut branched: Vec<(&str, Box<PrimSpec>)> = Vec::new();
         let sections = self.sections;
-        let plain = prim_specs_map
-            .into_specs()
-            .into_iter()
-            .zip(&placed)
-            .filter_map(|(prim, &(index, branch, path))| {
-                if branch {
-                    let path_str = sections.path(index as usize).unwrap_or_default();
-                    branched.push((path_str, prim));
-                    return None;
-                }
-                Some((path?, prim))
-            });
+        let plain = prim_specs_map.into_placed().filter_map(|(index, prim)| {
+            if self.in_branch_of(SpecName::Entry(index)) {
+                let path_str = sections.path(index as usize).unwrap_or_default();
+                branched.push((path_str, prim));
+                None
+            } else {
+                Some((self.prim_path_at(index)?, prim))
+            }
+        });
         layer.insert_prims(plain);
         sort::sort_unstable_by_key(&mut branched, |(path, _)| *path);
         for (path_str, mut prim) in branched {
@@ -2023,70 +2003,44 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         // Each parent's child specs, parents and children in the file's
         // spec order, so names intern in the same order on every read. A
         // child is its path table entry and name.
-        let mut parents: Vec<PrimKey<'a>> = Vec::new();
-        let mut children: HashMap<PrimKey<'a>, Vec<(u32, TokenId)>> = HashMap::new();
+        let mut parents = Vec::new();
+        let mut missing: HashMap<usize, Vec<(u32, TokenId)>> = HashMap::new();
+        let mut wide: HashMap<usize, HashSet<TokenId>> = HashMap::new();
         let sections = self.sections;
         for spec in &sections.specs {
             if spec.form != SpecForm::Prim {
                 continue;
             }
             let index = spec.path_index;
-            // Specs inside variant branches have no parent prim spec here.
-            if index as usize >= sections.paths.len() || self.in_branch_of(SpecName::Entry(index)) {
+            let Some((place, child)) = self.child_of(index, prim_specs) else {
                 continue;
-            }
-            let key = self.prim_key_at(index);
-            if !prim_specs.contains_key(key) {
-                continue;
-            }
-            // The parent strips the path's last name: from the path, or as
-            // the text is split.
-            let (parent, child) = match key {
-                PrimKey::Path(path) => {
-                    let Some(parent) = self.paths.parent(path) else {
-                        continue;
-                    };
-                    let Some(name) = self.paths.resolve(path).leaf() else {
-                        continue;
-                    };
-                    (PrimKey::Path(parent), name)
-                }
-                PrimKey::Text(path) => {
-                    let Some(parent_path) = parent_prim_path(path) else {
-                        continue;
-                    };
-                    let child_name = path.rsplit('/').next().unwrap_or("");
-                    if child_name.is_empty() {
-                        continue;
-                    }
-                    (
-                        self.prim_key_of_text(parent_path),
-                        self.tokens.intern(child_name),
-                    )
-                }
             };
-            children
-                .entry(parent)
-                .or_insert_with(|| {
-                    parents.push(parent);
-                    Vec::new()
-                })
-                .push((index, child));
+            let authored = &prim_specs.specs[place].authored_children;
+            let listed = if authored.len() <= 16 {
+                authored.contains(&child)
+            } else {
+                wide.entry(place)
+                    .or_insert_with(|| authored.iter().copied().collect())
+                    .contains(&child)
+            };
+            if !listed {
+                missing
+                    .entry(place)
+                    .or_insert_with(|| {
+                        parents.push(place);
+                        Vec::new()
+                    })
+                    .push((index, child));
+            }
         }
 
-        // Only add to parent's authored_children if not already present
-        // (the prim's own primChildren field is authoritative), in path
-        // order.
-        for parent_key in parents {
-            let Some(parent) = prim_specs.get_mut(parent_key) else {
-                continue;
-            };
-            let mut named = children.remove(&parent_key).unwrap_or_default();
-            let listed: HashSet<TokenId> = parent.authored_children.iter().copied().collect();
-            named.retain(|(_, name)| !listed.contains(name));
-            if named.is_empty() {
-                continue;
-            }
+        // A file can omit a child from primChildren. Only those names
+        // need sorting and appending after the authoritative list.
+        for place in parents {
+            let parent = &mut prim_specs.specs[place];
+            let named = missing
+                .remove(&place)
+                .expect("parent with missing children");
             // The few a parent does not list are ordered by their texts.
             let mut named: Vec<(&str, TokenId)> = named
                 .into_iter()
@@ -2098,6 +2052,49 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                 named.into_iter().map(|(_, name)| name),
             );
         }
+    }
+
+    /// Locate the parent spec and child name for a prim entry. An ordinary
+    /// edge of the crate path tree already names both. Recover by spelling
+    /// for duplicate entries, non-segment tokens or tables supplied as text.
+    fn child_of(&mut self, index: u32, specs: &PrimSpecs<'a>) -> Option<(usize, TokenId)> {
+        let paths = &self.sections.paths;
+        let spelling = paths.spelling(index as usize)?;
+        if spelling.selection() {
+            return None;
+        }
+        if !spelling.close()
+            && let Some(&PathNode::Child {
+                parent,
+                token,
+                property: false,
+            }) = paths.nodes().get(index as usize)
+            && specs.place_at(index).is_some()
+            && let Some(place) = specs.place_at(parent)
+            && self.prim_path_at(parent).is_some()
+        {
+            let name = self.lookup_token(token);
+            if !name.is_empty() && !name.contains('/') {
+                return Some((place, self.token_id(token)));
+            }
+        }
+
+        let key = self.prim_key_at(index);
+        if !specs.contains_key(key) {
+            return None;
+        }
+        let (parent, child) = match key {
+            PrimKey::Path(path) => (
+                PrimKey::Path(self.paths.parent(path)?),
+                self.paths.resolve(path).leaf()?,
+            ),
+            PrimKey::Text(path) => {
+                let parent = parent_prim_path(path)?;
+                let name = path.rsplit('/').next().filter(|s| !s.is_empty())?;
+                (self.prim_key_of_text(parent), self.tokens.intern(name))
+            }
+        };
+        Some((specs.place(parent)?, child))
     }
 
     // ── Value conversion helpers ──────────────────────────────────────

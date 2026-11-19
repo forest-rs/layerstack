@@ -1198,9 +1198,9 @@ fn build_paths<I: Copy + Into<i64>>(
     // What each element's text holds, found once per token: many paths
     // share an element (a property name).
     let mut elements = Elements(vec![Element::default(); tokens.len()]);
-    // Each path's text length, whether it ends with `}`, and whether it is
-    // `/`, as the root's is.
-    let mut texts: Vec<(usize, bool, bool)> = vec![(0, false, false); nodes.len()];
+    // The final lengths and spelling flags also describe each parent
+    // while its children are reconstructed.
+    let mut lengths = vec![0; nodes.len()];
 
     // Stack frames: (start_index, parent's index, is_first_iteration);
     // `NO_PARENT` before the root.
@@ -1226,7 +1226,7 @@ fn build_paths<I: Copy + Into<i64>>(
 
             if first && parent_at == NO_PARENT {
                 // Root node.
-                texts[target] = (1, false, true);
+                lengths[target] = 1;
                 spellings[target] = Spelling(Spelling::ROOT);
                 nodes[target] = PathNode::Root;
             } else {
@@ -1240,10 +1240,13 @@ fn build_paths<I: Copy + Into<i64>>(
                 };
                 // A sibling of the root follows no parent: a corrupt
                 // encoding, whose paths join the empty text.
-                let (parent_len, parent_brace, parent_slash) = texts
+                let parent_len = lengths.get(parent_at as usize).copied().unwrap_or(0);
+                let parent = spellings
                     .get(parent_at as usize)
                     .copied()
-                    .unwrap_or((0, false, false));
+                    .unwrap_or_default();
+                let parent_slash = parent.root();
+                let parent_brace = parent.ends_with_close();
                 let sep = if is_property {
                     "."
                 } else if element.has(Element::OPENS | Element::JOINS) || parent_brace {
@@ -1262,13 +1265,9 @@ fn build_paths<I: Copy + Into<i64>>(
                 } else {
                     element.has(Element::CLOSES)
                 };
-                texts[target] = (len, brace, len == 1 && sep == "/");
+                lengths[target] = len;
                 // Separators hold none of these but `.`, and the text
                 // holds its parent's, or `/` alone.
-                let parent = spellings
-                    .get(parent_at as usize)
-                    .copied()
-                    .unwrap_or_default();
                 let mut bits = parent.0 & !(Spelling::CLOSE_LAST | Spelling::ROOT);
                 for (flag, holds) in [
                     (Spelling::SELECTION, element.has(Element::OPEN)),
@@ -1327,7 +1326,7 @@ fn build_paths<I: Copy + Into<i64>>(
         }
     }
 
-    Ok((texts.into_iter().map(|(len, ..)| len).collect(), spellings))
+    Ok((lengths, spellings))
 }
 
 // ---------------------------------------------------------------------------

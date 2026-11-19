@@ -21,7 +21,7 @@ impl fmt::Write for ByteCount {
 fn relationship_save(c: &mut Criterion) {
     let mut group = c.benchmark_group("usda_relationship_save");
     for depth in [1, 16] {
-        let (store, layer) = relationship_layer::fixture(depth);
+        let (store, layer) = relationship_layer::fixture(depth, 2048);
         group.bench_function(BenchmarkId::new("string", depth), |b| {
             b.iter(|| {
                 layerstack_usda::save_usda(black_box(&layer), store.tokens(), store.paths())

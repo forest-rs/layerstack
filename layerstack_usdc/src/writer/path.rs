@@ -9,8 +9,8 @@
 //! (`SdfPath::operator<`) and `pathNode.h` (`Sdf_PathNode::Compare`).
 
 use alloc::borrow::Cow;
-use alloc::string::String;
 use alloc::vec::Vec;
+use core::cmp::Ordering;
 
 use super::error::UsdcWriteError;
 
@@ -19,18 +19,75 @@ use super::error::UsdcWriteError;
 /// The derived ordering is `Sdf_PathNode`'s for these nodes: a prim node
 /// before a variant selection node, prim nodes by name, and variant
 /// selection nodes by set name, then variant name.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) enum Element {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) enum Element<'a> {
     /// A prim name (`/A`).
-    Prim(String),
+    Prim(&'a str),
     /// A variant selection (`{set=variant}`); an empty variant names the
     /// variant set itself (`{set=}`).
     Variant {
         /// Variant set name.
-        set: String,
+        set: &'a str,
         /// Variant name, or empty for the variant set.
-        variant: String,
+        variant: &'a str,
     },
+}
+
+/// The ordinary namespace prefix is already a canonical key into the input
+/// text. Only elements starting at the first variant selection need storage.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Hash)]
+struct PrimPart<'a> {
+    names: &'a str,
+    suffix: Vec<Element<'a>>,
+}
+
+impl<'a> PrimPart<'a> {
+    fn elements(&self) -> impl Iterator<Item = Element<'a>> + '_ {
+        self.names
+            .split('/')
+            .skip(1)
+            .map(Element::Prim)
+            .chain(self.suffix.iter().copied())
+    }
+
+    fn last(&self) -> Option<Element<'a>> {
+        self.suffix.last().copied().or_else(|| {
+            self.names
+                .rsplit_once('/')
+                .map(|(_, name)| Element::Prim(name))
+        })
+    }
+
+    fn parent(&self) -> Option<Self> {
+        if let Some((_, prefix)) = self.suffix.split_last() {
+            return Some(Self {
+                names: self.names,
+                suffix: prefix.to_vec(),
+            });
+        }
+        self.names.rsplit_once('/').map(|(names, _)| Self {
+            names,
+            suffix: Vec::new(),
+        })
+    }
+}
+
+impl Ord for PrimPart<'_> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.suffix.is_empty() && other.suffix.is_empty() {
+            // '/' precedes every byte allowed in an identifier. Comparing
+            // slash-delimited names thus compares their elements in Sdf order.
+            self.names.cmp(other.names)
+        } else {
+            self.elements().cmp(other.elements())
+        }
+    }
+}
+
+impl PartialOrd for PrimPart<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 /// One element of a path's property part.
@@ -41,19 +98,17 @@ pub(crate) enum Element {
 /// `Sdf_PathNode::Compare`'s: by node type, then a name by byte order or a
 /// bracketed path in `SdfPath` order.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) enum PropertyElement {
-    /// The property of a prim or variant (`.b`).
-    Property(String),
+pub(crate) enum PropertyElement<'a> {
     /// A target path (`[/C]`), after a property or a relational
     /// attribute.
-    Target(CratePath),
+    Target(CratePath<'a>),
     /// A mapper (`.mapper[/C]`), after a property or a relational
     /// attribute.
-    Mapper(CratePath),
+    Mapper(CratePath<'a>),
     /// A relational attribute (`.d`), after a target.
-    RelationalAttribute(String),
+    RelationalAttribute(&'a str),
     /// A mapper argument (`.arg`), after a mapper.
-    MapperArg(String),
+    MapperArg(&'a str),
     /// An expression (`.expression`), after a property or a relational
     /// attribute.
     Expression,
@@ -71,20 +126,21 @@ pub(crate) enum PropertyElement {
 /// properties, then by its child prims, then by its variant sets and
 /// variants.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct CratePath {
-    /// Prim part elements from the root; empty for the pseudo-root.
-    pub(crate) elements: Vec<Element>,
-    /// Property part elements, the property first; empty for a path that
-    /// is not below a property.
-    pub(crate) property: Vec<PropertyElement>,
+pub(crate) struct CratePath<'a> {
+    prim: PrimPart<'a>,
+    /// The first property name, also the property grouping key in SPECS.
+    pub(crate) property: Option<&'a str>,
+    /// Steps below the named property.
+    below: Vec<PropertyElement<'a>>,
 }
 
-impl CratePath {
+impl<'a> CratePath<'a> {
     /// The pseudo-root, `/`.
     pub(crate) fn root() -> Self {
         Self {
-            elements: Vec::new(),
-            property: Vec::new(),
+            prim: PrimPart::default(),
+            property: None,
+            below: Vec::new(),
         }
     }
 
@@ -99,7 +155,7 @@ impl CratePath {
     /// relational attribute after a target, then a target, a mapper or an
     /// expression again; a mapper argument after a mapper; the bracketed
     /// paths absolute.
-    pub(crate) fn parse(text: &str) -> Result<Self, UsdcWriteError> {
+    pub(crate) fn parse(text: &'a str) -> Result<Self, UsdcWriteError> {
         let invalid = |reason| UsdcWriteError::InvalidPath {
             path: text.into(),
             reason,
@@ -110,16 +166,21 @@ impl CratePath {
         if rest.is_empty() {
             return Ok(Self::root());
         }
-        let mut elements = Vec::new();
-        let mut property = Vec::new();
+        let mut prim = PrimPart::default();
+        let mut property = None;
+        let mut below = Vec::new();
         loop {
             let end = rest.find(['/', '{', '.']).unwrap_or(rest.len());
             let name = &rest[..end];
             if !is_name(name) {
                 return Err(invalid("prim name is not an identifier"));
             }
-            elements.push(Element::Prim(name.into()));
             rest = &rest[end..];
+            if prim.suffix.is_empty() {
+                prim.names = &text[..text.len() - rest.len()];
+            } else {
+                prim.suffix.push(Element::Prim(name));
+            }
             while let Some(selection) = rest.strip_prefix('{') {
                 let Some((inner, after)) = selection.split_once('}') else {
                     return Err(invalid("variant selection is not closed"));
@@ -130,17 +191,16 @@ impl CratePath {
                 if !is_name(set) || !(variant.is_empty() || is_variant_name(variant)) {
                     return Err(invalid("variant selection names are not valid"));
                 }
-                elements.push(Element::Variant {
-                    set: set.into(),
-                    variant: variant.into(),
-                });
+                prim.suffix.push(Element::Variant { set, variant });
                 rest = after;
             }
-            let after_selection = matches!(elements.last(), Some(Element::Variant { .. }));
+            let after_selection = matches!(prim.suffix.last(), Some(Element::Variant { .. }));
             match rest.chars().next() {
                 None => break,
                 Some('.') => {
-                    property = parse_property(&rest[1..]).map_err(invalid)?;
+                    let (name, suffix) = parse_property(&rest[1..]).map_err(invalid)?;
+                    property = Some(name);
+                    below = suffix;
                     break;
                 }
                 Some('/') if !after_selection => rest = &rest[1..],
@@ -149,31 +209,35 @@ impl CratePath {
             }
         }
         let is_set =
-            |e: &Element| matches!(e, Element::Variant { variant, .. } if variant.is_empty());
-        if let Some(i) = elements.iter().position(is_set)
-            && (i + 1 < elements.len() || !property.is_empty())
+            |e: &Element<'_>| matches!(e, Element::Variant { variant, .. } if variant.is_empty());
+        if let Some(i) = prim.suffix.iter().position(is_set)
+            && (i + 1 < prim.suffix.len() || property.is_some())
         {
             return Err(invalid("a variant set path has no children"));
         }
-        Ok(Self { elements, property })
+        Ok(Self {
+            prim,
+            property,
+            below,
+        })
     }
 
     /// Whether this is a prim property path (`SdfPath::IsPrimPropertyPath`):
     /// a property of a prim or variant, the only property path a spec has
     /// here and the one the path tree stores by its name.
     pub(crate) fn is_prim_property(&self) -> bool {
-        self.property.len() == 1
+        self.property.is_some() && self.below.is_empty()
     }
 
     /// Whether this is the pseudo-root.
     pub(crate) fn is_root(&self) -> bool {
-        self.elements.is_empty() && self.property.is_empty()
+        self.prim.names.is_empty()
     }
 
     /// The last element of the prim part, for a path that is not below a
     /// property.
-    pub(crate) fn last_element(&self) -> Option<&Element> {
-        self.elements.last().filter(|_| self.property.is_empty())
+    pub(crate) fn last_element(&self) -> Option<Element<'a>> {
+        self.prim.last().filter(|_| self.property.is_none())
     }
 
     /// The parent path, `SdfPath::GetParentPath`: the path less its last
@@ -181,16 +245,21 @@ impl CratePath {
     /// property and a variant's the prim or variant holding its set;
     /// `None` for the pseudo-root.
     pub(crate) fn parent(&self) -> Option<Self> {
-        if let Some((_, parent)) = self.property.split_last() {
+        if self.property.is_some() {
+            let (property, below) = match self.below.split_last() {
+                Some((_, prefix)) => (self.property, prefix.to_vec()),
+                None => (None, Vec::new()),
+            };
             return Some(Self {
-                elements: self.elements.clone(),
-                property: parent.to_vec(),
+                prim: self.prim.clone(),
+                property,
+                below,
             });
         }
-        let (_, parent) = self.elements.split_last()?;
         Some(Self {
-            elements: parent.to_vec(),
-            property: Vec::new(),
+            prim: self.prim.parent()?,
+            property: None,
+            below: Vec::new(),
         })
     }
 
@@ -199,7 +268,7 @@ impl CratePath {
     /// table before the target path's parent; `None` for any other path,
     /// a mapper's included.
     pub(crate) fn target(&self) -> Option<&Self> {
-        match self.property.last()? {
+        match self.below.last()? {
             PropertyElement::Target(target) => Some(target),
             _ => None,
         }
@@ -209,16 +278,9 @@ impl CratePath {
     pub(crate) fn variant_set(&self) -> Option<Self> {
         match self.last_element()? {
             Element::Variant { set, variant } if !variant.is_empty() => {
-                let mut elements = self.elements.clone();
-                elements.pop();
-                elements.push(Element::Variant {
-                    set: set.clone(),
-                    variant: String::new(),
-                });
-                Some(Self {
-                    elements,
-                    property: Vec::new(),
-                })
+                let mut path = self.clone();
+                *path.prim.suffix.last_mut()? = Element::Variant { set, variant: "" };
+                Some(path)
             }
             _ => None,
         }
@@ -226,7 +288,10 @@ impl CratePath {
 
     /// Number of path elements below the pseudo-root.
     pub(crate) fn depth(&self) -> usize {
-        self.elements.len() + self.property.len()
+        self.prim.names.bytes().filter(|&c| c == b'/').count()
+            + self.prim.suffix.len()
+            + usize::from(self.property.is_some())
+            + self.below.len()
     }
 
     /// The token stored for this path's last element, as `CrateFile::_AddPath`
@@ -234,8 +299,10 @@ impl CratePath {
     /// the element's text (`SdfPath::GetElementToken`: `B`, `{v=x}`,
     /// `[/C]`, `.mapper[/C]`, `.d`, empty for the root).
     pub(crate) fn element_token(&self) -> Cow<'_, str> {
-        match (self.property.last(), self.elements.last()) {
-            (Some(PropertyElement::Property(name)), _) => Cow::Borrowed(name),
+        if self.is_prim_property() {
+            return Cow::Borrowed(self.property.expect("a prim property"));
+        }
+        match (self.below.last(), self.prim.last()) {
             (Some(PropertyElement::Target(target)), _) => Cow::Owned(alloc::format!("[{target}]")),
             (Some(PropertyElement::Mapper(target)), _) => {
                 Cow::Owned(alloc::format!(".mapper[{target}]"))
@@ -257,22 +324,23 @@ impl CratePath {
 /// Parses a property part, `text` being what follows its `.`: a property
 /// name, then the elements [`CratePath::parse`] lists, or the reason it
 /// is not one.
-fn parse_property(mut text: &str) -> Result<Vec<PropertyElement>, &'static str> {
+fn parse_property(mut text: &str) -> Result<(&str, Vec<PropertyElement<'_>>), &'static str> {
     // A name ends where a bracketed path or the next element starts.
     let name_end = |text: &str| text.find(['[', '.']).unwrap_or(text.len());
     let end = name_end(text);
     if !is_property_name(&text[..end]) {
         return Err("property name is not a namespaced identifier");
     }
-    let mut property = alloc::vec![PropertyElement::Property(text[..end].into())];
+    let name = &text[..end];
+    let mut property = Vec::new();
     text = &text[end..];
     while !text.is_empty() {
-        let last = property.last().expect("the property name");
+        let last = property.last();
         match last {
-            PropertyElement::MapperArg(_) | PropertyElement::Expression => {
+            Some(PropertyElement::MapperArg(_) | PropertyElement::Expression) => {
                 return Err("a mapper argument or an expression ends the path");
             }
-            PropertyElement::Mapper(_) => {
+            Some(PropertyElement::Mapper(_)) => {
                 // Only a mapper argument follows a mapper.
                 let Some(rest) = text.strip_prefix('.') else {
                     return Err("a mapper is followed by a mapper argument");
@@ -281,10 +349,10 @@ fn parse_property(mut text: &str) -> Result<Vec<PropertyElement>, &'static str> 
                 if !is_name(&rest[..end]) {
                     return Err("mapper argument name is not an identifier");
                 }
-                property.push(PropertyElement::MapperArg(rest[..end].into()));
+                property.push(PropertyElement::MapperArg(&rest[..end]));
                 text = &rest[end..];
             }
-            PropertyElement::Target(_) => {
+            Some(PropertyElement::Target(_)) => {
                 // Only a relational attribute follows a target.
                 let Some(rest) = text.strip_prefix('.') else {
                     return Err("a target is followed by a relational attribute");
@@ -293,10 +361,10 @@ fn parse_property(mut text: &str) -> Result<Vec<PropertyElement>, &'static str> 
                 if !is_property_name(&rest[..end]) {
                     return Err("relational attribute name is not a namespaced identifier");
                 }
-                property.push(PropertyElement::RelationalAttribute(rest[..end].into()));
+                property.push(PropertyElement::RelationalAttribute(&rest[..end]));
                 text = &rest[end..];
             }
-            PropertyElement::Property(_) | PropertyElement::RelationalAttribute(_) => {
+            None | Some(PropertyElement::RelationalAttribute(_)) => {
                 if let Some(rest) = text.strip_prefix(".mapper[") {
                     let (target, rest) = bracketed(rest)?;
                     property.push(PropertyElement::Mapper(target));
@@ -316,7 +384,7 @@ fn parse_property(mut text: &str) -> Result<Vec<PropertyElement>, &'static str> 
             }
         }
     }
-    Ok(property)
+    Ok((name, property))
 }
 
 /// Parses the absolute path of a bracketed element, `text` following its
@@ -328,7 +396,7 @@ fn parse_property(mut text: &str) -> Result<Vec<PropertyElement>, &'static str> 
 /// `CrateFile::_AddPath` adding the bracketed path and then its parents
 /// (`Z`, `.`, `..`, `../..`, ...), which never reach the absolute root,
 /// until the stack overflows (`pxr/usd/sdf/crateFile.cpp`).
-fn bracketed(text: &str) -> Result<(CratePath, &str), &'static str> {
+fn bracketed(text: &str) -> Result<(CratePath<'_>, &str), &'static str> {
     let mut depth = 0_usize;
     for (at, byte) in text.bytes().enumerate() {
         match byte {
@@ -353,13 +421,13 @@ fn is_property_name(name: &str) -> bool {
     name.split(':').all(is_name)
 }
 
-impl core::fmt::Display for CratePath {
+impl core::fmt::Display for CratePath<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         if self.is_root() {
             return f.write_str("/");
         }
         let mut after_selection = false;
-        for element in &self.elements {
+        for element in self.prim.elements() {
             match element {
                 Element::Prim(name) if after_selection => f.write_str(name)?,
                 Element::Prim(name) => write!(f, "/{name}")?,
@@ -367,11 +435,12 @@ impl core::fmt::Display for CratePath {
             }
             after_selection = matches!(element, Element::Variant { .. });
         }
-        for element in &self.property {
+        if let Some(name) = self.property {
+            write!(f, ".{name}")?;
+        }
+        for element in &self.below {
             match element {
-                PropertyElement::Property(name)
-                | PropertyElement::RelationalAttribute(name)
-                | PropertyElement::MapperArg(name) => {
+                PropertyElement::RelationalAttribute(name) | PropertyElement::MapperArg(name) => {
                     write!(f, ".{name}")?;
                 }
                 PropertyElement::Expression => f.write_str(".expression")?,
@@ -425,29 +494,31 @@ pub(crate) struct PathTree {
 ///
 /// `sorted` must contain the parent of every non-root path (the path table
 /// adds ancestors), which makes every subtree contiguous.
-pub(crate) fn path_tree(sorted: &[(&CratePath, u32, u32)]) -> PathTree {
+pub(crate) fn path_tree(sorted: &[(&CratePath<'_>, u32, u32)]) -> PathTree {
     let n = sorted.len();
-    // End (exclusive) of each entry's subtree: the next entry at the same or
-    // a shallower depth.
-    let mut subtree_end = alloc::vec![n; n];
-    let mut open: Vec<usize> = Vec::new();
-    for (i, (path, _, _)) in sorted.iter().enumerate() {
-        while let Some(&top) = open.last() {
-            if sorted[top].0.depth() >= path.depth() {
-                subtree_end[top] = i;
-                open.pop();
-            } else {
+    let mut tree = PathTree {
+        path_indexes: Vec::with_capacity(n),
+        element_tokens: Vec::with_capacity(n),
+        jumps: alloc::vec![-2; n],
+    };
+    // The next path at the same depth is a sibling; a shallower path
+    // closes a subtree. Each entry opens and closes exactly once.
+    let mut open: Vec<(usize, usize)> = Vec::new();
+    for (i, (path, index, token)) in sorted.iter().enumerate() {
+        let depth = path.depth();
+        while let Some(&(at, level)) = open.last() {
+            if level < depth {
                 break;
             }
+            open.pop();
+            tree.jumps[at] = match (i > at + 1, level == depth) {
+                (true, true) => (i - at) as i64,
+                (false, true) => 0,
+                (true, false) => -1,
+                (false, false) => -2,
+            };
         }
-        open.push(i);
-    }
-
-    let mut tree = PathTree::default();
-    for (i, (path, index, token)) in sorted.iter().enumerate() {
-        let has_child = i + 1 < subtree_end[i];
-        let next = subtree_end[i];
-        let has_sibling = next < n && sorted[next].0.depth() == path.depth();
+        open.push((i, depth));
         tree.path_indexes.push(i64::from(*index));
         let token = i64::from(*token);
         tree.element_tokens.push(if path.is_prim_property() {
@@ -455,23 +526,22 @@ pub(crate) fn path_tree(sorted: &[(&CratePath, u32, u32)]) -> PathTree {
         } else {
             token
         });
-        tree.jumps.push(match (has_child, has_sibling) {
-            (true, true) => (next - i) as i64,
-            (false, true) => 0,
-            (true, false) => -1,
-            (false, false) => -2,
-        });
+    }
+    for (at, _) in open {
+        if at + 1 < n {
+            tree.jumps[at] = -1;
+        }
     }
     tree
 }
 
 #[cfg(test)]
 mod tests {
-    use alloc::string::ToString;
+    use alloc::string::{String, ToString};
 
     use super::*;
 
-    fn p(text: &str) -> CratePath {
+    fn p(text: &str) -> CratePath<'_> {
         CratePath::parse(text).unwrap()
     }
 
@@ -585,6 +655,22 @@ mod tests {
     }
 
     #[test]
+    fn unselected_prefixes_compare_in_element_order() {
+        let mut paths = [
+            "/A0", "/A_", "/A/X", "/A{v=x}", "/A", "/A0{v=x}", "/A.aa", "/A\u{c9}", "/A{v=x}X",
+        ]
+        .map(p);
+        paths.sort();
+        let text: Vec<_> = paths.iter().map(ToString::to_string).collect();
+        assert_eq!(
+            text,
+            [
+                "/A", "/A.aa", "/A/X", "/A{v=x}", "/A{v=x}X", "/A0", "/A0{v=x}", "/A_", "/A\u{c9}"
+            ]
+        );
+    }
+
+    #[test]
     fn orders_mapper_arguments_and_expressions_like_sdf_path() {
         // `sorted(Sdf.Path(...))` in OpenUSD 26.11.
         let mut paths = [
@@ -617,7 +703,7 @@ mod tests {
     fn tree_jumps() {
         // /, /A, /A.x, /A/B, /C
         let paths = [p("/"), p("/A"), p("/A.x"), p("/A/B"), p("/C")];
-        let entries: Vec<(&CratePath, u32, u32)> = paths
+        let entries: Vec<(&CratePath<'_>, u32, u32)> = paths
             .iter()
             .enumerate()
             .zip(0_u32..)

@@ -69,7 +69,7 @@ use alloc::vec::Vec;
 use layerstack::doc::Layer;
 use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
-use layerstack_usda::save::{LayerSpec, visit_layer_specs};
+use layerstack_usda::save::{Declaration, LayerSpec, Payload, visit_layer_specs};
 use layerstack_usda::writer::{
     Attribute, Document, ListOp as UsdaListOp, Metadatum, Prim, Property,
     Reference as UsdaReference, Relationship, Specifier as UsdaSpecifier, Value as UsdaValue,
@@ -129,6 +129,14 @@ pub fn save_usdc(
                 children,
                 sets,
             } => lower_body(prim, path, variant, children, sets, &mut specs),
+            LayerSpec::Declarations {
+                path,
+                prim,
+                properties,
+            } => {
+                declarations(path, prim, properties, tokens, paths, &mut specs);
+                Ok(())
+            }
             LayerSpec::Set(path, variants) => {
                 set_spec(&path, variants, &mut specs);
                 Ok(())
@@ -138,6 +146,91 @@ pub fn save_usdc(
     .map_err(UsdcWriteError::Save)?;
     result?;
     super::encode::write(&specs)
+}
+
+/// Store exact-typed declarations directly in the field table, preserving the
+/// authored order used for OpenUSD's first-use indexes (AOUSD Core §16.3).
+fn declarations(
+    id: layerstack::PathId,
+    prim: &layerstack::PrimSpec,
+    properties: &[Declaration<'_>],
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+    sink: &mut LayerSpecs,
+) {
+    let path = paths.display(id, tokens);
+    sink.begin(path.as_str(), SpecForm::Prim);
+    if let Some(s) = prim.specifier {
+        sink.field("specifier", Value::Specifier(s));
+    }
+    if let Some(t) = prim.type_name {
+        sink.token("typeName", tokens.resolve(t));
+    }
+    if !prim.authored_children.is_empty() {
+        sink.field(
+            "primChildren",
+            Value::TokenVector(
+                prim.authored_children
+                    .iter()
+                    .map(|&t| tokens.resolve(t).into())
+                    .collect(),
+            ),
+        );
+    }
+    if !properties.is_empty() {
+        sink.field(
+            "properties",
+            Value::TokenVector(properties.iter().map(|p| p.name.into()).collect()),
+        );
+    }
+    for p in properties {
+        let location = [path.as_str(), ".", p.name].concat();
+        let variability = match p.variability {
+            UsdaVariability::Varying => Variability::Varying,
+            UsdaVariability::Uniform => Variability::Uniform,
+        };
+        if let Payload::Targets(targets) = p.payload {
+            sink.begin(location, SpecForm::Relationship);
+            sink.field("variability", Value::Variability(variability));
+            if p.custom {
+                sink.field("custom", Value::Bool(true));
+            }
+            if let Some(targets) = targets {
+                sink.field(
+                    "targetPaths",
+                    Value::PathListOp(ListOp::explicit(
+                        targets.iter().map(|t| t.display(paths, tokens)).collect(),
+                    )),
+                );
+            }
+            continue;
+        }
+        sink.begin(location, SpecForm::Attribute);
+        sink.field("custom", Value::Bool(p.custom));
+        sink.token("typeName", p.ty);
+        sink.field("variability", Value::Variability(variability));
+        let value = match &p.payload {
+            Payload::String(s) => Value::String((*s).into()),
+            Payload::Token(s) => {
+                sink.token("default", s);
+                continue;
+            }
+            Payload::Int(v) => Value::Int(*v),
+            Payload::Int64(v) => Value::Int64(*v),
+            Payload::Bool(v) => Value::Bool(*v),
+            Payload::Float(v) => Value::Float(*v),
+            Payload::Double(v) => Value::Double(*v),
+            Payload::Ints(v) => Value::Int64Array(v.to_vec()),
+            Payload::Floats(v) => Value::FloatArray(v.to_vec()),
+            Payload::Doubles(v) => Value::DoubleArray(v.to_vec()),
+            Payload::Tokens(v) => {
+                Value::TokenArray(v.iter().map(|&t| tokens.resolve(t).into()).collect())
+            }
+            Payload::Strings(v) => Value::StringArray(v.iter().map(String::from).collect()),
+            Payload::Targets(_) => unreachable!("relationship handled above"),
+        };
+        sink.field("default", value);
+    }
 }
 
 /// Lowers `doc` to the crate specs [`write_document`] writes.
@@ -2008,6 +2101,35 @@ def Xform "A" (
                 })
             )),
             "the USDA save's error, before any output"
+        );
+    }
+
+    #[test]
+    fn borrowed_declarations_preserve_authored_field_order_and_types() {
+        let source = r#"#usda 1.0
+def Scope "A" {
+    custom token z = "same"
+    uniform int64 wide = 1
+    string same = "same"
+    bool enabled = 1
+    float f = -0
+    double d = 0.25
+    int a = 1
+    float[] floats = [1.25]
+    double[] doubles = [-2.5]
+    int64[] ids = [4, -2]
+    string[] labels = ["b", "a"]
+    token[] names = ["b", "a"]
+    rel none = None
+    varying rel links = [</A.z>, </A>]
+    rel bare
+}
+"#;
+        let (layer, tokens, paths) = import_usda(source);
+        let doc = layerstack_usda::save::usdc_document(&layer, &tokens, &paths).unwrap();
+        assert_eq!(
+            save_usdc(&layer, &tokens, &paths).unwrap(),
+            write_document(&doc).unwrap()
         );
     }
 

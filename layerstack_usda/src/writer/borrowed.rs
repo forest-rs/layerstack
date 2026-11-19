@@ -15,6 +15,12 @@ use layerstack::{
     Value, Variability,
 };
 
+#[derive(Clone, Copy)]
+pub(crate) enum Order {
+    Authored,
+    Text,
+}
+
 #[derive(Default)]
 pub(crate) struct CheckedNames {
     prim_names: HashSet<TokenId>,
@@ -34,6 +40,7 @@ impl CheckedNames {
         tokens: &'a TokenInterner,
         paths: &'a PathInterner,
         declarations: &mut Vec<Declaration<'a>>,
+        order: Order,
     ) -> Option<BorrowedPrim<'a>> {
         if spec.rare().is_some()
             || !spec.fields.is_empty()
@@ -68,13 +75,29 @@ impl CheckedNames {
             declarations.push(property);
         }
         let properties = &mut declarations[start..];
-        if !properties.is_sorted_by(|a, b| dictionary_cmp(a.name, b.name).is_le()) {
-            layerstack::sort::sort_unstable_by(properties, |a, b| dictionary_cmp(a.name, b.name));
-        }
-        if properties
-            .windows(2)
-            .any(|pair| pair[0].name == pair[1].name)
-        {
+        let duplicate = if properties.is_sorted_by(|a, b| dictionary_cmp(a.name, b.name).is_le()) {
+            properties
+                .windows(2)
+                .any(|pair| pair[0].name == pair[1].name)
+        } else {
+            match order {
+                Order::Text => {
+                    layerstack::sort::sort_unstable_by(properties, |a, b| {
+                        dictionary_cmp(a.name, b.name)
+                    });
+                    properties
+                        .windows(2)
+                        .any(|pair| pair[0].name == pair[1].name)
+                }
+                Order::Authored => {
+                    let mut names: smallvec::SmallVec<[&str; 8]> =
+                        properties.iter().map(|p| p.name).collect();
+                    layerstack::sort::sort_unstable_by(&mut names, |a, b| a.cmp(b));
+                    names.windows(2).any(|pair| pair[0] == pair[1])
+                }
+            }
+        };
+        if duplicate {
             declarations.truncate(start);
             return None;
         }
@@ -123,7 +146,7 @@ impl CheckedNames {
                             && op.delete.is_empty()
                             && op.reorder.is_empty() =>
                     {
-                        op.explicit.as_deref()
+                        Some(op.explicit.as_deref()?)
                     }
                     _ => return None,
                 };
@@ -173,36 +196,60 @@ pub(crate) struct BorrowedPrim<'a> {
     paths: &'a PathInterner,
 }
 
-pub(crate) struct Declaration<'a> {
-    name: &'a str,
-    ty: &'a str,
-    payload: Payload<'a>,
-    custom: bool,
-    variability: Variability,
+/// A checked property declaration borrowed from an authored prim.
+#[derive(Debug)]
+pub struct Declaration<'a> {
+    /// Property name, including any namespace.
+    pub name: &'a str,
+    /// Declared attribute type or `rel`.
+    pub ty: &'a str,
+    /// Authored default or relationship targets.
+    pub payload: Payload<'a>,
+    /// Whether the declaration is custom.
+    pub custom: bool,
+    /// Authored variability.
+    pub variability: Variability,
 }
 
-enum Payload<'a> {
-    Quoted(&'a str),
+/// Native values that can be written directly at their declared type.
+#[derive(Debug)]
+pub enum Payload<'a> {
+    /// String default.
+    String(&'a str),
+    /// Resolved token default.
+    Token(&'a str),
+    /// Boolean default.
     Bool(bool),
-    Int(i64),
+    /// Signed 32-bit default.
+    Int(i32),
+    /// Signed 64-bit default.
+    Int64(i64),
+    /// Single-precision default.
     Float(f32),
+    /// Double-precision default.
     Double(f64),
+    /// Signed 64-bit array.
     Ints(&'a [i64]),
+    /// Single-precision array.
     Floats(&'a [f32]),
+    /// Double-precision array.
     Doubles(&'a [f64]),
+    /// Interned token array.
     Tokens(&'a [TokenId]),
+    /// String array.
     Strings(&'a layerstack::StringArray),
+    /// The relationship's explicit targets, or no authored target field.
     Targets(Option<&'a [TargetPath]>),
 }
 
 impl<'a> Payload<'a> {
     fn default_value(ty: &str, v: &'a Value, tokens: &'a TokenInterner) -> Option<Self> {
         Some(match (ty, v) {
-            ("string", Value::String(s)) if !s.contains('\0') => Self::Quoted(s),
-            ("token", Value::Token(id)) => Self::Quoted(tokens.resolve(*id)),
+            ("string", Value::String(s)) if !s.contains('\0') => Self::String(s),
+            ("token", Value::Token(id)) => Self::Token(tokens.resolve(*id)),
             ("bool", Value::Bool(v)) => Self::Bool(*v),
-            ("int", Value::Int(v)) => Self::Int(i64::from(*v)),
-            ("int64", Value::Int64(v)) => Self::Int(*v),
+            ("int", Value::Int(v)) => Self::Int(*v),
+            ("int64", Value::Int64(v)) => Self::Int64(*v),
             ("float", Value::Float(v)) => Self::Float(*v),
             ("double", Value::Double(v)) => Self::Double(*v),
             ("int64[]", Value::TypedArray(TypedArray::Int64(v))) => Self::Ints(v),
@@ -246,9 +293,10 @@ impl BorrowedPrim<'_> {
                 w.out.push_str(" = ");
             }
             match &p.payload {
-                Payload::Quoted(s) => w.string(s),
+                Payload::String(s) | Payload::Token(s) => w.string(s),
                 Payload::Bool(v) => w.out.push(if *v { '1' } else { '0' }),
                 Payload::Int(v) => w.display(v),
+                Payload::Int64(v) => w.display(v),
                 Payload::Float(v) => w.f32(*v),
                 Payload::Double(v) => w.f64(*v),
                 Payload::Ints(v) => w.array(v, |w, v| w.display(v)),

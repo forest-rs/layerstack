@@ -1,10 +1,11 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Destinations for the authored namespace walk. Text retains the tree.
+//! Destinations for the authored namespace walk. Documents retain the tree.
 //! A crate consumes each spec's fields and child names as it is visited.
 
 use super::*;
+use crate::writer::borrowed::Order;
 
 pub(super) trait Sink<'a> {
     /// Consume an ordinary prim directly when this destination can represent
@@ -12,6 +13,7 @@ pub(super) trait Sink<'a> {
     fn borrow_prim(
         &mut self,
         _: &'a PrimSpec,
+        _: PathId,
         _: TokenId,
         _: &'a TokenInterner,
         _: &'a PathInterner,
@@ -101,6 +103,15 @@ pub enum LayerSpec<'a> {
         /// Nonempty variant sets in field order.
         sets: Vec<String>,
     },
+    /// Plain prim fields and checked declarations in authored order.
+    Declarations {
+        /// Interned namespace path of this prim.
+        path: PathId,
+        /// The prim supplying the header and child names.
+        prim: &'a PrimSpec,
+        /// Exact-typed properties with validated names and target paths.
+        properties: &'a [Declaration<'a>],
+    },
     /// Variant set path and its variant children.
     Set(String, Vec<String>),
 }
@@ -119,6 +130,8 @@ pub fn visit_layer_specs(
     visit: impl FnMut(LayerSpec<'_>),
 ) -> Result<(), SaveError> {
     let mut sink = CheckedSpecs {
+        names: crate::writer::CheckedNames::default(),
+        declarations: Vec::new(),
         tokens,
         visit,
         validation: Ok(()),
@@ -133,12 +146,48 @@ pub fn visit_layer_specs(
 }
 
 struct CheckedSpecs<'a, F> {
+    names: crate::writer::CheckedNames,
+    declarations: Vec<Declaration<'a>>,
     tokens: &'a TokenInterner,
     visit: F,
     validation: Result<(), WriteError>,
 }
 
-impl<F: FnMut(LayerSpec<'_>)> Sink<'_> for CheckedSpecs<'_, F> {
+impl<'a, F: FnMut(LayerSpec<'_>)> Sink<'a> for CheckedSpecs<'a, F> {
+    fn borrow_prim(
+        &mut self,
+        spec: &'a PrimSpec,
+        id: PathId,
+        name: TokenId,
+        tokens: &'a TokenInterner,
+        paths: &'a PathInterner,
+    ) -> bool {
+        self.declarations.clear();
+        if self
+            .names
+            .borrow_prim(
+                spec,
+                name,
+                tokens,
+                paths,
+                &mut self.declarations,
+                Order::Authored,
+            )
+            .is_none()
+        {
+            return false;
+        }
+        if self.validation.is_err() {
+            return true;
+        }
+        (self.visit)(LayerSpec::Declarations {
+            path: id,
+            prim: spec,
+            properties: &self.declarations,
+        });
+        true
+    }
+
     fn root(&mut self, root: Document, children: &[TokenId]) {
         self.validation = root.validate();
         if self.validation.is_ok() {
@@ -257,6 +306,7 @@ impl<'a, O: crate::writer::TextOutput<'a>> Sink<'a> for TextBuilder<O> {
     fn borrow_prim(
         &mut self,
         spec: &'a PrimSpec,
+        _: PathId,
         name: TokenId,
         tokens: &'a TokenInterner,
         paths: &'a PathInterner,
@@ -264,10 +314,14 @@ impl<'a, O: crate::writer::TextOutput<'a>> Sink<'a> for TextBuilder<O> {
         if self.shared.is_err() || self.text.is_err() {
             return false;
         }
-        let Some(body) =
-            self.names
-                .borrow_prim(spec, name, tokens, paths, self.output.declarations())
-        else {
+        let Some(body) = self.names.borrow_prim(
+            spec,
+            name,
+            tokens,
+            paths,
+            self.output.declarations(),
+            Order::Text,
+        ) else {
             return false;
         };
         let layout = self.open_body(false, !spec.authored_children.is_empty());

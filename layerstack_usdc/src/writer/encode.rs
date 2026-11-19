@@ -1893,6 +1893,11 @@ fn prepare<S: Specs + ?Sized>(specs: &S) -> Result<(Paths<'_>, Vec<usize>), Usdc
             return Err(UsdcWriteError::DuplicateSpec { path: text.into() });
         }
         ordinary &= !text.contains('{');
+        // The layer lowerer emits each built-in field at most once. Authored
+        // metadata can introduce an arbitrary name, including a collision.
+        if !specs.check_field_names(i) {
+            continue;
+        }
         names.clear();
         for (_, field) in specs.fields(i) {
             if field.name.is_empty() {

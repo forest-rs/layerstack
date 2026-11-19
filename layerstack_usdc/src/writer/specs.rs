@@ -43,6 +43,10 @@ pub(super) trait Specs {
     fn len(&self) -> usize;
     fn header(&self, index: usize) -> (&str, SpecForm);
     fn fields(&self, index: usize) -> impl ExactSizeIterator<Item = (Option<usize>, &Field)>;
+    /// Caller-supplied names can shadow another field on the same spec.
+    fn check_field_names(&self, _index: usize) -> bool {
+        true
+    }
     fn retained_field_count(&self) -> usize {
         0
     }
@@ -66,6 +70,7 @@ struct Header {
     path: String,
     form: SpecForm,
     first_field: usize,
+    has_metadata: bool,
 }
 
 #[derive(Default)]
@@ -73,29 +78,31 @@ pub(super) struct LayerSpecs {
     headers: Vec<Header>,
     fields: Vec<Field>,
     occurrences: Vec<usize>,
-    scalar_index: HashTable<usize>,
+    field_index: HashTable<usize>,
     hasher: DefaultHashBuilder,
 }
 
-// The ubiquitous specifier, typeName, custom, variability and scalar default
-// fields occupy one value each. Every other value goes straight to the pool;
+// Repeated declaration fields and short name lists occupy one value each.
+// Every other value goes straight to the pool;
 // the packer's typed caches handle their payloads, including float bit patterns.
 #[derive(Hash, PartialEq, Eq)]
-enum Scalar<'a> {
+enum CommonField<'a> {
     Specifier(u8),
     Variability(u8),
     Bool(bool),
     Token(&'a str),
     String(&'a str),
+    Tokens(&'a [String]),
 }
 
-fn scalar(value: &Value) -> Option<Scalar<'_>> {
+fn common_field(value: &Value) -> Option<CommonField<'_>> {
     Some(match value {
-        Value::Specifier(s) => Scalar::Specifier(*s as u8),
-        Value::Variability(v) => Scalar::Variability(*v as u8),
-        Value::Bool(b) => Scalar::Bool(*b),
-        Value::Token(t) => Scalar::Token(t),
-        Value::String(s) => Scalar::String(s),
+        Value::Specifier(s) => CommonField::Specifier(*s as u8),
+        Value::Variability(v) => CommonField::Variability(*v as u8),
+        Value::Bool(b) => CommonField::Bool(*b),
+        Value::Token(t) => CommonField::Token(t),
+        Value::String(s) => CommonField::String(s),
+        Value::TokenVector(names) if names.len() <= 8 => CommonField::Tokens(names),
         _ => return None,
     })
 }
@@ -106,6 +113,7 @@ impl SpecSink for LayerSpecs {
             path: path.into(),
             form,
             first_field: self.occurrences.len(),
+            has_metadata: false,
         });
     }
 
@@ -113,30 +121,57 @@ impl SpecSink for LayerSpecs {
         &self.headers.last().expect("an open spec").path
     }
 
+    fn metadata(&mut self, field: Field) {
+        self.headers.last_mut().expect("an open spec").has_metadata = true;
+        self.field(field.name, field.value);
+    }
+
     fn field(&mut self, name: impl AsRef<str> + Into<String>, value: Value) {
-        let index = self.fields.len();
-        if let Some(key) = scalar(&value) {
-            let hash = self.hasher.hash_one((name.as_ref(), &key));
-            if let Some(&found) = self.scalar_index.find(hash, |&i| {
-                let f = &self.fields[i];
-                f.name == name.as_ref() && scalar(&f.value).as_ref() == Some(&key)
-            }) {
-                self.occurrences.push(found);
-                return;
-            }
-            self.scalar_index.insert_unique(hash, index, |&i| {
+        if common_field(&value).is_some_and(|key| self.reuse(name.as_ref(), &key)) {
+            return;
+        }
+        self.store(name, value);
+    }
+}
+
+impl LayerSpecs {
+    /// Register the next slot on a miss so callers only copy a token when
+    /// the new field will actually own it.
+    fn reuse(&mut self, name: &str, key: &CommonField<'_>) -> bool {
+        let hash = self.hasher.hash_one((name, key));
+        if let Some(&found) = self.field_index.find(hash, |&i| {
+            let f = &self.fields[i];
+            f.name == name && common_field(&f.value).as_ref() == Some(key)
+        }) {
+            self.occurrences.push(found);
+            return true;
+        }
+        self.field_index
+            .insert_unique(hash, self.fields.len(), |&i| {
                 let f = &self.fields[i];
                 self.hasher
-                    .hash_one((&f.name, scalar(&f.value).expect("indexed scalar")))
+                    .hash_one((&f.name, common_field(&f.value).expect("indexed field")))
             });
-        }
+        false
+    }
+
+    fn store(&mut self, name: impl Into<String>, value: Value) {
+        self.occurrences.push(self.fields.len());
         self.fields.push(Field::new(name, value));
-        self.occurrences.push(index);
+    }
+
+    pub(super) fn token(&mut self, name: &str, token: &str) {
+        if !self.reuse(name, &CommonField::Token(token)) {
+            self.store(name, Value::Token(token.into()));
+        }
     }
 }
 
 impl Specs for LayerSpecs {
     const VALIDATED_NAMESPACE: bool = true;
+    fn check_field_names(&self, index: usize) -> bool {
+        self.headers[index].has_metadata
+    }
     fn retained_field_count(&self) -> usize {
         self.fields.len()
     }

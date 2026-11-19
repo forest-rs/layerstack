@@ -410,7 +410,7 @@ fn lower_attribute(
     prim: &str,
     sink: &mut impl SpecSink,
 ) -> Result<(), UsdcWriteError> {
-    let path = alloc::format!("{prim}.{}", attribute.name);
+    let path = [prim, ".", &attribute.name].concat();
     let type_name = core::mem::take(&mut attribute.type_name);
     let scalar = type_name.strip_suffix("[]").unwrap_or(&type_name);
     let declared = match scalar {
@@ -418,7 +418,7 @@ fn lower_attribute(
         "duration" => Declared::Duration,
         _ => Declared::Other,
     };
-    sink.begin(&path, SpecForm::Attribute);
+    sink.begin(path, SpecForm::Attribute);
     sink.field("custom", Value::Bool(attribute.custom));
     sink.field("typeName", Value::Token(type_name));
     sink.field(
@@ -432,7 +432,7 @@ fn lower_attribute(
         sink.field("default", attribute_value(declared, value));
     }
     for entry in &mut attribute.metadata {
-        sink.metadata(metadatum(Owner::Attribute, &path, entry)?);
+        sink.metadata(metadatum(Owner::Attribute, sink.path(), entry)?);
     }
     if let Some(connections) = &mut attribute.connections {
         sink.field("connectionPaths", Value::PathListOp(list_op(connections)));
@@ -500,7 +500,7 @@ fn lower_relationship(
     prim: &str,
     sink: &mut impl SpecSink,
 ) -> Result<(), UsdcWriteError> {
-    let path = alloc::format!("{prim}.{}", relationship.name);
+    let path = [prim, ".", &relationship.name].concat();
     // A relationship's legacy `default` is an `SdfPath` value, which no
     // crate value type holds: OpenUSD 26.11 posts "Attempted to pack
     // unsupported type 'SdfPath'" and writes an invalid value its reader
@@ -512,7 +512,7 @@ fn lower_relationship(
             key: "default".into(),
         });
     }
-    sink.begin(&path, SpecForm::Relationship);
+    sink.begin(path, SpecForm::Relationship);
     sink.field(
         "variability",
         Value::Variability(if relationship.varying {
@@ -529,7 +529,7 @@ fn lower_relationship(
         sink.field("targetPaths", Value::PathListOp(list_op(targets)));
     }
     for entry in &mut relationship.metadata {
-        sink.metadata(metadatum(Owner::Relationship, &path, entry)?);
+        sink.metadata(metadatum(Owner::Relationship, sink.path(), entry)?);
     }
     if let Some(targets) = targets.filter(|op| op.explicit.is_none()) {
         sink.field("targetPaths", Value::PathListOp(list_op(targets)));

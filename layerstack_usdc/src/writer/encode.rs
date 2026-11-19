@@ -485,10 +485,7 @@ impl<'a> Packer<'a> {
                 self.blob(T::PathExpression, 0, index.to_le_bytes(), false)?
             }
             Value::PathExpressionArray(v) => {
-                let indexes = self.text_indexes(v, site, Self::string)?;
-                self.plain_array(T::PathExpression, v.len(), |out| {
-                    out.extend_from_slice(&indexes);
-                })?
+                self.text_sequence(T::PathExpression, v, site, Self::string)?
             }
             Value::Relocates(entries) => {
                 let mut bytes = (entries.len() as u64).to_le_bytes().to_vec();
@@ -584,18 +581,9 @@ impl<'a> Packer<'a> {
             Value::DurationArray(v) => {
                 self.math_array(T::Duration, v.len(), v, f64::to_le_bytes)?
             }
-            Value::StringArray(v) => {
-                let indexes = self.text_indexes(v, site, Self::string)?;
-                self.plain_array(T::String, v.len(), |out| out.extend_from_slice(&indexes))?
-            }
-            Value::TokenArray(v) => {
-                let indexes = self.text_indexes(v, site, Self::token)?;
-                self.plain_array(T::Token, v.len(), |out| out.extend_from_slice(&indexes))?
-            }
-            Value::AssetArray(v) => {
-                let indexes = self.text_indexes(v, site, Self::string)?;
-                self.plain_array(T::AssetPath, v.len(), |out| out.extend_from_slice(&indexes))?
-            }
+            Value::StringArray(v) => self.text_sequence(T::String, v, site, Self::string)?,
+            Value::TokenArray(v) => self.text_sequence(T::Token, v, site, Self::token)?,
+            Value::AssetArray(v) => self.text_sequence(T::AssetPath, v, site, Self::string)?,
             Value::Vec2hArray(v) => {
                 self.math_array(T::Vec2h, v.len(), v.as_flattened(), u16::to_le_bytes)?
             }
@@ -661,12 +649,7 @@ impl<'a> Packer<'a> {
             )?,
             Value::Dictionary(entries) => self.dictionary(entries, site)?,
             // `Write(std::vector<TfToken>)`: count, then token indexes.
-            Value::TokenVector(v) => {
-                let indexes = self.text_indexes(v, site, Self::token)?;
-                let mut bytes = (v.len() as u64).to_le_bytes().to_vec();
-                bytes.extend_from_slice(&indexes);
-                self.blob(T::TokenVector, 0, bytes, false)?
-            }
+            Value::TokenVector(v) => self.text_sequence(T::TokenVector, v, site, Self::token)?,
             Value::TokenListOp(op) => {
                 let bytes = self.list_op(op, site, text_item(site, Self::token))?;
                 self.blob(T::TokenListOp, 0, bytes, false)?
@@ -746,12 +729,7 @@ impl<'a> Packer<'a> {
                 self.blob(T::Payload, 0, bytes, false)?
             }
             // `Write(std::vector<std::string>)`: count, then string indexes.
-            Value::StringVector(v) => {
-                let indexes = self.text_indexes(v, site, Self::string)?;
-                let mut bytes = (v.len() as u64).to_le_bytes().to_vec();
-                bytes.extend_from_slice(&indexes);
-                self.blob(T::StringVector, 0, bytes, false)?
-            }
+            Value::StringVector(v) => self.text_sequence(T::StringVector, v, site, Self::string)?,
             // `Write(std::vector<SdfLayerOffset>)`: count, then each offset
             // and scale.
             Value::LayerOffsetVector(v) => {
@@ -938,19 +916,30 @@ impl<'a> Packer<'a> {
         self.blob(ValueType::TimeSamples, 0, bytes, false)
     }
 
-    /// Adds each text to a table, returning the `u32` indexes as bytes.
-    fn text_indexes(
+    /// Token and string vectors and arrays have the same counted index
+    /// payload. Vectors are deduplicated blobs, arrays use array alignment.
+    fn text_sequence(
         &mut self,
+        ty: ValueType,
         items: &[String],
         site: Site<'_>,
         add: fn(&mut Self, &str) -> Result<u32, UsdcWriteError>,
-    ) -> Result<Vec<u8>, UsdcWriteError> {
-        let mut bytes = Vec::with_capacity(items.len() * 4);
+    ) -> Result<u64, UsdcWriteError> {
+        let vector = matches!(ty, ValueType::TokenVector | ValueType::StringVector);
+        if items.is_empty() && !vector {
+            return Ok(rep(ty, ARRAY_BIT, 0));
+        }
+        let mut bytes = SmallVec::<[u8; 32]>::with_capacity(8 + items.len() * 4);
+        bytes.extend_from_slice(&(items.len() as u64).to_le_bytes());
         for item in items {
             site.check_text(item)?;
             bytes.extend_from_slice(&add(self, item)?.to_le_bytes());
         }
-        Ok(bytes)
+        if vector {
+            self.blob(ty, 0, bytes, false)
+        } else {
+            self.array_blob(ty, ARRAY_BIT, &bytes, true)
+        }
     }
 
     /// `GfVec` values wider than four bytes: inlined as one `int8` per

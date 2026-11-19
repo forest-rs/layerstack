@@ -875,6 +875,21 @@ mod tests {
     }
 
     #[test]
+    fn path_span_import_matches_lossless_tokenization() {
+        for targets in [
+            "[</World/Étage>, </World/α.x:y>, <../Sibling>]",
+            "[</World// ignored >\n/Child>, </Other>]",
+            "[</World/* hidden > */Child>, </Other>]",
+            "[</World/\"name>part\">, </Other>]",
+            "[</World.a[/Target].attr>, </A{v=x}B>]",
+            "[</World/9é>, </World..broken>, <>]",
+            "[</Unterminated",
+        ] {
+            compare(&format!("#usda 1.0\ndef \"A\" {{ rel links = {targets} }}"));
+        }
+    }
+
+    #[test]
     fn direct_numeric_arrays_match_the_ast_emitter() {
         for ty in [
             "bool", "uchar", "int", "uint", "int64", "uint64", "half", "float", "double",

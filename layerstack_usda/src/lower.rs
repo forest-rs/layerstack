@@ -1940,7 +1940,14 @@ enum TailPart<'t> {
 /// Spec: AOUSD Core §8 (paths).
 pub(crate) fn split_property_tail(text: &str) -> Option<(&str, &str, PropertyTail)> {
     use TailPart::{Bracket, Name};
+    // A plain prim or a single property has no extended tail.
+    if !text.contains('.') {
+        return None;
+    }
     let (prim, tail) = split_top_level(text, b'.')?;
+    if !tail.contains(['[', '.', ']']) && !tail.is_empty() {
+        return None;
+    }
     let mut parts: SmallVec<[TailPart<'_>; 8]> = SmallVec::new();
     let mut depth = 0_usize;
     let mut name_start = Some(0);
@@ -2003,6 +2010,9 @@ fn split_top_level(text: &str, byte: u8) -> Option<(&str, &str)> {
 /// holds a variant selection: a `{` outside the paths in `[...]`, which
 /// may hold their own (`/A.b[/C{v=x}].d`).
 pub(crate) fn has_prim_variant_selection(text: &str) -> bool {
+    if !text.contains('{') {
+        return false;
+    }
     let mut depth = 0_usize;
     for b in text.bytes() {
         match b {
@@ -2110,8 +2120,8 @@ impl PathGrammar<'_> {
 
     /// `Utf8Identifier`: `_` or `XID_Start`, then `XID_Continue`.
     fn identifier(&self, at: usize) -> Option<usize> {
-        let first = self.char_at(at).filter(|&c| crate::ident::is_start(c))?;
-        Some(self.chars_while(at + first.len_utf8(), crate::ident::is_continue))
+        let len = crate::lexer::identifier_len(self.text.get(at..)?);
+        (len != 0).then_some(at + len)
     }
 
     /// `PropertyName`: identifiers joined by `:`, which commits.

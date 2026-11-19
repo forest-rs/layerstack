@@ -432,22 +432,8 @@ impl<'a> Lexer<'a> {
 
     /// Lexes an identifier or keyword.
     fn lex_ident(&mut self, start: u32) -> Token {
-        // First char is already validated as `XID_Start` or `_`
-        // (`crate::ident`, AOUSD Core §7.3.3, §16.2.8).
-        // Advance past it (may be multi-byte UTF-8).
-        let ch = self.current_char();
-        self.advance(ch.len_utf8() as u32);
-
-        // Continue with XID_Continue characters.
-        while self.pos < self.bytes.len() as u32 {
-            let ch = self.current_char();
-            if crate::ident::is_continue(ch) {
-                self.advance(ch.len_utf8() as u32);
-            } else {
-                break;
-            }
-        }
-
+        let len = identifier_len(&self.source[self.pos as usize..]);
+        self.advance(u32::try_from(len).expect("identifier fits the source span"));
         self.token(TokenKind::Ident, start)
     }
 
@@ -468,6 +454,41 @@ impl<'a> Lexer<'a> {
         let remaining = &self.source[self.pos as usize..];
         remaining.chars().next().unwrap_or('\0')
     }
+}
+
+/// Byte length of the USD identifier at the start, zero if none.
+/// The ASCII part of XID is independent of the Unicode tables.
+pub(crate) fn identifier_len(text: &str) -> usize {
+    let bytes = text.as_bytes();
+    let Some(&first) = bytes.first() else {
+        return 0;
+    };
+    let mut end = if first.is_ascii() {
+        if first != b'_' && !first.is_ascii_alphabetic() {
+            return 0;
+        }
+        1
+    } else {
+        let c = text.chars().next().expect("nonempty");
+        if !crate::ident::is_start(c) {
+            return 0;
+        }
+        c.len_utf8()
+    };
+    while let Some(&b) = bytes.get(end) {
+        if b.is_ascii_alphanumeric() || b == b'_' {
+            end += 1;
+        } else if b.is_ascii() {
+            break;
+        } else {
+            let c = text[end..].chars().next().expect("character boundary");
+            if !crate::ident::is_continue(c) {
+                break;
+            }
+            end += c.len_utf8();
+        }
+    }
+    end
 }
 
 impl Iterator for Lexer<'_> {

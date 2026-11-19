@@ -29,6 +29,20 @@ pub(crate) struct Cursor<'a> {
     peak: usize,
 }
 
+impl<'a> Cursor<'a> {
+    /// Keep the opening token and its closing delimiter. A successful
+    /// span read supplies the continuation past any speculative lookahead.
+    fn finish_span(&mut self, index: usize, close: TokenKind, end: u32, rest: Lexer<'a>) {
+        self.tokens.truncate(index + 1 - self.base);
+        self.tokens.push(Token {
+            kind: close,
+            span: Span::new(end - 1, end),
+        });
+        self.peak = self.peak.max(self.tokens.len());
+        self.lexer = rest;
+    }
+}
+
 /// Consumed tokens a window keeps before it moves its lookahead to the
 /// front, so a release costs a short move once per this many tokens.
 pub(crate) const RELEASE_AFTER: usize = 32;
@@ -85,6 +99,37 @@ impl<'a> TokenSource<'a> {
             Self::Streaming(cursor) => cursor.borrow().peak,
         }
     }
+
+    /// Lowering reads a path reference from its source span. In import mode
+    /// keep just the delimiters when the interior cannot contain a quoted
+    /// token or comment that would hide the closing angle. The path grammar
+    /// still validates the entire span, including malformed identifiers.
+    pub(crate) fn plain_path(&self, index: usize, start: u32) -> bool {
+        let Self::Streaming(cursor) = self else {
+            return false;
+        };
+        let mut cursor = cursor.borrow_mut();
+        let tail = &cursor.source[start as usize + 1..];
+        let mut slash = false;
+        for (offset, byte) in tail.bytes().enumerate() {
+            if byte == b'>' {
+                let end = start + u32::try_from(offset).expect("source span") + 2;
+                let rest = Lexer::at_offset(cursor.source, end);
+                cursor.finish_span(index, TokenKind::RightAngle, end, rest);
+                return true;
+            }
+            if byte == b'/' && slash
+                || !(byte.is_ascii_alphanumeric()
+                    || !byte.is_ascii()
+                    || matches!(byte, b'/' | b'.' | b':' | b'_'))
+            {
+                return false;
+            }
+            slash = byte == b'/';
+        }
+        false
+    }
+
     pub(crate) fn numeric_array(
         &self,
         index: usize,
@@ -130,15 +175,7 @@ impl<'a> TokenSource<'a> {
         };
         let mut cursor = cursor.borrow_mut();
         let (value, rest) = read(cursor.source, token.span.start)?;
-        // Discard speculative lookahead past the opening token; the event
-        // cursor owns the continuation. Invalid shapes leave this state intact.
-        let keep = index + 1 - cursor.base;
-        cursor.tokens.truncate(keep);
-        cursor.tokens.push(Token {
-            kind: close,
-            span: Span::new(value.span.end - 1, value.span.end),
-        });
-        cursor.lexer = rest;
+        cursor.finish_span(index, close, value.span.end, rest);
         Some(value)
     }
 }

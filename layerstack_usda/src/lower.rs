@@ -23,13 +23,14 @@ use crate::writer::{is_variant_identifier, is_variant_selection};
 
 /// Lowers a CST into an AST, producing diagnostics for semantic errors.
 pub fn lower<'a>(tree: &SyntaxTree, source: &'a str) -> ParseResult<'a> {
-    LowerCtx::new(source).finish(tree)
+    LowerCtx::new(source, false).finish(tree)
 }
 
 impl<'a> LowerCtx<'a> {
-    pub(crate) fn new(source: &'a str) -> Self {
+    pub(crate) fn new(source: &'a str, checked_path_spans: bool) -> Self {
         Self {
             source,
+            checked_path_spans,
             diagnostics: Vec::new(),
             lowered: Vec::new(),
         }
@@ -89,6 +90,9 @@ struct LoweredPrim<'a> {
 
 pub(crate) struct LowerCtx<'a> {
     source: &'a str,
+    /// The import parser represents a checked ordinary path by a leaf
+    /// spanning its delimiters. Public CSTs always go through validation.
+    checked_path_spans: bool,
     diagnostics: Vec<Diagnostic>,
     /// Prims lowered as they closed, in source order, that the prim or layer
     /// holding them has not taken yet.
@@ -1618,7 +1622,8 @@ impl<'a> LowerCtx<'a> {
         } else {
             full
         };
-        if !path.is_empty() && !is_path_text(path) {
+        let checked = self.checked_path_spans && node.children().len() == 0;
+        if !checked && !path.is_empty() && !is_path_text(path) {
             self.error(
                 node.span(),
                 alloc::format!("`{}` is not a valid path", path.escape_debug()),
@@ -1882,6 +1887,35 @@ struct Raised;
 /// Spec: AOUSD Core §8 (paths).
 pub(crate) fn is_path_text(text: &str) -> bool {
     matches!(PathGrammar { text }.path(0), Ok(Some(end)) if end == text.len())
+}
+
+/// Boundaries found by the path grammar, borrowed from the input so emission
+/// can use an absolute target without splitting its text a second time.
+pub(crate) struct OrdinaryPath<'a> {
+    pub text: &'a str,
+    /// Start of the final prim name and end of the prim path within text.
+    pub leaf_start: usize,
+    pub prim_end: usize,
+}
+
+pub(crate) fn ordinary_path_ref(text: &str) -> Option<OrdinaryPath<'_>> {
+    let grammar = PathGrammar { text };
+    let mut leaf = usize::from(text.starts_with('/'));
+    let mut at = grammar.identifier(leaf)?;
+    while let Some(next) = grammar.byte(at, b'/') {
+        leaf = next;
+        at = grammar.identifier(next)?;
+    }
+    let prim_end = at;
+    if let Some(next) = grammar.byte(at, b'.') {
+        at = grammar.property_name(next).ok()??;
+    }
+    grammar.byte(at, b'>')?;
+    Some(OrdinaryPath {
+        text: &text[..at],
+        leaf_start: leaf,
+        prim_end,
+    })
 }
 
 /// What the property part of a path of [`is_path_text`]'s grammar ends in,

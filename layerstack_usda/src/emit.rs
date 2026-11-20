@@ -96,6 +96,65 @@ impl ChildNames {
     }
 }
 
+/// Validated absolute targets of the current relationship. Source slices
+/// identify their occurrences even when grammar recovery skips an entry.
+/// Only the last parent is cached across statements.
+#[derive(Default)]
+struct ParsedTargets<'a> {
+    paths: Vec<crate::lower::OrdinaryPath<'a>>,
+    parent: Option<(&'a str, PathId)>,
+}
+
+impl ParsedTargets<'_> {
+    fn intern(
+        &mut self,
+        authored: &[&str],
+        tokens: &TokenInterner,
+        paths: &PathInterner,
+    ) -> Option<Vec<TargetPath>> {
+        if self.paths.is_empty()
+            || self.paths.len() != authored.len()
+            || !self
+                .paths
+                .iter()
+                .zip(authored)
+                .all(|(parsed, text)| core::ptr::eq(parsed.text, *text))
+        {
+            return None;
+        }
+
+        let mut targets = Vec::with_capacity(authored.len());
+        for path in &self.paths {
+            // The root is its own spelling; other parents end just before
+            // the slash introducing the leaf.
+            let prefix = if path.leaf_start == 1 {
+                "/"
+            } else {
+                &path.text[..path.leaf_start - 1]
+            };
+            let parent = match self.parent {
+                Some((previous, id)) if previous == prefix => id,
+                _ => {
+                    let id = paths.intern(
+                        Path::parse_absolute(prefix, tokens).expect("checked absolute prim path"),
+                    );
+                    self.parent = Some((prefix, id));
+                    id
+                }
+            };
+            let leaf = tokens.intern(&path.text[path.leaf_start..path.prim_end]);
+            let prim = paths.intern_child(parent, leaf);
+            targets.push(if path.prim_end == path.text.len() {
+                TargetPath::Prim(prim)
+            } else {
+                let name = tokens.intern(&path.text[path.prim_end + 1..]);
+                TargetPath::Property(PropertyPath::new(prim, name))
+            });
+        }
+        Some(targets)
+    }
+}
+
 struct PrimFrame {
     id: PathId,
     parent_len: usize,
@@ -168,6 +227,10 @@ impl<'a> LayerImport<'a> {
         &mut self.ctx.arrays
     }
 
+    pub(crate) fn target(&mut self, path: crate::lower::OrdinaryPath<'a>) {
+        self.ctx.targets.paths.push(path);
+    }
+
     pub(crate) fn statement(&mut self, child: &ast::PrimChild<'_>) {
         if self.ignored.is_none() {
             self.ctx.emit_child(
@@ -179,6 +242,7 @@ impl<'a> LayerImport<'a> {
             );
         }
         self.ctx.arrays.finish_statement();
+        self.ctx.targets.paths.clear();
     }
 
     pub(crate) fn end(&mut self, end: u32) {
@@ -330,6 +394,7 @@ fn emit_ast(
 
 struct EmitCtx<'a> {
     registry: Option<&'a SchemaRegistry>,
+    targets: ParsedTargets<'a>,
     arrays: crate::read::PreparedValues,
     tokens: &'a TokenInterner,
     paths: &'a PathInterner,
@@ -378,6 +443,7 @@ impl<'a> EmitCtx<'a> {
             rejections: Vec::new(),
             rejected: false,
             arrays: crate::read::PreparedValues::default(),
+            targets: ParsedTargets::default(),
             registry,
             emitted_arcs: false,
             property_types: Vec::new(),
@@ -2046,6 +2112,9 @@ impl<'a> EmitCtx<'a> {
     ) -> Vec<TargetPath> {
         const REFUSAL: &str =
             "Relationship target paths must be absolute prim, property or mapper paths";
+        if let Some(paths) = self.targets.intern(targets, self.tokens, self.paths) {
+            return paths;
+        }
         if targets
             .iter()
             .all(|t| t.starts_with('/') && !t.contains('{'))
@@ -4945,6 +5014,7 @@ def \"A\" (
         let ctx = EmitCtx {
             registry: None,
             arrays: crate::read::PreparedValues::default(),
+            targets: ParsedTargets::default(),
             tokens: &tokens,
             paths: &paths,
             resolver: &mut resolver,

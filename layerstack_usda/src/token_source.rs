@@ -100,34 +100,23 @@ impl<'a> TokenSource<'a> {
         }
     }
 
-    /// Lowering reads a path reference from its source span. In import mode
-    /// keep just the delimiters when the interior cannot contain a quoted
-    /// token or comment that would hide the closing angle. The path grammar
-    /// still validates the entire span, including malformed identifiers.
-    pub(crate) fn plain_path(&self, index: usize, start: u32) -> bool {
+    /// Consume a reference when the path grammar recognizes its entire
+    /// interior and the closing angle. On failure the lexer stays put.
+    pub(crate) fn ordinary_path(
+        &self,
+        index: usize,
+        start: u32,
+    ) -> Option<crate::lower::OrdinaryPath<'a>> {
         let Self::Streaming(cursor) = self else {
-            return false;
+            return None;
         };
         let mut cursor = cursor.borrow_mut();
         let tail = &cursor.source[start as usize + 1..];
-        let mut slash = false;
-        for (offset, byte) in tail.bytes().enumerate() {
-            if byte == b'>' {
-                let end = start + u32::try_from(offset).expect("source span") + 2;
-                let rest = Lexer::at_offset(cursor.source, end);
-                cursor.finish_span(index, TokenKind::RightAngle, end, rest);
-                return true;
-            }
-            if byte == b'/' && slash
-                || !(byte.is_ascii_alphanumeric()
-                    || !byte.is_ascii()
-                    || matches!(byte, b'/' | b'.' | b':' | b'_'))
-            {
-                return false;
-            }
-            slash = byte == b'/';
-        }
-        false
+        let path = crate::lower::ordinary_path_ref(tail)?;
+        let end = start + 2 + u32::try_from(path.text.len()).expect("source span");
+        let rest = Lexer::at_offset(cursor.source, end);
+        cursor.finish_span(index, TokenKind::RightAngle, end, rest);
+        Some(path)
     }
 
     pub(crate) fn numeric_array(

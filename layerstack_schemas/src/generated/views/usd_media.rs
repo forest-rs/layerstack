@@ -231,6 +231,9 @@ impl<'a> AuthorshipApi<'a> {
         )))
     }
 
+    /// The USD property name template of [`Self::contact`].
+    pub const CONTACT: &'static str = "authorship:__INSTANCE_NAME__:contact";
+
     #[doc = "Contact information for inquiries about this asset, such as an email address, support URL, or licensing page."]
     #[doc = ""]
     #[doc = "USD attribute `authorship:<instance>:contact` (`string[]`, uniform)."]
@@ -257,6 +260,9 @@ impl<'a> AuthorshipApi<'a> {
             crate::value::read_string_array_shared,
         )
     }
+
+    /// The USD property name template of [`Self::copyright_owner`].
+    pub const COPYRIGHT_OWNER: &'static str = "authorship:__INSTANCE_NAME__:copyrightOwner";
 
     #[doc = "The list of entities holding copyright in this content."]
     #[doc = ""]
@@ -285,6 +291,9 @@ impl<'a> AuthorshipApi<'a> {
         )
     }
 
+    /// The USD property name template of [`Self::created`].
+    pub const CREATED: &'static str = "authorship:__INSTANCE_NAME__:created";
+
     #[doc = "An ISO 8601 timestamp indicating when this authoring step occurred (e.g., `2025-02-16T12:03:17+01:00`)."]
     #[doc = ""]
     #[doc = "USD attribute `authorship:<instance>:created` (`string`, uniform)."]
@@ -298,6 +307,9 @@ impl<'a> AuthorshipApi<'a> {
             crate::value::read_string,
         )
     }
+
+    /// The USD property name template of [`Self::creator`].
+    pub const CREATOR: &'static str = "authorship:__INSTANCE_NAME__:creator";
 
     #[doc = "Human-readable names of the artists, studios, or services that contributed to this authoring step."]
     #[doc = ""]
@@ -326,6 +338,9 @@ impl<'a> AuthorshipApi<'a> {
         )
     }
 
+    /// The USD property name template of [`Self::description`].
+    pub const DESCRIPTION: &'static str = "authorship:__INSTANCE_NAME__:description";
+
     #[doc = "Free-form description of how the prim was created."]
     #[doc = ""]
     #[doc = "USD attribute `authorship:<instance>:description` (`string`, uniform)."]
@@ -340,6 +355,9 @@ impl<'a> AuthorshipApi<'a> {
         )
     }
 
+    /// The USD property name template of [`Self::digital_source_type`].
+    pub const DIGITAL_SOURCE_TYPE: &'static str = "authorship:__INSTANCE_NAME__:digitalSourceType";
+
     #[doc = "A URI describing the nature of the creative process, such as whether the content is human-made or AI-generated."]
     #[doc = ""]
     #[doc = "USD attribute `authorship:<instance>:digitalSourceType` (`string`, uniform)."]
@@ -353,6 +371,9 @@ impl<'a> AuthorshipApi<'a> {
             crate::value::read_string,
         )
     }
+
+    /// The USD property name template of [`Self::inputs`].
+    pub const INPUTS: &'static str = "authorship:__INSTANCE_NAME__:inputs";
 
     #[doc = "The inputs that shaped this authoring step, as flattened (name, value) pairs."]
     #[doc = ""]
@@ -381,6 +402,9 @@ impl<'a> AuthorshipApi<'a> {
         )
     }
 
+    /// The USD property name template of [`Self::instance_id`].
+    pub const INSTANCE_ID: &'static str = "authorship:__INSTANCE_NAME__:instanceID";
+
     #[doc = "A unique identifier for this run's output, such as a single generative AI result."]
     #[doc = ""]
     #[doc = "USD attribute `authorship:<instance>:instanceID` (`string`, uniform)."]
@@ -391,6 +415,9 @@ impl<'a> AuthorshipApi<'a> {
             crate::value::read_string,
         )
     }
+
+    /// The USD property name template of [`Self::software_package`].
+    pub const SOFTWARE_PACKAGE: &'static str = "authorship:__INSTANCE_NAME__:softwarePackage";
 
     #[doc = "The tool or system that most directly wrote the USD data for this prim."]
     #[doc = ""]
@@ -406,6 +433,9 @@ impl<'a> AuthorshipApi<'a> {
         )
     }
 
+    /// The USD property name template of [`Self::software_version`].
+    pub const SOFTWARE_VERSION: &'static str = "authorship:__INSTANCE_NAME__:softwareVersion";
+
     #[doc = "The version of the softwarePackage that created this record."]
     #[doc = ""]
     #[doc = "USD attribute `authorship:<instance>:softwareVersion` (`string`, uniform)."]
@@ -419,6 +449,9 @@ impl<'a> AuthorshipApi<'a> {
             crate::value::read_string,
         )
     }
+
+    /// The USD property name template of [`Self::usage_terms`].
+    pub const USAGE_TERMS: &'static str = "authorship:__INSTANCE_NAME__:usageTerms";
 
     #[doc = "The license or usage terms for this asset."]
     #[doc = ""]

@@ -126,6 +126,9 @@ impl<'a> SemanticsLabelsApi<'a> {
         )))
     }
 
+    /// The USD property name template of [`Self::labels`].
+    pub const LABELS: &'static str = "semantics:labels:__INSTANCE_NAME__";
+
     #[doc = "Array of labels specified directly at this prim."]
     #[doc = ""]
     #[doc = "USD attribute `semantics:labels:<instance>` (`token[]`; fallback `[]`)."]

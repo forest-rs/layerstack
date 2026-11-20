@@ -183,6 +183,9 @@ impl<'a> AccessibilityApi<'a> {
         )))
     }
 
+    /// The USD property name template of [`Self::description`].
+    pub const DESCRIPTION: &'static str = "accessibility:__INSTANCE_NAME__:description";
+
     #[doc = "An extended description of the prim to provide more details."]
     #[doc = ""]
     #[doc = "USD attribute `accessibility:<instance>:description` (`string`)."]
@@ -207,6 +210,9 @@ impl<'a> AccessibilityApi<'a> {
         )
     }
 
+    /// The USD property name template of [`Self::label`].
+    pub const LABEL: &'static str = "accessibility:__INSTANCE_NAME__:label";
+
     #[doc = "A short label to concisely describe the prim."]
     #[doc = ""]
     #[doc = "USD attribute `accessibility:<instance>:label` (`string`)."]
@@ -230,6 +236,9 @@ impl<'a> AccessibilityApi<'a> {
             crate::value::read_string,
         )
     }
+
+    /// The USD property name template of [`Self::priority`].
+    pub const PRIORITY: &'static str = "accessibility:__INSTANCE_NAME__:priority";
 
     #[doc = "A hint to the accessibility runtime of how to prioritize this instance's label and description, relative to others. Allowed tokens are \"low\", \"standard\", and \"high\"."]
     #[doc = ""]

@@ -950,20 +950,20 @@ fn accessors(
         setter_docs.push_str(&doc_attrs("    ", &[format!("C++ authoring: `{class}::{create}().{}`; changes are queued in `SchemaEdit` until its transaction is applied.", if property.kind == PropertyKind::Relationship { "SetTargets()" } else { "Set()" })]));
         setter_docs.push_str(&alias);
     }
-    // The USD name, for authoring and reading by name (OpenUSD's schema
-    // tokens); a multiple-apply schema's names depend on the instance.
-    let constant = if property
+    // Multiple-apply views resolve their templates when an instance is chosen.
+    let description = if property
         .name
         .contains(layerstack::schema::INSTANCE_NAME_PLACEHOLDER)
     {
-        String::new()
+        "USD property name template"
     } else {
-        format!(
-            "    /// The USD name of [`Self::{name}`].\n    pub const {}: &'static str = {:?};\n\n",
-            name.to_ascii_uppercase(),
-            property.name
-        )
+        "USD name"
     };
+    let constant = format!(
+        "    /// The {description} of [`Self::{name}`].\n    pub const {}: &'static str = {:?};\n\n",
+        name.to_ascii_uppercase(),
+        property.name
+    );
     let usd = &property.name;
     let mut enums = String::new();
     if property.kind == PropertyKind::Relationship {

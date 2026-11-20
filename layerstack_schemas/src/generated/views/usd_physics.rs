@@ -915,6 +915,9 @@ impl<'a> PhysicsDriveApi<'a> {
         )))
     }
 
+    /// The USD property name template of [`Self::damping`].
+    pub const DAMPING: &'static str = "drive:__INSTANCE_NAME__:physics:damping";
+
     #[doc = "USD attribute `drive:<instance>:physics:damping` (`float`; fallback `0.0`)."]
     #[doc = "C++ read: `UsdPhysicsDriveAPI::GetDampingAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdPhysicsDriveAPI::GetDampingAttr")]
@@ -936,6 +939,9 @@ impl<'a> PhysicsDriveApi<'a> {
             crate::value::read_float,
         )
     }
+
+    /// The USD property name template of [`Self::max_force`].
+    pub const MAX_FORCE: &'static str = "drive:__INSTANCE_NAME__:physics:maxForce";
 
     #[doc = "USD attribute `drive:<instance>:physics:maxForce` (`float`; fallback `inf`)."]
     #[doc = "C++ read: `UsdPhysicsDriveAPI::GetMaxForceAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -959,6 +965,9 @@ impl<'a> PhysicsDriveApi<'a> {
         )
     }
 
+    /// The USD property name template of [`Self::stiffness`].
+    pub const STIFFNESS: &'static str = "drive:__INSTANCE_NAME__:physics:stiffness";
+
     #[doc = "USD attribute `drive:<instance>:physics:stiffness` (`float`; fallback `0.0`)."]
     #[doc = "C++ read: `UsdPhysicsDriveAPI::GetStiffnessAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdPhysicsDriveAPI::GetStiffnessAttr")]
@@ -980,6 +989,9 @@ impl<'a> PhysicsDriveApi<'a> {
             crate::value::read_float,
         )
     }
+
+    /// The USD property name template of [`Self::target_position`].
+    pub const TARGET_POSITION: &'static str = "drive:__INSTANCE_NAME__:physics:targetPosition";
 
     #[doc = "USD attribute `drive:<instance>:physics:targetPosition` (`float`; fallback `0.0`)."]
     #[doc = "C++ read: `UsdPhysicsDriveAPI::GetTargetPositionAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -1003,6 +1015,9 @@ impl<'a> PhysicsDriveApi<'a> {
         )
     }
 
+    /// The USD property name template of [`Self::target_velocity`].
+    pub const TARGET_VELOCITY: &'static str = "drive:__INSTANCE_NAME__:physics:targetVelocity";
+
     #[doc = "USD attribute `drive:<instance>:physics:targetVelocity` (`float`; fallback `0.0`)."]
     #[doc = "C++ read: `UsdPhysicsDriveAPI::GetTargetVelocityAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdPhysicsDriveAPI::GetTargetVelocityAttr")]
@@ -1024,6 +1039,9 @@ impl<'a> PhysicsDriveApi<'a> {
             crate::value::read_float,
         )
     }
+
+    /// The USD property name template of [`Self::drive_type`].
+    pub const DRIVE_TYPE: &'static str = "drive:__INSTANCE_NAME__:physics:type";
 
     #[doc = "USD attribute `drive:<instance>:physics:type` (`token`, uniform; fallback `\"force\"`)."]
     #[doc = "C++ read: `UsdPhysicsDriveAPI::GetTypeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -2152,6 +2170,9 @@ impl<'a> PhysicsLimitApi<'a> {
         )))
     }
 
+    /// The USD property name template of [`Self::high`].
+    pub const HIGH: &'static str = "limit:__INSTANCE_NAME__:physics:high";
+
     #[doc = "USD attribute `limit:<instance>:physics:high` (`float`; fallback `inf`)."]
     #[doc = "C++ read: `UsdPhysicsLimitAPI::GetHighAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdPhysicsLimitAPI::GetHighAttr")]
@@ -2173,6 +2194,9 @@ impl<'a> PhysicsLimitApi<'a> {
             crate::value::read_float,
         )
     }
+
+    /// The USD property name template of [`Self::low`].
+    pub const LOW: &'static str = "limit:__INSTANCE_NAME__:physics:low";
 
     #[doc = "USD attribute `limit:<instance>:physics:low` (`float`; fallback `-inf`)."]
     #[doc = "C++ read: `UsdPhysicsLimitAPI::GetLowAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]

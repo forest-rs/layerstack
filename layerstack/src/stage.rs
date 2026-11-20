@@ -591,6 +591,8 @@ pub struct Stage {
     root_layer: Option<LayerId>,
     clips: crate::value_clips::Catalog,
     prototypes: prototypes::PrototypeTable,
+    #[cfg(test)]
+    prototype_preparations: usize,
     composition_work: CompositionWork,
     prims: HashMap<PathId, PrimIndex>,
     children: HashMap<PathId, Vec<PathId>>,
@@ -951,6 +953,8 @@ impl Stage {
         composed_roots: &[PathId],
         child_index: &crate::prim_indexing::ChildIndex,
     ) -> BoundaryOrders {
+        let had_instances = !self.instances.is_empty();
+        let mut regroup = self.prototype_indexes_changed(store.paths(), &partial, affected);
         for path in affected {
             if let Some(old) = self.prims.remove(path) {
                 self.forget_type_info(old.type_info);
@@ -965,7 +969,12 @@ impl Stage {
                     self.inactive_children.remove(path);
                 }
             }
-            match partial.children.remove(path) {
+            let children = partial.children.remove(path);
+            if had_instances && !regroup {
+                regroup = self.children_of(*path).unwrap_or_default()
+                    != children.as_deref().unwrap_or_default();
+            }
+            match children {
                 Some(children) => {
                     self.children.insert(*path, children);
                 }
@@ -975,11 +984,12 @@ impl Stage {
             }
         }
         let mut composed = core::mem::take(&mut partial.boundary_children);
-        self.merge_prims_from(store, partial, affected, composed_roots);
+        self.merge_prim_records_from(store, partial, affected, composed_roots);
         let mut orders = BoundaryOrders::default();
         for (parent, given) in boundary_children {
             let Some(index) = self.prims.get(&parent) else {
-                self.children.remove(&parent);
+                let old = self.children.remove(&parent);
+                regroup |= had_instances && old.is_some_and(|children| !children.is_empty());
                 continue;
             };
             let mut children = match composed.remove(&parent) {
@@ -1001,11 +1011,6 @@ impl Stage {
                     children
                 }
             };
-            if children.is_empty() {
-                self.children.remove(&parent);
-                self.inactive_children.remove(&parent);
-                continue;
-            }
             // Ordinary composition orders before pruning inactive children:
             // invisible names can delimit reorder groups of visible names.
             children.retain(|child| self.prims.contains_key(child));
@@ -1015,6 +1020,9 @@ impl Stage {
             } else {
                 self.inactive_children.remove(&parent);
             }
+            if had_instances && !regroup {
+                regroup = self.children_of(parent).unwrap_or_default() != children;
+            }
             if children.is_empty() {
                 self.children.remove(&parent);
             } else {
@@ -1022,7 +1030,9 @@ impl Stage {
             }
         }
         self.order_errors(store);
-        self.prepare_prototypes(store, InstanceIndexKeys::new());
+        if regroup {
+            self.prepare_prototypes(store, InstanceIndexKeys::new());
+        }
         orders
     }
 
@@ -1979,6 +1989,8 @@ impl Stage {
             inactive: HashSet::new(),
             inactive_children: HashMap::new(),
             prototypes: prototypes::PrototypeTable::default(),
+            #[cfg(test)]
+            prototype_preparations: 0,
             composition_work: CompositionWork::default(),
             root_layer: None,
             clips: crate::value_clips::Catalog::default(),
@@ -2204,6 +2216,23 @@ impl Stage {
     pub(crate) fn merge_prims_from(
         &mut self,
         store: &dyn LayerStore,
+        partial: Self,
+        recomposed: &[PathId],
+        composed_roots: &[PathId],
+    ) {
+        let regroup = self.prototype_indexes_changed(store.paths(), &partial, recomposed);
+        self.merge_prim_records_from(store, partial, recomposed, composed_roots);
+        self.order_errors(store);
+        if regroup {
+            self.prepare_prototypes(store, InstanceIndexKeys::new());
+        }
+    }
+
+    /// Installs indexes and their per-prim data. The caller orders errors and
+    /// updates prototypes after any child-list changes have been applied.
+    fn merge_prim_records_from(
+        &mut self,
+        store: &dyn LayerStore,
         mut partial: Self,
         recomposed: &[PathId],
         composed_roots: &[PathId],
@@ -2292,7 +2321,6 @@ impl Stage {
                 .into_iter()
                 .filter(|error| is_recomposed(error)),
         );
-        self.order_errors(store);
         self.asset_requests
             .retain(|request| !recomposed.contains(&request.prim));
         self.asset_requests.extend(
@@ -2302,7 +2330,6 @@ impl Stage {
                 .filter(|request| recomposed.contains(&request.prim)),
         );
         sort_asset_requests(&mut self.asset_requests);
-        self.prepare_prototypes(store, InstanceIndexKeys::new());
     }
 
     /// Refreshes existing value slots without rebuilding prim graphs. The

@@ -460,6 +460,26 @@ impl<T: Send, R: Send> Pool<'_, T, R> {
         in_order
     }
 
+    /// Runs a single-threaded phase depth first and passes each result to
+    /// `visit` before running the next task. The caller must use a serial pool.
+    pub(crate) fn visit_serial(&self, mut pending: Vec<T>, mut visit: impl FnMut(R)) {
+        debug_assert!(
+            self.in_order(),
+            "serial visits require a single-threaded pool"
+        );
+        pending.reverse();
+        let mut added = Vec::new();
+        while let Some(task) = pending.pop() {
+            visit(self.work.call(
+                task,
+                &mut added,
+                #[cfg(feature = "std")]
+                None,
+            ));
+            pending.extend(added.drain(..).rev());
+        }
+    }
+
     /// Does `tasks` and every task they add, and returns their results.
     pub fn run(&self, tasks: Vec<T>) -> Vec<R> {
         #[cfg(feature = "std")]
@@ -481,19 +501,8 @@ impl<T: Send, R: Send> Pool<'_, T, R> {
                 }
             }
         }
-        let mut pending = tasks;
-        pending.reverse();
         let mut results = Vec::new();
-        let mut added = Vec::new();
-        while let Some(task) = pending.pop() {
-            results.push(self.work.call(
-                task,
-                &mut added,
-                #[cfg(feature = "std")]
-                None,
-            ));
-            pending.extend(added.drain(..).rev());
-        }
+        self.visit_serial(tasks, |result| results.push(result));
         results
     }
 }
@@ -698,6 +707,30 @@ pub(super) mod tests {
     fn one_thread_runs_tasks_depth_first() {
         let order = with_pool(1, &tree, |pool| pool.run(alloc::vec![2]));
         assert_eq!(order, [2, 1, 0, 0, 1, 0, 0]);
+    }
+
+    #[test]
+    fn serial_visit_handles_each_result_before_indexing_the_next_task() {
+        use core::sync::atomic::{AtomicUsize, Ordering};
+
+        let tasks_run = AtomicUsize::new(0);
+        let work = |task, added: &mut Vec<u32>| {
+            tasks_run.fetch_add(1, Ordering::Relaxed);
+            match task {
+                1 => added.extend([10, 11]),
+                10 => added.push(100),
+                _ => {}
+            }
+            task
+        };
+        let mut results = Vec::new();
+        with_pool(1, &work, |pool| {
+            pool.visit_serial(alloc::vec![1, 2], |task| {
+                assert_eq!(tasks_run.load(Ordering::Relaxed), results.len() + 1);
+                results.push(task);
+            });
+        });
+        assert_eq!(results, [1, 10, 100, 11, 2]);
     }
 
     #[test]

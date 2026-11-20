@@ -25,7 +25,7 @@ use crate::{
     extent::ExtentError,
     gf,
     primvar::Primvar,
-    usd_geom::{GeomModelApiEdit, ImageablePurpose, Xformable},
+    usd_geom::{GeomModelApiEdit, ImageablePurpose, PointBased, Xformable},
     usd_skel::{SkelAnimation, SkelRoot, Skeleton},
 };
 use alloc::{string::String, sync::Arc, vec, vec::Vec};
@@ -747,18 +747,6 @@ fn transform_normal(n: [f32; 3], m: &[[f64; 3]; 3]) -> [f32; 3] {
     core::array::from_fn(|j| {
         (f64::from(n[0]) * m[0][j] + f64::from(n[1]) * m[1][j] + f64::from(n[2]) * m[2][j]) as f32
     })
-}
-
-/// `UsdGeomPointBased::ComputeExtent`.
-fn points_extent(points: &[[f32; 3]]) -> [[f32; 3]; 2] {
-    let mut extent = [[f32::INFINITY; 3], [f32::NEG_INFINITY; 3]];
-    for point in points {
-        for axis in 0..3 {
-            extent[0][axis] = extent[0][axis].min(point[axis]);
-            extent[1][axis] = extent[1][axis].max(point[axis]);
-        }
-    }
-    extent
 }
 
 fn vec3f_array(values: Vec<[f32; 3]>) -> Value {
@@ -1825,7 +1813,7 @@ fn run(job: Job) -> Output {
     if job.extent
         && let Some(points) = &output.points
     {
-        output.extent = Some(points_extent(points));
+        output.extent = Some(PointBased::compute_extent(points));
     }
     output
 }
@@ -2080,11 +2068,7 @@ mod tests {
     }
 
     #[test]
-    fn extents_and_normals_round_as_openusd() {
-        assert_eq!(
-            points_extent(&[[1.0, -2.0, 0.5], [-1.0, 3.0, 0.25]]),
-            [[-1.0, -2.0, 0.25], [1.0, 3.0, 0.5]]
-        );
+    fn deformation_helpers_match_openusd() {
         let mut normals = [[3.0, 0.0, 4.0], [0.0, 0.0, 0.0]];
         normalize(&mut normals);
         assert_eq!(normals, [[0.6, 0.0, 0.8], [0.0, 0.0, 0.0]]);

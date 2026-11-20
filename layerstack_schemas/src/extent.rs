@@ -1,7 +1,7 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Intrinsic bounds for the built-in geometry supported by `BoundsCache`.
+//! Point-based extent computation and intrinsic bounds for `BoundsCache`.
 
 mod providers;
 pub use providers::{
@@ -9,8 +9,41 @@ pub use providers::{
     ExtentRegistrationError,
 };
 
-use crate::{PrimView, Scene, Time, bounds::Range3d};
+use crate::{
+    PrimView, Scene, Time,
+    bounds::{Extent, Range3d},
+    usd_geom::PointBased,
+};
 use layerstack::{PathId, TokenInterner, Value};
+
+impl PointBased<'_> {
+    /// Computes the object-space minimum and maximum corners of borrowed points.
+    /// Pass the result to an `extent` setter alongside the corresponding `points`.
+    /// For empty input the corners are `[f32::MAX; 3]` and `[-f32::MAX; 3]`.
+    /// NaN coordinates are skipped, infinities can extend the range, and ties
+    /// preserve the first coordinate, including the sign of zero.
+    ///
+    /// OpenUSD 26.11 `UsdGeomPointBased::ComputeExtent`; AOUSD Core §13.3.1
+    /// (typed schema properties).
+    #[must_use]
+    #[doc(alias = "UsdGeomPointBased::ComputeExtent")]
+    #[doc(alias = "ComputeExtent")]
+    pub fn compute_extent(points: &[[f32; 3]]) -> Extent {
+        let mut min = [f32::MAX; 3];
+        let mut max = [-f32::MAX; 3];
+        for point in points {
+            for (axis, &coordinate) in point.iter().enumerate() {
+                if coordinate < min[axis] {
+                    min[axis] = coordinate;
+                }
+                if coordinate > max[axis] {
+                    max[axis] = coordinate;
+                }
+            }
+        }
+        [min, max]
+    }
+}
 
 pub(crate) fn has_builtin(schema: &str) -> bool {
     matches!(
@@ -426,6 +459,37 @@ mod tests {
     use layerstack::{
         InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, Stage, StageOptions, TypedArray,
     };
+
+    #[test]
+    fn point_based_extent_from_borrowed_points() {
+        let points = [[1., -2., 3.], [-4., 5., 0.]];
+        assert_eq!(
+            PointBased::compute_extent(&[]),
+            [[f32::MAX; 3], [-f32::MAX; 3]]
+        );
+        assert_eq!(PointBased::compute_extent(&points[..1]), [points[0]; 2]);
+        assert_eq!(
+            PointBased::compute_extent(&points),
+            [[-4., -2., 0.], [1., 5., 3.]]
+        );
+    }
+
+    #[test]
+    fn point_based_extent_handles_nan_infinity_and_signed_zero() {
+        assert_eq!(
+            PointBased::compute_extent(&[[f32::NAN, f32::INFINITY, f32::NEG_INFINITY]]),
+            [
+                [f32::MAX, f32::MAX, f32::NEG_INFINITY],
+                [-f32::MAX, f32::INFINITY, -f32::MAX],
+            ]
+        );
+        let points = [[-0., 0., -0.], [0., -0., 0.]];
+        let extent = PointBased::compute_extent(&points);
+        assert_eq!(
+            extent.map(|corner| corner.map(f32::to_bits)),
+            [points[0].map(f32::to_bits); 2]
+        );
+    }
 
     #[test]
     fn mesh_points_reject_wrong_native_empty_kind() {

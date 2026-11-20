@@ -19,6 +19,49 @@ use super::{CannotEdit, EditTarget, PathId, SchemaEdit};
 
 const ROOT: LayerId = LayerId(1);
 
+#[test]
+fn application_restrictions_on_pending_schemas_work_on_typeless_prims() {
+    use layerstack::{CannotApply, SchemaDefinition, SchemaKind, SchemaRegistry};
+    let mut store = InMemoryStore::default();
+    store.insert_layer(Layer::new(ROOT));
+    let tokens = store.tokens();
+    let base = tokens.intern("Base");
+    let permit = tokens.intern("PermitAPI");
+    let mut builder = SchemaRegistry::builder();
+    builder.register(SchemaDefinition::new(base, SchemaKind::AbstractTyped));
+    builder.register(SchemaDefinition::api(permit));
+    builder.register(SchemaDefinition::api(tokens.intern("TypedAPI")).with_can_only_apply_to(base));
+    builder.register(
+        SchemaDefinition::api(tokens.intern("RestrictedAPI")).with_can_only_apply_to(permit),
+    );
+    let options = StageOptions {
+        schemas: Some(Arc::new(builder.build(tokens))),
+        ..StageOptions::default()
+    };
+    let mut live = LiveStage::compose(&mut store, ROOT, options);
+    for (path, type_name) in [
+        ("/Plain", ""),
+        ("/Abstract", "Base"),
+        ("/Unknown", "Missing"),
+    ] {
+        let path = store.path(path);
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(ROOT));
+        edit.define_prim(path, type_name).unwrap();
+        for api in ["TypedAPI", "RestrictedAPI"] {
+            assert!(matches!(
+                edit.apply_api(path, api, None),
+                Err(super::ApplySchemaError::CannotApply(
+                    CannotApply::NotATarget { .. }
+                ))
+            ));
+        }
+        edit.apply_api(path, "PermitAPI", None).unwrap();
+        edit.apply_api(path, "RestrictedAPI", None).unwrap();
+        let transaction = edit.finish();
+        live.apply(&mut store, &transaction).unwrap();
+    }
+}
+
 /// A stage over one layer, built by `build`.
 fn stage(build: impl FnOnce(&mut InMemoryStore, &mut Layer)) -> (InMemoryStore, LiveStage) {
     let mut store = InMemoryStore::default();

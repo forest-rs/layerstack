@@ -11,9 +11,10 @@ use alloc::{string::String, vec::Vec};
 
 use layerstack::edit::{EditTarget, Transaction};
 use layerstack::{
-    CannotApply, FieldValue, LayerStore, ListOp, ListPosition, PathId, PrimPathArg,
+    CannotApply, FieldValue, LayerStore, ListOp, ListPosition, PathId, PrimDefinition, PrimPathArg,
     PropertyDeclaration, PropertyDefinition, PropertyKind, PropertyPath, PropertySpec,
-    PropertyType, ResolvedValue, Specifier, Stage, TargetPath, Time, TokenId, TokenInterner, Value,
+    PropertyType, ResolvedValue, SchemaKind, SchemaRegistry, Specifier, Stage, TargetPath, Time,
+    TokenId, TokenInterner, Value,
 };
 
 #[cfg(test)]
@@ -2234,12 +2235,16 @@ impl<'s> SchemaEdit<'s> {
             .schemas()
             .ok_or(CannotApply::NotAnAppliedSchema)?;
         let type_name = self.type_name(path);
-        let names = self.applied_names(path);
         let tokens = self.store.tokens();
         let schema_token = tokens.intern(schema);
-        registry.intern_instance_names(&names, tokens);
-        let definition = registry.prim_definition(type_name, &names, tokens);
-        registry.can_apply(&definition, schema_token, instance, tokens)?;
+        check_api_application(
+            registry,
+            type_name,
+            || self.applied_names(path),
+            schema_token,
+            instance,
+            tokens,
+        )?;
         let applied = match instance {
             None => tokens.intern(schema),
             Some(instance) => {
@@ -2254,6 +2259,38 @@ impl<'s> SchemaEdit<'s> {
         self.applied.push((path, applied));
         Ok(())
     }
+}
+
+/// Checks applications against the registry-owned type first. Collect
+/// the prim's other APIs and compose their definition only when one of
+/// them could satisfy a target restriction the type and its built-ins
+/// do not meet. AOUSD Core §13.3.1–§13.3.2.
+pub(crate) fn check_api_application<A: AsRef<[TokenId]>>(
+    registry: &SchemaRegistry,
+    type_name: Option<TokenId>,
+    applied: impl FnOnce() -> A,
+    schema: TokenId,
+    instance: Option<&str>,
+    tokens: &TokenInterner,
+) -> Result<(), CannotApply> {
+    let typeless = PrimDefinition::default();
+    let typed = type_name
+        .and_then(|name| registry.schema(name))
+        .filter(|schema| schema.kind == SchemaKind::ConcreteTyped)
+        .and_then(|schema| registry.schema_definition(schema.name))
+        .unwrap_or(&typeless);
+    let allowed = match registry.can_apply(typed, schema, instance, tokens) {
+        Err(CannotApply::NotATarget { allowed }) => allowed,
+        result => return result,
+    };
+    let applied = applied();
+    let applied = applied.as_ref();
+    if applied.is_empty() {
+        return Err(CannotApply::NotATarget { allowed });
+    }
+    registry.intern_instance_names(applied, tokens);
+    let composed = registry.prim_definition(type_name, applied, tokens);
+    registry.can_apply(&composed, schema, instance, tokens)
 }
 
 /// The default value a created property spec holds.

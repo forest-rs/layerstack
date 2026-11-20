@@ -106,6 +106,64 @@ fn selected_materialx_interfaces_author_usd_without_loading_implementations() {
 }
 
 #[test]
+fn checked_connections_use_downstream_generated_materialx_definitions() {
+    use layerstack_schemas::materialx::MaterialXConnectionError;
+    use layerstack_schemas::shading::ConnectionModification::Replace;
+
+    let mut store = InMemoryStore::default();
+    let root = LayerId(1);
+    store.insert_layer(Layer::new(root));
+    let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
+    let mut live = LiveStage::compose(
+        &mut store,
+        root,
+        StageOptions {
+            schemas: Some(schemas),
+            ..StageOptions::default()
+        },
+    );
+    let source_path = store.path("/Color");
+    let rgba_path = store.path("/Rgba");
+    let consumer_path = store.path("/Paint");
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(root));
+    let source = materialx::NdPaint::define(&mut edit, source_path)
+        .unwrap()
+        .create_out_output(&mut edit)
+        .unwrap();
+    let rgba = materialx::NdRgba::define(&mut edit, rgba_path)
+        .unwrap()
+        .create_out_output(&mut edit)
+        .unwrap();
+    let tint = materialx::NdPaint::define(&mut edit, consumer_path)
+        .unwrap()
+        .create_tint_input(&mut edit)
+        .unwrap();
+    tint.connect_to_materialx_source(&mut edit, source, materialx::NODE_DEFINITIONS, Replace)
+        .unwrap();
+    let before = edit.transaction().len();
+    assert!(matches!(
+        tint.connect_to_materialx_source(&mut edit, rgba, materialx::NODE_DEFINITIONS, Replace),
+        Err(MaterialXConnectionError::TypeMismatch {
+            input_type: "color3",
+            output_type: "color4",
+            ..
+        })
+    ));
+    assert_eq!(edit.transaction().len(), before);
+    let transaction = edit.finish();
+    live.apply(&mut store, &transaction).unwrap();
+    let scene = Scene::new(live.stage(), &store);
+    let tint = materialx::NdPaint::get(&scene, consumer_path)
+        .unwrap()
+        .tint_input()
+        .unwrap();
+    assert_eq!(
+        tint.connected_sources().sources,
+        [store.property_path("/Color.outputs:out")]
+    );
+}
+
+#[test]
 fn user_literals_compile_and_round_trip_without_rust_path_rewriting() {
     const LABEL: &str =
         "crate::example alloc::sync::Arc:: alloc::vec::Vec< alloc::boxed::Box:: ::alloc::";

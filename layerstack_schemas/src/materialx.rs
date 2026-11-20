@@ -15,11 +15,16 @@
 //! available in `STANDARD_NODES`. With `usd-shade`, custom libraries can use
 //! `layerstack_schemagen --materialx` to generate their own bindings.
 //!
+//! Pass the selected definitions to
+//! [`PortEdit::connect_to_materialx_source`](crate::shading::PortEdit::connect_to_materialx_source)
+//! to check a wire between two shader nodes before authoring it.
+//! Material terminals use the ordinary USD connection API.
+//!
 //! ```
 //! # #[cfg(feature = "usd-mtlx")]
 //! # fn paint(edit: &mut layerstack_schemas::SchemaEdit<'_>, material: layerstack::PathId,
 //! #          albedo: layerstack::PathId, surface: layerstack::PathId) -> Result<(), Box<dyn std::error::Error>> {
-//! use layerstack_schemas::materialx::{ImageColor3, OpenPbrSurface};
+//! use layerstack_schemas::materialx::{ImageColor3, OpenPbrSurface, STANDARD_NODES};
 //! use layerstack_schemas::shading::ConnectionModification::Replace;
 //! use layerstack_schemas::usd_shade::Material;
 //!
@@ -29,13 +34,16 @@
 //! let surface = OpenPbrSurface::define(edit, surface)?;
 //!
 //! let rgb = image.create_out_output(edit)?;
-//! surface.create_base_color_input(edit)?.connect_to_source(edit, rgb, Replace)?;
+//! surface.create_base_color_input(edit)?.connect_to_materialx_source(edit, rgb, STANDARD_NODES, Replace)?;
 //! let shader = surface.create_surface_output(edit)?;
 //! paint.create_surface_output(edit, "mtlx")?.connect_to_source(edit, shader, Replace)?;
 //! # Ok(()) }
 //! ```
 
 use crate::shading::PortKind;
+
+mod connections;
+pub use connections::MaterialXConnectionError;
 
 /// A `MaterialX` `<nodedef>` selected when generating bindings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

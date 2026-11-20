@@ -11,7 +11,7 @@ use layerstack_schemas::{
     Scene, SchemaEdit,
     materialx::{
         ExtractVector3, ImageColor3, ImageVector3, MaterialXDefault, MaterialXPort, NormalMap,
-        OpenPbrSurface, Place2dVector2, TexcoordVector2,
+        OpenPbrSurface, Place2dVector2, STANDARD_NODES, TexcoordVector2,
     },
     shading::{ConnectionModification::Replace, PortKind},
     usd_shade::Material,
@@ -59,7 +59,7 @@ fn textured_material(with_packed_maps: bool) -> (InMemoryStore, LiveStage, PathI
     surface
         .create_base_color_input(&mut edit)
         .unwrap()
-        .connect_to_source(&mut edit, color, Replace)
+        .connect_to_materialx_source(&mut edit, color, STANDARD_NODES, Replace)
         .unwrap();
     let output = surface.create_surface_output(&mut edit).unwrap();
     material
@@ -94,7 +94,7 @@ fn textured_material(with_packed_maps: bool) -> (InMemoryStore, LiveStage, PathI
         placement
             .create_texcoord_input(&mut edit)
             .unwrap()
-            .connect_to_source(&mut edit, uv, Replace)
+            .connect_to_materialx_source(&mut edit, uv, STANDARD_NODES, Replace)
             .unwrap();
         let placement = placement.create_out_output(&mut edit).unwrap();
         for texcoord in [
@@ -103,7 +103,7 @@ fn textured_material(with_packed_maps: bool) -> (InMemoryStore, LiveStage, PathI
             normal_image.create_texcoord_input(&mut edit).unwrap(),
         ] {
             texcoord
-                .connect_to_source(&mut edit, &placement, Replace)
+                .connect_to_materialx_source(&mut edit, &placement, STANDARD_NODES, Replace)
                 .unwrap();
         }
 
@@ -128,11 +128,11 @@ fn textured_material(with_packed_maps: bool) -> (InMemoryStore, LiveStage, PathI
             extract
                 .create_in_value_input(&mut edit)
                 .unwrap()
-                .connect_to_source(&mut edit, &packed, Replace)
+                .connect_to_materialx_source(&mut edit, &packed, STANDARD_NODES, Replace)
                 .unwrap();
             let channel = extract.create_out_output(&mut edit).unwrap();
             input
-                .connect_to_source(&mut edit, channel, Replace)
+                .connect_to_materialx_source(&mut edit, channel, STANDARD_NODES, Replace)
                 .unwrap();
         }
 
@@ -142,13 +142,13 @@ fn textured_material(with_packed_maps: bool) -> (InMemoryStore, LiveStage, PathI
         normal_map
             .create_in_value_input(&mut edit)
             .unwrap()
-            .connect_to_source(&mut edit, samples, Replace)
+            .connect_to_materialx_source(&mut edit, samples, STANDARD_NODES, Replace)
             .unwrap();
         let normal = normal_map.create_out_output(&mut edit).unwrap();
         surface
             .create_geometry_normal_input(&mut edit)
             .unwrap()
-            .connect_to_source(&mut edit, normal, Replace)
+            .connect_to_materialx_source(&mut edit, normal, STANDARD_NODES, Replace)
             .unwrap();
     }
 

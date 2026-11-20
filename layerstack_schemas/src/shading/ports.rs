@@ -20,7 +20,7 @@ pub enum PortKind {
     Output,
 }
 impl PortKind {
-    fn prefix(self) -> &'static str {
+    pub(crate) fn prefix(self) -> &'static str {
         match self {
             Self::Input => "inputs:",
             Self::Output => "outputs:",

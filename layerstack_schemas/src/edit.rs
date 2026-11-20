@@ -2340,8 +2340,7 @@ pub(crate) fn check_api_application<A: AsRef<[TokenId]>>(
     if applied.is_empty() {
         return Err(CannotApply::NotATarget { allowed });
     }
-    registry.intern_instance_names(applied, tokens);
-    let composed = registry.prim_definition(type_name, applied, tokens);
+    let composed = registry.prepare_prim_definition(type_name, applied, tokens);
     registry.can_apply(&composed, schema, instance, tokens)
 }
 

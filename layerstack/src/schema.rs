@@ -1060,9 +1060,9 @@ impl SchemaRegistry {
     /// The names this builds for multiple-apply instances (the instance
     /// names, and the instantiated schema and property names) are looked up
     /// in `tokens`, never interned: [`SchemaRegistry::intern_instance_names`]
-    /// must have interned them for `applied`, as composing a stage does for
-    /// each prim's `apiSchemas`. A name that is missing is a bug, which a
-    /// debug assertion reports.
+    /// must have interned them for `applied`. To build the definition and
+    /// intern its names in one pass, use [`Self::prepare_prim_definition`].
+    /// A debug assertion reports a missing name.
     ///
     /// Each call builds a new definition.
     ///
@@ -1075,10 +1075,36 @@ impl SchemaRegistry {
         applied: &[TokenId],
         tokens: &TokenInterner,
     ) -> PrimDefinition {
-        let mut names = Lookup(tokens);
+        self.build_prim_definition(type_name, applied, Names::new(tokens, NameMode::Lookup))
+    }
+
+    /// Builds a prim definition and interns the names of its applied schema
+    /// instances as they are composed. A stage uses this when it first sees
+    /// a combination of type and applied schemas.
+    ///
+    /// This has the same definition and token effects as calling
+    /// [`Self::intern_instance_names`] followed by [`Self::prim_definition`].
+    ///
+    /// Spec: AOUSD Core §13.3.2–§13.3.2.4 (applied schemas and fallback strength).
+    #[must_use]
+    pub fn prepare_prim_definition(
+        &self,
+        type_name: Option<TokenId>,
+        applied: &[TokenId],
+        tokens: &TokenInterner,
+    ) -> PrimDefinition {
+        self.build_prim_definition(type_name, applied, Names::new(tokens, NameMode::Intern))
+    }
+
+    fn build_prim_definition(
+        &self,
+        type_name: Option<TokenId>,
+        applied: &[TokenId],
+        mut names: Names<'_>,
+    ) -> PrimDefinition {
         let mut definition = self.typed(type_name).cloned().unwrap_or_default();
         for &name in applied {
-            let Some((schema, instance)) = self.applied(name, tokens) else {
+            let Some((schema, instance)) = self.applied(name, names.tokens) else {
                 continue;
             };
             let instance = match instance {
@@ -1098,22 +1124,25 @@ impl SchemaRegistry {
     /// the instantiated names of their schemas and properties, including
     /// those of the multiple-apply schemas they include.
     ///
-    /// A stage composed with schemas ([`crate::StageOptions::schemas`])
-    /// does this for each prim's composed `apiSchemas`, so its prim
-    /// definitions are built without mutating the store.
+    /// Use this when subsequent [`Self::prim_definition`] queries must only
+    /// look up names. To prepare a definition immediately, use
+    /// [`Self::prepare_prim_definition`].
     ///
     /// Spec: AOUSD Core §13.3.2 (a multiple-apply schema's property names are
     /// formed from the instance name).
     pub fn intern_instance_names(&self, applied: &[TokenId], tokens: &TokenInterner) {
+        let mut names = Names::new(tokens, NameMode::Intern);
         for &name in applied {
-            let Some((schema, Some(instance))) = self
-                .applied(name, tokens)
-                .map(|(schema, instance)| (schema, instance.map(String::from)))
-            else {
+            let Some((schema, Some(instance))) = self.applied(name, tokens) else {
                 continue;
             };
-            let instance = tokens.intern(instance);
-            PrimDefinition::default().compose_weaker(schema, Some(instance), &mut Intern(tokens));
+            let instance = Some(tokens.intern(instance));
+            for template in schema.applied_schemas() {
+                let _ = template.instantiate(instance, &mut names);
+            }
+            for property in schema.properties() {
+                let _ = names.instantiate(property.name, instance);
+            }
         }
     }
 
@@ -1281,69 +1310,61 @@ fn placeholder_offset(name: &str) -> Option<usize> {
     None
 }
 
-/// How a prim definition being built finds the tokens of names it forms:
-/// interned while the registry is built ([`Intern`]), looked up once it is
-/// in use ([`Lookup`]).
-trait Names {
-    /// The token of `text`, if it has one.
-    fn name(&mut self, text: &str) -> Option<TokenId>;
+/// Preparation interns names. Read-only queries require them to exist.
+#[derive(Clone, Copy)]
+enum NameMode {
+    Intern,
+    Lookup,
+}
 
-    /// The interner the names are in.
-    fn tokens(&self) -> &TokenInterner;
+/// Reuses one string across the names expanded while composing a definition.
+struct Names<'a> {
+    tokens: &'a TokenInterner,
+    mode: NameMode,
+    buffer: String,
+}
 
-    /// `name` with its placeholder replaced by `instance`; `name` itself
-    /// when there is no instance or no placeholder.
-    ///
+impl<'a> Names<'a> {
+    fn new(tokens: &'a TokenInterner, mode: NameMode) -> Self {
+        Self {
+            tokens,
+            mode,
+            buffer: String::new(),
+        }
+    }
+
+    fn name(&self, text: &str) -> Option<TokenId> {
+        match self.mode {
+            NameMode::Intern => Some(self.tokens.intern(text)),
+            NameMode::Lookup => {
+                let found = self.tokens.lookup(text);
+                debug_assert!(
+                    found.is_some(),
+                    "`{text}` was never interned; prepare the applied schema names first"
+                );
+                found
+            }
+        }
+    }
+
     /// OpenUSD: `UsdSchemaRegistry::MakeMultipleApplyNameInstance`.
     fn instantiate(&mut self, name: TokenId, instance: Option<TokenId>) -> Option<TokenId> {
         let Some(instance) = instance else {
             return Some(name);
         };
-        let tokens = self.tokens();
-        let text = tokens.resolve(name);
+        let text = self.tokens.resolve(name);
+        if text == INSTANCE_NAME_PLACEHOLDER {
+            return Some(instance);
+        }
         let Some(offset) = placeholder_offset(text) else {
             return Some(name);
         };
-        let instantiated = format!(
-            "{}{}{}",
-            &text[..offset],
-            tokens.resolve(instance),
-            &text[offset + INSTANCE_NAME_PLACEHOLDER.len()..]
-        );
-        self.name(&instantiated)
-    }
-}
-
-/// [`Names`] that interns what it forms.
-struct Intern<'t>(&'t TokenInterner);
-
-impl Names for Intern<'_> {
-    fn name(&mut self, text: &str) -> Option<TokenId> {
-        Some(self.0.intern(text))
-    }
-
-    fn tokens(&self) -> &TokenInterner {
-        self.0
-    }
-}
-
-/// [`Names`] that looks up what it forms, which
-/// [`SchemaRegistry::intern_instance_names`] interned beforehand.
-struct Lookup<'t>(&'t TokenInterner);
-
-impl Names for Lookup<'_> {
-    fn name(&mut self, text: &str) -> Option<TokenId> {
-        let found = self.0.lookup(text);
-        debug_assert!(
-            found.is_some(),
-            "`{text}` was never interned; `SchemaRegistry::intern_instance_names` must run \
-             for the applied schemas first"
-        );
-        found
-    }
-
-    fn tokens(&self) -> &TokenInterner {
-        self.0
+        self.buffer.clear();
+        self.buffer.push_str(&text[..offset]);
+        self.buffer.push_str(self.tokens.resolve(instance));
+        self.buffer
+            .push_str(&text[offset + INSTANCE_NAME_PLACEHOLDER.len()..]);
+        self.name(&self.buffer)
     }
 }
 
@@ -1606,7 +1627,11 @@ impl<'a> Build<'a> {
             }
             let (weaker, weaker_complete) = self.api_definition(target, building);
             complete &= weaker_complete;
-            definition.compose_weaker(&weaker, instance, &mut Intern(self.tokens));
+            definition.compose_weaker(
+                &weaker,
+                instance,
+                &mut Names::new(self.tokens, NameMode::Intern),
+            );
         }
         building.pop();
 
@@ -1654,7 +1679,11 @@ impl<'a> Build<'a> {
         for included in inclusions {
             if let Some((target, instance)) = self.inclusion(schema, included) {
                 let (weaker, _) = self.api_definition(target, &mut Vec::new());
-                definition.compose_weaker(&weaker, instance, &mut Intern(self.tokens));
+                definition.compose_weaker(
+                    &weaker,
+                    instance,
+                    &mut Names::new(self.tokens, NameMode::Intern),
+                );
             }
         }
         let mut overridden = HashSet::new();

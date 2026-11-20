@@ -861,6 +861,58 @@ impl<'s> SchemaEdit<'s> {
         )
     }
 
+    /// Whether a pending definition supplies a new local site whose value
+    /// would have no existing competing source in this snapshot.
+    #[cfg(feature = "usd-geom")]
+    pub(crate) fn has_pending_local_site(&self, path: PathId, time: Time) -> bool {
+        let paths = self.store.paths();
+        let layer = self.target.layer();
+        if !self.specified.contains(&path)
+            || !self.target.has_root_identity()
+            || !self.target.maps_to_itself(path, paths)
+            || !self.stage.has_local_layer(layer)
+            || self.store.layer(layer).is_none()
+            || self.stage.dangling_kind(TargetPath::Prim(path), paths)
+                != Some(layerstack::DanglingKind::NoPrim)
+            || self
+                .stage
+                .composition_errors()
+                .iter()
+                .any(|error| matches!(error, layerstack::CompositionError::LimitExceeded(_)))
+        {
+            return false;
+        }
+
+        let mut ancestors = core::iter::successors(paths.parent(path), |&at| paths.parent(at))
+            .filter_map(|at| self.stage_prim(at));
+        let Some(parent) = ancestors.next() else {
+            return false;
+        };
+        let suffix = &paths.resolve(path).segments()[paths.resolve(parent.path()).depth()..];
+        // A relocation source can be absent even though a new local spec
+        // there would be prohibited (AOUSD Core §10.3.2.6).
+        let relocated = parent.composition_graph().nodes().any(|(_, node)| {
+            let site = paths.resolve(node.site().prim_path()).join(suffix);
+            node.layers()
+                .filter_map(|id| self.store.layer(id))
+                .any(|layer| {
+                    layer
+                        .relocates()
+                        .iter()
+                        .any(|entry| paths.resolve(entry.source).is_prefix_of(&site))
+                })
+        });
+        if relocated {
+            return false;
+        }
+        // Value clips inherited from ancestors can supply a numeric value
+        // even without an existing prim in the stage (AOUSD Core §12.3.7).
+        !matches!(time, Time::At { .. })
+            || core::iter::once(parent)
+                .chain(ancestors)
+                .all(|prim| prim.metadata_opinions("clips").is_empty())
+    }
+
     /// Reserves a child name against composed prims and earlier definitions in
     /// this transaction. Interning a path alone does not occupy its name.
     #[cfg(feature = "usd-geom")]

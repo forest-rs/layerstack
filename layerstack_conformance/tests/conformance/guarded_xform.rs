@@ -4,11 +4,13 @@
 //! Compound transform authoring and its rejection boundary.
 
 use layerstack::{
-    InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, PropertySpec, PropertyType, StageOptions,
-    SublayerEntry, Value, edit::EditTarget,
+    AuthoringInspectionError, InMemoryStore, Layer, LayerId, LiveStage, PrimSpec,
+    PropertyDeclaration, PropertyKind, PropertySpec, PropertyType, StageOptions, SublayerEntry,
+    Value, Variability, edit::EditTarget,
 };
 use layerstack_schemas::{
-    MatrixXformError, Scene, SchemaEdit, Time, XformCache, usd_geom::XformableEdit,
+    MatrixXformError, Scene, SchemaEdit, Time, XformCache,
+    usd_geom::{Mesh, XformableEdit},
 };
 use std::sync::Arc;
 
@@ -40,6 +42,167 @@ fn fixture(
 
 fn identity() -> [[f64; 4]; 4] {
     core::array::from_fn(|row| core::array::from_fn(|col| if row == col { 1. } else { 0. }))
+}
+
+#[test]
+fn pending_definition_and_matrix_values_publish_in_one_transaction() {
+    let (mut store, mut live, _) = fixture(None, None);
+    let path = store.path("/New/Child");
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(2)));
+    let mesh = Mesh::define(&mut edit, path).unwrap();
+    let mut default = identity();
+    default[3][0] = 5.;
+    let mut sample = identity();
+    sample[3][1] = 7.;
+    mesh.set_matrix_transform(&mut edit, default).unwrap();
+    let before = edit.transaction().clone();
+    assert_eq!(
+        mesh.set_matrix_transform_at(&mut edit, f64::INFINITY, sample),
+        Err(MatrixXformError::Inspection(
+            AuthoringInspectionError::InvalidTime
+        ))
+    );
+    assert_eq!(edit.transaction(), &before);
+    mesh.set_matrix_transform_at(&mut edit, 2., sample).unwrap();
+    let transaction = edit.finish();
+    let applied = live.apply(&mut store, &transaction).unwrap();
+    let scene = Scene::new(live.stage(), &store);
+    for (time, expected) in [(Time::Default, default), (Time::at(2.), sample)] {
+        assert_eq!(
+            XformCache::new(time)
+                .local_transform(&scene, path)
+                .unwrap()
+                .matrix,
+            expected
+        );
+    }
+    live.apply(&mut store, &applied.inverse).unwrap();
+    assert!(live.stage().prim(path, &store).is_none());
+}
+
+#[test]
+fn pending_matrix_declares_uniform_order_without_a_schema_registry() {
+    let mut store = InMemoryStore::default();
+    let path = store.path("/New");
+    let layer = LayerId(1);
+    store.insert_layer(Layer::new(layer));
+    let mut live = LiveStage::compose(&mut store, layer, StageOptions::default());
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(layer));
+    let mesh = Mesh::define(&mut edit, path).unwrap();
+    mesh.set_matrix_transform(&mut edit, identity()).unwrap();
+    let transaction = edit.finish();
+    live.apply(&mut store, &transaction).unwrap();
+    let prim = live.stage().prim(path, &store).unwrap();
+    let order = prim
+        .property("xformOpOrder")
+        .unwrap()
+        .declaration()
+        .unwrap();
+    assert_eq!(order.variability, Variability::Uniform);
+    assert_eq!(
+        order.type_name,
+        Some(PropertyType::parse("token[]").unwrap())
+    );
+}
+
+#[test]
+fn incompatible_pending_declarations_reject_without_altering_the_edit() {
+    let (mut store, live, _) = fixture(None, None);
+    let path = store.path("/New");
+    for (attribute, kind, type_name) in [
+        (
+            "xformOpOrder",
+            PropertyKind::Attribute,
+            Some(PropertyType::parse("float[]").unwrap()),
+        ),
+        ("xformOp:transform", PropertyKind::Relationship, None),
+    ] {
+        let property = layerstack::PropertyPath::new(path, store.tokens().intern(attribute));
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+        let mesh = Mesh::define(&mut edit, path).unwrap();
+        assert!(edit.declare_property(
+            property,
+            &PropertyDeclaration {
+                kind,
+                type_name,
+                variability: Variability::Varying,
+                custom: true
+            },
+        ));
+        let before = edit.transaction().clone();
+        assert!(matches!(
+            mesh.set_matrix_transform(&mut edit, identity()),
+            Err(MatrixXformError::IncompatibleType { attribute: actual, .. }) if actual == attribute
+        ));
+        assert_eq!(edit.transaction(), &before);
+        assert_eq!(edit.property_kind(path, attribute), Some(kind));
+    }
+}
+
+#[test]
+fn pending_definitions_still_need_a_contributing_site() {
+    let (mut store, _, _) = fixture(None, None);
+    let inactive = store.path("/Off");
+    let below_inactive = store.path("/Off/Child");
+    let below_variant = store.path("/P/VariantChild");
+    let missing = store.path("/Absent");
+    let relocated = store.path("/P/Old");
+    let destination = store.path("/P/Moved");
+    let variant =
+        layerstack::SpecPath::parse("/P{shape=unselected}", store.tokens(), store.paths()).unwrap();
+    let root = store.layer_mut(LayerId(1)).unwrap();
+    root.insert_prim(inactive, PrimSpec::def().with_active(false));
+    root.relocates_mut().push(layerstack::Relocate {
+        source: relocated,
+        target: Some(destination),
+    });
+    store.insert_layer(Layer::new(LayerId(3)));
+    let live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+    for (path, target) in [
+        (below_inactive, EditTarget::for_layer(LayerId(1))),
+        (relocated, EditTarget::for_layer(LayerId(1))),
+        (
+            below_variant,
+            EditTarget::for_local_variant(LayerId(1), &variant),
+        ),
+        (missing, EditTarget::for_layer(LayerId(3))),
+    ] {
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, target);
+        let mesh = Mesh::define(&mut edit, path).unwrap();
+        let before = edit.transaction().clone();
+        assert_eq!(
+            mesh.set_matrix_transform(&mut edit, identity()),
+            Err(MatrixXformError::Inspection(
+                AuthoringInspectionError::MissingPrim(path)
+            ))
+        );
+        assert_eq!(edit.transaction(), &before);
+    }
+}
+
+#[test]
+fn pending_sample_rejects_when_ancestor_clips_could_contribute() {
+    let (mut store, live) = crate::support::schema_scene::scene(
+        r#"#usda 1.0
+def Xform "P" (clips = { dictionary default = {
+    asset[] assetPaths = [@motion.usda@]
+    string primPath = "/Clip"
+    double2[] active = [(0, 0)]
+} }) {}
+"#,
+    );
+    let path = store.path("/P/New");
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    let mesh = Mesh::define(&mut edit, path).unwrap();
+    let before = edit.transaction().clone();
+    assert_eq!(
+        mesh.set_matrix_transform_at(&mut edit, 2., identity()),
+        Err(MatrixXformError::Inspection(
+            AuthoringInspectionError::MissingPrim(path)
+        ))
+    );
+    assert_eq!(edit.transaction(), &before);
+    mesh.set_matrix_transform(&mut edit, identity()).unwrap();
 }
 
 #[test]
@@ -133,7 +296,7 @@ fn replacement_at_strongest_site_is_atomic_and_rejects_invalid_inputs() {
     assert!(matches!(
         xform.set_matrix_transform_at(&mut edit, f64::INFINITY, identity()),
         Err(MatrixXformError::Inspection(
-            layerstack::AuthoringInspectionError::InvalidTime
+            AuthoringInspectionError::InvalidTime
         ))
     ));
     assert_eq!(edit.transaction(), &before);

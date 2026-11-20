@@ -422,8 +422,17 @@ cover building the layer, including collecting and applying the transaction.
 The paths, schema registry and empty stage are prepared ahead of time.
 Serialization and live-stage recomposition are outside the timed section.
 
+The `wide_layer_authoring` group applies up to 32,768 named `CollectionAPI`
+instances to one scope. It compares direct records and two batch write orders.
+`batch_contiguous` writes each collection's default and targets immediately
+after applying it. `batch_grouped` applies every API first, then writes the
+same properties by name. `batch_apply_only` measures the applications alone.
+Each batch is checked against byte-identical direct records before timing.
+Use the 128, 512, and 2,048 cases for comparisons with a quadratic baseline.
+
 ```sh
-cargo bench -p wind_tunnel --bench layer_authoring -- --warm-up-time 1 --measurement-time 1
+cargo bench -p wind_tunnel --bench layer_authoring -- '^layer_authoring/' --warm-up-time 1 --measurement-time 1
+cargo bench -p wind_tunnel --bench layer_authoring -- 'wide_layer_authoring/.*/(128|512|2048)$' --warm-up-time 1 --measurement-time 1
 ```
 
 ## Procedural batches

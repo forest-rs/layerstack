@@ -8,9 +8,12 @@
 //! USD representation. Defaults describe what the node implementation supplies
 //! when an input is left unauthored.
 //!
-//! With the `usd-mtlx` feature, this module also provides bindings for the
-//! `MaterialX` 1.39.5 color image and `OpenPBR` Surface nodes. Custom libraries can
-//! generate the same interfaces with `layerstack_schemagen --materialx`.
+//! With `usd-mtlx`, this module ships selected `MaterialX` 1.39.5 bindings for
+//! image and tiled-image sampling, texture coordinates and placement, normal
+//! and bump mapping, channel operations, math and color adjustment, and
+//! `OpenPBR` Surface, Standard Surface and `glTF` PBR. Their descriptors are
+//! available in `STANDARD_NODES`. With `usd-shade`, custom libraries can use
+//! `layerstack_schemagen --materialx` to generate their own bindings.
 //!
 //! ```
 //! # #[cfg(feature = "usd-mtlx")]
@@ -81,11 +84,32 @@ mod standard;
 
 #[cfg(feature = "usd-mtlx")]
 pub use standard::{
+    NODE_DEFINITIONS as STANDARD_NODES, NdAddColor3 as AddColor3, NdAddColor3Edit as AddColor3Edit,
+    NdAddFloat as AddFloat, NdAddFloatEdit as AddFloatEdit, NdBumpVector3 as Bump,
+    NdBumpVector3Edit as BumpEdit, NdClampFloat as ClampFloat, NdClampFloatEdit as ClampFloatEdit,
+    NdColorcorrectColor3 as ColorCorrectColor3, NdColorcorrectColor3Edit as ColorCorrectColor3Edit,
+    NdCombine3Color3 as Combine3Color3, NdCombine3Color3Edit as Combine3Color3Edit,
+    NdExtractColor3 as ExtractColor3, NdExtractColor3Edit as ExtractColor3Edit,
+    NdExtractVector3 as ExtractVector3, NdExtractVector3Edit as ExtractVector3Edit,
+    NdGltfPbrSurfaceshader as GltfPbr, NdGltfPbrSurfaceshaderEdit as GltfPbrEdit,
     NdImageColor3 as ImageColor3, NdImageColor3Edit as ImageColor3Edit,
-    NdOpenPbrSurfaceSurfaceshader as OpenPbrSurface,
-    NdOpenPbrSurfaceSurfaceshaderEdit as OpenPbrSurfaceEdit,
+    NdImageColor4 as ImageColor4, NdImageColor4Edit as ImageColor4Edit, NdImageFloat as ImageFloat,
+    NdImageFloatEdit as ImageFloatEdit, NdImageVector3 as ImageVector3,
+    NdImageVector3Edit as ImageVector3Edit, NdInvertFloat as InvertFloat,
+    NdInvertFloatEdit as InvertFloatEdit, NdMixColor3 as MixColor3,
+    NdMixColor3Edit as MixColor3Edit, NdMixFloat as MixFloat, NdMixFloatEdit as MixFloatEdit,
+    NdMultiplyColor3Fa as MultiplyColor3ByFloat,
+    NdMultiplyColor3FaEdit as MultiplyColor3ByFloatEdit, NdMultiplyFloat as MultiplyFloat,
+    NdMultiplyFloatEdit as MultiplyFloatEdit, NdNormalmapFloat as NormalMap,
+    NdNormalmapFloatEdit as NormalMapEdit, NdOpenPbrSurfaceSurfaceshader as OpenPbrSurface,
+    NdOpenPbrSurfaceSurfaceshaderEdit as OpenPbrSurfaceEdit, NdPlace2dVector2 as Place2dVector2,
+    NdPlace2dVector2Edit as Place2dVector2Edit, NdRemapFloat as RemapFloat,
+    NdRemapFloatEdit as RemapFloatEdit, NdSeparate3Vector3 as Separate3Vector3,
+    NdSeparate3Vector3Edit as Separate3Vector3Edit,
+    NdStandardSurfaceSurfaceshader as StandardSurface,
+    NdStandardSurfaceSurfaceshaderEdit as StandardSurfaceEdit,
+    NdTexcoordVector2 as TexcoordVector2, NdTexcoordVector2Edit as TexcoordVector2Edit,
+    NdTiledimageColor3 as TiledImageColor3, NdTiledimageColor3Edit as TiledImageColor3Edit,
+    NdTiledimageFloat as TiledImageFloat, NdTiledimageFloatEdit as TiledImageFloatEdit,
+    NdTiledimageVector3 as TiledImageVector3, NdTiledimageVector3Edit as TiledImageVector3Edit,
 };
-
-/// Definitions for the `MaterialX` nodes shipped with this crate.
-#[cfg(feature = "usd-mtlx")]
-pub const STANDARD_NODES: &[MaterialXNode] = &[ImageColor3::DEFINITION, OpenPbrSurface::DEFINITION];

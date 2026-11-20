@@ -305,6 +305,7 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
             "use {schema_crate}::materialx::{{MaterialXNode, MaterialXPort}};\nuse {schema_crate}::shading::PortKind;"
         );
     }
+    let mut definitions = String::new();
     for node in &model.nodes {
         let name = crate::views::pascal(&crate::views::snake(
             node.id.strip_prefix("Usd").unwrap_or(&node.id),
@@ -320,6 +321,7 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
         );
         if is_materialx(node) {
             crate::materialx::render_definition(&mut out, node, schema_crate);
+            let _ = writeln!(definitions, "    {name}::DEFINITION,");
         }
         let mut setters = String::new();
         let mut methods: std::collections::BTreeSet<String> = [
@@ -464,6 +466,12 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
         let _ = writeln!(
             out,
             "}}\n\n/// Authors `{id}` inputs and typed ports through an explicit edit target.\n#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]\npub struct {name}Edit {{ shader: ShaderEdit }}\nimpl Deref for {name}Edit {{ type Target = ShaderEdit; fn deref(&self) -> &Self::Target {{ &self.shader }} }}\nimpl {name}Edit {{\n    /// A handle authoring this node's inputs on the shader `shader` authors, whatever its `info:id`.\n    #[must_use]\n    pub fn from_shader(shader: ShaderEdit) -> Self {{ Self {{ shader }} }}\n{setters}}}"
+        );
+    }
+    if materialx {
+        let _ = writeln!(
+            out,
+            "\n/// The selected MaterialX node definitions, in identifier order.\npub const NODE_DEFINITIONS: &[MaterialXNode] = &[\n{definitions}];"
         );
     }
     let imports = imports(&out, external);

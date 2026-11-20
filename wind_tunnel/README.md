@@ -403,6 +403,21 @@ The deformation of each sample runs on the worker threads; reading the stage,
 writing the results and applying them stay on the calling thread, so every
 thread count writes the same layer.
 
+## Authoring a new layer
+
+`layer_authoring` compares hand-written prim and property specs, a
+`LayerBatch`, and generated `SchemaEdit` calls whose transaction is applied
+to the layer. Each of 64 or 1,024 scopes has two named collections, each
+with a uniform boolean and an explicit relationship to another scope.
+The benchmark checks that all three produce byte-identical USDA. Timings
+cover building the layer, including collecting and applying the transaction.
+The paths, schema registry and empty stage are prepared ahead of time.
+Serialization and live-stage recomposition are outside the timed section.
+
+```sh
+cargo bench -p wind_tunnel --bench layer_authoring -- --warm-up-time 1 --measurement-time 1
+```
+
 ## Procedural batches
 
 `examples/procedural_batch.rs` times a procedural batch applied to a

@@ -4,6 +4,11 @@
 
 Initial release.
 
+- Importers can build a fresh layer with `LayerBatch` using registered schema
+  declarations. Generated multiple-apply views expose property-name templates
+  alongside their accessors. Existing `SchemaEdit` callers can continue to
+  collect and apply transactions when editing a composed stage.
+
 - The views' building blocks are public, so generated views of schema
   libraries outside this crate share them: `PrimView::read_targets`,
   `PrimEdit::new`, `PrimEdit::from_path_unchecked`, `PrimEdit::write_value`,

@@ -323,6 +323,19 @@ pub(crate) fn conforms(ty: &PropertyType, value: &Value) -> bool {
     }
 }
 
+impl PropertyType {
+    /// Whether an attribute of this type can author `value` as a default
+    /// or time sample, using the same value-type checks as a transaction.
+    /// The type must be registered. A value block fits every registered
+    /// type. Deferred arrays use their element type when known.
+    ///
+    /// Spec: AOUSD Core §6.2–§6.3 and §7.6.4.1.1 (attribute value types).
+    #[must_use]
+    pub fn accepts_value(&self, value: &Value) -> bool {
+        self.value_type().is_some() && conforms(self, value)
+    }
+}
+
 fn scalar_conforms(ty: &PropertyType, value: &Value) -> bool {
     let expected = ty.default_scalar();
     if matches!(expected, Value::Null) {
@@ -432,6 +445,16 @@ mod tests {
     use super::*;
     use crate::{ArrayEdit, ArrayEditOp};
     use alloc::vec;
+
+    #[test]
+    fn only_registered_attribute_types_accept_authored_values() {
+        let unknown = PropertyType::unregistered(PropertyType::parse("unknown").unwrap_err());
+        assert!(!unknown.accepts_value(&Value::Blocked));
+        let distance = PropertyType::parse("double").unwrap();
+        assert!(distance.accepts_value(&Value::Blocked));
+        assert!(distance.accepts_value(&Value::Double(1.0)));
+        assert!(!distance.accepts_value(&Value::Float(1.0)));
+    }
 
     #[test]
     fn tagged_tuple_literals_require_canonical_storage() {

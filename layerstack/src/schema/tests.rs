@@ -30,6 +30,14 @@ fn fallback(
     let found = registry.property_definition(type_name, applied, property, tokens);
     let definition = registry.prim_definition(type_name, applied, tokens);
     assert_eq!(found.as_ref(), definition.property(property), "{name}");
+    let declaration = |p: &PropertyDefinition| (p.kind, p.type_name.clone(), p.variability);
+    assert_eq!(
+        registry
+            .strongest_property_definition(type_name, applied, property, tokens)
+            .map(declaration),
+        definition.property(property).map(declaration),
+        "{name}"
+    );
     found.and_then(|p| p.fallback)
 }
 

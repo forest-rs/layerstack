@@ -420,6 +420,9 @@
 
 extern crate alloc;
 
+#[cfg(feature = "usd-mtlx")]
+extern crate self as layerstack_schemas;
+
 #[cfg(feature = "usd-geom")]
 mod mesh_publication;
 #[cfg(feature = "usd-geom")]
@@ -473,6 +476,8 @@ pub mod light;
 pub mod lod;
 #[cfg(feature = "usd-physics")]
 pub mod mass;
+#[cfg(feature = "usd-shade")]
+pub mod materialx;
 #[cfg(feature = "usd-geom")]
 mod model_extents;
 #[cfg(feature = "usd-geom")]

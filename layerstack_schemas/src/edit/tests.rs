@@ -297,6 +297,42 @@ fn appended_generic_edits_keep_their_place_in_one_transaction() {
     );
 }
 
+#[cfg(feature = "usd-shade")]
+#[test]
+fn material_surface_output_uses_its_render_context() {
+    use crate::{shading::PortError, usd_shade::Material};
+
+    let (mut store, mut live) = stage(|_, _| {});
+    let path = store.path("/Paint");
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(ROOT));
+    let material = Material::define(&mut edit, path).unwrap();
+    for (context, name) in [
+        ("", "outputs:surface"),
+        ("mtlx", "outputs:mtlx:surface"),
+        ("vendor:preview", "outputs:vendor:preview:surface"),
+    ] {
+        let output = material.create_surface_output(&mut edit, context).unwrap();
+        assert_eq!(output.name(), name);
+        assert_eq!(
+            edit.attribute_type(path, name).unwrap().type_name(),
+            "token"
+        );
+    }
+    material
+        .create_output(
+            &mut edit,
+            "other:surface",
+            layerstack::PropertyType::parse("float").unwrap(),
+        )
+        .unwrap();
+    assert!(matches!(
+        material.create_surface_output(&mut edit, "other"),
+        Err(PortError::TypeMismatch { .. })
+    ));
+    let tx = edit.finish();
+    live.apply(&mut store, &tx).unwrap();
+}
+
 /// A property spec a host creates through `declare_property` is one the
 /// handles see: a connection to it finds it rather than creating it again,
 /// and declaring one a handle created collects nothing.

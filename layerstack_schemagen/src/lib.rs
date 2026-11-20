@@ -67,6 +67,7 @@ pub mod compile;
 mod emit;
 pub mod kinds;
 mod library;
+mod materialx;
 pub mod metadata;
 mod model;
 mod output;
@@ -78,6 +79,7 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+#[cfg(test)]
 use layerstack::NoAssets;
 
 /// The directories whose every file the generator writes.
@@ -261,10 +263,10 @@ fn generate(args: impl Iterator<Item = String>) -> Result<String, String> {
         }
         let output = output.ok_or("--out <Rust file> is required for shader libraries")?;
         let text = if materialx.is_some() {
-            generate_materialx_library(
+            rustfmt(&generate_materialx_library(
                 path,
                 &selected.iter().map(String::as_str).collect::<Vec<_>>(),
-            )?
+            )?)?
         } else {
             generate_shader_library(path)?
         };
@@ -433,6 +435,7 @@ pub fn generate_shader_library(path: impl AsRef<Path>) -> Result<String, String>
     render_library(nodes, store)
 }
 
+#[cfg(test)]
 fn generate_shader_text(text: &str) -> Result<String, String> {
     let mut store = layerstack::InMemoryStore::default();
     let read = layerstack_usda::read_usda(
@@ -497,29 +500,27 @@ pub fn generate_kind_library(
 /// Generates typed USD APIs for explicitly selected `MaterialX` `NodeDefs`.
 ///
 /// Uses `python3` and its standard XML reader during generation only. Local
-/// whole-file `XIncludes` and `NodeDef` inheritance are resolved. Numeric, boolean,
-/// string and filename ports with literal defaults are supported. Unsupported
-/// types and nonliteral defaults fail explicitly. This does not import material
-/// graphs, select or compile implementations, or evaluate shaders. `NodeDef` names
-/// become USD identifiers; execution requires a compatible renderer registry.
+/// whole-file `XIncludes` and `NodeDef` inheritance are resolved. Generated
+/// `DEFINITION` constants preserve the `MaterialX` port names, directions, types
+/// and defaults alongside the USD property names and types. The sole
+/// `surfaceshader` output named `out` uses the USD material terminal name
+/// `outputs:surface`. Literal input defaults are available as typed associated
+/// functions. Geometry property defaults and output pass-through defaults are
+/// descriptors for consumers of the interface.
+///
+/// `NodeDef` names become USD identifiers. Runtime evaluation requires a
+/// compatible renderer registry. Returns unformatted Rust for build scripts.
+///
+/// # Errors
+///
+/// Reports unreadable or malformed XML, invalid selections, unsupported port
+/// types, invalid defaults and conflicting generated Rust names.
 pub fn generate_materialx_library(
     path: impl AsRef<Path>,
     definitions: &[&str],
 ) -> Result<String, String> {
-    let output = Command::new("python3")
-        .arg("-c")
-        .arg(include_str!("materialx.py"))
-        .arg(path.as_ref())
-        .args(definitions)
-        .output()
-        .map_err(|e| format!("`MaterialX` generation needs python3: {e}"))?;
-    if !output.status.success() {
-        return Err(format!(
-            "`MaterialX`: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        ));
-    }
-    generate_shader_text(&String::from_utf8(output.stdout).map_err(|e| e.to_string())?)
+    let nodes = materialx::read(path.as_ref(), definitions)?;
+    render_library(nodes, layerstack::InMemoryStore::default())
 }
 
 #[cfg(test)]

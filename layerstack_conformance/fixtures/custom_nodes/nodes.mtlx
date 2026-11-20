@@ -9,5 +9,5 @@
     <input name="matrix" type="matrix33" value="1,0,0,0,1,0,0,0,1"/>
   </nodedef>
   <nodedef name="ND_rgba" inherit="ND_base" node="rgba" type="color4"/>
-  <nodedef name="ND_unsupported" node="surface" type="surfaceshader"/>
+  <nodedef name="ND_unsupported" node="surface" type="volumeshader"/>
 </materialx>

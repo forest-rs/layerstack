@@ -116,6 +116,7 @@ mod lux_nodes;
 mod make_visible;
 mod mass;
 mod material_subsets;
+mod materialx;
 mod membership_cache;
 mod membership_index;
 mod mesh_export;

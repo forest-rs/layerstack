@@ -18,9 +18,11 @@ licensed_lux="layerstack_schemas/src/light/helpers.rs"
 # A schema library's Rust module, as `layerstack_schemagen compile --rust`
 # writes it for a downstream crate; it is checked against the generator.
 generated_library="layerstack_custom_schemas/src/generated"
+# The pinned MaterialX NodeDefs and derived bindings are Apache-2.0.
+generated_materialx="layerstack_schemas/src/materialx/standard.rs"
 
 # Check all the standard Rust source files
-output=$(rg "^// Copyright (19|20)[\d]{2} (.+ and )?the LayerStack Authors( and .+)?$\n^// SPDX-License-Identifier: Apache-2\.0 OR MIT$\n\n" --files-without-match --multiline -g "*.rs" -g "!$generated/**" -g "!$generated_tests/**" -g "!$licensed_math" -g "!$licensed_mass" -g "!$licensed_lux" -g "!$generated_library/**" .)
+output=$(rg "^// Copyright (19|20)[\d]{2} (.+ and )?the LayerStack Authors( and .+)?$\n^// SPDX-License-Identifier: Apache-2\.0 OR MIT$\n\n" --files-without-match --multiline -g "*.rs" -g "!$generated/**" -g "!$generated_tests/**" -g "!$licensed_math" -g "!$licensed_mass" -g "!$licensed_lux" -g "!$generated_library/**" -g "!$generated_materialx" .)
 
 if [ -n "$output" ]; then
 	echo -e "The following files lack the correct copyright header:\n"
@@ -40,6 +42,11 @@ if [ -n "$output" ]; then
 	echo -e "The following OpenUSD-derived files lack the upstream header:\n"
 	echo $output
 	echo -e "\n\nRegenerate them with layerstack_schemagen.\n"
+	exit 1
+fi
+
+if ! rg -q --multiline '\A// Copyright Contributors to the MaterialX Project\n// Copyright (19|20)[0-9]{2} the LayerStack Authors\n// SPDX-License-Identifier: Apache-2\.0\n\n' "$generated_materialx"; then
+	echo "The MaterialX bindings lack the correct header. Run bash layerstack_schemas/materialx/generate.sh."
 	exit 1
 fi
 

@@ -594,6 +594,9 @@ jobs:
           pxr="$(python -c 'import os, pxr; print(os.path.dirname(pxr.__file__))')"
           cargo run --locked -p layerstack_schemagen -- --check --pxr "$pxr" --source openusd
 
+      - name: check standard MaterialX bindings
+        run: bash layerstack_schemas/materialx/generate.sh --check
+
       # The schema compiler must write what OpenUSD's usdGenSchema writes:
       # every schema domain's checked-in generatedSchema.usda and
       # plugInfo.json, and testUsdGenSchema's baselines and failures.

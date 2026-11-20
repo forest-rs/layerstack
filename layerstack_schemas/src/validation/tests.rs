@@ -25,6 +25,52 @@ fn attr(name: &str, value: Value) -> PropertySpec {
     PropertySpec::typed_attribute(PropertyType::parse(name).unwrap()).with_default(value)
 }
 #[test]
+fn attribute_findings_keep_name_order_across_contributing_layers() {
+    let mut store = setup();
+    let prim = store.path("/Model");
+    let mut strong = Layer::new(LayerId(1));
+    strong
+        .sublayers_mut()
+        .push(layerstack::SublayerEntry::new(LayerId(2)));
+    let mut weak = Layer::new(LayerId(2));
+    let mut definition = PrimSpec::def();
+    let mut over = PrimSpec::over();
+    for name in ["weight2", "weight10", "weight1"] {
+        let name = store.tokens().intern(name);
+        definition.set_property(name, attr("float", Value::Float(1.)));
+        over.set_property(name, attr("double", Value::Double(2.)));
+    }
+    strong.insert_prim(prim, definition);
+    weak.insert_prim(prim, over);
+    store.insert_layer(strong);
+    store.insert_layer(weak);
+    let stage = stage(&mut store);
+    let scene = Scene::new(&stage, &store);
+    let report = ValidationContext::new([BuiltinRule::AttributeTypes])
+        .validate(&scene, ValidationScope::Prim(prim), &[Time::Default])
+        .unwrap();
+    let sites: Vec<_> = report
+        .problems
+        .iter()
+        .map(|p| {
+            (
+                store.tokens().resolve(p.site.property.unwrap()),
+                p.site.source.as_ref().unwrap().layer,
+            )
+        })
+        .collect();
+    assert_eq!(
+        sites,
+        [
+            ("weight1", LayerId(2)),
+            ("weight10", LayerId(2)),
+            ("weight2", LayerId(2))
+        ]
+    );
+    assert_eq!(report.work.property_specs, 6);
+}
+
+#[test]
 fn core_type_conflicts_include_weaker_source_and_requests_are_deterministic() {
     let mut store = setup();
     let p = store.path("/Model");

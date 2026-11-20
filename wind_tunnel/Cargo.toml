@@ -161,3 +161,7 @@ harness = false
 [[bench]]
 name = "layer_authoring"
 harness = false
+
+[[bench]]
+name = "validation"
+harness = false

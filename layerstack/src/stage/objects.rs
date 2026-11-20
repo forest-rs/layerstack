@@ -516,6 +516,15 @@ impl<'a> Prim<'a> {
     pub fn authored_properties(self) -> Vec<Property<'a>> {
         self.property_handles(Stage::authored_property_names_of(self.index, self.store))
     }
+    /// Visits each authored property once, borrowing the prim's composed index.
+    /// The iterator collects and sorts nothing. Use it when the result is
+    /// independent of traversal order, for example to count attributes.
+    /// For USD property order, use [`Self::authored_properties`].
+    ///
+    /// Spec: AOUSD Core §12 (properties authored by contributing opinions).
+    pub fn authored_properties_unordered(self) -> impl Iterator<Item = Property<'a>> + 'a {
+        Stage::authored_names_of(self.index).map(move |name| self.property_handle(name))
+    }
     /// The authored properties inside `namespace`: those whose names start
     /// with it and a `:` (`material:binding` holds
     /// `material:binding:preview`, not `material:binding` itself), in the
@@ -535,15 +544,22 @@ impl<'a> Prim<'a> {
     /// opinion authors (property opinions are always specs) or one its
     /// definition defines, so none needs its kind checked again.
     fn property_handles(self, names: Vec<TokenId>) -> Vec<Property<'a>> {
-        let (stage, store) = (self.stage, self.store);
         names
             .into_iter()
-            .map(|name| {
-                let path = PropertyPath::new(self.path, name);
-                debug_assert!(stage.property_kind(path).is_some(), "a composed property");
-                Property { stage, store, path }
-            })
+            .map(|name| self.property_handle(name))
             .collect()
+    }
+    fn property_handle(self, name: TokenId) -> Property<'a> {
+        let path = PropertyPath::new(self.path, name);
+        debug_assert!(
+            self.stage.property_kind(path).is_some(),
+            "a composed property"
+        );
+        Property {
+            stage: self.stage,
+            store: self.store,
+            path,
+        }
     }
     /// The strongest authored property ordering (`reorder properties`);
     /// `None` when no opinion authors one.

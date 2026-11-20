@@ -491,7 +491,12 @@ impl PathInterner {
 
     /// Interns the path made of `segments`, allocating only for a path not
     /// interned yet.
-    pub(crate) fn intern_segments(&self, segments: &[TokenId]) -> PathId {
+    ///
+    /// Pass prim names from the same token interner as the other paths.
+    /// An empty slice denotes the root. The caller may reuse the slice
+    /// as soon as this method returns.
+    #[must_use]
+    pub fn intern_segments(&self, segments: &[TokenId]) -> PathId {
         if let Some(id) = self.lookup_segments(segments) {
             return id;
         }

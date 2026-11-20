@@ -103,6 +103,7 @@ impl ChildNames {
 struct ParsedTargets<'a> {
     paths: Vec<crate::lower::OrdinaryPath<'a>>,
     parent: Option<(&'a str, PathId)>,
+    parent_segments: Vec<TokenId>,
 }
 
 impl ParsedTargets<'_> {
@@ -135,9 +136,12 @@ impl ParsedTargets<'_> {
             let parent = match self.parent {
                 Some((previous, id)) if previous == prefix => id,
                 _ => {
-                    let id = paths.intern(
-                        Path::parse_absolute(prefix, tokens).expect("checked absolute prim path"),
-                    );
+                    self.parent_segments.clear();
+                    if prefix != "/" {
+                        self.parent_segments
+                            .extend(prefix[1..].split('/').map(|name| tokens.intern(name)));
+                    }
+                    let id = paths.intern_segments(&self.parent_segments);
                     self.parent = Some((prefix, id));
                     id
                 }

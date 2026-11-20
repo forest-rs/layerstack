@@ -1081,14 +1081,11 @@ impl Stage {
                         Some(schemas) if identity.applied.is_empty() => schemas
                             .shared_typed(schema_type)
                             .unwrap_or_else(|| empty.clone()),
-                        Some(schemas) => {
-                            schemas.intern_instance_names(&identity.applied, store.tokens());
-                            Arc::new(schemas.prim_definition(
-                                schema_type,
-                                &identity.applied,
-                                store.tokens(),
-                            ))
-                        }
+                        Some(schemas) => Arc::new(schemas.prepare_prim_definition(
+                            schema_type,
+                            &identity.applied,
+                            store.tokens(),
+                        )),
                     };
                     let info = Arc::new(PrimTypeInfo {
                         identity: identity.clone(),

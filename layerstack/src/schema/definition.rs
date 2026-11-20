@@ -26,6 +26,25 @@ pub struct AppliedSchema {
     pub instance: Option<TokenId>,
 }
 
+impl AppliedSchema {
+    pub(super) fn instantiate(
+        self,
+        instance: Option<TokenId>,
+        names: &mut Names<'_>,
+    ) -> Option<Self> {
+        let name = names.instantiate(self.name, instance)?;
+        let instance = match self.instance {
+            Some(template) => Some(names.instantiate(template, instance)?),
+            None => None,
+        };
+        Some(Self {
+            name,
+            schema: self.schema,
+            instance,
+        })
+    }
+}
+
 /// The schemas a prim has, and the properties they define: its type, its
 /// applied schemas in strength order, and for each defined property the
 /// definition its strongest schema gives, with missing fallbacks and metadata
@@ -162,24 +181,12 @@ impl PrimDefinition {
         &mut self,
         weaker: &Self,
         instance: Option<TokenId>,
-        names: &mut impl Names,
+        names: &mut Names<'_>,
     ) {
         for applied in &weaker.applied {
-            let Some(name) = names.instantiate(applied.name, instance) else {
-                continue;
-            };
-            let applied_instance = match applied.instance {
-                None => None,
-                Some(template) => match names.instantiate(template, instance) {
-                    Some(name) => Some(name),
-                    None => continue,
-                },
-            };
-            self.push_applied(AppliedSchema {
-                name,
-                schema: applied.schema,
-                instance: applied_instance,
-            });
+            if let Some(applied) = applied.instantiate(instance, names) {
+                self.push_applied(applied);
+            }
         }
         for property in &weaker.properties {
             if let Some(name) = names.instantiate(property.name, instance) {
@@ -188,7 +195,7 @@ impl PrimDefinition {
                         name,
                         ..property.clone()
                     },
-                    names.tokens(),
+                    names.tokens,
                 );
             }
         }

@@ -401,8 +401,25 @@ fn multiple_apply_instances_fill_in_templates() {
     let registry = builder.build(&t);
 
     let applied = [t.intern("SlotAPI:left:upper"), slot, t.intern("TileAPI")];
+    let direct_tokens = t.snapshot();
+    let direct = registry.prepare_prim_definition(Some(tile), &applied, &direct_tokens);
     registry.intern_instance_names(&applied, &t);
+    let prepared_count = t.len();
     let definition = registry.prim_definition(Some(tile), &applied, &t);
+    assert_eq!(
+        t.len(),
+        prepared_count,
+        "read-only composition must only look up names"
+    );
+    assert_eq!(
+        direct_tokens.len(),
+        prepared_count,
+        "both paths intern the same names"
+    );
+    assert_eq!(
+        direct, definition,
+        "one-pass preparation preserves names, strength and fallbacks"
+    );
     assert_eq!(
         applied_names(&definition, &t),
         [

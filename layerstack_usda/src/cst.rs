@@ -623,6 +623,28 @@ impl TreeBuilder {
         self.tree.nodes.truncate(count);
     }
 
+    /// Make the current node's completed children available to the importer
+    /// before parsing its body. Closing it later records its full span.
+    pub(crate) fn open_node(&mut self, end: u32) -> SyntaxNode<'_> {
+        let id = *self.parent_stack.last().expect("open node");
+        let len = self.tree.nodes.len() as u32 - id;
+        let node = &mut self.tree.nodes[id as usize];
+        node.subtree_len = len;
+        node.child_count = *self.child_counts.last().expect("open node");
+        node.span.end = end;
+        self.tree.node(NodeId(id))
+    }
+
+    /// Forget the last completed direct children of the open node after
+    /// their statements have been consumed.
+    pub(crate) fn consume_from(&mut self, first: usize) {
+        self.peak = self.peak.max(self.tree.nodes.len());
+        if let Some(child) = self.tree.nodes.get(first) {
+            *self.child_counts.last_mut().expect("open node") = child.index_in_parent;
+            self.tree.nodes.truncate(first);
+        }
+    }
+
     /// The nodes so far, as a tree whose closed nodes can be walked.
     pub(crate) fn tree(&self) -> &SyntaxTree {
         &self.tree

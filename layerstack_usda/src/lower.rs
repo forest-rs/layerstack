@@ -23,33 +23,21 @@ use crate::writer::{is_variant_identifier, is_variant_selection};
 
 /// Lowers a CST into an AST, producing diagnostics for semantic errors.
 pub fn lower<'a>(tree: &SyntaxTree, source: &'a str) -> ParseResult<'a> {
-    PrimLowering::new(source).finish(tree)
+    LowerCtx::new(source).finish(tree)
 }
 
-/// Lowers each prim as the parser closes it, so that the parser can drop
-/// the prim's syntax and a reader holds the syntax of the prims it is in,
-/// not the whole file's. The result, diagnostics and their order are those
-/// of [`lower`] over the whole tree: lowering a prim reads its subtree
-/// alone, and a prim's diagnostics join the enclosing prim's (or layer's)
-/// where lowering the whole tree would report them.
-pub(crate) struct PrimLowering<'a> {
-    ctx: LowerCtx<'a>,
-}
-
-impl<'a> PrimLowering<'a> {
+impl<'a> LowerCtx<'a> {
     pub(crate) fn new(source: &'a str) -> Self {
         Self {
-            ctx: LowerCtx {
-                source,
-                diagnostics: Vec::new(),
-                lowered: Vec::new(),
-            },
+            source,
+            diagnostics: Vec::new(),
+            lowered: Vec::new(),
         }
     }
 
     /// Where the prims closed inside one the parser opens now will start.
     pub(crate) fn mark(&self) -> usize {
-        self.ctx.lowered.len()
+        self.lowered.len()
     }
 
     /// Lowers the prim the parser has just closed at `node` of `tree`, the
@@ -58,25 +46,34 @@ impl<'a> PrimLowering<'a> {
     pub(crate) fn close_prim(&mut self, tree: &SyntaxTree, node: u32, mark: usize) {
         let node = tree.node(crate::cst::NodeId(node));
         let start = node.span().start;
-        let prim = self.ctx.lower_prim(node);
-        let diagnostics = core::mem::take(&mut self.ctx.diagnostics);
+        let prior = core::mem::take(&mut self.diagnostics);
+        let prim = self.lower_prim(node);
+        let diagnostics = core::mem::replace(&mut self.diagnostics, prior);
         // The prims inside are part of this one now (or were not lowered by
         // it, as lowering the whole tree would not have lowered them).
-        self.ctx.lowered.truncate(mark);
-        self.ctx.lowered.push(LoweredPrim {
+        self.lowered.truncate(mark);
+        self.lowered.push(LoweredPrim {
             start,
             prim: Some(prim),
             diagnostics,
         });
     }
 
+    pub(crate) fn finish_statement(&mut self) {
+        self.lowered.clear();
+    }
+
+    pub(crate) fn into_diagnostics(self) -> Vec<Diagnostic> {
+        self.diagnostics
+    }
+
     /// Lowers the rest of `tree`: the header, layer metadata and the root
     /// prims, whose lowering was done as they closed.
-    pub(crate) fn finish(mut self, tree: &SyntaxTree) -> ParseResult<'a> {
-        let layer = self.ctx.lower_source_file(tree.root());
+    fn finish(mut self, tree: &SyntaxTree) -> ParseResult<'a> {
+        let layer = self.lower_source_file(tree.root());
         ParseResult {
             layer,
-            diagnostics: self.ctx.diagnostics,
+            diagnostics: self.diagnostics,
         }
     }
 }
@@ -90,7 +87,7 @@ struct LoweredPrim<'a> {
     diagnostics: Vec<Diagnostic>,
 }
 
-struct LowerCtx<'a> {
+pub(crate) struct LowerCtx<'a> {
     source: &'a str,
     diagnostics: Vec<Diagnostic>,
     /// Prims lowered as they closed, in source order, that the prim or layer
@@ -134,7 +131,7 @@ impl<'a> LowerCtx<'a> {
 
     // ── Source file ────────────────────────────────────────────────
 
-    fn lower_source_file(&mut self, root: SyntaxNode<'_>) -> Layer<'a> {
+    pub(crate) fn lower_source_file(&mut self, root: SyntaxNode<'_>) -> Layer<'a> {
         let span = root.span();
         let tree = root.tree();
         let mut version = "";
@@ -308,7 +305,7 @@ impl<'a> LowerCtx<'a> {
         Some(prim)
     }
 
-    fn lower_prim(&mut self, node: SyntaxNode<'_>) -> Prim<'a> {
+    pub(crate) fn lower_prim(&mut self, node: SyntaxNode<'_>) -> Prim<'a> {
         if let Some(prim) = self.take_lowered(node) {
             return prim;
         }
@@ -502,7 +499,6 @@ impl<'a> LowerCtx<'a> {
     // ── Prim body ──────────────────────────────────────────────────
 
     fn lower_prim_body(&mut self, node: SyntaxNode<'_>) -> Vec<PrimChild<'a>> {
-        let tree = node.tree();
         let mut children = Vec::with_capacity(
             node.children()
                 .filter(|child| {
@@ -517,34 +513,22 @@ impl<'a> LowerCtx<'a> {
                 })
                 .count(),
         );
-        for child in node.children_no_trivia() {
-            let (kind, id) = (child.kind(), child.id.0);
-            match kind {
-                SyntaxKind::PrimDef => {
-                    children.push(PrimChild::Prim(self.lower_prim(self.node_from(tree, id))));
-                }
-                SyntaxKind::AttributeDef => {
-                    children.push(PrimChild::Attribute(
-                        self.lower_attribute(self.node_from(tree, id)),
-                    ));
-                }
-                SyntaxKind::RelationshipDef => {
-                    children.push(PrimChild::Relationship(
-                        self.lower_relationship(self.node_from(tree, id)),
-                    ));
-                }
-                SyntaxKind::VariantSetDef => {
-                    children.push(PrimChild::VariantSet(
-                        self.lower_variant_set(self.node_from(tree, id)),
-                    ));
-                }
-                SyntaxKind::ReorderStmt => {
-                    children.push(self.lower_reorder_stmt(self.node_from(tree, id)));
-                }
-                _ => {}
-            }
-        }
+        children.extend(
+            node.children_no_trivia()
+                .filter_map(|child| self.lower_child(child)),
+        );
         children
+    }
+
+    pub(crate) fn lower_child(&mut self, node: SyntaxNode<'_>) -> Option<PrimChild<'a>> {
+        Some(match node.kind() {
+            SyntaxKind::PrimDef => PrimChild::Prim(self.lower_prim(node)),
+            SyntaxKind::AttributeDef => PrimChild::Attribute(self.lower_attribute(node)),
+            SyntaxKind::RelationshipDef => PrimChild::Relationship(self.lower_relationship(node)),
+            SyntaxKind::VariantSetDef => PrimChild::VariantSet(self.lower_variant_set(node)),
+            SyntaxKind::ReorderStmt => self.lower_reorder_stmt(node),
+            _ => return None,
+        })
     }
 
     // ── Attributes ─────────────────────────────────────────────────
@@ -933,7 +917,10 @@ impl<'a> LowerCtx<'a> {
         }
     }
 
-    fn lower_name_list_from_reorder(&mut self, node: SyntaxNode<'_>) -> Vec<Cow<'a, str>> {
+    pub(crate) fn lower_name_list_from_reorder(
+        &mut self,
+        node: SyntaxNode<'_>,
+    ) -> Vec<Cow<'a, str>> {
         let nl = node
             .children_no_trivia()
             .find(|c| c.kind() == SyntaxKind::NameList);

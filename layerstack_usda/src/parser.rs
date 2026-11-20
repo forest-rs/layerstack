@@ -18,7 +18,9 @@ use crate::ast::ParseResult;
 use crate::cst::{CstParseResult, SyntaxKind, TreeBuilder};
 use crate::diagnostic::Diagnostic;
 use crate::lexer::{Token, TokenKind, tokenize};
-use crate::lower::PrimLowering;
+use crate::lower::LowerCtx;
+use alloc::borrow::Cow;
+use alloc::boxed::Box;
 
 /// Parses a USDA source string into an AST through the shared CST grammar.
 ///
@@ -54,52 +56,50 @@ fn parse_tree<const LOSSLESS: bool>(source: &str) -> CstParseResult {
 /// and the open prims' statements but not their closed child prims'.
 const READ_NODES: usize = 64;
 
-/// A layer parsed and lowered for import (see [`parse_for_read`]).
-pub(crate) struct ReadParse<'a> {
-    /// The lowered layer and the diagnostics of lowering.
-    pub lowered: ParseResult<'a>,
-    /// Syntax and recovery diagnostics.
-    pub diagnostics: Vec<Diagnostic>,
-    /// Numeric arrays and tuples read straight into their values.
-    pub arrays: crate::read::PreparedValues,
-    /// The most tokens held at once.
-    pub tokens: usize,
-    /// The most syntax nodes held at once.
-    pub syntax_nodes: usize,
-}
-
-/// Parses and lowers `source` for import in one pass: tokens are lexed as
-/// the grammar asks and released once consumed, and each prim is lowered as
-/// it closes, its syntax then dropped, so the read holds a window of tokens
-/// and the syntax of the prims it is in rather than the whole file's.
-pub(crate) fn parse_for_read(source: &str) -> ReadParse<'_> {
+/// Import through the shared grammar. Ordinary prims are open only while
+/// reading their bodies. Variant sets are lowered as complete statements
+/// so branch admission and resolver calls retain their authored order.
+pub(crate) fn parse_for_read<'a>(
+    source: &'a str,
+    import: crate::emit::LayerImport<'a>,
+) -> crate::read::ReadResult {
     let mut parser =
         Parser::<false>::with_tokens(source, crate::token_source::TokenSource::streaming(source));
-    parser.direct_arrays = Some(crate::read::PreparedValues::default());
-    parser.lowering = Some(PrimLowering::new(source));
-    // Holding the syntax of the open prims alone, a read rarely needs more.
+    parser.read = Some(Box::new(ReadMode {
+        lowering: LowerCtx::new(source),
+        layer: import,
+        root_order: None,
+        in_variant: false,
+    }));
     parser.builder = TreeBuilder::with_capacity(source.len() as u32, READ_NODES);
     parser.parse_source_file();
-    let arrays = parser
-        .direct_arrays
-        .take()
-        .expect("read mode owns its arrays");
-    let lowering = parser.lowering.take().expect("read mode lowers prims");
-    let syntax_nodes = parser.builder.peak();
-    let tree = parser.builder.finish();
-    ReadParse {
-        lowered: lowering.finish(&tree),
-        diagnostics: parser.diagnostics,
-        arrays,
+    let mut read = *parser.read.expect("import parser");
+    let arrays = read.layer.arrays();
+    let stats = crate::read::ReadStats {
         tokens: parser.tokens.retained(),
-        syntax_nodes,
+        syntax_nodes: parser.builder.peak(),
+        numeric_arrays: arrays.arrays(),
+        numeric_elements: arrays.elements(),
+    };
+    crate::read::ReadResult {
+        emitted: read.layer.finish(read.root_order.as_deref()),
+        lower_diagnostics: read.lowering.into_diagnostics(),
+        parse_diagnostics: parser.diagnostics,
+        stats,
     }
 }
 
 // ── Parser ─────────────────────────────────────────────────────────────
 
+struct ReadMode<'a> {
+    lowering: LowerCtx<'a>,
+    layer: crate::emit::LayerImport<'a>,
+    root_order: Option<Vec<Cow<'a, str>>>,
+    in_variant: bool,
+}
+
 /// Where a prim lowered as it closes was opened: its node, and where the
-/// prims lowered inside it start (see [`PrimLowering::mark`]).
+/// prims lowered inside it start (see [`LowerCtx::mark`]).
 struct OpenPrim {
     node: usize,
     mark: usize,
@@ -215,9 +215,9 @@ struct Parser<'a, const LOSSLESS: bool> {
     current: Option<Token>,
     diagnostics: Vec<Diagnostic>,
     builder: TreeBuilder,
-    direct_arrays: Option<crate::read::PreparedValues>,
-    /// In read mode, lowers each prim as it closes (see [`parse_for_read`]).
-    lowering: Option<PrimLowering<'a>>,
+    /// Present only for direct import. Ordinary and lossless AST parsing
+    /// use the same productions without consuming closed statements.
+    read: Option<Box<ReadMode<'a>>>,
     /// Whether a line break was consumed since the last non-trivia token,
     /// so a property statement there has ended.
     line_break: bool,
@@ -251,8 +251,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             current,
             diagnostics: Vec::new(),
             builder: TreeBuilder::new(source.len() as u32),
-            direct_arrays: None,
-            lowering: None,
+            read: None,
             line_break: false,
             speculating: false,
             release_at: crate::token_source::RELEASE_AFTER,
@@ -654,6 +653,13 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             self.parse_layer_metadata();
         }
 
+        let end = self.current_span().start;
+        if let Some(read) = &mut self.read {
+            let header = read.lowering.lower_source_file(self.builder.open_node(end));
+            read.layer.metadata(&header.metadata);
+            self.builder.consume_from(1);
+        }
+
         // Root prims and reorder statements.
         loop {
             self.eat_trivia();
@@ -661,11 +667,16 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 break;
             }
 
+            let first = self.builder.node_count();
             // A root prim ends at a line break or the end of the file, a
             // `reorder rootPrims` statement also at `;` (`LayerSpec`,
             // `pxr/usd/sdf/textFileFormatParser.h`).
             if self.peek() == Some(TokenKind::Ident) && self.current_text() == "reorder" {
                 self.parse_reorder_statement();
+                if let Some(read) = &mut self.read {
+                    let node = self.builder.tree().node(crate::cst::NodeId(first as u32));
+                    read.root_order = Some(read.lowering.lower_name_list_from_reorder(node));
+                }
                 self.expect_statement_end(true, None);
             } else if self.peek() == Some(TokenKind::Ident)
                 && matches!(self.current_text(), "def" | "over" | "class")
@@ -676,6 +687,9 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 let span = self.current_span();
                 self.error(span, "expected prim definition or reorder statement");
                 self.bump();
+            }
+            if self.read.is_some() {
+                self.builder.consume_from(first);
             }
         }
 
@@ -913,27 +927,18 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
 
     // ── Prim parsing ───────────────────────────────────────────────
 
-    /// In read mode, notes where a prim opens (see [`PrimLowering`]); call
-    /// before opening its node.
-    fn open_prim(&self) -> Option<OpenPrim> {
-        self.lowering.as_ref().map(|lowering| OpenPrim {
-            node: self.builder.node_count(),
-            mark: lowering.mark(),
-        })
-    }
-
-    /// In read mode, lowers the prim `opened` that has just closed, and
-    /// drops its syntax.
-    fn close_prim(&mut self, opened: Option<OpenPrim>) {
-        if let (Some(lowering), Some(opened)) = (&mut self.lowering, opened) {
-            lowering.close_prim(self.builder.tree(), opened.node as u32, opened.mark);
-            self.builder.collapse(opened.node);
-        }
-    }
-
     fn parse_prim(&mut self) {
         let start = self.current_span().start;
-        let opened = self.open_prim();
+        // Prims in a variant belong to its enclosing statement. Lower each
+        // as it closes and keep its location until the set is complete.
+        let variant_prim = self
+            .read
+            .as_ref()
+            .filter(|read| read.in_variant)
+            .map(|read| OpenPrim {
+                node: self.builder.node_count(),
+                mark: read.lowering.mark(),
+            });
         self.builder.start_node(SyntaxKind::PrimDef, start);
 
         // Specifier: def/over/class.
@@ -959,6 +964,13 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             self.parse_prim_metadata();
         }
 
+        let end = self.current_span().start;
+        if let Some(read) = &mut self.read
+            && variant_prim.is_none()
+        {
+            let header = read.lowering.lower_prim(self.builder.open_node(end));
+            read.layer.begin(&header);
+        }
         // Body: { ... }
         self.expect(TokenKind::LeftBrace);
         self.nested(Nesting::Namespace, Self::parse_prim_body);
@@ -966,7 +978,15 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
 
         let end = self.current_span().start;
         self.builder.finish_node(end);
-        self.close_prim(opened);
+        if let Some(read) = &mut self.read {
+            if let Some(opened) = variant_prim {
+                read.lowering
+                    .close_prim(self.builder.tree(), opened.node as u32, opened.mark);
+                self.builder.collapse(opened.node);
+            } else {
+                read.layer.end(end);
+            }
+        }
     }
 
     // ── Prim metadata ──────────────────────────────────────────────
@@ -1359,6 +1379,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             if self.refuse_stray_separator() {
                 continue;
             }
+            let first = self.builder.node_count();
             // A prim or variant set ends at a line break, a property or
             // `reorder` statement also at `;`, which it consumes (`PrimItem`,
             // `pxr/usd/sdf/textFileFormatParser.h`): the closing `}` of
@@ -1397,6 +1418,19 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                     format!("unexpected `{}` in a prim body", text.escape_debug()),
                 );
                 self.bump();
+            }
+            if let Some(read) = &mut self.read
+                && !read.in_variant
+                && first < self.builder.node_count()
+            {
+                let node = self.builder.tree().node(crate::cst::NodeId(first as u32));
+                if node.kind() != SyntaxKind::PrimDef
+                    && let Some(child) = read.lowering.lower_child(node)
+                {
+                    read.layer.statement(&child);
+                    read.lowering.finish_statement();
+                }
+                self.builder.consume_from(first);
             }
             self.skip_unparsed(progress);
         }
@@ -2004,6 +2038,10 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
     // ── Variant sets ───────────────────────────────────────────────
 
     fn parse_variant_set(&mut self) {
+        let enclosing = self
+            .read
+            .as_mut()
+            .map(|read| core::mem::replace(&mut read.in_variant, true));
         let start = self.current_span().start;
         self.builder.start_node(SyntaxKind::VariantSetDef, start);
 
@@ -2025,6 +2063,9 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
 
         let end = self.current_span().start;
         self.builder.finish_node(end);
+        if let (Some(read), Some(previous)) = (&mut self.read, enclosing) {
+            read.in_variant = previous;
+        }
     }
 
     fn parse_variant_branch(&mut self) {
@@ -2095,7 +2136,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
     ) {
         self.eat_trivia();
         if is_array
-            && self.direct_arrays.is_some()
+            && self.read.is_some()
             && let Some(width) = crate::read::numeric_width(type_name)
         {
             let start = self.current_span().start;
@@ -2109,15 +2150,17 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 // range by declaration offset and sample ordinal.
                 self.builder.finish_node(array.span.end);
                 self.builder.finish_node(self.current_span().start);
-                self.direct_arrays
+                self.read
                     .as_mut()
                     .expect("read mode")
+                    .layer
+                    .arrays()
                     .insert(crate::read::PreparedKey::new(attribute, sample), array);
                 return;
             }
         }
         if !is_array
-            && self.direct_arrays.is_some()
+            && self.read.is_some()
             && let Some(width @ 1..) = crate::read::numeric_width(type_name)
         {
             let start = self.current_span().start;
@@ -2130,9 +2173,11 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 // Placeholders, as for an array above.
                 self.builder.finish_node(tuple.span.end);
                 self.builder.finish_node(self.current_span().start);
-                self.direct_arrays
+                self.read
                     .as_mut()
                     .expect("read mode")
+                    .layer
+                    .arrays()
                     .insert(crate::read::PreparedKey::new(attribute, sample), tuple);
                 return;
             }

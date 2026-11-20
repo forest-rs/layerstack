@@ -166,21 +166,13 @@ fn declarations(
         sink.token("typeName", tokens.resolve(t));
     }
     if !prim.authored_children.is_empty() {
-        sink.field(
+        sink.names(
             "primChildren",
-            Value::TokenVector(
-                prim.authored_children
-                    .iter()
-                    .map(|&t| tokens.resolve(t).into())
-                    .collect(),
-            ),
+            prim.authored_children.iter().map(|&t| tokens.resolve(t)),
         );
     }
     if !properties.is_empty() {
-        sink.field(
-            "properties",
-            Value::TokenVector(properties.iter().map(|p| p.name.into()).collect()),
-        );
+        sink.names("properties", properties.iter().map(|p| p.name));
     }
     for p in properties {
         let variability = match p.variability {
@@ -208,7 +200,10 @@ fn declarations(
         sink.token("typeName", p.ty);
         sink.field("variability", Value::Variability(variability));
         let value = match &p.payload {
-            Payload::String(s) => Value::String((*s).into()),
+            Payload::String(s) => {
+                sink.string("default", s);
+                continue;
+            }
             Payload::Token(s) => {
                 sink.token("default", s);
                 continue;

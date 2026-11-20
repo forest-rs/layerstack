@@ -3516,7 +3516,7 @@ impl Stage {
     /// [`Self::property_names`] of the prim whose index is `index`, for a
     /// caller that holds the index already.
     pub(crate) fn property_names_of(index: &PrimIndex, store: &dyn LayerStore) -> Vec<TokenId> {
-        let mut names = Self::authored_names_of(index);
+        let mut names: Vec<_> = Self::authored_names_of(index).collect();
         if let Some(info) = index.type_info.as_ref() {
             let definition = &info.definition;
             let authored: HashSet<TokenId> = names.iter().copied().collect();
@@ -3557,7 +3557,7 @@ impl Stage {
         index: &PrimIndex,
         store: &dyn LayerStore,
     ) -> Vec<TokenId> {
-        let mut names = Self::authored_names_of(index);
+        let mut names: Vec<_> = Self::authored_names_of(index).collect();
         Self::order_names_of(index, &mut names, store);
         names
     }
@@ -3584,7 +3584,7 @@ impl Stage {
     ) -> Vec<TokenId> {
         let namespace = namespace.trim_end_matches(':');
         let tokens = store.tokens();
-        let mut names = Self::authored_names_of(index);
+        let mut names: Vec<_> = Self::authored_names_of(index).collect();
         names.retain(|name| {
             tokens
                 .resolve(*name)
@@ -3599,12 +3599,12 @@ impl Stage {
     fn authored_names(&self, prim: PathId) -> Vec<TokenId> {
         self.prims
             .get(&prim)
-            .map(Self::authored_names_of)
+            .map(|index| Self::authored_names_of(index).collect())
             .unwrap_or_default()
     }
 
     /// [`Self::authored_names`] of the prim whose index is `index`.
-    fn authored_names_of(index: &PrimIndex) -> Vec<TokenId> {
+    fn authored_names_of(index: &PrimIndex) -> impl Iterator<Item = TokenId> + '_ {
         use crate::prim_index::FieldKey;
 
         index
@@ -3615,7 +3615,6 @@ impl Stage {
                 FieldKey::Property(name) => Some(*name),
                 FieldKey::Metadata(_) => None,
             })
-            .collect()
     }
 
     /// The prims composed as instances, in no particular order.

@@ -298,14 +298,16 @@ fn type_name(t: Option<&PropertyType>) -> Option<AttributeTypeName> {
         is_array: t.is_array(),
     })
 }
-/// The properties opinions of `prim` author, by name in byte order.
-fn properties<'a>(scene: &Scene<'a>, prim: PathId) -> Vec<layerstack::Property<'a>> {
-    let mut properties = scene
+/// Findings are sorted before publication, so checking properties can use
+/// the order of the composed index and skip USD presentation ordering.
+fn properties<'a>(
+    scene: &Scene<'a>,
+    prim: PathId,
+) -> impl Iterator<Item = layerstack::Property<'a>> {
+    scene
         .prim(prim)
-        .map(layerstack::Prim::authored_properties)
-        .unwrap_or_default();
-    sort::sort_unstable_by_key(&mut properties, |property| property.name());
-    properties
+        .into_iter()
+        .flat_map(layerstack::Prim::authored_properties_unordered)
 }
 /// The tokens of a token value, or of a token array value with `true`;
 /// `None` for another type.
@@ -340,10 +342,6 @@ fn allowed_tokens(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut 
     };
     for handle in properties(scene, prim) {
         let property = handle.path().property();
-        let Some(decl) = handle.declaration() else {
-            continue;
-        };
-        let schema = handle.definition();
         let Some(attribute) = handle.as_attribute() else {
             continue;
         };
@@ -358,8 +356,13 @@ fn allowed_tokens(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut 
         let Some(allowed) = allowed.filter(|list| !list.is_empty()) else {
             continue;
         };
-        let uniform =
-            schema.map_or(decl.variability, |s| s.variability) == layerstack::Variability::Uniform;
+        let Some(decl) = handle.declaration() else {
+            continue;
+        };
+        let uniform = handle
+            .definition()
+            .map_or(decl.variability, |s| s.variability)
+            == layerstack::Variability::Uniform;
         let times = if uniform {
             vec![Time::Default]
         } else {
@@ -409,14 +412,16 @@ fn prim_rule(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut Valid
                 if handle.kind() != PropertyKind::Attribute {
                     continue;
                 }
-                let declared = type_name(decl.type_name.as_ref());
-                let schema_type = type_name(schema.and_then(|s| s.type_name.as_ref()));
-                let expected = schema_type.clone().or_else(|| declared.clone());
+                let declared = decl.type_name.as_ref();
+                let schema_type = schema.and_then(|s| s.type_name.as_ref());
+                let expected = schema_type.or(declared);
                 for op in handle.opinions() {
                     if let Some(spec) = op.value().as_property() {
                         out.work.property_specs += 1;
-                        let authored = type_name(spec.type_name.as_ref());
-                        if authored != expected {
+                        let authored = spec.type_name.as_ref();
+                        if authored.map(PropertyType::type_name)
+                            != expected.map(PropertyType::type_name)
+                        {
                             push(
                                 out,
                                 rule,
@@ -430,10 +435,10 @@ fn prim_rule(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut Valid
                                 },
                                 None,
                                 ValidationProblemKind::AttributeTypeMismatch {
-                                    expected: expected.clone(),
-                                    declared: declared.clone(),
-                                    schema: schema_type.clone(),
-                                    authored,
+                                    expected: type_name(expected),
+                                    declared: type_name(declared),
+                                    schema: type_name(schema_type),
+                                    authored: type_name(authored),
                                 },
                             );
                         }
@@ -536,45 +541,69 @@ fn prim_rule(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut Valid
             }
         }
         #[cfg(feature = "usd-shade")]
-        BuiltinRule::MaterialBindingApi
-        | BuiltinRule::MaterialBindingPropertyKinds
-        | BuiltinRule::ShadingConnections => shade(scene, prim, rule, out),
+        BuiltinRule::MaterialBindingApi | BuiltinRule::MaterialBindingPropertyKinds => {
+            material_bindings(scene, prim, rule, out);
+        }
+        #[cfg(feature = "usd-shade")]
+        BuiltinRule::ShadingConnections => shading_connections(scene, prim, out),
         #[cfg(all(feature = "usd-shade", feature = "usd-geom"))]
         BuiltinRule::MaterialSubsetFamilies => material_subsets(scene, prim, rule, out),
         _ => (),
     }
 }
 #[cfg(feature = "usd-shade")]
-fn shade(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut ValidationReport) {
+fn material_bindings(
+    scene: &Scene<'_>,
+    prim: PathId,
+    rule: BuiltinRule,
+    out: &mut ValidationReport,
+) {
     let mut binding_rel = false;
+    for handle in properties(scene, prim).filter(|p| p.name().starts_with("material:binding")) {
+        if handle
+            .declaration()
+            .is_some_and(|d| d.kind == PropertyKind::Relationship)
+        {
+            binding_rel = true;
+        } else if rule == BuiltinRule::MaterialBindingPropertyKinds {
+            push(
+                out,
+                rule,
+                property_site(scene, prim, handle.path().property()),
+                None,
+                ValidationProblemKind::MaterialBindingNotRelationship,
+            );
+        }
+    }
+    if rule == BuiltinRule::MaterialBindingApi
+        && binding_rel
+        && !scene.has_api(prim, "MaterialBindingAPI", None)
+    {
+        push(
+            out,
+            rule,
+            prim_site(scene, prim),
+            None,
+            ValidationProblemKind::MissingMaterialBindingApi,
+        );
+    }
+}
+#[cfg(feature = "usd-shade")]
+fn shading_connections(scene: &Scene<'_>, prim: PathId, out: &mut ValidationReport) {
+    // Only built-in shading families and their derived types have shading ports.
+    if !(scene.is_a(prim, "Shader")
+        || scene.is_a(prim, "NodeGraph")
+        || scene.is_a(prim, "Material"))
+    {
+        return;
+    }
     for handle in properties(scene, prim) {
         let property = handle.path().property();
         let name = handle.name();
-        let kind = handle.declaration().map(|d| d.kind);
-        if name.starts_with("material:binding") {
-            binding_rel |= kind == Some(PropertyKind::Relationship);
-            if rule == BuiltinRule::MaterialBindingPropertyKinds
-                && kind != Some(PropertyKind::Relationship)
-            {
-                push(
-                    out,
-                    rule,
-                    property_site(scene, prim, property),
-                    None,
-                    ValidationProblemKind::MaterialBindingNotRelationship,
-                );
-            }
-        }
-        if rule != BuiltinRule::ShadingConnections
-            || !(name.starts_with("inputs:") || name.starts_with("outputs:"))
-            || kind != Some(PropertyKind::Attribute)
-        {
-            continue;
-        }
-        // Restrict to C++'s built-in shading families, not arbitrary custom ports.
-        if !(scene.is_a(prim, "Shader")
-            || scene.is_a(prim, "NodeGraph")
-            || scene.is_a(prim, "Material"))
+        if !(name.starts_with("inputs:") || name.starts_with("outputs:"))
+            || !handle
+                .declaration()
+                .is_some_and(|d| d.kind == PropertyKind::Attribute)
         {
             continue;
         }
@@ -592,7 +621,7 @@ fn shade(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut Validatio
                 if let Some(problem) = problem {
                     push(
                         out,
-                        rule,
+                        BuiltinRule::ShadingConnections,
                         property_site(scene, prim, property),
                         None,
                         problem,
@@ -600,18 +629,6 @@ fn shade(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut Validatio
                 }
             }
         }
-    }
-    if rule == BuiltinRule::MaterialBindingApi
-        && binding_rel
-        && !scene.has_api(prim, "MaterialBindingAPI", None)
-    {
-        push(
-            out,
-            rule,
-            prim_site(scene, prim),
-            None,
-            ValidationProblemKind::MissingMaterialBindingApi,
-        );
     }
 }
 #[cfg(all(feature = "usd-shade", feature = "usd-geom"))]

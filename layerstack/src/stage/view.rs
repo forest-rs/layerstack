@@ -880,6 +880,9 @@ mod tests {
         let paths: Vec<String> = world.properties().iter().map(ToString::to_string).collect();
         assert_eq!(paths, ["/World.note", "/World.size"]);
         assert_eq!(world.authored_properties().len(), 1);
+        let mut authored = world.authored_properties_unordered();
+        assert_eq!(authored.next().unwrap().name(), "note");
+        assert!(authored.next().is_none());
         let note = world.property("note").unwrap();
         assert!(note.is_custom() && note.is_authored());
         assert_eq!(note.prim().path(), world.path());

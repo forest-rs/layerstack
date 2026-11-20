@@ -1035,21 +1035,18 @@ impl Walk<'_, '_, '_> {
     /// order.
     fn walk(&mut self, roots: Vec<PathId>, parent: Option<&Arc<Graph>>) {
         let tasks = roots.iter().map(|&root| (root, parent.cloned())).collect();
+        if self.pool.in_order() {
+            // Serial indexing already follows join order. Move each result
+            // straight into the composition while its index is at hand.
+            let pool = self.pool;
+            pool.visit_serial(tasks, |prim| self.join(prim, None));
+            return;
+        }
         let indexed = self.pool.run(tasks);
         // Grown once, rather than rehashing as the prims join.
         self.out.prims.reserve(indexed.len());
         if self.with_dependencies {
             self.out.records.reserve(indexed.len());
-        }
-        // One thread indexes prims in the order they join: a prim, then
-        // the children it adds, depth first.
-        if self.pool.in_order() {
-            let mut ignored = Vec::new();
-            for prim in indexed {
-                self.join(prim, &mut ignored);
-                ignored.clear();
-            }
-            return;
         }
         // Found by place, so each prim moves once more, into its join.
         let places = Places::new(&indexed);
@@ -1061,14 +1058,13 @@ impl Walk<'_, '_, '_> {
                 .get(path)
                 .and_then(|at| indexed[at].take())
                 .expect("indexed prim");
-            self.join(prim, &mut pending);
+            self.join(prim, Some(&mut pending));
         }
     }
 
-    /// Joins the indexed `prim` into the composition, and pushes the
-    /// children to join after it, which are indexed, onto `pending`, last
-    /// first.
-    fn join(&mut self, prim: Indexed, pending: &mut Vec<PathId>) {
+    /// Joins the indexed `prim` into the composition. When joining results
+    /// from multiple workers, queues the children to join, last first.
+    fn join(&mut self, prim: Indexed, pending: Option<&mut Vec<PathId>>) {
         let Indexed {
             path,
             graph,
@@ -1190,7 +1186,7 @@ impl Walk<'_, '_, '_> {
             None if keep && !children.is_empty() => {
                 if deferred || descended {
                     let kept = out.children.entry(path).insert(children);
-                    if !deferred {
+                    if !deferred && let Some(pending) = pending {
                         pending.extend(kept.get().iter().rev().copied());
                     }
                     return;
@@ -1209,7 +1205,9 @@ impl Walk<'_, '_, '_> {
             self.walk(composed, graph.as_ref());
             return;
         }
-        pending.extend(composed.into_iter().rev());
+        if let Some(pending) = pending {
+            pending.extend(composed.into_iter().rev());
+        }
     }
     /// Gives each deferred instance its descendants: copies of its
     /// representative's, re-rooted, when their records do not depend on where

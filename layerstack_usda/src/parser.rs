@@ -66,7 +66,7 @@ pub(crate) fn parse_for_read<'a>(
     let mut parser =
         Parser::<false>::with_tokens(source, crate::token_source::TokenSource::streaming(source));
     parser.read = Some(Box::new(ReadMode {
-        lowering: LowerCtx::new(source),
+        lowering: LowerCtx::new(source, true),
         layer: import,
         root_order: None,
         in_variant: false,
@@ -2011,7 +2011,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                     if self.peek() == Some(TokenKind::RightBracket) || self.current().is_none() {
                         break;
                     }
-                    self.parse_path_ref();
+                    self.parse_relationship_target();
                     self.eat(TokenKind::Comma);
                     self.skip_unparsed(progress);
                 }
@@ -2019,7 +2019,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 let list_end = self.current_span().start;
                 self.builder.finish_node(list_end);
             } else if self.peek() == Some(TokenKind::LeftAngle) {
-                self.parse_path_ref();
+                self.parse_relationship_target();
             }
         }
 
@@ -2766,20 +2766,36 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
 
     /// Parses a path reference (`<...>`) into a `PathRef` node.
     fn parse_path_ref(&mut self) {
+        let _ = self.path_ref();
+    }
+
+    fn parse_relationship_target(&mut self) {
+        if let Some(path) = self.path_ref()
+            && let Some(read) = &mut self.read
+            && !read.in_variant
+            && path.text.starts_with('/')
+        {
+            read.layer.target(path);
+        }
+    }
+
+    fn path_ref(&mut self) -> Option<crate::lower::OrdinaryPath<'a>> {
         self.eat_trivia();
         let start = self.current_span().start;
-        self.builder.start_node(SyntaxKind::PathRef, start);
-
         if !LOSSLESS
             && self.peek() == Some(TokenKind::LeftAngle)
-            && self.tokens.plain_path(self.pos, start)
+            && let Some(path) = self.tokens.ordinary_path(self.pos, start)
         {
             self.seek(self.pos + 2);
             self.line_break = false;
-            self.builder.finish_node(self.current_span().start);
-            return;
+            self.builder.token(
+                SyntaxKind::PathRef,
+                Span::new(start, self.current_span().start),
+            );
+            return Some(path);
         }
 
+        self.builder.start_node(SyntaxKind::PathRef, start);
         if self.peek() == Some(TokenKind::LeftAngle) {
             self.bump(); // <
         }
@@ -2795,6 +2811,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
 
         let end = self.current_span().start;
         self.builder.finish_node(end);
+        None
     }
 
     /// Parses a namespaced name `foo:bar:baz`.

@@ -865,7 +865,7 @@ mod tests {
         let body = |count| {
             let mut s = String::from("#usda 1.0\ndef \"Root\" {\n");
             for i in 0..count {
-                s.push_str(&format!("def \"C{i}\" {{ rel r = </Root> }}\n"));
+                s.push_str(&format!("def \"C{i}\" {{ rel r = </Root>; }}\n"));
             }
             s.push_str("}\n");
             s
@@ -902,6 +902,44 @@ def "A" {
 reorder rootPrims = ["A"]
 "#,
         );
+    }
+
+    #[test]
+    fn checked_relationship_targets_keep_prim_and_token_identity() {
+        let source = r#"#usda 1.0
+def "World" {
+    rel first = [</Root>, </Root.attr>, </A/π>, </A/β.property:port>]
+    rel mixed = [</A/Root>, <../Other>, </A.r[/B].attr>]
+    rel following = [</Other/Leaf>, </A/β>, </A/β.property:port>]
+    variantSet "shape" = {
+        "round" { rel inside = [</A/π>, <Child>]; }
+    }
+}
+"#;
+        compare(source);
+        let reference = InMemoryStore::default();
+        let parsed = crate::parser::parse(source);
+        let expected = crate::emit::emit(
+            &parsed.layer,
+            LayerId(1),
+            reference.tokens(),
+            reference.paths(),
+            &mut NoAssets,
+        );
+        let actual = InMemoryStore::default();
+        let read = read_usda(
+            source,
+            LayerId(1),
+            actual.tokens(),
+            actual.paths(),
+            &mut NoAssets,
+        );
+        assert!(
+            !read.has_errors(),
+            "{:?}",
+            read.diagnostics().collect::<Vec<_>>()
+        );
+        assert_eq!(read.emitted.layer, expected.layer);
     }
 
     #[test]

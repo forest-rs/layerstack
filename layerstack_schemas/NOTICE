@@ -22,5 +22,16 @@ This product includes software developed at:
 
 Pixar (http://www.pixar.com/).
 
+The NodeDef excerpts in `materialx/standard.mtlx` and their generated
+bindings in `src/materialx/standard.rs` derive from the Academy Software
+Foundation's MaterialX v1.39.5 (7b64921ef1d42f2d57871e9d2c43dc11f041f26b),
+under Apache-2.0. See `LICENSE-APACHE`.
+Copyright Contributors to the MaterialX Project
+
+ND_image_color3 from
+https://github.com/AcademySoftwareFoundation/MaterialX/blob/7b64921ef1d42f2d57871e9d2c43dc11f041f26b/libraries/stdlib/stdlib_defs.mtlx
+ND_open_pbr_surface_surfaceshader from
+https://github.com/AcademySoftwareFoundation/MaterialX/blob/7b64921ef1d42f2d57871e9d2c43dc11f041f26b/libraries/bxdf/open_pbr_surface.mtlx
+
 The rest of this crate is copyright the LayerStack Authors and licensed
 under Apache-2.0 OR MIT; see `LICENSE-APACHE` and `LICENSE-MIT`.

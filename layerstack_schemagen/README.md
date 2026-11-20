@@ -91,15 +91,25 @@ cargo run -p layerstack_schemagen -- --materialx libraries/nodes.mtlx --node ND_
 ```
 
 Repeat `--node` to select more NodeDefs. `generate_materialx_library` is the
-build-script counterpart. It needs `python3` with its standard XML reader only
-during generation. Local whole-file XIncludes and NodeDef inheritance are
-resolved; inherited defaults and port types are retained. Numeric, boolean,
-string and filename ports are supported. Unsupported types, nonliteral defaults,
-missing definitions, include/inheritance cycles and incompatible redeclarations
-fail generation. Unselected definitions do not expand the generated library.
+build-script counterpart. Generation needs `python3` with its standard XML
+reader. The CLI uses `rustfmt` so `--check` can verify a checked-in module.
+Regenerate existing CLI output once before using `--check` with this version.
+Local whole-file XIncludes and NodeDef inheritance are resolved. Supported port
+types include numeric scalars, vectors, colors, matrices, booleans, strings,
+filenames and `surfaceshader`. Unsupported types, invalid defaults, missing
+definitions, include or inheritance cycles, incompatible redeclarations and
+generated Rust name collisions fail generation.
 
-This is interface generation, not MaterialX graph import/export, shader
-compilation, implementation selection or rendering. `MaterialXConfigAPI` alone
-does not supply those features. Generated identifiers require a renderer that
-recognizes the selected NodeDefs. OSL parameter introspection remains a separate
-adapter; no OSL toolchain is required by this generator.
+Each typed node has a `DEFINITION` constant with the MaterialX name, direction,
+type and default of every port, alongside its USD property name and type. A
+sole `surfaceshader` output named `out` becomes `token outputs:surface` for
+compatibility with the material terminal authored by OpenUSD's `usdMtlx`
+reader. Other output names are retained. Inputs with literal defaults have
+typed default accessors. The descriptor preserves `defaultgeomprop` and
+`defaultinput` references, along with any output fallback literal. Regenerated
+modules use the `layerstack_schemas::materialx` descriptor types, available with
+the existing `usd-shade` feature.
+
+This mode generates authoring interfaces. Rendering the authored shaders
+requires a renderer that recognizes the selected NodeDefs. OSL parameter
+introspection uses a separate adapter.

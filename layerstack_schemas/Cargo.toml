@@ -6,8 +6,9 @@ edition.workspace = true
 rust-version.workspace = true
 # The generated tables derive from OpenUSD's schema definitions, under the
 # Tomorrow Open Source Technology License 1.0 (`LICENSE-TOST-1.0`,
-# `NOTICE`); the hand-written code is Apache-2.0 OR MIT.
-license = "(Apache-2.0 OR MIT) AND LicenseRef-TOST-1.0"
+# `NOTICE`). The MaterialX NodeDefs and derived bindings are Apache-2.0.
+# The hand-written code may also be used under MIT.
+license = "Apache-2.0 AND LicenseRef-TOST-1.0"
 repository.workspace = true
 readme = "README.md"
 documentation = "https://docs.rs/layerstack_schemas"
@@ -15,6 +16,8 @@ keywords = ["usd", "openusd", "schemas", "scene-description"]
 categories = ["graphics"]
 include = [
     "src/**",
+    "materialx/generate.sh",
+    "materialx/standard.mtlx",
     "Cargo.toml",
     "README.md",
     "CHANGELOG.md",

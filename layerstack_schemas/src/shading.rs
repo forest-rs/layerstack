@@ -40,7 +40,10 @@ pub use network::{
     MaterialRevisions,
 };
 
-use crate::{PrimView, Scene, usd_shade::Material};
+use crate::{
+    PrimView, Scene, SchemaEdit,
+    usd_shade::{Material, MaterialEdit},
+};
 use alloc::{format, string::String, vec::Vec};
 use layerstack::{PathId, PropertyKind, PropertyPath, TargetPath};
 
@@ -471,5 +474,28 @@ impl Material<'_> {
             }
         }
         result
+    }
+}
+
+impl MaterialEdit {
+    /// Creates the token-valued surface terminal for a render context, following
+    /// OpenUSD's `UsdShadeMaterial::CreateSurfaceOutput`. Use an empty context
+    /// for the universal surface output. AOUSD Core §12.4 (connections).
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`PortError`] if the material is missing, the context is an
+    /// invalid USD namespace, or the existing property has an incompatible type.
+    pub fn create_surface_output(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        context: &str,
+    ) -> Result<PortEdit, PortError> {
+        let ty = layerstack::PropertyType::parse("token").expect("registered USD type");
+        if context.is_empty() {
+            self.create_output(edit, "surface", ty)
+        } else {
+            self.create_output(edit, &format!("{context}:surface"), ty)
+        }
     }
 }

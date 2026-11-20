@@ -646,6 +646,26 @@ cargo run -p layerstack_schemagen -- --pxr <site-packages>/pxr --source <OpenUSD
 
 `--check` fails instead when the checked-in files are stale.
 
+### MaterialX node authoring
+
+With `usd-mtlx`, `materialx::ImageColor3` and `materialx::OpenPbrSurface`
+provide typed views and edit handles for the MaterialX 1.39.5 image and
+OpenPBR Surface 1.1.1 NodeDefs. Define each node with a `SchemaEdit`. Set the
+image's file with `set_file` and connect its `create_out_output` to
+`create_base_color_input`. Connect `OpenPbrSurfaceEdit::create_surface_output`
+to the material's terminal created with
+`MaterialEdit::create_surface_output(&mut edit, "mtlx")`.
+Literal NodeDef defaults are available through associated `_default`
+functions. They are only authored when a caller explicitly writes a value.
+
+The bindings use the pinned `materialx/standard.mtlx` NodeDef excerpts
+(see `NOTICE`). Regenerate from the workspace root with Python 3, rustfmt
+and cached Cargo dependencies. Add `--check` to verify the checked-in bindings.
+
+```sh
+bash layerstack_schemas/materialx/generate.sh
+```
+
 ### Shading values and port authoring
 
 `Scene::value_sources` follows connections through material and node-graph
@@ -727,8 +747,9 @@ See [CHANGELOG.md](CHANGELOG.md) for release status.
 The generated tables and views in `src/generated` derive from OpenUSD's schema
 definitions and are under the Tomorrow Open Source Technology License 1.0
 (`LICENSE-TOST-1.0`, `NOTICE`). The private matrix decomposition code adapts
-OpenUSD Gf under the same license. The rest of the crate is under Apache-2.0 OR
-MIT (`LICENSE-APACHE`, `LICENSE-MIT`).
+OpenUSD Gf under the same license. The MaterialX NodeDef excerpts and their
+generated bindings are under Apache-2.0. The rest of the crate is under
+Apache-2.0 OR MIT (`LICENSE-APACHE`, `LICENSE-MIT`).
 
 With `usd-skel`, `Skeleton::query` prepares a validated parent-first joint
 forest and sparse animation mapping. Queries compute local, skeleton-space and

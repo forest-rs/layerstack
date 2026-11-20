@@ -14,16 +14,17 @@ use std::path::Path;
 
 #[derive(Debug)]
 pub(crate) struct Node {
-    id: String,
-    ports: Vec<NodePort>,
+    pub(crate) id: String,
+    pub(crate) ports: Vec<NodePort>,
 }
 #[derive(Debug)]
-struct NodePort {
-    name: String,
-    ty: PropertyType,
-    variability: Variability,
-    default: Option<Value>,
-    doc: String,
+pub(crate) struct NodePort {
+    pub(crate) name: String,
+    pub(crate) ty: PropertyType,
+    pub(crate) variability: Variability,
+    pub(crate) default: Option<Value>,
+    pub(crate) doc: String,
+    pub(crate) materialx: Option<crate::materialx::PortDefinition>,
 }
 
 pub(crate) fn read(
@@ -97,6 +98,7 @@ pub(crate) fn read_store(
                     .and_then(|attribute| attribute.authored_value(Time::Default))
                     .map(|value| value.value),
                 doc,
+                materialx: None,
             });
         }
         nodes.push(Node { id, ports });
@@ -230,7 +232,10 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
     } else {
         "crate"
     };
-    let library = if external {
+    let materialx = model.nodes.iter().any(is_materialx);
+    let library = if materialx {
+        "Selected MaterialX"
+    } else if external {
         "Library-defined"
     } else {
         "OpenUSD's standard"
@@ -257,7 +262,13 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
     } else {
         crate::emit::header(model)
     };
-    out.push_str(&format!("\n//! {library} shader nodes, keyed by `info:id`.\n//! Inputs read authored values at the requested time; definition defaults are\n//! explicit associated functions. These views do not evaluate shaders or follow\n//! input connections. Port creation uses ordinary shading transactions.\n//! Spec: AOUSD Core §7.6.4.1 (typed attributes), §12.3 (value resolution),\n//! §12.4 (connections). Node identifiers and defaults are OpenUSD usdShaders definitions.\n#![allow(clippy::doc_markdown, clippy::too_long_first_doc_paragraph, reason = \"documentation is copied verbatim from OpenUSD\")]\n\n{alloc_decl}use core::ops::Deref;\n@LAYERSTACK_IMPORTS@\n{vec_import}use {schema_crate}::{{CannotEdit, Scene, SchemaEdit}};\nuse {schema_crate}::shading::{{Port, PortEdit, PortError}};\nuse {schema_crate}::usd_shade::{{Shader, ShaderEdit, NodeDefApiImplementationSource}};\n"));
+    let source = if materialx {
+        "Node interfaces are copied from the selected MaterialX NodeDefs."
+    } else {
+        "Node identifiers and defaults are OpenUSD usdShaders definitions."
+    };
+    let doc_source = if materialx { "MaterialX" } else { "OpenUSD" };
+    out.push_str(&format!("\n//! {library} shader nodes, keyed by `info:id`.\n//! Inputs read authored values at the requested time; definition defaults are\n//! explicit associated functions. These views do not evaluate shaders or follow\n//! input connections. Port creation uses ordinary shading transactions.\n//! Spec: AOUSD Core §7.6.4.1 (typed attributes), §12.3 (value resolution),\n//! §12.4 (connections). {source}\n#![allow(clippy::doc_markdown, clippy::too_long_first_doc_paragraph, reason = \"documentation is copied verbatim from {doc_source}\")]\n\n{alloc_decl}use core::ops::Deref;\n@LAYERSTACK_IMPORTS@\n{vec_import}use {schema_crate}::{{CannotEdit, Scene, SchemaEdit}};\nuse {schema_crate}::shading::{{Port, PortEdit, PortError}};\nuse {schema_crate}::usd_shade::{{Shader, ShaderEdit, NodeDefApiImplementationSource}};\n"));
     // Include implementation imports and referenced prelude types in the same
     // namespace as node structs and their authoring handles.
     let mut node_names: std::collections::BTreeSet<String> = [
@@ -287,6 +298,13 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
     .into_iter()
     .map(String::from)
     .collect();
+    if materialx {
+        node_names.extend(["MaterialXNode", "MaterialXPort", "PortKind"].map(String::from));
+        let _ = writeln!(
+            out,
+            "use {schema_crate}::materialx::{{MaterialXNode, MaterialXPort}};\nuse {schema_crate}::shading::PortKind;"
+        );
+    }
     for node in &model.nodes {
         let name = crate::views::pascal(&crate::views::snake(
             node.id.strip_prefix("Usd").unwrap_or(&node.id),
@@ -300,6 +318,9 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
             out,
             "\n/// The {standard}`{id}` shader node.\n#[derive(Clone, Copy, Debug)]\npub struct {name}<'a> {{ shader: Shader<'a> }}\nimpl<'a> Deref for {name}<'a> {{ type Target = Shader<'a>; fn deref(&self) -> &Self::Target {{ &self.shader }} }}\nimpl<'a> {name}<'a> {{\n    /// The shader's definition identifier.\n    pub const ID: &'static str = {id:?};\n    /// Reads an identifier-based Shader whose composed `info:id` matches.\n    #[must_use]\n    pub fn get(scene: &Scene<'a>, path: impl layerstack::PrimPathArg) -> Option<Self> {{\n        let shader = Shader::get(scene, path)?;\n        let definition = shader.node_def_api();\n        (definition.id() == Some(Self::ID) && definition.effective_implementation_source() == NodeDefApiImplementationSource::Id).then_some(Self {{ shader }})\n    }}\n    /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.\n    ///\n    /// # Errors\n    ///\n    /// [`CannotEdit`] for a path beneath an instance or in a prototype; nothing is authored.\n    pub fn define(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<{name}Edit, CannotEdit> {{\n        let shader = Shader::define(edit, path)?;\n        shader.node_def_api().set_id(edit, Self::ID);\n        shader.node_def_api().set_implementation_source(edit, NodeDefApiImplementationSource::Id);\n        Ok({name}Edit {{ shader }})\n    }}"
         );
+        if is_materialx(node) {
+            crate::materialx::render_definition(&mut out, node, schema_crate);
+        }
         let mut setters = String::new();
         let mut methods: std::collections::BTreeSet<String> = [
             "new",
@@ -453,6 +474,12 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
     ])
 }
 
+fn is_materialx(node: &Node) -> bool {
+    node.ports
+        .first()
+        .is_some_and(|port| port.materialx.is_some())
+}
+
 /// The `use` items the generated views need: `PathId` and `PropertyType`,
 /// and `Value`, `Arc` and (outside the schema crate) `Box` where the views
 /// name them unqualified.
@@ -595,7 +622,7 @@ fn matrix_literal(matrix: &[f64], width: usize) -> String {
     )
 }
 
-fn finite_default(value: &Value) -> bool {
+pub(crate) fn finite_default(value: &Value) -> bool {
     match value {
         Value::Float(v) => v.is_finite(),
         Value::Double(v) | Value::TimeCode(v) | Value::Duration(v) => v.is_finite(),
@@ -637,6 +664,7 @@ mod tests {
                     variability: Variability::Varying,
                     default: None,
                     doc: doc.into(),
+                    materialx: None,
                 }],
             }],
         };
@@ -661,6 +689,7 @@ mod tests {
                             Value::string("b\"c"),
                         ])),
                         doc: String::new(),
+                        materialx: None,
                     }],
                 }],
             };

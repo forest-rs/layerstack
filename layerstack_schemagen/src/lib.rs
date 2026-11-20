@@ -502,7 +502,8 @@ pub fn generate_kind_library(
 /// Uses `python3` and its standard XML reader during generation only. Local
 /// whole-file `XIncludes` and `NodeDef` inheritance are resolved. Generated
 /// `DEFINITION` constants preserve the `MaterialX` port names, directions, types
-/// and defaults alongside the USD property names and types. The sole
+/// and defaults alongside the USD property names and types. The module's
+/// `NODE_DEFINITIONS` collects all selected interfaces in identifier order. The sole
 /// `surfaceshader` output named `out` uses the USD material terminal name
 /// `outputs:surface`. Literal input defaults are available as typed associated
 /// functions. Geometry property defaults and output pass-through defaults are

@@ -14,9 +14,25 @@ output=layerstack_schemas/src/materialx/standard.rs
 tmp=$(mktemp -d)
 trap 'rm -rf -- "$tmp"' EXIT
 
+definitions=layerstack_schemas/materialx/standard.mtlx
+# Non-default versions in the bundled library supply inherited ports.
+names=$(python3 - "$definitions" <<'XML'
+import sys
+import xml.etree.ElementTree as ET
+
+for definition in ET.parse(sys.argv[1]).getroot().findall("nodedef"):
+    if "version" not in definition.attrib or definition.get("isdefaultversion") == "true":
+        print(definition.attrib["name"])
+XML
+)
+nodes=()
+while IFS= read -r name; do
+    nodes+=(--node "$name")
+done <<< "$names"
+
 cargo run --locked -p layerstack_schemagen -- \
-    --materialx layerstack_schemas/materialx/standard.mtlx \
-    --node ND_image_color3 --node ND_open_pbr_surface_surfaceshader \
+    --materialx "$definitions" \
+    "${nodes[@]}" \
     --out "$tmp/generated.rs"
 
 {

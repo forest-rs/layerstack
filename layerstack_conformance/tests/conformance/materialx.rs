@@ -9,7 +9,10 @@ use layerstack::{
 };
 use layerstack_schemas::{
     Scene, SchemaEdit,
-    materialx::{ImageColor3, MaterialXDefault, MaterialXPort, OpenPbrSurface},
+    materialx::{
+        ExtractVector3, ImageColor3, ImageVector3, MaterialXDefault, MaterialXPort, NormalMap,
+        OpenPbrSurface, Place2dVector2, TexcoordVector2,
+    },
     shading::{ConnectionModification::Replace, PortKind},
     usd_shade::Material,
 };
@@ -18,7 +21,7 @@ use std::sync::Arc;
 
 const LAYER: LayerId = LayerId(1);
 
-fn textured_material() -> (InMemoryStore, LiveStage, PathId, PathId, PathId) {
+fn textured_material(with_packed_maps: bool) -> (InMemoryStore, LiveStage, PathId, PathId, PathId) {
     let mut store = InMemoryStore::default();
     store.insert_layer(Layer::new(LAYER));
     let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
@@ -33,6 +36,18 @@ fn textured_material() -> (InMemoryStore, LiveStage, PathId, PathId, PathId) {
     let material_path = store.path("/Paint");
     let albedo_path = store.path("/Paint/Albedo");
     let surface_path = store.path("/Paint/Surface");
+    let map_paths = with_packed_maps.then(|| {
+        [
+            "/Paint/Texcoord",
+            "/Paint/Placement",
+            "/Paint/Packed",
+            "/Paint/Roughness",
+            "/Paint/Metalness",
+            "/Paint/NormalImage",
+            "/Paint/NormalMap",
+        ]
+        .map(|path| store.path(path))
+    });
     let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LAYER));
     let material = Material::define(&mut edit, material_path).unwrap();
     let albedo = ImageColor3::define(&mut edit, albedo_path).unwrap();
@@ -52,6 +67,91 @@ fn textured_material() -> (InMemoryStore, LiveStage, PathId, PathId, PathId) {
         .unwrap()
         .connect_to_source(&mut edit, &output, Replace)
         .unwrap();
+
+    if let Some(
+        [
+            uv,
+            placement,
+            packed,
+            roughness,
+            metalness,
+            normal_image,
+            normal_map,
+        ],
+    ) = map_paths
+    {
+        let uv = TexcoordVector2::define(&mut edit, uv).unwrap();
+        let placement = Place2dVector2::define(&mut edit, placement).unwrap();
+        let packed = ImageVector3::define(&mut edit, packed).unwrap();
+        let roughness = ExtractVector3::define(&mut edit, roughness).unwrap();
+        let metalness = ExtractVector3::define(&mut edit, metalness).unwrap();
+        let normal_image = ImageVector3::define(&mut edit, normal_image).unwrap();
+        let normal_map = NormalMap::define(&mut edit, normal_map).unwrap();
+
+        uv.set_index(&mut edit, 0).unwrap();
+        placement.set_scale(&mut edit, [2.0, 3.0]).unwrap();
+        let uv = uv.create_out_output(&mut edit).unwrap();
+        placement
+            .create_texcoord_input(&mut edit)
+            .unwrap()
+            .connect_to_source(&mut edit, uv, Replace)
+            .unwrap();
+        let placement = placement.create_out_output(&mut edit).unwrap();
+        for texcoord in [
+            albedo.create_texcoord_input(&mut edit).unwrap(),
+            packed.create_texcoord_input(&mut edit).unwrap(),
+            normal_image.create_texcoord_input(&mut edit).unwrap(),
+        ] {
+            texcoord
+                .connect_to_source(&mut edit, &placement, Replace)
+                .unwrap();
+        }
+
+        packed
+            .set_file(&mut edit, "metallic_roughness.png")
+            .unwrap();
+        let packed = packed.create_out_output(&mut edit).unwrap();
+        // Green holds roughness and blue holds metalness in the packed image.
+        for (extract, channel, input) in [
+            (
+                roughness,
+                1,
+                surface.create_specular_roughness_input(&mut edit).unwrap(),
+            ),
+            (
+                metalness,
+                2,
+                surface.create_base_metalness_input(&mut edit).unwrap(),
+            ),
+        ] {
+            extract.set_index(&mut edit, channel).unwrap();
+            extract
+                .create_in_value_input(&mut edit)
+                .unwrap()
+                .connect_to_source(&mut edit, &packed, Replace)
+                .unwrap();
+            let channel = extract.create_out_output(&mut edit).unwrap();
+            input
+                .connect_to_source(&mut edit, channel, Replace)
+                .unwrap();
+        }
+
+        normal_image.set_file(&mut edit, "normal.png").unwrap();
+        normal_map.set_scale(&mut edit, 0.5).unwrap();
+        let samples = normal_image.create_out_output(&mut edit).unwrap();
+        normal_map
+            .create_in_value_input(&mut edit)
+            .unwrap()
+            .connect_to_source(&mut edit, samples, Replace)
+            .unwrap();
+        let normal = normal_map.create_out_output(&mut edit).unwrap();
+        surface
+            .create_geometry_normal_input(&mut edit)
+            .unwrap()
+            .connect_to_source(&mut edit, normal, Replace)
+            .unwrap();
+    }
+
     let transaction = edit.finish();
     live.apply(&mut store, &transaction).unwrap();
     (store, live, material_path, albedo_path, surface_path)
@@ -59,7 +159,7 @@ fn textured_material() -> (InMemoryStore, LiveStage, PathId, PathId, PathId) {
 
 #[test]
 fn standard_nodes_author_a_textured_openpbr_surface() {
-    let (store, live, material_path, albedo_path, surface_path) = textured_material();
+    let (store, live, material_path, albedo_path, surface_path) = textured_material(false);
     let scene = Scene::new(live.stage(), &store);
     let albedo = ImageColor3::get(&scene, albedo_path).unwrap();
     let surface = OpenPbrSurface::get(&scene, surface_path).unwrap();
@@ -116,6 +216,17 @@ fn standard_nodes_author_a_textured_openpbr_surface() {
 
 #[test]
 fn openusd_reopens_textured_openpbr_usda_and_usdc() {
+    let (store, _, _, _, _) = textured_material(false);
+    verify_openusd(&store, "sparse");
+}
+
+#[test]
+fn openusd_reopens_packed_openpbr_usda_and_usdc() {
+    let (store, _, _, _, _) = textured_material(true);
+    verify_openusd(&store, "packed");
+}
+
+fn verify_openusd(store: &InMemoryStore, graph: &str) {
     let explicit_python = std::env::var_os("LAYERSTACK_USD_PYTHON");
     let python = explicit_python.as_deref().unwrap_or("python3".as_ref());
     let available = Command::new(python)
@@ -131,9 +242,8 @@ fn openusd_reopens_textured_openpbr_usda_and_usdc() {
         return;
     }
 
-    let (store, _, _, _, _) = textured_material();
     let layer = store.layer(LAYER).unwrap();
-    let dir = fresh_scratch_dir("materialx_authoring");
+    let dir = fresh_scratch_dir(&format!("materialx_authoring_{graph}"));
     let usda = dir.join("paint.usda");
     let usdc = dir.join("paint.usdc");
     std::fs::write(
@@ -151,6 +261,7 @@ fn openusd_reopens_textured_openpbr_usda_and_usdc() {
             "-c",
             include_str!("../../scripts/materialx_authoring_oracle.py"),
         ])
+        .arg(graph)
         .args([&usda, &usdc])
         .output()
         .unwrap();

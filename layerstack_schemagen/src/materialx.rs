@@ -358,6 +358,9 @@ mod tests {
             </materialx>"#,
         );
         let conventional = source.generate(&["ND_legacy", "ND_explicit"]).unwrap();
+        assert!(conventional.ends_with(
+            "pub const NODE_DEFINITIONS: &[MaterialXNode] = &[\n    NdExplicit::DEFINITION,\n    NdLegacy::DEFINITION,\n];\n"
+        ));
         let descriptor = r#"name: "out", direction: PortKind::Output, type_name: "surfaceshader", usd_name: "outputs:surface", usd_type_name: "token", default: None"#;
         assert_eq!(conventional.matches(descriptor).count(), 2);
         assert_eq!(

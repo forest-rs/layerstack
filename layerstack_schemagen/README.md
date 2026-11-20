@@ -101,7 +101,8 @@ definitions, include or inheritance cycles, incompatible redeclarations and
 generated Rust name collisions fail generation.
 
 Each typed node has a `DEFINITION` constant with the MaterialX name, direction,
-type and default of every port, alongside its USD property name and type. A
+type and default of every port, alongside its USD property name and type.
+The module's `NODE_DEFINITIONS` lists every selected interface. A
 sole `surfaceshader` output named `out` becomes `token outputs:surface` for
 compatibility with the material terminal authored by OpenUSD's `usdMtlx`
 reader. Other output names are retained. Inputs with literal defaults have

@@ -368,6 +368,32 @@ impl Stage {
         }
         result
     }
+
+    /// Whether replaced prims may change instance identity, membership or
+    /// descendant record sharing. The caller checks traversal changes when
+    /// the merge also replaces visible child lists.
+    pub(super) fn prototype_indexes_changed(
+        &self,
+        paths: &crate::PathInterner,
+        partial: &Self,
+        replaced: &[PathId],
+    ) -> bool {
+        let had_instances = !self.instances.is_empty();
+        if !had_instances && partial.instances.is_empty() {
+            return false;
+        }
+        // Traversal checks the pseudo-root's visibility before walking the
+        // active child lists. Its index can change even if its children do not.
+        let root = paths.lookup(&Path::root());
+        replaced.iter().any(|&path| {
+            partial.instances.contains(&path)
+                || had_instances
+                    && (Some(path) == root && self.is_active(path) != partial.is_active(path)
+                        || core::iter::successors(Some(path), |&at| paths.parent(at))
+                            .any(|at| self.instances.contains(&at)))
+        })
+    }
+
     /// Groups the stage's instances into prototypes by [`InstanceKey`], in
     /// traversal order, reading each root's [`InstanceIndexKey`] from
     /// `keys` when composition found it, and shares equal descendant
@@ -380,6 +406,10 @@ impl Stage {
         store: &dyn LayerStore,
         mut keys: InstanceIndexKeys,
     ) {
+        #[cfg(test)]
+        {
+            self.prototype_preparations += 1;
+        }
         let mut table = PrototypeTable::default();
         if self.instances.is_empty() {
             self.prototypes = table;
@@ -487,7 +517,8 @@ impl Stage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{InMemoryStore, Layer, LiveStage, PrimSpec, Reference};
+    use crate::edit::Transaction;
+    use crate::{EditTarget, InMemoryStore, Layer, LiveStage, PrimSpec, Reference, SublayerEntry};
     use alloc::vec;
 
     fn scene() -> (InMemoryStore, Vec<PathId>, PathId, TokenId) {
@@ -746,6 +777,162 @@ mod tests {
                     .collect(),
             })
             .collect()
+    }
+
+    fn assert_fresh_prototypes(stage: &Stage, store: &mut InMemoryStore) {
+        let fresh = Stage::compose(store, LayerId(1), StageOptions::default());
+        assert_eq!(inventory(stage), inventory(&fresh));
+        assert_eq!(stage.composition_storage(), fresh.composition_storage());
+    }
+
+    #[test]
+    fn unrelated_index_and_subtree_edits_keep_prototypes() {
+        let (mut store, _, _, _) = scene();
+        let root = LayerId(1);
+        let weaker = LayerId(3);
+        let property = store.property_path("/Settings.label");
+        let spec = |text| {
+            PropertySpec::typed_attribute(PropertyType::parse("string").unwrap())
+                .with_default(Value::string(text))
+        };
+        let mut layer = Layer::new(weaker);
+        layer.insert_prim(
+            property.prim_path(),
+            PrimSpec::def().with_property(property.property(), spec("original")),
+        );
+        store.insert_layer(layer);
+        store
+            .layers
+            .get_mut(&root)
+            .unwrap()
+            .sublayers_mut()
+            .push(SublayerEntry::new(weaker));
+        let mut live = LiveStage::compose(&mut store, root, StageOptions::default());
+        assert_eq!(
+            live.stage().prototypes().next().unwrap().instances().len(),
+            100
+        );
+
+        // An external opinion edit replaces the index alone.
+        store
+            .layers
+            .get_mut(&weaker)
+            .unwrap()
+            .set_property(property, spec("source edit"));
+        assert_eq!(live.notify_changed_layers(&store), [weaker]);
+        assert_eq!(live.recompose(&mut store), [property.prim_path()]);
+        assert_eq!(live.stage().prototype_preparations, 1);
+        assert_fresh_prototypes(live.stage(), &mut store);
+
+        // The first stronger override creates a prim spec as well as the property.
+        let mut edit = Transaction::new();
+        edit.set_default(
+            EditTarget::for_layer(root).property(property),
+            Value::string("override"),
+        );
+        live.apply(&mut store, &edit).unwrap();
+        let work = live.recomposition_work();
+        assert!(
+            !work.full_rebuild && work.replaced_prim_indexes > 0,
+            "{work:?}"
+        );
+        assert_eq!(live.stage().prototype_preparations, 1);
+        assert_fresh_prototypes(live.stage(), &mut store);
+    }
+
+    #[test]
+    fn changed_instance_indexes_and_members_refresh_prototypes() {
+        let (mut store, instances, _, _) = scene();
+        let root = LayerId(1);
+        let asset = LayerId(2);
+        let property = store.property_path("/Asset/Child.newValue");
+        let mut live = LiveStage::compose(&mut store, root, StageOptions::default());
+        store.layers.get_mut(&asset).unwrap().set_property(
+            property,
+            PropertySpec::attribute().with_default(Value::Int(19)),
+        );
+        // Every instance's descendant gets a new composed record.
+        assert_eq!(live.notify_changed_layers(&store), [asset]);
+        let paths = live.recompose(&mut store);
+        assert_eq!(paths.len(), instances.len());
+        assert_eq!(live.stage().prototype_preparations, 2);
+        assert_fresh_prototypes(live.stage(), &mut store);
+
+        let mut edit = Transaction::new();
+        edit.set_instanceable(EditTarget::for_layer(root).prim(instances[0]), false);
+        live.apply(&mut store, &edit).unwrap();
+        assert!(!live.recomposition_work().full_rebuild);
+        assert!(!live.stage().is_instance(instances[0]));
+        assert_eq!(live.stage().prototype_preparations, 3);
+        assert_fresh_prototypes(live.stage(), &mut store);
+    }
+
+    #[test]
+    fn reordered_boundary_refreshes_prototype_order_and_representative() {
+        use alloc::collections::BTreeSet;
+
+        let (mut store, instances, _, _) = scene();
+        let root_layer = LayerId(1);
+        let options = StageOptions::default();
+        let errors = [store.path("/ErrorA"), store.path("/ErrorB")];
+        let missing = store.path("/Missing");
+        let layer = store.layers.get_mut(&root_layer).unwrap();
+        for path in errors {
+            layer.insert_prim(
+                path,
+                PrimSpec::def().with_reference(Reference::with_asset(
+                    LayerId(2),
+                    missing,
+                    "asset.usda",
+                )),
+            );
+        }
+        let mut stage = Stage::compose(&mut store, root_layer, options.clone());
+        let root = store.path("/");
+        let first = |stage: &Stage| stage.prototypes().next().unwrap().instances()[0];
+        assert_eq!(first(&stage), instances[0]);
+        let error_paths = |stage: &Stage| {
+            stage
+                .composition_errors()
+                .iter()
+                .filter_map(CompositionError::prim)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(error_paths(&stage), errors);
+        let order = ["I1", "I0", "ErrorB", "ErrorA"].map(|name| store.tokens().intern(name));
+        store
+            .layers
+            .get_mut(&root_layer)
+            .unwrap()
+            .insert_prim(root, PrimSpec::default().with_prim_order(order.to_vec()));
+        // Only the pseudo-root and its complete child order are replaced.
+        let boundaries = Boundaries {
+            parents: [root].into_iter().collect(),
+            retained: false,
+        };
+        let child_index = crate::prim_indexing::ChildIndex::default();
+        let partial = Stage::compose_local_paths(
+            &mut store,
+            root_layer,
+            options,
+            BTreeSet::from([root]),
+            &boundaries,
+            &child_index,
+        );
+        let orders = stage.merge_local_subtrees(
+            &store,
+            partial,
+            &[root],
+            &[],
+            vec![(root, Vec::new())],
+            &[],
+            &child_index,
+        );
+        assert_eq!(orders.composed, 1);
+        assert_eq!(first(&stage), instances[1]);
+        assert_eq!(error_paths(&stage), [errors[1], errors[0]]);
+        assert_eq!(stage.prototype_preparations, 2);
+        assert_fresh_prototypes(&stage, &mut store);
     }
 
     /// Instances of `/Asset`, which holds an instance of `/Leaf`.

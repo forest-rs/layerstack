@@ -3,16 +3,20 @@
 
 //! Instancing scaling benchmarks.
 //!
-//! Measures `Stage::compose` time as the number of instanced prims grows.
+//! Measures composition and unrelated structural edits as the instance count grows.
 //! Each instance references a shared coral asset (two child prims: branches
 //! and polyps), mirroring the `instancing` example.
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, Reference, Stage, StageOptions, Value};
+use layerstack::{
+    InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, PropertySpec, PropertyType, Reference,
+    Stage, StageOptions, SublayerEntry, Value,
+    edit::{EditTarget, Transaction},
+};
 
 /// Build a store with `n` instanced corals under `/Reef` plus one shared
-/// `/Coral` asset, then compose and return the stage.
-fn build_and_compose(n: usize) -> Stage {
+/// `/Coral` asset.
+fn build(n: usize) -> InMemoryStore {
     let mut store = InMemoryStore::default();
 
     let f_vertices = store.tokens().intern("vertices");
@@ -72,8 +76,7 @@ fn build_and_compose(n: usize) -> Stage {
 
     store.insert_layer(reef_layer);
 
-    // --- Compose ---
-    Stage::compose(&mut store, LayerId(1), StageOptions::default())
+    store
 }
 
 fn bench_instancing(c: &mut Criterion) {
@@ -81,14 +84,54 @@ fn bench_instancing(c: &mut Criterion) {
 
     for &n in &[100, 1_000, 10_000] {
         group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, &n| {
-            b.iter(|| build_and_compose(n));
+            b.iter(|| Stage::compose(&mut build(n), LayerId(1), StageOptions::default()));
         });
     }
 
     group.finish();
 }
 
-criterion_group!(benches, bench_instancing);
+fn bench_unrelated_override(c: &mut Criterion) {
+    let mut group = c.benchmark_group("instancing_unrelated_override");
+    let root = LayerId(1);
+    let weaker = LayerId(3);
+    for n in [100, 1_000] {
+        let mut store = build(n);
+        let label = store.property_path("/Settings.label");
+        let mut source = Layer::new(weaker);
+        source.insert_prim(
+            label.prim_path(),
+            PrimSpec::def().with_property(
+                label.property(),
+                PropertySpec::typed_attribute(PropertyType::parse("string").unwrap())
+                    .with_default(Value::string("original")),
+            ),
+        );
+        store.insert_layer(source);
+        store
+            .layer_mut(root)
+            .unwrap()
+            .sublayers_mut()
+            .push(SublayerEntry::new(weaker));
+        let mut live = LiveStage::compose(&mut store, root, StageOptions::default());
+        let mut edit = Transaction::new();
+        // Authoring into the stronger layer creates the first property spec there.
+        edit.set_default(
+            EditTarget::for_layer(root).property(label),
+            Value::string("edited"),
+        );
+        group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, _| {
+            b.iter(|| {
+                let applied = live.apply(&mut store, &edit).unwrap();
+                let undone = live.apply(&mut store, &applied.inverse).unwrap();
+                std::hint::black_box((applied.changes, undone.changes));
+            });
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(benches, bench_instancing, bench_unrelated_override);
 criterion_main!(benches);
 
 extern crate alloc;

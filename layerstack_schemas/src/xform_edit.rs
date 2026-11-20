@@ -434,20 +434,24 @@ impl XformableEdit {
     /// then authors the order, declaration and matrix in one rollback group.
     /// Existing op attributes remain available but no longer appear in the order.
     /// Only the matrix default changes; existing numeric samples are retained.
-    /// Requires a composed prim; newly collected definitions must be applied first.
+    /// A prim can be defined earlier in the same edit when the target is a
+    /// local layer at the same namespace path and the snapshot establishes
+    /// that the new prim can contribute there. Numeric writes to a pending
+    /// prim require ancestors without authored value clips.
     ///
     /// This deliberately rejects any stronger value-bearing source, including
     /// sparse sources that could alter the proposed result. Raw op/order setters
-    /// remain available for deliberate masked authoring. It accepts only
-    /// where [`Self::make_matrix_xform`] (OpenUSD's `MakeMatrixXform`) does,
-    /// and then authors what it and setting its op author; it also refuses
-    /// a stronger `xformOp:transform`, which would mask the matrix.
+    /// remain available for deliberate masked authoring. On a composed prim
+    /// this writes the same fields as [`Self::make_matrix_xform`] (OpenUSD's
+    /// `MakeMatrixXform`) and setting its op, with strength checks for both
+    /// the order and matrix attributes.
     ///
     /// AOUSD Core §12.3 (value strength), §13.3.1 (transformable prims).
     ///
     /// # Errors
-    /// Returns [`MatrixXformError`] for an inactive or stronger destination,
-    /// incompatible existing declarations, or nonfinite matrix elements.
+    /// Returns [`MatrixXformError`] when the destination cannot be established,
+    /// a stronger source could alter the result, a declaration is incompatible,
+    /// or a matrix element is nonfinite.
     pub fn set_matrix_transform(
         &self,
         edit: &mut SchemaEdit<'_>,
@@ -482,18 +486,26 @@ impl XformableEdit {
         }
         const TRANSFORM: &str = "xformOp:transform";
         edit.group(|edit| {
+            let mut pending = false;
             for (attribute, query, expected) in [
                 (Xformable::XFORM_OP_ORDER, Time::Default, "token[]"),
                 (TRANSFORM, time.map_or(Time::Default, Time::at), "matrix4d"),
             ] {
-                let inspection = edit
-                    .inspect_authoring(self.path(), attribute, query)
-                    .map_err(MatrixXformError::Inspection)?;
-                if inspection.target.is_none() {
-                    return Err(MatrixXformError::InactiveTarget);
-                }
-                if let Some(source) = inspection.stronger_sources.into_iter().next() {
-                    return Err(MatrixXformError::StrongerSource { attribute, source });
+                match edit.inspect_authoring(self.path(), attribute, query) {
+                    Ok(inspection) => {
+                        if inspection.target.is_none() {
+                            return Err(MatrixXformError::InactiveTarget);
+                        }
+                        if let Some(source) = inspection.stronger_sources.into_iter().next() {
+                            return Err(MatrixXformError::StrongerSource { attribute, source });
+                        }
+                    }
+                    Err(AuthoringInspectionError::MissingPrim(_))
+                        if edit.has_pending_local_site(self.path(), query) =>
+                    {
+                        pending = true;
+                    }
+                    Err(error) => return Err(MatrixXformError::Inspection(error)),
                 }
                 match edit.attribute_type(self.path(), attribute) {
                     Some(ty) if ty.type_name() != expected => {
@@ -516,6 +528,17 @@ impl XformableEdit {
                     self.path(),
                     TRANSFORM,
                     value_type(XformOpType::Transform, XformOpPrecision::Double),
+                );
+            }
+            if pending
+                && edit
+                    .attribute_type(self.path(), Xformable::XFORM_OP_ORDER)
+                    .is_none()
+            {
+                edit.create_uniform_attribute(
+                    self.path(),
+                    Xformable::XFORM_OP_ORDER,
+                    PropertyType::parse("token[]").expect("a registered value type"),
                 );
             }
             self.set_order(edit, &[TRANSFORM.into()]);

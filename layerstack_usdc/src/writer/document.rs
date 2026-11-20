@@ -158,8 +158,7 @@ fn declarations(
     paths: &PathInterner,
     sink: &mut LayerSpecs,
 ) {
-    let path = paths.display(id, tokens);
-    sink.begin(path.as_str(), SpecForm::Prim);
+    let owner = sink.plain_prim(id, paths, tokens);
     if let Some(s) = prim.specifier {
         sink.field("specifier", Value::Specifier(s));
     }
@@ -184,13 +183,12 @@ fn declarations(
         );
     }
     for p in properties {
-        let location = [path.as_str(), ".", p.name].concat();
         let variability = match p.variability {
             UsdaVariability::Varying => Variability::Varying,
             UsdaVariability::Uniform => Variability::Uniform,
         };
         if let Payload::Targets(targets) = p.payload {
-            sink.begin(location, SpecForm::Relationship);
+            sink.property(owner, p.name, SpecForm::Relationship);
             sink.field("variability", Value::Variability(variability));
             if p.custom {
                 sink.field("custom", Value::Bool(true));
@@ -205,7 +203,7 @@ fn declarations(
             }
             continue;
         }
-        sink.begin(location, SpecForm::Attribute);
+        sink.property(owner, p.name, SpecForm::Attribute);
         sink.field("custom", Value::Bool(p.custom));
         sink.token("typeName", p.ty);
         sink.field("variability", Value::Variability(variability));
@@ -2130,6 +2128,31 @@ def Scope "A" {
         assert_eq!(
             save_usdc(&layer, &tokens, &paths).unwrap(),
             write_document(&doc).unwrap()
+        );
+    }
+
+    #[test]
+    fn declaration_paths_keep_namespace_and_first_use_order() {
+        let (layer, tokens, paths) = import_usda(
+            r#"#usda 1.0
+def "A0" {
+    float x = 1
+}
+def "A" {
+    rel links = [</A/Child.x>, </A0.x>, </Outside.x>]
+    float x = 2
+    def "Child" {
+        float x = 3
+        rel links = </A.x>
+    }
+}
+"#,
+        );
+        let document = layerstack_usda::save::usdc_document(&layer, &tokens, &paths).unwrap();
+        assert_eq!(
+            save_usdc(&layer, &tokens, &paths).unwrap(),
+            write_document(&document).unwrap(),
+            "structured owners and forward targets retain the same crate indexes"
         );
     }
 

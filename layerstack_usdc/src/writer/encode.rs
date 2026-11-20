@@ -24,7 +24,7 @@ use super::array_dedup::{Array, ArrayDedup};
 use super::compress::{IntWidth, LZ4_MAX_TOTAL_INPUT, append_compressed, encode_integers};
 use super::error::UsdcWriteError;
 use super::path::{CratePath, Element, path_tree};
-use super::specs::Specs;
+use super::specs::{SpecPath, Specs};
 use super::{ListOp, Permission, Reference, Spec, Specifier, Value, Variability};
 use crate::toc;
 use crate::value_type::{SpecForm, ValueType};
@@ -97,7 +97,7 @@ fn inlined(ty: ValueType, payload: u32) -> u64 {
 /// Where a spec's field is being packed, for error reports.
 #[derive(Clone, Copy)]
 struct Site<'a> {
-    path: &'a str,
+    path: SpecPath<'a>,
     field: &'a str,
 }
 
@@ -298,6 +298,9 @@ impl<'a> Packer<'a> {
     /// `_AddPath` recurses; here the paths still to add wait on a heap
     /// stack, as a namespace has no depth limit.
     fn path(&mut self, slot: usize) -> Result<u32, UsdcWriteError> {
+        if let Some((index, _)) = self.paths.entries[slot].file {
+            return Ok(index);
+        }
         let mut pending = SmallVec::<[usize; 8]>::new();
         pending.push(slot);
         while let Some(&i) = pending.last() {
@@ -316,15 +319,21 @@ impl<'a> Packer<'a> {
                 }
             }
             if pending.len() == before {
-                let name = self.paths.entries[i].path.element_token();
-                let token = self.token(&name)?;
-                let id = index(self.paths.file_count)?;
-                self.paths.file_count += 1;
-                self.paths.entries[i].file = Some((id, token));
+                self.assign_path(i)?;
                 pending.pop();
             }
         }
         Ok(self.paths.entries[slot].file.expect("path was packed").0)
+    }
+
+    /// Assign the file index after the parent and any bracketed target have theirs.
+    fn assign_path(&mut self, i: usize) -> Result<u32, UsdcWriteError> {
+        let name = self.paths.entries[i].path.element_token();
+        let token = self.token(&name)?;
+        let id = index(self.paths.file_count)?;
+        self.paths.file_count += 1;
+        self.paths.entries[i].file = Some((id, token));
+        Ok(id)
     }
 
     /// `_AddPath(SdfPath())`: the empty path, a reference or payload's
@@ -1859,40 +1868,45 @@ fn prepare<S: Specs + ?Sized>(specs: &S) -> Result<(Paths<'_>, Vec<usize>), Usdc
     let mut ordinary = true;
     for i in 0..specs.len() {
         let (text, form) = specs.header(i);
-        let path = if !S::VALIDATED_NAMESPACE {
-            let path = CratePath::parse(text)?;
-            let last = path.last_element();
-            let fits = match form {
-                SpecForm::PseudoRoot => path.is_root(),
-                SpecForm::Prim => matches!(last, Some(Element::Prim(_))),
-                SpecForm::VariantSet => {
-                    matches!(last, Some(Element::Variant { variant, .. }) if variant.is_empty())
-                }
-                SpecForm::Variant => {
-                    matches!(last, Some(Element::Variant { variant, .. }) if !variant.is_empty())
-                }
-                SpecForm::Attribute | SpecForm::Relationship => path.is_prim_property(),
-                form => {
-                    return Err(UsdcWriteError::UnsupportedSpecForm {
+        let path = match text {
+            SpecPath::Property { prim, name, .. } => CratePath::from_parts(prim, Some(name)),
+            SpecPath::Text(raw) if S::VALIDATED_NAMESPACE => {
+                ordinary &= !raw.contains('{');
+                CratePath::authored(raw)?
+            }
+            SpecPath::Text(raw) => {
+                ordinary &= !raw.contains('{');
+                let path = CratePath::parse(raw)?;
+                let last = path.last_element();
+                let fits = match form {
+                    SpecForm::PseudoRoot => path.is_root(),
+                    SpecForm::Prim => matches!(last, Some(Element::Prim(_))),
+                    SpecForm::VariantSet => {
+                        matches!(last, Some(Element::Variant { variant, .. }) if variant.is_empty())
+                    }
+                    SpecForm::Variant => {
+                        matches!(last, Some(Element::Variant { variant, .. }) if !variant.is_empty())
+                    }
+                    SpecForm::Attribute | SpecForm::Relationship => path.is_prim_property(),
+                    form => {
+                        return Err(UsdcWriteError::UnsupportedSpecForm {
+                            path: text.into(),
+                            form,
+                        });
+                    }
+                };
+                if !fits {
+                    return Err(UsdcWriteError::SpecPathMismatch {
                         path: text.into(),
                         form,
                     });
                 }
-            };
-            if !fits {
-                return Err(UsdcWriteError::SpecPathMismatch {
-                    path: text.into(),
-                    form,
-                });
+                path
             }
-            path
-        } else {
-            CratePath::authored(text)?
         };
         if paths.intern(path) != i {
             return Err(UsdcWriteError::DuplicateSpec { path: text.into() });
         }
-        ordinary &= !text.contains('{');
         // The layer lowerer emits each built-in field at most once. Authored
         // metadata can introduce an arbitrary name, including a collision.
         if !specs.check_field_names(i) {
@@ -1948,7 +1962,10 @@ fn prepare<S: Specs + ?Sized>(specs: &S) -> Result<(Paths<'_>, Vec<usize>), Usdc
         // For ordinary spec paths both separators ('.', '/') sort before
         // identifier bytes, exactly where Sdf orders property and child nodes.
         sort::sort_by(&mut paths.namespace, |&a, &b| {
-            specs.header(a).0.cmp(specs.header(b).0)
+            paths.entries[a]
+                .path
+                .ordinary_key()
+                .cmp(&paths.entries[b].path.ordinary_key())
         });
     } else {
         sort::sort_by(&mut paths.namespace, |&a, &b| {
@@ -2001,7 +2018,15 @@ pub(super) fn write(specs: &(impl Specs + ?Sized)) -> Result<Vec<u8>, UsdcWriteE
             }
             fields.push(id);
         }
-        let path_index = packer.path(i)?;
+        let path_index = match text {
+            SpecPath::Property { owner, .. }
+                if packer.paths.entries[i].file.is_none()
+                    && packer.paths.entries[owner].file.is_some() =>
+            {
+                packer.assign_path(i)?
+            }
+            _ => packer.path(i)?,
+        };
         let fieldset = packer.fieldset(&fields)?;
         packer
             .specs
@@ -2024,7 +2049,7 @@ mod blob_tests {
             ),])));
         let mut packer = Packer::new(Paths::default());
         let site = Site {
-            path: "/Root",
+            path: SpecPath::Text("/Root"),
             field: "customData",
         };
         packer.pack(&nested, site).unwrap();

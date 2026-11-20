@@ -208,10 +208,26 @@ mod tests {
         assert_eq!(layer.change_history_stats().discarded_batches, 1);
     }
     #[test]
+    fn single_path_edits_keep_precise_evidence_in_the_record() {
+        let mut layer = Layer::new(LayerId(1));
+        let path = PathId::from_raw(1);
+        layer.insert_prim(path, crate::PrimSpec::def());
+        let stats = layer.change_history_stats();
+        assert_eq!(stats.recorded_items, 1);
+        assert_eq!(stats.retained_bytes, size_of::<crate::doc::LayerChange>());
+        assert_eq!(layer.changed_paths_since(0), Some(vec![path]));
+
+        layer.record_change(false, Some(Vec::new()));
+        assert_eq!(layer.changed_paths_since(1), Some(Vec::new()));
+        layer.touch();
+        assert_eq!(layer.changed_paths_since(2), None);
+    }
+
+    #[test]
     fn cloning_history_reaccounts_vector_capacity_before_eviction() {
         let mut layer = Layer::new(LayerId(1));
         let mut paths = Vec::with_capacity(100);
-        paths.push(PathId::from_raw(1));
+        paths.extend([PathId::from_raw(1), PathId::from_raw(2)]);
         layer.record_change(false, Some(paths));
         let mut cloned = layer.clone();
         assert!(

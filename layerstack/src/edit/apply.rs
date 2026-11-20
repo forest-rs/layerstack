@@ -1480,7 +1480,11 @@ pub(crate) fn apply(
             ignored.extend(support_only_prims(store, &journal.steps, *id, stage, root));
         }
         if let Some(layer) = store.layer_mut(*id) {
-            layer.record_scoped_change(journal.structural_layers.contains(id), paths, ignored);
+            layer.record_scoped_change(
+                journal.structural_layers.contains(id),
+                paths.into(),
+                ignored,
+            );
         }
     }
     let Journal {

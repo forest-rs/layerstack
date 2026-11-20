@@ -3594,11 +3594,41 @@ pub struct Layer {
     pub(crate) no_reference_arcs: Option<u64>,
 }
 
+/// Authored paths in one change. Most editing methods touch exactly one.
+#[derive(Clone, Debug)]
+pub(crate) enum ChangedPaths {
+    Unknown,
+    One(PathId),
+    Batch(Vec<PathId>),
+}
+
+impl From<Option<Vec<PathId>>> for ChangedPaths {
+    fn from(paths: Option<Vec<PathId>>) -> Self {
+        match paths {
+            None => Self::Unknown,
+            Some(v) => match v.as_slice() {
+                [path] => Self::One(*path),
+                _ => Self::Batch(v),
+            },
+        }
+    }
+}
+
+impl ChangedPaths {
+    fn as_slice(&self) -> Option<&[PathId]> {
+        match self {
+            Self::Unknown => None,
+            Self::One(path) => Some(core::slice::from_ref(path)),
+            Self::Batch(paths) => Some(paths),
+        }
+    }
+}
+
 /// Bounded authored evidence, independent of each stage's synchronization cursor.
 #[derive(Clone, Debug)]
 pub(crate) struct LayerChange {
     generation: u64,
-    paths: Option<Vec<PathId>>,
+    paths: ChangedPaths,
     /// Changed prims whose specs only support existing children, as an
     /// inert `over` created for an edit beneath it does: their own prim
     /// indexes change, not the namespace beneath them (see
@@ -3614,14 +3644,14 @@ impl crate::change_history::Record for LayerChange {
     }
     fn bytes(&self) -> usize {
         size_of::<Self>()
-            + self
-                .paths
-                .as_ref()
-                .map_or(0, |p| p.capacity() * size_of::<PathId>())
+            + match &self.paths {
+                ChangedPaths::Batch(paths) => paths.capacity() * size_of::<PathId>(),
+                _ => 0,
+            }
             + self.scope_ignored.capacity() * size_of::<PathId>()
     }
     fn items(&self) -> usize {
-        self.paths.as_ref().map_or(0, Vec::len)
+        self.paths.as_slice().map_or(0, <[_]>::len)
     }
 }
 
@@ -3943,7 +3973,7 @@ impl Layer {
     /// its opinions.
     pub fn prim_mut(&mut self, path: PathId) -> Option<&mut PrimSpec> {
         if self.prims.contains_key(&path) {
-            self.record_change(true, Some(alloc::vec![path]));
+            self.record_change(true, ChangedPaths::One(path));
         }
         self.prims.get_mut(&path)
     }
@@ -3956,7 +3986,7 @@ impl Layer {
     /// the specs beneath it are left as they are.
     pub fn remove_prim(&mut self, path: PathId) -> Option<PrimSpec> {
         let removed = self.prims.remove(&path)?;
-        self.record_change(true, Some(alloc::vec![path]));
+        self.record_change(true, ChangedPaths::One(path));
         Some(removed)
     }
 
@@ -4143,8 +4173,8 @@ impl Layer {
     }
 
     /// Records an atomic authored batch. Unknown edits invalidate history precision.
-    pub(crate) fn record_change(&mut self, structural: bool, paths: Option<Vec<PathId>>) {
-        self.record_scoped_change(structural, paths, Vec::new());
+    pub(crate) fn record_change(&mut self, structural: bool, paths: impl Into<ChangedPaths>) {
+        self.record_scoped_change(structural, paths.into(), Vec::new());
     }
 
     /// Records an atomic authored batch whose changed prims `scope_ignored`
@@ -4152,7 +4182,7 @@ impl Layer {
     pub(crate) fn record_scoped_change(
         &mut self,
         structural: bool,
-        paths: Option<Vec<PathId>>,
+        paths: ChangedPaths,
         scope_ignored: Vec<PathId>,
     ) {
         self.generation += 1;
@@ -4176,7 +4206,7 @@ impl Layer {
         self.structure += 1;
         self.change_history.record(LayerChange {
             generation: self.generation,
-            paths: None,
+            paths: ChangedPaths::Unknown,
             scope_ignored: Vec::new(),
             layer_stack: true,
         });
@@ -4241,7 +4271,7 @@ impl Layer {
             paths.extend(
                 change
                     .paths
-                    .as_ref()?
+                    .as_slice()?
                     .iter()
                     .copied()
                     .filter(|p| !scoped || !change.scope_ignored.contains(p)),
@@ -4259,7 +4289,7 @@ impl Layer {
     /// one (see [`Layer::variant_prims`]) instead of replacing it; a spec
     /// authored outside any variant branch takes the [`Layer::prims`] slot.
     pub fn insert_prim(&mut self, path: PathId, spec: PrimSpec) {
-        self.record_change(true, Some(alloc::vec![path]));
+        self.record_change(true, ChangedPaths::One(path));
         self.place_prim(path, Box::new(spec));
     }
 
@@ -4345,7 +4375,7 @@ impl Layer {
                 return;
             }
             parent_spec.authored_children.push(name);
-            self.record_change(true, Some(alloc::vec![parent]));
+            self.record_change(true, ChangedPaths::One(parent));
             if !created {
                 return;
             }
@@ -4760,7 +4790,7 @@ impl Layer {
     pub fn set_property(&mut self, property_path: PropertyPath, spec: PropertySpec) -> &mut Self {
         self.record_change(
             !self.prims.contains_key(&property_path.prim_path()),
-            Some(alloc::vec![property_path.prim_path()]),
+            ChangedPaths::One(property_path.prim_path()),
         );
         self.prims
             .entry(property_path.prim_path())
@@ -4784,7 +4814,7 @@ impl Layer {
     /// Moves [`Layer::generation`] forward, since the caller may write
     /// through the reference.
     pub fn property_mut(&mut self, property_path: PropertyPath) -> Option<&mut PropertySpec> {
-        self.record_change(false, Some(alloc::vec![property_path.prim_path()]));
+        self.record_change(false, ChangedPaths::One(property_path.prim_path()));
         self.prims
             .get_mut(&property_path.prim_path())?
             .property_mut(property_path.property())

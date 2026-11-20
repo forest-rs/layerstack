@@ -49,8 +49,9 @@ use core::hash::Hash;
 
 use hashbrown::HashSet;
 use layerstack::doc::{
-    FieldEntry, FieldValue, Layer, LayerId, LayerOffset, PrimSpec, Reference, ReferenceSource,
-    Specifier, SublayerEntry, Value, VariantSets, VariantSpec, get_field_mut, set_field_vec,
+    FieldEntry, FieldValue, Layer, LayerBuilder, LayerId, LayerOffset, PrimSpec, Reference,
+    ReferenceSource, Specifier, SublayerEntry, Value, VariantSets, VariantSpec, get_field_mut,
+    set_field_vec,
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp;
@@ -70,7 +71,9 @@ use smallvec::SmallVec;
 use crate::Span;
 use crate::ast;
 use crate::diagnostic::Diagnostic;
-use crate::lower::{PropertyTail, anchor_bracketed, has_prim_variant_selection, split_property_tail};
+use crate::lower::{
+    PropertyTail, anchor_bracketed, has_prim_variant_selection, split_property_tail,
+};
 use crate::metadata::{MetadataRejection, MetadataValueError};
 use crate::numeric::{convert_scalar, dimensioned_value, element_type_hint};
 use crate::writer::is_identifier;
@@ -167,7 +170,7 @@ struct PrimFrame {
 /// because an empty branch name invalidates the whole set.
 pub(crate) struct LayerImport<'a> {
     ctx: EmitCtx<'a>,
-    layer: Layer,
+    layer: LayerBuilder,
     root_children: Vec<TokenId>,
     path: String,
     frames: Vec<PrimFrame>,
@@ -186,7 +189,7 @@ impl<'a> LayerImport<'a> {
     ) -> Self {
         Self {
             ctx: EmitCtx::new(layer_id, tokens, paths, resolver, registry),
-            layer: Layer::new(layer_id),
+            layer: LayerBuilder::new(layer_id),
             root_children: Vec::new(),
             path: String::new(),
             frames: Vec::new(),
@@ -469,7 +472,7 @@ impl<'a> EmitCtx<'a> {
     // ── Layer ────────────────────────────────────────────────────────
 
     fn emit_layer(&mut self, ast: &ast::Layer<'_>) -> Layer {
-        let mut layer = Layer::new(self.layer_id);
+        let mut layer = LayerBuilder::new(self.layer_id);
 
         self.layer_metadata(&ast.metadata, &mut layer);
 
@@ -508,7 +511,7 @@ impl<'a> EmitCtx<'a> {
         )
     }
 
-    fn layer_metadata(&mut self, metadata: &[ast::LayerMeta<'_>], layer: &mut Layer) {
+    fn layer_metadata(&mut self, metadata: &[ast::LayerMeta<'_>], layer: &mut LayerBuilder) {
         for meta in metadata {
             match meta {
                 ast::LayerMeta::SubLayers(items) => {
@@ -539,7 +542,7 @@ impl<'a> EmitCtx<'a> {
                 ast::LayerMeta::Relocates(entries) => {
                     // The statement authors the field, an empty one for
                     // `relocates = {}` (`SdfLayer::HasRelocates`).
-                    let _ = layer.relocates_mut();
+                    let relocates = layer.relocates_mut();
                     for entry in entries {
                         // OpenUSD names the source path in both messages.
                         // Spec: `SdfSchema::IsValidRelocatesSourcePath`.
@@ -558,7 +561,7 @@ impl<'a> EmitCtx<'a> {
                             continue;
                         }
                         if let Some(relocate) = self.emit_relocate(entry) {
-                            layer.relocates_mut().push(relocate);
+                            relocates.push(relocate);
                         }
                     }
                 }
@@ -580,7 +583,7 @@ impl<'a> EmitCtx<'a> {
                         _ => None,
                     };
                     if let Some(name) = name {
-                        layer.set_default_prim(Some(self.tokens.intern(name)));
+                        layer.set_default_prim(self.tokens.intern(name));
                     }
                 }
                 ast::LayerMeta::Custom(entry) => {
@@ -597,7 +600,7 @@ impl<'a> EmitCtx<'a> {
 
     fn finish_layer(
         &mut self,
-        mut layer: Layer,
+        mut layer: LayerBuilder,
         root_path_id: PathId,
         root_children: Vec<TokenId>,
         order: Option<&[Cow<'_, str>]>,
@@ -613,6 +616,7 @@ impl<'a> EmitCtx<'a> {
             layer.insert_prim(root_path_id, root_spec);
         }
 
+        let mut layer = layer.finish();
         if self.defer_variant_arcs {
             let resolved = layerstack::resolve_selected_deferred_arcs(
                 &mut layer,
@@ -656,7 +660,7 @@ impl<'a> EmitCtx<'a> {
         place: PrimPlace,
         prim_path: &mut String,
         outer_variant_sites: &[VariantSelectionSite],
-        layer: &mut Layer,
+        layer: &mut LayerBuilder,
     ) {
         let mut frame = self.begin_prim(prim, place, prim_path, outer_variant_sites);
         for child in &prim.children {
@@ -699,7 +703,7 @@ impl<'a> EmitCtx<'a> {
         frame: &mut PrimFrame,
         prim_path: &mut String,
         outer_variant_sites: &[VariantSelectionSite],
-        layer: &mut Layer,
+        layer: &mut LayerBuilder,
     ) {
         match child {
             ast::PrimChild::Attribute(attr) => {
@@ -1437,7 +1441,7 @@ impl<'a> EmitCtx<'a> {
         prim_path: &mut String,
         enclosing: &[VariantSelectionSite],
         sets: &mut VariantSets,
-        layer: &mut Layer,
+        layer: &mut LayerBuilder,
     ) {
         // A variant named "" has the set's own path (`/P{v=}`): OpenUSD's
         // text parser creates that variant's spec there, then finds the

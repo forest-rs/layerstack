@@ -3521,6 +3521,62 @@ impl core::ops::Index<&PathId> for LayerPrims {
     }
 }
 
+/// Constructs a fresh layer in its final storage. A reader owns the builder
+/// until the entire layer is available, so individual insertions need no
+/// change history. [`Self::finish`] publishes the initial structural change.
+#[cfg(feature = "unstable-internals")]
+#[derive(Debug)]
+pub struct LayerBuilder(Layer);
+
+#[cfg(feature = "unstable-internals")]
+impl LayerBuilder {
+    /// Starts an empty layer with the given identity.
+    pub fn new(id: LayerId) -> Self {
+        Self(Layer::new(id))
+    }
+
+    /// Places a spec using the variant branch rules of [`Layer::insert_prim`].
+    pub fn insert_prim(&mut self, path: PathId, spec: PrimSpec) {
+        self.0.place_prim(path, Box::new(spec));
+    }
+
+    /// The sublayers authored in the layer header.
+    pub fn sublayers_mut(&mut self) -> &mut Vec<SublayerEntry> {
+        &mut self.0.sublayers
+    }
+
+    /// Authors a layer relocates field, including an explicitly empty one.
+    pub fn relocates_mut(&mut self) -> &mut Vec<Relocate> {
+        self.0.relocates.get_or_insert_with(Vec::new)
+    }
+
+    /// The metadata fields authored in the layer header.
+    pub fn metadata_fields_mut(&mut self) -> &mut Vec<FieldEntry> {
+        &mut self.0.metadata
+    }
+
+    /// Sets the authored default prim name.
+    pub fn set_default_prim(&mut self, name: TokenId) {
+        self.0.default_prim = Some(name);
+    }
+
+    /// Returns the completed layer. A nonempty import is one whole-layer
+    /// structural change. An empty layer keeps its initial generation.
+    #[must_use]
+    pub fn finish(self) -> Layer {
+        let mut layer = self.0;
+        if !layer.prims.is_empty()
+            || !layer.sublayers.is_empty()
+            || !layer.metadata.is_empty()
+            || layer.relocates.is_some()
+            || layer.default_prim.is_some()
+        {
+            layer.touch_structure();
+        }
+        layer
+    }
+}
+
 /// A document layer.
 ///
 /// Its content is read through accessors such as [`Layer::prims`] and

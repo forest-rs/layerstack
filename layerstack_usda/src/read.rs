@@ -71,6 +71,10 @@ impl ReadResult {
 
 /// Imports USDA directly into an authored layer using the shared grammar.
 ///
+/// The returned layer records its initial authored content as one structural
+/// change. An empty layer stays at generation zero. Subsequent edits are
+/// tracked by the layer's normal editing methods.
+///
 /// Numeric scalar, vector and quaternion property arrays (including time
 /// samples and variant branches) are consumed as events into native buffers
 /// during parsing, without retaining their element tokens or scanning them again. This avoids per-element CST nodes, generic AST values and tuple
@@ -786,6 +790,46 @@ mod tests {
         }
         fn resolved_path(&self, _: LayerId) -> Option<&str> {
             None
+        }
+    }
+
+    #[test]
+    fn initial_content_is_one_change_and_subsequent_edits_are_tracked() {
+        let store = InMemoryStore::default();
+        for (source, generation) in [
+            ("#usda 1.0\n", 0),
+            ("#usda 1.0\n( relocates = {} )\n", 1),
+            ("#usda 1.0\n( subLayers = [@missing.usda@] )\n", 1),
+            ("#usda 1.0\n( upAxis = \"Y\" )\n", 1),
+            ("#usda 1.0\n( defaultPrim = \"A\" )\n", 1),
+            (
+                "#usda 1.0\n( defaultPrim = \"A\" )\ndef \"A\" {\n def \"B\" {}\n}\n",
+                1,
+            ),
+        ] {
+            let result = read_usda(
+                source,
+                LayerId(1),
+                store.tokens(),
+                store.paths(),
+                &mut NoAssets,
+            );
+            assert!(
+                !result.has_errors(),
+                "{:?}",
+                result.diagnostics().collect::<Vec<_>>()
+            );
+            let mut layer = result.emitted.layer;
+            assert_eq!(layer.generation(), generation);
+            assert_eq!(layer.structural_generation(), generation);
+            assert_eq!(layer.change_history_stats().recorded_batches, generation);
+            assert_eq!(layer.change_history_stats().recorded_items, 0);
+            assert!(layer.known_without_reference_arcs());
+
+            layer.insert_prim(store.path("/Later"), layerstack::PrimSpec::def());
+            assert_eq!(layer.generation(), generation + 1);
+            assert_eq!(layer.change_history_stats().recorded_items, 1);
+            assert!(!layer.known_without_reference_arcs());
         }
     }
 

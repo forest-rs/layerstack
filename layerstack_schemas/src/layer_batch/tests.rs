@@ -328,3 +328,121 @@ fn applied_api_writes_use_the_composed_declaration_and_earlier_applications() {
         assert_eq!(prop.type_name.as_ref().unwrap().type_name(), expected);
     }
 }
+
+#[test]
+fn wide_prims_keep_the_strongest_declaration_and_authored_order() {
+    use layerstack::{
+        CannotApply, FieldValue, PropertyDefinition, SchemaDefinition, SchemaKind, SchemaRegistry,
+    };
+
+    let store = InMemoryStore::default();
+    let tokens = store.tokens();
+    let attribute = |name, ty| {
+        PropertyDefinition::attribute(tokens.intern(name))
+            .with_type(PropertyType::parse(ty).unwrap())
+    };
+    let template = "slots:__INSTANCE_NAME__:value";
+    let first_slot = "slots:__INSTANCE_NAME__:prefix:value";
+    let expanded = "slots:prefix:__INSTANCE_NAME__:value";
+    let spare = "slots:__INSTANCE_NAME__:spare";
+    let mut builder = SchemaRegistry::builder();
+    builder
+        .register(SchemaDefinition::typed(tokens.intern("Panel")))
+        .register(
+            SchemaDefinition::new(tokens.intern("SlotsAPI"), SchemaKind::MultipleApplyApi)
+                .with_property(attribute(template, "int"))
+                .with_property(attribute(first_slot, "int"))
+                .with_property(attribute(expanded, "double"))
+                .with_property(attribute(spare, "int"))
+                .with_built_in(tokens.intern("QualAPI:inner")),
+        )
+        .register(
+            SchemaDefinition::new(tokens.intern("LaterAPI"), SchemaKind::MultipleApplyApi)
+                .with_property(attribute(template, "float")),
+        )
+        .register(SchemaDefinition::new(
+            tokens.intern("QualAPI"),
+            SchemaKind::MultipleApplyApi,
+        ))
+        .register(
+            SchemaDefinition::api(tokens.intern("NeedsQualAPI"))
+                .with_can_only_apply_to(tokens.intern("QualAPI:later:inner")),
+        );
+    let registry = builder.build(tokens);
+    let path = store.path("/Panel");
+    let mut batch = LayerBatch::new(LayerId(1), &store, &registry).unwrap();
+    batch
+        .define(path, "Panel", |prim| {
+            // With more than one matching template, the earliest application
+            // contributes the declaration even for a later API handle.
+            prim.apply("SlotsAPI", Some("left"))?
+                .set(expanded, Value::Double(1.0))?;
+            for i in 0..32 {
+                prim.apply("SlotsAPI", Some(&alloc::format!("instance{i}")))?
+                    .set(template, Value::Int(i))?;
+            }
+            prim.apply("SlotsAPI", Some("prefix:left"))?
+                .set(template, Value::Double(2.0))?;
+            prim.apply("LaterAPI", Some("prefix:left"))?
+                .set(template, Value::Double(3.0))?;
+            prim.set("slots:prefix:left:value", Value::Double(4.0))?;
+            assert!(matches!(
+                prim.apply("NeedsQualAPI", None),
+                Err(BatchError::CannotApply {
+                    reason: CannotApply::NotATarget { .. },
+                    ..
+                })
+            ));
+            prim.apply("SlotsAPI", Some("later"))?;
+            prim.apply("NeedsQualAPI", None)?;
+            // Both templates of the same application can match. Their
+            // declaration order breaks the tie after application strength.
+            prim.apply("SlotsAPI", Some("prefix"))?
+                .set(expanded, Value::Int(5))?;
+            prim.apply("SlotsAPI", Some("left"))?;
+            Ok(())
+        })
+        .unwrap();
+    let layer = batch.finish();
+    let spec = layer.prim(path).unwrap();
+    assert_eq!(spec.properties.len(), 34);
+    let property = &spec.properties[0];
+    assert_eq!(tokens.resolve(property.name), "slots:prefix:left:value");
+    assert_eq!(property.spec.default, Some(Value::Double(4.0)));
+    let property = &spec.properties[33];
+    assert_eq!(tokens.resolve(property.name), "slots:prefix:prefix:value");
+    assert_eq!(property.spec.default, Some(Value::Int(5)));
+    let FieldValue::TokenListOp(applied) = spec.field(tokens.intern("apiSchemas")).unwrap() else {
+        panic!("expected apiSchemas list op");
+    };
+    assert_eq!(tokens.resolve(applied.prepend[0]), "SlotsAPI:left");
+    assert_eq!(tokens.resolve(applied.prepend[33]), "SlotsAPI:prefix:left");
+    assert_eq!(tokens.resolve(applied.prepend[36]), "NeedsQualAPI");
+    assert_eq!(applied.prepend.len(), 38);
+    assert!(tokens.lookup("slots:instance31:spare").is_none());
+}
+
+#[test]
+fn failed_wide_prim_keeps_existing_children_and_can_be_retried() {
+    let store = InMemoryStore::default();
+    let registry = openusd(store.tokens());
+    let parent = store.path("/Parent");
+    let child = store.path("/Parent/Child");
+    let mut batch = LayerBatch::new(LayerId(1), &store, &registry).unwrap();
+    batch.define(child, Xform::SCHEMA, |_| Ok(())).unwrap();
+    let failed = batch.define(parent, Xform::SCHEMA, |prim| {
+        for i in 0..32 {
+            prim.apply(CollectionApi::SCHEMA, Some(&alloc::format!("set{i}")))?
+                .set(CollectionApi::INCLUDE_ROOT, Value::Bool(true))?;
+        }
+        prim.set("collection:set0:includeRoot", Value::Int(1))
+    });
+    assert!(matches!(failed, Err(BatchError::ValueTypeMismatch { .. })));
+    batch.define(parent, Mesh::SCHEMA, |_| Ok(())).unwrap();
+    let layer = batch.finish();
+    let spec = layer.prim(parent).unwrap();
+    assert_eq!(spec.type_name, store.tokens().lookup(Mesh::SCHEMA));
+    assert_eq!(spec.authored_children, [store.tokens().intern("Child")]);
+    assert!(spec.properties.is_empty());
+    assert!(spec.fields.is_empty());
+}

@@ -3,7 +3,7 @@
 
 //! Instancing scaling benchmarks.
 //!
-//! Measures composition and unrelated structural edits as the instance count grows.
+//! Measures composition, source edits and unrelated structural edits as the instance count grows.
 //! Each instance references a shared coral asset (two child prims: branches
 //! and polyps), mirroring the `instancing` example.
 
@@ -131,7 +131,75 @@ fn bench_unrelated_override(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_instancing, bench_unrelated_override);
+/// Sixteen independent sources keep the changed fan-out proportional to one
+/// group. Both layouts author the same inherit arcs and edit the same source.
+fn bench_shared_override(c: &mut Criterion) {
+    let mut group = c.benchmark_group("shared_source_override");
+    for n in [256, 4_096] {
+        for instanceable in [false, true] {
+            let mut store = InMemoryStore::default();
+            let root = LayerId(1);
+            let weaker = LayerId(2);
+            let mut layer = Layer::new(weaker);
+            let mut sources = Vec::new();
+            for i in 0..16 {
+                let source = store.path(&format!("/Source{i}"));
+                let label = store.property_path(&format!("/Source{i}/Branch.label"));
+                sources.push(source);
+                layer.define_prim(
+                    label.prim_path(),
+                    PrimSpec::def().with_property(
+                        label.property(),
+                        PropertySpec::typed_attribute(PropertyType::parse("string").unwrap())
+                            .with_default(Value::string("original")),
+                    ),
+                    store.paths(),
+                );
+            }
+            for i in 0..n {
+                let prim = store.path(&format!("/Reef/Coral{i}"));
+                layer.define_prim(
+                    prim,
+                    PrimSpec::def()
+                        .with_inherit(sources[i % sources.len()])
+                        .with_instanceable(instanceable),
+                    store.paths(),
+                );
+            }
+            store.insert_layer(layer);
+            let mut overrides = Layer::new(root);
+            overrides.sublayers_mut().push(SublayerEntry::new(weaker));
+            store.insert_layer(overrides);
+            let mut live = LiveStage::compose(&mut store, root, StageOptions::default());
+            let label = store.property_path("/Source0/Branch.label");
+            let mut edit = Transaction::new();
+            edit.set_default(
+                EditTarget::for_layer(root).property(label),
+                Value::string("edited"),
+            );
+            let layout = if instanceable {
+                "instanced"
+            } else {
+                "ordinary"
+            };
+            group.bench_function(BenchmarkId::new(layout, n), |b| {
+                b.iter(|| {
+                    let applied = live.apply(&mut store, &edit).unwrap();
+                    let undone = live.apply(&mut store, &applied.inverse).unwrap();
+                    std::hint::black_box((applied.changes, undone.changes));
+                });
+            });
+        }
+    }
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_instancing,
+    bench_unrelated_override,
+    bench_shared_override
+);
 criterion_main!(benches);
 
 extern crate alloc;

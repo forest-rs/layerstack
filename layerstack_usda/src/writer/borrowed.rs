@@ -7,9 +7,9 @@
 //! keeps its diagnostics and their precedence. AOUSD Core §§7.6, 16.2.16.
 
 use super::{Layout, Specifier, Writer, dictionary_cmp, is_identifier, is_property_name};
+use crate::save::PropertyView;
 use alloc::vec::Vec;
 use hashbrown::HashSet;
-use layerstack::property::PropertyEntry;
 use layerstack::{
     PathId, PathInterner, PrimSpec, PropertyKind, TargetPath, TokenId, TokenInterner, TypedArray,
     Value, Variability,
@@ -40,7 +40,7 @@ impl CheckedNames {
         tokens: &'a TokenInterner,
         paths: &'a PathInterner,
         declarations: &mut Vec<Declaration<'a>>,
-        order: Order,
+        (order, entries): (Order, impl Iterator<Item = PropertyView<'a>>),
     ) -> Option<BorrowedPrim<'a>> {
         if spec.rare().is_some()
             || !spec.fields.is_empty()
@@ -63,7 +63,7 @@ impl CheckedNames {
             return None;
         }
         let start = declarations.len();
-        for entry in &spec.properties {
+        for entry in entries {
             let name = tokens.resolve(entry.name);
             let property = checked(&mut self.property_names, entry.name, name, is_property_name)
                 .then(|| self.property(entry, name, tokens, paths))
@@ -113,13 +113,14 @@ impl CheckedNames {
 
     fn property<'a>(
         &mut self,
-        entry: &'a PropertyEntry,
+        spec: PropertyView<'a>,
         name: &'a str,
         tokens: &'a TokenInterner,
         paths: &'a PathInterner,
     ) -> Option<Declaration<'a>> {
-        let spec = &entry.spec;
-        if !spec.metadata.is_empty() || spec.time_samples.is_authored() || spec.spline.is_some() {
+        if spec.extra.is_some_and(|s| {
+            !s.metadata.is_empty() || s.time_samples.is_authored() || s.spline.is_some()
+        }) {
             return None;
         }
         let (ty, payload) = match spec.kind {
@@ -127,28 +128,16 @@ impl CheckedNames {
                 if spec.targets.is_some() {
                     return None;
                 }
-                let ty = spec.type_name.as_ref()?.type_name();
-                (
-                    ty,
-                    Payload::default_value(ty, spec.default.as_ref()?, tokens)?,
-                )
+                let ty = spec.type_name?.type_name();
+                (ty, Payload::default_value(ty, spec.default?, tokens)?)
             }
             PropertyKind::Relationship => {
                 if spec.type_name.is_some() || spec.default.is_some() {
                     return None;
                 }
-                let targets = match spec.targets.as_deref() {
+                let targets = match spec.targets {
                     None => None,
-                    Some(op)
-                        if op.prepend.is_empty()
-                            && op.append.is_empty()
-                            && op.add.is_empty()
-                            && op.delete.is_empty()
-                            && op.reorder.is_empty() =>
-                    {
-                        Some(op.explicit.as_deref()?)
-                    }
-                    _ => return None,
+                    Some(op) => Some(op.explicit()?),
                 };
                 for t in targets.unwrap_or_default() {
                     let id = t.prim_path();

@@ -109,6 +109,36 @@ impl Columns {
         table.rows += 1;
         self.rows.insert(path, (id, row));
     }
+    pub(super) fn row(
+        &self,
+        path: PathId,
+    ) -> impl Iterator<Item = layerstack_usda::save::PropertyView<'_>> {
+        self.rows
+            .get(&path)
+            .into_iter()
+            .flat_map(move |&(shape, row)| {
+                let table = &self.tables[shape];
+                let values = &table.blocks[row / self.block_size];
+                table.decls.iter().zip(values).map(move |(decl, col)| {
+                    let extra = self
+                        .rare
+                        .get(&PropertyPath::new(path, decl.name))
+                        .map(AsRef::as_ref);
+                    layerstack_usda::save::PropertyView {
+                        name: decl.name,
+                        kind: decl.kind,
+                        custom: decl.custom,
+                        variability: decl.variability,
+                        type_name: decl.ty.as_ref(),
+                        default: col[row % self.block_size].as_ref(),
+                        targets: extra
+                            .and_then(|s: &PropertySpec| s.targets.as_deref())
+                            .map(layerstack_usda::save::Targets::Native),
+                        extra,
+                    }
+                })
+            })
+    }
     fn cell(&self, key: PropertyPath) -> Option<(usize, usize, usize)> {
         let &(shape, row) = self.rows.get(&key.prim_path())?;
         let slot = self.tables[shape]

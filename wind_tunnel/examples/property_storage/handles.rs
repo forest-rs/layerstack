@@ -59,6 +59,20 @@ impl Handles {
         self.layouts = HashMap::new();
         self.scratch = Vec::new();
     }
+    pub(super) fn row(
+        &self,
+        path: PathId,
+    ) -> impl Iterator<Item = layerstack_usda::save::PropertyView<'_>> {
+        self.rows.get(&path).into_iter().flat_map(|&(group, row)| {
+            let group = &self.groups[group];
+            let start = (row % ROWS) * group.names.len();
+            group
+                .names
+                .iter()
+                .zip(&group.blocks[row / ROWS][start..])
+                .map(|(&name, spec)| layerstack_usda::save::PropertyView::native(name, spec))
+        })
+    }
     fn cell(&self, key: PropertyPath) -> (usize, usize, usize) {
         let (group, row) = self.rows[&key.prim_path()];
         let names = &self.groups[group].names;

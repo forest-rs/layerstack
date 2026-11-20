@@ -71,6 +71,8 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 
+#[cfg(feature = "unstable-internals")]
+pub use document::save_usdc_from;
 pub use document::{save_usdc, write_document};
 pub use error::UsdcWriteError;
 pub use layerstack::doc::Specifier;

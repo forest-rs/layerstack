@@ -82,6 +82,32 @@ impl Edges {
         })
     }
 
+    pub(super) fn borrow(&self, key: PropertyPath) -> Option<layerstack_usda::save::Targets<'_>> {
+        use layerstack_usda::save::Targets;
+        let slice = |r: &Range<u32>| &self.values[r.start as usize..r.end as usize];
+        Some(match self.entries.get(&key)? {
+            Edge::Empty => Targets::Explicit(&[]),
+            Edge::One(t) => Targets::Explicit(std::slice::from_ref(t)),
+            Edge::Two(t) => Targets::Explicit(t),
+            Edge::Run(r) => Targets::Explicit(slice(r)),
+            Edge::Owned(op) => Targets::Native(op),
+            Edge::Mixed(slots) => {
+                let [explicit, prepend, append, delete, add, reorder] =
+                    slots.each_ref().map(|r| r.as_ref().map(slice));
+                Targets::Lists(
+                    explicit,
+                    [
+                        prepend.unwrap(),
+                        append.unwrap(),
+                        delete.unwrap(),
+                        add.unwrap(),
+                        reorder.unwrap(),
+                    ],
+                )
+            }
+        })
+    }
+
     pub(super) fn expand(&self, key: PropertyPath) -> Option<Box<ListOp<TargetPath>>> {
         let slice = |r: &Range<u32>| self.values[r.start as usize..r.end as usize].to_vec();
         let edge = self.entries.get(&key)?;

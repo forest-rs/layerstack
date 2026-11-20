@@ -69,7 +69,9 @@ use alloc::vec::Vec;
 use layerstack::doc::Layer;
 use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
-use layerstack_usda::save::{Declaration, LayerSpec, Payload, visit_layer_specs};
+use layerstack_usda::save::{
+    Declaration, LayerSpec, NativeProperties, Payload, PropertySource, visit_layer_specs_from,
+};
 use layerstack_usda::writer::{
     Attribute, Document, ListOp as UsdaListOp, Metadatum, Prim, Property,
     Reference as UsdaReference, Relationship, Specifier as UsdaSpecifier, Value as UsdaValue,
@@ -114,9 +116,23 @@ pub fn save_usdc(
     tokens: &TokenInterner,
     paths: &PathInterner,
 ) -> Result<Vec<u8>, UsdcWriteError> {
+    save_usdc_from(layer, tokens, paths, &NativeProperties)
+}
+
+/// Saves a crate borrowing ordinary declarations from another property layout.
+///
+/// # Errors
+///
+/// See [`save_usdc`].
+pub fn save_usdc_from(
+    layer: &Layer,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+    source: &impl PropertySource,
+) -> Result<Vec<u8>, UsdcWriteError> {
     let mut specs = LayerSpecs::default();
     let mut result = Ok(());
-    visit_layer_specs(layer, tokens, paths, |item| {
+    visit_layer_specs_from(layer, tokens, paths, source, |item| {
         if result.is_err() {
             return;
         }

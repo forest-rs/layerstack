@@ -109,8 +109,8 @@ use layerstack::doc::{
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::{ListOp as LayerListOp, SparseListOp};
-use layerstack::path::{Path, PathId, PathInterner, TargetPath};
-use layerstack::property::{PropertyEntry, PropertyKind, Variability};
+use layerstack::path::{Path, PathId, PathInterner};
+use layerstack::property::{PropertyKind, Variability};
 use layerstack::spec_path::VariantSelectionSite;
 
 use crate::writer::{
@@ -150,6 +150,7 @@ fn lower(
 ) -> Result<Document, SaveError> {
     let mut builder = namespace::DocumentBuilder::default();
     Lowering {
+        source: &NativeProperties,
         tokens,
         paths,
         skip_empty_entries,
@@ -245,10 +246,35 @@ fn lower_text<'a, O: crate::writer::TextOutput<'a>>(
     tokens: &'a TokenInterner,
     paths: &'a PathInterner,
 ) -> Result<O::Finished, SaveError> {
+    lower_text_from::<O, _>(layer, tokens, paths, &NativeProperties)
+}
+
+/// Saves USDA directly from the supplied ordinary property storage.
+///
+/// # Errors
+///
+/// See [`save_usda`].
+#[cfg(feature = "unstable-internals")]
+pub fn save_usda_from(
+    layer: &Layer,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+    source: &impl PropertySource,
+) -> Result<String, SaveError> {
+    lower_text_from::<crate::writer::TextString<'_>, _>(layer, tokens, paths, source)
+}
+
+fn lower_text_from<'a, O: crate::writer::TextOutput<'a>, S: PropertySource>(
+    layer: &'a Layer,
+    tokens: &'a TokenInterner,
+    paths: &'a PathInterner,
+    source: &'a S,
+) -> Result<O::Finished, SaveError> {
     let mut sink = namespace::TextBuilder::<O>::new();
     Lowering {
         tokens,
         paths,
+        source,
         skip_empty_entries: true,
     }
     .layer(layer, &mut sink)?;
@@ -384,7 +410,8 @@ impl fmt::Display for Invalid {
     }
 }
 
-struct Lowering<'a> {
+struct Lowering<'a, S> {
+    source: &'a S,
     tokens: &'a TokenInterner,
     paths: &'a PathInterner,
     /// Leave out dictionary entries with no value instead of refusing them.
@@ -419,7 +446,7 @@ enum Site<'t> {
     Metadata,
 }
 
-impl<'l> Lowering<'l> {
+impl<'l, S: PropertySource> Lowering<'l, S> {
     fn name(&self, token: TokenId) -> String {
         String::from(self.tokens.resolve(token))
     }
@@ -470,7 +497,7 @@ impl<'l> Lowering<'l> {
         };
         if let Some((root, spec)) = root.and_then(|id| Some((id, layer.prim(id)?))) {
             visited.prims.insert(root);
-            if !is_children_only(spec) {
+            if !is_children_only(spec) || self.source.properties(root, spec).next().is_some() {
                 return invalid("/", Invalid::PseudoRootOpinions);
             }
             doc.prim_order = spec.prim_order().map(|o| self.names(o));
@@ -688,7 +715,14 @@ impl<'l> Lowering<'l> {
 
         if !duplicate
             && parent.sites.is_empty()
-            && sink.borrow_prim(spec, id, name, self.tokens, self.paths)
+            && sink.borrow_prim(
+                spec,
+                id,
+                name,
+                self.tokens,
+                self.paths,
+                self.source.properties(id, spec),
+            )
         {
             return Ok(SpecTask {
                 set_names_error: None,
@@ -735,11 +769,17 @@ impl<'l> Lowering<'l> {
         }
         prim.property_order = spec.property_order().map(|o| self.names(o));
         prim.prim_order = spec.prim_order().map(|o| self.names(o));
-        prim.properties = spec
-            .properties
-            .iter()
-            .map(|entry| self.property(entry, &shown))
-            .collect::<Result<_, _>>()?;
+        prim.properties = if parent.sites.is_empty() {
+            self.source
+                .properties(id, spec)
+                .map(|p| self.property(p, &shown))
+                .collect::<Result<_, _>>()?
+        } else {
+            NativeProperties
+                .properties(id, spec)
+                .map(|p| self.property(p, &shown))
+                .collect::<Result<_, _>>()?
+        };
         let set_names_error = self
             .set_names(&mut prim, &shown, spec.variant_set_names())
             .err();
@@ -878,7 +918,7 @@ impl<'l> Lowering<'l> {
         prim.properties = variant
             .properties
             .iter()
-            .map(|entry| self.property(entry, &shown))
+            .map(|entry| self.property(PropertyView::native(entry.name, &entry.spec), &shown))
             .collect::<Result<_, _>>()?;
         let set_names_error = self
             .set_names(&mut prim, &shown, &variant.variant_set_names)
@@ -901,29 +941,30 @@ impl<'l> Lowering<'l> {
 
     /// Spec: AOUSD Core §7.6.3–§7.6.5 (property, attribute and relationship
     /// spec fields).
-    fn property(&self, entry: &PropertyEntry, prim: &str) -> Result<Property, SaveError> {
-        let name = self.name(entry.name);
+    fn property(&self, spec: PropertyView<'_>, prim: &str) -> Result<Property, SaveError> {
+        let name = self.name(spec.name);
         let path = [prim, ".", &name].concat();
-        let spec = &entry.spec;
-        let targets = match &spec.targets {
+        let samples = spec.extra.and_then(|s| s.time_samples.get());
+        let spline = spec.extra.and_then(|s| s.spline.as_ref());
+        let targets = match spec.targets {
             Some(op) => Some(self.target_list(op, &path)?),
             None => None,
         };
-        let metadata = self.metadata(&spec.metadata, &path)?;
+        let metadata = self.metadata(spec.extra.map_or(&[][..], |s| &s.metadata), &path)?;
         Ok(match spec.kind {
             PropertyKind::Attribute => {
-                let Some(declared) = &spec.type_name else {
+                let Some(declared) = spec.type_name else {
                     return invalid(path, Invalid::MissingTypeName);
                 };
                 let type_name = String::from(declared.type_name());
                 let site = Site::Value(&type_name, declared.default_scalar());
-                let value = match &spec.default {
+                let value = match spec.default {
                     Some(value) => Some(self.value(value, site, &path)?),
                     None => None,
                 };
                 // A blocked sample is a value block (§12.3.6), which
                 // `value` converts like any other value.
-                let time_samples = match spec.time_samples.get() {
+                let time_samples = match samples {
                     Some(samples) => Some(
                         samples
                             .iter()
@@ -942,10 +983,9 @@ impl<'l> Lowering<'l> {
                     },
                     value,
                     time_samples,
-                    spline: spec.spline.clone(),
-                    spline_custom_data: spec
-                        .spline
-                        .iter()
+                    spline: spline.cloned(),
+                    spline_custom_data: spline
+                        .into_iter()
                         .flat_map(|s| &s.knots)
                         .filter(|k| !k.custom_data.is_empty())
                         .map(|k| {
@@ -969,12 +1009,12 @@ impl<'l> Lowering<'l> {
             PropertyKind::Relationship => {
                 // A relationship holds no value but the legacy `default`
                 // path (`rel r.default = </A>`).
-                let default = match &spec.default {
+                let default = match spec.default {
                     None => None,
                     Some(LayerValue::PathText(default)) => Some(String::from(&**default)),
                     Some(_) => return invalid(path, Invalid::RelationshipValue),
                 };
-                if spec.type_name.is_some() || spec.time_samples.is_authored() {
+                if spec.type_name.is_some() || samples.is_some() {
                     return invalid(path, Invalid::RelationshipValue);
                 }
                 Property::Relationship(Relationship {
@@ -989,12 +1029,11 @@ impl<'l> Lowering<'l> {
         })
     }
 
-    fn target_list(
-        &self,
-        op: &LayerListOp<TargetPath>,
-        path: &str,
-    ) -> Result<ListOp<String>, SaveError> {
-        self.list_op(op, path, |t| Ok(t.display(self.paths, self.tokens)))
+    fn target_list(&self, op: Targets<'_>, path: &str) -> Result<ListOp<String>, SaveError> {
+        let (explicit, edits) = op.slices();
+        self.list_slices(explicit, edits, path, |t| {
+            Ok(t.display(self.paths, self.tokens))
+        })
     }
 
     /// A reference or payload as authored: its asset path, never the layer
@@ -1035,22 +1074,33 @@ impl<'l> Lowering<'l> {
         path: &str,
         item: impl Fn(&T) -> Result<U, SaveError>,
     ) -> Result<ListOp<U>, SaveError> {
-        let edits = !(op.prepend.is_empty()
-            && op.append.is_empty()
-            && op.delete.is_empty()
-            && op.add.is_empty()
-            && op.reorder.is_empty());
-        if op.explicit.is_some() && edits {
+        self.list_slices(
+            op.explicit.as_deref(),
+            [&op.prepend, &op.append, &op.delete, &op.add, &op.reorder],
+            path,
+            item,
+        )
+    }
+
+    fn list_slices<T, U>(
+        &self,
+        explicit: Option<&[T]>,
+        edits: [&[T]; 5],
+        path: &str,
+        item: impl Fn(&T) -> Result<U, SaveError>,
+    ) -> Result<ListOp<U>, SaveError> {
+        if explicit.is_some() && edits.iter().any(|list| !list.is_empty()) {
             return unsupported(path, Unsupported::MixedListOp);
         }
+        let [prepend, append, delete, add, reorder] = edits;
         let list = |items: &[T]| items.iter().map(&item).collect::<Result<Vec<_>, _>>();
         Ok(ListOp {
-            explicit: op.explicit.as_deref().map(list).transpose()?,
-            deleted: list(&op.delete)?,
-            added: list(&op.add)?,
-            prepended: list(&op.prepend)?,
-            appended: list(&op.append)?,
-            reordered: list(&op.reorder)?,
+            explicit: explicit.map(list).transpose()?,
+            deleted: list(delete)?,
+            added: list(add)?,
+            prepended: list(prepend)?,
+            appended: list(append)?,
+            reordered: list(reorder)?,
         })
     }
 
@@ -1546,10 +1596,13 @@ pub(crate) fn push_element(array: &mut Value, element: Value) -> bool {
 }
 
 mod namespace;
+mod properties;
 #[doc(hidden)]
 pub use crate::writer::borrowed::{Declaration, Payload};
 #[doc(hidden)]
-pub use namespace::{LayerSpec, visit_layer_specs};
+pub use namespace::{LayerSpec, visit_layer_specs, visit_layer_specs_from};
+#[doc(hidden)]
+pub use properties::{NativeProperties, PropertySource, PropertyView, Targets};
 
 #[cfg(test)]
 mod tests;

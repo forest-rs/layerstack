@@ -6,10 +6,10 @@
 //! Run with `cargo run --release -p wind_tunnel --example property_storage -- MODE OP FILE`.
 //! Modes are `native`, `soa`, `tile` (64 rows), `packed`, `inline`, `soa-packed`,
 //! `tile-packed`, `handles` and `share`. The `import` operation times full layer loading.
-//! `save` includes adapting storage for the existing writer. `query` times a shuffled
+//! `save` borrows declarations and target lists directly from each layout. `query` times a shuffled
 //! sweep of ordinary properties, copying a snapshot and editing one frequently occurring
 //! property. Experimental edits measure storage detachment only. `verify` compares the
-//! reconstructed layer and its USDA and USDC bytes with the ordinary reader.
+//! directly saved USDA and USDC bytes and the reconstructed layer with the ordinary reader.
 //! `verify-edit` compares the edited layer and held snapshot to their native equivalents.
 //! These alternative layouts cover ordinary prims with distinct paths. Variant branch
 //! specs stay in native storage. The experiment has no stage or edit journal adapter.
@@ -114,7 +114,11 @@ impl Properties {
         } else {
             let mut op = Box::new(ListOp::new());
             op.explicit = Some(vec![TargetPath::Prim(key.prim_path())]);
-            if self.mode != Mode::Native {
+            if self.mode != Mode::Native
+                && layer
+                    .prim(key.prim_path())
+                    .is_some_and(|p| p.outer_variant_sites().is_empty())
+            {
                 // Keep imported runs immutable while a snapshot holds the arena.
                 // An edit owns its replacement and leaves unrelated runs in place.
                 self.edges.insert(key, op, Mode::Inline);
@@ -145,6 +149,29 @@ impl Properties {
                     .targets = self.edges.expand(key);
             }
         }
+    }
+}
+
+impl layerstack_usda::save::PropertySource for Properties {
+    fn properties<'a>(
+        &'a self,
+        path: layerstack::PathId,
+        prim: &'a layerstack::PrimSpec,
+    ) -> impl Iterator<Item = layerstack_usda::save::PropertyView<'a>> {
+        let columns = self.columns.iter().flat_map(move |c| c.row(path));
+        let handles = self.handles.iter().flat_map(move |h| h.row(path));
+        // Captured rows are removed from the prim, so exactly one iterator has entries.
+        columns
+            .chain(handles)
+            .chain(layerstack_usda::save::NativeProperties.properties(path, prim))
+            .map(move |mut p| {
+                if self.mode != Mode::Native
+                    && let Some(targets) = self.edges.borrow(PropertyPath::new(path, p.name))
+                {
+                    p.targets = Some(targets);
+                }
+                p
+            })
     }
 }
 
@@ -242,36 +269,66 @@ fn main() {
         println!("{read_ns}");
         return;
     }
-    if operation == "save" || operation == "verify" {
+    let text = || {
+        if mode == "native" {
+            layerstack_usda::save_usda(&layer, store.tokens(), store.paths())
+        } else {
+            layerstack_usda::save::save_usda_from(
+                &layer,
+                store.tokens(),
+                store.paths(),
+                &properties,
+            )
+        }
+    };
+    let binary = || {
+        if mode == "native" {
+            layerstack_usdc::save_usdc(&layer, store.tokens(), store.paths())
+        } else {
+            layerstack_usdc::writer::save_usdc_from(
+                &layer,
+                store.tokens(),
+                store.paths(),
+                &properties,
+            )
+        }
+    };
+    if let Some(path) = operation.strip_prefix("write=") {
+        if path.ends_with(".usda") {
+            fs::write(path, text().unwrap()).unwrap();
+        } else {
+            fs::write(path, binary().unwrap()).unwrap();
+        }
+        return;
+    }
+    if operation == "save" || operation == "profile-save" {
+        let rounds = if operation == "profile-save" { 200 } else { 1 };
         let start = Instant::now();
+        let mut len = 0;
+        for _ in 0..rounds {
+            len = if bytes.starts_with(b"PXR-USDC") {
+                black_box(binary().unwrap()).len()
+            } else {
+                black_box(text().unwrap()).len()
+            };
+        }
+        println!("{read_ns} {} {len}", start.elapsed().as_nanos() / rounds);
+        return;
+    }
+    if operation == "verify" {
+        let native = import(&bytes, &store, &mut Properties::new("native"), "native");
+        assert_eq!(
+            text().unwrap(),
+            layerstack_usda::save_usda(&native, store.tokens(), store.paths()).unwrap(),
+            "direct USDA differs"
+        );
+        assert_eq!(
+            binary().unwrap(),
+            layerstack_usdc::save_usdc(&native, store.tokens(), store.paths()).unwrap(),
+            "direct USDC differs"
+        );
         properties.restore(&mut layer);
-        if bytes.starts_with(b"PXR-USDC") && operation == "save" {
-            let output = layerstack_usdc::save_usdc(&layer, store.tokens(), store.paths()).unwrap();
-            println!(
-                "{read_ns} {} {}",
-                start.elapsed().as_nanos(),
-                black_box(output).len()
-            );
-            return;
-        }
-        let usda = layerstack_usda::save_usda(&layer, store.tokens(), store.paths()).unwrap();
-        let save = start.elapsed().as_nanos();
-        black_box(&usda);
-        if operation == "verify" {
-            let native = import(&bytes, &store, &mut Properties::new("native"), "native");
-            assert_eq!(native, layer, "layer content changed in {mode}");
-            assert_eq!(
-                usda,
-                layerstack_usda::save_usda(&native, store.tokens(), store.paths()).unwrap(),
-                "USDA bytes changed in {mode}"
-            );
-            assert_eq!(
-                layerstack_usdc::save_usdc(&layer, store.tokens(), store.paths()).unwrap(),
-                layerstack_usdc::save_usdc(&native, store.tokens(), store.paths()).unwrap(),
-                "USDC bytes changed in {mode}"
-            );
-        }
-        println!("{read_ns} {save} {}", usda.len());
+        assert_eq!(native, layer, "reconstructed layer differs in {mode}");
         return;
     }
     let mut keys: Vec<_> = if let Some(c) = &properties.columns {
@@ -347,6 +404,26 @@ fn main() {
             "snapshot content changed in {mode}"
         );
         Properties::new("native").edit(&mut expected, key, kind);
+        assert_eq!(
+            layerstack_usda::save::save_usda_from(
+                &layer,
+                store.tokens(),
+                store.paths(),
+                &properties
+            ),
+            layerstack_usda::save_usda(&expected, store.tokens(), store.paths()),
+            "edited USDA output differs in {mode}"
+        );
+        assert_eq!(
+            layerstack_usdc::writer::save_usdc_from(
+                &layer,
+                store.tokens(),
+                store.paths(),
+                &properties
+            ),
+            layerstack_usdc::save_usdc(&expected, store.tokens(), store.paths()),
+            "edited USDC output differs in {mode}"
+        );
         properties.restore(&mut layer);
         assert_eq!(layer, expected, "edited layers differ in {mode}");
     }

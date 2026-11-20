@@ -17,6 +17,7 @@ pub(super) trait Sink<'a> {
         _: TokenId,
         _: &'a TokenInterner,
         _: &'a PathInterner,
+        _: impl Iterator<Item = PropertyView<'a>>,
     ) -> bool {
         false
     }
@@ -129,6 +130,21 @@ pub fn visit_layer_specs(
     paths: &PathInterner,
     visit: impl FnMut(LayerSpec<'_>),
 ) -> Result<(), SaveError> {
+    visit_layer_specs_from(layer, tokens, paths, &NativeProperties, visit)
+}
+
+/// Visits validated specs, borrowing ordinary properties from the supplied storage.
+///
+/// # Errors
+///
+/// See [`visit_layer_specs`].
+pub fn visit_layer_specs_from(
+    layer: &Layer,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+    source: &impl PropertySource,
+    visit: impl FnMut(LayerSpec<'_>),
+) -> Result<(), SaveError> {
     let mut sink = CheckedSpecs {
         names: crate::writer::CheckedNames::default(),
         declarations: Vec::new(),
@@ -137,6 +153,7 @@ pub fn visit_layer_specs(
         validation: Ok(()),
     };
     Lowering {
+        source,
         tokens,
         paths,
         skip_empty_entries: false,
@@ -161,6 +178,7 @@ impl<'a, F: FnMut(LayerSpec<'_>)> Sink<'a> for CheckedSpecs<'a, F> {
         name: TokenId,
         tokens: &'a TokenInterner,
         paths: &'a PathInterner,
+        properties: impl Iterator<Item = PropertyView<'a>>,
     ) -> bool {
         self.declarations.clear();
         if self
@@ -171,7 +189,7 @@ impl<'a, F: FnMut(LayerSpec<'_>)> Sink<'a> for CheckedSpecs<'a, F> {
                 tokens,
                 paths,
                 &mut self.declarations,
-                Order::Authored,
+                (Order::Authored, properties),
             )
             .is_none()
         {
@@ -310,6 +328,7 @@ impl<'a, O: crate::writer::TextOutput<'a>> Sink<'a> for TextBuilder<O> {
         name: TokenId,
         tokens: &'a TokenInterner,
         paths: &'a PathInterner,
+        properties: impl Iterator<Item = PropertyView<'a>>,
     ) -> bool {
         if self.shared.is_err() || self.text.is_err() {
             return false;
@@ -320,7 +339,7 @@ impl<'a, O: crate::writer::TextOutput<'a>> Sink<'a> for TextBuilder<O> {
             tokens,
             paths,
             self.output.declarations(),
-            Order::Text,
+            (Order::Text, properties),
         ) else {
             return false;
         };

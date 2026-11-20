@@ -6,8 +6,8 @@ use alloc::sync::Arc;
 use alloc::vec;
 
 use layerstack::doc::{LayerId, Reference, SublayerEntry};
-use layerstack::path::PropertyPath;
-use layerstack::property::PropertySpec;
+use layerstack::path::{PropertyPath, TargetPath};
+use layerstack::property::{PropertyEntry, PropertySpec};
 use layerstack::spline::{CurveType, Extrapolation, KnotInterp, SplineDataType};
 use layerstack::{AssetResolveError, AssetResolver, ResolvedAsset};
 

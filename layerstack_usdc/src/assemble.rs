@@ -24,8 +24,8 @@ use layerstack::sort;
 use hashbrown::{HashMap, HashSet};
 
 use layerstack::doc::{
-    FieldValue, Layer, LayerId, LayerOffset, PrimSpec, RarePrimFields, Reference, Specifier,
-    SublayerEntry, Value, VariantSelections, VariantSets, VariantSpec, set_field_vec,
+    FieldValue, Layer, LayerId, LayerOffset, PrimSpec, Reference, Specifier, SublayerEntry, Value,
+    VariantSets, VariantSpec, set_field_vec,
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp;
@@ -1580,7 +1580,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             decoded.mark(index);
             let (spec, children) = &shared.spec;
             let children = children.as_deref().map(Order::Shared);
-            return Ok((Box::new(copy_prim(spec)), children));
+            return Ok((spec.clone(), children));
         }
         let (used, diagnostics) = (self.budget.used(), self.diagnostics.len());
         self.collect_spec_fields(index, decoded, fields)?;
@@ -1597,7 +1597,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         {
             let charged = self.budget.used() - used;
             let _ = shared.prim.set(Arc::new(Shared {
-                spec: (Box::new(copy_prim(&prim)), children.clone()),
+                spec: (prim.clone(), children.clone()),
                 charged,
             }));
         }
@@ -3505,52 +3505,6 @@ fn place_property(prims: &mut PrimSpecs<'_>, item: PropertyItem) {
     put_property(&mut prim.properties, item.name, item.property);
 }
 
-/// A copy of `spec`, a spec built for a fieldset specs share, cloning only
-/// what it authors: most of a prim spec's lists and maps are empty, and
-/// cloning each costs as much as building the spec.
-fn copy_prim(spec: &PrimSpec) -> PrimSpec {
-    fn list<T: Clone>(list: &ListOp<T>) -> ListOp<T> {
-        if list.is_empty() {
-            ListOp::new()
-        } else {
-            list.clone()
-        }
-    }
-    fn map(map: &VariantSelections) -> VariantSelections {
-        if map.is_empty() {
-            VariantSelections::new()
-        } else {
-            map.clone()
-        }
-    }
-    fn vec<T: Clone>(vec: &[T]) -> Vec<T> {
-        vec.to_vec()
-    }
-    let mut copy = PrimSpec::default();
-    copy.specifier = spec.specifier;
-    copy.type_name = spec.type_name;
-    copy.fields = vec(&spec.fields);
-    copy.properties = vec(&spec.properties);
-    copy.authored_children = vec(&spec.authored_children);
-    copy.references = list(&spec.references).into();
-    copy.payloads = list(&spec.payloads).into();
-    copy.instanceable = spec.instanceable;
-    copy.active = spec.active;
-    if let Some(rare) = spec.rare() {
-        *copy.rare_mut() = RarePrimFields {
-            inherits: list(&rare.inherits).into(),
-            specializes: list(&rare.specializes).into(),
-            variant_selections: map(&rare.variant_selections),
-            variant_sets: rare.variant_sets.clone(),
-            variant_set_names: list(&rare.variant_set_names).into(),
-            property_order: rare.property_order.clone(),
-            prim_order: rare.prim_order.clone(),
-            outer_variant_sites: vec(&rare.outer_variant_sites),
-        };
-    }
-    copy
-}
-
 /// Declares the variant sets a spec's `variantSetChildren` names, in its
 /// order, before their own specs fill them: OpenUSD keeps a spec's set
 /// specs in that order (`SdfPrimSpec::GetVariantSets`), the order its text
@@ -4114,6 +4068,47 @@ def "Other" {}
         assert!(tree.layer == text.layer, "the same layer");
         assert_eq!(tree.diagnostics, text.diagnostics);
         assert!(tree.layer == read.emitted.layer, "the layer written");
+    }
+
+    /// An empty, non-explicit inheritPaths list op is still an authored field
+    /// (AOUSD Core §7.6.2.3.3). Reusing its fieldset must preserve that fact.
+    #[test]
+    fn shared_prim_fieldset_preserves_authored_empty_inherits() {
+        use crate::writer::{ListOp as CrateOp, Spec, SpecForm as Form, Value as V, write_crate};
+        let child = |path| {
+            Spec::new(path, Form::Prim)
+                .with_field("specifier", V::Specifier(Specifier::Def))
+                .with_field(
+                    "inheritPaths",
+                    V::PathListOp(CrateOp::prepend(alloc::vec![])),
+                )
+        };
+        let bytes = write_crate(&[
+            Spec::new("/", Form::PseudoRoot).with_field(
+                "primChildren",
+                V::TokenVector(alloc::vec!["A".into(), "B".into()]),
+            ),
+            child("/A"),
+            child("/B"),
+        ])
+        .unwrap();
+        let store = layerstack::InMemoryStore::default();
+        let read = crate::read_usdc(
+            &bytes,
+            LayerId(1),
+            store.tokens(),
+            store.paths(),
+            &mut NoAssets,
+        )
+        .unwrap();
+        assert!(read.diagnostics.is_empty(), "{:?}", read.diagnostics);
+        for name in ["/A", "/B"] {
+            let prim = read.layer.prim(store.path(name)).unwrap();
+            assert!(
+                prim.rare().unwrap().inherits.is_authored(),
+                "{name} lost its inheritPaths field"
+            );
+        }
     }
 
     /// An `SdfUnregisteredValue` holding text is the USDA text of the

@@ -7,7 +7,7 @@
 
 use alloc::string::String;
 use alloc::vec::Vec;
-use core::hash::BuildHasher;
+use core::hash::{BuildHasher, Hash, Hasher};
 use hashbrown::{DefaultHashBuilder, HashTable};
 
 use super::{Field, Spec, SpecForm, Value};
@@ -108,6 +108,40 @@ pub(super) struct LayerSpecs {
 // Repeated declaration fields and short name lists occupy one value each.
 // Every other value goes straight to the pool;
 // the packer's typed caches handle their payloads, including float bit patterns.
+#[derive(Clone, Copy)]
+enum Names<'a> {
+    Stored(&'a [String]),
+    Borrowed(&'a [&'a str]),
+}
+
+impl Names<'_> {
+    fn as_names(&self) -> impl ExactSizeIterator<Item = &str> {
+        let len = match self {
+            Self::Stored(s) => s.len(),
+            Self::Borrowed(s) => s.len(),
+        };
+        (0..len).map(move |i| match self {
+            Self::Stored(s) => s[i].as_str(),
+            Self::Borrowed(s) => s[i],
+        })
+    }
+}
+impl PartialEq for Names<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_names().eq(other.as_names())
+    }
+}
+impl Eq for Names<'_> {}
+impl Hash for Names<'_> {
+    fn hash<H: Hasher>(&self, h: &mut H) {
+        let names = self.as_names();
+        names.len().hash(h);
+        for n in names {
+            n.hash(h);
+        }
+    }
+}
+
 #[derive(Hash, PartialEq, Eq)]
 enum CommonField<'a> {
     Specifier(u8),
@@ -115,7 +149,7 @@ enum CommonField<'a> {
     Bool(bool),
     Token(&'a str),
     String(&'a str),
-    Tokens(&'a [String]),
+    Tokens(Names<'a>),
 }
 
 fn common_field(value: &Value) -> Option<CommonField<'_>> {
@@ -125,7 +159,7 @@ fn common_field(value: &Value) -> Option<CommonField<'_>> {
         Value::Bool(b) => CommonField::Bool(*b),
         Value::Token(t) => CommonField::Token(t),
         Value::String(s) => CommonField::String(s),
-        Value::TokenVector(names) if names.len() <= 8 => CommonField::Tokens(names),
+        Value::TokenVector(names) if names.len() <= 8 => CommonField::Tokens(Names::Stored(names)),
         _ => return None,
     })
 }
@@ -217,6 +251,29 @@ impl LayerSpecs {
     fn store(&mut self, name: impl Into<String>, value: Value) {
         self.occurrences.push(self.fields.len());
         self.fields.push(Field::new(name, value));
+    }
+
+    /// Name lists recur across prims of the same type. Probe with borrowed
+    /// names so only distinct short lists allocate strings in the field pool.
+    pub(super) fn names<'a>(&mut self, field: &str, names: impl ExactSizeIterator<Item = &'a str>) {
+        if names.len() <= 8 {
+            let names: smallvec::SmallVec<[&str; 8]> = names.collect();
+            if self.reuse(field, &CommonField::Tokens(Names::Borrowed(&names))) {
+                return;
+            }
+            self.store(
+                field,
+                Value::TokenVector(names.into_iter().map(String::from).collect()),
+            );
+        } else {
+            self.store(field, Value::TokenVector(names.map(String::from).collect()));
+        }
+    }
+
+    pub(super) fn string(&mut self, name: &str, value: &str) {
+        if !self.reuse(name, &CommonField::String(value)) {
+            self.store(name, Value::String(value.into()));
+        }
     }
 
     pub(super) fn token(&mut self, name: &str, token: &str) {

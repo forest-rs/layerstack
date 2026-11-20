@@ -1,14 +1,20 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use alloc::{format, vec::Vec};
-use hashbrown::HashSet;
+use alloc::{boxed::Box, format, sync::Arc, vec::Vec};
+use hashbrown::{HashMap, HashSet, hash_map::Entry};
 use layerstack::{
-    CannotApply, ListOp, PrimDefinition, PrimSpec, PropertyDefinition, PropertyKind, PropertySpec,
-    SchemaRegistry, TargetPath, TokenId, TokenInterner, Value,
+    CannotApply, ListOp, PrimDefinition, PrimSpec, PropertyDefinition, PropertyEntry, PropertyKind,
+    PropertySpec, SchemaRegistry, TargetPath, TokenId, TokenInterner, Value,
 };
 
-use super::BatchError;
+use super::{
+    BatchError,
+    index::{ApiMemberships, Declarations},
+};
+
+/// Narrow prims need no separate lookup tables.
+const INDEX_AT: usize = 8;
 
 /// A new prim being defined in a [`LayerBatch`](super::LayerBatch).
 /// Properties use the prim's schema and any APIs applied to it. Only
@@ -20,7 +26,11 @@ pub struct BatchPrim<'a> {
     spec: PrimSpec,
     schemas: &'a SchemaRegistry,
     tokens: &'a TokenInterner,
+    typed: &'a PrimDefinition,
     applied: Vec<TokenId>,
+    declarations: Option<Box<Declarations<'a>>>,
+    memberships: Option<Box<ApiMemberships>>,
+    property_slots: Option<HashMap<TokenId, usize>>,
 }
 
 impl<'a> BatchPrim<'a> {
@@ -33,7 +43,13 @@ impl<'a> BatchPrim<'a> {
             spec: PrimSpec::def().with_type_name(type_name),
             schemas,
             tokens,
+            typed: schemas
+                .schema_definition(type_name)
+                .expect("registered concrete schema"),
             applied: Vec::new(),
+            declarations: None,
+            memberships: None,
+            property_slots: None,
         }
     }
 
@@ -100,28 +116,67 @@ impl<'a> BatchPrim<'a> {
             .schemas
             .schema_definition(schema_id)
             .ok_or_else(|| rejected(CannotApply::NotAnAppliedSchema))?;
-        crate::edit::check_api_application(
-            self.schemas,
-            self.spec.type_name,
-            || self.applied.as_slice(),
-            schema_id,
-            instance,
-            self.tokens,
-        )
-        .map_err(rejected)?;
+        self.check_api_application(schema_id, instance)
+            .map_err(rejected)?;
         let entry = match instance {
             None => schema_id,
             Some(instance) => self.tokens.intern(format!("{schema}:{instance}")),
         };
-        if !self.applied.contains(&entry) {
-            self.applied.push(entry);
-        }
         let instance = instance.map(|name| self.tokens.intern(name));
+        self.record_api(entry);
         Ok(BatchApi {
             prim: self,
             definition,
             instance,
         })
+    }
+
+    fn check_api_application(
+        &mut self,
+        schema: TokenId,
+        instance: Option<&str>,
+    ) -> Result<(), CannotApply> {
+        let checked = self
+            .schemas
+            .can_apply(self.typed, schema, instance, self.tokens);
+        if !matches!(checked, Err(CannotApply::NotATarget { .. })) || self.applied.is_empty() {
+            return checked;
+        }
+        let memberships = self.memberships.get_or_insert_with(|| {
+            let mut memberships = Box::new(ApiMemberships::new(self.typed));
+            for &entry in &self.applied {
+                memberships.insert(entry, self.schemas, self.tokens);
+            }
+            memberships
+        });
+        self.schemas.can_apply_with_apis(
+            self.typed,
+            schema,
+            instance,
+            self.tokens,
+            |schema, instance| memberships.contains(schema, instance),
+        )
+    }
+
+    fn record_api(&mut self, entry: TokenId) {
+        let new = match &mut self.declarations {
+            Some(index) => index.insert(entry, self.applied.len(), self.schemas, self.tokens),
+            None => !self.applied.contains(&entry),
+        };
+        if !new {
+            return;
+        }
+        self.applied.push(entry);
+        if self.applied.len() == INDEX_AT {
+            let mut declarations = Box::new(Declarations::default());
+            for (rank, &entry) in self.applied.iter().enumerate() {
+                declarations.insert(entry, rank, self.schemas, self.tokens);
+            }
+            self.declarations = Some(declarations);
+        }
+        if let Some(memberships) = &mut self.memberships {
+            memberships.insert(entry, self.schemas, self.tokens);
+        }
     }
 
     fn property_name(&self, name: &str) -> Result<TokenId, BatchError> {
@@ -139,8 +194,17 @@ impl<'a> BatchPrim<'a> {
         expected: PropertyKind,
     ) -> Result<&'a PropertyDefinition, BatchError> {
         let definition = self
-            .schemas
-            .strongest_property_definition(self.spec.type_name, &self.applied, name, self.tokens)
+            .typed
+            .property(name)
+            .or_else(|| match &self.declarations {
+                Some(index) => index.property(name, self.tokens),
+                None => self.schemas.strongest_property_definition(
+                    None,
+                    &self.applied,
+                    name,
+                    self.tokens,
+                ),
+            })
             .ok_or_else(|| BatchError::UnknownProperty(self.tokens.resolve(name).into()))?;
         if definition.kind != expected {
             return Err(BatchError::WrongPropertyKind {
@@ -166,7 +230,7 @@ impl<'a> BatchPrim<'a> {
         }
         let mut spec = PropertySpec::typed_attribute(ty.clone()).with_default(value);
         spec.variability = def.variability;
-        self.spec.set_property(name, spec);
+        self.set_property(name, spec);
         Ok(())
     }
 
@@ -187,8 +251,36 @@ impl<'a> BatchPrim<'a> {
         }
         let mut spec = PropertySpec::relationship().with_targets(ListOp::explicit(targets));
         spec.variability = def.variability;
-        self.spec.set_property(name, spec);
+        self.set_property(name, spec);
         Ok(())
+    }
+
+    fn set_property(&mut self, name: TokenId, spec: PropertySpec) {
+        let properties = &mut self.spec.properties;
+        if let Some(slots) = &mut self.property_slots {
+            match slots.entry(name) {
+                Entry::Occupied(entry) => properties[*entry.get()].spec = Arc::new(spec),
+                Entry::Vacant(entry) => {
+                    entry.insert(properties.len());
+                    properties.push(PropertyEntry {
+                        name,
+                        spec: Arc::new(spec),
+                    });
+                }
+            }
+            return;
+        }
+        self.spec.set_property(name, spec);
+        if self.spec.properties.len() == INDEX_AT {
+            self.property_slots = Some(
+                self.spec
+                    .properties
+                    .iter()
+                    .enumerate()
+                    .map(|(at, property)| (property.name, at))
+                    .collect(),
+            );
+        }
     }
 }
 

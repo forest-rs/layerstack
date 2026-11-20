@@ -10,6 +10,7 @@ use layerstack::{
     PropertyKind, PropertyType, SchemaKind, SchemaRegistry, TargetPath, TokenInterner,
 };
 
+mod index;
 mod prim;
 pub use prim::{BatchApi, BatchPrim};
 

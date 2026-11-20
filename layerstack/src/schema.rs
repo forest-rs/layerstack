@@ -960,6 +960,33 @@ impl SchemaRegistry {
         instance: Option<&str>,
         tokens: &TokenInterner,
     ) -> Result<(), CannotApply> {
+        self.check_application(prim, schema, instance, tokens, |_, _| false)
+    }
+
+    /// Checks API applicability against `prim` and additional applied APIs
+    /// supplied by an authoring client. `has_api(schema, None)` must report
+    /// whether any instance or single application of `schema` is present.
+    /// This authoring hook is available under `unstable-internals`.
+    #[cfg(feature = "unstable-internals")]
+    pub fn can_apply_with_apis(
+        &self,
+        prim: &PrimDefinition,
+        schema: TokenId,
+        instance: Option<&str>,
+        tokens: &TokenInterner,
+        has_api: impl FnMut(TokenId, Option<TokenId>) -> bool,
+    ) -> Result<(), CannotApply> {
+        self.check_application(prim, schema, instance, tokens, has_api)
+    }
+
+    fn check_application(
+        &self,
+        prim: &PrimDefinition,
+        schema: TokenId,
+        instance: Option<&str>,
+        tokens: &TokenInterner,
+        mut has_api: impl FnMut(TokenId, Option<TokenId>) -> bool,
+    ) -> Result<(), CannotApply> {
         let definition = self
             .schemas
             .get(&schema)
@@ -985,7 +1012,7 @@ impl SchemaRegistry {
         if allowed.is_empty()
             || allowed
                 .iter()
-                .any(|&name| self.is_target(prim, name, tokens))
+                .any(|&name| self.is_target(prim, name, tokens, &mut has_api))
         {
             return Ok(());
         }
@@ -1003,7 +1030,13 @@ impl SchemaRegistry {
     /// and instance names). OpenUSD 26.11: `_IsPrimValidApplyToTarget`
     /// (`usd/prim.cpp`), which splits the name with
     /// `UsdSchemaRegistry::GetTypeNameAndInstance`.
-    fn is_target(&self, prim: &PrimDefinition, name: TokenId, tokens: &TokenInterner) -> bool {
+    fn is_target(
+        &self,
+        prim: &PrimDefinition,
+        name: TokenId,
+        tokens: &TokenInterner,
+        has_api: &mut impl FnMut(TokenId, Option<TokenId>) -> bool,
+    ) -> bool {
         let (schema_name, instance) = split_instance(tokens.resolve(name));
         let instance = instance.filter(|instance| !instance.is_empty());
         let applied = tokens.lookup(schema_name).filter(|schema| {
@@ -1012,10 +1045,10 @@ impl SchemaRegistry {
                 .is_some_and(|s| s.kind.is_applied())
         });
         match (applied, instance) {
-            (Some(schema), None) => prim.has_api(schema),
-            (Some(schema), Some(instance)) => tokens
-                .lookup(instance)
-                .is_some_and(|instance| prim.has_api_instance(schema, instance)),
+            (Some(schema), None) => prim.has_api(schema) || has_api(schema, None),
+            (Some(schema), Some(instance)) => tokens.lookup(instance).is_some_and(|instance| {
+                prim.has_api_instance(schema, instance) || has_api(schema, Some(instance))
+            }),
             (None, _) => prim.is_a(name),
         }
     }
@@ -1265,6 +1298,27 @@ impl SchemaRegistry {
         name: TokenId,
         tokens: &'t TokenInterner,
     ) -> Option<(&PrimDefinition, Option<&'t str>)> {
+        self.resolve_application(name, tokens)
+            .map(|(_, definition, instance)| (definition, instance))
+    }
+
+    /// Resolves an authored `apiSchemas` entry to its registered schema,
+    /// definition and instance, using the same rules as prim composition.
+    #[cfg(feature = "unstable-internals")]
+    #[must_use]
+    pub fn applied_definition<'t>(
+        &self,
+        name: TokenId,
+        tokens: &'t TokenInterner,
+    ) -> Option<(TokenId, &PrimDefinition, Option<&'t str>)> {
+        self.resolve_application(name, tokens)
+    }
+
+    fn resolve_application<'t>(
+        &self,
+        name: TokenId,
+        tokens: &'t TokenInterner,
+    ) -> Option<(TokenId, &PrimDefinition, Option<&'t str>)> {
         let (schema_name, instance) = split_instance(tokens.resolve(name));
         let schema = self.schemas.get(&tokens.lookup(schema_name)?)?;
         let instance = instance.filter(|instance| !instance.is_empty());
@@ -1273,8 +1327,14 @@ impl SchemaRegistry {
             SchemaKind::MultipleApplyApi => instance.is_some(),
             SchemaKind::ConcreteTyped | SchemaKind::AbstractTyped => false,
         };
-        fits.then(|| Some((self.definitions.get(&schema.name)?.as_ref(), instance)))
-            .flatten()
+        fits.then(|| {
+            Some((
+                schema.name,
+                self.definitions.get(&schema.name)?.as_ref(),
+                instance,
+            ))
+        })
+        .flatten()
     }
 }
 

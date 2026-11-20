@@ -6,16 +6,20 @@
 
 use std::{
     hint::black_box,
+    ops::Range,
+    sync::Arc,
     time::{Duration, Instant},
 };
 
 use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 use layerstack::{
-    AssetResolveError, AssetResolver, InMemoryStore, Layer, LayerId, LiveStage, PathInterner,
-    PrimSpec, PropertyPath, PropertySpec, PropertyType, Reference, ResolvedAsset, Stage,
-    StageOptions, Time, TokenInterner, Value,
+    AssetResolveError, AssetResolver, InMemoryStore, Layer, LayerId, ListOp, LiveStage, PathId,
+    PathInterner, PrimSpec, PropertyDefinition, PropertyEntry, PropertyPath, PropertySpec,
+    PropertyType, Reference, ResolvedAsset, SchemaDefinition, SchemaRegistry, Stage, StageOptions,
+    Time, TokenId, TokenInterner, Value,
     edit::{EditTarget, Transaction},
 };
+use layerstack_schemas::Domain;
 
 struct NoAssets;
 
@@ -333,5 +337,172 @@ fn bench_sampled_default_edits(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_storage, bench_sampled_default_edits);
+struct AppliedSchemaFixture {
+    store: InMemoryStore,
+    options: StageOptions,
+    expansion_rules: Vec<(PathId, Range<usize>)>,
+    allowed_tokens: TokenId,
+}
+
+fn applied_schema_fixture(
+    prims: usize,
+    instances: usize,
+    shared_instances: bool,
+    base_properties: usize,
+) -> AppliedSchemaFixture {
+    let mut store = InMemoryStore::default();
+    let tokens = store.tokens();
+    let mut builder = SchemaRegistry::builder();
+    layerstack_schemas::register(&mut builder, &[Domain::UsdGeom], tokens).unwrap();
+    let scope = tokens.intern("Scope");
+    let type_name = if base_properties == 0 {
+        scope
+    } else {
+        let base_name = tokens.intern("WideBase");
+        let mut base = SchemaDefinition::typed(base_name).with_parent(scope);
+        let property_type = PropertyType::parse("int").unwrap();
+        for index in 0..base_properties {
+            let name = tokens.intern(format!("baseProperty{index}"));
+            base = base.with_property(
+                PropertyDefinition::attribute(name)
+                    .with_type(property_type.clone())
+                    .with_fallback(Value::Int(0)),
+            );
+        }
+        builder.register(base);
+        let derived = tokens.intern("WideScope");
+        builder.register(SchemaDefinition::typed(derived).with_parent(base_name));
+        derived
+    };
+    let options = StageOptions {
+        schemas: Some(Arc::new(builder.build(tokens))),
+        ..StageOptions::default()
+    };
+    let api_schemas = tokens.intern("apiSchemas");
+    let allowed_tokens = tokens.intern("allowedTokens");
+    let includes = Arc::new(PropertySpec::relationship());
+    let mut layer = Layer::new(LayerId(1));
+    let mut expansion_rules = Vec::with_capacity(prims);
+    for prim_index in 0..prims {
+        let path = store.path(&format!("/Scope{prim_index}"));
+        let tokens = store.tokens();
+        let mut prim = PrimSpec::def().with_type_name(type_name);
+        let mut apis = Vec::with_capacity(instances);
+        let offset = if shared_instances {
+            0
+        } else {
+            prim_index * instances
+        };
+        let rows = offset..offset + instances;
+        for index in rows.clone() {
+            apis.push(tokens.intern(format!("CollectionAPI:row_{index}")));
+            prim.properties.push(PropertyEntry {
+                name: tokens.intern(format!("collection:row_{index}:includes")),
+                spec: Arc::clone(&includes),
+            });
+        }
+        layer.insert_prim(path, prim.with_field(api_schemas, ListOp::explicit(apis)));
+        expansion_rules.push((path, rows));
+    }
+    store.insert_layer(layer);
+    AppliedSchemaFixture {
+        store,
+        options,
+        expansion_rules,
+        allowed_tokens,
+    }
+}
+
+fn bench_applied_schemas(c: &mut Criterion) {
+    let mut group = c.benchmark_group("applied_schema_composition");
+    group.sample_size(10);
+    group.warm_up_time(Duration::from_millis(500));
+    group.measurement_time(Duration::from_secs(2));
+    for (label, prims, instances, shared, base_properties) in [
+        ("wide_1024", 1, 1024, true, 0),
+        ("wide_8192", 1, 8192, true, 0),
+        ("wide_32768", 1, 32768, true, 0),
+        ("shared_128x128", 128, 128, true, 256),
+        ("distinct_128x128", 128, 128, false, 256),
+    ] {
+        let AppliedSchemaFixture {
+            mut store,
+            options,
+            expansion_rules,
+            allowed_tokens,
+        } = applied_schema_fixture(prims, instances, shared, base_properties);
+        let schemas = options.schemas.as_ref().unwrap();
+        let definition_size = |name| {
+            schemas
+                .schema_definition(store.tokens().lookup(name).unwrap())
+                .unwrap()
+                .properties()
+                .len()
+        };
+        let expected_properties = base_properties
+            + definition_size("Scope")
+            + instances * definition_size("CollectionAPI");
+        let stage = Stage::compose(&mut store, LayerId(1), options.clone());
+        assert!(
+            stage.composition_errors().is_empty(),
+            "fixture composes without errors"
+        );
+        let mut properties = Vec::with_capacity(prims * instances);
+        for (path, rows) in &expansion_rules {
+            let prim = stage.prim(*path, &store).unwrap();
+            let definition = prim.definition().unwrap();
+            assert_eq!(
+                definition.applied_schemas().len(),
+                instances,
+                "every application reaches the composed definition"
+            );
+            assert_eq!(
+                definition.properties().len(),
+                expected_properties,
+                "the definition contains every inherited and applied property"
+            );
+            for index in rows.clone() {
+                let name = format!("collection:row_{index}:expansionRule");
+                let property = prim.property(name.as_str()).unwrap();
+                assert!(
+                    property.metadata(allowed_tokens).is_some(),
+                    "instance has schema metadata"
+                );
+                properties.push(property);
+            }
+        }
+        group.bench_function(BenchmarkId::new("read_metadata", label), |b| {
+            b.iter(|| {
+                for property in black_box(&properties) {
+                    black_box(property.metadata(allowed_tokens));
+                }
+            });
+        });
+        drop(properties);
+        drop(stage);
+        group.bench_function(BenchmarkId::new("compose", label), |b| {
+            // A fresh store measures first composition, including names
+            // instantiated by the applied schemas. Setup and drop are untimed.
+            b.iter_batched_ref(
+                || applied_schema_fixture(prims, instances, shared, base_properties),
+                |fixture| {
+                    black_box(Stage::compose(
+                        &mut fixture.store,
+                        LayerId(1),
+                        fixture.options.clone(),
+                    ))
+                },
+                BatchSize::PerIteration,
+            );
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_storage,
+    bench_sampled_default_edits,
+    bench_applied_schemas
+);
 criterion_main!(benches);

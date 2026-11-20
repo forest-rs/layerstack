@@ -253,6 +253,14 @@ one- and four-layer stacks, both fieldless and with three typed transform
 properties per prim. Fixture setup and stage destruction are outside the
 composition timer. Composition assertions check child and dependency coverage.
 
+The `composition_storage` target's `applied_schema_composition` group composes
+one `Scope` with up to 32,768 `CollectionAPI` applications. It also composes 128
+prims with 128 shared or distinct application names per prim and 256 inherited
+properties. Each application authors an `includes` relationship. Each compose
+sample starts with a fresh store and excludes fixture setup and drop time. The
+metadata case reads `expansionRule`'s schema-defined `allowedTokens` for every
+application from an already composed stage.
+
 The `usdc_open` target includes `usdc_integer_import`: signed and unsigned
 32/64-bit arrays at small and mesh-buffer sizes. Input files are prepared outside
 measurement, and complete layer import is timed separately from destruction.

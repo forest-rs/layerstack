@@ -263,6 +263,13 @@ before returning a transaction. Live publication and file export use the same
 primvar cardinality and index validators. Indices retain separately indexed UV
 and normal seams even when the selected values happen to be equal.
 
+When authoring points and extent directly, call
+`usd_geom::PointBased::compute_extent(&points)` before handing the point buffer
+to a setter. Mesh publication uses the same calculation. A mesh with zero
+points authors the two corners of an empty range, `[f32::MAX; 3]` and
+`[-f32::MAX; 3]`. Prepare and apply another publication to refresh a previously
+published zero-length extent.
+
 ```rust,ignore
 let publication = generated_mesh.prepare(
     live.stage(), &mut store, &edit_target, mesh_path, &owned_properties,
@@ -305,7 +312,7 @@ restore its manifest or explicitly supply its known owned names before pruning.
 
 Preparation validates the entire snapshot and scans its points/topology/indices,
 even for unchanged updates. It allocates small transaction/property records and
-a derived extent buffer (at most two points). Native owner equality avoids
+a derived two-point extent buffer. Native owner equality avoids
 element comparison; independently allocated buffers can require O(elements)
 comparison. Producer evaluation, immutable geometry-content hashing and buffer
 pooling remain caller responsibilities.

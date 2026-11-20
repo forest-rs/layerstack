@@ -12,6 +12,7 @@
 
 use crate::diagnostic::{Describe, Names, with_store};
 use crate::subset::{MeshTopologyError, validate_mesh_topology};
+use crate::usd_geom::PointBased;
 use alloc::{format, string::String, sync::Arc, vec::Vec};
 use layerstack::edit::{EditTarget, Transaction};
 use layerstack::{
@@ -298,7 +299,7 @@ impl GeneratedMesh {
             }
         }
         self.validate()?;
-        let extent = derive_extent(&self.points);
+        let extent = Arc::new(PointBased::compute_extent(&self.points).to_vec());
         let work = MeshValidationWork {
             points: self.points.len(),
             faces: self.face_vertex_counts.len(),
@@ -402,7 +403,8 @@ impl GeneratedMesh {
     /// sites require a composed `Mesh`; explicit non-mesh targets are rejected.
     /// A layer-generation guard rejects application after intervening target edits.
     /// Planning allocates small property/transaction records; buffers are not copied.
-    /// A new two-point extent buffer is derived from the points on each preparation.
+    /// A new two-point extent buffer is derived from the points on each preparation
+    /// with [`PointBased::compute_extent`], including the empty range for zero points.
     /// Changed arrays are compared by representation when owners differ (O(elements));
     /// validation still scans points, topology and indices on unchanged updates.
     /// AOUSD Core §7.6 (authored specs), §12.3 (values), §7.6.4 (attribute specs).
@@ -485,7 +487,7 @@ impl GeneratedMesh {
         ));
         let extent = retained_extent
             .cloned()
-            .unwrap_or_else(|| derive_extent(&self.points));
+            .unwrap_or_else(|| Arc::new(PointBased::compute_extent(&self.points).to_vec()));
         attributes.push((
             String::from("extent"),
             typed("float3[]", TypedArray::Vec3f(extent)),
@@ -599,21 +601,6 @@ impl GeneratedMesh {
             properties,
         })
     }
-}
-
-fn derive_extent(points: &[[f32; 3]]) -> Arc<Vec<[f32; 3]>> {
-    let mut extent = Vec::new();
-    if let Some(first) = points.first() {
-        let (mut lo, mut hi) = (*first, *first);
-        for point in points.iter().skip(1) {
-            for axis in 0..3 {
-                lo[axis] = lo[axis].min(point[axis]);
-                hi[axis] = hi[axis].max(point[axis]);
-            }
-        }
-        extent.extend([lo, hi]);
-    }
-    Arc::new(extent)
 }
 
 /// Geometry covered by one successful immutable snapshot validation.
@@ -730,6 +717,51 @@ mod tests {
             element_size: 1,
             indices: Some(Arc::new(vec![0, 1, 2])),
         }
+    }
+    #[test]
+    fn empty_mesh_publications_author_two_extent_corners() {
+        let mut store = InMemoryStore::default();
+        let root = LayerId(1);
+        store.insert_layer(Layer::new(root));
+        let options = StageOptions {
+            schemas: Some(Arc::new(crate::openusd(store.tokens()))),
+            ..Default::default()
+        };
+        let mut live = LiveStage::compose(&mut store, root, options);
+        let target = EditTarget::for_layer(root);
+        let mesh = GeneratedMesh::default();
+        let snapshot = mesh.clone().into_validated().unwrap();
+        let generated = store.path("/Generated");
+        let validated = store.path("/Validated");
+        let old = triangle()
+            .prepare(live.stage(), &mut store, &target, generated, &[])
+            .unwrap();
+        live.apply(&mut store, &old.transaction).unwrap();
+        let generated_edit = mesh
+            .prepare(
+                live.stage(),
+                &mut store,
+                &target,
+                generated,
+                &old.properties,
+            )
+            .unwrap();
+        live.apply(&mut store, &generated_edit.transaction).unwrap();
+        let validated_edit = snapshot
+            .prepare(live.stage(), &mut store, &target, validated, &[])
+            .unwrap();
+        live.apply(&mut store, &validated_edit.transaction).unwrap();
+
+        let scene = Scene::new(live.stage(), &store);
+        // OpenUSD 26.11 UsdGeomPointBased::ComputeExtent on no points.
+        let expected = [[f32::MAX; 3], [-f32::MAX; 3]];
+        for path in [generated, validated] {
+            let published = Mesh::get(&scene, path).unwrap();
+            assert_eq!(published.extent().unwrap().as_slice(), &expected);
+            assert!(Arc::ptr_eq(&published.points().unwrap(), &mesh.points));
+        }
+        let retained = Mesh::get(&scene, validated).unwrap().extent().unwrap();
+        assert!(Arc::ptr_eq(&retained, &snapshot.0.extent));
     }
     #[test]
     fn validated_snapshots_repair_authored_output_without_scanning_geometry() {
@@ -857,6 +889,10 @@ mod tests {
         live.apply(&mut store, &update.transaction).unwrap();
         let scene = Scene::new(live.stage(), &store);
         let mesh = Mesh::get(&scene, path).unwrap();
+        assert_eq!(
+            mesh.extent().unwrap().as_slice(),
+            &[[0., 0., 0.], [2., 2., 0.]]
+        );
         assert!(Arc::ptr_eq(
             &indices_before,
             &mesh.face_vertex_indices().unwrap()

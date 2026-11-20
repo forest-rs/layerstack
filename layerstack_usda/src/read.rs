@@ -22,7 +22,7 @@ pub struct ReadStats {
     /// the rollback of a speculative parse), including fallback values.
     pub tokens: usize,
     /// The most syntax nodes held at once for structural lowering, which
-    /// drops a prim's nodes once it has lowered the prim.
+    /// consumes ordinary prim bodies one statement at a time.
     pub syntax_nodes: usize,
     /// Nonempty numeric property arrays recognized for direct conversion.
     pub numeric_arrays: usize,
@@ -124,28 +124,8 @@ fn read_with_registry(
     resolver: &mut dyn AssetResolver,
     registry: Option<&SchemaRegistry>,
 ) -> ReadResult {
-    let parsed = crate::parser::parse_for_read(source);
-    let stats = ReadStats {
-        tokens: parsed.tokens,
-        syntax_nodes: parsed.syntax_nodes,
-        numeric_arrays: parsed.arrays.arrays(),
-        numeric_elements: parsed.arrays.elements(),
-    };
-    let emitted = crate::emit::emit_with_arrays(
-        &parsed.lowered.layer,
-        layer_id,
-        tokens,
-        paths,
-        resolver,
-        parsed.arrays,
-        registry,
-    );
-    ReadResult {
-        emitted,
-        parse_diagnostics: parsed.diagnostics,
-        lower_diagnostics: parsed.lowered.diagnostics,
-        stats,
-    }
+    let import = crate::emit::LayerImport::new(layer_id, tokens, paths, resolver, registry);
+    crate::parser::parse_for_read(source, import)
 }
 
 /// Numeric values read as the parser met them, by attribute statement
@@ -229,6 +209,12 @@ impl PreparedValues {
         Some((value, errors))
     }
 
+    /// Values and conversion errors belong to their enclosing statement.
+    /// Keep the buffers and the cumulative work counters across statements.
+    pub(crate) fn finish_statement(&mut self) {
+        self.values.clear();
+        self.errors.clear();
+    }
     /// Numeric arrays read.
     pub(crate) fn arrays(&self) -> usize {
         self.arrays
@@ -872,6 +858,50 @@ mod tests {
             );
         }
         imported.stats
+    }
+
+    #[test]
+    fn ordinary_bodies_release_closed_siblings() {
+        let body = |count| {
+            let mut s = String::from("#usda 1.0\ndef \"Root\" {\n");
+            for i in 0..count {
+                s.push_str(&format!("def \"C{i}\" {{ rel r = </Root> }}\n"));
+            }
+            s.push_str("}\n");
+            s
+        };
+        assert_eq!(
+            compare(&body(2)).syntax_nodes,
+            compare(&body(1024)).syntax_nodes
+        );
+    }
+
+    #[test]
+    fn streamed_statements_preserve_diagnostics_and_variant_admission() {
+        compare(
+            r#"#usda 1.0
+reorder rootPrims = ["B", "A"]
+def "Bad/Name" {
+    def "Ignored" { rel bad = </Bad/9name> }
+}
+def "A" {
+    float[] samples = [1, 2, 3]
+    variantSet "look" = {
+        "x" {
+            def "Inside" {
+                float3 p = (1, 2, 3)
+                rel r = <../Target>
+            }
+        }
+        "" { rel ignored = <> }
+    }
+    def "B" { int[] values = [4, 5] }
+    rel invalid = </>
+    reorder properties = ["samples", "invalid"]
+}
+reorder rootPrims = ["A"]
+"#,
+        );
     }
 
     #[test]

@@ -96,6 +96,114 @@ impl ChildNames {
     }
 }
 
+struct PrimFrame {
+    id: PathId,
+    parent_len: usize,
+    spec: PrimSpec,
+    names: ChildNames,
+}
+
+/// Emits closed statements as the grammar reads them. The open namespace
+/// owns the unfinished prim specs; variant sets arrive as complete statements
+/// because an empty branch name invalidates the whole set.
+pub(crate) struct LayerImport<'a> {
+    ctx: EmitCtx<'a>,
+    layer: Layer,
+    root_children: Vec<TokenId>,
+    path: String,
+    frames: Vec<PrimFrame>,
+    /// Depth below an invalid name and its diagnostic, whose span ends
+    /// when that prim closes. Its subtree still gets parsed and lowered.
+    ignored: Option<(usize, usize)>,
+}
+
+impl<'a> LayerImport<'a> {
+    pub(crate) fn new(
+        layer_id: LayerId,
+        tokens: &'a TokenInterner,
+        paths: &'a PathInterner,
+        resolver: &'a mut dyn AssetResolver,
+        registry: Option<&'a SchemaRegistry>,
+    ) -> Self {
+        Self {
+            ctx: EmitCtx::new(layer_id, tokens, paths, resolver, registry),
+            layer: Layer::new(layer_id),
+            root_children: Vec::new(),
+            path: String::new(),
+            frames: Vec::new(),
+            ignored: None,
+        }
+    }
+
+    pub(crate) fn metadata(&mut self, metadata: &[ast::LayerMeta<'_>]) {
+        self.ctx.layer_metadata(metadata, &mut self.layer);
+    }
+
+    pub(crate) fn begin(&mut self, prim: &ast::Prim<'_>) {
+        if let Some((depth, _)) = &mut self.ignored {
+            *depth += 1;
+            return;
+        }
+        if !self.ctx.admits_prim_name(prim) {
+            self.ignored = Some((1, self.ctx.diagnostics.len() - 1));
+            return;
+        }
+        let name = self.ctx.tokens.intern(&prim.name);
+        let parent = if let Some(frame) = self.frames.last_mut() {
+            frame.names.append(&mut frame.spec.authored_children, name);
+            frame.id
+        } else {
+            self.root_children.push(name);
+            self.ctx.paths.intern(Path::root())
+        };
+        self.frames.push(self.ctx.begin_prim(
+            prim,
+            PrimPlace { parent, name },
+            &mut self.path,
+            &[],
+        ));
+    }
+
+    pub(crate) fn arrays(&mut self) -> &mut crate::read::PreparedValues {
+        &mut self.ctx.arrays
+    }
+
+    pub(crate) fn statement(&mut self, child: &ast::PrimChild<'_>) {
+        if self.ignored.is_none() {
+            self.ctx.emit_child(
+                child,
+                self.frames.last_mut().expect("open prim"),
+                &mut self.path,
+                &[],
+                &mut self.layer,
+            );
+        }
+        self.ctx.arrays.finish_statement();
+    }
+
+    pub(crate) fn end(&mut self, end: u32) {
+        if let Some((depth, diagnostic)) = &mut self.ignored {
+            *depth -= 1;
+            if *depth == 0 {
+                self.ctx.diagnostics[*diagnostic].span.end = end;
+                self.ignored = None;
+            }
+            return;
+        }
+        let frame = self.frames.pop().expect("open prim");
+        self.path.truncate(frame.parent_len);
+        self.layer.insert_prim(frame.id, frame.spec);
+    }
+
+    pub(crate) fn finish(mut self, order: Option<&[Cow<'_, str>]>) -> EmitResult {
+        let root = self.ctx.paths.intern(Path::root());
+        let layer = self
+            .ctx
+            .finish_layer(self.layer, root, self.root_children, order);
+        self.ctx.finish(layer)
+    }
+}
+
 /// Result of emitting a single USDA layer.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -131,15 +239,7 @@ pub fn emit(
     paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
 ) -> EmitResult {
-    emit_with_arrays(
-        ast,
-        layer_id,
-        tokens,
-        paths,
-        resolver,
-        crate::read::PreparedValues::default(),
-        None,
-    )
+    emit_ast(ast, layer_id, tokens, paths, resolver, None)
 }
 
 /// Emits USDA with caller-registered metadata types and spec targets.
@@ -162,15 +262,7 @@ pub fn emit_with_registry(
     resolver: &mut dyn AssetResolver,
     registry: &SchemaRegistry,
 ) -> EmitResult {
-    emit_with_arrays(
-        ast,
-        layer_id,
-        tokens,
-        paths,
-        resolver,
-        crate::read::PreparedValues::default(),
-        Some(registry),
-    )
+    emit_ast(ast, layer_id, tokens, paths, resolver, Some(registry))
 }
 
 /// The field `key` that reading `statements`, USDA metadata statements of
@@ -221,37 +313,17 @@ pub fn metadata_from_text(
     emitted.layer.metadata(tokens.intern(key)).cloned()
 }
 
-pub(crate) fn emit_with_arrays(
+fn emit_ast(
     ast: &ast::Layer<'_>,
     layer_id: LayerId,
     tokens: &TokenInterner,
     paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
-    arrays: crate::read::PreparedValues,
     registry: Option<&SchemaRegistry>,
 ) -> EmitResult {
-    let mut ctx = EmitCtx {
-        tokens,
-        paths,
-        defer_variant_arcs: resolver.defers_variant_arcs(),
-        resolver,
-        layer_id,
-        resolved_layers: Vec::new(),
-        diagnostics: Vec::new(),
-        rejections: Vec::new(),
-        rejected: false,
-        arrays,
-        registry,
-        emitted_arcs: false,
-        property_types: Vec::new(),
-    };
+    let mut ctx = EmitCtx::new(layer_id, tokens, paths, resolver, registry);
     let layer = ctx.emit_layer(ast);
-    EmitResult {
-        layer,
-        resolved_layers: ctx.resolved_layers,
-        diagnostics: ctx.diagnostics,
-        rejected: ctx.rejected,
-    }
+    ctx.finish(layer)
 }
 
 // ── Internal context ────────────────────────────────────────────────────
@@ -287,7 +359,40 @@ struct EmitCtx<'a> {
 /// layer declaring more builds the rest per attribute.
 const PROPERTY_TYPES_SHARED: usize = 64;
 
-impl EmitCtx<'_> {
+impl<'a> EmitCtx<'a> {
+    fn new(
+        layer_id: LayerId,
+        tokens: &'a TokenInterner,
+        paths: &'a PathInterner,
+        resolver: &'a mut dyn AssetResolver,
+        registry: Option<&'a SchemaRegistry>,
+    ) -> Self {
+        Self {
+            tokens,
+            paths,
+            defer_variant_arcs: resolver.defers_variant_arcs(),
+            resolver,
+            layer_id,
+            resolved_layers: Vec::new(),
+            diagnostics: Vec::new(),
+            rejections: Vec::new(),
+            rejected: false,
+            arrays: crate::read::PreparedValues::default(),
+            registry,
+            emitted_arcs: false,
+            property_types: Vec::new(),
+        }
+    }
+
+    fn finish(self, layer: Layer) -> EmitResult {
+        EmitResult {
+            layer,
+            resolved_layers: self.resolved_layers,
+            diagnostics: self.diagnostics,
+            rejected: self.rejected,
+        }
+    }
+
     /// Reports scene description OpenUSD's text parser rejects, which
     /// rejects the layer.
     fn reject(&mut self, span: Span, message: String) {
@@ -300,8 +405,45 @@ impl EmitCtx<'_> {
     fn emit_layer(&mut self, ast: &ast::Layer<'_>) -> Layer {
         let mut layer = Layer::new(self.layer_id);
 
-        // Process layer metadata.
-        for meta in &ast.metadata {
+        self.layer_metadata(&ast.metadata, &mut layer);
+
+        // Process root prims.
+        let root_path = Path::root();
+        let root_path_id = self.paths.intern(root_path);
+
+        // Collect root children for a pseudo root prim if needed.
+        let mut root_children = Vec::with_capacity(ast.prims.len());
+        // The text of the path of the prim being emitted, which anchors the
+        // relative paths it authors: each prim's name is pushed while it is.
+        let mut prim_path = String::new();
+        for prim in &ast.prims {
+            if !self.admits_prim_name(prim) {
+                continue;
+            }
+            let name_tok = self.tokens.intern(&prim.name);
+            root_children.push(name_tok);
+            self.emit_prim(
+                prim,
+                PrimPlace {
+                    parent: root_path_id,
+                    name: name_tok,
+                },
+                &mut prim_path,
+                &[],
+                &mut layer,
+            );
+        }
+
+        self.finish_layer(
+            layer,
+            root_path_id,
+            root_children,
+            ast.root_prim_order.as_deref(),
+        )
+    }
+
+    fn layer_metadata(&mut self, metadata: &[ast::LayerMeta<'_>], layer: &mut Layer) {
+        for meta in metadata {
             match meta {
                 ast::LayerMeta::SubLayers(items) => {
                     for item in items {
@@ -385,39 +527,20 @@ impl EmitCtx<'_> {
                 }
             }
         }
+    }
 
-        // Process root prims.
-        let root_path = Path::root();
-        let root_path_id = self.paths.intern(root_path);
-
-        // Collect root children for a pseudo root prim if needed.
-        let mut root_children = Vec::with_capacity(ast.prims.len());
-        // The text of the path of the prim being emitted, which anchors the
-        // relative paths it authors: each prim's name is pushed while it is.
-        let mut prim_path = String::new();
-        for prim in &ast.prims {
-            if !self.admits_prim_name(prim) {
-                continue;
-            }
-            let name_tok = self.tokens.intern(&prim.name);
-            root_children.push(name_tok);
-            self.emit_prim(
-                prim,
-                PrimPlace {
-                    parent: root_path_id,
-                    name: name_tok,
-                },
-                &mut prim_path,
-                &[],
-                &mut layer,
-            );
-        }
-
+    fn finish_layer(
+        &mut self,
+        mut layer: Layer,
+        root_path_id: PathId,
+        root_children: Vec<TokenId>,
+        order: Option<&[Cow<'_, str>]>,
+    ) -> Layer {
         // If there are root prims, create a root prim spec to hold children
         // and any root ordering.
-        if !root_children.is_empty() || ast.root_prim_order.is_some() {
+        if !root_children.is_empty() || order.is_some() {
             let mut root_spec = PrimSpec::default().with_children(root_children);
-            if let Some(order) = &ast.root_prim_order {
+            if let Some(order) = order {
                 root_spec = root_spec
                     .with_prim_order(order.iter().map(|n| self.tokens.intern(n)).collect());
             }
@@ -469,6 +592,21 @@ impl EmitCtx<'_> {
         outer_variant_sites: &[VariantSelectionSite],
         layer: &mut Layer,
     ) {
+        let mut frame = self.begin_prim(prim, place, prim_path, outer_variant_sites);
+        for child in &prim.children {
+            self.emit_child(child, &mut frame, prim_path, outer_variant_sites, layer);
+        }
+        prim_path.truncate(frame.parent_len);
+        layer.insert_prim(frame.id, frame.spec);
+    }
+
+    fn begin_prim(
+        &mut self,
+        prim: &ast::Prim<'_>,
+        place: PrimPlace,
+        prim_path: &mut String,
+        outer_variant_sites: &[VariantSelectionSite],
+    ) -> PrimFrame {
         let parent_len = prim_path.len();
         prim_path.push('/');
         prim_path.push_str(&prim.name);
@@ -481,58 +619,69 @@ impl EmitCtx<'_> {
         // Process prim metadata.
         self.emit_prim_metadata(&prim.metadata, prim_path, outer_variant_sites, &mut spec);
 
-        // Process prim body children.
-        let mut child_names = ChildNames::default();
-        for child in &prim.children {
-            match child {
-                ast::PrimChild::Attribute(attr) => {
-                    self.emit_attribute(attr, &mut spec.properties, prim_path);
+        PrimFrame {
+            id: path_id,
+            parent_len,
+            spec,
+            names: ChildNames::default(),
+        }
+    }
+
+    fn emit_child(
+        &mut self,
+        child: &ast::PrimChild<'_>,
+        frame: &mut PrimFrame,
+        prim_path: &mut String,
+        outer_variant_sites: &[VariantSelectionSite],
+        layer: &mut Layer,
+    ) {
+        match child {
+            ast::PrimChild::Attribute(attr) => {
+                self.emit_attribute(attr, &mut frame.spec.properties, prim_path);
+            }
+            ast::PrimChild::Relationship(rel) => {
+                self.emit_relationship(
+                    rel,
+                    &mut frame.spec.properties,
+                    prim_path,
+                    outer_variant_sites,
+                );
+            }
+            ast::PrimChild::Prim(child_prim) => {
+                if !self.admits_prim_name(child_prim) {
+                    return;
                 }
-                ast::PrimChild::Relationship(rel) => {
-                    self.emit_relationship(
-                        rel,
-                        &mut spec.properties,
-                        prim_path,
-                        outer_variant_sites,
-                    );
-                }
-                ast::PrimChild::Prim(child_prim) => {
-                    if !self.admits_prim_name(child_prim) {
-                        continue;
-                    }
-                    let child_name = self.tokens.intern(&child_prim.name);
-                    child_names.append(&mut spec.authored_children, child_name);
-                    let place = PrimPlace {
-                        parent: path_id,
-                        name: child_name,
-                    };
-                    self.emit_prim(child_prim, place, prim_path, outer_variant_sites, layer);
-                }
-                ast::PrimChild::VariantSet(vs) => {
-                    self.emit_variant_set(
-                        vs,
-                        path_id,
-                        prim_path,
-                        outer_variant_sites,
-                        &mut spec.rare_mut().variant_sets,
-                        layer,
-                    );
-                }
-                ast::PrimChild::ReorderNameChildren(names) => {
-                    spec.rare_mut().prim_order =
-                        Some(names.iter().map(|n| self.tokens.intern(n)).collect());
-                }
-                ast::PrimChild::ReorderProperties(names) => {
-                    // Spec: AOUSD Core §7.6.2.2.2 (`propertyChildren`); the
-                    // `reorder properties` statement authors `propertyOrder`.
-                    spec.rare_mut().property_order =
-                        Some(names.iter().map(|n| self.tokens.intern(n)).collect());
-                }
+                let child_name = self.tokens.intern(&child_prim.name);
+                frame
+                    .names
+                    .append(&mut frame.spec.authored_children, child_name);
+                let place = PrimPlace {
+                    parent: frame.id,
+                    name: child_name,
+                };
+                self.emit_prim(child_prim, place, prim_path, outer_variant_sites, layer);
+            }
+            ast::PrimChild::VariantSet(vs) => {
+                self.emit_variant_set(
+                    vs,
+                    frame.id,
+                    prim_path,
+                    outer_variant_sites,
+                    &mut frame.spec.rare_mut().variant_sets,
+                    layer,
+                );
+            }
+            ast::PrimChild::ReorderNameChildren(names) => {
+                frame.spec.rare_mut().prim_order =
+                    Some(names.iter().map(|n| self.tokens.intern(n)).collect());
+            }
+            ast::PrimChild::ReorderProperties(names) => {
+                // Spec: AOUSD Core §7.6.2.2.2 (`propertyChildren`); the
+                // `reorder properties` statement authors `propertyOrder`.
+                frame.spec.rare_mut().property_order =
+                    Some(names.iter().map(|n| self.tokens.intern(n)).collect());
             }
         }
-
-        layer.insert_prim(path_id, spec);
-        prim_path.truncate(parent_len);
     }
 
     /// Interns the absolute prim path `text`, as interning its parsed

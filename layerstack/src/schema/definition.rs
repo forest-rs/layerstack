@@ -9,7 +9,7 @@ use crate::sync::Memo;
 use alloc::{borrow::Cow, boxed::Box, format, sync::Arc, vec::Vec};
 use core::fmt;
 
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 
 use super::{INSTANCE_NAME_PLACEHOLDER, Names, PropertyDefinition};
 use crate::interner::{TokenId, TokenInterner};
@@ -278,8 +278,20 @@ impl PrimDefinition {
         self.index.get(&name).map(|&i| &mut self.properties[i])
     }
 
-    pub(super) fn push_applied(&mut self, applied: AppliedSchema) {
-        if !self.applied.iter().any(|a| a.name == applied.name) {
+    /// The first occurrence wins in schema strength order. Small lists can
+    /// be scanned directly. For a wide definition, keep a membership index
+    /// for the duration of the build, including APIs inherited from its type.
+    pub(super) fn push_applied(&mut self, applied: AppliedSchema, seen: &mut HashSet<TokenId>) {
+        const LINEAR_SEARCH_LIMIT: usize = 16;
+        let new = if self.applied.len() < LINEAR_SEARCH_LIMIT {
+            !self.applied.iter().any(|prior| prior.name == applied.name)
+        } else {
+            if seen.is_empty() {
+                seen.extend(self.applied.iter().map(|prior| prior.name));
+            }
+            seen.insert(applied.name)
+        };
+        if new {
             self.applied.push(applied);
         }
     }
@@ -342,10 +354,11 @@ impl PrimDefinition {
         weaker: &Self,
         instance: Option<TokenId>,
         names: &mut Names<'_>,
+        seen: &mut HashSet<TokenId>,
     ) {
         for applied in &weaker.applied {
             if let Some(applied) = applied.instantiate(instance, names) {
-                self.push_applied(applied);
+                self.push_applied(applied, seen);
             }
         }
         for property in weaker.iter_properties() {

@@ -1106,6 +1106,7 @@ impl SchemaRegistry {
             .shared_typed(type_name)
             .map(PrimDefinition::with_shared_base)
             .unwrap_or_default();
+        let mut seen = HashSet::new();
         for &name in applied {
             let Some((schema, instance)) = self.applied(name, names.tokens) else {
                 continue;
@@ -1117,7 +1118,7 @@ impl SchemaRegistry {
                     None => continue,
                 },
             };
-            definition.compose_weaker(schema, instance, &mut names);
+            definition.compose_weaker(schema, instance, &mut names, &mut seen);
         }
         definition
     }
@@ -1601,11 +1602,15 @@ impl<'a> Build<'a> {
             name
         };
         let mut definition = PrimDefinition::default();
-        definition.push_applied(AppliedSchema {
-            name: applied_name,
-            schema: name,
-            instance: template.then_some(self.placeholder),
-        });
+        let mut seen = HashSet::new();
+        definition.push_applied(
+            AppliedSchema {
+                name: applied_name,
+                schema: name,
+                instance: template.then_some(self.placeholder),
+            },
+            &mut seen,
+        );
         for property in &schema.properties {
             definition.add_property(property.name, property, self.tokens);
         }
@@ -1634,6 +1639,7 @@ impl<'a> Build<'a> {
                 &weaker,
                 instance,
                 &mut Names::new(self.tokens, NameMode::Intern),
+                &mut seen,
             );
         }
         building.pop();
@@ -1679,6 +1685,7 @@ impl<'a> Build<'a> {
             }
         }
         let schema = &schemas[&name];
+        let mut seen = HashSet::new();
         for included in inclusions {
             if let Some((target, instance)) = self.inclusion(schema, included) {
                 let (weaker, _) = self.api_definition(target, &mut Vec::new());
@@ -1686,6 +1693,7 @@ impl<'a> Build<'a> {
                     &weaker,
                     instance,
                     &mut Names::new(self.tokens, NameMode::Intern),
+                    &mut seen,
                 );
             }
         }

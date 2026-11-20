@@ -385,6 +385,43 @@ fn overrides_replace_fallbacks_but_not_variability() {
 }
 
 #[test]
+fn wide_applied_lists_keep_the_first_occurrence_across_the_typed_base_and_nested_apis() {
+    let t = TokenInterner::default();
+    let ty = t.intern("Model");
+    let slot = t.intern("SlotAPI");
+    let nested = t.intern("NestedAPI");
+    let names: Vec<_> = (0..64)
+        .map(|i| t.intern(format!("SlotAPI:slot{i}")))
+        .collect();
+    let mut model = SchemaDefinition::typed(ty);
+    for &name in &names[..32] {
+        model = model.with_built_in(name);
+    }
+    let mut builder = SchemaRegistry::builder();
+    builder
+        .register(model)
+        .register(SchemaDefinition::new(slot, SchemaKind::MultipleApplyApi).with_built_in(nested))
+        .register(SchemaDefinition::new(nested, SchemaKind::MultipleApplyApi));
+    let registry = builder.build(&t);
+    let repeated: Vec<_> = names[16..].iter().chain(&names[32..]).copied().collect();
+    let definition = registry.prepare_prim_definition(Some(ty), &repeated, &t);
+    let expected: Vec<_> = names
+        .into_iter()
+        .enumerate()
+        .flat_map(|(i, name)| [name, t.lookup(&format!("NestedAPI:slot{i}")).unwrap()])
+        .collect();
+    assert!(registry.issues().is_empty());
+    assert_eq!(
+        definition
+            .applied_schemas()
+            .iter()
+            .map(|a| a.name)
+            .collect::<Vec<_>>(),
+        expected
+    );
+}
+
+#[test]
 fn multiple_apply_instances_fill_in_templates() {
     // Spec: AOUSD Core §13.3.2 (instance names, which may contain `:`) and
     // §13.3.2.1 (built-ins by type and by named instance).

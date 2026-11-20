@@ -5,6 +5,13 @@ use alloc::{boxed::Box, string::String, vec::Vec};
 
 use super::*;
 
+#[test]
+fn definitions_remain_send_and_sync() {
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<PrimDefinition>();
+    assert_send_sync::<SchemaRegistry>();
+}
+
 fn attr(tokens: &TokenInterner, name: &str, fallback: impl Into<Value>) -> PropertyDefinition {
     PropertyDefinition::attribute(tokens.intern(name)).with_fallback(fallback)
 }
@@ -630,6 +637,18 @@ fn property_lookup_matches_the_built_definition() {
     let applied = [t.intern("SlotAPI:left"), t.intern("SlotAPI:a:b")];
     registry.intern_instance_names(&applied, &t);
     let definition = registry.prim_definition(Some(tile), &applied, &t);
+    #[cfg(feature = "std")]
+    {
+        let label = t.intern("label");
+        let base = registry
+            .schema_definition(tile)
+            .unwrap()
+            .property(label)
+            .unwrap();
+        let left = registry.prim_definition(Some(tile), &applied[..1], &t);
+        assert!(core::ptr::eq(base, left.property(label).unwrap()));
+        assert!(core::ptr::eq(base, definition.property(label).unwrap()));
+    }
 
     let mut names: Vec<String> = definition
         .properties()

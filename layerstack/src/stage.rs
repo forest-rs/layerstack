@@ -3546,8 +3546,7 @@ impl Stage {
             let authored: HashSet<TokenId> = names.iter().copied().collect();
             names.extend(
                 definition
-                    .properties()
-                    .iter()
+                    .iter_properties()
                     .map(|property| property.name)
                     .filter(|name| !authored.contains(name)),
             );

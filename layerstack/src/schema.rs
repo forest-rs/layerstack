@@ -1102,7 +1102,10 @@ impl SchemaRegistry {
         applied: &[TokenId],
         mut names: Names<'_>,
     ) -> PrimDefinition {
-        let mut definition = self.typed(type_name).cloned().unwrap_or_default();
+        let mut definition = self
+            .shared_typed(type_name)
+            .map(PrimDefinition::with_shared_base)
+            .unwrap_or_default();
         for &name in applied {
             let Some((schema, instance)) = self.applied(name, names.tokens) else {
                 continue;
@@ -1140,7 +1143,7 @@ impl SchemaRegistry {
             for template in schema.applied_schemas() {
                 let _ = template.instantiate(instance, &mut names);
             }
-            for property in schema.properties() {
+            for property in schema.iter_properties() {
                 let _ = names.instantiate(property.name, instance);
             }
         }
@@ -1604,7 +1607,7 @@ impl<'a> Build<'a> {
             instance: template.then_some(self.placeholder),
         });
         for property in &schema.properties {
-            definition.add_property(property.clone(), self.tokens);
+            definition.add_property(property.name, property, self.tokens);
         }
 
         building.push(name);
@@ -1660,7 +1663,7 @@ impl<'a> Build<'a> {
         for ancestor in chain {
             let ancestor = &schemas[ancestor];
             for property in &ancestor.properties {
-                definition.add_property(property.clone(), self.tokens);
+                definition.add_property(property.name, property, self.tokens);
             }
             for &included in &ancestor.built_ins {
                 if !inclusions.contains(&included) {

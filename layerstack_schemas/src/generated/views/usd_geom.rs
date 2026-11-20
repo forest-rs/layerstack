@@ -183,6 +183,9 @@ impl<'a> BackPlateApi<'a> {
         )))
     }
 
+    /// The USD property name template of [`Self::alpha_image`].
+    pub const ALPHA_IMAGE: &'static str = "backPlate:__INSTANCE_NAME__:alpha:image";
+
     #[doc = "Asset path to the file containing a texture or sequence of textures."]
     #[doc = ""]
     #[doc = "USD attribute `backPlate:<instance>:alpha:image` (`asset`; fallback `\"\"`)."]
@@ -207,6 +210,10 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
+    /// The USD property name template of [`Self::depth_camera_space_offset`].
+    pub const DEPTH_CAMERA_SPACE_OFFSET: &'static str =
+        "backPlate:__INSTANCE_NAME__:depth:cameraSpaceOffset";
+
     #[doc = "USD attribute `backPlate:<instance>:depth:cameraSpaceOffset` (`float`; fallback `0.0`)."]
     #[doc = "C++ read: `UsdGeomBackPlateAPI::GetDepthCameraSpaceOffsetAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdGeomBackPlateAPI::GetDepthCameraSpaceOffsetAttr")]
@@ -228,6 +235,9 @@ impl<'a> BackPlateApi<'a> {
             crate::value::read_float,
         )
     }
+
+    /// The USD property name template of [`Self::depth_image`].
+    pub const DEPTH_IMAGE: &'static str = "backPlate:__INSTANCE_NAME__:depth:image";
 
     #[doc = "Asset path to the file containing a texture or sequence of textures."]
     #[doc = ""]
@@ -253,6 +263,9 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
+    /// The USD property name template of [`Self::depth_min_offset`].
+    pub const DEPTH_MIN_OFFSET: &'static str = "backPlate:__INSTANCE_NAME__:depth:minOffset";
+
     #[doc = "USD attribute `backPlate:<instance>:depth:minOffset` (`float`; fallback `0.0`)."]
     #[doc = "C++ read: `UsdGeomBackPlateAPI::GetDepthMinOffsetAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdGeomBackPlateAPI::GetDepthMinOffsetAttr")]
@@ -275,6 +288,10 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
+    /// The USD property name template of [`Self::depth_normalizing_factor`].
+    pub const DEPTH_NORMALIZING_FACTOR: &'static str =
+        "backPlate:__INSTANCE_NAME__:depth:normalizingFactor";
+
     #[doc = "USD attribute `backPlate:<instance>:depth:normalizingFactor` (`float`; fallback `1.0`)."]
     #[doc = "C++ read: `UsdGeomBackPlateAPI::GetDepthNormalizingFactorAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdGeomBackPlateAPI::GetDepthNormalizingFactorAttr")]
@@ -296,6 +313,9 @@ impl<'a> BackPlateApi<'a> {
             crate::value::read_float,
         )
     }
+
+    /// The USD property name template of [`Self::image`].
+    pub const IMAGE: &'static str = "backPlate:__INSTANCE_NAME__:image";
 
     #[doc = "Asset path to the file containing a texture or sequence of textures."]
     #[doc = ""]
@@ -321,6 +341,9 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
+    /// The USD property name template of [`Self::luma_offset`].
+    pub const LUMA_OFFSET: &'static str = "backPlate:__INSTANCE_NAME__:luma:offset";
+
     #[doc = "USD attribute `backPlate:<instance>:luma:offset` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
     #[doc = "C++ read: `UsdGeomBackPlateAPI::GetLumaOffsetAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdGeomBackPlateAPI::GetLumaOffsetAttr")]
@@ -342,6 +365,9 @@ impl<'a> BackPlateApi<'a> {
             crate::value::read_float3,
         )
     }
+
+    /// The USD property name template of [`Self::luma_power`].
+    pub const LUMA_POWER: &'static str = "backPlate:__INSTANCE_NAME__:luma:power";
 
     #[doc = "USD attribute `backPlate:<instance>:luma:power` (`float3`; fallback `(1.0, 1.0, 1.0)`)."]
     #[doc = "C++ read: `UsdGeomBackPlateAPI::GetLumaPowerAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -365,6 +391,9 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
+    /// The USD property name template of [`Self::luma_slope`].
+    pub const LUMA_SLOPE: &'static str = "backPlate:__INSTANCE_NAME__:luma:slope";
+
     #[doc = "USD attribute `backPlate:<instance>:luma:slope` (`float3`; fallback `(1.0, 1.0, 1.0)`)."]
     #[doc = "C++ read: `UsdGeomBackPlateAPI::GetLumaSlopeAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
     #[doc(alias = "UsdGeomBackPlateAPI::GetLumaSlopeAttr")]
@@ -386,6 +415,9 @@ impl<'a> BackPlateApi<'a> {
             crate::value::read_float3,
         )
     }
+
+    /// The USD property name template of [`Self::plate_visibility`].
+    pub const PLATE_VISIBILITY: &'static str = "backPlate:__INSTANCE_NAME__:plateVisibility";
 
     #[doc = "Toggles the visibility of the back plate to all cameras, only the owning camera, or no cameras."]
     #[doc = ""]
@@ -414,6 +446,9 @@ impl<'a> BackPlateApi<'a> {
         )
     }
 
+    /// The USD property name template of [`Self::rotate_xyz_tweak`].
+    pub const ROTATE_XYZ_TWEAK: &'static str = "backPlate:__INSTANCE_NAME__:rotateXYZ:tweak";
+
     #[doc = "USD attribute `backPlate:<instance>:rotateXYZ:tweak` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
     #[must_use]
     pub fn rotate_xyz_tweak(&self) -> Option<[f32; 3]> {
@@ -432,6 +467,9 @@ impl<'a> BackPlateApi<'a> {
             crate::value::read_float3,
         )
     }
+
+    /// The USD property name template of [`Self::scale_tweak`].
+    pub const SCALE_TWEAK: &'static str = "backPlate:__INSTANCE_NAME__:scale:tweak";
 
     #[doc = "USD attribute `backPlate:<instance>:scale:tweak` (`float2`; fallback `(1.0, 1.0)`)."]
     #[doc = "C++ read: `UsdGeomBackPlateAPI::GetScaleTweakAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]
@@ -454,6 +492,9 @@ impl<'a> BackPlateApi<'a> {
             crate::value::read_float2,
         )
     }
+
+    /// The USD property name template of [`Self::translate_tweak`].
+    pub const TRANSLATE_TWEAK: &'static str = "backPlate:__INSTANCE_NAME__:translate:tweak";
 
     #[doc = "USD attribute `backPlate:<instance>:translate:tweak` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
     #[doc = "C++ read: `UsdGeomBackPlateAPI::GetTranslateTweakAttr().Get()`; this getter returns the resolved value rather than an attribute/relationship handle."]

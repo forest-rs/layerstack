@@ -128,6 +128,9 @@ impl<'a> CoordSysApi<'a> {
         )))
     }
 
+    /// The USD property name template of [`Self::binding`].
+    pub const BINDING: &'static str = "coordSys:__INSTANCE_NAME__:binding";
+
     #[doc = "Prim binding expressing the appropriate coordinate systems."]
     #[doc = ""]
     #[doc = "USD relationship `coordSys:<instance>:binding` (`rel`)."]

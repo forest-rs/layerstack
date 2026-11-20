@@ -237,6 +237,9 @@ impl<'a> CollectionApi<'a> {
         )))
     }
 
+    /// The USD property name template of [`Self::excludes`].
+    pub const EXCLUDES: &'static str = "collection:__INSTANCE_NAME__:excludes";
+
     #[doc = "Specifies a list of targets that are excluded below the included paths in this collection."]
     #[doc = ""]
     #[doc = "USD relationship `collection:<instance>:excludes` (`rel`)."]
@@ -247,6 +250,9 @@ impl<'a> CollectionApi<'a> {
     pub fn excludes(&self) -> ::alloc::vec::Vec<::layerstack::TargetPath> {
         self.read_targets("collection:__INSTANCE_NAME__:excludes")
     }
+
+    /// The USD property name template of [`Self::expansion_rule`].
+    pub const EXPANSION_RULE: &'static str = "collection:__INSTANCE_NAME__:expansionRule";
 
     #[doc = "Specifies how the paths that are included in the collection must be expanded to determine its members."]
     #[doc = ""]
@@ -262,6 +268,9 @@ impl<'a> CollectionApi<'a> {
         )
     }
 
+    /// The USD property name template of [`Self::include_root`].
+    pub const INCLUDE_ROOT: &'static str = "collection:__INSTANCE_NAME__:includeRoot";
+
     #[doc = "Boolean attribute indicating whether the pseudo-root path `</>` should be counted as one of the included target paths."]
     #[doc = ""]
     #[doc = "USD attribute `collection:<instance>:includeRoot` (`bool`, uniform)."]
@@ -276,6 +285,9 @@ impl<'a> CollectionApi<'a> {
         )
     }
 
+    /// The USD property name template of [`Self::includes`].
+    pub const INCLUDES: &'static str = "collection:__INSTANCE_NAME__:includes";
+
     #[doc = "Specifies a list of targets that are included in the collection."]
     #[doc = ""]
     #[doc = "USD relationship `collection:<instance>:includes` (`rel`)."]
@@ -286,6 +298,10 @@ impl<'a> CollectionApi<'a> {
     pub fn includes(&self) -> ::alloc::vec::Vec<::layerstack::TargetPath> {
         self.read_targets("collection:__INSTANCE_NAME__:includes")
     }
+
+    /// The USD property name template of [`Self::membership_expression`].
+    pub const MEMBERSHIP_EXPRESSION: &'static str =
+        "collection:__INSTANCE_NAME__:membershipExpression";
 
     #[doc = "Specifies a path expression that determines membership in this collection."]
     #[doc = ""]
@@ -300,6 +316,9 @@ impl<'a> CollectionApi<'a> {
             crate::value::read_path_expression,
         )
     }
+
+    /// The USD property name template of [`Self::mode`].
+    pub const MODE: &'static str = "collection:__INSTANCE_NAME__:mode";
 
     #[doc = "Specifies which mode the collection uses to determine membership: `automatic`, `relationship`, or `expression`."]
     #[doc = ""]
@@ -732,6 +751,9 @@ impl<'a> ColorSpaceDefinitionApi<'a> {
         ))
     }
 
+    /// The USD property name template of [`Self::blue_chroma`].
+    pub const BLUE_CHROMA: &'static str = "colorSpaceDefinition:__INSTANCE_NAME__:blueChroma";
+
     #[doc = "Blue chromaticity coordinates."]
     #[doc = ""]
     #[doc = "USD attribute `colorSpaceDefinition:<instance>:blueChroma` (`float2`; fallback `(0.0, 0.0)`)."]
@@ -755,6 +777,9 @@ impl<'a> ColorSpaceDefinitionApi<'a> {
             crate::value::read_float2,
         )
     }
+
+    /// The USD property name template of [`Self::gamma`].
+    pub const GAMMA: &'static str = "colorSpaceDefinition:__INSTANCE_NAME__:gamma";
 
     #[doc = "Gamma value of the log section."]
     #[doc = ""]
@@ -780,6 +805,9 @@ impl<'a> ColorSpaceDefinitionApi<'a> {
         )
     }
 
+    /// The USD property name template of [`Self::green_chroma`].
+    pub const GREEN_CHROMA: &'static str = "colorSpaceDefinition:__INSTANCE_NAME__:greenChroma";
+
     #[doc = "Green chromaticity coordinates."]
     #[doc = ""]
     #[doc = "USD attribute `colorSpaceDefinition:<instance>:greenChroma` (`float2`; fallback `(0.0, 1.0)`)."]
@@ -803,6 +831,9 @@ impl<'a> ColorSpaceDefinitionApi<'a> {
             crate::value::read_float2,
         )
     }
+
+    /// The USD property name template of [`Self::linear_bias`].
+    pub const LINEAR_BIAS: &'static str = "colorSpaceDefinition:__INSTANCE_NAME__:linearBias";
 
     #[doc = "Linear bias of the log section."]
     #[doc = ""]
@@ -828,6 +859,9 @@ impl<'a> ColorSpaceDefinitionApi<'a> {
         )
     }
 
+    /// The USD property name template of [`Self::name`].
+    pub const NAME: &'static str = "colorSpaceDefinition:__INSTANCE_NAME__:name";
+
     #[doc = "The name of the color space defined on this prim."]
     #[doc = ""]
     #[doc = "USD attribute `colorSpaceDefinition:<instance>:name` (`token`, uniform; fallback `\"custom\"`)."]
@@ -841,6 +875,9 @@ impl<'a> ColorSpaceDefinitionApi<'a> {
             crate::value::read_token,
         )
     }
+
+    /// The USD property name template of [`Self::red_chroma`].
+    pub const RED_CHROMA: &'static str = "colorSpaceDefinition:__INSTANCE_NAME__:redChroma";
 
     #[doc = "Red chromaticity coordinates."]
     #[doc = ""]
@@ -865,6 +902,9 @@ impl<'a> ColorSpaceDefinitionApi<'a> {
             crate::value::read_float2,
         )
     }
+
+    /// The USD property name template of [`Self::white_point`].
+    pub const WHITE_POINT: &'static str = "colorSpaceDefinition:__INSTANCE_NAME__:whitePoint";
 
     #[doc = "Whitepoint chromaticity coordinates."]
     #[doc = ""]

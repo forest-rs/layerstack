@@ -116,6 +116,24 @@ pub fn read_usda_with_registry(
     read_with_registry(source, layer_id, tokens, paths, resolver, Some(registry))
 }
 
+#[cfg(feature = "unstable-internals")]
+pub(crate) type PrimVisitor<'a> = dyn FnMut(layerstack::PathId, &mut layerstack::PrimSpec) + 'a;
+
+/// Experimental measurement hook for ordinary prims just before insertion.
+#[cfg(feature = "unstable-internals")]
+pub fn read_usda_with_prim_visitor<'a>(
+    source: &'a str,
+    layer_id: LayerId,
+    tokens: &'a TokenInterner,
+    paths: &'a PathInterner,
+    resolver: &'a mut dyn AssetResolver,
+    visitor: &'a mut (dyn FnMut(layerstack::PathId, &mut layerstack::PrimSpec) + 'a),
+) -> ReadResult {
+    let mut import = crate::emit::LayerImport::new(layer_id, tokens, paths, resolver, None);
+    import.on_prim = Some(visitor);
+    crate::parser::parse_for_read(source, import)
+}
+
 fn read_with_registry(
     source: &str,
     layer_id: LayerId,

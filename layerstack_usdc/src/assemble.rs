@@ -80,6 +80,8 @@ pub struct AssembleDiagnostic {
     pub message: String,
 }
 
+pub(crate) type PrimVisitor<'a> = dyn FnMut(PathId, &mut PrimSpec) + 'a;
+
 /// Assembles decoded USDC sections into a [`Layer`].
 ///
 /// `data` is the full file byte slice (needed for offset-based value reads).
@@ -116,7 +118,7 @@ pub fn assemble(
 ) -> Result<AssembleResult, UsdcError> {
     let chunk = SPECS_PER_CHUNK;
     assemble_in_chunks(
-        data, sections, layer_id, tokens, paths, resolver, budget, threads, chunk,
+        data, sections, layer_id, tokens, paths, resolver, budget, threads, chunk, None,
     )
 }
 
@@ -125,7 +127,7 @@ pub fn assemble(
     clippy::too_many_arguments,
     reason = "the inputs a read assembles from, each explicit"
 )]
-fn assemble_in_chunks(
+pub(crate) fn assemble_in_chunks(
     data: &[u8],
     sections: &CrateSections,
     layer_id: LayerId,
@@ -135,6 +137,7 @@ fn assemble_in_chunks(
     budget: &mut DecodeBudget,
     threads: &Threads,
     chunk: usize,
+    visitor: Option<&mut PrimVisitor<'_>>,
 ) -> Result<AssembleResult, UsdcError> {
     let tables = ReadTables::for_read(sections);
     let inputs = ReadInputs {
@@ -149,7 +152,7 @@ fn assemble_in_chunks(
     };
     let mut ctx = inputs.ctx(budget, Some(resolver));
 
-    let layer = ctx.assemble_layer(inputs, threads)?;
+    let layer = ctx.assemble_layer(inputs, threads, visitor)?;
 
     Ok(AssembleResult {
         layer,
@@ -362,7 +365,7 @@ impl Visits<'_> {
 /// of the specs the pass converts, so that a pass divides a file the same
 /// way on any number of threads, and evenly however the file orders its
 /// specs (a writer may put every prim spec first).
-const SPECS_PER_CHUNK: usize = 512;
+pub(crate) const SPECS_PER_CHUNK: usize = 512;
 
 /// What converting one chunk of specs found ([`AssembleCtx::run_pass`]).
 struct Chunk<T> {
@@ -687,6 +690,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         &mut self,
         inputs: ReadInputs<'a>,
         threads: &Threads,
+        mut visitor: Option<&mut PrimVisitor<'_>>,
     ) -> Result<Layer, UsdcError> {
         let mut layer = Layer::new(self.layer_id);
 
@@ -855,15 +859,21 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         // placed it, so the specs are in the file's order of those specs.
         let mut branched: Vec<(&str, Box<PrimSpec>)> = Vec::new();
         let sections = self.sections;
-        let plain = prim_specs_map.into_placed().filter_map(|(index, prim)| {
-            if self.in_branch_of(SpecName::Entry(index)) {
-                let path_str = sections.path(index as usize).unwrap_or_default();
-                branched.push((path_str, prim));
-                None
-            } else {
-                Some((self.prim_path_at(index)?, prim))
-            }
-        });
+        let plain = prim_specs_map
+            .into_placed()
+            .filter_map(|(index, mut prim)| {
+                if self.in_branch_of(SpecName::Entry(index)) {
+                    let path_str = sections.path(index as usize).unwrap_or_default();
+                    branched.push((path_str, prim));
+                    None
+                } else {
+                    let path = self.prim_path_at(index)?;
+                    if let Some(visit) = &mut visitor {
+                        visit(path, &mut prim);
+                    }
+                    Some((path, prim))
+                }
+            });
         layer.insert_prims(plain);
         sort::sort_unstable_by_key(&mut branched, |(path, _)| *path);
         for (path_str, mut prim) in branched {
@@ -2207,12 +2217,13 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                     .filter(|(_, v)| unheld_kind(v).is_none())
                     .map(|(k, v)| {
                         let entry = match v {
-                            CrateValue::ListOp(listop) if listop.op_type == ValueType::TokenListOp => {
+                            CrateValue::ListOp(listop)
+                                if listop.op_type == ValueType::TokenListOp =>
+                            {
                                 FieldValue::TokenListOp(Box::new(self.convert_token_listop(listop)))
                             }
-                            CrateValue::ListOp(listop) => {
-                                scalar_entry_list_op(listop).unwrap_or(FieldValue::Value(Value::Null))
-                            }
+                            CrateValue::ListOp(listop) => scalar_entry_list_op(listop)
+                                .unwrap_or(FieldValue::Value(Value::Null)),
                             v => FieldValue::Value(self.convert_crate_value(v)),
                         };
                         (Arc::from(k.as_str()), entry)
@@ -2471,7 +2482,9 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                     self.report(
                         spec_path,
                         Some(field),
-                        alloc::format!("unsupported: dictionary entry `{key}` holds {kind}, which is not read"),
+                        alloc::format!(
+                            "unsupported: dictionary entry `{key}` holds {kind}, which is not read"
+                        ),
                     )?;
                 }
                 Some(FieldValue::Value(self.convert_crate_value(cv)))
@@ -2492,8 +2505,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         field: &str,
         statements: &str,
     ) -> Result<Option<FieldValue>, UsdcError> {
-        let read =
-            layerstack_usda::metadata_from_text(field, statements, self.tokens, self.paths);
+        let read = layerstack_usda::metadata_from_text(field, statements, self.tokens, self.paths);
         if read.is_none() {
             self.report(
                 spec_path,
@@ -3723,7 +3735,11 @@ fn unheld_kind(value: &CrateValue) -> Option<&'static str> {
 /// Collects into `found`, by key path (`a/b` for entry `b` of entry `a`),
 /// the entries of `value`, a dictionary, and of the dictionaries it holds,
 /// that [`unheld_kind`] names, with what they hold.
-fn unheld_entries(value: &CrateValue, prefix: &mut String, found: &mut Vec<(String, &'static str)>) {
+fn unheld_entries(
+    value: &CrateValue,
+    prefix: &mut String,
+    found: &mut Vec<(String, &'static str)>,
+) {
     let CrateValue::Dictionary(entries) = value else {
         return;
     };
@@ -4169,7 +4185,10 @@ def "Other" {}
         assert_eq!(field("words"), value(Value::array(words)));
         assert_eq!(
             field("info"),
-            value(Value::Dictionary(alloc::vec![("k".into(), Value::Int(1).into())]))
+            value(Value::Dictionary(alloc::vec![(
+                "k".into(),
+                Value::Int(1).into()
+            )]))
         );
     }
 
@@ -4478,6 +4497,7 @@ def "Other" {}
                 &mut budget,
                 &Threads::new(threads),
                 chunk,
+                None,
             );
             (result, resolver.0, budget.used())
         };

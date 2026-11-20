@@ -169,6 +169,9 @@ mod numeric;
 mod read;
 mod token_source;
 pub use emit::{EmitResult, metadata_from_text};
+#[cfg(feature = "unstable-internals")]
+pub use read::read_usda_with_prim_visitor;
+
 pub use read::{ReadResult, ReadStats, read_usda, read_usda_with_registry};
 
 pub mod save;

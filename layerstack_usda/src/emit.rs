@@ -70,7 +70,9 @@ use smallvec::SmallVec;
 use crate::Span;
 use crate::ast;
 use crate::diagnostic::Diagnostic;
-use crate::lower::{PropertyTail, anchor_bracketed, has_prim_variant_selection, split_property_tail};
+use crate::lower::{
+    PropertyTail, anchor_bracketed, has_prim_variant_selection, split_property_tail,
+};
 use crate::metadata::{MetadataRejection, MetadataValueError};
 use crate::numeric::{convert_scalar, dimensioned_value, element_type_hint};
 use crate::writer::is_identifier;
@@ -166,6 +168,8 @@ struct PrimFrame {
 /// owns the unfinished prim specs; variant sets arrive as complete statements
 /// because an empty branch name invalidates the whole set.
 pub(crate) struct LayerImport<'a> {
+    #[cfg(feature = "unstable-internals")]
+    pub(crate) on_prim: Option<&'a mut crate::read::PrimVisitor<'a>>,
     ctx: EmitCtx<'a>,
     layer: Layer,
     root_children: Vec<TokenId>,
@@ -185,6 +189,8 @@ impl<'a> LayerImport<'a> {
         registry: Option<&'a SchemaRegistry>,
     ) -> Self {
         Self {
+            #[cfg(feature = "unstable-internals")]
+            on_prim: None,
             ctx: EmitCtx::new(layer_id, tokens, paths, resolver, registry),
             layer: Layer::new(layer_id),
             root_children: Vec::new(),
@@ -255,6 +261,14 @@ impl<'a> LayerImport<'a> {
             return;
         }
         let frame = self.frames.pop().expect("open prim");
+        #[cfg(feature = "unstable-internals")]
+        let frame = {
+            let mut frame = frame;
+            if let Some(visit) = &mut self.on_prim {
+                visit(frame.id, &mut frame.spec);
+            }
+            frame
+        };
         self.path.truncate(frame.parent_len);
         self.layer.insert_prim(frame.id, frame.spec);
     }

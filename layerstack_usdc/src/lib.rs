@@ -194,3 +194,33 @@ pub fn read_usdc_within(
         data, &sections, layer_id, tokens, paths, resolver, budget, threads,
     )
 }
+
+/// Experimental measurement hook for ordinary prims just before insertion.
+#[cfg(feature = "unstable-internals")]
+pub fn read_usdc_with_prim_visitor(
+    data: &[u8],
+    layer_id: LayerId,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+    resolver: &mut dyn AssetResolver,
+    visitor: &mut dyn FnMut(layerstack::PathId, &mut layerstack::PrimSpec),
+) -> Result<AssembleResult, UsdcError> {
+    let mut budget = DecodeBudget::for_input(data.len());
+    let threads = Threads::new(1);
+    let hdr = header::parse_header(data)?;
+    let toc = toc::parse_toc(data, hdr.toc_offset)?;
+    let sections =
+        section::parse_sections_on(data, &toc, hdr.crate_version(), &mut budget, &threads)?;
+    assemble::assemble_in_chunks(
+        data,
+        &sections,
+        layer_id,
+        tokens,
+        paths,
+        resolver,
+        &mut budget,
+        &threads,
+        assemble::SPECS_PER_CHUNK,
+        Some(visitor),
+    )
+}

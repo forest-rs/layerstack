@@ -99,7 +99,9 @@
 //!
 //! Every view has an edit handle (`MeshEdit`) whose setters author through
 //! a [`SchemaEdit`], which collects a `Transaction` for one explicit edit
-//! target. [`SchemaEdit::apply_api`] applies registered API schemas by name,
+//! target. For importing into a fresh layer, [`LayerBatch`] writes the
+//! registered declarations and supplied values directly into layer records.
+//! [`SchemaEdit::apply_api`] applies registered API schemas by name,
 //! including runtime codeless schemas without generated Rust types.
 //! A handle is had only for a prim that exists, on the stage or
 //! defined earlier in the edit: from a concrete schema's `define`, an
@@ -470,6 +472,7 @@ mod imageable;
 pub mod kind;
 #[cfg(feature = "usd-semantics")]
 mod labels;
+mod layer_batch;
 #[cfg(feature = "usd-lux")]
 pub mod light;
 #[cfg(feature = "usd-lod")]
@@ -565,6 +568,7 @@ pub use imageable::{PurposeInfo, PurposeInputs, Visibility, VisibilityInputs};
 pub use kind::KindRegistry;
 #[cfg(feature = "usd-semantics")]
 pub use labels::{LabelInterval, LabelQueryError, LabelsQuery};
+pub use layer_batch::{BatchApi, BatchError, BatchPrim, LayerBatch};
 pub use layerstack::Time;
 #[cfg(all(feature = "usd-geom", feature = "usd-shade"))]
 pub use material_subsets::{MaterialBindingSubset, MaterialBindingSubsets, MaterialSubsetError};

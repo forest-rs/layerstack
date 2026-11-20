@@ -157,3 +157,7 @@ harness = false
 [[bench]]
 name = "point_instancer"
 harness = false
+
+[[bench]]
+name = "layer_authoring"
+harness = false

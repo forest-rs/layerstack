@@ -9,6 +9,27 @@ time, and as typed views over a composed stage: `usd_geom::Mesh`,
 getter per property (its fallback applied), enums for `allowedTokens`, and
 edit handles whose setters author through a `SchemaEdit` transaction.
 
+For importers building a fresh layer, `LayerBatch` writes records directly.
+Use the same registered schemas and generated property names. Each `define`
+closure writes one prim. If it returns an error, that prim and its missing
+ancestors are discarded. The finished layer can be saved or composed for
+application-specific validation.
+
+```rust
+use layerstack::{InMemoryStore, LayerId, TargetPath};
+use layerstack_schemas::{LayerBatch, usd::CollectionApi, usd_geom::Scope};
+
+let store = InMemoryStore::default();
+let schemas = layerstack_schemas::openusd(store.tokens());
+let mesh = store.try_path("/World/Body")?;
+let mut batch = LayerBatch::new(LayerId(1), &store, &schemas)?;
+batch.define(store.try_path("/Groups")?, Scope::SCHEMA, |prim| {
+    prim.apply(CollectionApi::SCHEMA, Some("visible"))?
+        .set_targets(CollectionApi::INCLUDES, vec![TargetPath::Prim(mesh)])
+})?;
+let layer = batch.finish();
+```
+
 Search rustdoc with C++ names such as `UsdGeomMesh`,
 `UsdGeomMesh::GetFaceVertexCountsAttr`, `UsdGeomXformCache` or
 `UsdGeomPrimvar::ComputeFlattened`. Generated views, getters and setters retain

@@ -50,6 +50,7 @@ pub use generated::{GeneratedSchemaError, SchemaDeclaration, read_generated_sche
 
 use crate::sort;
 use alloc::{format, string::String, sync::Arc, vec, vec::Vec};
+use core::ops::ControlFlow;
 
 use hashbrown::{HashMap, HashSet};
 
@@ -1131,19 +1132,53 @@ impl SchemaRegistry {
         tokens: &TokenInterner,
     ) -> Option<PropertyDefinition> {
         let mut found: Option<PropertyDefinition> = None;
-        let mut visit = |candidate: &PropertyDefinition| match &mut found {
-            None => {
-                found = Some(PropertyDefinition {
-                    name: property,
-                    ..candidate.clone()
-                });
-            }
-            Some(stronger) => stronger.compose_weaker(candidate, tokens),
-        };
+        let _ =
+            self.visit_property_definitions(type_name, applied, property, tokens, |candidate| {
+                match &mut found {
+                    None => {
+                        found = Some(PropertyDefinition {
+                            name: property,
+                            ..candidate.clone()
+                        });
+                    }
+                    Some(stronger) => stronger.compose_weaker(candidate, tokens),
+                }
+                ControlFlow::<()>::Continue(())
+            });
+        found
+    }
+
+    /// The strongest schema contribution to `property` on a prim with
+    /// `type_name` and `applied` schemas. Its kind, type and variability
+    /// are the declaration a new property spec takes. Its name may be a
+    /// multiple-apply template. For the fully composed fallbacks and
+    /// metadata, use [`Self::property_definition`].
+    ///
+    /// Spec: AOUSD Core §13.3.2.3 (composing the prim definition).
+    #[must_use]
+    pub fn strongest_property_definition(
+        &self,
+        type_name: Option<TokenId>,
+        applied: &[TokenId],
+        property: TokenId,
+        tokens: &TokenInterner,
+    ) -> Option<&PropertyDefinition> {
+        self.visit_property_definitions(type_name, applied, property, tokens, ControlFlow::Break)
+            .break_value()
+    }
+
+    fn visit_property_definitions<'a, B>(
+        &'a self,
+        type_name: Option<TokenId>,
+        applied: &[TokenId],
+        property: TokenId,
+        tokens: &TokenInterner,
+        mut visit: impl FnMut(&'a PropertyDefinition) -> ControlFlow<B>,
+    ) -> ControlFlow<B> {
         if let Some(typed) = self.typed(type_name)
             && let Some(candidate) = typed.property(property)
         {
-            visit(candidate);
+            visit(candidate)?;
         }
         let name = tokens.resolve(property);
         for &entry in applied {
@@ -1153,17 +1188,17 @@ impl SchemaRegistry {
             match instance {
                 None => {
                     if let Some(candidate) = schema.property(property) {
-                        visit(candidate);
+                        visit(candidate)?;
                     }
                 }
                 Some(instance) => {
                     for candidate in schema.instance_properties(name, instance, tokens) {
-                        visit(candidate);
+                        visit(candidate)?;
                     }
                 }
             }
         }
-        found
+        ControlFlow::Continue(())
     }
 
     /// Reuse the registry-owned definition for a plain concrete type.

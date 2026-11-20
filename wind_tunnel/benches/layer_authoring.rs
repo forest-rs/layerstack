@@ -15,8 +15,8 @@ use std::{
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use layerstack::{
-    EditTarget, FieldValue, InMemoryStore, Layer, LayerId, ListOp, PathId, PrimSpec, PropertySpec,
-    PropertyType, SchemaRegistry, Stage, StageOptions, TargetPath, TokenId, Value,
+    EditTarget, FieldValue, InMemoryStore, Layer, LayerId, ListOp, PathId, PrimSpec, PropertyEntry,
+    PropertySpec, PropertyType, SchemaRegistry, Stage, StageOptions, TargetPath, TokenId, Value,
 };
 use layerstack_schemas::{LayerBatch, SchemaEdit, usd::CollectionApi, usd_geom::Scope};
 
@@ -144,13 +144,12 @@ impl Fixture {
     }
 
     fn text(&self) -> String {
-        layerstack_usda::save_usda(
-            self.store.layer(ROOT).unwrap(),
-            self.store.tokens(),
-            self.store.paths(),
-        )
-        .unwrap()
+        layer_text(self.store.layer(ROOT).unwrap(), &self.store)
     }
+}
+
+fn layer_text(layer: &Layer, store: &InMemoryStore) -> String {
+    layerstack_usda::save_usda(layer, store.tokens(), store.paths()).unwrap()
 }
 
 fn neighbors(paths: &[PathId], i: usize) -> [TargetPath; 2] {
@@ -198,5 +197,180 @@ fn bench(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench);
+struct WideCollection {
+    instance: String,
+    attribute: String,
+    relationship: String,
+    tokens: CollectionTokens,
+    include_root: bool,
+}
+
+struct WideFixture {
+    store: InMemoryStore,
+    schemas: SchemaRegistry,
+    root: PathId,
+    path: PathId,
+    target: TargetPath,
+    scope: TokenId,
+    api_schemas: TokenId,
+    collections: Vec<WideCollection>,
+}
+
+#[derive(Clone, Copy)]
+enum Writes {
+    ApplyOnly,
+    Contiguous,
+    Grouped,
+}
+
+impl WideFixture {
+    fn new(instances: usize) -> Self {
+        let store = InMemoryStore::default();
+        let root = store.path("/");
+        let path = store.path("/Collections");
+        let target = TargetPath::Prim(store.path("/Target"));
+        let tokens = store.tokens();
+        let schemas = layerstack_schemas::registry(&[layerstack_schemas::Domain::UsdGeom], tokens);
+        let scope = tokens.intern("Scope");
+        let api_schemas = tokens.intern("apiSchemas");
+        let collections = (0..instances)
+            .map(|index| {
+                let instance = format!("collection_{index}");
+                let attribute = format!("collection:{instance}:includeRoot");
+                let relationship = format!("collection:{instance}:includes");
+                WideCollection {
+                    tokens: CollectionTokens {
+                        applied: tokens.intern(format!("CollectionAPI:{instance}")),
+                        include_root: tokens.intern(&attribute),
+                        includes: tokens.intern(&relationship),
+                    },
+                    instance,
+                    attribute,
+                    relationship,
+                    include_root: index % 2 != 0,
+                }
+            })
+            .collect();
+        Self {
+            store,
+            schemas,
+            root,
+            path,
+            target,
+            scope,
+            api_schemas,
+            collections,
+        }
+    }
+
+    fn records(&self, with_properties: bool) -> Layer {
+        let mut layer = Layer::new(ROOT);
+        let name = self.store.paths().resolve(self.path).leaf().unwrap();
+        layer.insert_prim(self.root, PrimSpec::default().with_children(vec![name]));
+        let mut prim = PrimSpec::def().with_type_name(self.scope).with_field(
+            self.api_schemas,
+            ListOp::prepended(self.collections.iter().map(|c| c.tokens.applied).collect()),
+        );
+        if with_properties {
+            let boolean = PropertyType::parse("bool").unwrap();
+            // Every name is unique, so append the records in their authored order.
+            prim.properties.reserve(self.collections.len() * 2);
+            for collection in &self.collections {
+                prim.properties.extend([
+                    PropertyEntry {
+                        name: collection.tokens.include_root,
+                        spec: Arc::new(
+                            PropertySpec::typed_attribute(boolean.clone())
+                                .uniform()
+                                .with_default(Value::Bool(collection.include_root)),
+                        ),
+                    },
+                    PropertyEntry {
+                        name: collection.tokens.includes,
+                        spec: Arc::new(
+                            PropertySpec::relationship()
+                                .with_targets(ListOp::explicit(vec![self.target])),
+                        ),
+                    },
+                ]);
+            }
+        }
+        layer.insert_prim(self.path, prim);
+        layer
+    }
+
+    fn batch(&self, writes: Writes) -> Layer {
+        let mut batch = LayerBatch::new(ROOT, &self.store, &self.schemas).unwrap();
+        batch
+            .define(self.path, Scope::SCHEMA, |prim| {
+                for collection in &self.collections {
+                    let mut api = prim.apply(CollectionApi::SCHEMA, Some(&collection.instance))?;
+                    if matches!(writes, Writes::Contiguous) {
+                        api.set(
+                            CollectionApi::INCLUDE_ROOT,
+                            Value::Bool(collection.include_root),
+                        )?;
+                        api.set_targets(CollectionApi::INCLUDES, vec![self.target])?;
+                    }
+                }
+                if matches!(writes, Writes::Grouped) {
+                    for collection in &self.collections {
+                        prim.set(&collection.attribute, Value::Bool(collection.include_root))?;
+                        prim.set_targets(&collection.relationship, vec![self.target])?;
+                    }
+                }
+                Ok(())
+            })
+            .unwrap();
+        batch.finish()
+    }
+}
+
+fn bench_wide(c: &mut Criterion) {
+    let mut group = c.benchmark_group("wide_layer_authoring");
+    group.sample_size(10);
+    let routes = [
+        ("records", None),
+        ("batch_apply_only", Some(Writes::ApplyOnly)),
+        ("batch_contiguous", Some(Writes::Contiguous)),
+        ("batch_grouped", Some(Writes::Grouped)),
+    ];
+    for n in [128, 512, 2048, 32768] {
+        group.throughput(Throughput::Elements(n as u64));
+        for (name, writes) in routes {
+            let mut fixture = None;
+            let author = |fixture: &WideFixture| match writes {
+                Some(writes) => fixture.batch(writes),
+                None => fixture.records(true),
+            };
+            group.bench_function(BenchmarkId::new(name, n), |b| {
+                let fixture = fixture.get_or_insert_with(|| {
+                    let fixture = WideFixture::new(n);
+                    if let Some(writes) = writes {
+                        let expected = fixture.records(!matches!(writes, Writes::ApplyOnly));
+                        assert!(
+                            layer_text(&author(&fixture), &fixture.store)
+                                == layer_text(&expected, &fixture.store),
+                            "{name} must author the same schema applications and property specs"
+                        );
+                    }
+                    fixture
+                });
+                b.iter_custom(|iterations| {
+                    let mut elapsed = Duration::ZERO;
+                    for _ in 0..iterations {
+                        let start = Instant::now();
+                        let layer = author(fixture);
+                        elapsed += start.elapsed();
+                        black_box(layer);
+                    }
+                    elapsed
+                });
+            });
+        }
+    }
+    group.finish();
+}
+
+criterion_group!(benches, bench, bench_wide);
 criterion_main!(benches);

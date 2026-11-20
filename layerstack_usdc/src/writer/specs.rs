@@ -14,7 +14,7 @@ use super::{Field, Spec, SpecForm, Value};
 
 /// A lowering writes the fields of the last spec it opened, in authored order.
 pub(super) trait SpecSink {
-    fn begin(&mut self, path: impl Into<String>, form: SpecForm);
+    fn begin(&mut self, path: impl AsRef<str> + Into<String>, form: SpecForm);
     fn path(&self) -> &str;
     fn field(&mut self, name: impl AsRef<str> + Into<String>, value: Value);
     fn metadata(&mut self, field: Field) {
@@ -23,7 +23,7 @@ pub(super) trait SpecSink {
 }
 
 impl SpecSink for Vec<Spec> {
-    fn begin(&mut self, path: impl Into<String>, form: SpecForm) {
+    fn begin(&mut self, path: impl AsRef<str> + Into<String>, form: SpecForm) {
         self.push(Spec::new(path, form));
     }
     fn path(&self) -> &str {
@@ -37,11 +37,32 @@ impl SpecSink for Vec<Spec> {
     }
 }
 
+/// A checked declaration already has an owner and a separate property name.
+/// Keep that boundary until a diagnostic actually needs the full spelling.
+#[derive(Clone, Copy)]
+pub(super) enum SpecPath<'a> {
+    Text(&'a str),
+    Property {
+        owner: usize,
+        prim: &'a str,
+        name: &'a str,
+    },
+}
+
+impl From<SpecPath<'_>> for String {
+    fn from(path: SpecPath<'_>) -> Self {
+        match path {
+            SpecPath::Text(text) => text.into(),
+            SpecPath::Property { prim, name, .. } => [prim, ".", name].concat(),
+        }
+    }
+}
+
 pub(super) trait Specs {
     /// The authored namespace walk checked every name, duplicate and owner.
     const VALIDATED_NAMESPACE: bool;
     fn len(&self) -> usize;
-    fn header(&self, index: usize) -> (&str, SpecForm);
+    fn header(&self, index: usize) -> (SpecPath<'_>, SpecForm);
     fn fields(&self, index: usize) -> impl ExactSizeIterator<Item = (Option<usize>, &Field)>;
     /// Caller-supplied names can shadow another field on the same spec.
     fn check_field_names(&self, _index: usize) -> bool {
@@ -57,9 +78,9 @@ impl Specs for [Spec] {
     fn len(&self) -> usize {
         self.len()
     }
-    fn header(&self, index: usize) -> (&str, SpecForm) {
+    fn header(&self, index: usize) -> (SpecPath<'_>, SpecForm) {
         let spec = &self[index];
-        (&spec.path, spec.form)
+        (SpecPath::Text(&spec.path), spec.form)
     }
     fn fields(&self, index: usize) -> impl ExactSizeIterator<Item = (Option<usize>, &Field)> {
         self[index].fields.iter().map(|f| (None, f))
@@ -67,7 +88,8 @@ impl Specs for [Spec] {
 }
 
 struct Header {
-    path: String,
+    start: usize,
+    owner: Option<usize>,
     form: SpecForm,
     first_field: usize,
     has_metadata: bool,
@@ -76,6 +98,7 @@ struct Header {
 #[derive(Default)]
 pub(super) struct LayerSpecs {
     headers: Vec<Header>,
+    text: String,
     fields: Vec<Field>,
     occurrences: Vec<usize>,
     field_index: HashTable<usize>,
@@ -108,17 +131,14 @@ fn common_field(value: &Value) -> Option<CommonField<'_>> {
 }
 
 impl SpecSink for LayerSpecs {
-    fn begin(&mut self, path: impl Into<String>, form: SpecForm) {
-        self.headers.push(Header {
-            path: path.into(),
-            form,
-            first_field: self.occurrences.len(),
-            has_metadata: false,
-        });
+    fn begin(&mut self, path: impl AsRef<str> + Into<String>, form: SpecForm) {
+        self.header(path.as_ref(), form, None);
     }
 
     fn path(&self) -> &str {
-        &self.headers.last().expect("an open spec").path
+        let header = self.headers.last().expect("an open spec");
+        debug_assert!(header.owner.is_none(), "metadata uses a fully spelled path");
+        &self.text[header.start..]
     }
 
     fn metadata(&mut self, field: Field) {
@@ -135,6 +155,45 @@ impl SpecSink for LayerSpecs {
 }
 
 impl LayerSpecs {
+    fn header(&mut self, part: &str, form: SpecForm, owner: Option<usize>) -> usize {
+        let index = self.headers.len();
+        self.headers.push(Header {
+            start: self.text.len(),
+            owner,
+            form,
+            first_field: self.occurrences.len(),
+            has_metadata: false,
+        });
+        self.text.push_str(part);
+        index
+    }
+
+    pub(super) fn plain_prim(
+        &mut self,
+        id: layerstack::PathId,
+        paths: &layerstack::PathInterner,
+        tokens: &layerstack::TokenInterner,
+    ) -> usize {
+        let index = self.header("", SpecForm::Prim, None);
+        for &segment in paths.resolve(id).segments() {
+            self.text.push('/');
+            self.text.push_str(tokens.resolve(segment));
+        }
+        index
+    }
+
+    pub(super) fn property(&mut self, owner: usize, name: &str, form: SpecForm) {
+        self.header(name, form, Some(owner));
+    }
+
+    fn part(&self, index: usize) -> &str {
+        let end = self
+            .headers
+            .get(index + 1)
+            .map_or(self.text.len(), |h| h.start);
+        &self.text[self.headers[index].start..end]
+    }
+
     /// Register the next slot on a miss so callers only copy a token when
     /// the new field will actually own it.
     fn reuse(&mut self, name: &str, key: &CommonField<'_>) -> bool {
@@ -178,9 +237,19 @@ impl Specs for LayerSpecs {
     fn len(&self) -> usize {
         self.headers.len()
     }
-    fn header(&self, index: usize) -> (&str, SpecForm) {
+    fn header(&self, index: usize) -> (SpecPath<'_>, SpecForm) {
         let header = &self.headers[index];
-        (&header.path, header.form)
+        (
+            match header.owner {
+                Some(owner) => SpecPath::Property {
+                    owner,
+                    prim: self.part(owner),
+                    name: self.part(index),
+                },
+                None => SpecPath::Text(self.part(index)),
+            },
+            header.form,
+        )
     }
     fn fields(&self, index: usize) -> impl ExactSizeIterator<Item = (Option<usize>, &Field)> {
         let start = self.headers[index].first_field;

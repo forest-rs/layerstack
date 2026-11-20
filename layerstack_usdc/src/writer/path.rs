@@ -163,14 +163,24 @@ impl<'a> CratePath<'a> {
         let (names, property) = text
             .split_once('.')
             .map_or((text, None), |(p, n)| (p, Some(n)));
-        Some(Self {
+        Some(Self::from_parts(names, property))
+    }
+
+    /// Builds an ordinary path from the checked components of a declaration.
+    pub(super) fn from_parts(names: &'a str, property: Option<&'a str>) -> Self {
+        Self {
             prim: PrimPart {
                 names,
                 suffix: Vec::new(),
             },
             property,
             below: Vec::new(),
-        })
+        }
+    }
+
+    /// The common namespace prefix sorts by bytes when no variants are present.
+    pub(super) fn ordinary_key(&self) -> (&str, Option<&str>) {
+        (self.prim.names, self.property)
     }
 
     /// Parses `/`, `/A/B`, `/A{v=x}B`, `/A{v=}`, `/A/B.prop:name`, or a

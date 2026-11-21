@@ -872,7 +872,7 @@ pub struct LayerFailure {
     /// Why this layer was not saved.
     pub error: IoError,
 }
-/// Save evidence; failed layers retain their dirty generations.
+/// Layers written or skipped because they have no persistent identifier.
 #[derive(Clone, Debug, Default)]
 #[non_exhaustive]
 pub struct SaveReport {
@@ -880,8 +880,33 @@ pub struct SaveReport {
     pub saved: Vec<LayerId>,
     /// Anonymous layers with no persistent identifier, left dirty.
     pub anonymous: Vec<LayerId>,
-    /// Selected layers that could not be written, left dirty.
+}
+
+/// One or more selected layers could not be saved. Saving still attempted the
+/// rest of the selection, and only successfully written layers became clean.
+#[derive(Clone, Debug)]
+#[non_exhaustive]
+pub struct SaveError {
+    /// Successful writes and skipped anonymous layers from the same operation.
+    pub report: SaveReport,
+    /// Each layer that failed, with its storage or serialization error.
     pub failures: Vec<LayerFailure>,
+}
+
+impl core::fmt::Display for SaveError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "layers that failed to save: {}", self.failures.len())?;
+        if let Some(first) = self.failures.first() {
+            write!(f, " (layer {}: {})", first.layer.0, first.error)?;
+        }
+        Ok(())
+    }
+}
+
+impl core::error::Error for SaveError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        self.failures.first().map(|f| &f.error as _)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1977,9 +2002,14 @@ impl<B: Storage> StageDocument<B> {
     }
     /// Saves dirty used layers, excluding the primary session and its sublayers.
     /// Only resident sources participate; anonymous layers are reported separately.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`SaveError`] with per-layer failures and the partial save report
+    /// if any selected layer could not be written.
     #[doc(alias = "UsdStage::Save")]
     #[doc(alias = "Save")]
-    pub fn save(&mut self) -> SaveReport {
+    pub fn save(&mut self) -> Result<SaveReport, SaveError> {
         self.synchronize();
         let session = self.session_layers();
         let layers = self
@@ -1992,9 +2022,14 @@ impl<B: Storage> StageDocument<B> {
         self.save_layers(&layers)
     }
     /// Saves dirty resident layers in the primary session's sublayer stack only.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`SaveError`] with per-layer failures and the partial save report
+    /// if any selected layer could not be written.
     #[doc(alias = "UsdStage::SaveSessionLayers")]
     #[doc(alias = "SaveSessionLayers")]
-    pub fn save_session_layers(&mut self) -> SaveReport {
+    pub fn save_session_layers(&mut self) -> Result<SaveReport, SaveError> {
         self.synchronize();
         let layers: Vec<_> = self.session_layers().into_iter().collect();
         self.save_layers(&layers)
@@ -2004,11 +2039,17 @@ impl<B: Storage> StageDocument<B> {
     /// Serialization may decode retained numeric values. Saving keeps their source
     /// ownership and caches; it does not rebind them to the written bytes, change
     /// authored generations or emit a scene edit. Existing snapshots remain valid.
-    pub fn save_layers(&mut self, layers: &[LayerId]) -> SaveReport {
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`SaveError`] with per-layer failures and the partial save report
+    /// if any selected layer could not be written.
+    pub fn save_layers(&mut self, layers: &[LayerId]) -> Result<SaveReport, SaveError> {
         let mut report = SaveReport::default();
+        let mut failures = Vec::new();
         for id in sort::collect_set(layers.iter().copied()) {
             if !self.store.contains_layer(id) {
-                report.failures.push(LayerFailure {
+                failures.push(LayerFailure {
                     layer: id,
                     error: IoError::new(IoErrorKind::MissingLayer, "selected layer is absent"),
                 });
@@ -2050,10 +2091,14 @@ impl<B: Storage> StageDocument<B> {
                             .map(Freshness::Version);
                     report.saved.push(id);
                 }
-                Err(error) => report.failures.push(LayerFailure { layer: id, error }),
+                Err(error) => failures.push(LayerFailure { layer: id, error }),
             }
         }
-        report
+        if failures.is_empty() {
+            Ok(report)
+        } else {
+            Err(SaveError { report, failures })
+        }
     }
     /// Exports an authored layer as USDA (`.usda`) or USDC (`.usd`/`.usdc`).
     /// Writes a copy: does not rebind arcs, rename the source or mark it saved.

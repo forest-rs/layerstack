@@ -97,8 +97,7 @@ fn main() {
         Value::Double(9.0),
     );
     let preview = live.apply(store, &preview).unwrap();
-    let saved = document.save();
-    assert!(saved.failures.is_empty(), "{:?}", saved.failures);
+    let saved = document.save().unwrap();
     assert_eq!(
         saved.saved,
         vec![root],

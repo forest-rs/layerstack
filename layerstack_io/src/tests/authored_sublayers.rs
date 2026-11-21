@@ -214,9 +214,13 @@ fn a_save_leaves_session_sublayers_authored_by_asset_path() {
         );
         stage.apply(store, &edit).unwrap();
     }
-    assert_eq!(doc.save().saved, vec![root], "not the session's sublayer");
+    assert_eq!(
+        doc.save().unwrap().saved,
+        vec![root],
+        "not the session's sublayer"
+    );
     assert!(doc.is_dirty(sub));
-    assert_eq!(doc.save_session_layers().saved, vec![sub]);
+    assert_eq!(doc.save_session_layers().unwrap().saved, vec![sub]);
     assert!(!doc.is_dirty(sub));
 }
 

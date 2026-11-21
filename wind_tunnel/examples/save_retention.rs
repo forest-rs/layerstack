@@ -126,8 +126,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut cursor = stage.change_cursor();
     let generation = document.store().layer(root_layer).unwrap().generation();
     let started = Instant::now();
-    let saved = document.save_layers(&[root_layer]);
-    assert!(saved.failures.is_empty(), "{saved:?}");
+    let saved = document.save_layers(&[root_layer])?;
     assert_eq!(saved.saved, [root_layer], "dirty root is saved");
     assert_eq!(
         document.store().layer(root_layer).unwrap().generation(),

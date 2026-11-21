@@ -126,7 +126,7 @@ impl<B: Storage> StageDocument<B> {
     /// assert_eq!(loaded.layers.len(), 1); // and `apply` loaded it
     /// let height = doc.view().attribute("/Shrub.height").unwrap();
     /// println!("{:?}", height.value::<f64>(Time::Default));
-    /// doc.save();
+    /// doc.save()?;
     /// # Ok(())
     /// # }
     /// ```

@@ -393,7 +393,7 @@ fn the_filesystem_lists_files_beside_an_identifier_and_answers_existence() {
     assert_eq!(storage.list_siblings(&absent).unwrap(), Some(Vec::new()));
     let mut document =
         StageDocument::create(storage, "scene.usda", StageOptions::default()).unwrap();
-    assert!(document.save().failures.is_empty());
+    document.save().unwrap();
     let root = document.stage.stage().root_layer().unwrap();
     let pattern = UdimPattern::parse("./tex/c.<UDIM>.png").unwrap();
     let found = document

@@ -50,7 +50,6 @@ fn main() {
         document.stage().stage().composition_errors().is_empty(),
         "authored composition must be valid"
     );
-    let report = document.save();
-    assert!(report.failures.is_empty(), "{:?}", report.failures);
+    document.save().unwrap();
     println!("{}", directory.join("RefExample.usda").display());
 }

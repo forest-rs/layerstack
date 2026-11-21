@@ -8,6 +8,7 @@
 use super::*;
 use crate::prim_index::PrimIndexData;
 use crate::sort;
+use alloc::collections::BTreeSet;
 use core::hash::{BuildHasher, Hash, Hasher};
 
 /// A cheap sharing bucket, not an identity. Exact equality remains mandatory.
@@ -95,9 +96,17 @@ fn hash_expression_paths<H: Hasher>(value: &Value, state: &mut H) {
 /// (`usd/instanceKey.cpp`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(super) struct InstanceKey {
+    root: InstanceRootKey,
+    topology: Vec<(Vec<TokenId>, bool)>,
+}
+
+/// Identity contributed by an instance root independently of its population
+/// mask. Keep one per prototype so a partial composition can compare its
+/// roots even when it only visited some descendants.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+struct InstanceRootKey {
     index: InstanceIndexKey,
     clips: Vec<crate::value_clips::ClipInstanceKey>,
-    topology: Vec<(Vec<TokenId>, bool)>,
 }
 
 /// The part of an instance's [`InstanceKey`] that the instance root's own
@@ -224,8 +233,9 @@ impl<'a> Prototype<'a> {
         &self.record.prims
     }
 }
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct PrototypeRecord {
+    root_key: InstanceRootKey,
     instances: Vec<PathId>,
     prims: Vec<PrototypePrim>,
 }
@@ -233,7 +243,6 @@ struct PrototypeRecord {
 pub(super) struct PrototypeTable {
     records: Vec<PrototypeRecord>,
     instances: HashMap<PathId, PrototypeId>,
-    members: Vec<Vec<PathId>>,
 }
 
 /// Work performed by the most recent complete composition of this snapshot.
@@ -331,8 +340,7 @@ impl Stage {
             .collect();
         sort::sort_unstable(&mut topology);
         InstanceKey {
-            index,
-            clips,
+            root: InstanceRootKey { index, clips },
             topology,
         }
     }
@@ -370,27 +378,31 @@ impl Stage {
     }
 
     /// Whether replaced prims may change instance identity, membership or
-    /// descendant record sharing. The caller checks traversal changes when
-    /// the merge also replaces visible child lists.
-    pub(super) fn prototype_indexes_changed(
-        &self,
-        paths: &crate::PathInterner,
-        partial: &Self,
-        replaced: &[PathId],
-    ) -> bool {
+    /// visibility. The caller separately checks any visible child lists it replaces.
+    pub(super) fn prototype_indexes_changed(&self, partial: &Self, replaced: &[PathId]) -> bool {
         let had_instances = !self.instances.is_empty();
         if !had_instances && partial.instances.is_empty() {
             return false;
         }
-        // Traversal checks the pseudo-root's visibility before walking the
-        // active child lists. Its index can change even if its children do not.
-        let root = paths.lookup(&Path::root());
+        // Only a root index contributes arcs, selections and clip definitions to
+        // its key. A descendant's record can change independently of its place
+        // in the populated namespace (AOUSD Core §11.3.3).
         replaced.iter().any(|&path| {
-            partial.instances.contains(&path)
-                || had_instances
-                    && (Some(path) == root && self.is_active(path) != partial.is_active(path)
-                        || core::iter::successors(Some(path), |&at| paths.parent(at))
-                            .any(|at| self.instances.contains(&at)))
+            if self.is_active(path) != partial.is_active(path) {
+                return true;
+            }
+            let was_instance = self.instances.contains(&path);
+            if was_instance != partial.instances.contains(&path) {
+                return true;
+            }
+            was_instance
+                && self
+                    .instance_prototype(path)
+                    .zip(partial.instance_prototype(path))
+                    .is_none_or(|(old, new)| {
+                        self.prototypes.records[old.0].root_key
+                            != partial.prototypes.records[new.0].root_key
+                    })
         })
     }
 
@@ -416,13 +428,11 @@ impl Stage {
             return;
         }
         let mut identities = HashMap::new();
-        let mut relative_groups: Vec<HashMap<Vec<TokenId>, Vec<PathId>>> = Vec::new();
         let root = store.paths().lookup(&Path::root());
-        let instances: Vec<_> = root
+        let instances = root
             .into_iter()
             .flat_map(|root| self.traverse(root))
-            .filter(|p| self.instances.contains(p))
-            .collect();
+            .filter(|p| self.instances.contains(p));
         for instance in instances {
             let index = match keys.remove(&instance) {
                 Some(index) => {
@@ -436,78 +446,121 @@ impl Stage {
                 None => self.instance_index_key(instance, store),
             };
             let key = self.instance_key_with(instance, index, store);
-            let id = *identities.entry(key).or_insert_with(|| {
+            let id = *identities.entry(key).or_insert_with_key(|key| {
                 let id = PrototypeId(table.records.len());
-                table.records.push(PrototypeRecord::default());
-                relative_groups.push(HashMap::new());
+                table.records.push(PrototypeRecord {
+                    root_key: key.root.clone(),
+                    instances: Vec::new(),
+                    prims: Vec::new(),
+                });
                 id
             });
             table.instances.insert(instance, id);
             let record = &mut table.records[id.0];
             let first = record.instances.is_empty();
             record.instances.push(instance);
-            let prefix = store.paths().resolve(instance);
-            for prim in self.traverse(instance).filter(|p| *p != instance) {
-                let relative = store
-                    .paths()
-                    .resolve(prim)
-                    .strip_prefix(prefix)
-                    .expect("descendant")
-                    .to_vec();
-                if first {
-                    record.prims.push(PrototypePrim {
-                        relative_path: relative.clone(),
+            if first {
+                let prefix = store.paths().resolve(instance);
+                record.prims = self
+                    .traverse(instance)
+                    .filter(|prim| *prim != instance)
+                    .map(|prim| PrototypePrim {
+                        relative_path: store
+                            .paths()
+                            .resolve(prim)
+                            .strip_prefix(prefix)
+                            .expect("descendant")
+                            .to_vec(),
                         representative: prim,
-                    });
-                }
-                relative_groups[id.0]
-                    .entry(relative)
-                    .or_default()
-                    .push(prim);
+                    })
+                    .collect();
             }
         }
-        table.members = relative_groups
-            .into_iter()
-            .flat_map(HashMap::into_values)
-            .filter(|members| members.len() > 1)
-            .collect();
         self.prototypes = table;
-        self.reshare_prototype_records();
+        self.reshare_prototype_records(store.paths());
     }
-    /// Returns exact comparison work so tests can assert scaling without timing.
-    pub(super) fn reshare_prototype_records(&mut self) -> usize {
-        self.reshare_records(None)
-    }
-    /// Value-only edits need to revisit only relative paths whose records changed.
-    pub(super) fn reshare_changed_prototype_records(&mut self, changed: &HashSet<PathId>) -> usize {
-        self.reshare_records(Some(changed))
-    }
-    fn reshare_records(&mut self, changed: Option<&HashSet<PathId>>) -> usize {
-        // AOUSD Core §11.4: descendants exclude opinions authored directly
-        // beneath an instance. Equality additionally guards mapped targets,
-        // anchored expressions, source sites, offsets and graph-node identities.
-        let builder = hashbrown::DefaultHashBuilder::default();
+
+    fn reshare_prototype_records(&mut self, paths: &crate::PathInterner) -> usize {
         let mut comparisons = 0;
-        for members in &self.prototypes.members {
-            if changed.is_some_and(|paths| !members.iter().any(|member| paths.contains(member))) {
+        for record in &self.prototypes.records {
+            if record.instances.len() > 1 {
+                for prim in &record.prims {
+                    comparisons += record.reshare(&mut self.prims, paths, &prim.relative_path);
+                }
+            }
+        }
+        comparisons
+    }
+
+    /// Find each affected relative path through its enclosing instance roots.
+    /// Nested instances can place one occurrence in more than one group.
+    pub(super) fn reshare_changed_prototype_records(
+        &mut self,
+        paths: &crate::PathInterner,
+        changed: impl IntoIterator<Item = PathId>,
+    ) -> usize {
+        if self.prototypes.instances.is_empty() {
+            return 0;
+        }
+        // Visit overlapping groups in the same prototype order as a full compose.
+        let mut groups = BTreeSet::new();
+        for prim in changed {
+            if !self.is_active(prim) {
                 continue;
             }
-            let mut buckets: HashMap<u64, Vec<Arc<PrimIndexData>>> = HashMap::new();
-            for member in members {
-                let Some(index) = self.prims.get_mut(member) else {
-                    continue;
-                };
-                let candidates = buckets
-                    .entry(builder.hash_one(RecordBucket(&index.data)))
-                    .or_default();
-                if let Some(shared) = candidates.iter().find(|data| {
-                    comparisons += 1;
-                    data.same_records(&index.data)
-                }) {
-                    index.data = Arc::clone(shared);
-                } else {
-                    candidates.push(Arc::clone(&index.data));
+            for root in core::iter::successors(paths.parent(prim), |&p| paths.parent(p)) {
+                if let Some(id) = self.prototypes.instances.get(&root)
+                    && self.prototypes.records[id.0].instances.len() > 1
+                {
+                    let relative = paths
+                        .resolve(prim)
+                        .strip_prefix(paths.resolve(root))
+                        .expect("ancestor");
+                    groups.insert((id.0, relative));
                 }
+            }
+        }
+        let mut comparisons = 0;
+        for (id, relative) in groups {
+            comparisons += self.prototypes.records[id].reshare(&mut self.prims, paths, relative);
+        }
+        comparisons
+    }
+}
+
+impl PrototypeRecord {
+    // The instance key includes the full relative topology. Expand a single
+    // group on demand instead of storing every descendant path a second time.
+    fn reshare(
+        &self,
+        prims: &mut HashMap<PathId, PrimIndex>,
+        paths: &crate::PathInterner,
+        relative: &[TokenId],
+    ) -> usize {
+        // AOUSD Core §11.4: only exactly equal records may share storage,
+        // including mapped targets, anchored expressions and source sites.
+        let builder = hashbrown::DefaultHashBuilder::default();
+        let mut comparisons = 0;
+        let mut buckets: HashMap<u64, Vec<Arc<PrimIndexData>>> = HashMap::new();
+        for &instance in &self.instances {
+            // An exact partial composition can retain a boundary child name
+            // without composing that child's index.
+            let Some(index) = paths
+                .lookup_joined(instance, relative)
+                .and_then(|member| prims.get_mut(&member))
+            else {
+                continue;
+            };
+            let candidates = buckets
+                .entry(builder.hash_one(RecordBucket(&index.data)))
+                .or_default();
+            if let Some(shared) = candidates.iter().find(|data| {
+                comparisons += 1;
+                data.same_records(&index.data)
+            }) {
+                index.data = Arc::clone(shared);
+            } else {
+                candidates.push(Arc::clone(&index.data));
             }
         }
         comparisons
@@ -659,14 +712,14 @@ mod tests {
                 ))]
             );
         }
-        let comparisons = stage.reshare_prototype_records();
+        let comparisons = stage.reshare_prototype_records(store.paths());
         assert!(
             comparisons < instances.len(),
             "unique remapped records must not compare every earlier occurrence: {comparisons}"
         );
-        let source_only = HashSet::from([source.prim_path()]);
+        let source_only = [source.prim_path()];
         assert_eq!(
-            stage.reshare_changed_prototype_records(&source_only),
+            stage.reshare_changed_prototype_records(store.paths(), source_only),
             0,
             "an edit outside prototype members must not scan their candidate records"
         );
@@ -704,7 +757,7 @@ mod tests {
                 .all(|p| builder.hash_one(RecordBucket(&stage.prims[p].data)) == bucket),
             "numeric values intentionally collide in the cheap path bucket"
         );
-        stage.reshare_prototype_records();
+        stage.reshare_prototype_records(store.paths());
         assert!(!Arc::ptr_eq(
             &stage.prims[&children[0]].data,
             &stage.prims[&children[1]].data
@@ -855,7 +908,7 @@ mod tests {
         assert_eq!(live.notify_changed_layers(&store), [asset]);
         let paths = live.recompose(&mut store);
         assert_eq!(paths.len(), instances.len());
-        assert_eq!(live.stage().prototype_preparations, 2);
+        assert_eq!(live.stage().prototype_preparations, 1);
         assert_fresh_prototypes(live.stage(), &mut store);
 
         let mut edit = Transaction::new();
@@ -863,7 +916,7 @@ mod tests {
         live.apply(&mut store, &edit).unwrap();
         assert!(!live.recomposition_work().full_rebuild);
         assert!(!live.stage().is_instance(instances[0]));
-        assert_eq!(live.stage().prototype_preparations, 3);
+        assert_eq!(live.stage().prototype_preparations, 2);
         assert_fresh_prototypes(live.stage(), &mut store);
     }
 
@@ -973,6 +1026,75 @@ mod tests {
     }
 
     #[test]
+    fn masked_nested_descendant_edits_preserve_topology_and_record_sharing() {
+        let (mut store, _) = nested_scene();
+        let leaf = store.path("/Leaf");
+        let other = store.path("/Leaf/Other");
+        let bit_name = store.tokens.intern("Bit");
+        let other_name = store.tokens.intern("Other");
+        let value = store.property_path("/Leaf/Bit.newValue");
+        let inners = [store.path("/I0/Inner"), store.path("/I1/Inner")];
+        let bits = [
+            store.path("/I0/Inner/Bit"),
+            store.path("/I1/Inner/Bit"),
+            store.path("/I2/Inner/Bit"),
+        ];
+        let sibling = store.path("/I0/Inner/Other");
+        let masked_sibling = store.path("/I2/Inner/Other");
+        let root = LayerId(1);
+        let asset = LayerId(2);
+        let source = store.layers.get_mut(&asset).unwrap();
+        source.insert_prim(
+            leaf,
+            PrimSpec::def().with_children(vec![bit_name, other_name]),
+        );
+        source.insert_prim(other, PrimSpec::def());
+        let options = StageOptions {
+            mask: Some(PopulationMask {
+                include: vec![inners[0], inners[1], bits[2]],
+            }),
+            ..StageOptions::default()
+        };
+        let mut live = LiveStage::compose(&mut store, root, options.clone());
+        let before = inventory(live.stage());
+        assert_eq!(before.len(), 4);
+        assert!(!live.stage().has_prim(masked_sibling));
+        let untouched = Arc::clone(&live.stage().prims[&sibling].data);
+
+        // The exact partial composition lists both children of each nested
+        // instance, while composing only the affected Bit indexes.
+        store.layers.get_mut(&asset).unwrap().set_property(
+            value,
+            PropertySpec::attribute().with_default(Value::Int(19)),
+        );
+        live.notify_layer_prim_edits(asset, &[value.prim_path()]);
+        assert_eq!(live.recompose(&mut store).len(), bits.len());
+        let stage = live.stage();
+        assert_eq!(stage.prototype_preparations, 1);
+        assert_eq!(inventory(stage), before);
+        assert!(!stage.has_prim(masked_sibling));
+        assert!(Arc::ptr_eq(&stage.prims[&sibling].data, &untouched));
+        assert!(Arc::ptr_eq(
+            &stage.prims[&bits[0]].data,
+            &stage.prims[&bits[1]].data
+        ));
+        for bit in bits {
+            assert_eq!(
+                stage
+                    .resolve_field_path(PropertyPath::new(bit, value.property()))
+                    .unwrap()
+                    .value,
+                Value::Int(19)
+            );
+        }
+        let fresh = Stage::compose(&mut store, root, options);
+        assert_eq!(inventory(stage), inventory(&fresh));
+        for bit in bits {
+            assert!(stage.prims[&bit].data.same_records(&fresh.prims[&bit].data));
+        }
+    }
+
+    #[test]
     fn composition_keys_indexed_roots_and_prototypes_match_serial_keys() {
         let (mut store, instances) = nested_scene();
         let first_inner = store.path("/I0/Inner");
@@ -1000,7 +1122,23 @@ mod tests {
             // Records are shared among the occurrences of one relative path,
             // one in each instance of a prototype: each outer instance's
             // `Inner` and `Inner/Bit`, and each inner instance's `Bit`.
-            let mut members = stage.prototypes.members.clone();
+            let mut members = Vec::new();
+            for proto in stage.prototypes() {
+                for prim in proto.prims() {
+                    members.push(
+                        proto
+                            .instances()
+                            .iter()
+                            .map(|&root| {
+                                store
+                                    .paths()
+                                    .lookup_joined(root, prim.relative_path())
+                                    .unwrap()
+                            })
+                            .collect::<Vec<_>>(),
+                    );
+                }
+            }
             members.sort();
             let occurrences = |suffix: &str| -> Vec<PathId> {
                 (0..instances.len())
@@ -1054,6 +1192,75 @@ mod tests {
             stage.instance_prototype(changed),
             stage.instance_prototype(instances[1])
         );
+    }
+
+    #[test]
+    fn stronger_instance_root_specs_regroup_only_when_the_root_key_changes() {
+        let (mut store, instances, _, field) = scene();
+        let root = LayerId(1);
+        let asset = LayerId(2);
+        let session = LayerId(3);
+        let first = instances[0];
+        let property = store.property_path("/I0.label");
+        let alternate = store.path("/Alternate");
+        let alternate_child = store.path("/Alternate/Child");
+        let child_name = store.tokens.intern("Child");
+        let source = store.layers.get_mut(&asset).unwrap();
+        source.insert_prim(alternate, PrimSpec::def().with_children(vec![child_name]));
+        source.insert_prim(
+            alternate_child,
+            PrimSpec::def().with_field(field, Value::Int(43)),
+        );
+        store.insert_layer(Layer::new(session));
+        let options = StageOptions {
+            session_layer: Some(session),
+            ..StageOptions::default()
+        };
+        let mut live = LiveStage::compose(&mut store, root, options.clone());
+        let original = inventory(live.stage());
+        let footprint: Vec<_> = live.stage().traverse(first).collect();
+        let target = EditTarget::for_layer(session);
+
+        // The new stronger root spec must be indexed, but the arc still
+        // brings in the same prototype and retains its original ordering.
+        let mut edit = Transaction::new();
+        edit.create_property(
+            target.property(property),
+            PropertySpec::typed_attribute(PropertyType::parse("string").unwrap())
+                .with_default(Value::string("local")),
+        );
+        live.apply(&mut store, &edit).unwrap();
+        let work = live.recomposition_work();
+        assert!(
+            !work.full_rebuild && work.replaced_prim_indexes != 0,
+            "{work:?}"
+        );
+        assert_eq!(live.stage().prototype_preparations, 1);
+        assert_eq!(inventory(live.stage()), original);
+
+        // A stronger reference changes the prototype without adding or
+        // removing any paths from the instance's visible namespace.
+        let mut edit = Transaction::new();
+        edit.set_references(
+            target.prim(first),
+            ListOp::explicit(vec![Reference::with_asset(asset, alternate, "asset.usda")]),
+        );
+        live.apply(&mut store, &edit).unwrap();
+        let stage = live.stage();
+        assert!(!live.recomposition_work().full_rebuild);
+        assert_eq!(stage.traverse(first).collect::<Vec<_>>(), footprint);
+        assert_eq!(stage.prototype_preparations, 2);
+        assert_eq!(stage.prototypes().count(), 2);
+        assert_ne!(
+            stage.instance_prototype(first),
+            stage.instance_prototype(instances[1])
+        );
+        assert_eq!(
+            stage.resolve_field(footprint[1], field).unwrap().value,
+            Value::Int(43)
+        );
+        let fresh = Stage::compose(&mut store, root, options);
+        assert_eq!(inventory(stage), inventory(&fresh));
     }
 }
 

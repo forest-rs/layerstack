@@ -954,7 +954,7 @@ impl Stage {
         child_index: &crate::prim_indexing::ChildIndex,
     ) -> BoundaryOrders {
         let had_instances = !self.instances.is_empty();
-        let mut regroup = self.prototype_indexes_changed(store.paths(), &partial, affected);
+        let mut regroup = self.prototype_indexes_changed(&partial, affected);
         for path in affected {
             if let Some(old) = self.prims.remove(path) {
                 self.forget_type_info(old.type_info);
@@ -1032,6 +1032,8 @@ impl Stage {
         self.order_errors(store);
         if regroup {
             self.prepare_prototypes(store, InstanceIndexKeys::new());
+        } else {
+            self.reshare_changed_prototype_records(store.paths(), affected.iter().copied());
         }
         orders
     }
@@ -2220,11 +2222,13 @@ impl Stage {
         recomposed: &[PathId],
         composed_roots: &[PathId],
     ) {
-        let regroup = self.prototype_indexes_changed(store.paths(), &partial, recomposed);
+        let regroup = self.prototype_indexes_changed(&partial, recomposed);
         self.merge_prim_records_from(store, partial, recomposed, composed_roots);
         self.order_errors(store);
         if regroup {
             self.prepare_prototypes(store, InstanceIndexKeys::new());
+        } else {
+            self.reshare_changed_prototype_records(store.paths(), recomposed.iter().copied());
         }
     }
 
@@ -2505,7 +2509,7 @@ impl Stage {
                 refreshed.insert(shared_key, (original, Arc::clone(spec)));
             }
         }
-        self.reshare_changed_prototype_records(&changed);
+        self.reshare_changed_prototype_records(store.paths(), changed.iter().copied());
         let mut changed: Vec<PathId> = changed.into_iter().collect();
         sort::sort_unstable(&mut changed);
         Some(changed)

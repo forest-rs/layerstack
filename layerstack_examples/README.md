@@ -104,6 +104,7 @@ These additional workflows are binaries: use
 | `prepared_reload` | Validate checked geometry and packaged texture bytes before accepting a reload; rejected candidates leave the published document intact |
 | `live_scene` | Retained mesh, occurrence and material records with component deltas and shared unchanged buffers |
 | `material_network` | Immutable textured Preview Surface network, UV transforms, primvar requirements, resource anchors and separate revision components |
+| `portable_material` | Author an OpenPBR material and Preview Surface fallback from shared values, bind a mesh and inspect the reopened layer |
 | `procedural_graph` | Request dependent terrain and scatter, reuse unchanged producers, rebuild after a resource revision and reject stale downstream work |
 | `codeless_api` | Load a runtime schema library and apply single/multiple APIs by name, inspect fallback values and undo |
 | `primvar_workflow` | Indexed primvar authoring, index animation, ID targets and reusable inheritance sets |

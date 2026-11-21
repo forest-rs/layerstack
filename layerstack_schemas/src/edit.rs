@@ -17,6 +17,9 @@ use layerstack::{
     TokenId, TokenInterner, Value,
 };
 
+mod pending;
+use pending::PendingEdits;
+
 #[cfg(test)]
 mod tests;
 
@@ -260,37 +263,7 @@ pub struct SchemaEdit<'s> {
     store: &'s mut dyn LayerStore,
     target: EditTarget,
     transaction: Transaction,
-    /// Prims this edit defines, with their type.
-    defined: Vec<(PathId, String)>,
-    /// Prims this edit gives a defining specifier (`def` or `class`),
-    /// typed or not.
-    specified: Vec<PathId>,
-    /// The prims of `specified` this edit leaves `class`es.
-    classes: Vec<PathId>,
-    /// Prims this edit creates an `over` spec for, absent from the stage
-    /// before.
-    overridden: Vec<PathId>,
-    /// Applied schema names this edit adds, by prim.
-    applied: Vec<(PathId, TokenId)>,
-    /// Properties this edit creates, with an attribute's type name.
-    created: Vec<(PathId, TokenId, Option<PropertyType>)>,
-    /// The defaults this edit sets, latest last.
-    defaults: Vec<(PathId, TokenId, Value)>,
-    /// The time samples this edit sets, in stage time, latest last.
-    #[cfg(feature = "usd-geom")]
-    samples: Vec<TimeSampleEdit>,
-    /// Prim metadata this edit authors, including target-local list operations.
-    #[cfg(feature = "usd-geom")]
-    metadata: Vec<(PathId, TokenId, FieldValue)>,
-    /// Property metadata this edit authors (`None` clears it), latest last.
-    property_metadata: Vec<PropertyMetadataEdit>,
-    /// Local property specs removed during this edit.
-    removed: Vec<(PathId, TokenId)>,
-    #[cfg(feature = "usd-ui")]
-    ui_hints: Vec<(TargetPath, Value)>,
-    /// The edit target's dictionary-valued metadata fields this edit
-    /// authors, as it leaves them (an empty dictionary once cleared).
-    dictionaries: Vec<(TargetPath, TokenId, Value)>,
+    pending: PendingEdits<'s>,
 }
 
 /// One time sample an edit authors, in stage time.
@@ -332,22 +305,7 @@ impl<'s> SchemaEdit<'s> {
             store,
             target,
             transaction: Transaction::new(),
-            defined: Vec::new(),
-            specified: Vec::new(),
-            classes: Vec::new(),
-            overridden: Vec::new(),
-            applied: Vec::new(),
-            created: Vec::new(),
-            defaults: Vec::new(),
-            #[cfg(feature = "usd-geom")]
-            samples: Vec::new(),
-            #[cfg(feature = "usd-geom")]
-            metadata: Vec::new(),
-            property_metadata: Vec::new(),
-            removed: Vec::new(),
-            #[cfg(feature = "usd-ui")]
-            ui_hints: Vec::new(),
-            dictionaries: Vec::new(),
+            pending: PendingEdits::default(),
         }
     }
 
@@ -431,7 +389,7 @@ impl<'s> SchemaEdit<'s> {
         spec.custom = declaration.custom;
         self.transaction
             .create_property(self.target.property(property), spec);
-        self.created.push((path, name, ty));
+        self.pending.prim_mut(path).created.push((name, ty));
         true
     }
 
@@ -439,10 +397,8 @@ impl<'s> SchemaEdit<'s> {
     /// `path` as this edit leaves it: one this edit creates, else one the
     /// target layer holds that this edit has not removed.
     fn holds_property(&mut self, path: PathId, name: TokenId) -> bool {
-        self.created
-            .iter()
-            .any(|(p, n, _)| (*p, *n) == (path, name))
-            || (!self.removed.contains(&(path, name)) && self.has_local_property(path, name))
+        self.has_created(path, name)
+            || (!self.is_removed(path, name) && self.has_local_property(path, name))
     }
 
     /// Applies a registered API schema by name, including codeless schemas,
@@ -597,9 +553,6 @@ impl<'s> SchemaEdit<'s> {
             let retyped = type_name.is_some_and(|ty| self.type_name(prim) != Some(ty));
             if !self.is_defined(prim) || retyped {
                 self.author_def(prim, type_name);
-                if type_name.is_some() {
-                    self.defined.push((prim, schema.into()));
-                }
             }
         }
         Ok(crate::PrimEdit::from_path_unchecked(path))
@@ -642,7 +595,7 @@ impl<'s> SchemaEdit<'s> {
         {
             self.transaction
                 .create_prim(self.target.prim(path), Specifier::Over, None);
-            self.overridden.push(path);
+            self.pending.mark_override(path);
         }
         Ok(crate::PrimEdit::from_path_unchecked(path))
     }
@@ -699,10 +652,7 @@ impl<'s> SchemaEdit<'s> {
             self.define_prim(path, "")?;
             self.transaction
                 .set_specifier(self.target.prim(path), Specifier::Class);
-            if !self.specified.contains(&path) {
-                self.specified.push(path);
-            }
-            self.classes.push(path);
+            self.pending.mark_defining(path, Specifier::Class);
         }
         Ok(crate::PrimEdit::from_path_unchecked(path))
     }
@@ -712,14 +662,15 @@ impl<'s> SchemaEdit<'s> {
     ///
     /// Spec: AOUSD Core §12.2.1 (specifier resolution).
     fn specifier(&self, path: PathId) -> Option<Specifier> {
-        if self.classes.contains(&path) {
-            Some(Specifier::Class)
-        } else if self.specified.contains(&path) || self.store.paths().parent(path).is_none() {
+        let pending = self.pending.prim(path);
+        if pending.is_defined() {
+            pending.specifier
+        } else if self.store.paths().parent(path).is_none() {
             Some(Specifier::Def)
         } else if let Some(prim) = self.stage_prim(path) {
             Some(prim.specifier())
         } else {
-            self.overridden.contains(&path).then_some(Specifier::Over)
+            pending.specifier
         }
     }
 
@@ -757,7 +708,7 @@ impl<'s> SchemaEdit<'s> {
     ///
     /// Spec: AOUSD Core §11.5, §12.2.1.
     fn is_defined(&self, path: PathId) -> bool {
-        self.specified.contains(&path)
+        self.pending.prim(path).is_defined()
             || self
                 .stage_prim(path)
                 .is_some_and(|prim| matches!(prim.specifier(), Specifier::Def | Specifier::Class))
@@ -773,9 +724,9 @@ impl<'s> SchemaEdit<'s> {
         self.transaction.set_specifier(at.clone(), Specifier::Def);
         if let Some(type_name) = type_name {
             self.transaction.set_type_name(at, type_name);
+            self.pending.prim_mut(path).type_name = Some(type_name);
         }
-        self.specified.push(path);
-        self.classes.retain(|&class| class != path);
+        self.pending.mark_defining(path, Specifier::Def);
     }
 
     /// Collects a fallible child group. Success appends its transaction; an error
@@ -791,47 +742,12 @@ impl<'s> SchemaEdit<'s> {
             store: &mut *self.store,
             target: self.target.clone(),
             transaction: Transaction::new(),
-            defined: self.defined.clone(),
-            specified: self.specified.clone(),
-            classes: self.classes.clone(),
-            overridden: self.overridden.clone(),
-            applied: self.applied.clone(),
-            created: self.created.clone(),
-            defaults: self.defaults.clone(),
-            #[cfg(feature = "usd-geom")]
-            samples: self.samples.clone(),
-            #[cfg(feature = "usd-geom")]
-            metadata: self.metadata.clone(),
-            property_metadata: self.property_metadata.clone(),
-            removed: self.removed.clone(),
-            #[cfg(feature = "usd-ui")]
-            ui_hints: self.ui_hints.clone(),
-            dictionaries: self.dictionaries.clone(),
+            pending: self.pending.child(),
         };
         let result = collect(&mut child)?;
         self.transaction.append(child.transaction);
-        self.defined = child.defined;
-        self.specified = child.specified;
-        self.classes = child.classes;
-        self.overridden = child.overridden;
-        self.applied = child.applied;
-        self.created = child.created;
-        self.defaults = child.defaults;
-        #[cfg(feature = "usd-geom")]
-        {
-            self.samples = child.samples;
-        }
-        #[cfg(feature = "usd-geom")]
-        {
-            self.metadata = child.metadata;
-        }
-        self.property_metadata = child.property_metadata;
-        self.removed = child.removed;
-        #[cfg(feature = "usd-ui")]
-        {
-            self.ui_hints = child.ui_hints;
-        }
-        self.dictionaries = child.dictionaries;
+        let local = child.pending.local;
+        self.pending.absorb(local);
         Ok(result)
     }
 
@@ -867,7 +783,7 @@ impl<'s> SchemaEdit<'s> {
     pub(crate) fn has_pending_local_site(&self, path: PathId, time: Time) -> bool {
         let paths = self.store.paths();
         let layer = self.target.layer();
-        if !self.specified.contains(&path)
+        if !self.pending.prim(path).is_defined()
             || !self.target.has_root_identity()
             || !self.target.maps_to_itself(path, paths)
             || !self.stage.has_local_layer(layer)
@@ -954,11 +870,14 @@ impl<'s> SchemaEdit<'s> {
     #[cfg(feature = "usd-geom")]
     pub(crate) fn local_prim_metadata(&mut self, path: PathId, name: &str) -> Option<FieldValue> {
         let name = self.tokens().intern(name);
-        if let Some((_, _, value)) = self
+        if let Some((_, value)) = self
+            .pending
+            .prim(path)
+            .other()
             .metadata
             .iter()
             .rev()
-            .find(|(p, n, _)| *p == path && *n == name)
+            .find(|(n, _)| *n == name)
         {
             return Some(value.clone());
         }
@@ -986,12 +905,37 @@ impl<'s> SchemaEdit<'s> {
         let name = self.tokens().intern(name);
         self.transaction
             .set_metadata(self.target.prim(path), name, value.clone());
-        self.metadata.push((path, name, value));
+        self.pending
+            .prim_mut(path)
+            .other_mut()
+            .metadata
+            .push((name, value));
     }
 
     fn property(&mut self, path: PathId, name: &str) -> layerstack::edit::Address {
         let name = self.store.tokens().intern(name);
         self.target.property(PropertyPath::new(path, name))
+    }
+
+    fn has_created(&self, path: PathId, name: TokenId) -> bool {
+        self.pending
+            .prim(path)
+            .created
+            .iter()
+            .any(|(created, _)| *created == name)
+    }
+
+    fn is_removed(&self, path: PathId, name: TokenId) -> bool {
+        self.pending.prim(path).other().removed.contains(&name)
+    }
+
+    fn pending_default(&self, path: PathId, name: TokenId) -> Option<&Value> {
+        self.pending
+            .prim(path)
+            .defaults
+            .iter()
+            .rev()
+            .find_map(|(key, value)| (*key == name).then_some(value))
     }
 
     /// Whether a prim is at `path`: on the stage, or defined or
@@ -1001,9 +945,7 @@ impl<'s> SchemaEdit<'s> {
     ///
     /// OpenUSD: authoring through an invalid `UsdPrim` fails.
     pub(crate) fn exists(&self, path: PathId) -> bool {
-        self.stage_prim(path).is_some()
-            || self.specified.contains(&path)
-            || self.overridden.contains(&path)
+        self.stage_prim(path).is_some() || self.pending.prim(path).specifier.is_some()
     }
 
     /// The parent of the prim at `path`; `None` for the pseudo-root.
@@ -1024,11 +966,11 @@ impl<'s> SchemaEdit<'s> {
             .stage_prim(path)
             .map(|prim| prim.all_children().map(layerstack::Prim::path).collect())
             .unwrap_or_default();
-        for &defined in self.specified.iter().chain(&self.overridden) {
+        self.pending.for_each_placed(&mut |defined| {
             if self.store.paths().parent(defined) == Some(path) && !children.contains(&defined) {
                 children.push(defined);
             }
-        }
+        });
         children
     }
 
@@ -1068,12 +1010,11 @@ impl<'s> SchemaEdit<'s> {
         let Some(schema) = tokens.lookup(schema) else {
             return false;
         };
-        match self.defined.iter().rev().find(|(p, _)| *p == path) {
-            Some((_, defined)) => self
+        match self.pending.prim(path).type_name {
+            Some(defined) => self
                 .stage
                 .schemas()
-                .zip(tokens.lookup(defined))
-                .is_some_and(|(registry, defined)| registry.is_a(defined, schema)),
+                .is_some_and(|registry| registry.is_a(defined, schema)),
             None => self
                 .stage_prim(path)
                 .and_then(layerstack::Prim::definition)
@@ -1082,23 +1023,18 @@ impl<'s> SchemaEdit<'s> {
     }
 
     /// The prim's type as this edit leaves it.
-    fn type_name(&mut self, path: PathId) -> Option<TokenId> {
-        match self.defined.iter().rev().find(|(p, _)| *p == path) {
-            Some((_, defined)) => {
-                let defined = defined.clone();
-                Some(self.store.tokens().intern(defined))
-            }
-            None => self
-                .stage_prim(path)
-                .and_then(layerstack::Prim::type_name_token),
-        }
+    fn type_name(&self, path: PathId) -> Option<TokenId> {
+        self.pending.prim(path).type_name.or_else(|| {
+            self.stage_prim(path)
+                .and_then(layerstack::Prim::type_name_token)
+        })
     }
 
     /// The definition the prim's schemas, as this edit leaves them, give
     /// its property `name`.
     ///
     /// Spec: AOUSD Core §13.3.2.3 (the prim definition).
-    fn definition(&mut self, path: PathId, name: TokenId) -> Option<PropertyDefinition> {
+    fn definition(&self, path: PathId, name: TokenId) -> Option<PropertyDefinition> {
         let registry = self.stage.schemas()?;
         let type_name = self.type_name(path);
         let applied = self.applied_names(path);
@@ -1118,12 +1054,7 @@ impl<'s> SchemaEdit<'s> {
             Some(ResolvedValue::TokenList(applied)) => applied,
             _ => Vec::new(),
         };
-        applied.extend(
-            self.applied
-                .iter()
-                .filter(|(p, _)| *p == path)
-                .map(|(_, name)| *name),
-        );
+        applied.extend_from_slice(&self.pending.prim(path).applied);
         applied
     }
 
@@ -1139,10 +1070,7 @@ impl<'s> SchemaEdit<'s> {
         let authored = self
             .stage_property(PropertyPath::new(path, token))
             .is_some_and(layerstack::Property::is_authored)
-            || self
-                .created
-                .iter()
-                .any(|(p, n, _)| (*p, *n) == (path, token));
+            || self.has_created(path, token);
         let definition = if authored {
             None
         } else {
@@ -1159,21 +1087,25 @@ impl<'s> SchemaEdit<'s> {
                 match time {
                     None => {
                         spec.default = Some(layer_value);
-                        self.defaults.push((path, token, value));
+                        self.pending.prim_mut(path).defaults.push((token, value));
                     }
                     Some(time) => {
                         #[cfg(feature = "usd-geom")]
-                        self.samples.push(TimeSampleEdit {
-                            property: PropertyPath::new(path, token),
-                            time,
-                            value,
-                        });
+                        self.pending
+                            .prim_mut(path)
+                            .other_mut()
+                            .samples
+                            .push(TimeSampleEdit {
+                                property: PropertyPath::new(path, token),
+                                time,
+                                value,
+                            });
                         let time = self.target.map_to_spec_time(time);
                         spec.time_samples = alloc::vec![(time, layer_value)].into();
                     }
                 }
                 self.transaction.create_property(at, spec);
-                self.created.push((path, token, Some(ty)));
+                self.pending.prim_mut(path).created.push((token, Some(ty)));
             }
             None => {
                 // Track the local declaration before a value op can implicitly
@@ -1181,16 +1113,23 @@ impl<'s> SchemaEdit<'s> {
                 self.ensure_property(PropertyPath::new(path, token));
                 match time {
                     None => {
-                        self.defaults.push((path, token, value.clone()));
+                        self.pending
+                            .prim_mut(path)
+                            .defaults
+                            .push((token, value.clone()));
                         self.transaction.set_default(at, value)
                     }
                     Some(time) => {
                         #[cfg(feature = "usd-geom")]
-                        self.samples.push(TimeSampleEdit {
-                            property: PropertyPath::new(path, token),
-                            time,
-                            value: value.clone(),
-                        });
+                        self.pending
+                            .prim_mut(path)
+                            .other_mut()
+                            .samples
+                            .push(TimeSampleEdit {
+                                property: PropertyPath::new(path, token),
+                                time,
+                                value: value.clone(),
+                            });
                         self.transaction.set_time_sample(at, time, value)
                     }
                 };
@@ -1203,15 +1142,10 @@ impl<'s> SchemaEdit<'s> {
     /// included).
     pub(crate) fn default_value(&mut self, path: PathId, name: &str) -> Option<Value> {
         let token = self.store.tokens().intern(name);
-        if let Some((_, _, value)) = self
-            .defaults
-            .iter()
-            .rev()
-            .find(|(p, n, _)| (*p, *n) == (path, token))
-        {
+        if let Some(value) = self.pending_default(path, token) {
             return Some(value.clone());
         }
-        if self.removed.contains(&(path, token)) {
+        if self.is_removed(path, token) {
             let property = PropertyPath::new(path, token);
             let mapped = self
                 .target
@@ -1256,15 +1190,10 @@ impl<'s> SchemaEdit<'s> {
     #[cfg(feature = "usd-shade")]
     pub(crate) fn authors_default(&mut self, path: PathId, name: &str) -> bool {
         let token = self.store.tokens().intern(name);
-        if let Some((_, _, value)) = self
-            .defaults
-            .iter()
-            .rev()
-            .find(|(p, n, _)| (*p, *n) == (path, token))
-        {
+        if let Some(value) = self.pending_default(path, token) {
             return !matches!(value, Value::Blocked);
         }
-        !self.removed.contains(&(path, token))
+        !self.is_removed(path, token)
             && crate::PrimView::new(self.scene(), path).has_authored_value(name)
     }
 
@@ -1292,6 +1221,9 @@ impl<'s> SchemaEdit<'s> {
         let attribute = self.stage_property(property).and_then(|p| p.as_attribute());
         let stage_times = attribute.map(|a| a.sample_times()).unwrap_or_default();
         let pending: Vec<&TimeSampleEdit> = self
+            .pending
+            .prim(path)
+            .other()
             .samples
             .iter()
             .filter(|sample| sample.property == property)
@@ -1328,19 +1260,27 @@ impl<'s> SchemaEdit<'s> {
     pub(crate) fn has_authored_value(&mut self, path: PathId, name: &str) -> bool {
         let token = self.store.tokens().intern(name);
         let property = PropertyPath::new(path, token);
-        if let Some((_, _, value)) = self
-            .defaults
-            .iter()
-            .rev()
-            .find(|(p, n, _)| (*p, *n) == (path, token))
-        {
+        if let Some(value) = self.pending_default(path, token) {
             return !matches!(value, Value::Blocked)
-                || self.samples.iter().any(|s| s.property == property);
+                || self
+                    .pending
+                    .prim(path)
+                    .other()
+                    .samples
+                    .iter()
+                    .any(|s| s.property == property);
         }
-        if self.samples.iter().any(|s| s.property == property) {
+        if self
+            .pending
+            .prim(path)
+            .other()
+            .samples
+            .iter()
+            .any(|s| s.property == property)
+        {
             return true;
         }
-        !self.removed.contains(&(path, token))
+        !self.is_removed(path, token)
             && crate::PrimView::new(self.scene(), path).has_authored_value(name)
     }
 
@@ -1348,7 +1288,7 @@ impl<'s> SchemaEdit<'s> {
     // specs, including weaker opinions of the same property.
     // Spec: AOUSD Core §12.2.2–§12.2.4 (declaration composition).
     fn composed_declaration(&mut self, path: PathId, name: TokenId) -> Option<PropertyDeclaration> {
-        if !self.removed.contains(&(path, name)) {
+        if !self.is_removed(path, name) {
             return self
                 .stage_property(PropertyPath::new(path, name))?
                 .declaration();
@@ -1386,11 +1326,13 @@ impl<'s> SchemaEdit<'s> {
     /// else the stage's (an opinion's declaration, else the schema's).
     pub(crate) fn attribute_type(&mut self, path: PathId, name: &str) -> Option<PropertyType> {
         let token = self.store.tokens().intern(name);
-        if let Some((_, _, ty)) = self
+        if let Some((_, ty)) = self
+            .pending
+            .prim(path)
             .created
             .iter()
             .rev()
-            .find(|(p, n, _)| (*p, *n) == (path, token))
+            .find(|(n, _)| *n == token)
         {
             return ty.clone();
         }
@@ -1415,11 +1357,13 @@ impl<'s> SchemaEdit<'s> {
     /// definition).
     pub fn property_kind(&mut self, path: PathId, name: &str) -> Option<PropertyKind> {
         let token = self.store.tokens().intern(name);
-        if let Some((_, _, ty)) = self
+        if let Some((_, ty)) = self
+            .pending
+            .prim(path)
             .created
             .iter()
             .rev()
-            .find(|(p, n, _)| (*p, *n) == (path, token))
+            .find(|(n, _)| *n == token)
         {
             return Some(if ty.is_some() {
                 PropertyKind::Attribute
@@ -1485,7 +1429,7 @@ impl<'s> SchemaEdit<'s> {
         let mut spec = PropertySpec::typed_attribute(ty.clone());
         spec.custom = false;
         self.transaction.create_property(at, spec);
-        self.created.push((path, token, Some(ty)));
+        self.pending.prim_mut(path).created.push((token, Some(ty)));
     }
 
     #[cfg(feature = "usd-lux")]
@@ -1502,7 +1446,7 @@ impl<'s> SchemaEdit<'s> {
         spec.custom = false;
         spec.variability = layerstack::Variability::Uniform;
         self.transaction.create_property(at, spec);
-        self.created.push((path, token, Some(ty)));
+        self.pending.prim_mut(path).created.push((token, Some(ty)));
     }
 
     /// Authors the metadata `key` of the property `name` of `path`, with no
@@ -1521,11 +1465,15 @@ impl<'s> SchemaEdit<'s> {
         let key = self.tokens().intern(key);
         let at = self.target.property(property);
         self.transaction.set_metadata(at, key, value.clone());
-        self.property_metadata.push(PropertyMetadataEdit {
-            property,
-            key,
-            value: Some(value),
-        });
+        self.pending
+            .prim_mut(path)
+            .other_mut()
+            .property_metadata
+            .push(PropertyMetadataEdit {
+                property,
+                key,
+                value: Some(value),
+            });
     }
 
     /// The metadata `key` of the property `name` of `path` as this edit
@@ -1541,6 +1489,9 @@ impl<'s> SchemaEdit<'s> {
         let property = PropertyPath::new(path, self.tokens().intern(name));
         let key = self.tokens().intern(key);
         if let Some(edit) = self
+            .pending
+            .prim(path)
+            .other()
             .property_metadata
             .iter()
             .rev()
@@ -1551,7 +1502,7 @@ impl<'s> SchemaEdit<'s> {
                 _ => None,
             };
         }
-        if self.removed.contains(&(path, property.property())) {
+        if self.is_removed(path, property.property()) {
             return None;
         }
         match self.stage_property(property)?.metadata(key)?.value {
@@ -1586,10 +1537,9 @@ impl<'s> SchemaEdit<'s> {
             .filter(|candidate| inside(candidate))
             .collect();
         let tokens = self.store.tokens();
-        for (p, n, ty) in &self.created {
+        for (n, ty) in &self.pending.prim(path).created {
             let created = tokens.resolve(*n);
-            if *p == path && ty.is_none() && inside(created) && !names.iter().any(|n| n == created)
-            {
+            if ty.is_none() && inside(created) && !names.iter().any(|n| n == created) {
                 names.push(String::from(created));
             }
         }
@@ -1625,19 +1575,20 @@ impl<'s> SchemaEdit<'s> {
                 let key = self.tokens().intern(key);
                 // Only a spec this edit or the target layer holds has the
                 // field to clear; no spec is created to clear nothing.
-                let created = self
-                    .created
-                    .iter()
-                    .any(|(p, n, _)| (*p, *n) == (path, token));
+                let created = self.has_created(path, token);
                 if created || self.has_local_property(path, token) {
                     let at = self.target.property(property);
                     self.transaction.clear_metadata(at, key);
                 }
-                self.property_metadata.push(PropertyMetadataEdit {
-                    property,
-                    key,
-                    value: None,
-                });
+                self.pending
+                    .prim_mut(path)
+                    .other_mut()
+                    .property_metadata
+                    .push(PropertyMetadataEdit {
+                        property,
+                        key,
+                        value: None,
+                    });
             }
         }
         Ok(())
@@ -1663,7 +1614,11 @@ impl<'s> SchemaEdit<'s> {
             Some(value) => {
                 self.transaction.set_metadata(at, name, value.clone());
                 #[cfg(feature = "usd-geom")]
-                self.metadata.push((path, name, value));
+                self.pending
+                    .prim_mut(path)
+                    .other_mut()
+                    .metadata
+                    .push((name, value));
             }
             None => {
                 self.transaction.clear_metadata(at, name);
@@ -1676,7 +1631,10 @@ impl<'s> SchemaEdit<'s> {
     /// `value` (`None` clears it), so a later by-key edit in this edit
     /// starts from it rather than from the layer.
     fn replace_dictionary(&mut self, target: TargetPath, key: TokenId, value: Option<&FieldValue>) {
-        self.dictionaries
+        self.pending
+            .prim_mut(target.prim_path())
+            .other_mut()
+            .dictionaries
             .retain(|(at, field, _)| (*at, *field) != (target, key));
         // Kept as the layer holds it, as a by-key edit's dictionary is.
         let dictionary = match value {
@@ -1686,7 +1644,11 @@ impl<'s> SchemaEdit<'s> {
             Some(_) => return,
             None => Value::Dictionary(Vec::new()),
         };
-        self.dictionaries.push((target, key, dictionary));
+        self.pending
+            .prim_mut(target.prim_path())
+            .other_mut()
+            .dictionaries
+            .push((target, key, dictionary));
     }
 
     /// Sets (`Some`) or erases (`None`) the entry at `key_path` of the
@@ -1746,6 +1708,9 @@ impl<'s> SchemaEdit<'s> {
         };
         let field = self.tokens().intern(key);
         let mut dictionary = match self
+            .pending
+            .prim(target.prim_path())
+            .other()
             .dictionaries
             .iter()
             .rev()
@@ -1798,16 +1763,18 @@ impl<'s> SchemaEdit<'s> {
             self.transaction
                 .set_metadata(at, field, FieldValue::Value(dictionary.clone()));
         }
+        let pending = self.pending.prim_mut(target.prim_path()).other_mut();
         if let TargetPath::Property(property) = target {
-            self.property_metadata.push(PropertyMetadataEdit {
+            pending.property_metadata.push(PropertyMetadataEdit {
                 property,
                 key: field,
                 value: (!(erase && empty)).then(|| FieldValue::Value(dictionary.clone())),
             });
         }
-        self.dictionaries
+        pending
+            .dictionaries
             .retain(|(at, f, _)| (*at, *f) != (target, field));
-        self.dictionaries.push((target, field, dictionary));
+        pending.dictionaries.push((target, field, dictionary));
         Ok(())
     }
 
@@ -1837,6 +1804,9 @@ impl<'s> SchemaEdit<'s> {
     #[cfg(feature = "usd-ui")]
     pub(crate) fn update_ui_hint(&mut self, target: TargetPath, keys: &[&str], value: Value) {
         let mut dictionary = self
+            .pending
+            .prim(target.prim_path())
+            .other()
             .ui_hints
             .iter()
             .rev()
@@ -1844,10 +1814,15 @@ impl<'s> SchemaEdit<'s> {
             .map(|(_, value)| value.clone())
             .unwrap_or_else(|| self.local_ui_hints(target));
         crate::ui_hints::set_dictionary_path(&mut dictionary, keys, value);
-        if let Some((_, previous)) = self.ui_hints.iter_mut().find(|(at, _)| *at == target) {
+        let hints = &mut self
+            .pending
+            .prim_mut(target.prim_path())
+            .other_mut()
+            .ui_hints;
+        if let Some((_, previous)) = hints.iter_mut().find(|(at, _)| *at == target) {
             *previous = dictionary.clone();
         } else {
-            self.ui_hints.push((target, dictionary.clone()));
+            hints.push((target, dictionary.clone()));
         }
         self.set_ui_metadata(target, "uiHints", dictionary);
     }
@@ -1863,7 +1838,7 @@ impl<'s> SchemaEdit<'s> {
     /// never a composed one.
     fn local_dictionary(&mut self, target: TargetPath, key: TokenId) -> Value {
         if let TargetPath::Property(path) = target
-            && self.removed.contains(&(path.prim_path(), path.property()))
+            && self.is_removed(path.prim_path(), path.property())
         {
             return Value::Dictionary(Vec::new());
         }
@@ -1915,9 +1890,7 @@ impl<'s> SchemaEdit<'s> {
         let key = self.store.tokens().lookup("uiHints")?;
         let resolved = match target {
             TargetPath::Prim(path) => self.stage_prim(path).and_then(|prim| prim.metadata(key)),
-            TargetPath::Property(path)
-                if self.removed.contains(&(path.prim_path(), path.property())) =>
-            {
+            TargetPath::Property(path) if self.is_removed(path.prim_path(), path.property()) => {
                 let mapped = self
                     .target
                     .map_property_to_spec_path(path, self.store.paths());
@@ -1954,8 +1927,14 @@ impl<'s> SchemaEdit<'s> {
                         Vec::new()
                     };
                 let mut dictionary = dictionary;
-                if let Some((_, Value::Dictionary(local))) =
-                    self.ui_hints.iter().rev().find(|(at, _)| *at == target)
+                if let Some((_, Value::Dictionary(local))) = self
+                    .pending
+                    .prim(target.prim_path())
+                    .other()
+                    .ui_hints
+                    .iter()
+                    .rev()
+                    .find(|(at, _)| *at == target)
                 {
                     dictionary = layerstack::combine_dictionaries(local, &dictionary);
                 }
@@ -1970,8 +1949,14 @@ impl<'s> SchemaEdit<'s> {
             Some(ResolvedValue::Scalar(Value::Dictionary(entries))) => entries,
             _ => Vec::new(),
         };
-        if let Some((_, Value::Dictionary(local))) =
-            self.ui_hints.iter().rev().find(|(at, _)| *at == target)
+        if let Some((_, Value::Dictionary(local))) = self
+            .pending
+            .prim(target.prim_path())
+            .other()
+            .ui_hints
+            .iter()
+            .rev()
+            .find(|(at, _)| *at == target)
         {
             dictionary = layerstack::combine_dictionaries(local, &dictionary);
         }
@@ -1981,11 +1966,7 @@ impl<'s> SchemaEdit<'s> {
     // A composed property may have no spec in the current target layer.
     // Metadata edits need that local declaration, preserving the composed type.
     fn ensure_property(&mut self, path: PropertyPath) {
-        if self
-            .created
-            .iter()
-            .any(|(p, n, _)| *p == path.prim_path() && *n == path.property())
-        {
+        if self.has_created(path.prim_path(), path.property()) {
             return;
         }
         let mapped = self
@@ -2005,7 +1986,7 @@ impl<'s> SchemaEdit<'s> {
                 }
             })
         });
-        if local && !self.removed.contains(&(path.prim_path(), path.property())) {
+        if local && !self.is_removed(path.prim_path(), path.property()) {
             return;
         }
         let declared = self.composed_declaration(path.prim_path(), path.property());
@@ -2035,7 +2016,10 @@ impl<'s> SchemaEdit<'s> {
         spec.custom = declared.as_ref().is_some_and(|d| d.custom);
         self.transaction
             .create_property(self.target.property(path), spec);
-        self.created.push((path.prim_path(), path.property(), ty));
+        self.pending
+            .prim_mut(path.prim_path())
+            .created
+            .push((path.property(), ty));
     }
 
     #[cfg(feature = "usd-ui")]
@@ -2067,11 +2051,7 @@ impl<'s> SchemaEdit<'s> {
     #[cfg(any(feature = "usd-vol", feature = "usd-lux", feature = "usd-shade"))]
     pub(crate) fn ensure_relationship(&mut self, path: PathId, name: &str, custom: bool) {
         let token = self.store.tokens().intern(name);
-        if self
-            .created
-            .iter()
-            .any(|(p, n, _)| (*p, *n) == (path, token))
-        {
+        if self.has_created(path, token) {
             return;
         }
         if !self.has_local_property(path, token) {
@@ -2083,7 +2063,7 @@ impl<'s> SchemaEdit<'s> {
             let at = self.target.property(PropertyPath::new(path, token));
             self.transaction.create_property(at, spec);
         }
-        self.created.push((path, token, None));
+        self.pending.prim_mut(path).created.push((token, None));
     }
 
     #[cfg(feature = "usd-lux")]
@@ -2114,7 +2094,7 @@ impl<'s> SchemaEdit<'s> {
         let at = self.target.property(PropertyPath::new(path, name));
         self.transaction
             .create_property(at, PropertySpec::relationship());
-        self.created.push((path, name, None));
+        self.pending.prim_mut(path).created.push((name, None));
     }
 
     #[cfg(feature = "usd-geom")]
@@ -2123,9 +2103,14 @@ impl<'s> SchemaEdit<'s> {
         self.ensure_property(PropertyPath::new(path, name));
         let at = self.target.property(PropertyPath::new(path, name));
         self.transaction.block_attribute(at);
-        self.defaults.push((path, name, Value::Blocked));
-        let property = PropertyPath::new(path, name);
-        self.samples.retain(|sample| sample.property != property);
+        let pending = self.pending.prim_mut(path);
+        pending.defaults.push((name, Value::Blocked));
+        if !pending.other().samples.is_empty() {
+            pending
+                .other_mut()
+                .samples
+                .retain(|sample| sample.property.property() != name);
+        }
     }
 
     #[cfg(any(feature = "usd-geom", feature = "usd-shade"))]
@@ -2133,16 +2118,18 @@ impl<'s> SchemaEdit<'s> {
         let name = self.store.tokens().intern(name);
         let at = self.target.property(PropertyPath::new(path, name));
         self.transaction.remove_spec(at);
-        self.removed.push((path, name));
-        self.created.retain(|(p, n, _)| (*p, *n) != (path, name));
-        self.defaults.retain(|(p, n, _)| (*p, *n) != (path, name));
+        let pending = self.pending.prim_mut(path);
+        pending.created.retain(|(n, _)| *n != name);
+        pending.defaults.retain(|(n, _)| *n != name);
+        let other = pending.other_mut();
+        other.removed.push(name);
         #[cfg(feature = "usd-geom")]
-        {
-            let property = PropertyPath::new(path, name);
-            self.samples.retain(|sample| sample.property != property);
-        }
+        other
+            .samples
+            .retain(|sample| sample.property.property() != name);
         #[cfg(feature = "usd-ui")]
-        self.ui_hints
+        other
+            .ui_hints
             .retain(|(at, _)| *at != TargetPath::Property(PropertyPath::new(path, name)));
     }
 
@@ -2187,10 +2174,7 @@ impl<'s> SchemaEdit<'s> {
     /// Spec: AOUSD Core §12.2.4 (properties), §13.3.2.3 (the prim
     /// definition).
     fn define_relationship(&mut self, path: PathId, name: TokenId) {
-        if self
-            .created
-            .iter()
-            .any(|(p, n, _)| (*p, *n) == (path, name))
+        if self.has_created(path, name)
             || self
                 .definition(path, name)
                 .is_none_or(|definition| definition.kind != PropertyKind::Relationship)
@@ -2201,7 +2185,7 @@ impl<'s> SchemaEdit<'s> {
         let at = self.target.property(PropertyPath::new(path, name));
         self.transaction
             .create_property(at, PropertySpec::relationship());
-        self.created.push((path, name, None));
+        self.pending.prim_mut(path).created.push((name, None));
     }
 
     /// Clears the targets the edit target authors on the relationship
@@ -2308,7 +2292,7 @@ impl<'s> SchemaEdit<'s> {
         };
         let at = self.target.prim(path);
         self.transaction.add_applied_schema(at, applied);
-        self.applied.push((path, applied));
+        self.pending.prim_mut(path).applied.push(applied);
         Ok(())
     }
 }

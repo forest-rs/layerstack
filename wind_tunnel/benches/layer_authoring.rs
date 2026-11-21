@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! Author the same layer as records, a schema-aware batch, and a generated
-//! transaction. Each scope applies two named collections, sets a uniform
-//! boolean on each, and targets another scope. Only authoring is timed.
+//! transaction, with and without one group per prim. Each scope applies
+//! two named collections, sets a uniform boolean on each, and targets
+//! another scope. Only authoring is timed.
 //! Schema loading, path creation, composition, serialization, and dropping
 //! the previous layer are outside the measurements.
 
@@ -130,15 +131,26 @@ impl Fixture {
         self.store.insert_layer(layer);
     }
 
-    fn transaction(&mut self) {
+    fn transaction(&mut self, grouped: bool) {
         let mut edit = SchemaEdit::new(&self.stage, &mut self.store, EditTarget::for_layer(ROOT));
         for (i, &path) in self.paths.iter().enumerate() {
-            Scope::define(&mut edit, path).unwrap();
-            for (name, target) in COLLECTIONS.into_iter().zip(neighbors(&self.paths, i)) {
-                CollectionApi::apply(&mut edit, path, name)
-                    .unwrap()
-                    .set_include_root(&mut edit, false)
-                    .set_includes(&mut edit, &[target]);
+            let author = |edit: &mut SchemaEdit<'_>| {
+                Scope::define(edit, path).unwrap();
+                for (name, target) in COLLECTIONS.into_iter().zip(neighbors(&self.paths, i)) {
+                    CollectionApi::apply(edit, path, name)
+                        .unwrap()
+                        .set_include_root(edit, false)
+                        .set_includes(edit, &[target]);
+                }
+            };
+            if grouped {
+                edit.group(|child| {
+                    author(child);
+                    Ok::<_, core::convert::Infallible>(())
+                })
+                .unwrap();
+            } else {
+                author(&mut edit);
             }
         }
         edit.finish().apply(&mut self.store).unwrap();
@@ -166,12 +178,13 @@ type Author = fn(&mut Fixture);
 fn bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("layer_authoring");
     group.sample_size(10);
-    let routes: [(&str, Author); 3] = [
+    let routes: [(&str, Author); 4] = [
         ("records", Fixture::records),
         ("batch", Fixture::batch),
-        ("transaction", Fixture::transaction),
+        ("transaction", |fixture| fixture.transaction(false)),
+        ("grouped_transaction", |fixture| fixture.transaction(true)),
     ];
-    for n in [64, 1024] {
+    for n in [64, 1024, 8000] {
         let mut fixture = Fixture::new(n);
         fixture.records();
         let expected = fixture.text();

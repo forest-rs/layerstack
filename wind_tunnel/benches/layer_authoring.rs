@@ -15,8 +15,9 @@ use std::{
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use layerstack::{
-    EditTarget, FieldValue, InMemoryStore, Layer, LayerId, ListOp, PathId, PrimSpec, PropertyEntry,
-    PropertySpec, PropertyType, SchemaRegistry, Stage, StageOptions, TargetPath, TokenId, Value,
+    EditTarget, FieldValue, InMemoryStore, Layer, LayerId, ListOp, PathId, PrimSpec,
+    PropertyDefinition, PropertyEntry, PropertySpec, PropertyType, SchemaDefinition,
+    SchemaRegistry, Stage, StageOptions, TargetPath, TokenId, Value,
 };
 use layerstack_schemas::{LayerBatch, SchemaEdit, usd::CollectionApi, usd_geom::Scope};
 
@@ -335,7 +336,7 @@ fn bench_wide(c: &mut Criterion) {
         ("batch_contiguous", Some(Writes::Contiguous)),
         ("batch_grouped", Some(Writes::Grouped)),
     ];
-    for n in [128, 512, 2048, 32768] {
+    for n in [8, 32, 128, 512, 2048, 32768] {
         group.throughput(Throughput::Elements(n as u64));
         for (name, writes) in routes {
             let mut fixture = None;
@@ -372,5 +373,53 @@ fn bench_wide(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench, bench_wide);
+/// Isolate ordinary typed writes from API application and template resolution.
+fn bench_typed_properties(c: &mut Criterion) {
+    let mut group = c.benchmark_group("batch_typed_properties");
+    let store = InMemoryStore::default();
+    let tokens = store.tokens();
+    let mut definition = SchemaDefinition::typed(tokens.intern("Settings"));
+    let names: Vec<_> = (0..64).map(|n| format!("setting{n}")).collect();
+    let integer = PropertyType::parse("int").unwrap();
+    for name in &names {
+        definition = definition.with_property(
+            PropertyDefinition::attribute(tokens.intern(name)).with_type(integer.clone()),
+        );
+    }
+    let mut registry = SchemaRegistry::builder();
+    registry.register(definition);
+    let schemas = registry.build(tokens);
+    let paths: Vec<_> = (0..256)
+        .map(|n| store.path(&format!("/Settings{n}")))
+        .collect();
+    group.throughput(Throughput::Elements(paths.len() as u64));
+    for width in [0, 1, 8, 16, 32, 64] {
+        group.bench_function(BenchmarkId::from_parameter(width), |b| {
+            b.iter_custom(|iterations| {
+                let mut elapsed = Duration::ZERO;
+                for _ in 0..iterations {
+                    let start = Instant::now();
+                    let mut batch = LayerBatch::new(ROOT, &store, &schemas).unwrap();
+                    for &path in &paths {
+                        batch
+                            .define(path, "Settings", |prim| {
+                                for name in &names[..width] {
+                                    prim.set(name, Value::Int(7))?;
+                                }
+                                Ok(())
+                            })
+                            .unwrap();
+                    }
+                    let layer = batch.finish();
+                    elapsed += start.elapsed();
+                    black_box(layer);
+                }
+                elapsed
+            });
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(benches, bench, bench_wide, bench_typed_properties);
 criterion_main!(benches);

@@ -428,7 +428,11 @@ instances to one scope. It compares direct records and two batch write orders.
 after applying it. `batch_grouped` applies every API first, then writes the
 same properties by name. `batch_apply_only` measures the applications alone.
 Each batch is checked against byte-identical direct records before timing.
-Use the 128, 512, and 2,048 cases for comparisons with a quadratic baseline.
+The 8- and 32-instance cases cover moderately sized prims. Use 128, 512,
+and 2,048 for comparisons with a quadratic baseline.
+
+The `batch_typed_properties` group isolates ordinary typed writes. It defines
+256 prims per iteration with zero to 64 integer defaults and no applied APIs.
 
 ```sh
 cargo bench -p wind_tunnel --bench layer_authoring -- '^layer_authoring/' --warm-up-time 1 --measurement-time 1

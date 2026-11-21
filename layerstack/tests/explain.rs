@@ -722,14 +722,8 @@ fn list_ops_report_each_edit() {
     let stage = layered(
         &mut store,
         vec![
-            PrimSpec::over().with_field(
-                api_schemas,
-                FieldValue::TokenListOp(Box::new(ListOp::prepended(vec![a]))),
-            ),
-            PrimSpec::def().with_field(
-                api_schemas,
-                FieldValue::TokenListOp(Box::new(ListOp::appended(vec![b]))),
-            ),
+            PrimSpec::over().with_field(api_schemas, FieldValue::from(ListOp::prepended(vec![a]))),
+            PrimSpec::def().with_field(api_schemas, FieldValue::from(ListOp::appended(vec![b]))),
         ],
     );
     let tree = store.path("/Tree");

@@ -92,9 +92,9 @@ impl Fixture {
         for (i, &path) in self.paths.iter().enumerate() {
             let mut prim = PrimSpec::def().with_type_name(self.scope).with_field(
                 self.api_schemas,
-                FieldValue::TokenListOp(Box::new(ListOp::prepended(
+                FieldValue::from(ListOp::prepended(
                     self.collections.iter().map(|c| c.applied).collect(),
-                ))),
+                )),
             );
             for (collection, target) in self.collections.iter().zip(neighbors(&self.paths, i)) {
                 prim.set_property(

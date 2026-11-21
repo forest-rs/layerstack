@@ -1255,9 +1255,9 @@ mod handle_tests {
             ball,
             PrimSpec::def().with_type_name(sphere).with_field(
                 api_schemas,
-                layerstack::FieldValue::TokenListOp(alloc::boxed::Box::new(
-                    layerstack::ListOp::explicit(alloc::vec![binding, collection]),
-                )),
+                layerstack::FieldValue::from(layerstack::ListOp::explicit(alloc::vec![
+                    binding, collection
+                ])),
             ),
         );
         layer.insert_prim(bare, PrimSpec::def());

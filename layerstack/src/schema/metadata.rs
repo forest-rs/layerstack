@@ -252,7 +252,7 @@ impl MetadataType {
                 &mut core::iter::empty(),
             )),
             Self::Dictionary => FieldValue::Value(Value::Dictionary(Vec::new())),
-            Self::ListOp(ListOpItem::Token) => FieldValue::TokenListOp(Box::default()),
+            Self::ListOp(ListOpItem::Token) => FieldValue::TokenListOp(Arc::default()),
             Self::ListOp(ListOpItem::String) => FieldValue::StringListOp(Box::default()),
             Self::ListOp(ListOpItem::Int) => FieldValue::IntListOp(Box::default()),
             Self::ListOp(ListOpItem::UInt) => FieldValue::UIntListOp(Box::default()),

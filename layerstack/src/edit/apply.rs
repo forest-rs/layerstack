@@ -2648,8 +2648,8 @@ fn add_applied_schema(
     ensure(store, id, &loc, journal)?;
     let spec = spec_at(layer(store, id)?, &loc).ok_or(Rejection::NoSuchSpec(path.clone()))?;
     let mut list = match crate::doc::get_field(spec.fields(), &key) {
-        Some(FieldValue::TokenListOp(list)) => list.clone(),
-        _ => Box::new(ListOp::default()),
+        Some(FieldValue::TokenListOp(list)) => (**list).clone(),
+        _ => ListOp::default(),
     };
     match &mut list.explicit {
         Some(explicit) if explicit.contains(&name) => return Ok(()),
@@ -2665,7 +2665,7 @@ fn add_applied_schema(
             loc,
             property: None,
             key,
-            value: Some(FieldValue::TokenListOp(list)),
+            value: Some(FieldValue::from(list)),
             index,
         },
     )

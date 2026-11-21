@@ -819,7 +819,7 @@ pub struct FieldEntry {
 /// composes over a weaker list op of its kind and resolves to an explicit
 /// one ([`combine_dictionary_chain`]).
 ///
-/// The list-op variants are boxed: most fields hold a [`Value`], and a
+/// List ops are stored out of line: most fields hold a [`Value`], and a
 /// field no larger than one keeps every [`FieldEntry`] and composed
 /// opinion small.
 ///
@@ -831,8 +831,12 @@ pub enum FieldValue {
     /// A plain value (strongest wins; dictionaries combine).
     Value(Value),
     /// A list-op field over tokens (resolved by chaining), such as
-    /// `apiSchemas`.
-    TokenListOp(Box<ListOp<TokenId>>),
+    /// `apiSchemas`. The authored and composed fields share this list.
+    ///
+    /// Construct a token list field with `FieldValue::from(list)` or
+    /// `FieldValue::TokenListOp(Arc::new(list))`. Code editing a matched
+    /// list can use `Arc::make_mut` to preserve other snapshots.
+    TokenListOp(Arc<ListOp<TokenId>>),
     /// A list-op field over target paths (resolved by chaining).
     ///
     /// Spec: AOUSD Core §12.4 (`ListOps`), applied to path lists.
@@ -909,7 +913,7 @@ impl FieldValue {
         }
         match self {
             Self::Value(_) => {}
-            Self::TokenListOp(op) => explicit(op),
+            Self::TokenListOp(op) => *op = Arc::new(ListOp::explicit(op.apply_to(&[]))),
             Self::PathListOp(op) => explicit(op),
             Self::StringListOp(op) => explicit(op),
             Self::IntListOp(op) => explicit(op),
@@ -950,7 +954,7 @@ impl fmt::Display for FieldValue {
 
 impl From<ListOp<TokenId>> for FieldValue {
     fn from(op: ListOp<TokenId>) -> Self {
-        Self::TokenListOp(Box::new(op))
+        Self::TokenListOp(Arc::new(op))
     }
 }
 
@@ -5614,6 +5618,30 @@ impl LayerStore for InMemoryStore {
 mod tests {
     use super::*;
     use alloc::boxed::Box;
+
+    #[test]
+    fn composed_token_list_opinion_shares_the_authored_payload() {
+        let tokens = TokenInterner::default();
+        let field = FieldEntry {
+            name: tokens.intern("apiSchemas"),
+            value: ListOp::prepended(alloc::vec![tokens.intern("CollectionAPI:test")]).into(),
+        };
+        let opinion = ComposedEntry::Field(&field).value();
+        let (FieldValue::TokenListOp(authored), Some(FieldValue::TokenListOp(composed))) =
+            (&field.value, opinion.as_field())
+        else {
+            panic!("expected token list operations");
+        };
+        assert!(Arc::ptr_eq(authored, composed));
+
+        let mut flattened = field.value.clone();
+        flattened.finalize();
+        let FieldValue::TokenListOp(flattened) = flattened else {
+            panic!("expected an explicit token list");
+        };
+        assert!(composed.explicit.is_none());
+        assert_eq!(flattened.explicit.as_ref(), Some(&composed.prepend));
+    }
 
     /// A released layer leaves with the bindings of its own assets; the
     /// arcs bound to it resolve through their bindings, recording no

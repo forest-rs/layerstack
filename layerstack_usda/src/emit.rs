@@ -2809,7 +2809,7 @@ const DISPLAY_UNITS: &[&str] = &[
 /// element types.
 fn set_field_list_op(existing: &mut FieldValue, kind: ast::ListOpKind, value: FieldValue) -> bool {
     match (existing, value) {
-        (FieldValue::TokenListOp(a), FieldValue::TokenListOp(b)) => set_statement(a, kind, *b),
+        (FieldValue::TokenListOp(a), FieldValue::TokenListOp(b)) => set_statement(Arc::make_mut(a), kind, Arc::unwrap_or_clone(b)),
         (FieldValue::StringListOp(a), FieldValue::StringListOp(b)) => set_statement(a, kind, *b),
         (FieldValue::IntListOp(a), FieldValue::IntListOp(b)) => set_statement(a, kind, *b),
         (FieldValue::UIntListOp(a), FieldValue::UIntListOp(b)) => set_statement(a, kind, *b),
@@ -4764,9 +4764,9 @@ def Xform \"A\" (
         let review = tokens.intern("StudioReviewAPI:main");
         assert_eq!(
             spec.field(api),
-            Some(&FieldValue::TokenListOp(Box::new(
+            Some(&FieldValue::from(
                 ListOp::prepended(vec![geom]).with_appended(vec![review])
-            ))),
+            )),
             "a prepend and an append statement each set their own list"
         );
         assert_eq!(
@@ -4853,9 +4853,9 @@ def \"A\" (
         let spec = prim(&result, &tokens, &paths, "/A");
         assert_eq!(
             spec.field(tokens.intern("apiSchemas")),
-            Some(&FieldValue::TokenListOp(Box::new(
+            Some(&FieldValue::from(
                 ListOp::prepended(vec![tokens.intern("Z")]).with_appended(vec![tokens.intern("W")])
-            )))
+            ))
         );
         let target = |path: &str| {
             let path = Path::parse_absolute(path, &tokens).unwrap();
@@ -4878,9 +4878,9 @@ def \"A\" (
         let geom = tokens.intern("GeomModelAPI");
         assert_eq!(
             spec.field(tokens.intern("apiSchemas")),
-            Some(&FieldValue::TokenListOp(Box::new(ListOp::explicit(vec![
+            Some(&FieldValue::from(ListOp::explicit(vec![
                 geom
-            ]))))
+            ])))
         );
     }
 

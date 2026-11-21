@@ -426,8 +426,8 @@ fn gen_listops_parses() {
     let binding = parsed.store.tokens().intern("MaterialBindingAPI");
     assert_eq!(
         root.field(api),
-        Some(&layerstack::FieldValue::TokenListOp(Box::new(
-            layerstack::ListOp::explicit(vec![binding])
+        Some(&layerstack::FieldValue::from(layerstack::ListOp::explicit(
+            vec![binding]
         )))
     );
     assert_eq!(root.payloads.append.len(), 1, "{:?}", root.payloads);

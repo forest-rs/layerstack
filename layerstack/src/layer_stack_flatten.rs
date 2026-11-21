@@ -909,7 +909,9 @@ fn merge_fields(strong: &mut Vec<FieldEntry>, weak: &[FieldEntry]) {
                     FieldValue::Value(Value::Dictionary(a)),
                     FieldValue::Value(Value::Dictionary(b)),
                 ) => *a = crate::combine_dictionaries(a, b),
-                (FieldValue::TokenListOp(a), FieldValue::TokenListOp(b)) => **a = list(a, b),
+                (FieldValue::TokenListOp(a), FieldValue::TokenListOp(b)) => {
+                    *a = Arc::new(list(a, b));
+                }
                 (FieldValue::PathListOp(a), FieldValue::PathListOp(b)) => **a = list(a, b),
                 (FieldValue::StringListOp(a), FieldValue::StringListOp(b)) => **a = list(a, b),
                 (FieldValue::IntListOp(a), FieldValue::IntListOp(b)) => **a = list(a, b),

@@ -2208,7 +2208,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
                     .map(|(k, v)| {
                         let entry = match v {
                             CrateValue::ListOp(listop) if listop.op_type == ValueType::TokenListOp => {
-                                FieldValue::TokenListOp(Box::new(self.convert_token_listop(listop)))
+                                FieldValue::from(self.convert_token_listop(listop))
                             }
                             CrateValue::ListOp(listop) => {
                                 scalar_entry_list_op(listop).unwrap_or(FieldValue::Value(Value::Null))
@@ -2380,9 +2380,9 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
         Ok(match cv {
             CrateValue::ListOp(listop) => {
                 let converted = match listop.op_type {
-                    ValueType::TokenListOp => Some(FieldValue::TokenListOp(Box::new(
+                    ValueType::TokenListOp => Some(FieldValue::from(
                         self.convert_token_listop(listop),
-                    ))),
+                    )),
                     ValueType::PathListOp => match self.convert_target_listop(listop) {
                         Ok(converted) => Some(FieldValue::PathListOp(Box::new(converted))),
                         Err(error) => {

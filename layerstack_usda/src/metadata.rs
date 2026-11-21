@@ -19,7 +19,6 @@
 //!
 //! Spec: AOUSD Core §7.4 (metadata), §16.2 (USDA).
 
-use alloc::boxed::Box;
 use alloc::format;
 use alloc::string::String;
 use alloc::sync::Arc;
@@ -299,7 +298,7 @@ fn list_op(
         }
         _ => return Err(MetadataValueError::ScalarForArray),
     };
-    fn place<T>(op: ast::ListOpKind, items: Vec<T>) -> Box<ListOp<T>> {
+    fn place<T>(op: ast::ListOpKind, items: Vec<T>) -> ListOp<T> {
         let mut list = ListOp::default();
         match op {
             ast::ListOpKind::Explicit => list.explicit = Some(items),
@@ -309,11 +308,11 @@ fn list_op(
             ast::ListOpKind::Delete => list.delete = items,
             ast::ListOpKind::Reorder => list.reorder = items,
         }
-        Box::new(list)
+        list
     }
     let values = items.into_iter();
     Ok(match item {
-        ListOpItem::Token => FieldValue::TokenListOp(place(
+        ListOpItem::Token => FieldValue::from(place(
             op,
             values
                 .filter_map(|value| match value {
@@ -322,7 +321,7 @@ fn list_op(
                 })
                 .collect(),
         )),
-        ListOpItem::String => FieldValue::StringListOp(place(
+        ListOpItem::String => FieldValue::from(place(
             op,
             values
                 .filter_map(|value| match value {
@@ -331,7 +330,7 @@ fn list_op(
                 })
                 .collect(),
         )),
-        ListOpItem::Int => FieldValue::IntListOp(place(
+        ListOpItem::Int => FieldValue::from(place(
             op,
             values
                 .filter_map(|value| match value {
@@ -340,7 +339,7 @@ fn list_op(
                 })
                 .collect(),
         )),
-        ListOpItem::UInt => FieldValue::UIntListOp(place(
+        ListOpItem::UInt => FieldValue::from(place(
             op,
             values
                 .filter_map(|value| match value {
@@ -349,7 +348,7 @@ fn list_op(
                 })
                 .collect(),
         )),
-        ListOpItem::Int64 => FieldValue::Int64ListOp(place(
+        ListOpItem::Int64 => FieldValue::from(place(
             op,
             values
                 .filter_map(|value| match value {
@@ -358,7 +357,7 @@ fn list_op(
                 })
                 .collect(),
         )),
-        ListOpItem::UInt64 => FieldValue::UInt64ListOp(place(
+        ListOpItem::UInt64 => FieldValue::from(place(
             op,
             values
                 .filter_map(|value| match value {
@@ -501,9 +500,9 @@ mod tests {
         );
         assert_eq!(
             read("None", "tokenlistop"),
-            Ok(FieldValue::TokenListOp(Box::new(ListOp::explicit(
+            Ok(FieldValue::from(ListOp::<layerstack::TokenId>::explicit(
                 Vec::new()
-            ))))
+            )))
         );
     }
 

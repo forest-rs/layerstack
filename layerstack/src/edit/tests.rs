@@ -2014,7 +2014,7 @@ fn applied_schemas_are_prepended_once_and_undo_exactly() {
     explicit.set_metadata(
         at(rock),
         api_schemas,
-        FieldValue::TokenListOp(Box::new(ListOp::explicit(vec![other]))),
+        FieldValue::from(ListOp::explicit(vec![other])),
     );
     explicit.add_applied_schema(at(rock), label);
     explicit.apply(&mut store).expect("explicit");
@@ -2026,7 +2026,7 @@ fn applied_schemas_are_prepended_once_and_undo_exactly() {
     appended.set_metadata(
         at(rock),
         api_schemas,
-        FieldValue::TokenListOp(Box::new(ListOp::appended(vec![label]))),
+        FieldValue::from(ListOp::appended(vec![label])),
     );
     appended.add_applied_schema(at(rock), label);
     appended.apply(&mut store).expect("appended");

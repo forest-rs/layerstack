@@ -1245,7 +1245,7 @@ impl Flattener<'_> {
         match resolved {
             ResolvedValue::Scalar(value) => FieldValue::Value(value),
             ResolvedValue::Dictionary(entries) => FieldValue::Value(Value::Dictionary(entries)),
-            ResolvedValue::TokenList(items) => FieldValue::TokenListOp(Box::new(explicit(items))),
+            ResolvedValue::TokenList(items) => FieldValue::from(explicit(items)),
             ResolvedValue::PathList(items) => FieldValue::PathListOp(Box::new(explicit(
                 items
                     .into_iter()

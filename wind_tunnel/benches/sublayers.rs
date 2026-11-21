@@ -201,5 +201,51 @@ fn bench_local_opinions(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_sublayers, bench_local_opinions);
+/// Every prim has one property. Vary how many layers actually author each
+/// prim independently of the number of layers in the stack.
+fn prepare_source_density(layers: usize, authors: usize, prims: usize) -> InMemoryStore {
+    let mut store = InMemoryStore::default();
+    let root = store.path("/Root");
+    let field = store.tokens().intern("value");
+    let mut stack: Vec<_> = (0..layers)
+        .map(|at| Layer::new(LayerId(1 + at as u64)))
+        .collect();
+    let mut children = vec![Vec::new(); layers];
+    *stack[0].sublayers_mut() = stack[1..]
+        .iter()
+        .map(|l| SublayerEntry::new(l.id()))
+        .collect();
+    for n in 0..prims {
+        let path = store.path(&alloc::format!("/Root/Item{n}"));
+        let name = store.paths().resolve(path).leaf().expect("a child name");
+        for offset in 0..authors {
+            let at = (n + offset) % layers;
+            stack[at].insert_prim(path, PrimSpec::def().with_field(field, at as i32));
+            children[at].push(name);
+        }
+    }
+    for (mut layer, names) in stack.into_iter().zip(children) {
+        layer.insert_prim(root, PrimSpec::def().with_children(names));
+        store.insert_layer(layer);
+    }
+    store
+}
+
+fn bench_source_density(c: &mut Criterion) {
+    let mut group = c.benchmark_group("compose_layer_sources");
+    for (layers, authors) in [(1, 1), (8, 1), (8, 2), (8, 8), (64, 1), (64, 64)] {
+        let mut store = prepare_source_density(layers, authors, 1_024);
+        group.bench_function(format!("{authors}_of_{layers}"), |b| {
+            b.iter(|| Stage::compose(&mut store, LayerId(1), StageOptions::default()));
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_sublayers,
+    bench_local_opinions,
+    bench_source_density
+);
 criterion_main!(benches);

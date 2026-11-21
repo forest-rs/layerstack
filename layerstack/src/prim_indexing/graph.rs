@@ -1219,7 +1219,11 @@ impl Graph {
     /// child's name to the other sites. OpenUSD: `AppendChildNameToAllSites`.
     pub(crate) fn append_child_path(&mut self, paths: &PathInterner, child: PathId) {
         let (root, rest) = self.nodes.split_first_mut().expect("a graph with a root");
-        debug_assert_eq!(paths.parent(child), Some(root.site.path.prim_path()));
+        debug_assert_eq!(
+            paths.parent(child),
+            Some(root.site.path.prim_path()),
+            "the root path is one namespace level above the child"
+        );
         root.site.path = root.site.path.child(child);
         if !rest.is_empty() {
             let name = paths.resolve(child).leaf().expect("prim name");

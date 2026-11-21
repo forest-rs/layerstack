@@ -16,7 +16,11 @@ use core::cmp::Ordering;
 
 use hashbrown::HashMap;
 
-use crate::{path::PathInterner, prim_index::ArcKind, spec_path::SpecPath};
+use crate::{
+    path::{PathId, PathInterner},
+    prim_index::ArcKind,
+    spec_path::SpecPath,
+};
 
 use super::{layer_stacks::StackId, map_function::MapFunction};
 
@@ -1211,16 +1215,18 @@ impl Graph {
         }
     }
 
-    /// Appends `name` to every node's site, for the index of the child
-    /// prim `name`. OpenUSD: `AppendChildNameToAllSites`.
-    pub(crate) fn append_child_name(
-        &mut self,
-        paths: &PathInterner,
-        name: crate::interner::TokenId,
-    ) {
-        for node in &mut self.nodes {
-            let child = paths.intern_joined(node.site.path.prim_path(), &[name]);
-            node.site.path = node.site.path.child(child);
+    /// Moves the root site to its known `child` prim path and appends the
+    /// child's name to the other sites. OpenUSD: `AppendChildNameToAllSites`.
+    pub(crate) fn append_child_path(&mut self, paths: &PathInterner, child: PathId) {
+        let (root, rest) = self.nodes.split_first_mut().expect("a graph with a root");
+        debug_assert_eq!(paths.parent(child), Some(root.site.path.prim_path()));
+        root.site.path = root.site.path.child(child);
+        if !rest.is_empty() {
+            let name = paths.resolve(child).leaf().expect("prim name");
+            for node in rest {
+                let child = paths.intern_joined(node.site.path.prim_path(), &[name]);
+                node.site.path = node.site.path.child(child);
+            }
         }
         if self.lookup.is_some() {
             self.lookup = Some(NodeLookup::new(&self.nodes));

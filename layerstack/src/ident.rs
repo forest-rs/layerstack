@@ -18,7 +18,7 @@
 //! assert!(!is_identifier("a²") && !is_identifier("1a") && !is_identifier(""));
 //! ```
 
-use alloc::collections::BTreeSet;
+use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::format;
 use alloc::string::String;
 
@@ -77,6 +77,9 @@ pub fn sanitize_ascii_identifier(key: &str) -> String {
 #[derive(Clone, Debug, Default)]
 pub struct SiblingNames {
     taken: BTreeSet<String>,
+    // Only bases that collide need a cursor. Claimed names are never released,
+    // so every suffix below the cursor remains taken.
+    next_suffix: BTreeMap<String, u64>,
 }
 
 impl SiblingNames {
@@ -101,10 +104,15 @@ impl SiblingNames {
         if self.reserve(&base) {
             return base;
         }
-        (2_u64..)
-            .map(|n| format!("{base}_{n}"))
-            .find(|candidate| self.reserve(candidate))
-            .expect("a free suffix exists")
+        let start = self.next_suffix.get(&base).copied().unwrap_or(2);
+        let (suffix, name) = (start..=u64::MAX)
+            .find_map(|suffix| {
+                let candidate = format!("{base}_{suffix}");
+                self.reserve(&candidate).then_some((suffix, candidate))
+            })
+            .expect("a free suffix exists");
+        self.next_suffix.insert(base, suffix.saturating_add(1));
+        name
     }
 
     /// Whether `name` is taken.
@@ -309,9 +317,12 @@ mod tests {
         assert_eq!(names.unique("a_2"), "a_2");
         assert_eq!(names.unique("a"), "a");
         assert_eq!(names.unique("a"), "a_3", "a_2 is already taken");
-        assert_eq!(names.unique("a"), "a_4");
+        assert!(names.reserve("a_4"), "a_4 is available");
+        assert_eq!(names.unique("a_5"), "a_5");
+        assert_eq!(names.unique("a"), "a_6");
+        assert_eq!(names.unique("a.5"), "a_5_2");
         assert!(!names.reserve("a"), "a is taken");
-        assert!(names.contains("a_4") && !names.contains("a_5"));
+        assert!(names.contains("a_6") && !names.contains("a_7"));
     }
 
     /// The order of usd-core 26.8's

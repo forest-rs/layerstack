@@ -436,7 +436,7 @@ impl PropertyDefinition {
         if !self.has_type_of(weaker) {
             return;
         }
-        if self.fallback.is_none() {
+        if self.fallback.is_none() && weaker.fallback.is_some() {
             self.fallback.clone_from(&weaker.fallback);
         }
         // Core §13.3.2.3; OpenUSD `_CreateComposedPrimOrPropertyIfNeeded`:

@@ -4,6 +4,11 @@
 
 Initial release.
 
+- Named API properties share their schema fields until an override changes
+  them. To migrate a `PropertyDefinition` literal, pass its name and the
+  remaining fields to `PropertyDefinition::new(name, PropertyDefinitionFields { … })`.
+  Borrow the fallback or metadata when reading it, or clone it for an owned value.
+
 - `LayerStore::identity` retains token/path domain affinity. `Stage` captures it;
   `PrimSnapshot`, `AttributeQuery::is_current` and `RelationshipQuery` expose
   current composition evidence without resolving unchanged inputs.

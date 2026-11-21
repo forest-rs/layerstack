@@ -26,8 +26,8 @@
 //! the implementation.
 
 use layerstack::{
-    MetadataConflict, PropertyDefinition, PropertyKind, PropertyType, SchemaDefinition, SchemaKind,
-    SchemaRegistryBuilder, TokenInterner, Value, Variability,
+    MetadataConflict, PropertyDefinition, PropertyDefinitionFields, PropertyKind, PropertyType,
+    SchemaDefinition, SchemaKind, SchemaRegistryBuilder, TokenInterner, Value, Variability,
 };
 
 /// The format of the table types ([`ValueType`], [`Property`], [`Schema`],
@@ -196,21 +196,23 @@ impl Metadata {
 
 impl Property {
     fn definition(&self, tokens: &TokenInterner) -> PropertyDefinition {
-        PropertyDefinition {
-            name: tokens.intern(self.name),
-            kind: self.kind,
-            type_name: self.value_type.map(ValueType::property_type),
-            variability: self.variability,
-            fallback: self.fallback.map(|construct| construct(tokens)),
-            metadata: self
-                .metadata
-                .iter()
-                .map(|(name, construct)| layerstack::FieldEntry {
-                    name: tokens.intern(name),
-                    value: construct(tokens).into(),
-                })
-                .collect(),
-        }
+        PropertyDefinition::new(
+            tokens.intern(self.name),
+            PropertyDefinitionFields {
+                kind: self.kind,
+                type_name: self.value_type.map(ValueType::property_type),
+                variability: self.variability,
+                fallback: self.fallback.map(|construct| construct(tokens)),
+                metadata: self
+                    .metadata
+                    .iter()
+                    .map(|(name, construct)| layerstack::FieldEntry {
+                        name: tokens.intern(name),
+                        value: construct(tokens).into(),
+                    })
+                    .collect(),
+            },
+        )
     }
 }
 

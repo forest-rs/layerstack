@@ -124,6 +124,14 @@ pub struct PropertyDefinition {
     /// The property name. In a multiple-apply schema it holds
     /// [`INSTANCE_NAME_PLACEHOLDER`].
     pub name: TokenId,
+    fields: Arc<PropertyDefinitionFields>,
+}
+
+/// A schema property's declaration, fallback and metadata. A named API
+/// instance changes the name while sharing these fields with its template.
+/// Mutating a property's fields gives that property a private copy.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PropertyDefinitionFields {
     /// Attribute or relationship.
     pub kind: PropertyKind,
     /// The declared value type of an attribute; `None` for a relationship
@@ -142,38 +150,66 @@ pub struct PropertyDefinition {
     /// Metadata fallbacks, composed in schema strength order. Runtime fields
     /// such as `customData`, time samples and connections are excluded when
     /// reading generated schemas. Structural fields remain in their dedicated
-    /// members above. Struct literals must initialize this field (usually empty).
+    /// members above.
     ///
     /// Spec: AOUSD Core §13.3.2.3–§13.3.2.4; OpenUSD
     /// `UsdPrimDefinition::ListPropertyMetadataFields`.
     pub metadata: Vec<FieldEntry>,
 }
 
+impl core::ops::Deref for PropertyDefinition {
+    type Target = PropertyDefinitionFields;
+
+    fn deref(&self) -> &Self::Target {
+        &self.fields
+    }
+}
+
+impl core::ops::DerefMut for PropertyDefinition {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        Arc::make_mut(&mut self.fields)
+    }
+}
+
 impl PropertyDefinition {
+    /// Creates a named property with the supplied schema fields. Clones share
+    /// the fields until one of them is edited.
+    #[must_use]
+    pub fn new(name: TokenId, fields: PropertyDefinitionFields) -> Self {
+        Self {
+            name,
+            fields: Arc::new(fields),
+        }
+    }
+
     /// A varying attribute with no declared type and no fallback.
     #[must_use]
     pub fn attribute(name: TokenId) -> Self {
-        Self {
+        Self::new(
             name,
-            kind: PropertyKind::Attribute,
-            type_name: None,
-            variability: Variability::Varying,
-            fallback: None,
-            metadata: Vec::new(),
-        }
+            PropertyDefinitionFields {
+                kind: PropertyKind::Attribute,
+                type_name: None,
+                variability: Variability::Varying,
+                fallback: None,
+                metadata: Vec::new(),
+            },
+        )
     }
 
     /// A relationship. Relationships are uniform and have no fallback.
     #[must_use]
     pub fn relationship(name: TokenId) -> Self {
-        Self {
+        Self::new(
             name,
-            kind: PropertyKind::Relationship,
-            type_name: None,
-            variability: Variability::Uniform,
-            fallback: None,
-            metadata: Vec::new(),
-        }
+            PropertyDefinitionFields {
+                kind: PropertyKind::Relationship,
+                type_name: None,
+                variability: Variability::Uniform,
+                fallback: None,
+                metadata: Vec::new(),
+            },
+        )
     }
 
     /// Declares the attribute's value type (builder).

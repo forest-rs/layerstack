@@ -1076,7 +1076,7 @@ impl<'s> SchemaEdit<'s> {
         } else {
             self.definition(path, token)
         };
-        match definition.and_then(|d| d.type_name.map(|ty| (ty, d.variability))) {
+        match definition.and_then(|d| d.type_name.clone().map(|ty| (ty, d.variability))) {
             Some((ty, variability)) => {
                 let mut spec = PropertySpec::typed_attribute(ty.clone());
                 spec.variability = variability;
@@ -1164,7 +1164,9 @@ impl<'s> SchemaEdit<'s> {
             {
                 return Some(value.materialized().clone());
             }
-            return self.definition(path, token).and_then(|d| d.fallback);
+            return self
+                .definition(path, token)
+                .and_then(|d| d.fallback.clone());
         }
         let attribute = self
             .stage_property(PropertyPath::new(path, token))?
@@ -1343,7 +1345,7 @@ impl<'s> SchemaEdit<'s> {
         }
         self.definition(path, token)
             .filter(|d| d.kind == PropertyKind::Attribute)
-            .and_then(|d| d.type_name)
+            .and_then(|d| d.type_name.clone())
     }
 
     /// Whether the property `name` of `path` is an attribute or a

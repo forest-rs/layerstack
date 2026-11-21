@@ -22,7 +22,10 @@
 
 use alloc::{format, string::String, vec::Vec};
 
-use super::{INSTANCE_NAME_PLACEHOLDER, PropertyDefinition, SchemaDefinition, SchemaKind};
+use super::{
+    INSTANCE_NAME_PLACEHOLDER, PropertyDefinition, PropertyDefinitionFields, SchemaDefinition,
+    SchemaKind,
+};
 use crate::{
     doc::{FieldEntry, FieldValue, Layer, Value},
     interner::{TokenId, TokenInterner},
@@ -185,27 +188,29 @@ pub fn read_generated_schema(
             }
             let overrides = override_names(spec.field(custom_data), tokens);
             for entry in &spec.properties {
-                let property = PropertyDefinition {
-                    name: entry.name,
-                    kind: entry.spec.kind,
-                    type_name: entry.spec.type_name.clone(),
-                    variability: entry.spec.variability,
-                    metadata: entry
-                        .spec
-                        .metadata
-                        .iter()
-                        .filter(|field| allowed_metadata(tokens.resolve(field.name)))
-                        .cloned()
-                        .collect(),
-                    fallback: match entry.spec.kind {
-                        PropertyKind::Attribute => entry
+                let property = PropertyDefinition::new(
+                    entry.name,
+                    PropertyDefinitionFields {
+                        kind: entry.spec.kind,
+                        type_name: entry.spec.type_name.clone(),
+                        variability: entry.spec.variability,
+                        metadata: entry
                             .spec
-                            .default
-                            .as_ref()
-                            .map(|value| value.materialized().clone()),
-                        PropertyKind::Relationship => None,
+                            .metadata
+                            .iter()
+                            .filter(|field| allowed_metadata(tokens.resolve(field.name)))
+                            .cloned()
+                            .collect(),
+                        fallback: match entry.spec.kind {
+                            PropertyKind::Attribute => entry
+                                .spec
+                                .default
+                                .as_ref()
+                                .map(|value| value.materialized().clone()),
+                            PropertyKind::Relationship => None,
+                        },
                     },
-                };
+                );
                 if overrides.contains(&entry.name) {
                     schema.overrides.push(property);
                 } else {

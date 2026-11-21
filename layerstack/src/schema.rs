@@ -908,7 +908,8 @@ impl SchemaRegistry {
         let Some(definition) = self.schemas.get(&schema) else {
             return &[];
         };
-        if let Some(instance) = instance.and_then(|instance| tokens.lookup(instance))
+        if !definition.instance_can_only_apply_to.is_empty()
+            && let Some(instance) = instance.and_then(|instance| tokens.lookup(instance))
             && let Some((_, types)) = definition
                 .instance_can_only_apply_to
                 .iter()
@@ -949,15 +950,12 @@ impl SchemaRegistry {
         {
             return false;
         }
-        let segments: Vec<&str> = instance.split(':').collect();
+        let mut segments = instance.rsplit(':');
+        let base = segments.next().expect("rsplit includes the last segment");
         // Spec: AOUSD Core §7.3.3, §16.2.8 (identifiers are XID).
-        if !segments
-            .iter()
-            .all(|segment| crate::ident::is_identifier(segment))
-        {
+        if !crate::ident::is_identifier(base) || !segments.all(crate::ident::is_identifier) {
             return false;
         }
-        let base = segments[segments.len() - 1];
         self.definitions.get(&schema).is_none_or(|template| {
             template
                 .properties()

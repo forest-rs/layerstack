@@ -1,7 +1,7 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use alloc::{boxed::Box, format, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use hashbrown::{HashMap, HashSet, hash_map::Entry};
 use layerstack::{
     CannotApply, ListOp, PrimDefinition, PrimSpec, PropertyDefinition, PropertyEntry, PropertyKind,
@@ -10,7 +10,7 @@ use layerstack::{
 
 use super::{
     BatchError,
-    index::{ApiMemberships, AppliedIndex},
+    index::{ApiMemberships, AppliedIndex, template_parts},
 };
 
 // Comparing a property against applied templates costs more than checking a
@@ -31,6 +31,7 @@ pub struct BatchPrim<'a> {
     tokens: &'a TokenInterner,
     typed: &'a PrimDefinition,
     applied: Vec<TokenId>,
+    name_buffer: String,
     applied_index: Option<Box<AppliedIndex<'a>>>,
     memberships: Option<Box<ApiMemberships>>,
     property_slots: Option<HashMap<TokenId, usize>>,
@@ -50,6 +51,7 @@ impl<'a> BatchPrim<'a> {
                 .schema_definition(type_name)
                 .expect("registered concrete schema"),
             applied: Vec::new(),
+            name_buffer: String::new(),
             applied_index: None,
             memberships: None,
             property_slots: None,
@@ -123,7 +125,13 @@ impl<'a> BatchPrim<'a> {
             .map_err(rejected)?;
         let entry = match instance {
             None => schema_id,
-            Some(instance) => self.tokens.intern(format!("{schema}:{instance}")),
+            Some(instance) => {
+                self.name_buffer.clear();
+                self.name_buffer.push_str(schema);
+                self.name_buffer.push(':');
+                self.name_buffer.push_str(instance);
+                self.tokens.intern(&self.name_buffer)
+            }
         };
         let instance = instance.map(|name| self.tokens.intern(name));
         self.record_api(entry);
@@ -327,25 +335,31 @@ impl BatchApi<'_, '_> {
         self.prim.set_relationship(name, targets)
     }
 
-    fn property_name(&self, template: &str) -> Result<TokenId, BatchError> {
+    fn property_name(&mut self, template: &str) -> Result<TokenId, BatchError> {
         let tokens = self.prim.tokens;
         let property = tokens
             .lookup(template)
             .filter(|&id| tokens.resolve(id) == template)
             .and_then(|id| self.definition.property(id))
             .ok_or_else(|| BatchError::UnknownProperty(template.into()))?;
-        Ok(match self.instance {
-            Some(instance) => tokens.intern(crate::view::instance_name(
-                template,
-                tokens.resolve(instance),
-            )),
-            None => property.name,
-        })
+        if let Some(instance) = self.instance
+            && let Some((prefix, suffix)) = template_parts(template)
+        {
+            let buffer = &mut self.prim.name_buffer;
+            buffer.clear();
+            buffer.push_str(prefix);
+            buffer.push_str(tokens.resolve(instance));
+            buffer.push_str(suffix);
+            return Ok(tokens.intern(buffer));
+        }
+        Ok(property.name)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use alloc::format;
+
     use super::*;
     use layerstack::{FieldValue, InMemoryStore, PropertyType, SchemaDefinition, SchemaKind};
 

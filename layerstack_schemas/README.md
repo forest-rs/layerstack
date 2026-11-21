@@ -588,6 +588,10 @@ transform helpers do not decompose arbitrary matrices or rewrite incompatible
 op stacks. Prepared transform-operation recipes remain
 an internal cache implementation detail.
 
+The indexed and nonindexed primvar creation helpers accept `None` for
+`element_size` to preserve existing opinions or use the schema fallback of 1.
+Existing integer arguments continue to author an explicit size, including 1.
+
 With `usd-geom`, every prim view exposes `primvars` and
 `find_primvar_with_inheritance`; `primvars_with_inheritance` returns effective
 value-producing primvars. Only authored constant values inherit, and a nearer

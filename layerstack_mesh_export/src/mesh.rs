@@ -60,36 +60,12 @@ impl<'a> Faces<'a> {
 
 /// How primvar elements map onto the mesh.
 ///
+/// This is the schema crate's [`layerstack_schemas::primvar::PrimvarInterpolation`]
+/// type, which also serves point-based normals authoring.
+///
 /// Spec: `UsdGeomPrimvar` interpolation
 /// (<https://openusd.org/dev/api/class_usd_geom_primvar.html>).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Interpolation {
-    /// One value for the whole mesh.
-    Constant,
-    /// One value per face.
-    Uniform,
-    /// One value per point, linearly interpolated.
-    Varying,
-    /// One value per point, interpolated like the surface (identical to
-    /// `Varying` for `subdivisionScheme = "none"`).
-    Vertex,
-    /// One value per face corner: splits values across seams without
-    /// duplicating points.
-    FaceVarying,
-}
-
-impl Interpolation {
-    /// The USD token for this interpolation.
-    pub fn token(self) -> &'static str {
-        match self {
-            Self::Constant => "constant",
-            Self::Uniform => "uniform",
-            Self::Varying => "varying",
-            Self::Vertex => "vertex",
-            Self::FaceVarying => "faceVarying",
-        }
-    }
-}
+pub use layerstack_schemas::primvar::PrimvarInterpolation as Interpolation;
 
 /// Values plus the interpolation (and optional indexing) that places them
 /// on the mesh.

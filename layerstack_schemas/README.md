@@ -270,6 +270,18 @@ points authors the two corners of an empty range, `[f32::MAX; 3]` and
 `[-f32::MAX; 3]`. Prepare and apply another publication to refresh a previously
 published zero-length extent.
 
+For built-in `normals`, author interpolation and values through the same edit.
+The interpolation setter is available on `PointBasedEdit` and its derived
+handles, including meshes defined earlier in the edit.
+
+```rust,ignore
+use layerstack_schemas::{primvar::PrimvarInterpolation, usd_geom::Mesh};
+
+Mesh::define(&mut edit, path)?
+    .set_normals_interpolation(&mut edit, PrimvarInterpolation::FaceVarying)?
+    .set_normals(&mut edit, &corner_normals);
+```
+
 ```rust,ignore
 let publication = generated_mesh.prepare(
     live.stage(), &mut store, &edit_target, mesh_path, &owned_properties,

@@ -41,7 +41,10 @@
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 use crate::diagnostic::{Describe, Names, with_store};
-use crate::{PrimEdit, PrimView, Scene, SchemaEdit, Time};
+use crate::{
+    MetadataError, PrimEdit, PrimView, Scene, SchemaEdit, Time,
+    usd_geom::{PointBased, PointBasedEdit},
+};
 use alloc::{
     format,
     string::{String, ToString},
@@ -58,6 +61,80 @@ use layerstack::{ArrayReadError, PathId, PropertyPath, PropertyType, TargetPath,
 pub struct Primvar<'a> {
     prim: PrimView<'a>,
     name: &'a str,
+}
+
+/// The interpolation of geometry primvars and point-based normals.
+/// OpenUSD: `UsdGeomPrimvar::IsValidInterpolation`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PrimvarInterpolation {
+    /// One value for the whole prim.
+    Constant,
+    /// One value per element, such as a mesh face or a curve.
+    Uniform,
+    /// Piecewise linear values at the geometry's varying sites, one per point on meshes.
+    Varying,
+    /// Values at the points or control vertices, interpolated like the surface.
+    /// For `subdivisionScheme = "none"`, meshes interpolate these like [`Self::Varying`].
+    Vertex,
+    /// One value per face corner, allowing seams without duplicating points.
+    FaceVarying,
+}
+
+impl PrimvarInterpolation {
+    /// The USD token for this interpolation.
+    #[must_use]
+    pub const fn token(self) -> &'static str {
+        match self {
+            Self::Constant => "constant",
+            Self::Uniform => "uniform",
+            Self::Varying => "varying",
+            Self::Vertex => "vertex",
+            Self::FaceVarying => "faceVarying",
+        }
+    }
+
+    /// The interpolation named by an exact USD token.
+    #[must_use]
+    pub fn from_token(token: &str) -> Option<Self> {
+        match token {
+            "constant" => Some(Self::Constant),
+            "uniform" => Some(Self::Uniform),
+            "varying" => Some(Self::Varying),
+            "vertex" => Some(Self::Vertex),
+            "faceVarying" => Some(Self::FaceVarying),
+            _ => None,
+        }
+    }
+}
+
+impl PointBasedEdit {
+    /// Sets the `interpolation` metadata on the `normals` attribute.
+    /// This can create the schema-defined attribute spec before authoring
+    /// its values, including on a prim just defined in `edit`.
+    ///
+    /// OpenUSD: `UsdGeomPointBased::SetNormalsInterpolation`. AOUSD Core
+    /// §12.2.5 (metadata), §13.3.1 (typed schema properties).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MetadataError`] if `normals` or its metadata field is
+    /// unavailable, or the field cannot be written on the declared property.
+    #[doc(alias = "UsdGeomPointBased::SetNormalsInterpolation")]
+    #[doc(alias = "SetNormalsInterpolation")]
+    pub fn set_normals_interpolation(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        interpolation: PrimvarInterpolation,
+    ) -> Result<&Self, MetadataError> {
+        let token = edit.tokens().intern(interpolation.token());
+        self.write_property_metadata(
+            edit,
+            PointBased::NORMALS,
+            "interpolation",
+            Value::Token(token),
+        )?;
+        Ok(self)
+    }
 }
 
 /// Invalid primvar declaration or indexed data.
@@ -249,13 +326,6 @@ fn valid_name(name: &str) -> bool {
                 && part.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
         })
 }
-fn interpolation_valid(value: &str) -> bool {
-    matches!(
-        value,
-        "constant" | "uniform" | "vertex" | "varying" | "faceVarying"
-    )
-}
-
 impl<'a> Primvar<'a> {
     /// Looks up a declared primvar by base name or full namespaced name.
     #[must_use]
@@ -944,7 +1014,7 @@ impl PrimvarEdit {
         edit: &mut SchemaEdit<'_>,
         interpolation: &str,
     ) -> Result<&Self, PrimvarError> {
-        if !interpolation_valid(interpolation) {
+        if PrimvarInterpolation::from_token(interpolation).is_none() {
             return Err(PrimvarError::InvalidInterpolation(
                 interpolation.to_string(),
             ));
@@ -1052,5 +1122,124 @@ impl PrimvarEdit {
         let value = crate::value::write_int_array_shared(indices, edit.tokens());
         edit.set_value(self.prim, &name, time, value);
         Ok(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::usd_geom::{Mesh, MeshEdit};
+    use alloc::vec;
+    use layerstack::{
+        EditTarget, InMemoryStore, Layer, LayerId, LiveStage, MetadataEditReason, MetadataTarget,
+        PropertyDeclaration, PropertyKind, StageOptions, Variability,
+    };
+
+    fn edit_fixture() -> (InMemoryStore, LiveStage, EditTarget, PathId) {
+        let mut store = InMemoryStore::default();
+        let root = LayerId(1);
+        let path = store.path("/Mesh");
+        store.insert_layer(Layer::new(root));
+        let options = StageOptions {
+            schemas: Some(Arc::new(crate::registry(
+                &[crate::Domain::UsdGeom],
+                store.tokens(),
+            ))),
+            ..Default::default()
+        };
+        let live = LiveStage::compose(&mut store, root, options);
+        (store, live, EditTarget::for_layer(root), path)
+    }
+
+    #[test]
+    fn geometry_interpolation_tokens_round_trip() {
+        for (value, token) in [
+            (PrimvarInterpolation::Constant, "constant"),
+            (PrimvarInterpolation::Uniform, "uniform"),
+            (PrimvarInterpolation::Varying, "varying"),
+            (PrimvarInterpolation::Vertex, "vertex"),
+            (PrimvarInterpolation::FaceVarying, "faceVarying"),
+        ] {
+            assert_eq!(value.token(), token);
+            assert_eq!(PrimvarInterpolation::from_token(token), Some(value));
+        }
+        for token in ["", "linear", "FaceVarying"] {
+            assert_eq!(PrimvarInterpolation::from_token(token), None);
+        }
+    }
+
+    #[test]
+    fn authors_normals_interpolation_before_values_on_a_pending_mesh() {
+        let (mut store, mut live, target, path) = edit_fixture();
+        let normal_array = Arc::new(vec![[0., 0., 1.]; 3]);
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, target.clone());
+        Mesh::define(&mut edit, path)
+            .unwrap()
+            .set_normals_interpolation(&mut edit, PrimvarInterpolation::FaceVarying)
+            .unwrap()
+            .set_normals_shared(&mut edit, Arc::clone(&normal_array));
+        let transaction = edit.finish();
+        live.apply(&mut store, &transaction).unwrap();
+        let mesh = Mesh::get(&Scene::new(live.stage(), &store), path).unwrap();
+        assert_eq!(
+            mesh.property_metadata(PointBased::NORMALS)
+                .unwrap()
+                .interpolation(),
+            Some("faceVarying")
+        );
+        let normals = store.property_path("/Mesh.normals");
+        let authored = store
+            .layer(target.layer())
+            .unwrap()
+            .property(normals)
+            .unwrap();
+        assert_eq!(
+            authored.type_name.as_ref().unwrap().type_name(),
+            "normal3f[]"
+        );
+        assert_eq!(authored.variability, Variability::Varying);
+        assert!(!authored.custom);
+
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, target);
+        MeshEdit::new(&edit, path)
+            .unwrap()
+            .unwrap()
+            .set_normals_interpolation(&mut edit, PrimvarInterpolation::Vertex)
+            .unwrap();
+        let transaction = edit.finish();
+        live.apply(&mut store, &transaction).unwrap();
+        let mesh = Mesh::get(&Scene::new(live.stage(), &store), path).unwrap();
+        assert_eq!(
+            mesh.property_metadata(PointBased::NORMALS)
+                .unwrap()
+                .interpolation(),
+            Some("vertex")
+        );
+        assert!(Arc::ptr_eq(&mesh.normals().unwrap(), &normal_array));
+    }
+
+    #[test]
+    fn refuses_normals_interpolation_on_a_relationship_without_adding_edits() {
+        let (mut store, live, target, path) = edit_fixture();
+        let property = store.property_path("/Mesh.normals");
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, target);
+        let mesh = Mesh::define(&mut edit, path).unwrap();
+        assert!(edit.declare_property(
+            property,
+            &PropertyDeclaration {
+                kind: PropertyKind::Relationship,
+                type_name: None,
+                variability: Variability::Uniform,
+                custom: false,
+            }
+        ));
+        let before = edit.transaction().clone();
+        assert!(matches!(
+            mesh.set_normals_interpolation(&mut edit, PrimvarInterpolation::Uniform),
+            Err(MetadataError::Field(error))
+                if error.target == MetadataTarget::Relationship
+                    && error.reason == MetadataEditReason::NotForSpec
+        ));
+        assert_eq!(edit.transaction(), &before);
     }
 }

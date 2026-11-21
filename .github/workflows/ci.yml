@@ -370,6 +370,10 @@ jobs:
       - name: cargo check
         run: cargo hack check ${{ env.RUST_MIN_VER_PKGS }} ${{ env.RUST_MIN_VER_UNPUBLISHED_PKGS }} --locked --optional-deps --each-feature --ignore-unknown-features --features std
 
+      - name: check the default USDC reader with std-enabled core
+        if: runner.os == 'Linux'
+        run: cargo check --locked -p layerstack_usdc --no-default-features --features layerstack/std
+
   check-msrv-wasm:
     name: cargo check (msrv) (wasm32)
     runs-on: ubuntu-latest

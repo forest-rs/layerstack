@@ -5,21 +5,22 @@
 
 use alloc::vec::Vec;
 use layerstack::parallel::Threads;
-use layerstack::sort;
-
-/// What a task of [`run_all`] does with its item: a result.
 #[cfg(feature = "std")]
-pub(crate) type Each<'w, T, R> = dyn Fn(T) -> R + Sync + 'w;
-/// What a task of [`run_all`] does with its item: a result.
-#[cfg(not(feature = "std"))]
-pub(crate) type Each<'w, T, R> = dyn Fn(T) -> R + 'w;
+use layerstack::sort;
 
 /// Whether work worth threads (`worth`) runs on a pool: when `threads`
 /// spares a thread as it starts. The pool then also takes the threads the
 /// budget spares later, as they come; work done on the calling thread alone
 /// is the same work, in turn, without the pool's cost.
 pub(crate) fn pooled(threads: &Threads, worth: bool) -> bool {
-    worth && threads.spare() > 0
+    cfg!(feature = "std") && worth && threads.spare() > 0
+}
+
+/// A reader built without `std` keeps its decode caches local to the
+/// calling thread, even if another crate enables the core worker pool.
+#[cfg(not(feature = "std"))]
+pub(crate) fn run_all<T, R>(_: &Threads, items: Vec<T>, each: &dyn Fn(T) -> R) -> Vec<R> {
+    items.into_iter().map(each).collect()
 }
 
 /// Runs `each` on every one of `items` on the calling thread and the
@@ -31,10 +32,11 @@ pub(crate) fn pooled(threads: &Threads, worth: bool) -> bool {
 /// items are handed out as halves of halves: the first threads start while
 /// the first halves are split, rather than one for each item the calling
 /// thread finishes.
+#[cfg(feature = "std")]
 pub(crate) fn run_all<T: Send, R: Send>(
     threads: &Threads,
     items: Vec<T>,
-    each: &Each<'_, T, R>,
+    each: &(dyn Fn(T) -> R + Sync),
 ) -> Vec<R> {
     if !pooled(threads, items.len() > 1) {
         return items.into_iter().map(each).collect();
@@ -59,6 +61,19 @@ pub(crate) fn run_all<T: Send, R: Send>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(not(feature = "std"))]
+    #[test]
+    fn local_reader_keeps_tasks_on_the_calling_thread() {
+        let threads = Threads::new(8);
+        assert!(!pooled(&threads, true));
+        let total = core::cell::Cell::new(0);
+        let sums = run_all(&threads, alloc::vec![1, 2, 3], &|item| {
+            total.set(total.get() + item);
+            total.get()
+        });
+        assert_eq!(sums, [1, 3, 6]);
+    }
 
     #[test]
     fn results_keep_the_items_order() {

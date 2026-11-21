@@ -1697,28 +1697,16 @@ fn origin_root(graph: &Graph, node: NodeIndex) -> NodeIndex {
     cursor
 }
 
-/// The composed child names of the prim `graph` indexes, weakest site
-/// first. OpenUSD: `PcpPrimIndex::ComputePrimChildNames`.
+/// The composed child names of the prim the finalized `graph` indexes,
+/// weakest site first. OpenUSD: `PcpPrimIndex::ComputePrimChildNames`.
 fn child_names(ctx: &Ctx<'_>, graph: &Graph) -> Vec<TokenId> {
     let mut order = Vec::new();
     let mut names = HashSet::new();
     let mut prohibited = HashSet::new();
     let mut unlisted = Vec::new();
-    let nodes: Vec<NodeIndex> = if graph.instanceable {
-        let mut out = Vec::new();
-        instanceable_weak_to_strong(graph, 0, true, &mut out);
-        out
-    } else {
-        let mut all = graph.strength_order();
-        all.reverse();
-        all
-    };
-    // Weak to strong: a node's subtree before the node, children weakest
-    // first.
-    for node in nodes {
-        let entry = graph.node(node);
+    let mut compose_at = |entry: &graph::Node| {
         if !entry.can_contribute_specs() {
-            continue;
+            return;
         }
         let stack = ctx.stacks.get(entry.site.stack);
         if stack.has_relocates() && !entry.site.path.has_variant_selections() {
@@ -1731,7 +1719,6 @@ fn child_names(ctx: &Ctx<'_>, graph: &Graph) -> Vec<TokenId> {
                 &mut prohibited,
             );
         }
-        let stack = ctx.stacks.get(entry.site.stack);
         site::compose_child_names(
             ctx.store,
             stack,
@@ -1741,6 +1728,18 @@ fn child_names(ctx: &Ctx<'_>, graph: &Graph) -> Vec<TokenId> {
             &mut names,
             &mut unlisted,
         );
+    };
+    if graph.instanceable {
+        let mut nodes = Vec::new();
+        instanceable_weak_to_strong(graph, 0, true, &mut nodes);
+        for node in nodes {
+            compose_at(graph.node(node));
+        }
+    } else {
+        // Finalization orders the arena from strongest to weakest.
+        for entry in graph.nodes.iter().rev() {
+            compose_at(entry);
+        }
     }
     if !unlisted.is_empty() {
         let tokens = ctx.store.tokens();
@@ -1851,12 +1850,11 @@ fn apply_relocated_names(
     }
 }
 
-/// Whether the prim `graph` indexes is active: its strongest `active`
-/// opinion, on a prim spec or a selected variant branch, `true` without
-/// one.
+/// Whether the prim the finalized `graph` indexes is active: its strongest
+/// `active` opinion, on a prim spec or a selected variant branch, `true`
+/// without one.
 fn is_active(ctx: &Ctx<'_>, graph: &Graph) -> bool {
-    for node in graph.strength_order() {
-        let entry = graph.node(node);
+    for entry in &graph.nodes {
         if !entry.can_contribute_specs() || !entry.has_specs {
             continue;
         }

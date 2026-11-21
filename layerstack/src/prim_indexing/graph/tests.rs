@@ -272,7 +272,8 @@ fn a_large_graph_finds_nodes_as_scans_of_it_do() {
     // A child prim's index starts from its parent's, every site one name
     // deeper.
     let name = tokens.intern("Child");
-    graph.append_child_name(&paths, name);
+    let child = paths.intern_joined(sites[0].path.prim_path(), &[name]);
+    graph.append_child_path(&paths, child);
     for site in &mut sites {
         site.path = site
             .path

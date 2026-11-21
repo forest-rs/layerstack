@@ -41,7 +41,10 @@ use crate::{
 
 use super::{
     dynamic_args::Walk,
-    graph::{Graph, NONE, Node, NodeIndex, Site, SubgraphArc, is_class_based, non_variant_depth},
+    graph::{
+        ChildList, Graph, NONE, Node, NodeIndex, Site, SubgraphArc, is_class_based,
+        non_variant_depth,
+    },
     layer_stacks::{LayerStacks, StackId},
     map_function::MapFunction,
     site::{self, ChildIndex},
@@ -844,10 +847,6 @@ impl Indexer<'_, '_, '_> {
     fn build_initial_from_ancestor(&mut self, site: &Site, root_contributes: bool) {
         let paths = self.ctx.store.paths();
         let parent_path = site_paths::parent(paths, &site.path).expect("not the root");
-        let name = paths
-            .resolve(site.path.prim_path())
-            .leaf()
-            .expect("prim name");
         let ancestor_instanceable;
         let cached = (self.previous_frame.is_none()
             && self.evaluate_implied_specializes
@@ -884,7 +883,9 @@ impl Indexer<'_, '_, '_> {
             self.disable_non_instanceable_nodes();
         }
         let paths = self.ctx.store.paths();
-        self.outputs.graph.append_child_name(paths, name);
+        self.outputs
+            .graph
+            .append_child_path(paths, site.path.prim_path());
         self.outputs.graph.has_payloads = false;
         self.outputs.payload_state = PayloadState::NoPayload;
         self.convert_nodes_for_child();
@@ -960,7 +961,8 @@ impl Indexer<'_, '_, '_> {
     fn elide_if_prohibited(&mut self) -> bool {
         let graph = self.graph();
         let mut found = None;
-        let mut stack = alloc::vec![0];
+        let mut stack = ChildList::new();
+        stack.push(0);
         while let Some(node) = stack.pop() {
             let entry = graph.node(node);
             if entry.culled {

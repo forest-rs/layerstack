@@ -2579,7 +2579,7 @@ fn set_value(
         .map(|d| (d.type_name, d.variability));
     let declared = match defined {
         Some(defined) if defined.type_name.is_some() => {
-            Some((defined.type_name, defined.variability))
+            Some((defined.type_name.clone(), defined.variability))
         }
         _ => declared,
     };
@@ -2788,6 +2788,7 @@ fn write_targets(
                 (Some(defined), _) => {
                     let ty = defined
                         .type_name
+                        .clone()
                         .ok_or(Rejection::UndeclaredType(path.clone()))?;
                     check_registered(&path, &ty)?;
                     let mut spec = PropertySpec::typed_attribute(ty);

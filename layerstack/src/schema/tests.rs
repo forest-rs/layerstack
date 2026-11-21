@@ -6,6 +6,33 @@ use alloc::{boxed::Box, string::String, vec::Vec};
 use super::*;
 
 #[test]
+fn instance_properties_share_schema_fields_until_an_override_changes_them() {
+    let tokens = TokenInterner::default();
+    let template = tokens.intern("slot:__INSTANCE_NAME__:size");
+    let property = PropertyDefinition::attribute(template).with_fallback(1);
+    let display_group = tokens.intern("displayGroup");
+    let mut definition = PrimDefinition::default();
+    let left = tokens.intern("slot:left:size");
+    let right = tokens.intern("slot:right:size");
+    definition.add_property(left, &property, &tokens);
+    definition.add_property(right, &property, &tokens);
+
+    for name in [left, right] {
+        let bound = definition.property(name).unwrap();
+        assert_eq!(bound.name, name);
+        assert!(Arc::ptr_eq(&bound.fields, &property.fields));
+    }
+    let weaker = PropertyDefinition::attribute(left).with_metadata(display_group, Value::Int(2));
+    definition.add_property(left, &weaker, &tokens);
+    assert_eq!(
+        definition.property(left).unwrap().metadata(display_group),
+        Some(&FieldValue::Value(Value::Int(2)))
+    );
+    assert!(definition.property(right).unwrap().metadata.is_empty());
+    assert!(property.metadata.is_empty());
+}
+
+#[test]
 fn definitions_remain_send_and_sync() {
     fn assert_send_sync<T: Send + Sync>() {}
     assert_send_sync::<PrimDefinition>();
@@ -45,7 +72,7 @@ fn fallback(
         definition.property(property).map(declaration),
         "{name}"
     );
-    found.and_then(|p| p.fallback)
+    found.and_then(|p| p.fallback.clone())
 }
 
 #[test]
@@ -735,7 +762,7 @@ fn property_lookup_matches_the_built_definition() {
     assert_eq!(
         registry
             .property_definition(Some(tile), &applied, left_index, &t)
-            .and_then(|p| p.fallback),
+            .and_then(|p| p.fallback.clone()),
         Some(Value::Int(3))
     );
 }

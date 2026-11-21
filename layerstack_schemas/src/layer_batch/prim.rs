@@ -5,7 +5,8 @@ use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use hashbrown::{HashMap, HashSet, hash_map::Entry};
 use layerstack::{
     CannotApply, ListOp, PrimDefinition, PrimSpec, PropertyDefinition, PropertyEntry, PropertyKind,
-    PropertySpec, SchemaRegistry, TargetPath, TokenId, TokenInterner, Value,
+    PropertySpec, PropertyType, SchemaRegistry, TargetPath, TokenId, TokenInterner, Value,
+    Variability,
 };
 
 use super::{
@@ -78,6 +79,87 @@ impl<'a> BatchPrim<'a> {
     pub fn set(&mut self, name: &str, value: impl Into<Value>) -> Result<(), BatchError> {
         let name = self.property_name(name)?;
         self.set_value(name, value.into())
+    }
+
+    /// Defines and sets a default for a typed attribute, including names that
+    /// the registry cannot declare in advance, such as user-named primvars.
+    /// Registered attributes must match the supplied type and keep their
+    /// declared variability. Other attributes are varying, non-custom specs.
+    ///
+    /// # Errors
+    ///
+    /// Rejects an invalid name, a name already authored on this prim,
+    /// an unregistered value type or a value that does not match the type.
+    /// Rejects conflicting schema declarations.
+    ///
+    /// Spec: AOUSD Core §7.6.4 (attribute specs), §13.3.2.3 (schema declarations).
+    pub fn define_attribute(
+        &mut self,
+        name: &str,
+        type_name: PropertyType,
+        value: impl Into<Value>,
+    ) -> Result<(), BatchError> {
+        let id = self.property_name(name)?;
+        let present = match &self.property_slots {
+            Some(slots) => slots.contains_key(&id),
+            None => self.spec.property(id).is_some(),
+        };
+        if present {
+            return Err(BatchError::DuplicateProperty(name.into()));
+        }
+        let variability = match self
+            .typed
+            .property(id)
+            .or_else(|| self.applied_property(id))
+        {
+            Some(declaration) if declaration.type_name.as_ref() != Some(&type_name) => {
+                return Err(BatchError::AttributeDeclarationConflict(name.into()));
+            }
+            Some(declaration) => declaration.variability,
+            None => Variability::Varying,
+        };
+        self.set_attribute_value(id, type_name, variability, value.into())
+    }
+
+    /// Sets the `interpolation` metadata token on an authored attribute,
+    /// for example a normal or a primvar.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a missing attribute or a relationship.
+    ///
+    /// Spec: AOUSD Core §7.6.4 (attribute specs).
+    #[cfg(feature = "usd-geom")]
+    pub fn set_interpolation(
+        &mut self,
+        name: &str,
+        interpolation: crate::primvar::PrimvarInterpolation,
+    ) -> Result<(), BatchError> {
+        let id = self.property_name(name)?;
+        let spec = match &self.property_slots {
+            Some(slots) => slots
+                .get(&id)
+                .map(|&index| Arc::make_mut(&mut self.spec.properties[index].spec)),
+            None => self.spec.property_mut(id),
+        }
+        .ok_or_else(|| BatchError::UnknownProperty(name.into()))?;
+        if spec.kind != PropertyKind::Attribute {
+            return Err(BatchError::WrongPropertyKind {
+                name: name.into(),
+                expected: PropertyKind::Attribute,
+            });
+        }
+        spec.set_metadata(
+            self.tokens.intern("interpolation"),
+            Value::Token(self.tokens.intern(interpolation.token())),
+        );
+        Ok(())
+    }
+
+    /// Interns a token into this batch's store for use in an authored value.
+    #[must_use]
+    pub fn token(&self, value: &str) -> TokenId {
+        self.tokens.intern(value)
     }
 
     /// Replaces the declared relationship's targets in authored order. An
@@ -201,9 +283,7 @@ impl<'a> BatchPrim<'a> {
         expected: PropertyKind,
     ) -> Result<&'a PropertyDefinition, BatchError> {
         let definition = self
-            .typed
-            .property(name)
-            .or_else(|| self.applied_property(name))
+            .property_definition(name)
             .ok_or_else(|| BatchError::UnknownProperty(self.tokens.resolve(name).into()))?;
         if definition.kind != expected {
             return Err(BatchError::WrongPropertyKind {
@@ -212,6 +292,12 @@ impl<'a> BatchPrim<'a> {
             });
         }
         Ok(definition)
+    }
+
+    fn property_definition(&mut self, name: TokenId) -> Option<&'a PropertyDefinition> {
+        self.typed
+            .property(name)
+            .or_else(|| self.applied_property(name))
     }
 
     fn applied_property(&mut self, name: TokenId) -> Option<&'a PropertyDefinition> {
@@ -234,16 +320,28 @@ impl<'a> BatchPrim<'a> {
         let ty = def
             .type_name
             .as_ref()
-            .filter(|ty| ty.value_type().is_some())
             .ok_or_else(|| BatchError::UndeclaredType(self.tokens.resolve(name).into()))?;
+        self.set_attribute_value(name, ty.clone(), def.variability, value)
+    }
+
+    fn set_attribute_value(
+        &mut self,
+        name: TokenId,
+        ty: PropertyType,
+        variability: Variability,
+        value: Value,
+    ) -> Result<(), BatchError> {
+        if ty.value_type().is_none() {
+            return Err(BatchError::UndeclaredType(self.tokens.resolve(name).into()));
+        }
         if !ty.accepts_value(&value) {
             return Err(BatchError::ValueTypeMismatch {
                 name: self.tokens.resolve(name).into(),
-                expected: ty.clone(),
+                expected: ty,
             });
         }
-        let mut spec = PropertySpec::typed_attribute(ty.clone()).with_default(value);
-        spec.variability = def.variability;
+        let mut spec = PropertySpec::typed_attribute(ty).with_default(value);
+        spec.variability = variability;
         self.set_property(name, spec);
         Ok(())
     }

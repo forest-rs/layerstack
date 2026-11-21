@@ -1089,3 +1089,178 @@ fn materials_round_trip_through_readers() {
         "textures are packaged after the layer"
     );
 }
+
+#[test]
+fn batch_mesh_reopens_with_export_equivalent_geometry_and_indexed_seams() {
+    use layerstack_schemas::{LayerBatch, usd_geom};
+
+    let uv_values = [[0., 0.], [1., 0.], [0., 1.], [0., 0.]];
+    let uv_indices = [0, 1, 2, 3, 2, 1];
+    let normal_values = [[0., 0., 1.], [0., 0., 1.]];
+    let normal_indices = [0, 0, 0, 1, 1, 1];
+    let mut panel = Mesh::new(
+        "StandaloneName",
+        &POINTS,
+        Faces::triangles(&[0, 1, 2, 0, 2, 3]),
+    )
+    .with_uvs(Primvar::face_varying(&uv_values[..]).with_indices(&uv_indices))
+    .with_normals(Primvar::face_varying(&normal_values[..]).with_indices(&normal_indices))
+    .with_primvar(
+        "paint",
+        Primvar::constant(PrimvarData::color3(&[[0.25, 0.5, 0.75]])),
+    )
+    .with_transform(placement());
+    panel.orientation = layerstack_mesh_export::Orientation::LeftHanded;
+    panel.double_sided = true;
+    let plain = Mesh::new("Plain", &TRI_POINTS, Faces::triangles(&[0, 1, 2]))
+        .with_normals(Primvar::vertex(&TRI_NORMALS[..]));
+
+    let store = InMemoryStore::default();
+    let schemas = layerstack_schemas::openusd(store.tokens());
+    let mut batch = LayerBatch::new(LayerId(1), &store, &schemas).unwrap();
+    batch
+        .define(store.path("/World"), usd_geom::Xform::SCHEMA, |_| Ok(()))
+        .unwrap();
+    batch
+        .define(
+            store.path("/World/Sibling"),
+            usd_geom::Cube::SCHEMA,
+            |cube| cube.set(usd_geom::Cube::SIZE, 3.0),
+        )
+        .unwrap();
+    let authored_paths = [store.path("/World/Panel"), store.path("/World/Plain")];
+    panel.author(&mut batch, authored_paths[0]).unwrap();
+    plain.author(&mut batch, authored_paths[1]).unwrap();
+    let layer = batch.finish();
+    let saved = layerstack_usda::save_usda(&layer, store.tokens(), store.paths()).unwrap();
+    let exported = Scene::new(
+        StageSettings::new(UpAxis::Y, 1.0),
+        Xform::new("Root").with_mesh(panel).with_mesh(plain),
+    )
+    .to_usda()
+    .unwrap();
+
+    let read = |text: &str| {
+        let parsed = layerstack_usda::parser::parse(text);
+        assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+        let result = layerstack_usda::emit::emit(
+            &parsed.layer,
+            LayerId(1),
+            store.tokens(),
+            store.paths(),
+            &mut NoAssets,
+        );
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        result.layer
+    };
+    let reopened = read(&saved);
+    let expected = read(&exported);
+    for (authored, standalone) in authored_paths
+        .into_iter()
+        .zip(["/Root/StandaloneName", "/Root/Plain"])
+    {
+        let original = layer.prim(authored).unwrap();
+        let roundtrip = reopened.prim(authored).unwrap();
+        let standalone = expected.prim(store.path(standalone)).unwrap();
+        assert_eq!(original.type_name, roundtrip.type_name);
+        assert_eq!(roundtrip.type_name, standalone.type_name);
+        assert_eq!(original.properties.len(), roundtrip.properties.len());
+        assert_eq!(standalone.properties.len(), roundtrip.properties.len());
+        for property in &original.properties {
+            let name = store.tokens().resolve(property.name);
+            assert_eq!(
+                roundtrip.property(property.name),
+                Some(property.spec.as_ref()),
+                "{name}"
+            );
+            assert_eq!(
+                standalone.property(property.name),
+                Some(property.spec.as_ref()),
+                "{name}"
+            );
+        }
+    }
+
+    let panel = reopened.prim(authored_paths[0]).unwrap();
+    for (name, ty, indices) in [
+        ("primvars:st", "texCoord2f[]", &uv_indices[..]),
+        ("primvars:normals", "normal3f[]", &normal_indices[..]),
+    ] {
+        let primvar = panel.property(store.tokens().intern(name)).unwrap();
+        assert_eq!(primvar.type_name.as_ref().unwrap().type_name(), ty);
+        assert_eq!(
+            primvar.metadata(store.tokens().intern("interpolation")),
+            Some(&FieldValue::Value(Value::Token(
+                store.tokens().intern("faceVarying")
+            )))
+        );
+        let companion = panel
+            .property(store.tokens().intern(format!("{name}:indices")))
+            .unwrap();
+        assert_eq!(companion.default, Some(ints(indices)));
+    }
+    assert!(reopened.prim(store.path("/World/Sibling")).is_some());
+    assert!(reopened.prim(store.path("/World/StandaloneName")).is_none());
+}
+
+#[test]
+fn batch_mesh_errors_leave_namespace_and_existing_prims_untouched() {
+    use layerstack_mesh_export::{MeshAuthorError, MeshProblem};
+    use layerstack_schemas::{BatchError, LayerBatch, usd_geom};
+
+    let store = InMemoryStore::default();
+    let schemas = layerstack_schemas::openusd(store.tokens());
+    let mut batch = LayerBatch::new(LayerId(1), &store, &schemas).unwrap();
+    let parent = store.path("/World");
+    let path = store.path("/World/Recovered");
+    let orphan = store.path("/Missing/Group/Rejected");
+    batch
+        .define(parent, usd_geom::Xform::SCHEMA, |_| Ok(()))
+        .unwrap();
+    let bad_topology = Mesh::new("Invalid", &TRI_POINTS, Faces::triangles(&[0, 1, 3]));
+    assert!(matches!(
+        bad_topology.author(&mut batch, path),
+        Err(MeshAuthorError::Geometry(
+            MeshProblem::PointIndexOutOfRange { .. }
+        ))
+    ));
+    let triangle = Mesh::new("Triangle", &TRI_POINTS, Faces::triangles(&[0, 1, 2]));
+    let bad_uv = triangle
+        .clone()
+        .with_uvs(Primvar::face_varying(&TRI_UVS[..]).with_indices(&[0, 1, 3]));
+    assert!(matches!(
+        bad_uv.author(&mut batch, orphan),
+        Err(MeshAuthorError::Geometry(
+            MeshProblem::PrimvarIndexOutOfRange { .. }
+        ))
+    ));
+    let conflicting_primvar = triangle
+        .clone()
+        .with_uvs(Primvar::vertex(&TRI_UVS[..]))
+        .with_primvar("st", Primvar::vertex(PrimvarData::tex_coord2(&TRI_UVS)));
+    assert_eq!(
+        conflicting_primvar.author(&mut batch, orphan),
+        Err(MeshAuthorError::Batch(BatchError::DuplicateProperty(
+            "primvars:st".into()
+        )))
+    );
+    assert_eq!(
+        triangle
+            .clone()
+            .with_material("Paint")
+            .author(&mut batch, orphan),
+        Err(MeshAuthorError::SceneMaterials)
+    );
+    triangle.author(&mut batch, path).unwrap();
+    assert!(matches!(
+        triangle.author(&mut batch, path),
+        Err(MeshAuthorError::Batch(BatchError::AlreadyDefined(_)))
+    ));
+    let layer = batch.finish();
+    assert!(layer.prim(store.path("/Missing")).is_none());
+    assert!(layer.prim(orphan).is_none());
+    assert_eq!(
+        layer.prim(parent).unwrap().authored_children,
+        [store.tokens().intern("Recovered")]
+    );
+}

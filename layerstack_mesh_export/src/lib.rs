@@ -252,6 +252,7 @@
 
 extern crate alloc;
 
+mod author;
 mod build;
 mod error;
 mod instance;
@@ -262,6 +263,7 @@ mod scene;
 mod shading;
 mod transform;
 
+pub use author::MeshAuthorError;
 pub use error::{ExportError, InstancerProblem, MaterialProblem, MeshProblem};
 pub use instance::Instance;
 pub use instancer::{

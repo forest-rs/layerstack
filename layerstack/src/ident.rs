@@ -18,6 +18,8 @@
 //! assert!(!is_identifier("a²") && !is_identifier("1a") && !is_identifier(""));
 //! ```
 
+use alloc::collections::BTreeSet;
+use alloc::format;
 use alloc::string::String;
 
 /// Turns an arbitrary key into a valid prim name.
@@ -30,7 +32,7 @@ use alloc::string::String;
 /// since older readers reject them.
 ///
 /// Distinct keys can map to one name (`"a.b"` and `"a-b"` both become
-/// `a_b`); assign unique sibling names when such collisions matter.
+/// `a_b`); use [`SiblingNames`] to give each child a unique name.
 ///
 /// ```
 /// use layerstack::ident::sanitize_ascii_identifier;
@@ -53,6 +55,62 @@ pub fn sanitize_ascii_identifier(key: &str) -> String {
         }
     }));
     name
+}
+
+/// Assigns unique prim names within a single parent.
+///
+/// Use one allocator per parent, and [reserve](Self::reserve) any existing
+/// child names or names fixed by the import before assigning source labels.
+/// [`Self::unique`] calls [`sanitize_ascii_identifier`] and, if the base is
+/// taken, appends the smallest available numeric suffix starting at `_2`.
+/// Assignments depend on call order.
+///
+/// ```
+/// use layerstack::ident::SiblingNames;
+///
+/// let mut names = SiblingNames::new();
+/// assert!(names.reserve("column_base_2"));
+/// assert_eq!(names.unique("column.base"), "column_base");
+/// assert_eq!(names.unique("column-base"), "column_base_3");
+/// assert_eq!(names.unique("column base"), "column_base_4");
+/// ```
+#[derive(Clone, Debug, Default)]
+pub struct SiblingNames {
+    taken: BTreeSet<String>,
+}
+
+impl SiblingNames {
+    /// Creates an allocator with no names taken.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Claims `name` verbatim. Returns whether the name was newly claimed.
+    ///
+    /// The caller is responsible for passing a valid prim name.
+    pub fn reserve(&mut self, name: &str) -> bool {
+        if self.taken.contains(name) {
+            return false;
+        }
+        self.taken.insert(name.into())
+    }
+
+    /// Assigns and claims an available prim name derived from `key`.
+    pub fn unique(&mut self, key: &str) -> String {
+        let base = sanitize_ascii_identifier(key);
+        if self.reserve(&base) {
+            return base;
+        }
+        (2_u64..)
+            .map(|n| format!("{base}_{n}"))
+            .find(|candidate| self.reserve(candidate))
+            .expect("a free suffix exists")
+    }
+
+    /// Whether `name` is taken.
+    pub fn contains(&self, name: &str) -> bool {
+        self.taken.contains(name)
+    }
 }
 
 /// Whether `c` may start an identifier (`XID_Start` or `_`).
@@ -224,7 +282,37 @@ fn dictionary_less(l: &[u8], r: &[u8]) -> bool {
 mod tests {
     use alloc::vec::Vec;
 
-    use super::{dictionary_cmp, is_continue, is_identifier, is_start};
+    use super::{
+        SiblingNames, dictionary_cmp, is_continue, is_identifier, is_start,
+        sanitize_ascii_identifier,
+    };
+
+    #[test]
+    fn sanitized_names_are_ascii_identifiers() {
+        for (key, want) in [
+            ("Tree", "Tree"),
+            ("_x", "_x"),
+            ("a b/c:d", "a_b_c_d"),
+            ("9", "_9"),
+            ("", "_"),
+            ("-", "__"),
+            ("é", "__"),
+            ("tile.0", "tile_0"),
+        ] {
+            assert_eq!(sanitize_ascii_identifier(key), want, "{key:?}");
+        }
+    }
+
+    #[test]
+    fn siblings_get_the_smallest_free_suffix() {
+        let mut names = SiblingNames::new();
+        assert_eq!(names.unique("a_2"), "a_2");
+        assert_eq!(names.unique("a"), "a");
+        assert_eq!(names.unique("a"), "a_3", "a_2 is already taken");
+        assert_eq!(names.unique("a"), "a_4");
+        assert!(!names.reserve("a"), "a is taken");
+        assert!(names.contains("a_4") && !names.contains("a_5"));
+    }
 
     /// The order of usd-core 26.8's
     /// `sorted(names, key=functools.cmp_to_key(Tf.DictionaryStrcmp))`.

@@ -234,6 +234,8 @@ pub enum Rejection {
     /// The copied specs author paths the copy cannot remap (for example
     /// an invalid path expression, or an arc whose asset is an expression).
     UnsupportedCopy,
+    /// A prim path segment is not a USD identifier (AOUSD Core §7.3.3).
+    InvalidPrimName(TokenId),
     /// A variant set name that is not an identifier.
     ///
     /// OpenUSD: `SdfVariantSetSpec::New` and the `variantSetNames` list
@@ -389,6 +391,7 @@ impl Rejection {
     /// | [`Self::VariantCopy`] | `edit.rejected.variant_copy` |
     /// | [`Self::CopyIntoSource`] | `edit.rejected.copy_into_source` |
     /// | [`Self::UnsupportedCopy`] | `edit.rejected.unsupported_copy` |
+    /// | [`Self::InvalidPrimName`] | `edit.rejected.invalid_prim_name` |
     /// | [`Self::InvalidVariantSetName`] | `edit.rejected.invalid_variant_set_name` |
     /// | [`Self::Diverged`] | `edit.rejected.diverged` |
     ///
@@ -422,6 +425,7 @@ impl Rejection {
             Self::VariantCopy => "edit.rejected.variant_copy",
             Self::CopyIntoSource => "edit.rejected.copy_into_source",
             Self::UnsupportedCopy => "edit.rejected.unsupported_copy",
+            Self::InvalidPrimName(_) => "edit.rejected.invalid_prim_name",
             Self::InvalidVariantSetName(_) => "edit.rejected.invalid_variant_set_name",
             Self::Diverged(_) => "edit.rejected.diverged",
         }
@@ -531,6 +535,7 @@ impl Describe for Rejection {
             Self::UnsupportedCopy => {
                 f.write_str("the copied specs author paths that cannot be remapped")
             }
+            Self::InvalidPrimName(name) => write!(f, "`{}` is not a valid prim name", names.token(*name)),
             Self::InvalidVariantSetName(name) => write!(
                 f,
                 "`{}` is not an identifier, so not a variant set name",

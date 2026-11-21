@@ -3167,6 +3167,27 @@ fn created_children_are_listed_once_in_creation_order() {
 }
 
 #[test]
+fn invalid_prim_name_rolls_back_the_whole_transaction() {
+    use crate::Path;
+    let mut store = rocks();
+    let malformed = Path::parse_absolute("/Created/bad-name/Leaf", store.tokens()).unwrap();
+    let path = store.paths().intern(malformed);
+    let first = store.path("/Earlier");
+    let parent = store.path("/Created");
+    let target = EditTarget::for_layer(ROCK);
+    let mut txn = Transaction::new();
+    txn.create_prim(target.prim(first), Specifier::Def, None);
+    txn.create_prim(target.prim(path), Specifier::Def, None);
+    let err = txn.apply(&mut store).unwrap_err();
+    assert_eq!(err.code(), "edit.rejected.invalid_prim_name");
+    assert!(err.display(&store).to_string().contains("bad-name"));
+    let layer = store.layer(ROCK).unwrap();
+    assert!(layer.prim(first).is_none());
+    assert!(layer.prim(parent).is_none());
+    assert!(layer.prim(path).is_none());
+}
+
+#[test]
 fn slots_name_their_fields_in_words() {
     let store = InMemoryStore::default();
     let (kind, season) = (store.tokens.intern("kind"), store.tokens.intern("season"));

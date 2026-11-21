@@ -47,6 +47,8 @@ mod tests;
 /// the caller's choice and is allowed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CannotEdit {
+    /// A segment of the prim path is not a USD identifier (AOUSD Core §7.3.3).
+    InvalidPrimName(TokenId),
     /// The path is beneath the native instance `instance` (the outermost
     /// one): its descendants are instance proxies, composed from its
     /// prototype, so an opinion authored at their paths would not be on
@@ -75,6 +77,9 @@ impl CannotEdit {
 impl Describe for CannotEdit {
     fn describe(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
         match self {
+            Self::InvalidPrimName(name) => {
+                write!(f, "`{}` is not a valid prim name", names.token(*name))
+            }
             Self::BeneathInstance { instance } => write!(
                 f,
                 "the path is beneath the instance {}, whose descendants are instance proxies; \
@@ -439,7 +444,8 @@ impl<'s> SchemaEdit<'s> {
         Ok(crate::PrimEdit::from_path_unchecked(path))
     }
 
-    /// Whether this edit may author the prim at `path`: `Ok` unless the
+    /// Whether this edit may author the prim at `path`. Each path segment must
+    /// be a valid prim name. A valid path is editable unless the
     /// edit target is a layer of the stage's local layer stack that maps
     /// `path` to itself and the path is beneath an instance or in a
     /// prototype. The prim need not exist. Every route that names a prim
@@ -449,6 +455,7 @@ impl<'s> SchemaEdit<'s> {
     ///
     /// # Errors
     ///
+    /// [`CannotEdit::InvalidPrimName`] with the first invalid segment,
     /// [`CannotEdit::BeneathInstance`] with the outermost instance above
     /// `path`, or [`CannotEdit::InPrototype`].
     ///
@@ -458,6 +465,10 @@ impl<'s> SchemaEdit<'s> {
     /// Spec: AOUSD Core §11.3.3 (scene-graph instancing).
     pub fn can_edit(&self, path: PathId) -> Result<(), CannotEdit> {
         let paths = self.store.paths();
+        paths
+            .resolve(path)
+            .validate_prim_names(self.store.tokens())
+            .map_err(CannotEdit::InvalidPrimName)?;
         if !self.stage.has_local_layer(self.target.layer())
             || !self.target.maps_to_itself(path, paths)
         {

@@ -89,12 +89,7 @@ impl<'a> LayerBatch<'a> {
         write: impl FnOnce(&mut BatchPrim<'a>) -> Result<(), BatchError>,
     ) -> Result<(), BatchError> {
         let name = self.paths.resolve(path);
-        if name.segments().is_empty()
-            || !name
-                .segments()
-                .iter()
-                .all(|&part| layerstack::ident::is_identifier(self.tokens.resolve(part)))
-        {
+        if name.segments().is_empty() || name.validate_prim_names(self.tokens).is_err() {
             return Err(BatchError::InvalidPath(name.display(self.tokens)));
         }
         if self

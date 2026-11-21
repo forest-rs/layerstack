@@ -18,6 +18,43 @@
 //! assert!(!is_identifier("a²") && !is_identifier("1a") && !is_identifier(""));
 //! ```
 
+use alloc::string::String;
+
+/// Turns an arbitrary key into a valid prim name.
+///
+/// Every character outside `[A-Za-z0-9_]` becomes `_`, and a name that
+/// would be empty or start with a digit gets a leading `_`, so the result
+/// always matches `[A-Za-z_][A-Za-z0-9_]*`. That is a USD identifier in
+/// every OpenUSD release; the Unicode identifiers AOUSD Core allows
+/// (`XID_Start` / `XID_Continue`, §7.3.3) are deliberately not produced,
+/// since older readers reject them.
+///
+/// Distinct keys can map to one name (`"a.b"` and `"a-b"` both become
+/// `a_b`); assign unique sibling names when such collisions matter.
+///
+/// ```
+/// use layerstack::ident::sanitize_ascii_identifier;
+///
+/// assert_eq!(sanitize_ascii_identifier("column.base-2"), "column_base_2");
+/// assert_eq!(sanitize_ascii_identifier("3rd"), "_3rd");
+/// assert_eq!(sanitize_ascii_identifier(""), "_");
+/// ```
+#[must_use]
+pub fn sanitize_ascii_identifier(key: &str) -> String {
+    let mut name = String::with_capacity(key.len() + 1);
+    if !key.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_') {
+        name.push('_');
+    }
+    name.extend(key.chars().map(|c| {
+        if c.is_ascii_alphanumeric() || c == '_' {
+            c
+        } else {
+            '_'
+        }
+    }));
+    name
+}
+
 /// Whether `c` may start an identifier (`XID_Start` or `_`).
 #[must_use]
 pub fn is_start(c: char) -> bool {

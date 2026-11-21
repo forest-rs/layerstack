@@ -268,6 +268,7 @@ pub use instance::Instance;
 pub use instancer::{
     INSTANCE_ID, INSTANCE_NAMES, OrientationPrecision, PROTOTYPES_SCOPE, PointInstancer,
 };
+pub use layerstack::UpAxis;
 pub use layerstack_usda::writer::Value;
 pub use layerstack_usdz::PackageFile;
 pub use material::{Channel, ColorInput, FloatInput, MATERIALS_SCOPE, Material, Texture, Wrap};
@@ -276,7 +277,7 @@ pub use mesh::{
     Orientation, Primvar, PrimvarData,
 };
 pub use names::{SiblingNames, sanitize_name};
-pub use scene::{Instancing, Node, Scene, StageSettings, UpAxis, UsdzProfile, Xform};
+pub use scene::{Instancing, Node, Scene, StageSettings, UsdzProfile, Xform};
 pub use transform::{NotRigid, SHEAR_TOLERANCE, Transform};
 
 #[cfg(test)]

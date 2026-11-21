@@ -216,8 +216,11 @@
 //! [`PrimView::metadata`]), [`PropertyMetadata`] (from
 //! [`PrimView::property_metadata`]) and [`StageMetadata`] (from
 //! [`Scene::metadata`]). Property readers compose authored opinions without
-//! synthesizing registered field defaults. Stage readers use the root layer
-//! and registered layer defaults; sublayer metadata does not participate.
+//! synthesizing registered field defaults. Stage readers use the primary
+//! session and root layers, then registered layer defaults. Use
+//! [`LiveStage::set_up_axis`](layerstack::LiveStage::set_up_axis) and
+//! [`LiveStage::set_meters_per_unit`](layerstack::LiveStage::set_meters_per_unit)
+//! to author checked geometry metrics on those layers.
 //!
 //! # Transforms, visibility and purpose
 //!

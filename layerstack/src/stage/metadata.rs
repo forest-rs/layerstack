@@ -9,6 +9,26 @@ use crate::{
     diagnostic::{Describe, Names, with_store},
 };
 
+/// The stage's up axis, as defined by OpenUSD's `UsdGeomSetStageUpAxis`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UpAxis {
+    /// Positive Y is up (the registered fallback).
+    Y,
+    /// Positive Z is up.
+    Z,
+}
+
+impl UpAxis {
+    /// The USD token for this axis.
+    #[must_use]
+    pub const fn token(self) -> &'static str {
+        match self {
+            Self::Y => "Y",
+            Self::Z => "Z",
+        }
+    }
+}
+
 /// Why a stage metadata edit was rejected. Rejection changes no authored state.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
@@ -291,6 +311,37 @@ impl LiveStage {
             None => self.clear_stage_metadata(store, layer, key),
         }
     }
+    /// Authors `upAxis` on the root or primary session layer. The primary
+    /// session layer's opinion is stronger than the root layer's.
+    ///
+    /// Matches OpenUSD's `UsdGeomSetStageUpAxis`, whose allowed tokens are
+    /// `Y` and `Z`. The edit uses the registered layer metadata field
+    /// ([`Self::set_stage_metadata`]) and returns a guarded inverse.
+    pub fn set_up_axis(
+        &mut self,
+        store: &mut dyn LayerStore,
+        layer: LayerId,
+        axis: UpAxis,
+    ) -> Result<Applied, StageMetadataError> {
+        let key = store.tokens().intern("upAxis");
+        let value = Value::Token(store.tokens().intern(axis.token()));
+        self.set_stage_metadata(store, layer, key, value.into())
+    }
+    /// Authors `metersPerUnit`, the length of one scene unit in meters,
+    /// on the root or primary session layer. Use `1.0` for meters or
+    /// `0.01` for centimeters.
+    ///
+    /// Matches OpenUSD's `UsdGeomSetStageMetersPerUnit`, which stores the
+    /// supplied double as-is. The edit uses the registered layer metadata
+    /// field ([`Self::set_stage_metadata`]) and returns a guarded inverse.
+    pub fn set_meters_per_unit(
+        &mut self,
+        store: &mut dyn LayerStore,
+        layer: LayerId,
+        value: f64,
+    ) -> Result<Applied, StageMetadataError> {
+        self.set_double_metadata(store, layer, "metersPerUnit", value)
+    }
     /// Authors a start time code on the selected metadata layer.
     pub fn set_start_time_code(
         &mut self,
@@ -298,7 +349,7 @@ impl LiveStage {
         layer: LayerId,
         value: f64,
     ) -> Result<Applied, StageMetadataError> {
-        self.set_time_metadata(store, layer, "startTimeCode", value)
+        self.set_double_metadata(store, layer, "startTimeCode", value)
     }
     /// Authors an end time code on the selected metadata layer.
     pub fn set_end_time_code(
@@ -307,7 +358,7 @@ impl LiveStage {
         layer: LayerId,
         value: f64,
     ) -> Result<Applied, StageMetadataError> {
-        self.set_time_metadata(store, layer, "endTimeCode", value)
+        self.set_double_metadata(store, layer, "endTimeCode", value)
     }
     /// Authors time codes per second on the selected metadata layer.
     pub fn set_time_codes_per_second(
@@ -316,7 +367,7 @@ impl LiveStage {
         layer: LayerId,
         value: f64,
     ) -> Result<Applied, StageMetadataError> {
-        self.set_time_metadata(store, layer, "timeCodesPerSecond", value)
+        self.set_double_metadata(store, layer, "timeCodesPerSecond", value)
     }
     /// Authors the intended playback rate on the selected metadata layer.
     pub fn set_frames_per_second(
@@ -325,9 +376,9 @@ impl LiveStage {
         layer: LayerId,
         value: f64,
     ) -> Result<Applied, StageMetadataError> {
-        self.set_time_metadata(store, layer, "framesPerSecond", value)
+        self.set_double_metadata(store, layer, "framesPerSecond", value)
     }
-    fn set_time_metadata(
+    fn set_double_metadata(
         &mut self,
         store: &mut dyn LayerStore,
         layer: LayerId,
@@ -399,7 +450,113 @@ mod tests {
     use alloc::string::ToString;
 
     use super::*;
-    use crate::{InMemoryStore, SpecPath, edit::Rejection};
+    use crate::{InMemoryStore, Layer, SpecPath, SublayerEntry, edit::Rejection};
+
+    #[test]
+    fn geometry_metrics_use_checked_stage_layers_and_registered_types() {
+        let mut store = InMemoryStore::default();
+        let (root, session, sublayer) = (LayerId(1), LayerId(2), LayerId(3));
+        let axis_key = store.tokens().intern("upAxis");
+        let units_key = store.tokens().intern("metersPerUnit");
+        let y = store.tokens().intern("Y");
+        let z = store.tokens().intern("Z");
+        let mut weak = Layer::new(sublayer);
+        weak.set_metadata(axis_key, Value::Token(z));
+        weak.set_metadata(units_key, Value::Double(1000.0));
+        store.insert_layer(weak);
+        let mut root_layer = Layer::new(root);
+        root_layer
+            .sublayers_mut()
+            .push(SublayerEntry::new(sublayer));
+        store.insert_layer(root_layer);
+        store.insert_layer(Layer::new(session));
+        let mut live = LiveStage::compose(
+            &mut store,
+            root,
+            StageOptions {
+                session_layer: Some(session),
+                ..StageOptions::default()
+            },
+        );
+
+        // The usdGeom declarations are built in. Only the root and
+        // primary session layer override the registered stage fallbacks.
+        let metrics = |live: &LiveStage, store: &InMemoryStore| {
+            (
+                live.stage().layer_metadata(axis_key, store),
+                live.stage().layer_metadata(units_key, store),
+            )
+        };
+        assert_eq!(
+            metrics(&live, &store),
+            (Some(Value::Token(y)), Some(Value::Double(0.01))),
+            "stage metrics use the registered fallbacks"
+        );
+        assert!(
+            matches!(
+                live.set_up_axis(&mut store, sublayer, UpAxis::Y),
+                Err(StageMetadataError::InvalidLayer(layer)) if layer == sublayer
+            ),
+            "a sublayer cannot author the stage axis"
+        );
+        assert!(
+            matches!(
+                live.set_meters_per_unit(&mut store, sublayer, 1.0),
+                Err(StageMetadataError::InvalidLayer(layer)) if layer == sublayer
+            ),
+            "a sublayer cannot author stage units"
+        );
+        let weak = store.layer(sublayer).unwrap();
+        assert_eq!(
+            weak.metadata(axis_key),
+            Some(&Value::Token(z).into()),
+            "a rejected edit leaves the authored axis alone"
+        );
+        assert_eq!(
+            weak.metadata(units_key),
+            Some(&Value::Double(1000.0).into()),
+            "a rejected edit leaves the authored units alone"
+        );
+
+        live.set_up_axis(&mut store, root, UpAxis::Y).unwrap();
+        live.set_meters_per_unit(&mut store, root, 1.0).unwrap();
+        let axis = live.set_up_axis(&mut store, session, UpAxis::Z).unwrap();
+        let units = live
+            .set_meters_per_unit(&mut store, session, 0.001)
+            .unwrap();
+        assert_eq!(
+            metrics(&live, &store),
+            (Some(Value::Token(z)), Some(Value::Double(0.001))),
+            "session opinions are strongest and use token and double values"
+        );
+        live.apply(&mut store, &units.inverse).unwrap();
+        live.apply(&mut store, &axis.inverse).unwrap();
+        assert_eq!(
+            metrics(&live, &store),
+            (Some(Value::Token(y)), Some(Value::Double(1.0))),
+            "undoing the session edits reveals both root opinions"
+        );
+    }
+
+    #[test]
+    fn geometry_units_author_the_supplied_double() {
+        let mut store = InMemoryStore::default();
+        let root = LayerId(1);
+        store.insert_layer(Layer::new(root));
+        let mut live = LiveStage::compose(&mut store, root, StageOptions::default());
+        let key = store.tokens().intern("metersPerUnit");
+        for value in [0.0, -1.0, f64::INFINITY, f64::NAN] {
+            live.set_meters_per_unit(&mut store, root, value).unwrap();
+            let Some(Value::Double(authored)) = live.stage().layer_metadata(key, &store) else {
+                panic!("the authored units must be a double");
+            };
+            assert_eq!(
+                authored.to_bits(),
+                value.to_bits(),
+                "preserve the given value"
+            );
+        }
+    }
 
     #[test]
     fn errors_name_layers_tokens_and_paths_with_the_store() {

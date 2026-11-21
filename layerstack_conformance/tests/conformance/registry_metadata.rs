@@ -749,9 +749,7 @@ fn sample(ty: &str, sample: &Json, tokens: &TokenInterner) -> FieldValue {
                 .collect(),
         ),
         "tokenlistop" => {
-            return FieldValue::from(*map(list(sample), |t| {
-                tokens.intern(t.as_str().unwrap())
-            }));
+            return FieldValue::from(*map(list(sample), |t| tokens.intern(t.as_str().unwrap())));
         }
         "stringlistop" => {
             return FieldValue::StringListOp(map(list(sample), |t| t.as_str().unwrap().into()));

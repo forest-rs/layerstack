@@ -18,7 +18,7 @@ use crate::{
     CustomAttribute, ExportError, Faces, FamilyType, INSTANCE_ID, INSTANCE_NAMES, Instance,
     InstancerProblem, Instancing, Interpolation, MATERIALS_SCOPE, Material, MaterialSubset, Mesh,
     MeshProblem, Node, Orientation, PROTOTYPES_SCOPE, PointInstancer, Primvar, PrimvarData, Scene,
-    Transform, UpAxis, Xform,
+    Transform, Xform,
 };
 
 /// What prims need to know about the rest of the scene.
@@ -82,10 +82,7 @@ pub(crate) fn document(scene: &Scene<'_>, target: Target) -> Result<Document, Ex
     // the root layer (`pxr/usd/usdGeom/metrics.h:23`, `:107`). The root prim is the
     // `defaultPrim` so references to the file need no prim path (AOUSD
     // Core §7.6.1.2.3).
-    let up_axis = match stage.up_axis {
-        UpAxis::Y => "Y",
-        UpAxis::Z => "Z",
-    };
+    let up_axis = stage.up_axis.token();
     let cx = Context {
         materials: &scene.materials,
         materials_scope: format!("/{}/{MATERIALS_SCOPE}", scene.root.name),

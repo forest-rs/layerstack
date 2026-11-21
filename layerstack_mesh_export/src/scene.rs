@@ -7,6 +7,7 @@ use alloc::borrow::Cow;
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use layerstack::UpAxis;
 use layerstack_usda::writer::{Document, Value};
 use layerstack_usdc::writer::write_document;
 use layerstack_usdz::{PackageFile, write_usdz};
@@ -97,18 +98,6 @@ pub enum Instancing {
     /// prototype's own origin, besides its instances. The references then
     /// compose into ordinary prims; the file is no larger.
     References,
-}
-
-/// The stage's up axis.
-///
-/// Spec: `UsdGeom` stage up axis
-/// (<https://openusd.org/dev/api/group___usd_geom_up_axis__group.html>).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum UpAxis {
-    /// +Y is up (USD's fallback).
-    Y,
-    /// +Z is up.
-    Z,
 }
 
 /// Stage-level metadata that tells consumers how to interpret coordinates.

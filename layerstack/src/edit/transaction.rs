@@ -262,6 +262,11 @@ impl Transaction {
     /// members are rejected: sublayers have [`Transaction::set_sublayers`]
     /// and its siblings, relocates [`Transaction::set_layer_relocates`]. Inverses guard this field
     /// alone. AOUSD Core §7.6.1; OpenUSD `SdfLayer::SetField`.
+    ///
+    /// For checked stage metadata edits on the root or primary session
+    /// layer, use [`crate::LiveStage::set_stage_metadata`] or its typed
+    /// setters such as [`crate::LiveStage::set_up_axis`] and
+    /// [`crate::LiveStage::set_meters_per_unit`].
     pub fn set_layer_metadata(
         &mut self,
         layer: LayerId,

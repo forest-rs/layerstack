@@ -347,7 +347,8 @@ pub use stage::{
     PrimPredicate, PrimRange, PrimSnapshot, PrimStatus, PrimVisit, PrimVisits, Property,
     PropertyDeclaration, Provenance, Relationship, RelationshipQuery, RelationshipQueryWork,
     Resolved, ResolvedValue, SampleBracket, SampleUse, SourceComposability, SourceStanding,
-    SpanTimes, Stage, StageMetadataError, StageOptions, Traverse, ValueExplanation, ValueSource,
+    SpanTimes, Stage, StageMetadataError, StageOptions, Traverse, UpAxis, ValueExplanation,
+    ValueSource,
 };
 pub use stage::{
     AuthoredTarget, AuthoredTargets, DanglingByName, DanglingCounts, DanglingKind, DanglingTarget,

@@ -37,7 +37,7 @@ pub use view::{FromValue, NameArg, PrimPathArg, PropertyPathArg, StageView};
 mod traversal;
 pub use traversal::{PrimPredicate, PrimRange, PrimStatus, PrimVisit, PrimVisits};
 pub(crate) mod metadata;
-pub use metadata::StageMetadataError;
+pub use metadata::{StageMetadataError, UpAxis};
 mod loading;
 pub(crate) use loading::ControlledStore;
 pub use loading::{

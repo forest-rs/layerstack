@@ -1695,20 +1695,26 @@ fn save_tracks_successful_generations_and_excludes_sessions() {
     set_value(&mut doc, root, 2);
     assert!(doc.is_dirty(root));
     doc.storage_mut().fail_write = true;
-    let failed = doc.save();
+    let failed = doc.save().unwrap_err();
     assert_eq!(failed.failures.len(), 1);
     assert!(doc.is_dirty(root));
     doc.storage_mut().fail_write = false;
-    assert_eq!(doc.save().saved, vec![root]);
+    let absent = LayerId(u64::MAX);
+    let partial = doc.save_layers(&[absent, session, root]).unwrap_err();
+    assert_eq!(partial.report.saved, [root]);
+    assert_eq!(partial.report.anonymous, [session]);
+    assert_eq!(partial.failures.len(), 1);
+    assert_eq!(partial.failures[0].layer, absent);
+    assert_eq!(partial.failures[0].error.kind, IoErrorKind::MissingLayer);
     assert!(!doc.is_dirty(root));
     assert!(doc.is_dirty(session));
-    assert_eq!(doc.save_session_layers().anonymous, vec![session]);
+    assert_eq!(doc.save_session_layers().unwrap().anonymous, vec![session]);
     doc.export_layer(session, "session.usda").unwrap();
     assert!(
         doc.is_dirty(session),
         "export does not change the binding or saved cursor"
     );
-    assert!(doc.save().saved.is_empty());
+    assert!(doc.save().unwrap().saved.is_empty());
 }
 /// A new anonymous layer is clean until its first edit, as OpenUSD's
 /// `SdfLayer::CreateAnonymous` returns a clean layer, and stays dirty once
@@ -1741,7 +1747,7 @@ fn a_new_anonymous_layer_is_clean_until_edited() {
     );
     let created = doc.create_anonymous_layer().unwrap();
     assert!(!doc.is_dirty(created));
-    assert!(doc.save_session_layers().anonymous.is_empty());
+    assert!(doc.save_session_layers().unwrap().anonymous.is_empty());
 
     let (store, stage) = doc.parts_mut();
     let property = store.property_path("/Root.value");
@@ -1755,7 +1761,7 @@ fn a_new_anonymous_layer_is_clean_until_edited() {
     let (store, stage) = doc.parts_mut();
     stage.apply(store, &inverse).unwrap();
     assert!(doc.is_dirty(session), "undone, but changed since created");
-    assert_eq!(doc.save_session_layers().anonymous, vec![session]);
+    assert_eq!(doc.save_session_layers().unwrap().anonymous, vec![session]);
 }
 /// A session layer read from storage (`UsdStage::Open(rootLayer,
 /// sessionLayer)`) brings its sublayers, the session layer stack, which is
@@ -1788,10 +1794,10 @@ fn a_session_layer_read_from_storage_brings_its_stack_and_saves_back() {
     set_value(&mut doc, session, 9);
     assert_eq!(value(&doc), Value::Int(9));
     assert!(
-        doc.save().saved.is_empty(),
+        doc.save().unwrap().saved.is_empty(),
         "saving skips the session layers"
     );
-    assert_eq!(doc.save_session_layers().saved, vec![session]);
+    assert_eq!(doc.save_session_layers().unwrap().saved, vec![session]);
     let saved = String::from_utf8(doc.storage().files["session.usda"].clone()).unwrap();
     assert!(saved.contains("int value = 9"), "{saved}");
     assert!(!doc.is_dirty(weak));
@@ -1892,7 +1898,7 @@ fn binary_export_reopens_and_package_reload_keeps_member_ids() {
     assert_eq!(doc.catalog.ids["scene.usdz[base.usda]"], member);
     assert_eq!(doc.store.layer_count(), 2);
     set_value(&mut doc, member, 11);
-    let saved = doc.save();
+    let saved = doc.save().unwrap_err();
     assert_eq!(saved.failures.len(), 1);
     assert_eq!(saved.failures[0].error.kind, IoErrorKind::ReadOnly);
     doc.export_layer(member, "base.usdc").unwrap();
@@ -1985,8 +1991,7 @@ fn namespace_edits_refuse_package_members_and_repair_plain_assets() {
     edited.sort();
     assert_eq!(edit.layers_to_edit(), edited);
     live.apply(store, edit.transaction()).unwrap();
-    let saved = doc.save();
-    assert!(saved.failures.is_empty(), "{:?}", saved.failures);
+    doc.save().unwrap();
     let text = String::from_utf8(doc.storage.files["asset.usda"].clone()).unwrap();
     assert!(text.contains("@scene.usda@</World/Lamp2>"), "{text}");
 }
@@ -2318,7 +2323,7 @@ fn newly_created_documents_save_and_reopen_without_seed_files() {
     );
     stage.apply(store, &edit).unwrap();
     assert!(doc.is_dirty(root));
-    assert_eq!(doc.save().saved, vec![root]);
+    assert_eq!(doc.save().unwrap().saved, vec![root]);
     let backend = Memory {
         files: doc.storage.files.clone(),
         ..Default::default()
@@ -2739,7 +2744,7 @@ fn forgetting_a_candidate_leaves_the_published_document_usable() {
     assert_eq!(value(&doc), Value::Int(1));
     set_value(&mut doc, root, 2);
     assert_eq!(value(&doc), Value::Int(2));
-    assert_eq!(doc.save().saved, [root]);
+    assert_eq!(doc.save().unwrap().saved, [root]);
 }
 
 #[test]

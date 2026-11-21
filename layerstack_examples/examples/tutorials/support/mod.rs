@@ -60,8 +60,7 @@ pub(crate) fn hello(directory: &std::path::Path) -> Document {
     live.apply(store, &transaction).unwrap();
     let name = store.tokens().intern("hello");
     live.set_default_prim(store, Some(name)).unwrap();
-    let report = document.save();
-    assert!(report.failures.is_empty(), "{:?}", report.failures);
+    let report = document.save().unwrap();
     assert_eq!(report.saved, vec![root], "save the newly authored root");
     document
 }

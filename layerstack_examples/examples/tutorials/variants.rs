@@ -43,8 +43,7 @@ fn main() {
         live.stage().composition_errors().is_empty(),
         "authored composition must be valid"
     );
-    let report = document.save();
-    assert!(report.failures.is_empty(), "{:?}", report.failures);
+    document.save().unwrap();
     println!(
         "{} (green variant selected)",
         directory.join("HelloWorld.usda").display()

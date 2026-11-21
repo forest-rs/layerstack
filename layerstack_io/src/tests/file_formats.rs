@@ -279,7 +279,7 @@ fn generated_layers_save_only_as_copies() {
         layer.insert_prim(row, spec.with_active(false));
     }
     doc.synchronize();
-    let report = doc.save_layers(&[grid, plain]);
+    let report = doc.save_layers(&[grid, plain]).unwrap_err();
     let mut failures: Vec<(LayerId, IoErrorKind)> = report
         .failures
         .iter()

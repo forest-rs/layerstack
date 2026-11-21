@@ -25,8 +25,9 @@ use layerstack::{
     },
 };
 use layerstack_io::{
-    ApplyError, FlattenFailure, ImportPolicy, IoError, LoadOptions, LoadReport, OpenOptions,
-    PackageInclusion, PackagePreparationLimits, SaveReport, StageDocument, UnavailableAsset,
+    ApplyError, FlattenFailure, ImportPolicy, IoError, LayerFailure, LoadOptions, LoadReport,
+    OpenOptions, PackageInclusion, PackagePreparationLimits, SaveReport, StageDocument,
+    UnavailableAsset,
 };
 use wasm_bindgen::prelude::*;
 
@@ -2407,18 +2408,23 @@ impl Stage {
     ///
     /// `layer.unknown` when `layer` names no layer of the stage.
     pub(crate) fn save(&mut self, layer: Option<u64>) -> Result<Wire, Error> {
-        let (report, skipped) = match layer {
+        let result = match layer {
             Some(id) => {
                 self.check_layer(LayerId(id))?;
-                (self.document.save_layers(&[LayerId(id)]), Vec::new())
+                self.document.save_layers(&[LayerId(id)])
             }
-            None => {
-                let report = self.document.save();
-                let skipped = self.skipped_by(&report);
-                (report, skipped)
-            }
+            None => self.document.save(),
         };
-        let mut record = self.save_record(&report);
+        let (report, failures) = match result {
+            Ok(report) => (report, Vec::new()),
+            Err(error) => (error.report, error.failures),
+        };
+        let skipped = if layer.is_none() {
+            self.skipped_by(&report, &failures)
+        } else {
+            Vec::new()
+        };
+        let mut record = self.save_record(&report, &failures);
         if let Wire::List(fields) = &mut record {
             fields.push(Wire::List(skipped));
         }
@@ -2429,7 +2435,7 @@ impl Stage {
     /// unwritten, as `[layer, reason]` rows: OpenUSD's `UsdStage::Save`
     /// saves the layers the stage uses, so a muted layer and one no longer
     /// composed stay dirty.
-    fn skipped_by(&self, report: &SaveReport) -> Vec<Wire> {
+    fn skipped_by(&self, report: &SaveReport, failures: &[LayerFailure]) -> Vec<Wire> {
         let stage = self.document.stage().stage();
         // The session layer stack, which a save of the stage leaves alone
         // (`UsdStage::Save`), as `save_session_layers` saves it.
@@ -2437,7 +2443,7 @@ impl Stage {
         let reported = |id: LayerId| {
             report.saved.contains(&id)
                 || report.anonymous.contains(&id)
-                || report.failures.iter().any(|failure| failure.layer == id)
+                || failures.iter().any(|failure| failure.layer == id)
         };
         self.document
             .store()
@@ -2460,7 +2466,7 @@ impl Stage {
             .collect()
     }
 
-    fn save_record(&mut self, report: &SaveReport) -> Wire {
+    fn save_record(&mut self, report: &SaveReport, failures: &[LayerFailure]) -> Wire {
         let mut written = self.document.storage_mut().take_written();
         let rows = report
             .saved
@@ -2476,8 +2482,7 @@ impl Stage {
                 ]))
             })
             .collect();
-        let failures = report
-            .failures
+        let failures = failures
             .iter()
             .map(|failure| {
                 Wire::List(vec![

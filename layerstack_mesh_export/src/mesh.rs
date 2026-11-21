@@ -265,15 +265,52 @@ impl PrimvarData<'_> {
     }
 
     pub(crate) fn to_value(&self) -> Value {
+        self.mesh_value().into_writer()
+    }
+
+    pub(crate) fn mesh_value(&self) -> MeshValue<'static> {
         match self {
-            Self::Float(v) => Value::FloatArray(v.to_vec().into()),
-            Self::Float2(v) | Self::TexCoord2(v) => Value::Float2Array(v.to_vec().into()),
+            Self::Float(v) => MeshValue::FloatArray(v.to_vec()),
+            Self::Float2(v) | Self::TexCoord2(v) => MeshValue::Float2Array(v.to_vec()),
             Self::Float3(v) | Self::Color3(v) | Self::Vector3(v) => {
-                Value::Float3Array(v.to_vec().into())
+                MeshValue::Float3Array(v.to_vec())
             }
-            Self::Float4(v) | Self::Color4(v) => Value::Float4Array(v.to_vec().into()),
-            Self::Int(v) => Value::IntArray(v.to_vec().into()),
-            Self::UInt(v) => Value::UIntArray(v.to_vec().into()),
+            Self::Float4(v) | Self::Color4(v) => MeshValue::Float4Array(v.to_vec()),
+            Self::Int(v) => MeshValue::IntArray(v.to_vec()),
+            Self::UInt(v) => MeshValue::UIntArray(v.to_vec()),
+        }
+    }
+}
+
+/// Default values shared by the document and native layer geometry writers.
+pub(crate) enum MeshValue<'a> {
+    Bool(bool),
+    Token(&'a str),
+    TokenArray(&'static [&'static str]),
+    IntArray(Vec<i32>),
+    UIntArray(Vec<u32>),
+    FloatArray(Vec<f32>),
+    Float2Array(Vec<[f32; 2]>),
+    Float3Array(Vec<[f32; 3]>),
+    Float4Array(Vec<[f32; 4]>),
+    Matrix4d([[f64; 4]; 4]),
+}
+
+impl MeshValue<'_> {
+    pub(crate) fn into_writer(self) -> Value {
+        match self {
+            Self::Bool(value) => Value::Bool(value),
+            Self::Token(value) => Value::Token(value.into()),
+            Self::TokenArray(values) => {
+                Value::TokenArray(values.iter().map(|v| (*v).into()).collect())
+            }
+            Self::IntArray(values) => Value::IntArray(values.into()),
+            Self::UIntArray(values) => Value::UIntArray(values.into()),
+            Self::FloatArray(values) => Value::FloatArray(values.into()),
+            Self::Float2Array(values) => Value::Float2Array(values.into()),
+            Self::Float3Array(values) => Value::Float3Array(values.into()),
+            Self::Float4Array(values) => Value::Float4Array(values.into()),
+            Self::Matrix4d(value) => Value::Matrix4d(value),
         }
     }
 }

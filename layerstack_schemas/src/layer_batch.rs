@@ -17,11 +17,12 @@ pub use prim::{BatchApi, BatchPrim};
 #[cfg(all(test, feature = "usd-geom"))]
 mod tests;
 
-/// Builds a new layer from schema-declared defaults, relationships and API applications.
+/// Builds a new layer from attribute defaults, relationships and API applications.
 ///
 /// Each [`define`](Self::define) writes one complete prim. The registry supplies
-/// property names, types and variability. Only the opinions supplied by the caller
-/// are authored. A caller can drop the batch to discard its records, or take its
+/// property names, types and variability. Dynamic attributes such as named
+/// primvars use [`BatchPrim::define_attribute`]. Only the opinions supplied by
+/// the caller are authored. A caller can drop the batch to discard its records, or take its
 /// layer with [`finish`](Self::finish) and insert it into the store. Composition,
 /// application-specific validation and saving can then run on the finished layer.
 /// Use [`crate::SchemaEdit`] for mapped edits to a composed stage with undo.
@@ -88,16 +89,28 @@ impl<'a> LayerBatch<'a> {
         schema: &str,
         write: impl FnOnce(&mut BatchPrim<'a>) -> Result<(), BatchError>,
     ) -> Result<(), BatchError> {
+        self.try_define(path, schema, write)
+    }
+
+    /// Defines a complete prim like [`Self::define`], with a caller-defined
+    /// error type. A failure converts batch errors to `E` and leaves the
+    /// batch unchanged, including when the authoring function returns `E`.
+    pub fn try_define<E: From<BatchError>>(
+        &mut self,
+        path: PathId,
+        schema: &str,
+        write: impl FnOnce(&mut BatchPrim<'a>) -> Result<(), E>,
+    ) -> Result<(), E> {
         let name = self.paths.resolve(path);
         if name.segments().is_empty() || name.validate_prim_names(self.tokens).is_err() {
-            return Err(BatchError::InvalidPath(name.display(self.tokens)));
+            return Err(BatchError::InvalidPath(name.display(self.tokens)).into());
         }
         if self
             .prims
             .get(&path)
             .is_some_and(|prim| prim.type_name.is_some())
         {
-            return Err(BatchError::AlreadyDefined(name.display(self.tokens)));
+            return Err(BatchError::AlreadyDefined(name.display(self.tokens)).into());
         }
         let ty = self
             .tokens
@@ -170,8 +183,12 @@ pub enum BatchError {
     AlreadyDefined(String),
     /// The name does not identify a registered concrete prim type.
     NotConcreteSchema(String),
-    /// The schema does not declare the requested property.
+    /// The requested property is unavailable.
     UnknownProperty(String),
+    /// A property with this name was already authored on the prim.
+    DuplicateProperty(String),
+    /// The supplied attribute type disagrees with a schema declaration.
+    AttributeDeclarationConflict(String),
     /// The operation requires a different kind of property.
     WrongPropertyKind {
         /// The property requested.
@@ -213,7 +230,11 @@ impl fmt::Display for BatchError {
             Self::NotConcreteSchema(name) => {
                 write!(f, "{name} is not a registered concrete schema")
             }
-            Self::UnknownProperty(name) => write!(f, "no schema declaration for {name}"),
+            Self::UnknownProperty(name) => write!(f, "property {name} is unavailable"),
+            Self::DuplicateProperty(name) => write!(f, "property {name} is already defined"),
+            Self::AttributeDeclarationConflict(name) => {
+                write!(f, "{name} conflicts with its schema declaration")
+            }
             Self::WrongPropertyKind { name, expected } => {
                 write!(f, "{name} requires a property of kind {expected:?}")
             }

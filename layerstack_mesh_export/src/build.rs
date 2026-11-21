@@ -21,6 +21,8 @@ use crate::{
     Transform, Xform,
 };
 
+use crate::mesh::MeshValue;
+
 /// What prims need to know about the rest of the scene.
 struct Context<'s, 'a> {
     /// The scene's materials, which meshes bind by name.
@@ -566,6 +568,166 @@ struct Sites {
     corners: usize,
 }
 
+pub(crate) struct MeshAttribute<'a> {
+    pub(crate) name: &'a str,
+    pub(crate) type_name: &'static str,
+    pub(crate) value: MeshValue<'a>,
+    pub(crate) interpolation: Option<Interpolation>,
+    pub(crate) declared: bool,
+    uniform: bool,
+}
+
+impl<'a> MeshAttribute<'a> {
+    fn new(name: &'a str, type_name: &'static str, value: MeshValue<'a>) -> Self {
+        Self {
+            name,
+            type_name,
+            value,
+            interpolation: None,
+            declared: true,
+            uniform: false,
+        }
+    }
+
+    fn uniform(mut self) -> Self {
+        self.uniform = true;
+        self
+    }
+
+    fn into_writer(self) -> Attribute {
+        let mut attribute = Attribute::new(self.name, self.type_name, self.value.into_writer());
+        if let Some(interpolation) = self.interpolation {
+            attribute = attribute
+                .with_metadata("interpolation", Value::Token(interpolation.token().into()));
+        }
+        if self.uniform {
+            attribute = attribute.uniform();
+        }
+        attribute
+    }
+}
+
+pub(crate) fn mesh_geometry<E: From<MeshProblem>>(
+    mesh: &Mesh<'_>,
+    mut write: impl FnMut(MeshAttribute<'_>) -> Result<(), E>,
+) -> Result<usize, E> {
+    let (counts, indices) = topology(&mesh.faces, mesh.points.len())?;
+    let sites = Sites {
+        points: mesh.points.len(),
+        faces: counts.len(),
+        corners: indices.len(),
+    };
+
+    // UsdGeomBoundable authors a local-space AABB; empty meshes omit it.
+    // AOUSD Core §7.6.4 (authored attributes).
+    if let Some(extent) = extent(&mesh.points)? {
+        write(MeshAttribute::new(
+            geom::Boundable::EXTENT,
+            "float3[]",
+            MeshValue::Float3Array(extent.to_vec()),
+        ))?;
+    }
+    write(MeshAttribute::new(
+        geom::Mesh::FACE_VERTEX_COUNTS,
+        "int[]",
+        MeshValue::IntArray(counts),
+    ))?;
+    write(MeshAttribute::new(
+        geom::Mesh::FACE_VERTEX_INDICES,
+        "int[]",
+        MeshValue::IntArray(indices),
+    ))?;
+
+    if let Some(normals) = &mesh.normals {
+        let values = MeshValue::Float3Array(normals.values.to_vec());
+        // UsdGeomPointBased normals are a plain attribute with interpolation.
+        // Indexed normals go to primvars:normals and take precedence.
+        if normals.indices.is_none() {
+            check_primvar(
+                geom::PointBased::NORMALS,
+                normals.values.len(),
+                normals,
+                sites,
+            )?;
+            let mut attribute = MeshAttribute::new(geom::PointBased::NORMALS, "normal3f[]", values);
+            attribute.interpolation = Some(normals.interpolation);
+            write(attribute)?;
+        } else {
+            mesh_primvar(
+                MeshAttribute::new("primvars:normals", "normal3f[]", values),
+                normals.values.len(),
+                normals,
+                sites,
+                &mut write,
+            )?;
+        }
+    }
+
+    // UsdGeomGprim winding is explicit even when it matches the fallback.
+    let orientation = match mesh.orientation {
+        Orientation::RightHanded => geom::GprimOrientation::RightHanded,
+        Orientation::LeftHanded => geom::GprimOrientation::LeftHanded,
+    };
+    write(
+        MeshAttribute::new(
+            geom::Gprim::ORIENTATION,
+            "token",
+            MeshValue::Token(orientation.as_str()),
+        )
+        .uniform(),
+    )?;
+    if mesh.double_sided {
+        write(
+            MeshAttribute::new(geom::Gprim::DOUBLE_SIDED, "bool", MeshValue::Bool(true)).uniform(),
+        )?;
+    }
+    write(MeshAttribute::new(
+        geom::PointBased::POINTS,
+        "point3f[]",
+        MeshValue::Float3Array(mesh.points.to_vec()),
+    ))?;
+
+    if let Some(uvs) = &mesh.uvs {
+        mesh_primvar(
+            MeshAttribute::new(
+                "primvars:st",
+                "texCoord2f[]",
+                MeshValue::Float2Array(uvs.values.to_vec()),
+            ),
+            uvs.values.len(),
+            uvs,
+            sites,
+            &mut write,
+        )?;
+    }
+    for custom in &mesh.primvars {
+        let data = &custom.primvar.values;
+        mesh_primvar(
+            MeshAttribute::new(
+                &format!("primvars:{}", custom.name),
+                data.type_name(),
+                data.mesh_value(),
+            ),
+            data.len(),
+            &custom.primvar,
+            sites,
+            &mut write,
+        )?;
+    }
+
+    // UsdGeomMesh's fallback is catmullClark; these are polygon surfaces.
+    write(
+        MeshAttribute::new(
+            geom::Mesh::SUBDIVISION_SCHEME,
+            "token",
+            MeshValue::Token(geom::MeshSubdivisionScheme::None.as_str()),
+        )
+        .uniform(),
+    )?;
+    transform_attributes(mesh.transform, write)?;
+    Ok(sites.faces)
+}
+
 fn mesh_prim(mesh: &Mesh<'_>, parent: &str, cx: &Context<'_, '_>) -> Result<Prim, ExportError> {
     let path = format!("{parent}/{}", mesh.name);
     let fail = |problem| ExportError::InvalidMesh {
@@ -573,134 +735,12 @@ fn mesh_prim(mesh: &Mesh<'_>, parent: &str, cx: &Context<'_, '_>) -> Result<Prim
         problem,
     };
 
-    let (counts, indices) = topology(&mesh.faces, mesh.points.len()).map_err(fail)?;
-    let sites = Sites {
-        points: mesh.points.len(),
-        faces: counts.len(),
-        corners: indices.len(),
-    };
-
     let mut attrs = Vec::new();
-    // `extent` is required on boundable prims for correct culling and
-    // bounds; it is the local-space AABB of `points`, before this prim's
-    // own transform (`pxr/usd/usdGeom/boundable.h:42`). Empty meshes have
-    // no extent.
-    if let Some(extent) = extent(&mesh.points).map_err(fail)? {
-        attrs.push(Attribute::new(
-            geom::Boundable::EXTENT,
-            "float3[]",
-            Value::Float3Array(extent.to_vec().into()),
-        ));
-    }
-    attrs.push(Attribute::new(
-        geom::Mesh::FACE_VERTEX_COUNTS,
-        "int[]",
-        Value::IntArray(counts.into()),
-    ));
-    attrs.push(Attribute::new(
-        geom::Mesh::FACE_VERTEX_INDICES,
-        "int[]",
-        Value::IntArray(indices.into()),
-    ));
-
-    if let Some(normals) = &mesh.normals {
-        let values = Value::Float3Array(normals.values.to_vec().into());
-        match normals.indices {
-            // `normals` is a plain attribute with an `interpolation`, not a
-            // primvar, so it cannot be indexed (`pxr/usd/usdGeom/pointBased.h`).
-            None => {
-                check_primvar(
-                    geom::PointBased::NORMALS,
-                    normals.values.len(),
-                    normals,
-                    sites,
-                )
-                .map_err(fail)?;
-                attrs.push(
-                    Attribute::new(geom::PointBased::NORMALS, "normal3f[]", values).with_metadata(
-                        "interpolation",
-                        Value::Token(normals.interpolation.token().into()),
-                    ),
-                );
-            }
-            // Indexed normals go to `primvars:normals`, which takes
-            // precedence over `normals` (`pxr/usd/usdGeom/pointBased.h:204`).
-            Some(_) => push_primvar(
-                &mut attrs,
-                "primvars:normals",
-                "normal3f[]",
-                values,
-                normals.values.len(),
-                normals,
-                sites,
-            )
-            .map_err(fail)?,
-        }
-    }
-
-    // `orientation` is authored even when it equals the `rightHanded`
-    // fallback, so the winding convention is explicit in the file
-    // (`pxr/usd/usdGeom/gprim.h:212`).
-    let orientation = match mesh.orientation {
-        Orientation::RightHanded => geom::GprimOrientation::RightHanded,
-        Orientation::LeftHanded => geom::GprimOrientation::LeftHanded,
-    };
-    attrs.push(
-        Attribute::new(
-            geom::Gprim::ORIENTATION,
-            "token",
-            Value::Token(orientation.as_str().into()),
-        )
-        .uniform(),
-    );
-    if mesh.double_sided {
-        attrs.push(Attribute::new(geom::Gprim::DOUBLE_SIDED, "bool", Value::Bool(true)).uniform());
-    }
-    attrs.push(Attribute::new(
-        geom::PointBased::POINTS,
-        "point3f[]",
-        Value::Float3Array(mesh.points.to_vec().into()),
-    ));
-
-    if let Some(uvs) = &mesh.uvs {
-        // The conventional primary UV set is the `st` primvar of role
-        // `texCoord2f` (`pxr/usd/usdGeom/primvar.h`).
-        push_primvar(
-            &mut attrs,
-            "primvars:st",
-            "texCoord2f[]",
-            Value::Float2Array(uvs.values.to_vec().into()),
-            uvs.values.len(),
-            uvs,
-            sites,
-        )
-        .map_err(fail)?;
-    }
-    for custom in &mesh.primvars {
-        let data = &custom.primvar.values;
-        push_primvar(
-            &mut attrs,
-            &format!("primvars:{}", custom.name),
-            data.type_name(),
-            data.to_value(),
-            data.len(),
-            &custom.primvar,
-            sites,
-        )
-        .map_err(fail)?;
-    }
-
-    // The schema fallback is `catmullClark`; polygonal kernel output must
-    // opt out explicitly or consumers will smooth it (`pxr/usd/usdGeom/mesh.h:62`).
-    attrs.push(
-        Attribute::new(
-            geom::Mesh::SUBDIVISION_SCHEME,
-            "token",
-            Value::Token(geom::MeshSubdivisionScheme::None.as_str().into()),
-        )
-        .uniform(),
-    );
-    push_transform(&mut attrs, mesh.transform);
+    let faces = mesh_geometry::<MeshProblem>(mesh, |attribute| {
+        attrs.push(attribute.into_writer());
+        Ok(())
+    })
+    .map_err(fail)?;
     push_custom(&mut attrs, &mesh.attributes);
 
     let mut prim = Prim::def(geom::Mesh::SCHEMA, &*mesh.name);
@@ -712,7 +752,7 @@ fn mesh_prim(mesh: &Mesh<'_>, parent: &str, cx: &Context<'_, '_>) -> Result<Prim
         .map(|name| material_binding(mesh, &path, &path, name, cx))
         .transpose()?;
     if !mesh.material_subsets.is_empty() {
-        check_family(&mesh.material_subsets, mesh.subset_family, sites.faces).map_err(fail)?;
+        check_family(&mesh.material_subsets, mesh.subset_family, faces).map_err(fail)?;
         // `UsdShadeMaterialBindingAPI::SetMaterialBindSubsetsFamilyType`
         // (materialBindingAPI.h:934) authors this attribute on the mesh.
         prim.push_property(
@@ -1007,54 +1047,62 @@ fn push_primvar_unchecked(
 /// companion `name:indices` `int[]` attribute (`pxr/usd/usdGeom/primvar.h:497`).
 /// Indices are copied verbatim: for face-varying data they define the
 /// primvar's topology, so they must not be deduplicated by value.
-fn push_primvar<V>(
-    attrs: &mut Vec<Attribute>,
-    name: &str,
-    type_name: &str,
-    values: Value,
+fn mesh_primvar<V, E: From<MeshProblem>>(
+    mut attribute: MeshAttribute<'_>,
     value_count: usize,
     primvar: &Primvar<'_, V>,
     sites: Sites,
-) -> Result<(), MeshProblem> {
+    write: &mut impl FnMut(MeshAttribute<'_>) -> Result<(), E>,
+) -> Result<(), E> {
+    let name = attribute.name;
     check_primvar(name, value_count, primvar, sites)?;
-    attrs.push(Attribute::new(name, type_name, values).with_metadata(
-        "interpolation",
-        Value::Token(primvar.interpolation.token().into()),
-    ));
+    attribute.interpolation = Some(primvar.interpolation);
+    attribute.declared = false;
+    write(attribute)?;
     if let Some(indices) = &primvar.indices {
-        let indices = indices
-            .iter()
-            .map(|&i| to_int(i))
-            .collect::<Result<Vec<_>, _>>()?;
-        attrs.push(Attribute::new(
-            format!("{name}:indices"),
-            "int[]",
-            Value::IntArray(indices.into()),
-        ));
+        let mut signed = Vec::with_capacity(indices.len());
+        for &index in indices.iter() {
+            signed.push(to_int(index)?);
+        }
+        let indices_name = format!("{name}:indices");
+        let mut attribute = MeshAttribute::new(&indices_name, "int[]", MeshValue::IntArray(signed));
+        attribute.declared = false;
+        write(attribute)?;
     }
     Ok(())
 }
 
-/// A single `xformOp:transform` op, listed in the `uniform token[]
-/// xformOpOrder` (`pxr/usd/usdGeom/xformable.h:136`). Nothing is written without a
-/// transform, which composes as identity.
-fn push_transform(attrs: &mut Vec<Attribute>, transform: Option<Transform>) {
+/// A single transform op, listed in the uniform token array xformOpOrder.
+/// Without a transform the prim composes as identity (`UsdGeomXformable`).
+fn transform_attributes<E>(
+    transform: Option<Transform>,
+    mut write: impl FnMut(MeshAttribute<'_>) -> Result<(), E>,
+) -> Result<(), E> {
     let Some(transform) = transform else {
-        return;
+        return Ok(());
     };
-    attrs.push(Attribute::new(
+    let mut op = MeshAttribute::new(
         "xformOp:transform",
         "matrix4d",
-        Value::Matrix4d(transform.usd_rows()),
-    ));
-    attrs.push(
-        Attribute::new(
+        MeshValue::Matrix4d(transform.usd_rows()),
+    );
+    op.declared = false;
+    write(op)?;
+    write(
+        MeshAttribute::new(
             geom::Xformable::XFORM_OP_ORDER,
             "token[]",
-            Value::TokenArray(vec![String::from("xformOp:transform")]),
+            MeshValue::TokenArray(&["xformOp:transform"]),
         )
         .uniform(),
-    );
+    )
+}
+
+fn push_transform(attrs: &mut Vec<Attribute>, transform: Option<Transform>) {
+    let Ok(()) = transform_attributes(transform, |attribute| {
+        attrs.push(attribute.into_writer());
+        Ok::<_, core::convert::Infallible>(())
+    });
 }
 
 fn push_custom(attrs: &mut Vec<Attribute>, custom: &[CustomAttribute<'_>]) {

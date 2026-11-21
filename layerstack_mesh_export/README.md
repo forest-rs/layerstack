@@ -36,6 +36,19 @@ The exporter explicitly authors units, up axis, default prim, transforms, and
 indices, material bindings and face subsets, and instancer arrays before
 writing. Indexed face-varying data keeps its seams; equal values are not merged.
 
+## Author a mesh into a larger layer
+
+Pass the same polygon input to `Mesh::author(&mut batch, path)` to write it
+alongside other prims in a `layerstack_schemas::LayerBatch`. The caller's path
+identifies the mesh. The helper validates topology and primvars and writes
+native layer records, including the indices that preserve UV seams and hard
+normal edges. If authoring fails, the batch retains its prior records.
+
+Use this method for geometry, transforms, and numeric primvars. It rejects
+standalone scene material names, material subsets, and custom writer attributes.
+Once the layer is composed, use `SchemaEdit` and `MaterialBindingApiEdit::bind`
+to bind a material by its prim path.
+
 ## Materials, instances, and packages
 
 Materials use the metallic `UsdPreviewSurface` workflow with constants or

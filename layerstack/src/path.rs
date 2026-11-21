@@ -336,6 +336,18 @@ impl Path {
         &self.segments
     }
 
+    /// Checks every segment against the USD prim identifier grammar (AOUSD Core §7.3.3).
+    /// The pseudo-root has no segments and passes. An error identifies the first
+    /// invalid name using the same interner that supplied this path's tokens.
+    pub fn validate_prim_names(&self, tokens: &TokenInterner) -> Result<(), TokenId> {
+        for &name in self.segments() {
+            if !crate::ident::is_identifier(tokens.resolve(name)) {
+                return Err(name);
+            }
+        }
+        Ok(())
+    }
+
     /// Formats this path as a string (e.g. `/Robot/Arm`).
     ///
     /// Requires a [`TokenInterner`] to resolve segment names.

@@ -164,6 +164,21 @@ fn spec(store: &mut InMemoryStore, path: &str) -> Option<(Option<Specifier>, Opt
 }
 
 #[test]
+fn malformed_ancestor_is_rejected_before_collecting_an_edit() {
+    let (mut store, live) = stage(|_, _| {});
+    let malformed =
+        layerstack::Path::parse_absolute("/合法/bad name/Leaf", store.tokens()).unwrap();
+    let path = store.paths().intern(malformed);
+    let name = store.tokens().intern("bad name");
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(ROOT));
+    assert!(
+        matches!(edit.define_prim(path, "Xform"), Err(CannotEdit::InvalidPrimName(n)) if n == name)
+    );
+    assert!(matches!(edit.override_prim(path), Err(CannotEdit::InvalidPrimName(n)) if n == name));
+    assert!(edit.finish().is_empty());
+}
+
+#[test]
 fn undefined_ancestors_are_defined_first() {
     let (mut store, mut live) = stage(|store, layer| {
         let g = store.path("/G");

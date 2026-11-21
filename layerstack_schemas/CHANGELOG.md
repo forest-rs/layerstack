@@ -9,6 +9,10 @@ Initial release.
   alongside their accessors. Existing `SchemaEdit` callers can continue to
   collect and apply transactions when editing a composed stage.
 
+- Live prim edits reject malformed path segments up front. Callers matching
+  `CannotEdit` exhaustively should handle `InvalidPrimName(name)`. Use
+  `InMemoryStore::try_path` when accepting a path from text.
+
 - The views' building blocks are public, so generated views of schema
   libraries outside this crate share them: `PrimView::read_targets`,
   `PrimEdit::new`, `PrimEdit::from_path_unchecked`, `PrimEdit::write_value`,

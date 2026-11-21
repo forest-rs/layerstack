@@ -22,6 +22,10 @@ Initial release.
 - `Layer::prim_at` reads an exact authored prim site, including variant-branch
   prims, without substituting selected or composed prims. This additive API
   supports validation of caller-owned publication targets.
+- Transactions that create prim specs reject malformed namespace segments.
+  Exhaustive matches on `Rejection` should handle `InvalidPrimName(name)`.
+  `ident::sanitize_ascii_identifier` converts external labels to portable prim names.
+
 - Prototype record sharing buckets source identities and mapped paths before
   exact, bit-preserving comparison. Material connections no longer compare every
   earlier occurrence when their remapped targets differ. Value refreshes revisit

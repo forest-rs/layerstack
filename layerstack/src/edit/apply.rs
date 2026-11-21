@@ -2905,6 +2905,11 @@ pub(super) fn insert_prim_spec(
     spec: PrimSpec,
     journal: &mut Journal<'_>,
 ) -> Result<(), Rejection> {
+    store
+        .paths()
+        .resolve(path)
+        .validate_prim_names(store.tokens())
+        .map_err(Rejection::InvalidPrimName)?;
     let found = layer(store, id)?;
     let mut main = found.prims.get(&path).cloned();
     let mut branches = found.variant_prims.get(&path).cloned();

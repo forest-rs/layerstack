@@ -131,6 +131,8 @@ fn compose_indexed(
     let mut prims = core::mem::take(&mut composed.prims);
     for (path, prim) in &mut prims {
         drop_inconsistent_property_kinds(*path, prim, &mut checks);
+        #[cfg(not(feature = "std"))]
+        prim.prepare_namespace_index(store.tokens());
     }
     drop_instance_targets(store, &mut prims, &mut checks);
     let (selection_errors, reads) = read_selections(store, &prims);

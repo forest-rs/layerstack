@@ -947,6 +947,140 @@ mod tests {
         assert_eq!(inside("").len(), 5);
     }
 
+    #[test]
+    fn wide_namespace_queries_follow_order_and_live_property_edits() {
+        use crate::{
+            LiveStage, SpecPath,
+            edit::{Address, Transaction},
+        };
+
+        let layer_id = LayerId(1);
+        let mut store = InMemoryStore::default();
+        let path = store.path("/P");
+        let spec_path = SpecPath::from_prim_path(path);
+        let mut spec = PrimSpec::def();
+        let fillers: Vec<_> = (0..251)
+            .map(|at| {
+                store
+                    .tokens()
+                    .intern(alloc::format!("fallback:property{at}"))
+            })
+            .collect();
+        let named = [
+            "rows:label10",
+            "rows",
+            "rows:label2",
+            "rows:Label3",
+            "rowsSibling:label",
+            "rows:nested:label",
+            "räws:label",
+        ];
+        for name in fillers
+            .iter()
+            .copied()
+            .chain(named.iter().map(|name| store.tokens().intern(*name)))
+        {
+            spec = spec.with_property(name, PropertySpec::relationship());
+        }
+        let mut layer = Layer::new(layer_id);
+        layer.insert_prim(path, spec);
+        store.insert_layer(layer);
+        let moved = store.tokens().intern("rows:nested:label");
+        let mut order = Transaction::new();
+        order.set_property_order(Address::spec(layer_id, spec_path.clone()), vec![moved]);
+        order.apply(&mut store).unwrap();
+
+        let options = StageOptions::default();
+        let mut live = LiveStage::compose(&mut store, layer_id, options.clone());
+        let retained = Stage::compose(&mut store, layer_id, options.clone());
+        let read = |stage: &Stage, store: &InMemoryStore, namespace: &str| {
+            let prim = stage.view(store).prim(path).unwrap();
+            let ordered = prim.authored_properties_in_namespace(namespace);
+            let namespace = namespace.trim_end_matches(':');
+            let expected: Vec<_> = prim
+                .authored_properties()
+                .into_iter()
+                .filter(|property| {
+                    namespace.is_empty()
+                        || property
+                            .name()
+                            .strip_prefix(namespace)
+                            .is_some_and(|suffix| suffix.starts_with(':'))
+                })
+                .map(|property| property.path())
+                .collect();
+            assert_eq!(
+                ordered
+                    .iter()
+                    .map(|property| property.path())
+                    .collect::<Vec<_>>(),
+                expected
+            );
+            ordered
+                .iter()
+                .map(|property| property.name().to_string())
+                .collect::<Vec<_>>()
+        };
+        for namespace in [
+            "rows",
+            "rows:",
+            "rows:nested",
+            "räws",
+            "missing",
+            "fallback",
+            "",
+        ] {
+            read(live.stage(), &store, namespace);
+        }
+        assert_eq!(
+            read(live.stage(), &store, "rows"),
+            [
+                "rows:nested:label",
+                "rows:label2",
+                "rows:Label3",
+                "rows:label10"
+            ]
+        );
+
+        let removed = store.tokens().intern("rows:label2");
+        let mut narrow = Transaction::new();
+        for name in [removed, fillers[0], fillers[1]] {
+            narrow.remove_spec(Address::spec(layer_id, spec_path.with_property(name)));
+        }
+        live.apply(&mut store, &narrow).unwrap();
+        let fresh = Stage::compose(&mut store, layer_id, options.clone());
+        assert_eq!(
+            read(live.stage(), &store, "rows"),
+            read(&fresh, &store, "rows")
+        );
+        assert_eq!(read(live.stage(), &store, "rows").len(), 3);
+        assert_eq!(read(&retained, &store, "rows").len(), 4);
+
+        let added = store.tokens().intern("rows:label1");
+        let mut wide = Transaction::new();
+        for name in [added, fillers[0], fillers[1]] {
+            wide.create_property(
+                Address::spec(layer_id, spec_path.with_property(name)),
+                PropertySpec::relationship(),
+            );
+        }
+        live.apply(&mut store, &wide).unwrap();
+        let fresh = Stage::compose(&mut store, layer_id, options);
+        assert_eq!(
+            read(live.stage(), &store, "rows"),
+            read(&fresh, &store, "rows")
+        );
+        assert_eq!(
+            read(live.stage(), &store, "rows"),
+            [
+                "rows:nested:label",
+                "rows:label1",
+                "rows:Label3",
+                "rows:label10"
+            ]
+        );
+    }
+
     /// A relationship spec where the schema defines an attribute authors no
     /// value: the attribute reads the fallback, and its explanation says
     /// so, as OpenUSD 26.08's `UsdAttribute::Get` and `GetResolveInfo` do.

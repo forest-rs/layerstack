@@ -388,7 +388,7 @@ impl Stage {
                 continue;
             };
             properties.clear();
-            for (field, range) in &index.fields {
+            for (field, range) in &*index.fields {
                 let FieldKey::Property(name) = *field else {
                     continue;
                 };

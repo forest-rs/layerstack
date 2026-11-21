@@ -12,9 +12,11 @@
 //! Spec: AOUSD Core §10 (composition arcs and strength ordering) and §12 (value resolution).
 
 use crate::sort;
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
-use core::ops::Range;
+#[cfg(feature = "std")]
+use core::sync::atomic::{AtomicBool, Ordering::Relaxed};
+use core::{cmp::Ordering, ops::Range};
 
 use crate::{
     doc::{FieldValue, LayerId, LayerOffset, Value},
@@ -691,13 +693,110 @@ pub(crate) struct PrimIndexData {
     pub(crate) opinions: Vec<Opinion>,
     /// Each field's opinions, a range of [`Self::opinions`]
     /// ([`Self::opinions_in`]), sorted by field.
-    pub(crate) fields: Vec<(FieldKey, Range<u32>)>,
+    pub(crate) fields: Box<[(FieldKey, Range<u32>)]>,
+    /// Shared by snapshots with the same authored fields. Only wide prims
+    /// allocate a slot, and only repeated queries build the sorted tokens.
+    namespace_index: Option<Arc<NamespaceIndex>>,
     /// The sites the opinions are read from, strongest first once
     /// finalized ([`PrimIndex::finalize`]).
     pub(crate) sources: Vec<OpinionSource>,
 }
 
+const _: () = assert!(
+    size_of::<PrimIndexData>()
+        == size_of::<(
+            Vec<Opinion>,
+            Vec<(FieldKey, Range<u32>)>,
+            Vec<OpinionSource>,
+        )>(),
+    "namespace indexing must preserve the size of per-prim data",
+);
+
+/// Index only wide prims, where repeated scans justify preparing a
+/// namespace index.
+const NAMESPACE_INDEX_MIN_FIELDS: usize = 256;
+
+#[derive(Debug, Default)]
+struct NamespaceIndex {
+    #[cfg(feature = "std")]
+    queried: AtomicBool,
+    #[cfg(feature = "std")]
+    sorted: crate::sync::Memo<Box<[TokenId]>>,
+    #[cfg(not(feature = "std"))]
+    sorted: Box<[TokenId]>,
+}
+
 impl PrimIndexData {
+    fn replace_fields(&mut self, fields: Vec<(FieldKey, Range<u32>)>) {
+        self.fields = fields.into_boxed_slice();
+        #[cfg(feature = "std")]
+        {
+            self.namespace_index = self.has_wide_properties().then(Arc::default);
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            self.namespace_index = None;
+        }
+    }
+
+    fn has_wide_properties(&self) -> bool {
+        self.fields.len() >= NAMESPACE_INDEX_MIN_FIELDS
+            && self.fields.len()
+                - self
+                    .fields
+                    .partition_point(|(key, _)| matches!(key, FieldKey::Metadata(_)))
+                >= NAMESPACE_INDEX_MIN_FIELDS
+    }
+
+    fn sorted_property_names(&self, tokens: &crate::TokenInterner) -> Box<[TokenId]> {
+        let mut names: Vec<_> = self
+            .fields
+            .iter()
+            .filter_map(|(key, _)| match key {
+                FieldKey::Property(name) => Some(*name),
+                FieldKey::Metadata(_) => None,
+            })
+            .collect();
+        // Names are unique. Unstable sort needs no extra scratch beyond
+        // the token buffer.
+        sort::sort_unstable_by(&mut names, |a, b| {
+            tokens.resolve(*a).cmp(tokens.resolve(*b))
+        });
+        names.into_boxed_slice()
+    }
+
+    /// Visits exactly the matching text-ordered tokens when a prefix
+    /// index is worthwhile. Otherwise the caller scans the original order.
+    pub(crate) fn names_in_namespace(
+        &self,
+        namespace: &str,
+        tokens: &crate::TokenInterner,
+    ) -> Option<&[TokenId]> {
+        let index = self.namespace_index.as_ref()?;
+        #[cfg(feature = "std")]
+        let names = match index.sorted.get() {
+            Some(names) => names,
+            // A single lookup is often cheaper than preparing the index.
+            None if !index.queried.swap(true, Relaxed) => return None,
+            None => index
+                .sorted
+                .get_or_init(|| self.sorted_property_names(tokens)),
+        };
+        #[cfg(not(feature = "std"))]
+        let names = &index.sorted;
+        let lower =
+            names.partition_point(|name| namespace_cmp(tokens.resolve(*name), namespace).is_lt());
+        let tail = &names[lower..];
+        let in_namespace = |name: &TokenId| namespace_cmp(tokens.resolve(*name), namespace).is_eq();
+        if !tail.first().is_some_and(in_namespace) {
+            return Some(&[]);
+        }
+        let count = tail.partition_point(in_namespace);
+        // For large result sets keep the authored token order before
+        // sorting them into USD dictionary order.
+        (count <= names.len() / 2).then_some(&tail[..count])
+    }
+
     /// The opinions of one of [`Self::fields`]' ranges.
     pub(crate) fn opinions_in(&self, range: &Range<u32>) -> Opinions<'_> {
         Opinions::new(&self.opinions[span(range)], &self.sources)
@@ -726,6 +825,15 @@ impl PrimIndexData {
                     }
             })
     }
+}
+
+/// Compare a raw name with `namespace:` without allocating the prefix.
+/// All names in the namespace compare equal and are contiguous.
+fn namespace_cmp(name: &str, namespace: &str) -> Ordering {
+    let name = name.as_bytes();
+    let (head, tail) = name.split_at(name.len().min(namespace.len()));
+    head.cmp(namespace.as_bytes())
+        .then_with(|| tail.first().cmp(&Some(&b':')))
 }
 
 /// `range` as indices of [`PrimIndexData::opinions`].
@@ -767,6 +875,17 @@ impl PrimIndex {
     #[cfg(test)]
     pub(crate) fn add_opinion(&mut self, opinion: Opinion) {
         self.add_opinions(core::iter::once(opinion));
+    }
+
+    /// Build the wide prefix index as part of composition on targets
+    /// without the shared memo used by concurrent readers.
+    #[cfg(not(feature = "std"))]
+    pub(crate) fn prepare_namespace_index(&mut self, tokens: &crate::TokenInterner) {
+        if self.has_wide_properties() {
+            let sorted = self.sorted_property_names(tokens);
+            Arc::make_mut(&mut self.data).namespace_index =
+                Some(Arc::new(NamespaceIndex { sorted }));
+        }
     }
 
     /// Gives back unused opinion storage after composing several batches.
@@ -829,23 +948,23 @@ impl PrimIndex {
     /// moves into a second representation: fields only index this buffer.
     fn index_fields(&mut self) {
         let data = Arc::make_mut(&mut self.data);
-        data.fields.clear();
         let runs = data
             .opinions
             .chunk_by(|a, b| FieldKey::of(a) == FieldKey::of(b))
             .count();
-        data.fields.reserve_exact(runs);
+        let mut fields: Vec<(FieldKey, Range<u32>)> = Vec::with_capacity(runs);
         for (at, opinion) in data.opinions.iter().enumerate() {
             let field = FieldKey::of(opinion);
             let end = position(at + 1);
-            if let Some((last, range)) = data.fields.last_mut()
+            if let Some((last, range)) = fields.last_mut()
                 && *last == field
             {
                 range.end = end;
             } else {
-                data.fields.push((field, position(at)..end));
+                fields.push((field, position(at)..end));
             }
         }
+        data.replace_fields(fields);
     }
 
     /// Groups fields while preserving insertion order within each stack.
@@ -863,17 +982,15 @@ impl PrimIndex {
         let mut keys: Vec<FieldKey> = data.opinions.iter().map(FieldKey::of).collect();
         sort::sort_unstable(&mut keys);
         keys.dedup();
-        data.fields.clear();
-        data.fields.reserve_exact(keys.len());
-        data.fields.extend(keys.iter().map(|&key| (key, 0..0)));
+        let mut fields: Vec<_> = keys.iter().map(|&key| (key, 0..0)).collect();
         for opinion in &data.opinions {
             let field = keys
                 .binary_search(&FieldKey::of(opinion))
                 .expect("counted field");
-            data.fields[field].1.end += 1;
+            fields[field].1.end += 1;
         }
         let mut offset = 0;
-        for (_, range) in &mut data.fields {
+        for (_, range) in &mut fields {
             let count = range.end;
             *range = offset..offset;
             offset += count;
@@ -883,7 +1000,7 @@ impl PrimIndex {
             let field = keys
                 .binary_search(&FieldKey::of(opinion))
                 .expect("counted field");
-            let range = &mut data.fields[field].1;
+            let range = &mut fields[field].1;
             order[range.end as usize] = source;
             range.end += 1;
         }
@@ -899,6 +1016,7 @@ impl PrimIndex {
             }
             order[current] = current;
         }
+        data.replace_fields(fields);
     }
 
     /// Groups hand-built indexes that do not have a ranked composition graph.
@@ -996,7 +1114,7 @@ impl PrimIndex {
                 }
             }
         }
-        for (_, range) in &data.fields {
+        for (_, range) in &*data.fields {
             sort::sort_by_key(&mut data.opinions[span(range)], |opinion| opinion.source);
         }
     }

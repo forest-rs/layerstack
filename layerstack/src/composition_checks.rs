@@ -106,7 +106,7 @@ pub(crate) fn drop_inconsistent_property_kinds(
     findings: &mut Findings,
 ) {
     let mut removed = Vec::new();
-    for (field, range) in &index.fields {
+    for (field, range) in &*index.fields {
         // One opinion has none to differ from.
         if range.len() < 2 {
             continue;
@@ -420,7 +420,7 @@ pub(crate) fn drop_instance_targets(
             continue;
         }
         let prim_path = paths.resolve(prim);
-        for (field, range) in &index.fields {
+        for (field, range) in &*index.fields {
             let opinions = index.opinions_in(range);
             let FieldKey::Property(property) = *field else {
                 continue;

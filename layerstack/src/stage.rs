@@ -3612,15 +3612,25 @@ impl Stage {
         store: &dyn LayerStore,
     ) -> Vec<TokenId> {
         let namespace = namespace.trim_end_matches(':');
+        if namespace.is_empty() {
+            return Self::authored_property_names_of(index, store);
+        }
         let tokens = store.tokens();
-        let mut names: Vec<_> = Self::authored_names_of(index).collect();
-        names.retain(|name| {
-            tokens
-                .resolve(*name)
-                .strip_prefix(namespace)
-                .is_some_and(|rest| rest.starts_with(':') || namespace.is_empty())
-        });
-        Self::order_names_of(index, &mut names, store);
+        let mut names: Vec<_> = if let Some(names) = index.names_in_namespace(namespace, tokens) {
+            names.to_vec()
+        } else {
+            Self::authored_names_of(index)
+                .filter(|name| {
+                    tokens
+                        .resolve(*name)
+                        .strip_prefix(namespace)
+                        .is_some_and(|rest| rest.starts_with(':'))
+                })
+                .collect()
+        };
+        if !names.is_empty() {
+            Self::order_names_of(index, &mut names, store);
+        }
         names
     }
 

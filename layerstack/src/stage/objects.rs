@@ -4,8 +4,7 @@
 //! Borrowed generic USD views and caller-owned retained attribute evaluation.
 //! AOUSD Core §11–§13; OpenUSD `UsdPrim`, `UsdProperty`, `UsdAttribute`,
 //! `UsdRelationship`, `UsdAttributeQuery`. Views borrow immutable snapshots;
-//! queries never hide synchronization or keep a mutable stage borrowed
-//! between evaluations.
+//! queries borrow no mutable stage between evaluations.
 use alloc::collections::BTreeMap;
 
 use super::*;
@@ -529,8 +528,9 @@ impl<'a> Prim<'a> {
     /// with it and a `:` (`material:binding` holds
     /// `material:binding:preview`, not `material:binding` itself), in the
     /// order of [`Self::property_names`]. The empty namespace holds every
-    /// authored property. Only the names inside are sorted, so this is
-    /// cheaper than filtering [`Self::authored_properties`].
+    /// authored property. Wide prims use a prefix index, prepared on demand
+    /// with the `std` feature. Only matching names are put in USD property
+    /// order.
     ///
     /// OpenUSD: `UsdPrim::GetAuthoredPropertiesInNamespace`.
     #[doc(alias = "UsdPrim::GetAuthoredPropertiesInNamespace")]

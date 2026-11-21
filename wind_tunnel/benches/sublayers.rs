@@ -171,7 +171,10 @@ fn bench_local_opinions(c: &mut Criterion) {
         ] {
             let mut store = prepare_local_opinions(count, scene);
             let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-            assert!(stage.composition_errors().is_empty());
+            assert!(
+                stage.composition_errors().is_empty(),
+                "the prepared scene composes without errors"
+            );
             let work = stage.composition_work();
             let prims = count + count.div_ceil(64) + 1;
             let references = if matches!(scene, LocalOpinions::WithReferences) {
@@ -179,8 +182,15 @@ fn bench_local_opinions(c: &mut Criterion) {
             } else {
                 0
             };
-            assert_eq!(work.composed_prim_indexes, prims);
-            assert_eq!(work.prim_index_nodes, prims + references);
+            assert_eq!(
+                work.composed_prim_indexes, prims,
+                "all authored prims compose"
+            );
+            assert_eq!(
+                work.prim_index_nodes,
+                prims + references,
+                "each reference adds a node to its prim index"
+            );
             drop(stage);
 
             group.bench_function(BenchmarkId::new(name, count), |b| {

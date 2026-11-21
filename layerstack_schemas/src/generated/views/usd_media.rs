@@ -516,7 +516,7 @@ impl AuthorshipApiEdit {
     #[doc(alias = "CreateContactAttr")]
     pub fn set_contact(&self, edit: &mut SchemaEdit<'_>, value: &[&str]) -> &Self {
         let value = crate::value::write_string_array(value, edit.tokens());
-        self.write_value(edit, "authorship:__INSTANCE_NAME__:contact", value);
+        self.write_schema_value(edit, "authorship:__INSTANCE_NAME__:contact", value);
         self
     }
 
@@ -528,7 +528,7 @@ impl AuthorshipApiEdit {
     #[doc(alias = "CreateCopyrightOwnerAttr")]
     pub fn set_copyright_owner(&self, edit: &mut SchemaEdit<'_>, value: &[&str]) -> &Self {
         let value = crate::value::write_string_array(value, edit.tokens());
-        self.write_value(edit, "authorship:__INSTANCE_NAME__:copyrightOwner", value);
+        self.write_schema_value(edit, "authorship:__INSTANCE_NAME__:copyrightOwner", value);
         self
     }
 
@@ -540,7 +540,7 @@ impl AuthorshipApiEdit {
     #[doc(alias = "CreateCreatedAttr")]
     pub fn set_created(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value(edit, "authorship:__INSTANCE_NAME__:created", value);
+        self.write_schema_value(edit, "authorship:__INSTANCE_NAME__:created", value);
         self
     }
 
@@ -552,7 +552,7 @@ impl AuthorshipApiEdit {
     #[doc(alias = "CreateCreatorAttr")]
     pub fn set_creator(&self, edit: &mut SchemaEdit<'_>, value: &[&str]) -> &Self {
         let value = crate::value::write_string_array(value, edit.tokens());
-        self.write_value(edit, "authorship:__INSTANCE_NAME__:creator", value);
+        self.write_schema_value(edit, "authorship:__INSTANCE_NAME__:creator", value);
         self
     }
 
@@ -564,7 +564,7 @@ impl AuthorshipApiEdit {
     #[doc(alias = "CreateDescriptionAttr")]
     pub fn set_description(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value(edit, "authorship:__INSTANCE_NAME__:description", value);
+        self.write_schema_value(edit, "authorship:__INSTANCE_NAME__:description", value);
         self
     }
 
@@ -576,7 +576,7 @@ impl AuthorshipApiEdit {
     #[doc(alias = "CreateDigitalSourceTypeAttr")]
     pub fn set_digital_source_type(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value(
+        self.write_schema_value(
             edit,
             "authorship:__INSTANCE_NAME__:digitalSourceType",
             value,
@@ -592,7 +592,7 @@ impl AuthorshipApiEdit {
     #[doc(alias = "CreateInputsAttr")]
     pub fn set_inputs(&self, edit: &mut SchemaEdit<'_>, value: &[&str]) -> &Self {
         let value = crate::value::write_string_array(value, edit.tokens());
-        self.write_value(edit, "authorship:__INSTANCE_NAME__:inputs", value);
+        self.write_schema_value(edit, "authorship:__INSTANCE_NAME__:inputs", value);
         self
     }
 
@@ -601,7 +601,7 @@ impl AuthorshipApiEdit {
     #[doc = "USD attribute `authorship:<instance>:instanceID` (`string`, uniform)."]
     pub fn set_instance_id(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value(edit, "authorship:__INSTANCE_NAME__:instanceID", value);
+        self.write_schema_value(edit, "authorship:__INSTANCE_NAME__:instanceID", value);
         self
     }
 
@@ -613,7 +613,7 @@ impl AuthorshipApiEdit {
     #[doc(alias = "CreateSoftwarePackageAttr")]
     pub fn set_software_package(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value(edit, "authorship:__INSTANCE_NAME__:softwarePackage", value);
+        self.write_schema_value(edit, "authorship:__INSTANCE_NAME__:softwarePackage", value);
         self
     }
 
@@ -625,7 +625,7 @@ impl AuthorshipApiEdit {
     #[doc(alias = "CreateSoftwareVersionAttr")]
     pub fn set_software_version(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value(edit, "authorship:__INSTANCE_NAME__:softwareVersion", value);
+        self.write_schema_value(edit, "authorship:__INSTANCE_NAME__:softwareVersion", value);
         self
     }
 
@@ -637,7 +637,7 @@ impl AuthorshipApiEdit {
     #[doc(alias = "CreateUsageTermsAttr")]
     pub fn set_usage_terms(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value(edit, "authorship:__INSTANCE_NAME__:usageTerms", value);
+        self.write_schema_value(edit, "authorship:__INSTANCE_NAME__:usageTerms", value);
         self
     }
 }
@@ -974,7 +974,7 @@ impl SpatialAudioEdit {
     #[doc(alias = "CreateAuralModeAttr")]
     pub fn set_aural_mode(&self, edit: &mut SchemaEdit<'_>, value: SpatialAudioAuralMode) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "auralMode", value);
+        self.write_schema_value(edit, "auralMode", value);
         self
     }
 
@@ -986,7 +986,7 @@ impl SpatialAudioEdit {
     #[doc(alias = "CreateEndTimeAttr")]
     pub fn set_end_time(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_timecode(value, edit.tokens());
-        self.write_value(edit, "endTime", value);
+        self.write_schema_value(edit, "endTime", value);
         self
     }
 
@@ -998,7 +998,7 @@ impl SpatialAudioEdit {
     #[doc(alias = "CreateFilePathAttr")]
     pub fn set_file_path(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "filePath", value);
+        self.write_schema_value(edit, "filePath", value);
         self
     }
 
@@ -1010,14 +1010,14 @@ impl SpatialAudioEdit {
     #[doc(alias = "CreateGainAttr")]
     pub fn set_gain(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "gain", value);
+        self.write_schema_value(edit, "gain", value);
         self
     }
 
     #[doc = "[`Self::set_gain`] as a time sample at the time code `time`."]
     pub fn set_gain_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value_at(edit, "gain", time, value);
+        self.write_schema_value_at(edit, "gain", time, value);
         self
     }
 
@@ -1029,7 +1029,7 @@ impl SpatialAudioEdit {
     #[doc(alias = "CreateMediaOffsetAttr")]
     pub fn set_media_offset(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "mediaOffset", value);
+        self.write_schema_value(edit, "mediaOffset", value);
         self
     }
 
@@ -1045,7 +1045,7 @@ impl SpatialAudioEdit {
         value: SpatialAudioPlaybackMode,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "playbackMode", value);
+        self.write_schema_value(edit, "playbackMode", value);
         self
     }
 
@@ -1057,7 +1057,7 @@ impl SpatialAudioEdit {
     #[doc(alias = "CreateStartTimeAttr")]
     pub fn set_start_time(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_timecode(value, edit.tokens());
-        self.write_value(edit, "startTime", value);
+        self.write_schema_value(edit, "startTime", value);
         self
     }
 }

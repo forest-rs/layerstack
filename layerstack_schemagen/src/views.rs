@@ -50,6 +50,8 @@ const RESERVED: &[&str] = &[
     "read_targets",
     "write_value",
     "write_value_at",
+    "write_schema_value",
+    "write_schema_value_at",
     "write_targets",
     "add_target",
     "remove_target",
@@ -861,14 +863,14 @@ fn setter(docs: &str, set: &str, usd: &str, ty: &str, write: &str, varying: bool
         .replace("TOKENS", "edit.tokens()");
     let mut out = format!(
         "{docs}    pub fn {set}(&self, edit: &mut SchemaEdit<'_>, value: {ty}) -> &Self {{\n        \
-         let value = {value};\n        self.write_value(edit, {usd:?}, value);\n        self\n    }}\n\n"
+         let value = {value};\n        self.write_schema_value(edit, {usd:?}, value);\n        self\n    }}\n\n"
     );
     if varying {
         let _ = write!(
             out,
             "    #[doc = \"[`Self::{set}`] as a time sample at the time code `time`.\"]\n    \
              pub fn {set}_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: {ty}) -> &Self {{\n        \
-             let value = {value};\n        self.write_value_at(edit, {usd:?}, time, value);\n        self\n    }}\n\n"
+             let value = {value};\n        self.write_schema_value_at(edit, {usd:?}, time, value);\n        self\n    }}\n\n"
         );
     }
     out

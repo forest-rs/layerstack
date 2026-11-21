@@ -224,7 +224,7 @@ impl LODDistanceHeuristicEdit {
     #[doc(alias = "CreateBlendThresholdsAttr")]
     pub fn set_blend_thresholds(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "blendThresholds", value);
+        self.write_schema_value(edit, "blendThresholds", value);
         self
     }
 
@@ -235,7 +235,7 @@ impl LODDistanceHeuristicEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "blendThresholds", value);
+        self.write_schema_value(edit, "blendThresholds", value);
         self
     }
 
@@ -246,7 +246,7 @@ impl LODDistanceHeuristicEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "blendThresholds", value);
+        self.write_schema_value(edit, "blendThresholds", value);
         self
     }
 
@@ -298,14 +298,14 @@ impl LODDistanceHeuristicEdit {
     #[doc(alias = "CreateCenterAttr")]
     pub fn set_center(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "center", value);
+        self.write_schema_value(edit, "center", value);
         self
     }
 
     #[doc = "[`Self::set_center`] as a time sample at the time code `time`."]
     pub fn set_center_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value_at(edit, "center", time, value);
+        self.write_schema_value_at(edit, "center", time, value);
         self
     }
 
@@ -319,7 +319,7 @@ impl LODDistanceHeuristicEdit {
     #[doc(alias = "CreateThresholdsAttr")]
     pub fn set_thresholds(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "thresholds", value);
+        self.write_schema_value(edit, "thresholds", value);
         self
     }
 
@@ -330,7 +330,7 @@ impl LODDistanceHeuristicEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "thresholds", value);
+        self.write_schema_value(edit, "thresholds", value);
         self
     }
 
@@ -341,7 +341,7 @@ impl LODDistanceHeuristicEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "thresholds", value);
+        self.write_schema_value(edit, "thresholds", value);
         self
     }
 }
@@ -451,7 +451,7 @@ impl LODHeuristicEdit {
     #[doc(alias = "CreateLodDomainAttr")]
     pub fn set_lod_domain(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "lod:domain", value);
+        self.write_schema_value(edit, "lod:domain", value);
         self
     }
 }
@@ -677,7 +677,7 @@ impl LODOverrideApiEdit {
     #[doc(alias = "CreateLodOverrideIndexAttr")]
     pub fn set_lod_override_index(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "lod:override:index", value);
+        self.write_schema_value(edit, "lod:override:index", value);
         self
     }
 
@@ -689,7 +689,7 @@ impl LODOverrideApiEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "lod:override:index", time, value);
+        self.write_schema_value_at(edit, "lod:override:index", time, value);
         self
     }
 
@@ -705,7 +705,7 @@ impl LODOverrideApiEdit {
         value: LODOverrideApiLodOverrideMode,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "lod:override:mode", value);
+        self.write_schema_value(edit, "lod:override:mode", value);
         self
     }
 
@@ -717,7 +717,7 @@ impl LODOverrideApiEdit {
         value: LODOverrideApiLodOverrideMode,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value_at(edit, "lod:override:mode", time, value);
+        self.write_schema_value_at(edit, "lod:override:mode", time, value);
         self
     }
 }
@@ -866,7 +866,7 @@ impl LODRootApiEdit {
     #[doc(alias = "CreateLodDefaultIndexAttr")]
     pub fn set_lod_default_index(&self, edit: &mut SchemaEdit<'_>, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value(edit, "lod:default:index", value);
+        self.write_schema_value(edit, "lod:default:index", value);
         self
     }
 
@@ -878,7 +878,7 @@ impl LODRootApiEdit {
         value: i32,
     ) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value_at(edit, "lod:default:index", time, value);
+        self.write_schema_value_at(edit, "lod:default:index", time, value);
         self
     }
 
@@ -1206,7 +1206,7 @@ impl LODScreenSizeHeuristicEdit {
     #[doc(alias = "CreateBlendThresholdsAttr")]
     pub fn set_blend_thresholds(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "blendThresholds", value);
+        self.write_schema_value(edit, "blendThresholds", value);
         self
     }
 
@@ -1217,7 +1217,7 @@ impl LODScreenSizeHeuristicEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "blendThresholds", value);
+        self.write_schema_value(edit, "blendThresholds", value);
         self
     }
 
@@ -1228,7 +1228,7 @@ impl LODScreenSizeHeuristicEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "blendThresholds", value);
+        self.write_schema_value(edit, "blendThresholds", value);
         self
     }
 
@@ -1282,14 +1282,14 @@ impl LODScreenSizeHeuristicEdit {
     #[doc(alias = "CreateExtentAttr")]
     pub fn set_extent(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "extent", value);
+        self.write_schema_value(edit, "extent", value);
         self
     }
 
     #[doc = "[`Self::set_extent`] as a time sample at the time code `time`."]
     pub fn set_extent_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value_at(edit, "extent", time, value);
+        self.write_schema_value_at(edit, "extent", time, value);
         self
     }
 
@@ -1300,7 +1300,7 @@ impl LODScreenSizeHeuristicEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "extent", value);
+        self.write_schema_value(edit, "extent", value);
         self
     }
 
@@ -1312,7 +1312,7 @@ impl LODScreenSizeHeuristicEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "extent", time, value);
+        self.write_schema_value_at(edit, "extent", time, value);
         self
     }
 
@@ -1323,7 +1323,7 @@ impl LODScreenSizeHeuristicEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "extent", value);
+        self.write_schema_value(edit, "extent", value);
         self
     }
 
@@ -1335,7 +1335,7 @@ impl LODScreenSizeHeuristicEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "extent", time, value);
+        self.write_schema_value_at(edit, "extent", time, value);
         self
     }
 
@@ -1351,7 +1351,7 @@ impl LODScreenSizeHeuristicEdit {
         value: LODScreenSizeHeuristicProjectionMethod,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "projectionMethod", value);
+        self.write_schema_value(edit, "projectionMethod", value);
         self
     }
 
@@ -1365,7 +1365,7 @@ impl LODScreenSizeHeuristicEdit {
     #[doc(alias = "CreateThresholdsAttr")]
     pub fn set_thresholds(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "thresholds", value);
+        self.write_schema_value(edit, "thresholds", value);
         self
     }
 
@@ -1376,7 +1376,7 @@ impl LODScreenSizeHeuristicEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "thresholds", value);
+        self.write_schema_value(edit, "thresholds", value);
         self
     }
 
@@ -1387,7 +1387,7 @@ impl LODScreenSizeHeuristicEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "thresholds", value);
+        self.write_schema_value(edit, "thresholds", value);
         self
     }
 }

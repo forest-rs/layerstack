@@ -154,7 +154,7 @@ impl MaterialXConfigApiEdit {
     #[doc(alias = "CreateConfigMtlxVersionAttr")]
     pub fn set_config_mtlx_version(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value(edit, "config:mtlx:version", value);
+        self.write_schema_value(edit, "config:mtlx:version", value);
         self
     }
 
@@ -166,7 +166,7 @@ impl MaterialXConfigApiEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value_at(edit, "config:mtlx:version", time, value);
+        self.write_schema_value_at(edit, "config:mtlx:version", time, value);
         self
     }
 }

@@ -101,6 +101,55 @@ impl fmt::Display for CannotEdit {
 
 impl core::error::Error for CannotEdit {}
 
+/// Why a write by attribute name could not collect an edit.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum AttributeWriteError {
+    /// No attribute type was declared for this name.
+    Undeclared {
+        /// Prim targeted by the write.
+        prim: PathId,
+        /// USD property name, including any namespace or API instance.
+        name: String,
+    },
+    /// The USD property is a relationship.
+    NotAnAttribute(PropertyPath),
+}
+
+impl AttributeWriteError {
+    /// The error with paths and names from the store the edit uses.
+    #[must_use]
+    pub fn display<'a>(&'a self, store: &'a dyn LayerStore) -> impl fmt::Display + 'a {
+        with_store(self, store)
+    }
+}
+
+impl Describe for AttributeWriteError {
+    fn describe(&self, f: &mut fmt::Formatter<'_>, names: Names<'_>) -> fmt::Result {
+        match self {
+            Self::Undeclared { prim, name } => write!(
+                f,
+                "{}.{name} has no declared attribute type. Declare it with \
+                 SchemaEdit::declare_property before writing a value.",
+                names.path(*prim),
+            ),
+            Self::NotAnAttribute(property) => write!(
+                f,
+                "{} is a relationship. Use write_targets to author its targets.",
+                names.property(*property),
+            ),
+        }
+    }
+}
+
+impl fmt::Display for AttributeWriteError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.describe(f, Names(None))
+    }
+}
+
+impl core::error::Error for AttributeWriteError {}
+
 /// Why [`SchemaEdit::create_class_prim`] creates no class, as OpenUSD's
 /// `UsdStage::CreateClassPrim` refuses it. Nothing is authored.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1069,6 +1118,63 @@ impl<'s> SchemaEdit<'s> {
         applied
     }
 
+    /// Checks that a name supplied at runtime has a declaration before a value
+    /// is queued. Pending declarations include those visible from a parent
+    /// group. Also inspect the edit target for specs outside the composed
+    /// branch, such as an unselected variant.
+    pub(crate) fn write_value(
+        &mut self,
+        path: PathId,
+        name: &str,
+        time: Option<f64>,
+        value: Value,
+    ) -> Result<(), AttributeWriteError> {
+        let undeclared = || AttributeWriteError::Undeclared {
+            prim: path,
+            name: name.into(),
+        };
+        // A multiple-apply property name may still exist only as a template.
+        let token = self.store.tokens().intern(name);
+        let property = PropertyPath::new(path, token);
+        let pending = self
+            .pending
+            .prim(path)
+            .created
+            .iter()
+            .rev()
+            .find(|(name, _)| *name == token)
+            .map(|(_, ty)| match ty {
+                Some(_) => (PropertyKind::Attribute, true),
+                None => (PropertyKind::Relationship, false),
+            });
+        let local = (!self.is_removed(path, token) && pending.is_none())
+            .then(|| self.local_property(path, token))
+            .flatten()
+            .map(|spec| (spec.kind, spec.type_name.is_some()));
+        let composed = self.composed_declaration(path, token);
+        let authored = pending
+            .or(local)
+            .or_else(|| composed.as_ref().map(|d| (d.kind, d.type_name.is_some())));
+        let definition = self.definition(path, token);
+        if authored.is_some_and(|(kind, _)| kind == PropertyKind::Relationship)
+            || definition
+                .as_ref()
+                .is_some_and(|d| d.kind == PropertyKind::Relationship)
+        {
+            return Err(AttributeWriteError::NotAnAttribute(property));
+        }
+        if !authored.is_some_and(|(_, typed)| typed)
+            && !composed.is_some_and(|d| d.kind == PropertyKind::Attribute && d.type_name.is_some())
+            && !definition.as_ref().is_some_and(|d| d.type_name.is_some())
+        {
+            return Err(undeclared());
+        }
+
+        let create_from = definition.filter(|_| authored.is_none());
+        self.write_attribute_value(property, time, value, create_from);
+        Ok(())
+    }
+
     /// Authors `value` for the attribute `name` of `path`, at `time` or as
     /// its default. An attribute no layer authors yet is created as the
     /// prim's schemas define it.
@@ -1077,9 +1183,9 @@ impl<'s> SchemaEdit<'s> {
     /// the definition's type and variability for a schema attribute.
     pub(crate) fn set_value(&mut self, path: PathId, name: &str, time: Option<f64>, value: Value) {
         let token = self.store.tokens().intern(name);
-        let at = self.target.property(PropertyPath::new(path, token));
+        let property = PropertyPath::new(path, token);
         let authored = self
-            .stage_property(PropertyPath::new(path, token))
+            .stage_property(property)
             .is_some_and(layerstack::Property::is_authored)
             || self.has_created(path, token);
         let definition = if authored {
@@ -1087,6 +1193,19 @@ impl<'s> SchemaEdit<'s> {
         } else {
             self.definition(path, token)
         };
+        self.write_attribute_value(property, time, value, definition);
+    }
+
+    fn write_attribute_value(
+        &mut self,
+        property: PropertyPath,
+        time: Option<f64>,
+        value: Value,
+        definition: Option<PropertyDefinition>,
+    ) {
+        let at = self.target.property(property);
+        let path = property.prim_path();
+        let token = property.property();
         match definition.and_then(|d| d.type_name.clone().map(|ty| (ty, d.variability))) {
             Some((ty, variability)) => {
                 let mut spec = PropertySpec::typed_attribute(ty.clone());
@@ -1107,7 +1226,7 @@ impl<'s> SchemaEdit<'s> {
                             .other_mut()
                             .samples
                             .push(TimeSampleEdit {
-                                property: PropertyPath::new(path, token),
+                                property,
                                 time,
                                 value,
                             });
@@ -1121,7 +1240,7 @@ impl<'s> SchemaEdit<'s> {
             None => {
                 // Track the local declaration before a value op can implicitly
                 // create it, so a later metadata edit never queues a duplicate.
-                self.ensure_property(PropertyPath::new(path, token));
+                self.ensure_property(property);
                 match time {
                     None => {
                         self.pending
@@ -1137,7 +1256,7 @@ impl<'s> SchemaEdit<'s> {
                             .other_mut()
                             .samples
                             .push(TimeSampleEdit {
-                                property: PropertyPath::new(path, token),
+                                property,
                                 time,
                                 value: value.clone(),
                             });
@@ -2148,13 +2267,13 @@ impl<'s> SchemaEdit<'s> {
 
     /// Whether the edit target's layer holds a spec for the property
     /// `name` of the prim at `path`.
-    fn has_local_property(&mut self, path: PathId, name: TokenId) -> bool {
-        let Some(mapped) = self.target.map_to_spec_path(path, self.store.paths()) else {
-            return false;
-        };
-        let Some(layer) = self.store.layer(self.target.layer()) else {
-            return false;
-        };
+    fn has_local_property(&self, path: PathId, name: TokenId) -> bool {
+        self.local_property(path, name).is_some()
+    }
+
+    fn local_property(&self, path: PathId, name: TokenId) -> Option<&PropertySpec> {
+        let mapped = self.target.map_to_spec_path(path, self.store.paths())?;
+        let layer = self.store.layer(self.target.layer())?;
         let properties = if !mapped.variant_chain().is_empty() {
             layer
                 .variant_spec_at(&mapped, self.store.paths())
@@ -2171,7 +2290,10 @@ impl<'s> SchemaEdit<'s> {
                 })
                 .map(|spec| &spec.properties)
         };
-        properties.is_some_and(|properties| properties.iter().any(|entry| entry.name == name))
+        properties?
+            .iter()
+            .find(|entry| entry.name == name)
+            .map(|entry| entry.spec.as_ref())
     }
 
     /// Creates the relationship `name` of `path` at the edit target, not

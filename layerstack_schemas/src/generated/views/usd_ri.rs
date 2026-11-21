@@ -183,14 +183,14 @@ impl RiMaterialApiEdit {
     #[doc(alias = "CreateDisplacementAttr")]
     pub fn set_displacement(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "outputs:ri:displacement", value);
+        self.write_schema_value(edit, "outputs:ri:displacement", value);
         self
     }
 
     #[doc = "[`Self::set_displacement`] as a time sample at the time code `time`."]
     pub fn set_displacement_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value_at(edit, "outputs:ri:displacement", time, value);
+        self.write_schema_value_at(edit, "outputs:ri:displacement", time, value);
         self
     }
 
@@ -200,14 +200,14 @@ impl RiMaterialApiEdit {
     #[doc(alias = "CreateSurfaceAttr")]
     pub fn set_surface(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "outputs:ri:surface", value);
+        self.write_schema_value(edit, "outputs:ri:surface", value);
         self
     }
 
     #[doc = "[`Self::set_surface`] as a time sample at the time code `time`."]
     pub fn set_surface_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value_at(edit, "outputs:ri:surface", time, value);
+        self.write_schema_value_at(edit, "outputs:ri:surface", time, value);
         self
     }
 
@@ -217,14 +217,14 @@ impl RiMaterialApiEdit {
     #[doc(alias = "CreateVolumeAttr")]
     pub fn set_volume(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "outputs:ri:volume", value);
+        self.write_schema_value(edit, "outputs:ri:volume", value);
         self
     }
 
     #[doc = "[`Self::set_volume`] as a time sample at the time code `time`."]
     pub fn set_volume_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value_at(edit, "outputs:ri:volume", time, value);
+        self.write_schema_value_at(edit, "outputs:ri:volume", time, value);
         self
     }
 }

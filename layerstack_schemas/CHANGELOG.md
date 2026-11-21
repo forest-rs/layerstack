@@ -4,6 +4,12 @@
 
 Initial release.
 
+- `PrimEdit::write_value`, `InstanceEdit::write_value`, and their `_at`
+  versions return `Result<(), AttributeWriteError>`. Propagate or handle the
+  result, and give new custom attributes a type with
+  `SchemaEdit::declare_property` before writing values. Regenerate Rust schema
+  views with the matching `layerstack_schemagen` to retain their typed setters.
+
 - Importers can build a fresh layer with `LayerBatch` using registered schema
   declarations. Generated multiple-apply views expose property-name templates
   alongside their accessors. Existing `SchemaEdit` callers can continue to

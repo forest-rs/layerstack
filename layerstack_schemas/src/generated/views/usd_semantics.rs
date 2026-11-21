@@ -209,14 +209,14 @@ impl SemanticsLabelsApiEdit {
     #[doc(alias = "CreateLabelsAttr")]
     pub fn set_labels(&self, edit: &mut SchemaEdit<'_>, value: &[&str]) -> &Self {
         let value = crate::value::write_array(value, edit.tokens(), crate::value::write_token);
-        self.write_value(edit, "semantics:labels:__INSTANCE_NAME__", value);
+        self.write_schema_value(edit, "semantics:labels:__INSTANCE_NAME__", value);
         self
     }
 
     #[doc = "[`Self::set_labels`] as a time sample at the time code `time`."]
     pub fn set_labels_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[&str]) -> &Self {
         let value = crate::value::write_array(value, edit.tokens(), crate::value::write_token);
-        self.write_value_at(edit, "semantics:labels:__INSTANCE_NAME__", time, value);
+        self.write_schema_value_at(edit, "semantics:labels:__INSTANCE_NAME__", time, value);
         self
     }
 }

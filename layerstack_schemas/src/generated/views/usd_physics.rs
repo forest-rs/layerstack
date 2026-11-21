@@ -272,7 +272,7 @@ impl PhysicsCollisionApiEdit {
     #[doc(alias = "CreateCollisionEnabledAttr")]
     pub fn set_collision_enabled(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "physics:collisionEnabled", value);
+        self.write_schema_value(edit, "physics:collisionEnabled", value);
         self
     }
 
@@ -284,7 +284,7 @@ impl PhysicsCollisionApiEdit {
         value: bool,
     ) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value_at(edit, "physics:collisionEnabled", time, value);
+        self.write_schema_value_at(edit, "physics:collisionEnabled", time, value);
         self
     }
 
@@ -538,7 +538,7 @@ impl PhysicsCollisionGroupEdit {
     #[doc(alias = "CreateInvertFilteredGroupsAttr")]
     pub fn set_invert_filtered_groups(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "physics:invertFilteredGroups", value);
+        self.write_schema_value(edit, "physics:invertFilteredGroups", value);
         self
     }
 
@@ -550,7 +550,7 @@ impl PhysicsCollisionGroupEdit {
         value: bool,
     ) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value_at(edit, "physics:invertFilteredGroups", time, value);
+        self.write_schema_value_at(edit, "physics:invertFilteredGroups", time, value);
         self
     }
 
@@ -562,7 +562,7 @@ impl PhysicsCollisionGroupEdit {
     #[doc(alias = "CreateMergeGroupNameAttr")]
     pub fn set_merge_group_name(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value(edit, "physics:mergeGroup", value);
+        self.write_schema_value(edit, "physics:mergeGroup", value);
         self
     }
 
@@ -574,7 +574,7 @@ impl PhysicsCollisionGroupEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value_at(edit, "physics:mergeGroup", time, value);
+        self.write_schema_value_at(edit, "physics:mergeGroup", time, value);
         self
     }
 }
@@ -730,14 +730,14 @@ impl PhysicsDistanceJointEdit {
     #[doc(alias = "CreateMaxDistanceAttr")]
     pub fn set_max_distance(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "physics:maxDistance", value);
+        self.write_schema_value(edit, "physics:maxDistance", value);
         self
     }
 
     #[doc = "[`Self::set_max_distance`] as a time sample at the time code `time`."]
     pub fn set_max_distance_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "physics:maxDistance", time, value);
+        self.write_schema_value_at(edit, "physics:maxDistance", time, value);
         self
     }
 
@@ -749,14 +749,14 @@ impl PhysicsDistanceJointEdit {
     #[doc(alias = "CreateMinDistanceAttr")]
     pub fn set_min_distance(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "physics:minDistance", value);
+        self.write_schema_value(edit, "physics:minDistance", value);
         self
     }
 
     #[doc = "[`Self::set_min_distance`] as a time sample at the time code `time`."]
     pub fn set_min_distance_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "physics:minDistance", time, value);
+        self.write_schema_value_at(edit, "physics:minDistance", time, value);
         self
     }
 }
@@ -1102,14 +1102,14 @@ impl PhysicsDriveApiEdit {
     #[doc(alias = "CreateDampingAttr")]
     pub fn set_damping(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "drive:__INSTANCE_NAME__:physics:damping", value);
+        self.write_schema_value(edit, "drive:__INSTANCE_NAME__:physics:damping", value);
         self
     }
 
     #[doc = "[`Self::set_damping`] as a time sample at the time code `time`."]
     pub fn set_damping_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "drive:__INSTANCE_NAME__:physics:damping", time, value);
+        self.write_schema_value_at(edit, "drive:__INSTANCE_NAME__:physics:damping", time, value);
         self
     }
 
@@ -1119,14 +1119,14 @@ impl PhysicsDriveApiEdit {
     #[doc(alias = "CreateMaxForceAttr")]
     pub fn set_max_force(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "drive:__INSTANCE_NAME__:physics:maxForce", value);
+        self.write_schema_value(edit, "drive:__INSTANCE_NAME__:physics:maxForce", value);
         self
     }
 
     #[doc = "[`Self::set_max_force`] as a time sample at the time code `time`."]
     pub fn set_max_force_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(
+        self.write_schema_value_at(
             edit,
             "drive:__INSTANCE_NAME__:physics:maxForce",
             time,
@@ -1141,14 +1141,14 @@ impl PhysicsDriveApiEdit {
     #[doc(alias = "CreateStiffnessAttr")]
     pub fn set_stiffness(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "drive:__INSTANCE_NAME__:physics:stiffness", value);
+        self.write_schema_value(edit, "drive:__INSTANCE_NAME__:physics:stiffness", value);
         self
     }
 
     #[doc = "[`Self::set_stiffness`] as a time sample at the time code `time`."]
     pub fn set_stiffness_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(
+        self.write_schema_value_at(
             edit,
             "drive:__INSTANCE_NAME__:physics:stiffness",
             time,
@@ -1163,7 +1163,7 @@ impl PhysicsDriveApiEdit {
     #[doc(alias = "CreateTargetPositionAttr")]
     pub fn set_target_position(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(
+        self.write_schema_value(
             edit,
             "drive:__INSTANCE_NAME__:physics:targetPosition",
             value,
@@ -1179,7 +1179,7 @@ impl PhysicsDriveApiEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(
+        self.write_schema_value_at(
             edit,
             "drive:__INSTANCE_NAME__:physics:targetPosition",
             time,
@@ -1194,7 +1194,7 @@ impl PhysicsDriveApiEdit {
     #[doc(alias = "CreateTargetVelocityAttr")]
     pub fn set_target_velocity(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(
+        self.write_schema_value(
             edit,
             "drive:__INSTANCE_NAME__:physics:targetVelocity",
             value,
@@ -1210,7 +1210,7 @@ impl PhysicsDriveApiEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(
+        self.write_schema_value_at(
             edit,
             "drive:__INSTANCE_NAME__:physics:targetVelocity",
             time,
@@ -1229,7 +1229,7 @@ impl PhysicsDriveApiEdit {
         value: PhysicsDriveApiDriveType,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "drive:__INSTANCE_NAME__:physics:type", value);
+        self.write_schema_value(edit, "drive:__INSTANCE_NAME__:physics:type", value);
         self
     }
 }
@@ -1885,14 +1885,14 @@ impl PhysicsJointEdit {
     #[doc(alias = "CreateBreakForceAttr")]
     pub fn set_break_force(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "physics:breakForce", value);
+        self.write_schema_value(edit, "physics:breakForce", value);
         self
     }
 
     #[doc = "[`Self::set_break_force`] as a time sample at the time code `time`."]
     pub fn set_break_force_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "physics:breakForce", time, value);
+        self.write_schema_value_at(edit, "physics:breakForce", time, value);
         self
     }
 
@@ -1904,14 +1904,14 @@ impl PhysicsJointEdit {
     #[doc(alias = "CreateBreakTorqueAttr")]
     pub fn set_break_torque(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "physics:breakTorque", value);
+        self.write_schema_value(edit, "physics:breakTorque", value);
         self
     }
 
     #[doc = "[`Self::set_break_torque`] as a time sample at the time code `time`."]
     pub fn set_break_torque_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "physics:breakTorque", time, value);
+        self.write_schema_value_at(edit, "physics:breakTorque", time, value);
         self
     }
 
@@ -1923,7 +1923,7 @@ impl PhysicsJointEdit {
     #[doc(alias = "CreateCollisionEnabledAttr")]
     pub fn set_collision_enabled(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "physics:collisionEnabled", value);
+        self.write_schema_value(edit, "physics:collisionEnabled", value);
         self
     }
 
@@ -1935,7 +1935,7 @@ impl PhysicsJointEdit {
         value: bool,
     ) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value_at(edit, "physics:collisionEnabled", time, value);
+        self.write_schema_value_at(edit, "physics:collisionEnabled", time, value);
         self
     }
 
@@ -1947,7 +1947,7 @@ impl PhysicsJointEdit {
     #[doc(alias = "CreateExcludeFromArticulationAttr")]
     pub fn set_exclude_from_articulation(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "physics:excludeFromArticulation", value);
+        self.write_schema_value(edit, "physics:excludeFromArticulation", value);
         self
     }
 
@@ -1959,14 +1959,14 @@ impl PhysicsJointEdit {
     #[doc(alias = "CreateJointEnabledAttr")]
     pub fn set_joint_enabled(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "physics:jointEnabled", value);
+        self.write_schema_value(edit, "physics:jointEnabled", value);
         self
     }
 
     #[doc = "[`Self::set_joint_enabled`] as a time sample at the time code `time`."]
     pub fn set_joint_enabled_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value_at(edit, "physics:jointEnabled", time, value);
+        self.write_schema_value_at(edit, "physics:jointEnabled", time, value);
         self
     }
 
@@ -1978,7 +1978,7 @@ impl PhysicsJointEdit {
     #[doc(alias = "CreateLocalPos0Attr")]
     pub fn set_local_pos0(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "physics:localPos0", value);
+        self.write_schema_value(edit, "physics:localPos0", value);
         self
     }
 
@@ -1990,7 +1990,7 @@ impl PhysicsJointEdit {
         value: [f32; 3],
     ) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value_at(edit, "physics:localPos0", time, value);
+        self.write_schema_value_at(edit, "physics:localPos0", time, value);
         self
     }
 
@@ -2002,7 +2002,7 @@ impl PhysicsJointEdit {
     #[doc(alias = "CreateLocalPos1Attr")]
     pub fn set_local_pos1(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "physics:localPos1", value);
+        self.write_schema_value(edit, "physics:localPos1", value);
         self
     }
 
@@ -2014,7 +2014,7 @@ impl PhysicsJointEdit {
         value: [f32; 3],
     ) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value_at(edit, "physics:localPos1", time, value);
+        self.write_schema_value_at(edit, "physics:localPos1", time, value);
         self
     }
 
@@ -2026,7 +2026,7 @@ impl PhysicsJointEdit {
     #[doc(alias = "CreateLocalRot0Attr")]
     pub fn set_local_rot0(&self, edit: &mut SchemaEdit<'_>, value: [f32; 4]) -> &Self {
         let value = crate::value::write_quatf(value, edit.tokens());
-        self.write_value(edit, "physics:localRot0", value);
+        self.write_schema_value(edit, "physics:localRot0", value);
         self
     }
 
@@ -2038,7 +2038,7 @@ impl PhysicsJointEdit {
         value: [f32; 4],
     ) -> &Self {
         let value = crate::value::write_quatf(value, edit.tokens());
-        self.write_value_at(edit, "physics:localRot0", time, value);
+        self.write_schema_value_at(edit, "physics:localRot0", time, value);
         self
     }
 
@@ -2050,7 +2050,7 @@ impl PhysicsJointEdit {
     #[doc(alias = "CreateLocalRot1Attr")]
     pub fn set_local_rot1(&self, edit: &mut SchemaEdit<'_>, value: [f32; 4]) -> &Self {
         let value = crate::value::write_quatf(value, edit.tokens());
-        self.write_value(edit, "physics:localRot1", value);
+        self.write_schema_value(edit, "physics:localRot1", value);
         self
     }
 
@@ -2062,7 +2062,7 @@ impl PhysicsJointEdit {
         value: [f32; 4],
     ) -> &Self {
         let value = crate::value::write_quatf(value, edit.tokens());
-        self.write_value_at(edit, "physics:localRot1", time, value);
+        self.write_schema_value_at(edit, "physics:localRot1", time, value);
         self
     }
 }
@@ -2267,14 +2267,14 @@ impl PhysicsLimitApiEdit {
     #[doc(alias = "CreateHighAttr")]
     pub fn set_high(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "limit:__INSTANCE_NAME__:physics:high", value);
+        self.write_schema_value(edit, "limit:__INSTANCE_NAME__:physics:high", value);
         self
     }
 
     #[doc = "[`Self::set_high`] as a time sample at the time code `time`."]
     pub fn set_high_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "limit:__INSTANCE_NAME__:physics:high", time, value);
+        self.write_schema_value_at(edit, "limit:__INSTANCE_NAME__:physics:high", time, value);
         self
     }
 
@@ -2284,14 +2284,14 @@ impl PhysicsLimitApiEdit {
     #[doc(alias = "CreateLowAttr")]
     pub fn set_low(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "limit:__INSTANCE_NAME__:physics:low", value);
+        self.write_schema_value(edit, "limit:__INSTANCE_NAME__:physics:low", value);
         self
     }
 
     #[doc = "[`Self::set_low`] as a time sample at the time code `time`."]
     pub fn set_low_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "limit:__INSTANCE_NAME__:physics:low", time, value);
+        self.write_schema_value_at(edit, "limit:__INSTANCE_NAME__:physics:low", time, value);
         self
     }
 }
@@ -2506,7 +2506,7 @@ impl PhysicsMassApiEdit {
     #[doc(alias = "CreateCenterOfMassAttr")]
     pub fn set_center_of_mass(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "physics:centerOfMass", value);
+        self.write_schema_value(edit, "physics:centerOfMass", value);
         self
     }
 
@@ -2518,7 +2518,7 @@ impl PhysicsMassApiEdit {
         value: [f32; 3],
     ) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value_at(edit, "physics:centerOfMass", time, value);
+        self.write_schema_value_at(edit, "physics:centerOfMass", time, value);
         self
     }
 
@@ -2530,14 +2530,14 @@ impl PhysicsMassApiEdit {
     #[doc(alias = "CreateDensityAttr")]
     pub fn set_density(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "physics:density", value);
+        self.write_schema_value(edit, "physics:density", value);
         self
     }
 
     #[doc = "[`Self::set_density`] as a time sample at the time code `time`."]
     pub fn set_density_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "physics:density", time, value);
+        self.write_schema_value_at(edit, "physics:density", time, value);
         self
     }
 
@@ -2549,7 +2549,7 @@ impl PhysicsMassApiEdit {
     #[doc(alias = "CreateDiagonalInertiaAttr")]
     pub fn set_diagonal_inertia(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "physics:diagonalInertia", value);
+        self.write_schema_value(edit, "physics:diagonalInertia", value);
         self
     }
 
@@ -2561,7 +2561,7 @@ impl PhysicsMassApiEdit {
         value: [f32; 3],
     ) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value_at(edit, "physics:diagonalInertia", time, value);
+        self.write_schema_value_at(edit, "physics:diagonalInertia", time, value);
         self
     }
 
@@ -2573,14 +2573,14 @@ impl PhysicsMassApiEdit {
     #[doc(alias = "CreateMassAttr")]
     pub fn set_mass(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "physics:mass", value);
+        self.write_schema_value(edit, "physics:mass", value);
         self
     }
 
     #[doc = "[`Self::set_mass`] as a time sample at the time code `time`."]
     pub fn set_mass_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "physics:mass", time, value);
+        self.write_schema_value_at(edit, "physics:mass", time, value);
         self
     }
 
@@ -2592,7 +2592,7 @@ impl PhysicsMassApiEdit {
     #[doc(alias = "CreatePrincipalAxesAttr")]
     pub fn set_principal_axes(&self, edit: &mut SchemaEdit<'_>, value: [f32; 4]) -> &Self {
         let value = crate::value::write_quatf(value, edit.tokens());
-        self.write_value(edit, "physics:principalAxes", value);
+        self.write_schema_value(edit, "physics:principalAxes", value);
         self
     }
 
@@ -2604,7 +2604,7 @@ impl PhysicsMassApiEdit {
         value: [f32; 4],
     ) -> &Self {
         let value = crate::value::write_quatf(value, edit.tokens());
-        self.write_value_at(edit, "physics:principalAxes", time, value);
+        self.write_schema_value_at(edit, "physics:principalAxes", time, value);
         self
     }
 }
@@ -2799,14 +2799,14 @@ impl PhysicsMaterialApiEdit {
     #[doc(alias = "CreateDensityAttr")]
     pub fn set_density(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "physics:density", value);
+        self.write_schema_value(edit, "physics:density", value);
         self
     }
 
     #[doc = "[`Self::set_density`] as a time sample at the time code `time`."]
     pub fn set_density_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "physics:density", time, value);
+        self.write_schema_value_at(edit, "physics:density", time, value);
         self
     }
 
@@ -2818,7 +2818,7 @@ impl PhysicsMaterialApiEdit {
     #[doc(alias = "CreateDynamicFrictionAttr")]
     pub fn set_dynamic_friction(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "physics:dynamicFriction", value);
+        self.write_schema_value(edit, "physics:dynamicFriction", value);
         self
     }
 
@@ -2830,7 +2830,7 @@ impl PhysicsMaterialApiEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "physics:dynamicFriction", time, value);
+        self.write_schema_value_at(edit, "physics:dynamicFriction", time, value);
         self
     }
 
@@ -2842,14 +2842,14 @@ impl PhysicsMaterialApiEdit {
     #[doc(alias = "CreateRestitutionAttr")]
     pub fn set_restitution(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "physics:restitution", value);
+        self.write_schema_value(edit, "physics:restitution", value);
         self
     }
 
     #[doc = "[`Self::set_restitution`] as a time sample at the time code `time`."]
     pub fn set_restitution_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "physics:restitution", time, value);
+        self.write_schema_value_at(edit, "physics:restitution", time, value);
         self
     }
 
@@ -2861,7 +2861,7 @@ impl PhysicsMaterialApiEdit {
     #[doc(alias = "CreateStaticFrictionAttr")]
     pub fn set_static_friction(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "physics:staticFriction", value);
+        self.write_schema_value(edit, "physics:staticFriction", value);
         self
     }
 
@@ -2873,7 +2873,7 @@ impl PhysicsMaterialApiEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "physics:staticFriction", time, value);
+        self.write_schema_value_at(edit, "physics:staticFriction", time, value);
         self
     }
 }
@@ -3083,7 +3083,7 @@ impl PhysicsMeshCollisionApiEdit {
         value: PhysicsMeshCollisionApiApproximation,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "physics:approximation", value);
+        self.write_schema_value(edit, "physics:approximation", value);
         self
     }
 }
@@ -3308,7 +3308,7 @@ impl PhysicsPrismaticJointEdit {
     #[doc(alias = "CreateAxisAttr")]
     pub fn set_axis(&self, edit: &mut SchemaEdit<'_>, value: PhysicsPrismaticJointAxis) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "physics:axis", value);
+        self.write_schema_value(edit, "physics:axis", value);
         self
     }
 
@@ -3320,14 +3320,14 @@ impl PhysicsPrismaticJointEdit {
     #[doc(alias = "CreateLowerLimitAttr")]
     pub fn set_lower_limit(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "physics:lowerLimit", value);
+        self.write_schema_value(edit, "physics:lowerLimit", value);
         self
     }
 
     #[doc = "[`Self::set_lower_limit`] as a time sample at the time code `time`."]
     pub fn set_lower_limit_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "physics:lowerLimit", time, value);
+        self.write_schema_value_at(edit, "physics:lowerLimit", time, value);
         self
     }
 
@@ -3339,14 +3339,14 @@ impl PhysicsPrismaticJointEdit {
     #[doc(alias = "CreateUpperLimitAttr")]
     pub fn set_upper_limit(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "physics:upperLimit", value);
+        self.write_schema_value(edit, "physics:upperLimit", value);
         self
     }
 
     #[doc = "[`Self::set_upper_limit`] as a time sample at the time code `time`."]
     pub fn set_upper_limit_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "physics:upperLimit", time, value);
+        self.write_schema_value_at(edit, "physics:upperLimit", time, value);
         self
     }
 }
@@ -3571,7 +3571,7 @@ impl PhysicsRevoluteJointEdit {
     #[doc(alias = "CreateAxisAttr")]
     pub fn set_axis(&self, edit: &mut SchemaEdit<'_>, value: PhysicsRevoluteJointAxis) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "physics:axis", value);
+        self.write_schema_value(edit, "physics:axis", value);
         self
     }
 
@@ -3583,14 +3583,14 @@ impl PhysicsRevoluteJointEdit {
     #[doc(alias = "CreateLowerLimitAttr")]
     pub fn set_lower_limit(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "physics:lowerLimit", value);
+        self.write_schema_value(edit, "physics:lowerLimit", value);
         self
     }
 
     #[doc = "[`Self::set_lower_limit`] as a time sample at the time code `time`."]
     pub fn set_lower_limit_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "physics:lowerLimit", time, value);
+        self.write_schema_value_at(edit, "physics:lowerLimit", time, value);
         self
     }
 
@@ -3602,14 +3602,14 @@ impl PhysicsRevoluteJointEdit {
     #[doc(alias = "CreateUpperLimitAttr")]
     pub fn set_upper_limit(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "physics:upperLimit", value);
+        self.write_schema_value(edit, "physics:upperLimit", value);
         self
     }
 
     #[doc = "[`Self::set_upper_limit`] as a time sample at the time code `time`."]
     pub fn set_upper_limit_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "physics:upperLimit", time, value);
+        self.write_schema_value_at(edit, "physics:upperLimit", time, value);
         self
     }
 }
@@ -3832,7 +3832,7 @@ impl PhysicsRigidBodyApiEdit {
     #[doc(alias = "CreateAngularVelocityAttr")]
     pub fn set_angular_velocity(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "physics:angularVelocity", value);
+        self.write_schema_value(edit, "physics:angularVelocity", value);
         self
     }
 
@@ -3844,7 +3844,7 @@ impl PhysicsRigidBodyApiEdit {
         value: [f32; 3],
     ) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value_at(edit, "physics:angularVelocity", time, value);
+        self.write_schema_value_at(edit, "physics:angularVelocity", time, value);
         self
     }
 
@@ -3856,7 +3856,7 @@ impl PhysicsRigidBodyApiEdit {
     #[doc(alias = "CreateKinematicEnabledAttr")]
     pub fn set_kinematic_enabled(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "physics:kinematicEnabled", value);
+        self.write_schema_value(edit, "physics:kinematicEnabled", value);
         self
     }
 
@@ -3868,7 +3868,7 @@ impl PhysicsRigidBodyApiEdit {
         value: bool,
     ) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value_at(edit, "physics:kinematicEnabled", time, value);
+        self.write_schema_value_at(edit, "physics:kinematicEnabled", time, value);
         self
     }
 
@@ -3880,7 +3880,7 @@ impl PhysicsRigidBodyApiEdit {
     #[doc(alias = "CreateRigidBodyEnabledAttr")]
     pub fn set_rigid_body_enabled(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "physics:rigidBodyEnabled", value);
+        self.write_schema_value(edit, "physics:rigidBodyEnabled", value);
         self
     }
 
@@ -3892,7 +3892,7 @@ impl PhysicsRigidBodyApiEdit {
         value: bool,
     ) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value_at(edit, "physics:rigidBodyEnabled", time, value);
+        self.write_schema_value_at(edit, "physics:rigidBodyEnabled", time, value);
         self
     }
 
@@ -3944,7 +3944,7 @@ impl PhysicsRigidBodyApiEdit {
     #[doc(alias = "CreateStartsAsleepAttr")]
     pub fn set_starts_asleep(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "physics:startsAsleep", value);
+        self.write_schema_value(edit, "physics:startsAsleep", value);
         self
     }
 
@@ -3956,14 +3956,14 @@ impl PhysicsRigidBodyApiEdit {
     #[doc(alias = "CreateVelocityAttr")]
     pub fn set_velocity(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "physics:velocity", value);
+        self.write_schema_value(edit, "physics:velocity", value);
         self
     }
 
     #[doc = "[`Self::set_velocity`] as a time sample at the time code `time`."]
     pub fn set_velocity_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value_at(edit, "physics:velocity", time, value);
+        self.write_schema_value_at(edit, "physics:velocity", time, value);
         self
     }
 }
@@ -4116,7 +4116,7 @@ impl PhysicsSceneEdit {
     #[doc(alias = "CreateGravityDirectionAttr")]
     pub fn set_gravity_direction(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "physics:gravityDirection", value);
+        self.write_schema_value(edit, "physics:gravityDirection", value);
         self
     }
 
@@ -4128,7 +4128,7 @@ impl PhysicsSceneEdit {
         value: [f32; 3],
     ) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value_at(edit, "physics:gravityDirection", time, value);
+        self.write_schema_value_at(edit, "physics:gravityDirection", time, value);
         self
     }
 
@@ -4140,7 +4140,7 @@ impl PhysicsSceneEdit {
     #[doc(alias = "CreateGravityMagnitudeAttr")]
     pub fn set_gravity_magnitude(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "physics:gravityMagnitude", value);
+        self.write_schema_value(edit, "physics:gravityMagnitude", value);
         self
     }
 
@@ -4152,7 +4152,7 @@ impl PhysicsSceneEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "physics:gravityMagnitude", time, value);
+        self.write_schema_value_at(edit, "physics:gravityMagnitude", time, value);
         self
     }
 }
@@ -4377,7 +4377,7 @@ impl PhysicsSphericalJointEdit {
     #[doc(alias = "CreateAxisAttr")]
     pub fn set_axis(&self, edit: &mut SchemaEdit<'_>, value: PhysicsSphericalJointAxis) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "physics:axis", value);
+        self.write_schema_value(edit, "physics:axis", value);
         self
     }
 
@@ -4389,7 +4389,7 @@ impl PhysicsSphericalJointEdit {
     #[doc(alias = "CreateConeAngle0LimitAttr")]
     pub fn set_cone_angle0_limit(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "physics:coneAngle0Limit", value);
+        self.write_schema_value(edit, "physics:coneAngle0Limit", value);
         self
     }
 
@@ -4401,7 +4401,7 @@ impl PhysicsSphericalJointEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "physics:coneAngle0Limit", time, value);
+        self.write_schema_value_at(edit, "physics:coneAngle0Limit", time, value);
         self
     }
 
@@ -4413,7 +4413,7 @@ impl PhysicsSphericalJointEdit {
     #[doc(alias = "CreateConeAngle1LimitAttr")]
     pub fn set_cone_angle1_limit(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "physics:coneAngle1Limit", value);
+        self.write_schema_value(edit, "physics:coneAngle1Limit", value);
         self
     }
 
@@ -4425,7 +4425,7 @@ impl PhysicsSphericalJointEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "physics:coneAngle1Limit", time, value);
+        self.write_schema_value_at(edit, "physics:coneAngle1Limit", time, value);
         self
     }
 }

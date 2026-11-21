@@ -290,14 +290,14 @@ impl CylinderLightEdit {
     #[doc(alias = "CreateLengthAttr")]
     pub fn set_length(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "inputs:length", value);
+        self.write_schema_value(edit, "inputs:length", value);
         self
     }
 
     #[doc = "[`Self::set_length`] as a time sample at the time code `time`."]
     pub fn set_length_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "inputs:length", time, value);
+        self.write_schema_value_at(edit, "inputs:length", time, value);
         self
     }
 
@@ -309,14 +309,14 @@ impl CylinderLightEdit {
     #[doc(alias = "CreateRadiusAttr")]
     pub fn set_radius(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "inputs:radius", value);
+        self.write_schema_value(edit, "inputs:radius", value);
         self
     }
 
     #[doc = "[`Self::set_radius`] as a time sample at the time code `time`."]
     pub fn set_radius_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "inputs:radius", time, value);
+        self.write_schema_value_at(edit, "inputs:radius", time, value);
         self
     }
 
@@ -328,14 +328,14 @@ impl CylinderLightEdit {
     #[doc(alias = "CreateTreatAsLineAttr")]
     pub fn set_treat_as_line(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "treatAsLine", value);
+        self.write_schema_value(edit, "treatAsLine", value);
         self
     }
 
     #[doc = "[`Self::set_treat_as_line`] as a time sample at the time code `time`."]
     pub fn set_treat_as_line_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value_at(edit, "treatAsLine", time, value);
+        self.write_schema_value_at(edit, "treatAsLine", time, value);
         self
     }
 }
@@ -468,14 +468,14 @@ impl DiskLightEdit {
     #[doc(alias = "CreateRadiusAttr")]
     pub fn set_radius(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "inputs:radius", value);
+        self.write_schema_value(edit, "inputs:radius", value);
         self
     }
 
     #[doc = "[`Self::set_radius`] as a time sample at the time code `time`."]
     pub fn set_radius_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "inputs:radius", time, value);
+        self.write_schema_value_at(edit, "inputs:radius", time, value);
         self
     }
 }
@@ -608,14 +608,14 @@ impl DistantLightEdit {
     #[doc(alias = "CreateAngleAttr")]
     pub fn set_angle(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "inputs:angle", value);
+        self.write_schema_value(edit, "inputs:angle", value);
         self
     }
 
     #[doc = "[`Self::set_angle`] as a time sample at the time code `time`."]
     pub fn set_angle_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "inputs:angle", time, value);
+        self.write_schema_value_at(edit, "inputs:angle", time, value);
         self
     }
 }
@@ -871,14 +871,14 @@ impl DomeLightEdit {
     #[doc(alias = "CreateGuideRadiusAttr")]
     pub fn set_guide_radius(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "guideRadius", value);
+        self.write_schema_value(edit, "guideRadius", value);
         self
     }
 
     #[doc = "[`Self::set_guide_radius`] as a time sample at the time code `time`."]
     pub fn set_guide_radius_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "guideRadius", time, value);
+        self.write_schema_value_at(edit, "guideRadius", time, value);
         self
     }
 
@@ -890,14 +890,14 @@ impl DomeLightEdit {
     #[doc(alias = "CreateTextureFileAttr")]
     pub fn set_texture_file(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "inputs:texture:file", value);
+        self.write_schema_value(edit, "inputs:texture:file", value);
         self
     }
 
     #[doc = "[`Self::set_texture_file`] as a time sample at the time code `time`."]
     pub fn set_texture_file_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value_at(edit, "inputs:texture:file", time, value);
+        self.write_schema_value_at(edit, "inputs:texture:file", time, value);
         self
     }
 
@@ -913,7 +913,7 @@ impl DomeLightEdit {
         value: DomeLightTextureFormat,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "inputs:texture:format", value);
+        self.write_schema_value(edit, "inputs:texture:format", value);
         self
     }
 
@@ -925,7 +925,7 @@ impl DomeLightEdit {
         value: DomeLightTextureFormat,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value_at(edit, "inputs:texture:format", time, value);
+        self.write_schema_value_at(edit, "inputs:texture:format", time, value);
         self
     }
 
@@ -1291,14 +1291,14 @@ impl DomeLight1Edit {
     #[doc(alias = "CreateGuideRadiusAttr")]
     pub fn set_guide_radius(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "guideRadius", value);
+        self.write_schema_value(edit, "guideRadius", value);
         self
     }
 
     #[doc = "[`Self::set_guide_radius`] as a time sample at the time code `time`."]
     pub fn set_guide_radius_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "guideRadius", time, value);
+        self.write_schema_value_at(edit, "guideRadius", time, value);
         self
     }
 
@@ -1310,14 +1310,14 @@ impl DomeLight1Edit {
     #[doc(alias = "CreateTextureFileAttr")]
     pub fn set_texture_file(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "inputs:texture:file", value);
+        self.write_schema_value(edit, "inputs:texture:file", value);
         self
     }
 
     #[doc = "[`Self::set_texture_file`] as a time sample at the time code `time`."]
     pub fn set_texture_file_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value_at(edit, "inputs:texture:file", time, value);
+        self.write_schema_value_at(edit, "inputs:texture:file", time, value);
         self
     }
 
@@ -1333,7 +1333,7 @@ impl DomeLight1Edit {
         value: DomeLight1TextureFormat,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "inputs:texture:format", value);
+        self.write_schema_value(edit, "inputs:texture:format", value);
         self
     }
 
@@ -1345,7 +1345,7 @@ impl DomeLight1Edit {
         value: DomeLight1TextureFormat,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value_at(edit, "inputs:texture:format", time, value);
+        self.write_schema_value_at(edit, "inputs:texture:format", time, value);
         self
     }
 
@@ -1357,7 +1357,7 @@ impl DomeLight1Edit {
     #[doc(alias = "CreatePoleAxisAttr")]
     pub fn set_pole_axis(&self, edit: &mut SchemaEdit<'_>, value: DomeLight1PoleAxis) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "poleAxis", value);
+        self.write_schema_value(edit, "poleAxis", value);
         self
     }
 
@@ -1935,14 +1935,14 @@ impl LightApiEdit {
     #[doc(alias = "CreateColorAttr")]
     pub fn set_color(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "inputs:color", value);
+        self.write_schema_value(edit, "inputs:color", value);
         self
     }
 
     #[doc = "[`Self::set_color`] as a time sample at the time code `time`."]
     pub fn set_color_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value_at(edit, "inputs:color", time, value);
+        self.write_schema_value_at(edit, "inputs:color", time, value);
         self
     }
 
@@ -1954,7 +1954,7 @@ impl LightApiEdit {
     #[doc(alias = "CreateColorTemperatureAttr")]
     pub fn set_color_temperature(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "inputs:colorTemperature", value);
+        self.write_schema_value(edit, "inputs:colorTemperature", value);
         self
     }
 
@@ -1966,7 +1966,7 @@ impl LightApiEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "inputs:colorTemperature", time, value);
+        self.write_schema_value_at(edit, "inputs:colorTemperature", time, value);
         self
     }
 
@@ -1978,14 +1978,14 @@ impl LightApiEdit {
     #[doc(alias = "CreateDiffuseAttr")]
     pub fn set_diffuse(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "inputs:diffuse", value);
+        self.write_schema_value(edit, "inputs:diffuse", value);
         self
     }
 
     #[doc = "[`Self::set_diffuse`] as a time sample at the time code `time`."]
     pub fn set_diffuse_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "inputs:diffuse", time, value);
+        self.write_schema_value_at(edit, "inputs:diffuse", time, value);
         self
     }
 
@@ -1997,7 +1997,7 @@ impl LightApiEdit {
     #[doc(alias = "CreateEnableColorTemperatureAttr")]
     pub fn set_enable_color_temperature(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "inputs:enableColorTemperature", value);
+        self.write_schema_value(edit, "inputs:enableColorTemperature", value);
         self
     }
 
@@ -2009,7 +2009,7 @@ impl LightApiEdit {
         value: bool,
     ) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value_at(edit, "inputs:enableColorTemperature", time, value);
+        self.write_schema_value_at(edit, "inputs:enableColorTemperature", time, value);
         self
     }
 
@@ -2021,14 +2021,14 @@ impl LightApiEdit {
     #[doc(alias = "CreateExposureAttr")]
     pub fn set_exposure(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "inputs:exposure", value);
+        self.write_schema_value(edit, "inputs:exposure", value);
         self
     }
 
     #[doc = "[`Self::set_exposure`] as a time sample at the time code `time`."]
     pub fn set_exposure_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "inputs:exposure", time, value);
+        self.write_schema_value_at(edit, "inputs:exposure", time, value);
         self
     }
 
@@ -2040,14 +2040,14 @@ impl LightApiEdit {
     #[doc(alias = "CreateIntensityAttr")]
     pub fn set_intensity(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "inputs:intensity", value);
+        self.write_schema_value(edit, "inputs:intensity", value);
         self
     }
 
     #[doc = "[`Self::set_intensity`] as a time sample at the time code `time`."]
     pub fn set_intensity_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "inputs:intensity", time, value);
+        self.write_schema_value_at(edit, "inputs:intensity", time, value);
         self
     }
 
@@ -2059,14 +2059,14 @@ impl LightApiEdit {
     #[doc(alias = "CreateNormalizeAttr")]
     pub fn set_normalize(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "inputs:normalize", value);
+        self.write_schema_value(edit, "inputs:normalize", value);
         self
     }
 
     #[doc = "[`Self::set_normalize`] as a time sample at the time code `time`."]
     pub fn set_normalize_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value_at(edit, "inputs:normalize", time, value);
+        self.write_schema_value_at(edit, "inputs:normalize", time, value);
         self
     }
 
@@ -2078,14 +2078,14 @@ impl LightApiEdit {
     #[doc(alias = "CreateSpecularAttr")]
     pub fn set_specular(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "inputs:specular", value);
+        self.write_schema_value(edit, "inputs:specular", value);
         self
     }
 
     #[doc = "[`Self::set_specular`] as a time sample at the time code `time`."]
     pub fn set_specular_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "inputs:specular", time, value);
+        self.write_schema_value_at(edit, "inputs:specular", time, value);
         self
     }
 
@@ -2141,7 +2141,7 @@ impl LightApiEdit {
         value: LightApiMaterialSyncMode,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "light:materialSyncMode", value);
+        self.write_schema_value(edit, "light:materialSyncMode", value);
         self
     }
 
@@ -2153,7 +2153,7 @@ impl LightApiEdit {
     #[doc(alias = "CreateShaderIdAttr")]
     pub fn set_shader_id(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "light:shaderId", value);
+        self.write_schema_value(edit, "light:shaderId", value);
         self
     }
 }
@@ -2280,7 +2280,7 @@ impl LightFilterEdit {
     #[doc(alias = "CreateShaderIdAttr")]
     pub fn set_shader_id(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "lightFilter:shaderId", value);
+        self.write_schema_value(edit, "lightFilter:shaderId", value);
         self
     }
 }
@@ -2538,7 +2538,7 @@ impl LightListApiEdit {
         value: LightListApiLightListCacheBehavior,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "lightList:cacheBehavior", value);
+        self.write_schema_value(edit, "lightList:cacheBehavior", value);
         self
     }
 
@@ -2550,7 +2550,7 @@ impl LightListApiEdit {
         value: LightListApiLightListCacheBehavior,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value_at(edit, "lightList:cacheBehavior", time, value);
+        self.write_schema_value_at(edit, "lightList:cacheBehavior", time, value);
         self
     }
 }
@@ -2808,7 +2808,7 @@ impl ListApiEdit {
         value: ListApiLightListCacheBehavior,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "lightList:cacheBehavior", value);
+        self.write_schema_value(edit, "lightList:cacheBehavior", value);
         self
     }
 
@@ -2820,7 +2820,7 @@ impl ListApiEdit {
         value: ListApiLightListCacheBehavior,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value_at(edit, "lightList:cacheBehavior", time, value);
+        self.write_schema_value_at(edit, "lightList:cacheBehavior", time, value);
         self
     }
 }
@@ -3413,14 +3413,14 @@ impl PortalLightEdit {
     #[doc(alias = "CreateHeightAttr")]
     pub fn set_height(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "inputs:height", value);
+        self.write_schema_value(edit, "inputs:height", value);
         self
     }
 
     #[doc = "[`Self::set_height`] as a time sample at the time code `time`."]
     pub fn set_height_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "inputs:height", time, value);
+        self.write_schema_value_at(edit, "inputs:height", time, value);
         self
     }
 
@@ -3432,14 +3432,14 @@ impl PortalLightEdit {
     #[doc(alias = "CreateWidthAttr")]
     pub fn set_width(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "inputs:width", value);
+        self.write_schema_value(edit, "inputs:width", value);
         self
     }
 
     #[doc = "[`Self::set_width`] as a time sample at the time code `time`."]
     pub fn set_width_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "inputs:width", time, value);
+        self.write_schema_value_at(edit, "inputs:width", time, value);
         self
     }
 }
@@ -3612,14 +3612,14 @@ impl RectLightEdit {
     #[doc(alias = "CreateHeightAttr")]
     pub fn set_height(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "inputs:height", value);
+        self.write_schema_value(edit, "inputs:height", value);
         self
     }
 
     #[doc = "[`Self::set_height`] as a time sample at the time code `time`."]
     pub fn set_height_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "inputs:height", time, value);
+        self.write_schema_value_at(edit, "inputs:height", time, value);
         self
     }
 
@@ -3631,14 +3631,14 @@ impl RectLightEdit {
     #[doc(alias = "CreateTextureFileAttr")]
     pub fn set_texture_file(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "inputs:texture:file", value);
+        self.write_schema_value(edit, "inputs:texture:file", value);
         self
     }
 
     #[doc = "[`Self::set_texture_file`] as a time sample at the time code `time`."]
     pub fn set_texture_file_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value_at(edit, "inputs:texture:file", time, value);
+        self.write_schema_value_at(edit, "inputs:texture:file", time, value);
         self
     }
 
@@ -3650,14 +3650,14 @@ impl RectLightEdit {
     #[doc(alias = "CreateWidthAttr")]
     pub fn set_width(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "inputs:width", value);
+        self.write_schema_value(edit, "inputs:width", value);
         self
     }
 
     #[doc = "[`Self::set_width`] as a time sample at the time code `time`."]
     pub fn set_width_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "inputs:width", time, value);
+        self.write_schema_value_at(edit, "inputs:width", time, value);
         self
     }
 }
@@ -3872,7 +3872,7 @@ impl ShadowApiEdit {
     #[doc(alias = "CreateShadowColorAttr")]
     pub fn set_shadow_color(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "inputs:shadow:color", value);
+        self.write_schema_value(edit, "inputs:shadow:color", value);
         self
     }
 
@@ -3884,7 +3884,7 @@ impl ShadowApiEdit {
         value: [f32; 3],
     ) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value_at(edit, "inputs:shadow:color", time, value);
+        self.write_schema_value_at(edit, "inputs:shadow:color", time, value);
         self
     }
 
@@ -3896,7 +3896,7 @@ impl ShadowApiEdit {
     #[doc(alias = "CreateShadowDistanceAttr")]
     pub fn set_shadow_distance(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "inputs:shadow:distance", value);
+        self.write_schema_value(edit, "inputs:shadow:distance", value);
         self
     }
 
@@ -3908,7 +3908,7 @@ impl ShadowApiEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "inputs:shadow:distance", time, value);
+        self.write_schema_value_at(edit, "inputs:shadow:distance", time, value);
         self
     }
 
@@ -3920,14 +3920,14 @@ impl ShadowApiEdit {
     #[doc(alias = "CreateShadowEnableAttr")]
     pub fn set_shadow_enable(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "inputs:shadow:enable", value);
+        self.write_schema_value(edit, "inputs:shadow:enable", value);
         self
     }
 
     #[doc = "[`Self::set_shadow_enable`] as a time sample at the time code `time`."]
     pub fn set_shadow_enable_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value_at(edit, "inputs:shadow:enable", time, value);
+        self.write_schema_value_at(edit, "inputs:shadow:enable", time, value);
         self
     }
 
@@ -3939,14 +3939,14 @@ impl ShadowApiEdit {
     #[doc(alias = "CreateShadowFalloffAttr")]
     pub fn set_shadow_falloff(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "inputs:shadow:falloff", value);
+        self.write_schema_value(edit, "inputs:shadow:falloff", value);
         self
     }
 
     #[doc = "[`Self::set_shadow_falloff`] as a time sample at the time code `time`."]
     pub fn set_shadow_falloff_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "inputs:shadow:falloff", time, value);
+        self.write_schema_value_at(edit, "inputs:shadow:falloff", time, value);
         self
     }
 
@@ -3958,7 +3958,7 @@ impl ShadowApiEdit {
     #[doc(alias = "CreateShadowFalloffGammaAttr")]
     pub fn set_shadow_falloff_gamma(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "inputs:shadow:falloffGamma", value);
+        self.write_schema_value(edit, "inputs:shadow:falloffGamma", value);
         self
     }
 
@@ -3970,7 +3970,7 @@ impl ShadowApiEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "inputs:shadow:falloffGamma", time, value);
+        self.write_schema_value_at(edit, "inputs:shadow:falloffGamma", time, value);
         self
     }
 }
@@ -4237,7 +4237,7 @@ impl ShapingApiEdit {
     #[doc(alias = "CreateShapingConeAngleAttr")]
     pub fn set_shaping_cone_angle(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "inputs:shaping:cone:angle", value);
+        self.write_schema_value(edit, "inputs:shaping:cone:angle", value);
         self
     }
 
@@ -4249,7 +4249,7 @@ impl ShapingApiEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "inputs:shaping:cone:angle", time, value);
+        self.write_schema_value_at(edit, "inputs:shaping:cone:angle", time, value);
         self
     }
 
@@ -4261,7 +4261,7 @@ impl ShapingApiEdit {
     #[doc(alias = "CreateShapingConeSoftnessAttr")]
     pub fn set_shaping_cone_softness(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "inputs:shaping:cone:softness", value);
+        self.write_schema_value(edit, "inputs:shaping:cone:softness", value);
         self
     }
 
@@ -4273,7 +4273,7 @@ impl ShapingApiEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "inputs:shaping:cone:softness", time, value);
+        self.write_schema_value_at(edit, "inputs:shaping:cone:softness", time, value);
         self
     }
 
@@ -4285,14 +4285,14 @@ impl ShapingApiEdit {
     #[doc(alias = "CreateShapingFocusAttr")]
     pub fn set_shaping_focus(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "inputs:shaping:focus", value);
+        self.write_schema_value(edit, "inputs:shaping:focus", value);
         self
     }
 
     #[doc = "[`Self::set_shaping_focus`] as a time sample at the time code `time`."]
     pub fn set_shaping_focus_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "inputs:shaping:focus", time, value);
+        self.write_schema_value_at(edit, "inputs:shaping:focus", time, value);
         self
     }
 
@@ -4304,7 +4304,7 @@ impl ShapingApiEdit {
     #[doc(alias = "CreateShapingFocusTintAttr")]
     pub fn set_shaping_focus_tint(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "inputs:shaping:focusTint", value);
+        self.write_schema_value(edit, "inputs:shaping:focusTint", value);
         self
     }
 
@@ -4316,7 +4316,7 @@ impl ShapingApiEdit {
         value: [f32; 3],
     ) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value_at(edit, "inputs:shaping:focusTint", time, value);
+        self.write_schema_value_at(edit, "inputs:shaping:focusTint", time, value);
         self
     }
 
@@ -4328,7 +4328,7 @@ impl ShapingApiEdit {
     #[doc(alias = "CreateShapingIesAngleScaleAttr")]
     pub fn set_shaping_ies_angle_scale(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "inputs:shaping:ies:angleScale", value);
+        self.write_schema_value(edit, "inputs:shaping:ies:angleScale", value);
         self
     }
 
@@ -4340,7 +4340,7 @@ impl ShapingApiEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "inputs:shaping:ies:angleScale", time, value);
+        self.write_schema_value_at(edit, "inputs:shaping:ies:angleScale", time, value);
         self
     }
 
@@ -4352,7 +4352,7 @@ impl ShapingApiEdit {
     #[doc(alias = "CreateShapingIesFileAttr")]
     pub fn set_shaping_ies_file(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "inputs:shaping:ies:file", value);
+        self.write_schema_value(edit, "inputs:shaping:ies:file", value);
         self
     }
 
@@ -4364,7 +4364,7 @@ impl ShapingApiEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value_at(edit, "inputs:shaping:ies:file", time, value);
+        self.write_schema_value_at(edit, "inputs:shaping:ies:file", time, value);
         self
     }
 
@@ -4376,7 +4376,7 @@ impl ShapingApiEdit {
     #[doc(alias = "CreateShapingIesNormalizeAttr")]
     pub fn set_shaping_ies_normalize(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "inputs:shaping:ies:normalize", value);
+        self.write_schema_value(edit, "inputs:shaping:ies:normalize", value);
         self
     }
 
@@ -4388,7 +4388,7 @@ impl ShapingApiEdit {
         value: bool,
     ) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value_at(edit, "inputs:shaping:ies:normalize", time, value);
+        self.write_schema_value_at(edit, "inputs:shaping:ies:normalize", time, value);
         self
     }
 }
@@ -4541,14 +4541,14 @@ impl SphereLightEdit {
     #[doc(alias = "CreateRadiusAttr")]
     pub fn set_radius(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "inputs:radius", value);
+        self.write_schema_value(edit, "inputs:radius", value);
         self
     }
 
     #[doc = "[`Self::set_radius`] as a time sample at the time code `time`."]
     pub fn set_radius_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "inputs:radius", time, value);
+        self.write_schema_value_at(edit, "inputs:radius", time, value);
         self
     }
 
@@ -4560,7 +4560,7 @@ impl SphereLightEdit {
     #[doc(alias = "CreateTreatAsPointAttr")]
     pub fn set_treat_as_point(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "treatAsPoint", value);
+        self.write_schema_value(edit, "treatAsPoint", value);
         self
     }
 
@@ -4572,7 +4572,7 @@ impl SphereLightEdit {
         value: bool,
     ) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value_at(edit, "treatAsPoint", time, value);
+        self.write_schema_value_at(edit, "treatAsPoint", time, value);
         self
     }
 }

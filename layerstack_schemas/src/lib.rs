@@ -534,7 +534,7 @@ pub use common_xform::{
     CommonComponent, CommonTransform, CommonTransformError, CommonTransformReading,
     CommonTransformSource, RotationOrder,
 };
-pub use edit::{ApplySchemaError, CannotEdit, ClassPrimError};
+pub use edit::{ApplySchemaError, AttributeWriteError, CannotEdit, ClassPrimError};
 
 #[cfg(all(feature = "usd-geom", feature = "usd-shade"))]
 mod material_subsets;

@@ -920,7 +920,7 @@ impl<'s> SchemaEdit<'s> {
     }
 
     /// The interned path of `parent`'s child `name`.
-    #[cfg(feature = "usd-geom")]
+    #[cfg(any(feature = "usd-geom", feature = "usd-mtlx"))]
     pub(crate) fn child_path(&mut self, parent: PathId, name: TokenId) -> PathId {
         let path = self.store.paths().resolve(parent).join(&[name]);
         self.store.paths().intern(path)

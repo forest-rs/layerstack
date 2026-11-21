@@ -88,7 +88,11 @@ pub enum MaterialXDefault {
 }
 
 #[cfg(feature = "usd-mtlx")]
+mod pbr;
+#[cfg(feature = "usd-mtlx")]
 mod standard;
+#[cfg(feature = "usd-mtlx")]
+pub use pbr::{PbrMaterialEdit, PbrMaterialError, PbrMaterialInputs, define_pbr_material};
 
 #[cfg(feature = "usd-mtlx")]
 pub use standard::{

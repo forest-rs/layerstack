@@ -160,7 +160,7 @@ impl<'a> Declarations<'a> {
     }
 }
 
-fn template_parts(template: &str) -> Option<(&str, &str)> {
+pub(super) fn template_parts(template: &str) -> Option<(&str, &str)> {
     let mut offset = 0;
     for segment in template.split(':') {
         if segment == INSTANCE_NAME_PLACEHOLDER {

@@ -2904,7 +2904,7 @@ impl LiveStage {
                 let mut fresh = SourceIndex::default();
                 let found = fresh.layer(&self.stage, layer, &self.layer_to_prims);
                 assert_eq!(share, found, "the share of {layer:?} is stale");
-                for &prim in share.prim_to_sites.keys() {
+                for &prim in share.identity_only.iter().chain(share.prim_to_sites.keys()) {
                     held.entry(prim).or_default().push(layer);
                 }
             }
@@ -3048,22 +3048,36 @@ fn find_share(
 /// prims draw specs or opinions from, both ways.
 #[derive(Debug, Default, PartialEq)]
 struct LayerSources {
-    /// Prim path in the layer → composed prims whose prim index draws
-    /// specs or opinions from it.
+    /// A composed prim whose sole source in this layer has the same path.
+    /// Both directions of that mapping fit in a single set entry.
+    identity_only: HashSet<PathId>,
+    /// Other mappings from a source site to its composed prims. A site can
+    /// supply both its own identity mapping and remapped prims.
     site_to_prims: HashMap<PathId, HashSet<PathId>>,
     /// Composed prim → its sites in `site_to_prims`, sorted.
-    prim_to_sites: HashMap<PathId, Vec<PathId>>,
+    prim_to_sites: HashMap<PathId, SmallVec<[PathId; 2]>>,
 }
 
 impl LayerSources {
     /// The composed prims drawing on `site`, in no order.
     fn prims(&self, site: PathId) -> impl Iterator<Item = &PathId> {
-        self.site_to_prims.get(&site).into_iter().flatten()
+        self.identity_only
+            .get(&site)
+            .into_iter()
+            .chain(self.site_to_prims.get(&site).into_iter().flatten())
     }
 
     /// Replaces the sites of `prim` with `sites`, sorted; whether it has
     /// any.
-    fn replace(&mut self, prim: PathId, sites: Vec<PathId>) -> bool {
+    fn replace(&mut self, prim: PathId, sites: SmallVec<[PathId; 2]>) -> bool {
+        let identity = sites.as_slice() == [prim];
+        if identity {
+            if !self.identity_only.insert(prim) {
+                return true;
+            }
+        } else {
+            self.identity_only.remove(&prim);
+        }
         if self.prim_to_sites.get(&prim) == Some(&sites) {
             return true;
         }
@@ -3077,8 +3091,8 @@ impl LayerSources {
                 }
             }
         }
-        if sites.is_empty() {
-            return false;
+        if identity || sites.is_empty() {
+            return identity;
         }
         for &site in &sites {
             self.site_to_prims.entry(site).or_default().insert(prim);
@@ -3145,6 +3159,28 @@ mod tests {
         interner::TokenId,
         path::{Path, PropertyPath},
     };
+
+    #[test]
+    fn identity_and_remapped_source_sites_can_share_a_destination_or_a_source() {
+        let store = InMemoryStore::default();
+        let (a, b) = (store.path("/A"), store.path("/B"));
+        let mut sources = LayerSources::default();
+        let prims = |sources: &LayerSources, site| {
+            let mut prims: Vec<_> = sources.prims(site).copied().collect();
+            prims.sort_unstable();
+            prims
+        };
+        sources.replace(a, SmallVec::from_slice(&[a]));
+        sources.replace(b, SmallVec::from_slice(&[a]));
+        assert_eq!(prims(&sources, a), [a, b]);
+        sources.replace(a, SmallVec::from_slice(&[a, b]));
+        assert_eq!(prims(&sources, a), [a, b]);
+        assert_eq!(prims(&sources, b), [a]);
+        sources.replace(a, SmallVec::from_slice(&[a]));
+        assert!(prims(&sources, b).is_empty());
+        assert!(!sources.replace(a, SmallVec::new()));
+        assert_eq!(prims(&sources, a), [b]);
+    }
 
     fn p(store: &mut InMemoryStore, s: &str) -> PathId {
         let path = Path::parse_absolute(s, &store.tokens).expect("valid path");
@@ -4565,8 +4601,8 @@ mod tests {
         let mut index = HashMap::new();
         for &layer in live.layer_to_prims.keys() {
             let share = shares.layer(&live.stage, layer, &live.layer_to_prims);
-            for (&site, prims) in &share.site_to_prims {
-                index.insert((layer, site), prims.clone());
+            for &site in share.identity_only.iter().chain(share.site_to_prims.keys()) {
+                index.insert((layer, site), share.prims(site).copied().collect());
             }
         }
         index

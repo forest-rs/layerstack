@@ -5,7 +5,7 @@
 
 use std::hint::black_box;
 
-use criterion::{BenchmarkId, Criterion, SamplingMode, criterion_group, criterion_main};
+use criterion::{BatchSize, BenchmarkId, Criterion, SamplingMode, criterion_group, criterion_main};
 use layerstack::{
     InMemoryStore, Layer, LayerId, LiveStage, LoadPolicy, NamespaceEdit, PrimSpec, PropertyPath,
     PropertySpec, PropertyType, Reference, Specifier, StageOptions, TargetPath, Value,
@@ -503,6 +503,40 @@ fn referenced_by_siblings(n: usize) -> (InMemoryStore, LiveStage, layerstack::Pa
     (store, live, proto)
 }
 
+/// The first source-site query builds a layer's reverse index. Exercise both
+/// local paths and a site that contributes to many composed prims.
+fn bench_source_index(c: &mut Criterion) {
+    let mut group = c.benchmark_group("live_first_source_lookup");
+    group.sample_size(10);
+    for n in [256, 16_384] {
+        for (case, references) in [("local", false), ("referenced", true)] {
+            group.bench_function(BenchmarkId::new(case, n), |b| {
+                b.iter_batched_ref(
+                    || {
+                        if references {
+                            referenced_by_siblings(n)
+                        } else {
+                            let (store, live, leaf, _) = build(n, 10);
+                            (store, live, leaf)
+                        }
+                    },
+                    |(store, live, path)| {
+                        let found = live.composed_prims_for_source(LayerId(1), *path, store);
+                        assert_eq!(
+                            found.len(),
+                            if references { n + 1 } else { 1 },
+                            "all composed destinations of the source"
+                        );
+                        black_box(found);
+                    },
+                    BatchSize::PerIteration,
+                );
+            });
+        }
+    }
+    group.finish();
+}
+
 /// Edits to a prim `n` siblings reference, each resyncing all of them:
 /// `/Proto` deactivated and activated again (`toggle_active`), and a
 /// child spec `/Proto/Added` authored and removed again (`add_child`).
@@ -599,6 +633,7 @@ criterion_group!(
     bench_root_renames,
     bench_root_rename_prepares,
     bench_sibling_resyncs,
+    bench_source_index,
     bench_bulk_loads
 );
 criterion_main!(benches);

@@ -387,7 +387,7 @@ impl TelescopeEdit {
     #[doc = "USD attribute `telescope:aperture` (`float`; fallback `0.2`)."]
     pub fn set_telescope_aperture(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = ::layerstack_schemas::value::write_float(value, edit.tokens());
-        self.write_value(edit, "telescope:aperture", value);
+        self.write_schema_value(edit, "telescope:aperture", value);
         self
     }
 
@@ -399,7 +399,7 @@ impl TelescopeEdit {
         value: f32,
     ) -> &Self {
         let value = ::layerstack_schemas::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "telescope:aperture", time, value);
+        self.write_schema_value_at(edit, "telescope:aperture", time, value);
         self
     }
 
@@ -410,7 +410,7 @@ impl TelescopeEdit {
         value: TelescopeTelescopeMount,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "telescope:mount", value);
+        self.write_schema_value(edit, "telescope:mount", value);
         self
     }
 

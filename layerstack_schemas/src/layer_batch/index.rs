@@ -1,20 +1,73 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use alloc::vec::Vec;
+use alloc::{boxed::Box, vec::Vec};
 use hashbrown::{HashMap, HashSet};
 use layerstack::{
     AppliedSchema, PrimDefinition, PropertyDefinition, SchemaRegistry, TokenId, TokenInterner,
     schema::INSTANCE_NAME_PLACEHOLDER,
 };
 
+/// The names of the APIs already applied, with a property index built on demand.
+#[derive(Debug)]
+pub(super) struct AppliedIndex<'a> {
+    names: HashSet<TokenId>,
+    declarations: Option<Box<Declarations<'a>>>,
+}
+
+impl<'a> AppliedIndex<'a> {
+    pub(super) fn new(applied: &[TokenId]) -> Self {
+        Self {
+            names: applied.iter().copied().collect(),
+            declarations: None,
+        }
+    }
+
+    pub(super) fn insert(
+        &mut self,
+        entry: TokenId,
+        rank: usize,
+        schemas: &'a SchemaRegistry,
+        tokens: &'a TokenInterner,
+    ) -> bool {
+        if !self.names.insert(entry) {
+            return false;
+        }
+        if let Some(declarations) = &mut self.declarations {
+            declarations.insert(entry, rank, schemas, tokens);
+        }
+        true
+    }
+
+    pub(super) fn property(
+        &mut self,
+        name: TokenId,
+        applied: &[TokenId],
+        schemas: &'a SchemaRegistry,
+        tokens: &'a TokenInterner,
+    ) -> Option<&'a PropertyDefinition> {
+        let declarations = self.declarations.get_or_insert_with(|| {
+            let mut declarations = Box::new(Declarations::default());
+            for (rank, &entry) in applied.iter().enumerate() {
+                declarations.insert(entry, rank, schemas, tokens);
+            }
+            declarations
+        });
+        declarations.property(name, tokens)
+    }
+
+    #[cfg(test)]
+    pub(super) fn has_declarations(&self) -> bool {
+        self.declarations.is_some()
+    }
+}
+
 /// Declarations of the APIs already applied to one prim, in authored strength
 /// order (AOUSD Core §13.3.2.3). Index a schema's templates once even when
 /// thousands of applications bind different instances. Only an authored
 /// property needs an interned concrete name.
 #[derive(Debug, Default)]
-pub(super) struct Declarations<'a> {
-    applied: HashSet<TokenId>,
+struct Declarations<'a> {
     families: HashSet<TokenId>,
     instances: HashMap<(TokenId, TokenId), usize>,
     named: HashMap<TokenId, Candidate<'a>>,
@@ -38,18 +91,15 @@ struct Template<'a> {
 }
 
 impl<'a> Declarations<'a> {
-    pub(super) fn insert(
+    fn insert(
         &mut self,
         entry: TokenId,
         rank: usize,
         schemas: &'a SchemaRegistry,
         tokens: &'a TokenInterner,
-    ) -> bool {
-        if !self.applied.insert(entry) {
-            return false;
-        }
+    ) {
         let Some((schema, definition, instance)) = schemas.applied_definition(entry, tokens) else {
-            return true;
+            return;
         };
         if let Some(instance) = instance {
             self.instances
@@ -75,14 +125,9 @@ impl<'a> Declarations<'a> {
                 }
             }
         }
-        true
     }
 
-    pub(super) fn property(
-        &self,
-        name: TokenId,
-        tokens: &TokenInterner,
-    ) -> Option<&'a PropertyDefinition> {
+    fn property(&self, name: TokenId, tokens: &TokenInterner) -> Option<&'a PropertyDefinition> {
         let mut found = self.named.get(&name).copied();
         let text = tokens.resolve(name);
         // A placeholder occupies a namespace segment, so its prefix is

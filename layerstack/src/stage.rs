@@ -65,6 +65,7 @@ use alloc::{
     vec::Vec,
 };
 use core::hash::Hash;
+use smallvec::SmallVec;
 
 use hashbrown::{HashMap, HashSet};
 
@@ -2596,7 +2597,7 @@ impl Stage {
     /// Only the keys of `layer` are read past their layer, so the cost is
     /// that of comparing each key's layer, not of collecting and sorting
     /// every site of the prim.
-    pub(crate) fn layer_source_sites(&self, prim: PathId, layer: LayerId) -> Vec<PathId> {
+    pub(crate) fn layer_source_sites(&self, prim: PathId, layer: LayerId) -> SmallVec<[PathId; 2]> {
         self.collect_source_sites(prim, |found, path| (found == layer).then_some(path))
     }
 
@@ -2605,6 +2606,7 @@ impl Stage {
     #[cfg(test)]
     pub(crate) fn source_sites(&self, prim: PathId) -> Vec<(LayerId, PathId)> {
         self.collect_source_sites(prim, |layer, path| Some((layer, path)))
+            .into_vec()
     }
 
     /// The sites `site` makes of the `(layer, prim path)` source sites of
@@ -2614,11 +2616,11 @@ impl Stage {
         &self,
         prim: PathId,
         site: impl Fn(LayerId, PathId) -> Option<T>,
-    ) -> Vec<T> {
+    ) -> SmallVec<[T; 2]> {
         let Some(index) = self.prims.get(&prim) else {
-            return Vec::new();
+            return SmallVec::new();
         };
-        let push = |sites: &mut Vec<T>, lookup: T, key: &OpinionKey| {
+        let push = |sites: &mut SmallVec<[T; 2]>, lookup: T, key: &OpinionKey| {
             sites.push(lookup);
             let spec_prim = key.spec_path.prim_path();
             if spec_prim != key.lookup_path
@@ -2630,7 +2632,7 @@ impl Stage {
         // Sorted and deduplicated rather than hashed: a prim has few sites.
         // Its opinions are read from its sources' specs, so the sources
         // name every site they do.
-        let mut sites = Vec::with_capacity(2 * index.sources.len() + 2);
+        let mut sites = SmallVec::new();
         for OpinionSource { key, .. } in &index.sources {
             if let Some(lookup) = site(key.layer_id, key.lookup_path) {
                 push(&mut sites, lookup, key);

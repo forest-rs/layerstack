@@ -92,8 +92,8 @@ pub(crate) struct Node {
     /// A node whose subtree contributes no specs, removed when the graph
     /// is finalized.
     pub(crate) culled: bool,
-    /// Whether a layer of the node's stack has a spec at its site.
-    pub(crate) has_specs: bool,
+    /// Summary of the specs the node's stack authors at its site.
+    pub(crate) authored: super::site::SiteOpinions,
     /// Whether a layer of the node's stack authors value clips at its site
     /// or an ancestor site.
     pub(crate) has_value_clips: bool,
@@ -119,6 +119,10 @@ pub(crate) struct Node {
 }
 
 impl Node {
+    pub(crate) fn has_specs(&self) -> bool {
+        self.authored.count != 0
+    }
+
     /// Whether this node contributes the specs at its site.
     pub(crate) fn can_contribute_specs(&self) -> bool {
         !(self.inert || self.culled)
@@ -296,7 +300,7 @@ impl Graph {
                 sibling_num: 0,
                 inert: false,
                 culled: false,
-                has_specs: false,
+                authored: super::site::SiteOpinions::default(),
                 has_value_clips: false,
                 restricted_depth: 0,
                 due_to_ancestor: false,

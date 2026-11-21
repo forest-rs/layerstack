@@ -376,8 +376,8 @@ pub(crate) fn build_prim_index(
     let depth = paths.resolve(site.path.prim_path()).depth();
     if depth == 0 && !site.path.has_variant_selections() {
         let mut graph = Graph::new(site.clone(), 0);
-        let has_specs = site::has_specs(ctx.store, ctx.stacks.get(site.stack), &site.path);
-        graph.node_mut(0).has_specs = has_specs;
+        let authored = site::SiteOpinions::find(ctx.store, ctx.stacks.get(site.stack), &site.path);
+        graph.node_mut(0).authored = authored;
         outputs.graph = graph;
         return;
     }
@@ -395,12 +395,12 @@ pub(crate) fn build_prim_index(
     if site_paths::is_variant_selection_path(&site.path) {
         let namespace_depth = non_variant_depth(indexer.ctx.store.paths(), &site.path);
         let mut graph = Graph::new(site.clone(), namespace_depth);
-        let has_specs = site::has_specs(
+        let authored = site::SiteOpinions::find(
             indexer.ctx.store,
             indexer.ctx.stacks.get(site.stack),
             &site.path,
         );
-        graph.node_mut(0).has_specs = has_specs;
+        graph.node_mut(0).authored = authored;
         graph.set_inert(indexer.ctx.store.paths(), 0, !root_contributes);
         indexer.outputs.graph = graph;
     } else {
@@ -613,7 +613,7 @@ impl Indexer<'_, '_, '_> {
         if stack.has_relocates() {
             tasks = tasks.with(TaskKind::NodeRelocations);
         }
-        if !entry.has_specs {
+        if !entry.has_specs() {
             return tasks;
         }
         for (_, _, spec) in site::specs(self.ctx.store, stack, &entry.site.path) {
@@ -903,13 +903,13 @@ impl Indexer<'_, '_, '_> {
             let entry = self.outputs.graph.node(index);
             // The root rechecks too: a spec may be authored without specs
             // for its ancestors.
-            if entry.has_specs || at == 0 {
+            if entry.has_specs() || at == 0 {
                 let stack = self.ctx.stacks.get(entry.site.stack);
-                let has = site::has_specs(self.ctx.store, stack, &entry.site.path);
-                self.outputs.graph.node_mut(index).has_specs = has;
+                let authored = site::SiteOpinions::find(self.ctx.store, stack, &entry.site.path);
+                self.outputs.graph.node_mut(index).authored = authored;
             }
             let entry = self.outputs.graph.node(index);
-            if !entry.inert && entry.has_specs && !entry.has_value_clips {
+            if !entry.inert && entry.has_specs() && !entry.has_value_clips {
                 let stack = self.ctx.stacks.get(entry.site.stack);
                 let clips = site::has_value_clips(self.ctx.store, stack, &entry.site.path);
                 self.outputs.graph.node_mut(index).has_value_clips = clips;
@@ -927,7 +927,7 @@ impl Indexer<'_, '_, '_> {
     /// `Pcp_ChildNodeIsInstanceable`.
     fn child_node_is_instanceable(&self, node: NodeIndex) -> bool {
         let entry = self.graph().node(node);
-        entry.transitive_direct && entry.can_contribute_specs() && entry.has_specs
+        entry.transitive_direct && entry.can_contribute_specs() && entry.has_specs()
     }
 
     /// Marks the nodes of an instance's index that cannot have opinions
@@ -1058,7 +1058,7 @@ impl Indexer<'_, '_, '_> {
                     .compose(paths, &map_to_parent)
             };
             let stack = self.ctx.stacks.get(site.stack);
-            let has_specs = site::has_specs(self.ctx.store, stack, &site.path);
+            let authored = site::SiteOpinions::find(self.ctx.store, stack, &site.path);
             let node = Node {
                 arc_kind,
                 parent,
@@ -1075,7 +1075,7 @@ impl Indexer<'_, '_, '_> {
                 sibling_num,
                 inert: false,
                 culled: false,
-                has_specs,
+                authored,
                 has_value_clips: false,
                 restricted_depth: 0,
                 due_to_ancestor: false,
@@ -1094,7 +1094,7 @@ impl Indexer<'_, '_, '_> {
                 self.outputs.graph.node_mut(index).restricted_depth = 1;
             }
             let entry = self.outputs.graph.node(index);
-            if !entry.inert && entry.has_specs {
+            if !entry.inert && entry.has_specs() {
                 let stack = self.ctx.stacks.get(site.stack);
                 let clips = site::has_value_clips(self.ctx.store, stack, &site.path);
                 self.outputs.graph.node_mut(index).has_value_clips = clips;
@@ -1755,7 +1755,7 @@ impl Indexer<'_, '_, '_> {
         let mut exists = false;
         for n in self.graph().subtree(node) {
             let found = if below_intro == 0 {
-                self.graph().node(n).has_specs
+                self.graph().node(n).has_specs()
             } else {
                 let path = self
                     .outputs
@@ -2686,7 +2686,7 @@ pub(crate) fn is_instanceable(
     graph: &Graph,
 ) -> bool {
     let instanceable_node =
-        |node: &Node| node.transitive_direct && node.can_contribute_specs() && node.has_specs;
+        |node: &Node| node.transitive_direct && node.can_contribute_specs() && node.has_specs();
     let mut has_data = false;
     let mut pending = graph.child_list(0);
     while let Some(node) = pending.pop() {

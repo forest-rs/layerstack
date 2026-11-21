@@ -10,11 +10,14 @@ use layerstack::{
 
 use super::{
     BatchError,
-    index::{ApiMemberships, Declarations},
+    index::{ApiMemberships, AppliedIndex},
 };
 
-/// Narrow prims need no separate lookup tables.
-const INDEX_AT: usize = 8;
+// Comparing a property against applied templates costs more than checking a
+// list of applied names or authored property slots for duplicates.
+const INDEX_API_DECLARATIONS_AT: usize = 8;
+const INDEX_API_NAMES_AT: usize = 16;
+const INDEX_PROPERTY_SLOTS_AT: usize = 32;
 
 /// A new prim being defined in a [`LayerBatch`](super::LayerBatch).
 /// Properties use the prim's schema and any APIs applied to it. Only
@@ -28,7 +31,7 @@ pub struct BatchPrim<'a> {
     tokens: &'a TokenInterner,
     typed: &'a PrimDefinition,
     applied: Vec<TokenId>,
-    declarations: Option<Box<Declarations<'a>>>,
+    applied_index: Option<Box<AppliedIndex<'a>>>,
     memberships: Option<Box<ApiMemberships>>,
     property_slots: Option<HashMap<TokenId, usize>>,
 }
@@ -47,7 +50,7 @@ impl<'a> BatchPrim<'a> {
                 .schema_definition(type_name)
                 .expect("registered concrete schema"),
             applied: Vec::new(),
-            declarations: None,
+            applied_index: None,
             memberships: None,
             property_slots: None,
         }
@@ -159,7 +162,10 @@ impl<'a> BatchPrim<'a> {
     }
 
     fn record_api(&mut self, entry: TokenId) {
-        let new = match &mut self.declarations {
+        if self.applied_index.is_none() && self.applied.len() >= INDEX_API_NAMES_AT {
+            self.applied_index = Some(Box::new(AppliedIndex::new(&self.applied)));
+        }
+        let new = match &mut self.applied_index {
             Some(index) => index.insert(entry, self.applied.len(), self.schemas, self.tokens),
             None => !self.applied.contains(&entry),
         };
@@ -167,13 +173,6 @@ impl<'a> BatchPrim<'a> {
             return;
         }
         self.applied.push(entry);
-        if self.applied.len() == INDEX_AT {
-            let mut declarations = Box::new(Declarations::default());
-            for (rank, &entry) in self.applied.iter().enumerate() {
-                declarations.insert(entry, rank, self.schemas, self.tokens);
-            }
-            self.declarations = Some(declarations);
-        }
         if let Some(memberships) = &mut self.memberships {
             memberships.insert(entry, self.schemas, self.tokens);
         }
@@ -189,22 +188,14 @@ impl<'a> BatchPrim<'a> {
     }
 
     fn declaration(
-        &self,
+        &mut self,
         name: TokenId,
         expected: PropertyKind,
     ) -> Result<&'a PropertyDefinition, BatchError> {
         let definition = self
             .typed
             .property(name)
-            .or_else(|| match &self.declarations {
-                Some(index) => index.property(name, self.tokens),
-                None => self.schemas.strongest_property_definition(
-                    None,
-                    &self.applied,
-                    name,
-                    self.tokens,
-                ),
-            })
+            .or_else(|| self.applied_property(name))
             .ok_or_else(|| BatchError::UnknownProperty(self.tokens.resolve(name).into()))?;
         if definition.kind != expected {
             return Err(BatchError::WrongPropertyKind {
@@ -213,6 +204,21 @@ impl<'a> BatchPrim<'a> {
             });
         }
         Ok(definition)
+    }
+
+    fn applied_property(&mut self, name: TokenId) -> Option<&'a PropertyDefinition> {
+        if self.applied.len() < INDEX_API_DECLARATIONS_AT {
+            return self.schemas.strongest_property_definition(
+                None,
+                &self.applied,
+                name,
+                self.tokens,
+            );
+        }
+        let index = self
+            .applied_index
+            .get_or_insert_with(|| Box::new(AppliedIndex::new(&self.applied)));
+        index.property(name, &self.applied, self.schemas, self.tokens)
     }
 
     fn set_value(&mut self, name: TokenId, value: Value) -> Result<(), BatchError> {
@@ -257,6 +263,15 @@ impl<'a> BatchPrim<'a> {
 
     fn set_property(&mut self, name: TokenId, spec: PropertySpec) {
         let properties = &mut self.spec.properties;
+        if self.property_slots.is_none() && properties.len() >= INDEX_PROPERTY_SLOTS_AT {
+            self.property_slots = Some(
+                properties
+                    .iter()
+                    .enumerate()
+                    .map(|(at, property)| (property.name, at))
+                    .collect(),
+            );
+        }
         if let Some(slots) = &mut self.property_slots {
             match slots.entry(name) {
                 Entry::Occupied(entry) => properties[*entry.get()].spec = Arc::new(spec),
@@ -271,16 +286,6 @@ impl<'a> BatchPrim<'a> {
             return;
         }
         self.spec.set_property(name, spec);
-        if self.spec.properties.len() == INDEX_AT {
-            self.property_slots = Some(
-                self.spec
-                    .properties
-                    .iter()
-                    .enumerate()
-                    .map(|(at, property)| (property.name, at))
-                    .collect(),
-            );
-        }
     }
 }
 
@@ -336,5 +341,104 @@ impl BatchApi<'_, '_> {
             )),
             None => property.name,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use layerstack::{FieldValue, InMemoryStore, PropertyType, SchemaDefinition, SchemaKind};
+
+    #[test]
+    fn apply_only_prims_index_names_without_preparing_declarations() {
+        let store = InMemoryStore::default();
+        let tokens = store.tokens();
+        let ty = tokens.intern("Panel");
+        let template = "slot:__INSTANCE_NAME__:visible";
+        let attribute = |name| {
+            PropertyDefinition::attribute(tokens.intern(name))
+                .with_type(PropertyType::parse("bool").unwrap())
+        };
+        let mut builder = SchemaRegistry::builder();
+        builder
+            .register(SchemaDefinition::typed(ty).with_property(attribute("visible")))
+            .register(
+                SchemaDefinition::new(tokens.intern("SlotAPI"), SchemaKind::MultipleApplyApi)
+                    .with_property(attribute(template)),
+            );
+        let registry = builder.build(tokens);
+
+        let mut prim = BatchPrim::new(ty, &registry, tokens);
+        for at in 0..INDEX_API_NAMES_AT {
+            prim.apply("SlotAPI", Some(&format!("entry{at}"))).unwrap();
+        }
+        assert!(prim.applied_index.is_none());
+        prim.apply("SlotAPI", Some("last")).unwrap();
+        prim.apply("SlotAPI", Some("entry0")).unwrap();
+        prim.set("visible", Value::Bool(true)).unwrap();
+        assert!(!prim.applied_index.as_ref().unwrap().has_declarations());
+
+        prim.set("slot:entry0:visible", Value::Bool(false)).unwrap();
+        assert!(prim.applied_index.as_ref().unwrap().has_declarations());
+        prim.apply("SlotAPI", Some("late"))
+            .unwrap()
+            .set(template, Value::Bool(true))
+            .unwrap();
+        let spec = prim.into_spec();
+        let FieldValue::TokenListOp(applied) = spec.field(tokens.intern("apiSchemas")).unwrap()
+        else {
+            panic!("expected apiSchemas list op");
+        };
+        assert_eq!(applied.prepend.len(), INDEX_API_NAMES_AT + 2);
+        assert_eq!(tokens.resolve(applied.prepend[0]), "SlotAPI:entry0");
+        assert_eq!(
+            tokens.resolve(*applied.prepend.last().unwrap()),
+            "SlotAPI:late"
+        );
+        assert_eq!(
+            spec.property(tokens.intern("slot:late:visible"))
+                .unwrap()
+                .default,
+            Some(Value::Bool(true)),
+        );
+    }
+
+    #[test]
+    fn indexing_slots_on_a_rewrite_preserves_authored_order() {
+        let store = InMemoryStore::default();
+        let tokens = store.tokens();
+        let ty = tokens.intern("Panel");
+        let ty_int = PropertyType::parse("int").unwrap();
+        let names: Vec<_> = (0..=INDEX_PROPERTY_SLOTS_AT)
+            .map(|at| format!("field{at}"))
+            .collect();
+        let mut schema = SchemaDefinition::typed(ty);
+        for name in &names {
+            schema = schema.with_property(
+                PropertyDefinition::attribute(tokens.intern(name)).with_type(ty_int.clone()),
+            );
+        }
+        let mut builder = SchemaRegistry::builder();
+        builder.register(schema);
+        let registry = builder.build(tokens);
+        let mut prim = BatchPrim::new(ty, &registry, tokens);
+        for name in &names[..INDEX_PROPERTY_SLOTS_AT] {
+            prim.set(name, Value::Int(1)).unwrap();
+        }
+        assert!(prim.property_slots.is_none());
+        prim.set(&names[0], Value::Int(2)).unwrap();
+        assert!(prim.property_slots.is_some());
+        prim.set(&names[INDEX_PROPERTY_SLOTS_AT], Value::Int(3))
+            .unwrap();
+        let spec = prim.into_spec();
+        assert_eq!(spec.properties.len(), names.len());
+        for (property, name) in spec.properties.iter().zip(&names) {
+            assert_eq!(tokens.resolve(property.name), name);
+        }
+        assert_eq!(spec.properties[0].spec.default, Some(Value::Int(2)));
+        assert_eq!(
+            spec.properties[INDEX_PROPERTY_SLOTS_AT].spec.default,
+            Some(Value::Int(3))
+        );
     }
 }

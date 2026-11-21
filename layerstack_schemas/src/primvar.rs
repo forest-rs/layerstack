@@ -838,6 +838,13 @@ impl PrimEdit {
     }
     /// Creates and authors an indexed array primvar as one fallible child group.
     /// Invalid names, metadata or sidecars append no edits.
+    ///
+    /// Pass `None` for `element_size` to leave its metadata unauthored in
+    /// this operation. An existing opinion still composes, with 1 as the
+    /// fallback. A positive integer explicitly authors the size.
+    ///
+    /// Spec: AOUSD Core §7.6.4 (attribute metadata). OpenUSD:
+    /// `UsdGeomPrimvarsAPI::CreatePrimvar`.
     pub fn create_indexed_primvar(
         &self,
         edit: &mut SchemaEdit<'_>,
@@ -846,12 +853,14 @@ impl PrimEdit {
         value: Value,
         indices: &[i32],
         interpolation: &str,
-        element_size: i32,
+        element_size: impl Into<Option<i32>>,
     ) -> Result<PrimvarEdit, PrimvarError> {
         edit.group(|edit| {
             let pv = self.create_primvar(edit, name, ty)?;
             pv.set_interpolation(edit, interpolation)?;
-            pv.set_element_size(edit, element_size)?;
+            if let Some(size) = element_size.into() {
+                pv.set_element_size(edit, size)?;
+            }
             pv.set(edit, value)?;
             pv.set_indices(edit, indices)?;
             Ok(pv)
@@ -860,6 +869,13 @@ impl PrimEdit {
     /// Creates and authors a nonindexed primvar, blocking any existing indices
     /// in the target layer so weaker indexing cannot leak into the new value.
     /// Invalid declarations or metadata append no edits.
+    ///
+    /// Pass `None` for `element_size` to leave its metadata unauthored in
+    /// this operation. An existing opinion still composes, with 1 as the
+    /// fallback. A positive integer explicitly authors the size.
+    ///
+    /// Spec: AOUSD Core §7.6.4 (attribute metadata). OpenUSD:
+    /// `UsdGeomPrimvarsAPI::CreatePrimvar`.
     pub fn create_nonindexed_primvar(
         &self,
         edit: &mut SchemaEdit<'_>,
@@ -867,12 +883,14 @@ impl PrimEdit {
         ty: PropertyType,
         value: Value,
         interpolation: &str,
-        element_size: i32,
+        element_size: impl Into<Option<i32>>,
     ) -> Result<PrimvarEdit, PrimvarError> {
         edit.group(|edit| {
             let pv = self.create_primvar(edit, name, ty)?;
             pv.set_interpolation(edit, interpolation)?;
-            pv.set_element_size(edit, element_size)?;
+            if let Some(size) = element_size.into() {
+                pv.set_element_size(edit, size)?;
+            }
             pv.set(edit, value)?;
             if pv.validate(edit)?.is_array() {
                 pv.block_indices(edit)?;
@@ -1131,8 +1149,8 @@ mod tests {
     use crate::usd_geom::{Mesh, MeshEdit};
     use alloc::vec;
     use layerstack::{
-        EditTarget, InMemoryStore, Layer, LayerId, LiveStage, MetadataEditReason, MetadataTarget,
-        PropertyDeclaration, PropertyKind, StageOptions, Variability,
+        EditTarget, FieldValue, InMemoryStore, Layer, LayerId, LiveStage, MetadataEditReason,
+        MetadataTarget, PropertyDeclaration, PropertyKind, StageOptions, Variability,
     };
 
     fn edit_fixture() -> (InMemoryStore, LiveStage, EditTarget, PathId) {
@@ -1149,6 +1167,52 @@ mod tests {
         };
         let live = LiveStage::compose(&mut store, root, options);
         (store, live, EditTarget::for_layer(root), path)
+    }
+
+    #[test]
+    fn primvar_creation_can_leave_element_size_unauthored() {
+        let (mut store, mut live, target, path) = edit_fixture();
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, target.clone());
+        let mesh = Mesh::define(&mut edit, path).unwrap();
+        let ty = PropertyType::parse("float[]").unwrap();
+        let values = || Value::array(vec![Value::Float(1.), Value::Float(2.)]);
+        mesh.create_indexed_primvar(
+            &mut edit,
+            "indexed",
+            ty.clone(),
+            values(),
+            &[0],
+            "vertex",
+            None,
+        )
+        .unwrap();
+        mesh.create_nonindexed_primvar(&mut edit, "plain", ty.clone(), values(), "vertex", None)
+            .unwrap();
+        mesh.create_indexed_primvar(&mut edit, "pair", ty.clone(), values(), &[0], "vertex", 2)
+            .unwrap();
+        mesh.create_nonindexed_primvar(&mut edit, "pair", ty, values(), "vertex", None)
+            .unwrap();
+        let txn = edit.finish();
+        live.apply(&mut store, &txn).unwrap();
+        let scene = Scene::new(live.stage(), &store);
+        let prim = store.layer(target.layer()).unwrap().prim(path).unwrap();
+        let key = store.tokens().intern("elementSize");
+        for (name, size, indexed) in [
+            ("indexed", None, true),
+            ("plain", None, false),
+            ("pair", Some(2), false),
+        ] {
+            let property = prim
+                .property(store.tokens().intern(alloc::format!("primvars:{name}")))
+                .unwrap();
+            assert_eq!(
+                property.metadata(key),
+                size.map(|v| FieldValue::Value(Value::Int(v))).as_ref()
+            );
+            let pv = Primvar::new(&scene, path, name).unwrap();
+            assert_eq!(pv.element_size(), size.unwrap_or(1));
+            assert_eq!(pv.is_indexed(), indexed);
+        }
     }
 
     #[test]

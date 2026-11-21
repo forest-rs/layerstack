@@ -175,7 +175,7 @@ impl HydraGenerativeProceduralApiEdit {
     #[doc(alias = "CreateProceduralTypeAttr")]
     pub fn set_procedural_type(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "primvars:hdGp:proceduralType", value);
+        self.write_schema_value(edit, "primvars:hdGp:proceduralType", value);
         self
     }
 
@@ -187,7 +187,7 @@ impl HydraGenerativeProceduralApiEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value_at(edit, "primvars:hdGp:proceduralType", time, value);
+        self.write_schema_value_at(edit, "primvars:hdGp:proceduralType", time, value);
         self
     }
 
@@ -199,7 +199,7 @@ impl HydraGenerativeProceduralApiEdit {
     #[doc(alias = "CreateProceduralSystemAttr")]
     pub fn set_procedural_system(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "proceduralSystem", value);
+        self.write_schema_value(edit, "proceduralSystem", value);
         self
     }
 
@@ -211,7 +211,7 @@ impl HydraGenerativeProceduralApiEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value_at(edit, "proceduralSystem", time, value);
+        self.write_schema_value_at(edit, "proceduralSystem", time, value);
         self
     }
 }
@@ -340,7 +340,7 @@ impl HydraPrimApiEdit {
     #[doc(alias = "CreateHydraExpandInstancesAttr")]
     pub fn set_hydra_expand_instances(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "hydra:expandInstances", value);
+        self.write_schema_value(edit, "hydra:expandInstances", value);
         self
     }
 }
@@ -469,7 +469,7 @@ impl HydraRenderPassApiEdit {
     #[doc(alias = "CreateHydraRendererNameAttr")]
     pub fn set_hydra_renderer_name(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "hydra:rendererName", value);
+        self.write_schema_value(edit, "hydra:rendererName", value);
         self
     }
 }

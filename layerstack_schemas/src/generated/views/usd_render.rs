@@ -210,7 +210,7 @@ impl RenderPassEdit {
     #[doc(alias = "CreateCommandAttr")]
     pub fn set_command(&self, edit: &mut SchemaEdit<'_>, value: &[&str]) -> &Self {
         let value = crate::value::write_string_array(value, edit.tokens());
-        self.write_value(edit, "command", value);
+        self.write_schema_value(edit, "command", value);
         self
     }
 
@@ -222,7 +222,7 @@ impl RenderPassEdit {
     #[doc(alias = "CreateFileNameAttr")]
     pub fn set_file_name(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "fileName", value);
+        self.write_schema_value(edit, "fileName", value);
         self
     }
 
@@ -274,7 +274,7 @@ impl RenderPassEdit {
     #[doc(alias = "CreatePassTypeAttr")]
     pub fn set_pass_type(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "passType", value);
+        self.write_schema_value(edit, "passType", value);
         self
     }
 
@@ -569,14 +569,14 @@ impl RenderProductEdit {
     #[doc(alias = "CreateProductNameAttr")]
     pub fn set_product_name(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "productName", value);
+        self.write_schema_value(edit, "productName", value);
         self
     }
 
     #[doc = "[`Self::set_product_name`] as a time sample at the time code `time`."]
     pub fn set_product_name_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value_at(edit, "productName", time, value);
+        self.write_schema_value_at(edit, "productName", time, value);
         self
     }
 
@@ -592,7 +592,7 @@ impl RenderProductEdit {
         value: RenderProductProductType,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "productType", value);
+        self.write_schema_value(edit, "productType", value);
         self
     }
 }
@@ -788,7 +788,7 @@ impl RenderSettingsEdit {
     #[doc(alias = "CreateIncludedPurposesAttr")]
     pub fn set_included_purposes(&self, edit: &mut SchemaEdit<'_>, value: &[&str]) -> &Self {
         let value = crate::value::write_array(value, edit.tokens(), crate::value::write_token);
-        self.write_value(edit, "includedPurposes", value);
+        self.write_schema_value(edit, "includedPurposes", value);
         self
     }
 
@@ -804,7 +804,7 @@ impl RenderSettingsEdit {
         value: &[&str],
     ) -> &Self {
         let value = crate::value::write_array(value, edit.tokens(), crate::value::write_token);
-        self.write_value(edit, "materialBindingPurposes", value);
+        self.write_schema_value(edit, "materialBindingPurposes", value);
         self
     }
 
@@ -856,7 +856,7 @@ impl RenderSettingsEdit {
     #[doc(alias = "CreateRenderingColorSpaceAttr")]
     pub fn set_rendering_color_space(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "renderingColorSpace", value);
+        self.write_schema_value(edit, "renderingColorSpace", value);
         self
     }
 }
@@ -1139,7 +1139,7 @@ impl RenderSettingsBaseEdit {
         value: RenderSettingsBaseAspectRatioConformPolicy,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "aspectRatioConformPolicy", value);
+        self.write_schema_value(edit, "aspectRatioConformPolicy", value);
         self
     }
 
@@ -1188,7 +1188,7 @@ impl RenderSettingsBaseEdit {
     #[doc = "USD attribute `dataWindowNDC` (`float4`, uniform; fallback `(0.0, 0.0, 1.0, 1.0)`)."]
     pub fn set_data_window_ndc(&self, edit: &mut SchemaEdit<'_>, value: [f32; 4]) -> &Self {
         let value = crate::value::write_float4(value, edit.tokens());
-        self.write_value(edit, "dataWindowNDC", value);
+        self.write_schema_value(edit, "dataWindowNDC", value);
         self
     }
 
@@ -1200,7 +1200,7 @@ impl RenderSettingsBaseEdit {
     #[doc(alias = "CreateDisableDepthOfFieldAttr")]
     pub fn set_disable_depth_of_field(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "disableDepthOfField", value);
+        self.write_schema_value(edit, "disableDepthOfField", value);
         self
     }
 
@@ -1212,7 +1212,7 @@ impl RenderSettingsBaseEdit {
     #[doc(alias = "CreateDisableMotionBlurAttr")]
     pub fn set_disable_motion_blur(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "disableMotionBlur", value);
+        self.write_schema_value(edit, "disableMotionBlur", value);
         self
     }
 
@@ -1224,7 +1224,7 @@ impl RenderSettingsBaseEdit {
     #[doc(alias = "CreateInstantaneousShutterAttr")]
     pub fn set_instantaneous_shutter(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "instantaneousShutter", value);
+        self.write_schema_value(edit, "instantaneousShutter", value);
         self
     }
 
@@ -1236,7 +1236,7 @@ impl RenderSettingsBaseEdit {
     #[doc(alias = "CreatePixelAspectRatioAttr")]
     pub fn set_pixel_aspect_ratio(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "pixelAspectRatio", value);
+        self.write_schema_value(edit, "pixelAspectRatio", value);
         self
     }
 
@@ -1248,7 +1248,7 @@ impl RenderSettingsBaseEdit {
     #[doc(alias = "CreateResolutionAttr")]
     pub fn set_resolution(&self, edit: &mut SchemaEdit<'_>, value: [i32; 2]) -> &Self {
         let value = crate::value::write_int2(value, edit.tokens());
-        self.write_value(edit, "resolution", value);
+        self.write_schema_value(edit, "resolution", value);
         self
     }
 }
@@ -1462,7 +1462,7 @@ impl RenderVarEdit {
     #[doc(alias = "CreateDataTypeAttr")]
     pub fn set_data_type(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "dataType", value);
+        self.write_schema_value(edit, "dataType", value);
         self
     }
 
@@ -1474,7 +1474,7 @@ impl RenderVarEdit {
     #[doc(alias = "CreateSourceNameAttr")]
     pub fn set_source_name(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value(edit, "sourceName", value);
+        self.write_schema_value(edit, "sourceName", value);
         self
     }
 
@@ -1486,7 +1486,7 @@ impl RenderVarEdit {
     #[doc(alias = "CreateSourceTypeAttr")]
     pub fn set_source_type(&self, edit: &mut SchemaEdit<'_>, value: RenderVarSourceType) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "sourceType", value);
+        self.write_schema_value(edit, "sourceType", value);
         self
     }
 }

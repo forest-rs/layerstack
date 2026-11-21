@@ -19,6 +19,226 @@ use super::{CannotEdit, EditTarget, PathId, SchemaEdit};
 
 const ROOT: LayerId = LayerId(1);
 
+#[test]
+fn undeclared_dynamic_writes_collect_no_edits() {
+    use alloc::string::ToString;
+    use layerstack::{EditError, PropertyPath, Rejection, Value};
+
+    use crate::{AttributeWriteError, PrimEdit};
+
+    let (mut store, mut live) = stage(|store, layer| {
+        layer.insert_prim(store.path("/Rock"), PrimSpec::def());
+    });
+    let path = store.path("/Rock");
+    let name = "custom:rating";
+    let target = EditTarget::for_layer(ROOT);
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, target.clone());
+    let prim = PrimEdit::new(&edit, path).unwrap().unwrap();
+    let expected = AttributeWriteError::Undeclared {
+        prim: path,
+        name: name.into(),
+    };
+    let error = prim
+        .write_value(&mut edit, name, Value::Float(1.0))
+        .unwrap_err();
+    assert_eq!(error, expected);
+
+    let token = edit.tokens().lookup(name).unwrap();
+    assert_eq!(
+        prim.write_value_at(&mut edit, name, 2.0, Value::Float(1.0)),
+        Err(expected)
+    );
+    assert!(edit.finish().is_empty());
+    let diagnostic = error.display(&store).to_string();
+    assert!(diagnostic.contains("/Rock.custom:rating"));
+    assert!(diagnostic.contains("SchemaEdit::declare_property"));
+
+    let mut raw = layerstack::Transaction::new();
+    raw.set_default(
+        target.property(PropertyPath::new(path, token)),
+        Value::Float(1.0),
+    );
+    assert!(matches!(
+        live.apply(&mut store, &raw),
+        Err(EditError::Rejected {
+            reason: Rejection::UndeclaredType(_),
+            ..
+        })
+    ));
+}
+
+#[test]
+fn dynamic_writes_use_authored_and_pending_custom_declarations() {
+    use layerstack::{
+        PropertyDeclaration, PropertyKind, PropertyPath, PropertySpec, PropertyType, Value,
+        Variability,
+    };
+
+    let ty = PropertyType::parse("float").unwrap();
+    let (mut store, mut live) = stage(|store, layer| {
+        let path = store.path("/Rock");
+        let weight = store.tokens().intern("custom:weight");
+        let mut spec = PrimSpec::def();
+        spec.set_property(weight, PropertySpec::typed_attribute(ty.clone()).custom());
+        layer.insert_prim(path, spec);
+    });
+    let path = store.path("/Rock");
+    let pending = store.tokens().intern("custom:rating");
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(ROOT));
+    let prim = crate::PrimEdit::new(&edit, path).unwrap().unwrap();
+    prim.write_value(&mut edit, "custom:weight", Value::Float(2.0))
+        .unwrap();
+    assert!(edit.declare_property(
+        PropertyPath::new(path, pending),
+        &PropertyDeclaration {
+            kind: PropertyKind::Attribute,
+            type_name: Some(ty.clone()),
+            variability: Variability::Varying,
+            custom: true,
+        },
+    ));
+    edit.group(|child| prim.write_value_at(child, "custom:rating", 3.0, Value::Float(4.0)))
+        .unwrap();
+
+    let transaction = edit.finish();
+    live.apply(&mut store, &transaction).unwrap();
+    let rock = store.layer(ROOT).unwrap().prim(path).unwrap();
+    let weight = rock
+        .property(store.tokens().lookup("custom:weight").unwrap())
+        .unwrap();
+    assert!(weight.custom);
+    assert_eq!(weight.default, Some(Value::Float(2.0)));
+    let rating = rock.property(pending).unwrap();
+    assert!(rating.custom);
+    assert_eq!(rating.type_name.as_ref(), Some(&ty));
+    assert_eq!(
+        rating.time_samples.get().unwrap(),
+        &[(3.0, Value::Float(4.0))]
+    );
+}
+
+#[cfg(feature = "usd-geom")]
+#[test]
+fn dynamic_writes_use_typed_and_instance_schemas_in_the_edit() {
+    use layerstack::{PropertyPath, Value};
+
+    use crate::{AttributeWriteError, InstanceEdit};
+
+    let (mut store, mut live) = stage(|_, _| {});
+    let path = store.path("/Rock");
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(ROOT));
+    let prim = edit.define_prim(path, "Cube").unwrap();
+    prim.write_value_at(&mut edit, "size", 2.0, Value::Double(3.0))
+        .unwrap();
+    edit.apply_api(path, "CollectionAPI", Some("front"))
+        .unwrap();
+    let instance = InstanceEdit::new(prim, "front");
+    instance
+        .write_value(
+            &mut edit,
+            "collection:__INSTANCE_NAME__:includeRoot",
+            Value::Bool(true),
+        )
+        .unwrap();
+    assert_eq!(
+        instance.write_value_at(
+            &mut edit,
+            "collection:__INSTANCE_NAME__:missing",
+            2.0,
+            Value::Bool(false)
+        ),
+        Err(AttributeWriteError::Undeclared {
+            prim: path,
+            name: "collection:front:missing".into(),
+        })
+    );
+    let relationship = edit.tokens().intern("collection:front:includes");
+    assert_eq!(
+        instance.write_value(
+            &mut edit,
+            "collection:__INSTANCE_NAME__:includes",
+            Value::Bool(true)
+        ),
+        Err(AttributeWriteError::NotAnAttribute(PropertyPath::new(
+            path,
+            relationship
+        )))
+    );
+    let transaction = edit.finish();
+    live.apply(&mut store, &transaction).unwrap();
+    let rock = store.layer(ROOT).unwrap().prim(path).unwrap();
+    let size = rock
+        .property(store.tokens().lookup("size").unwrap())
+        .unwrap();
+    assert_eq!(
+        size.time_samples.get().unwrap(),
+        &[(2.0, Value::Double(3.0))]
+    );
+    let include = rock
+        .property(
+            store
+                .tokens()
+                .lookup("collection:front:includeRoot")
+                .unwrap(),
+        )
+        .unwrap();
+    assert_eq!(include.default, Some(Value::Bool(true)));
+    assert!(rock.property(relationship).is_none());
+}
+
+#[test]
+fn dynamic_write_uses_an_unselected_variants_authored_type() {
+    use layerstack::{
+        PropertyEntry, PropertySpec, PropertyType, SpecPath, Value, VariantSetSpec, VariantSpec,
+        Variants,
+    };
+
+    let (mut store, mut live) = stage(|store, layer| {
+        let path = store.path("/Rock");
+        let tokens = store.tokens();
+        let name = tokens.intern("custom:rating");
+        let look = tokens.intern("look");
+        let bare = tokens.intern("bare");
+        let painted = tokens.intern("painted");
+        let mut variants = Variants::new();
+        variants.insert(bare, VariantSpec::default());
+        variants.insert(
+            painted,
+            VariantSpec {
+                properties: alloc::vec![PropertyEntry {
+                    name,
+                    spec: PropertySpec::typed_attribute(PropertyType::parse("float").unwrap())
+                        .custom()
+                        .into(),
+                }],
+                ..VariantSpec::default()
+            },
+        );
+        let mut prim = PrimSpec::def();
+        let rare = prim.rare_mut();
+        rare.variant_sets.insert(look, VariantSetSpec { variants });
+        rare.variant_set_names.make_mut().prepend.push(look);
+        rare.variant_selections.insert(look, bare);
+        layer.insert_prim(path, prim);
+    });
+    let prim = store.path("/Rock");
+    let branch = SpecPath::parse("/Rock{look=painted}", store.tokens(), store.paths()).unwrap();
+    let target = EditTarget::for_local_variant(ROOT, &branch);
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, target);
+    let handle = crate::PrimEdit::new(&edit, prim).unwrap().unwrap();
+    handle
+        .write_value(&mut edit, "custom:rating", Value::Float(2.0))
+        .unwrap();
+    let transaction = edit.finish();
+    live.apply(&mut store, &transaction).unwrap();
+    let variant = store
+        .layer(ROOT)
+        .unwrap()
+        .variant_spec_at(&branch, store.paths())
+        .unwrap();
+    assert_eq!(variant.properties[0].spec.default, Some(Value::Float(2.0)));
+}
+
 #[cfg(feature = "usd-geom")]
 #[test]
 fn grouped_pending_prims_keep_order_and_restore_parent_on_failure() {

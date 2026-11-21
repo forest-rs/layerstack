@@ -154,7 +154,7 @@ impl GenerativeProceduralEdit {
     #[doc(alias = "CreateProceduralSystemAttr")]
     pub fn set_procedural_system(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "proceduralSystem", value);
+        self.write_schema_value(edit, "proceduralSystem", value);
         self
     }
 
@@ -166,7 +166,7 @@ impl GenerativeProceduralEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value_at(edit, "proceduralSystem", time, value);
+        self.write_schema_value_at(edit, "proceduralSystem", time, value);
         self
     }
 }

@@ -29,7 +29,7 @@ use layerstack::{
     TargetPath, Time, TokenId, TokenInterner, Value,
 };
 
-use crate::edit::{CannotEdit, SchemaEdit};
+use crate::edit::{AttributeWriteError, CannotEdit, SchemaEdit};
 use crate::kind::KindRegistry;
 
 /// A composed stage and the store it was composed from: what every schema
@@ -587,14 +587,25 @@ impl PrimEdit {
 
     /// Authors `value` as the default of the attribute `name` (its USD
     /// name). An attribute no layer authors yet is created as the prim's
-    /// schemas define it: the type and variability of their definition.
+    /// schemas define it. To write a new custom attribute, first give it
+    /// a type with [`SchemaEdit::declare_property`].
     ///
     /// OpenUSD: `UsdAttribute::Set` at the default time, after
     /// `UsdPrim::CreateAttribute` for a schema attribute.
     ///
     /// Spec: AOUSD Core §7.6.4.1.3 (`default`), §12.3 (attribute values).
-    pub fn write_value(&self, edit: &mut SchemaEdit<'_>, name: &str, value: Value) {
-        edit.set_value(self.path, name, None, value);
+    ///
+    /// # Errors
+    ///
+    /// [`AttributeWriteError`] if the name denotes a relationship or lacks
+    /// an attribute type. A refusal collects no edit.
+    pub fn write_value(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        name: &str,
+        value: Value,
+    ) -> Result<(), AttributeWriteError> {
+        edit.write_value(self.path, name, None, value)
     }
 
     /// [`Self::write_value`] as a time sample at the time code `time`,
@@ -604,7 +615,35 @@ impl PrimEdit {
     ///
     /// Spec: AOUSD Core §7.6.4.1.4 (`timeSamples`), §12.3.2 (time-based
     /// resolution).
-    pub fn write_value_at(&self, edit: &mut SchemaEdit<'_>, name: &str, time: f64, value: Value) {
+    ///
+    /// # Errors
+    ///
+    /// The same declaration errors as [`Self::write_value`].
+    pub fn write_value_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        name: &str,
+        time: f64,
+        value: Value,
+    ) -> Result<(), AttributeWriteError> {
+        edit.write_value(self.path, name, Some(time), value)
+    }
+
+    /// Generated setter for a property declared by its schema.
+    #[doc(hidden)]
+    pub fn write_schema_value(&self, edit: &mut SchemaEdit<'_>, name: &str, value: Value) {
+        edit.set_value(self.path, name, None, value);
+    }
+
+    /// Generated time-sampled setter for a property declared by its schema.
+    #[doc(hidden)]
+    pub fn write_schema_value_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        name: &str,
+        time: f64,
+        value: Value,
+    ) {
         edit.set_value(self.path, name, Some(time), value);
     }
 
@@ -997,22 +1036,60 @@ impl InstanceEdit {
     /// [`PrimEdit::write_value`] of the instance's attribute `template`:
     /// a multiple-apply schema's property name, whose `__INSTANCE_NAME__`
     /// segment is the instance name (see [`InstanceView::read_value`]).
-    pub fn write_value(&self, edit: &mut SchemaEdit<'_>, template: &str, value: Value) {
+    ///
+    /// # Errors
+    ///
+    /// The same declaration errors as [`PrimEdit::write_value`], for the
+    /// expanded name.
+    pub fn write_value(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        template: &str,
+        value: Value,
+    ) -> Result<(), AttributeWriteError> {
         self.prim
-            .write_value(edit, &instance_name(template, &self.instance), value);
+            .write_value(edit, &instance_name(template, &self.instance), value)
     }
 
     /// [`PrimEdit::write_value_at`] of the instance's attribute `template`
     /// (see [`Self::write_value`]).
+    ///
+    /// # Errors
+    ///
+    /// The same declaration errors as [`Self::write_value`].
     pub fn write_value_at(
         &self,
         edit: &mut SchemaEdit<'_>,
         template: &str,
         time: f64,
         value: Value,
-    ) {
+    ) -> Result<(), AttributeWriteError> {
         self.prim
-            .write_value_at(edit, &instance_name(template, &self.instance), time, value);
+            .write_value_at(edit, &instance_name(template, &self.instance), time, value)
+    }
+
+    /// Generated setter for a property declared by this instance's schema.
+    #[doc(hidden)]
+    pub fn write_schema_value(&self, edit: &mut SchemaEdit<'_>, template: &str, value: Value) {
+        self.prim
+            .write_schema_value(edit, &instance_name(template, &self.instance), value);
+    }
+
+    /// Generated time-sampled setter for a property declared by this instance's schema.
+    #[doc(hidden)]
+    pub fn write_schema_value_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        template: &str,
+        time: f64,
+        value: Value,
+    ) {
+        self.prim.write_schema_value_at(
+            edit,
+            &instance_name(template, &self.instance),
+            time,
+            value,
+        );
     }
 
     /// [`PrimEdit::write_targets`] of the instance's relationship

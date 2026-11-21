@@ -567,14 +567,14 @@ impl BackPlateApiEdit {
     #[doc(alias = "CreateAlphaImageAttr")]
     pub fn set_alpha_image(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "backPlate:__INSTANCE_NAME__:alpha:image", value);
+        self.write_schema_value(edit, "backPlate:__INSTANCE_NAME__:alpha:image", value);
         self
     }
 
     #[doc = "[`Self::set_alpha_image`] as a time sample at the time code `time`."]
     pub fn set_alpha_image_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value_at(edit, "backPlate:__INSTANCE_NAME__:alpha:image", time, value);
+        self.write_schema_value_at(edit, "backPlate:__INSTANCE_NAME__:alpha:image", time, value);
         self
     }
 
@@ -584,7 +584,7 @@ impl BackPlateApiEdit {
     #[doc(alias = "CreateDepthCameraSpaceOffsetAttr")]
     pub fn set_depth_camera_space_offset(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(
+        self.write_schema_value(
             edit,
             "backPlate:__INSTANCE_NAME__:depth:cameraSpaceOffset",
             value,
@@ -600,7 +600,7 @@ impl BackPlateApiEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(
+        self.write_schema_value_at(
             edit,
             "backPlate:__INSTANCE_NAME__:depth:cameraSpaceOffset",
             time,
@@ -617,14 +617,14 @@ impl BackPlateApiEdit {
     #[doc(alias = "CreateDepthImageAttr")]
     pub fn set_depth_image(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "backPlate:__INSTANCE_NAME__:depth:image", value);
+        self.write_schema_value(edit, "backPlate:__INSTANCE_NAME__:depth:image", value);
         self
     }
 
     #[doc = "[`Self::set_depth_image`] as a time sample at the time code `time`."]
     pub fn set_depth_image_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value_at(edit, "backPlate:__INSTANCE_NAME__:depth:image", time, value);
+        self.write_schema_value_at(edit, "backPlate:__INSTANCE_NAME__:depth:image", time, value);
         self
     }
 
@@ -634,7 +634,7 @@ impl BackPlateApiEdit {
     #[doc(alias = "CreateDepthMinOffsetAttr")]
     pub fn set_depth_min_offset(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "backPlate:__INSTANCE_NAME__:depth:minOffset", value);
+        self.write_schema_value(edit, "backPlate:__INSTANCE_NAME__:depth:minOffset", value);
         self
     }
 
@@ -646,7 +646,7 @@ impl BackPlateApiEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(
+        self.write_schema_value_at(
             edit,
             "backPlate:__INSTANCE_NAME__:depth:minOffset",
             time,
@@ -661,7 +661,7 @@ impl BackPlateApiEdit {
     #[doc(alias = "CreateDepthNormalizingFactorAttr")]
     pub fn set_depth_normalizing_factor(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(
+        self.write_schema_value(
             edit,
             "backPlate:__INSTANCE_NAME__:depth:normalizingFactor",
             value,
@@ -677,7 +677,7 @@ impl BackPlateApiEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(
+        self.write_schema_value_at(
             edit,
             "backPlate:__INSTANCE_NAME__:depth:normalizingFactor",
             time,
@@ -694,14 +694,14 @@ impl BackPlateApiEdit {
     #[doc(alias = "CreateImageAttr")]
     pub fn set_image(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "backPlate:__INSTANCE_NAME__:image", value);
+        self.write_schema_value(edit, "backPlate:__INSTANCE_NAME__:image", value);
         self
     }
 
     #[doc = "[`Self::set_image`] as a time sample at the time code `time`."]
     pub fn set_image_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value_at(edit, "backPlate:__INSTANCE_NAME__:image", time, value);
+        self.write_schema_value_at(edit, "backPlate:__INSTANCE_NAME__:image", time, value);
         self
     }
 
@@ -711,7 +711,7 @@ impl BackPlateApiEdit {
     #[doc(alias = "CreateLumaOffsetAttr")]
     pub fn set_luma_offset(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "backPlate:__INSTANCE_NAME__:luma:offset", value);
+        self.write_schema_value(edit, "backPlate:__INSTANCE_NAME__:luma:offset", value);
         self
     }
 
@@ -723,7 +723,7 @@ impl BackPlateApiEdit {
         value: [f32; 3],
     ) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value_at(edit, "backPlate:__INSTANCE_NAME__:luma:offset", time, value);
+        self.write_schema_value_at(edit, "backPlate:__INSTANCE_NAME__:luma:offset", time, value);
         self
     }
 
@@ -733,7 +733,7 @@ impl BackPlateApiEdit {
     #[doc(alias = "CreateLumaPowerAttr")]
     pub fn set_luma_power(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "backPlate:__INSTANCE_NAME__:luma:power", value);
+        self.write_schema_value(edit, "backPlate:__INSTANCE_NAME__:luma:power", value);
         self
     }
 
@@ -745,7 +745,7 @@ impl BackPlateApiEdit {
         value: [f32; 3],
     ) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value_at(edit, "backPlate:__INSTANCE_NAME__:luma:power", time, value);
+        self.write_schema_value_at(edit, "backPlate:__INSTANCE_NAME__:luma:power", time, value);
         self
     }
 
@@ -755,7 +755,7 @@ impl BackPlateApiEdit {
     #[doc(alias = "CreateLumaSlopeAttr")]
     pub fn set_luma_slope(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "backPlate:__INSTANCE_NAME__:luma:slope", value);
+        self.write_schema_value(edit, "backPlate:__INSTANCE_NAME__:luma:slope", value);
         self
     }
 
@@ -767,7 +767,7 @@ impl BackPlateApiEdit {
         value: [f32; 3],
     ) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value_at(edit, "backPlate:__INSTANCE_NAME__:luma:slope", time, value);
+        self.write_schema_value_at(edit, "backPlate:__INSTANCE_NAME__:luma:slope", time, value);
         self
     }
 
@@ -783,7 +783,7 @@ impl BackPlateApiEdit {
         value: BackPlateApiPlateVisibility,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "backPlate:__INSTANCE_NAME__:plateVisibility", value);
+        self.write_schema_value(edit, "backPlate:__INSTANCE_NAME__:plateVisibility", value);
         self
     }
 
@@ -795,7 +795,7 @@ impl BackPlateApiEdit {
         value: BackPlateApiPlateVisibility,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value_at(
+        self.write_schema_value_at(
             edit,
             "backPlate:__INSTANCE_NAME__:plateVisibility",
             time,
@@ -807,7 +807,7 @@ impl BackPlateApiEdit {
     #[doc = "USD attribute `backPlate:<instance>:rotateXYZ:tweak` (`float3`; fallback `(0.0, 0.0, 0.0)`)."]
     pub fn set_rotate_xyz_tweak(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "backPlate:__INSTANCE_NAME__:rotateXYZ:tweak", value);
+        self.write_schema_value(edit, "backPlate:__INSTANCE_NAME__:rotateXYZ:tweak", value);
         self
     }
 
@@ -819,7 +819,7 @@ impl BackPlateApiEdit {
         value: [f32; 3],
     ) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value_at(
+        self.write_schema_value_at(
             edit,
             "backPlate:__INSTANCE_NAME__:rotateXYZ:tweak",
             time,
@@ -834,7 +834,7 @@ impl BackPlateApiEdit {
     #[doc(alias = "CreateScaleTweakAttr")]
     pub fn set_scale_tweak(&self, edit: &mut SchemaEdit<'_>, value: [f32; 2]) -> &Self {
         let value = crate::value::write_float2(value, edit.tokens());
-        self.write_value(edit, "backPlate:__INSTANCE_NAME__:scale:tweak", value);
+        self.write_schema_value(edit, "backPlate:__INSTANCE_NAME__:scale:tweak", value);
         self
     }
 
@@ -846,7 +846,7 @@ impl BackPlateApiEdit {
         value: [f32; 2],
     ) -> &Self {
         let value = crate::value::write_float2(value, edit.tokens());
-        self.write_value_at(edit, "backPlate:__INSTANCE_NAME__:scale:tweak", time, value);
+        self.write_schema_value_at(edit, "backPlate:__INSTANCE_NAME__:scale:tweak", time, value);
         self
     }
 
@@ -856,7 +856,7 @@ impl BackPlateApiEdit {
     #[doc(alias = "CreateTranslateTweakAttr")]
     pub fn set_translate_tweak(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "backPlate:__INSTANCE_NAME__:translate:tweak", value);
+        self.write_schema_value(edit, "backPlate:__INSTANCE_NAME__:translate:tweak", value);
         self
     }
 
@@ -868,7 +868,7 @@ impl BackPlateApiEdit {
         value: [f32; 3],
     ) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value_at(
+        self.write_schema_value_at(
             edit,
             "backPlate:__INSTANCE_NAME__:translate:tweak",
             time,
@@ -1189,7 +1189,7 @@ impl BasisCurvesEdit {
     #[doc(alias = "CreateBasisAttr")]
     pub fn set_basis(&self, edit: &mut SchemaEdit<'_>, value: BasisCurvesBasis) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "basis", value);
+        self.write_schema_value(edit, "basis", value);
         self
     }
 
@@ -1201,7 +1201,7 @@ impl BasisCurvesEdit {
     #[doc(alias = "CreateTypeAttr")]
     pub fn set_curve_type(&self, edit: &mut SchemaEdit<'_>, value: BasisCurvesCurveType) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "type", value);
+        self.write_schema_value(edit, "type", value);
         self
     }
 
@@ -1213,7 +1213,7 @@ impl BasisCurvesEdit {
     #[doc(alias = "CreateWrapAttr")]
     pub fn set_wrap(&self, edit: &mut SchemaEdit<'_>, value: BasisCurvesWrap) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "wrap", value);
+        self.write_schema_value(edit, "wrap", value);
         self
     }
 }
@@ -1345,14 +1345,14 @@ impl BoundableEdit {
     #[doc(alias = "CreateExtentAttr")]
     pub fn set_extent(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "extent", value);
+        self.write_schema_value(edit, "extent", value);
         self
     }
 
     #[doc = "[`Self::set_extent`] as a time sample at the time code `time`."]
     pub fn set_extent_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value_at(edit, "extent", time, value);
+        self.write_schema_value_at(edit, "extent", time, value);
         self
     }
 
@@ -1363,7 +1363,7 @@ impl BoundableEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "extent", value);
+        self.write_schema_value(edit, "extent", value);
         self
     }
 
@@ -1375,7 +1375,7 @@ impl BoundableEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "extent", time, value);
+        self.write_schema_value_at(edit, "extent", time, value);
         self
     }
 
@@ -1386,7 +1386,7 @@ impl BoundableEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "extent", value);
+        self.write_schema_value(edit, "extent", value);
         self
     }
 
@@ -1398,7 +1398,7 @@ impl BoundableEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "extent", time, value);
+        self.write_schema_value_at(edit, "extent", time, value);
         self
     }
 }
@@ -1993,7 +1993,7 @@ impl CameraEdit {
     #[doc(alias = "CreateClippingPlanesAttr")]
     pub fn set_clipping_planes(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 4]]) -> &Self {
         let value = crate::value::write_float4_array(value, edit.tokens());
-        self.write_value(edit, "clippingPlanes", value);
+        self.write_schema_value(edit, "clippingPlanes", value);
         self
     }
 
@@ -2005,7 +2005,7 @@ impl CameraEdit {
         value: &[[f32; 4]],
     ) -> &Self {
         let value = crate::value::write_float4_array(value, edit.tokens());
-        self.write_value_at(edit, "clippingPlanes", time, value);
+        self.write_schema_value_at(edit, "clippingPlanes", time, value);
         self
     }
 
@@ -2016,7 +2016,7 @@ impl CameraEdit {
         value: ::alloc::vec::Vec<[f32; 4]>,
     ) -> &Self {
         let value = crate::value::write_float4_array_owned(value, edit.tokens());
-        self.write_value(edit, "clippingPlanes", value);
+        self.write_schema_value(edit, "clippingPlanes", value);
         self
     }
 
@@ -2028,7 +2028,7 @@ impl CameraEdit {
         value: ::alloc::vec::Vec<[f32; 4]>,
     ) -> &Self {
         let value = crate::value::write_float4_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "clippingPlanes", time, value);
+        self.write_schema_value_at(edit, "clippingPlanes", time, value);
         self
     }
 
@@ -2039,7 +2039,7 @@ impl CameraEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>,
     ) -> &Self {
         let value = crate::value::write_float4_array_shared(value, edit.tokens());
-        self.write_value(edit, "clippingPlanes", value);
+        self.write_schema_value(edit, "clippingPlanes", value);
         self
     }
 
@@ -2051,7 +2051,7 @@ impl CameraEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>,
     ) -> &Self {
         let value = crate::value::write_float4_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "clippingPlanes", time, value);
+        self.write_schema_value_at(edit, "clippingPlanes", time, value);
         self
     }
 
@@ -2063,7 +2063,7 @@ impl CameraEdit {
     #[doc(alias = "CreateClippingRangeAttr")]
     pub fn set_clipping_range(&self, edit: &mut SchemaEdit<'_>, value: [f32; 2]) -> &Self {
         let value = crate::value::write_float2(value, edit.tokens());
-        self.write_value(edit, "clippingRange", value);
+        self.write_schema_value(edit, "clippingRange", value);
         self
     }
 
@@ -2075,7 +2075,7 @@ impl CameraEdit {
         value: [f32; 2],
     ) -> &Self {
         let value = crate::value::write_float2(value, edit.tokens());
-        self.write_value_at(edit, "clippingRange", time, value);
+        self.write_schema_value_at(edit, "clippingRange", time, value);
         self
     }
 
@@ -2087,14 +2087,14 @@ impl CameraEdit {
     #[doc(alias = "CreateExposureAttr")]
     pub fn set_exposure(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "exposure", value);
+        self.write_schema_value(edit, "exposure", value);
         self
     }
 
     #[doc = "[`Self::set_exposure`] as a time sample at the time code `time`."]
     pub fn set_exposure_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "exposure", time, value);
+        self.write_schema_value_at(edit, "exposure", time, value);
         self
     }
 
@@ -2106,7 +2106,7 @@ impl CameraEdit {
     #[doc(alias = "CreateExposureFStopAttr")]
     pub fn set_exposure_f_stop(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "exposure:fStop", value);
+        self.write_schema_value(edit, "exposure:fStop", value);
         self
     }
 
@@ -2118,7 +2118,7 @@ impl CameraEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "exposure:fStop", time, value);
+        self.write_schema_value_at(edit, "exposure:fStop", time, value);
         self
     }
 
@@ -2130,14 +2130,14 @@ impl CameraEdit {
     #[doc(alias = "CreateExposureIsoAttr")]
     pub fn set_exposure_iso(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "exposure:iso", value);
+        self.write_schema_value(edit, "exposure:iso", value);
         self
     }
 
     #[doc = "[`Self::set_exposure_iso`] as a time sample at the time code `time`."]
     pub fn set_exposure_iso_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "exposure:iso", time, value);
+        self.write_schema_value_at(edit, "exposure:iso", time, value);
         self
     }
 
@@ -2149,7 +2149,7 @@ impl CameraEdit {
     #[doc(alias = "CreateExposureResponsivityAttr")]
     pub fn set_exposure_responsivity(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "exposure:responsivity", value);
+        self.write_schema_value(edit, "exposure:responsivity", value);
         self
     }
 
@@ -2161,7 +2161,7 @@ impl CameraEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "exposure:responsivity", time, value);
+        self.write_schema_value_at(edit, "exposure:responsivity", time, value);
         self
     }
 
@@ -2173,14 +2173,14 @@ impl CameraEdit {
     #[doc(alias = "CreateExposureTimeAttr")]
     pub fn set_exposure_time(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "exposure:time", value);
+        self.write_schema_value(edit, "exposure:time", value);
         self
     }
 
     #[doc = "[`Self::set_exposure_time`] as a time sample at the time code `time`."]
     pub fn set_exposure_time_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "exposure:time", time, value);
+        self.write_schema_value_at(edit, "exposure:time", time, value);
         self
     }
 
@@ -2192,14 +2192,14 @@ impl CameraEdit {
     #[doc(alias = "CreateFocalLengthAttr")]
     pub fn set_focal_length(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "focalLength", value);
+        self.write_schema_value(edit, "focalLength", value);
         self
     }
 
     #[doc = "[`Self::set_focal_length`] as a time sample at the time code `time`."]
     pub fn set_focal_length_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "focalLength", time, value);
+        self.write_schema_value_at(edit, "focalLength", time, value);
         self
     }
 
@@ -2211,14 +2211,14 @@ impl CameraEdit {
     #[doc(alias = "CreateFocusDistanceAttr")]
     pub fn set_focus_distance(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "focusDistance", value);
+        self.write_schema_value(edit, "focusDistance", value);
         self
     }
 
     #[doc = "[`Self::set_focus_distance`] as a time sample at the time code `time`."]
     pub fn set_focus_distance_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "focusDistance", time, value);
+        self.write_schema_value_at(edit, "focusDistance", time, value);
         self
     }
 
@@ -2230,14 +2230,14 @@ impl CameraEdit {
     #[doc(alias = "CreateFStopAttr")]
     pub fn set_f_stop(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "fStop", value);
+        self.write_schema_value(edit, "fStop", value);
         self
     }
 
     #[doc = "[`Self::set_f_stop`] as a time sample at the time code `time`."]
     pub fn set_f_stop_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "fStop", time, value);
+        self.write_schema_value_at(edit, "fStop", time, value);
         self
     }
 
@@ -2249,7 +2249,7 @@ impl CameraEdit {
     #[doc(alias = "CreateHorizontalApertureAttr")]
     pub fn set_horizontal_aperture(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "horizontalAperture", value);
+        self.write_schema_value(edit, "horizontalAperture", value);
         self
     }
 
@@ -2261,7 +2261,7 @@ impl CameraEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "horizontalAperture", time, value);
+        self.write_schema_value_at(edit, "horizontalAperture", time, value);
         self
     }
 
@@ -2273,7 +2273,7 @@ impl CameraEdit {
     #[doc(alias = "CreateHorizontalApertureOffsetAttr")]
     pub fn set_horizontal_aperture_offset(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "horizontalApertureOffset", value);
+        self.write_schema_value(edit, "horizontalApertureOffset", value);
         self
     }
 
@@ -2285,7 +2285,7 @@ impl CameraEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "horizontalApertureOffset", time, value);
+        self.write_schema_value_at(edit, "horizontalApertureOffset", time, value);
         self
     }
 
@@ -2295,7 +2295,7 @@ impl CameraEdit {
     #[doc(alias = "CreateProjectionAttr")]
     pub fn set_projection(&self, edit: &mut SchemaEdit<'_>, value: CameraProjection) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "projection", value);
+        self.write_schema_value(edit, "projection", value);
         self
     }
 
@@ -2307,7 +2307,7 @@ impl CameraEdit {
         value: CameraProjection,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value_at(edit, "projection", time, value);
+        self.write_schema_value_at(edit, "projection", time, value);
         self
     }
 
@@ -2319,14 +2319,14 @@ impl CameraEdit {
     #[doc(alias = "CreateShutterCloseAttr")]
     pub fn set_shutter_close(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "shutter:close", value);
+        self.write_schema_value(edit, "shutter:close", value);
         self
     }
 
     #[doc = "[`Self::set_shutter_close`] as a time sample at the time code `time`."]
     pub fn set_shutter_close_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value_at(edit, "shutter:close", time, value);
+        self.write_schema_value_at(edit, "shutter:close", time, value);
         self
     }
 
@@ -2338,14 +2338,14 @@ impl CameraEdit {
     #[doc(alias = "CreateShutterOpenAttr")]
     pub fn set_shutter_open(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "shutter:open", value);
+        self.write_schema_value(edit, "shutter:open", value);
         self
     }
 
     #[doc = "[`Self::set_shutter_open`] as a time sample at the time code `time`."]
     pub fn set_shutter_open_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value_at(edit, "shutter:open", time, value);
+        self.write_schema_value_at(edit, "shutter:open", time, value);
         self
     }
 
@@ -2357,7 +2357,7 @@ impl CameraEdit {
     #[doc(alias = "CreateStereoRoleAttr")]
     pub fn set_stereo_role(&self, edit: &mut SchemaEdit<'_>, value: CameraStereoRole) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "stereoRole", value);
+        self.write_schema_value(edit, "stereoRole", value);
         self
     }
 
@@ -2369,7 +2369,7 @@ impl CameraEdit {
     #[doc(alias = "CreateVerticalApertureAttr")]
     pub fn set_vertical_aperture(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "verticalAperture", value);
+        self.write_schema_value(edit, "verticalAperture", value);
         self
     }
 
@@ -2381,7 +2381,7 @@ impl CameraEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "verticalAperture", time, value);
+        self.write_schema_value_at(edit, "verticalAperture", time, value);
         self
     }
 
@@ -2393,7 +2393,7 @@ impl CameraEdit {
     #[doc(alias = "CreateVerticalApertureOffsetAttr")]
     pub fn set_vertical_aperture_offset(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "verticalApertureOffset", value);
+        self.write_schema_value(edit, "verticalApertureOffset", value);
         self
     }
 
@@ -2405,7 +2405,7 @@ impl CameraEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "verticalApertureOffset", time, value);
+        self.write_schema_value_at(edit, "verticalApertureOffset", time, value);
         self
     }
 }
@@ -2627,7 +2627,7 @@ impl CapsuleEdit {
     #[doc(alias = "CreateAxisAttr")]
     pub fn set_axis(&self, edit: &mut SchemaEdit<'_>, value: CapsuleAxis) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "axis", value);
+        self.write_schema_value(edit, "axis", value);
         self
     }
 
@@ -2639,14 +2639,14 @@ impl CapsuleEdit {
     #[doc(alias = "CreateHeightAttr")]
     pub fn set_height(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "height", value);
+        self.write_schema_value(edit, "height", value);
         self
     }
 
     #[doc = "[`Self::set_height`] as a time sample at the time code `time`."]
     pub fn set_height_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value_at(edit, "height", time, value);
+        self.write_schema_value_at(edit, "height", time, value);
         self
     }
 
@@ -2658,14 +2658,14 @@ impl CapsuleEdit {
     #[doc(alias = "CreateRadiusAttr")]
     pub fn set_radius(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radius", value);
+        self.write_schema_value(edit, "radius", value);
         self
     }
 
     #[doc = "[`Self::set_radius`] as a time sample at the time code `time`."]
     pub fn set_radius_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value_at(edit, "radius", time, value);
+        self.write_schema_value_at(edit, "radius", time, value);
         self
     }
 }
@@ -2908,7 +2908,7 @@ impl Capsule1Edit {
     #[doc(alias = "CreateAxisAttr")]
     pub fn set_axis(&self, edit: &mut SchemaEdit<'_>, value: Capsule1Axis) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "axis", value);
+        self.write_schema_value(edit, "axis", value);
         self
     }
 
@@ -2920,14 +2920,14 @@ impl Capsule1Edit {
     #[doc(alias = "CreateHeightAttr")]
     pub fn set_height(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "height", value);
+        self.write_schema_value(edit, "height", value);
         self
     }
 
     #[doc = "[`Self::set_height`] as a time sample at the time code `time`."]
     pub fn set_height_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value_at(edit, "height", time, value);
+        self.write_schema_value_at(edit, "height", time, value);
         self
     }
 
@@ -2939,14 +2939,14 @@ impl Capsule1Edit {
     #[doc(alias = "CreateRadiusBottomAttr")]
     pub fn set_radius_bottom(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radiusBottom", value);
+        self.write_schema_value(edit, "radiusBottom", value);
         self
     }
 
     #[doc = "[`Self::set_radius_bottom`] as a time sample at the time code `time`."]
     pub fn set_radius_bottom_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value_at(edit, "radiusBottom", time, value);
+        self.write_schema_value_at(edit, "radiusBottom", time, value);
         self
     }
 
@@ -2958,14 +2958,14 @@ impl Capsule1Edit {
     #[doc(alias = "CreateRadiusTopAttr")]
     pub fn set_radius_top(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radiusTop", value);
+        self.write_schema_value(edit, "radiusTop", value);
         self
     }
 
     #[doc = "[`Self::set_radius_top`] as a time sample at the time code `time`."]
     pub fn set_radius_top_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value_at(edit, "radiusTop", time, value);
+        self.write_schema_value_at(edit, "radiusTop", time, value);
         self
     }
 }
@@ -3187,7 +3187,7 @@ impl ConeEdit {
     #[doc(alias = "CreateAxisAttr")]
     pub fn set_axis(&self, edit: &mut SchemaEdit<'_>, value: ConeAxis) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "axis", value);
+        self.write_schema_value(edit, "axis", value);
         self
     }
 
@@ -3199,14 +3199,14 @@ impl ConeEdit {
     #[doc(alias = "CreateHeightAttr")]
     pub fn set_height(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "height", value);
+        self.write_schema_value(edit, "height", value);
         self
     }
 
     #[doc = "[`Self::set_height`] as a time sample at the time code `time`."]
     pub fn set_height_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value_at(edit, "height", time, value);
+        self.write_schema_value_at(edit, "height", time, value);
         self
     }
 
@@ -3218,14 +3218,14 @@ impl ConeEdit {
     #[doc(alias = "CreateRadiusAttr")]
     pub fn set_radius(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radius", value);
+        self.write_schema_value(edit, "radius", value);
         self
     }
 
     #[doc = "[`Self::set_radius`] as a time sample at the time code `time`."]
     pub fn set_radius_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value_at(edit, "radius", time, value);
+        self.write_schema_value_at(edit, "radius", time, value);
         self
     }
 }
@@ -3358,14 +3358,14 @@ impl CubeEdit {
     #[doc(alias = "CreateSizeAttr")]
     pub fn set_size(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "size", value);
+        self.write_schema_value(edit, "size", value);
         self
     }
 
     #[doc = "[`Self::set_size`] as a time sample at the time code `time`."]
     pub fn set_size_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value_at(edit, "size", time, value);
+        self.write_schema_value_at(edit, "size", time, value);
         self
     }
 }
@@ -3539,7 +3539,7 @@ impl CurvesEdit {
     #[doc(alias = "CreateCurveVertexCountsAttr")]
     pub fn set_curve_vertex_counts(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "curveVertexCounts", value);
+        self.write_schema_value(edit, "curveVertexCounts", value);
         self
     }
 
@@ -3551,7 +3551,7 @@ impl CurvesEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value_at(edit, "curveVertexCounts", time, value);
+        self.write_schema_value_at(edit, "curveVertexCounts", time, value);
         self
     }
 
@@ -3562,7 +3562,7 @@ impl CurvesEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "curveVertexCounts", value);
+        self.write_schema_value(edit, "curveVertexCounts", value);
         self
     }
 
@@ -3574,7 +3574,7 @@ impl CurvesEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "curveVertexCounts", time, value);
+        self.write_schema_value_at(edit, "curveVertexCounts", time, value);
         self
     }
 
@@ -3585,7 +3585,7 @@ impl CurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "curveVertexCounts", value);
+        self.write_schema_value(edit, "curveVertexCounts", value);
         self
     }
 
@@ -3597,7 +3597,7 @@ impl CurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "curveVertexCounts", time, value);
+        self.write_schema_value_at(edit, "curveVertexCounts", time, value);
         self
     }
 
@@ -3611,14 +3611,14 @@ impl CurvesEdit {
     #[doc(alias = "CreateWidthsAttr")]
     pub fn set_widths(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "widths", value);
+        self.write_schema_value(edit, "widths", value);
         self
     }
 
     #[doc = "[`Self::set_widths`] as a time sample at the time code `time`."]
     pub fn set_widths_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value_at(edit, "widths", time, value);
+        self.write_schema_value_at(edit, "widths", time, value);
         self
     }
 
@@ -3629,7 +3629,7 @@ impl CurvesEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "widths", value);
+        self.write_schema_value(edit, "widths", value);
         self
     }
 
@@ -3641,7 +3641,7 @@ impl CurvesEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "widths", time, value);
+        self.write_schema_value_at(edit, "widths", time, value);
         self
     }
 
@@ -3652,7 +3652,7 @@ impl CurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "widths", value);
+        self.write_schema_value(edit, "widths", value);
         self
     }
 
@@ -3664,7 +3664,7 @@ impl CurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "widths", time, value);
+        self.write_schema_value_at(edit, "widths", time, value);
         self
     }
 }
@@ -3886,7 +3886,7 @@ impl CylinderEdit {
     #[doc(alias = "CreateAxisAttr")]
     pub fn set_axis(&self, edit: &mut SchemaEdit<'_>, value: CylinderAxis) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "axis", value);
+        self.write_schema_value(edit, "axis", value);
         self
     }
 
@@ -3898,14 +3898,14 @@ impl CylinderEdit {
     #[doc(alias = "CreateHeightAttr")]
     pub fn set_height(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "height", value);
+        self.write_schema_value(edit, "height", value);
         self
     }
 
     #[doc = "[`Self::set_height`] as a time sample at the time code `time`."]
     pub fn set_height_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value_at(edit, "height", time, value);
+        self.write_schema_value_at(edit, "height", time, value);
         self
     }
 
@@ -3917,14 +3917,14 @@ impl CylinderEdit {
     #[doc(alias = "CreateRadiusAttr")]
     pub fn set_radius(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radius", value);
+        self.write_schema_value(edit, "radius", value);
         self
     }
 
     #[doc = "[`Self::set_radius`] as a time sample at the time code `time`."]
     pub fn set_radius_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value_at(edit, "radius", time, value);
+        self.write_schema_value_at(edit, "radius", time, value);
         self
     }
 }
@@ -4167,7 +4167,7 @@ impl Cylinder1Edit {
     #[doc(alias = "CreateAxisAttr")]
     pub fn set_axis(&self, edit: &mut SchemaEdit<'_>, value: Cylinder1Axis) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "axis", value);
+        self.write_schema_value(edit, "axis", value);
         self
     }
 
@@ -4179,14 +4179,14 @@ impl Cylinder1Edit {
     #[doc(alias = "CreateHeightAttr")]
     pub fn set_height(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "height", value);
+        self.write_schema_value(edit, "height", value);
         self
     }
 
     #[doc = "[`Self::set_height`] as a time sample at the time code `time`."]
     pub fn set_height_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value_at(edit, "height", time, value);
+        self.write_schema_value_at(edit, "height", time, value);
         self
     }
 
@@ -4198,14 +4198,14 @@ impl Cylinder1Edit {
     #[doc(alias = "CreateRadiusBottomAttr")]
     pub fn set_radius_bottom(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radiusBottom", value);
+        self.write_schema_value(edit, "radiusBottom", value);
         self
     }
 
     #[doc = "[`Self::set_radius_bottom`] as a time sample at the time code `time`."]
     pub fn set_radius_bottom_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value_at(edit, "radiusBottom", time, value);
+        self.write_schema_value_at(edit, "radiusBottom", time, value);
         self
     }
 
@@ -4217,14 +4217,14 @@ impl Cylinder1Edit {
     #[doc(alias = "CreateRadiusTopAttr")]
     pub fn set_radius_top(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radiusTop", value);
+        self.write_schema_value(edit, "radiusTop", value);
         self
     }
 
     #[doc = "[`Self::set_radius_top`] as a time sample at the time code `time`."]
     pub fn set_radius_top_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value_at(edit, "radiusTop", time, value);
+        self.write_schema_value_at(edit, "radiusTop", time, value);
         self
     }
 }
@@ -4724,7 +4724,7 @@ impl GeomModelApiEdit {
     #[doc(alias = "CreateModelApplyDrawModeAttr")]
     pub fn set_model_apply_draw_mode(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "model:applyDrawMode", value);
+        self.write_schema_value(edit, "model:applyDrawMode", value);
         self
     }
 
@@ -4740,7 +4740,7 @@ impl GeomModelApiEdit {
         value: GeomModelApiModelCardGeometry,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "model:cardGeometry", value);
+        self.write_schema_value(edit, "model:cardGeometry", value);
         self
     }
 
@@ -4752,7 +4752,7 @@ impl GeomModelApiEdit {
     #[doc(alias = "CreateModelCardTextureXNegAttr")]
     pub fn set_model_card_texture_x_neg(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "model:cardTextureXNeg", value);
+        self.write_schema_value(edit, "model:cardTextureXNeg", value);
         self
     }
 
@@ -4764,7 +4764,7 @@ impl GeomModelApiEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value_at(edit, "model:cardTextureXNeg", time, value);
+        self.write_schema_value_at(edit, "model:cardTextureXNeg", time, value);
         self
     }
 
@@ -4776,7 +4776,7 @@ impl GeomModelApiEdit {
     #[doc(alias = "CreateModelCardTextureXPosAttr")]
     pub fn set_model_card_texture_x_pos(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "model:cardTextureXPos", value);
+        self.write_schema_value(edit, "model:cardTextureXPos", value);
         self
     }
 
@@ -4788,7 +4788,7 @@ impl GeomModelApiEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value_at(edit, "model:cardTextureXPos", time, value);
+        self.write_schema_value_at(edit, "model:cardTextureXPos", time, value);
         self
     }
 
@@ -4800,7 +4800,7 @@ impl GeomModelApiEdit {
     #[doc(alias = "CreateModelCardTextureYNegAttr")]
     pub fn set_model_card_texture_y_neg(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "model:cardTextureYNeg", value);
+        self.write_schema_value(edit, "model:cardTextureYNeg", value);
         self
     }
 
@@ -4812,7 +4812,7 @@ impl GeomModelApiEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value_at(edit, "model:cardTextureYNeg", time, value);
+        self.write_schema_value_at(edit, "model:cardTextureYNeg", time, value);
         self
     }
 
@@ -4824,7 +4824,7 @@ impl GeomModelApiEdit {
     #[doc(alias = "CreateModelCardTextureYPosAttr")]
     pub fn set_model_card_texture_y_pos(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "model:cardTextureYPos", value);
+        self.write_schema_value(edit, "model:cardTextureYPos", value);
         self
     }
 
@@ -4836,7 +4836,7 @@ impl GeomModelApiEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value_at(edit, "model:cardTextureYPos", time, value);
+        self.write_schema_value_at(edit, "model:cardTextureYPos", time, value);
         self
     }
 
@@ -4848,7 +4848,7 @@ impl GeomModelApiEdit {
     #[doc(alias = "CreateModelCardTextureZNegAttr")]
     pub fn set_model_card_texture_z_neg(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "model:cardTextureZNeg", value);
+        self.write_schema_value(edit, "model:cardTextureZNeg", value);
         self
     }
 
@@ -4860,7 +4860,7 @@ impl GeomModelApiEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value_at(edit, "model:cardTextureZNeg", time, value);
+        self.write_schema_value_at(edit, "model:cardTextureZNeg", time, value);
         self
     }
 
@@ -4872,7 +4872,7 @@ impl GeomModelApiEdit {
     #[doc(alias = "CreateModelCardTextureZPosAttr")]
     pub fn set_model_card_texture_z_pos(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "model:cardTextureZPos", value);
+        self.write_schema_value(edit, "model:cardTextureZPos", value);
         self
     }
 
@@ -4884,7 +4884,7 @@ impl GeomModelApiEdit {
         value: &str,
     ) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value_at(edit, "model:cardTextureZPos", time, value);
+        self.write_schema_value_at(edit, "model:cardTextureZPos", time, value);
         self
     }
 
@@ -4900,7 +4900,7 @@ impl GeomModelApiEdit {
         value: GeomModelApiModelCardVisibility,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "model:cardVisibility", value);
+        self.write_schema_value(edit, "model:cardVisibility", value);
         self
     }
 
@@ -4916,7 +4916,7 @@ impl GeomModelApiEdit {
         value: GeomModelApiModelDrawMode,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "model:drawMode", value);
+        self.write_schema_value(edit, "model:drawMode", value);
         self
     }
 
@@ -4928,7 +4928,7 @@ impl GeomModelApiEdit {
     #[doc(alias = "CreateModelDrawModeColorAttr")]
     pub fn set_model_draw_mode_color(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "model:drawModeColor", value);
+        self.write_schema_value(edit, "model:drawModeColor", value);
         self
     }
 }
@@ -5171,7 +5171,7 @@ impl GeomSubsetEdit {
         value: GeomSubsetElementType,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "elementType", value);
+        self.write_schema_value(edit, "elementType", value);
         self
     }
 
@@ -5183,7 +5183,7 @@ impl GeomSubsetEdit {
     #[doc(alias = "CreateFamilyNameAttr")]
     pub fn set_family_name(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "familyName", value);
+        self.write_schema_value(edit, "familyName", value);
         self
     }
 
@@ -5197,14 +5197,14 @@ impl GeomSubsetEdit {
     #[doc(alias = "CreateIndicesAttr")]
     pub fn set_indices(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "indices", value);
+        self.write_schema_value(edit, "indices", value);
         self
     }
 
     #[doc = "[`Self::set_indices`] as a time sample at the time code `time`."]
     pub fn set_indices_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value_at(edit, "indices", time, value);
+        self.write_schema_value_at(edit, "indices", time, value);
         self
     }
 
@@ -5215,7 +5215,7 @@ impl GeomSubsetEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "indices", value);
+        self.write_schema_value(edit, "indices", value);
         self
     }
 
@@ -5227,7 +5227,7 @@ impl GeomSubsetEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "indices", time, value);
+        self.write_schema_value_at(edit, "indices", time, value);
         self
     }
 
@@ -5238,7 +5238,7 @@ impl GeomSubsetEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "indices", value);
+        self.write_schema_value(edit, "indices", value);
         self
     }
 
@@ -5250,7 +5250,7 @@ impl GeomSubsetEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "indices", time, value);
+        self.write_schema_value_at(edit, "indices", time, value);
         self
     }
 }
@@ -5515,7 +5515,7 @@ impl GprimEdit {
     #[doc(alias = "CreateDoubleSidedAttr")]
     pub fn set_double_sided(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "doubleSided", value);
+        self.write_schema_value(edit, "doubleSided", value);
         self
     }
 
@@ -5527,7 +5527,7 @@ impl GprimEdit {
     #[doc(alias = "CreateOrientationAttr")]
     pub fn set_orientation(&self, edit: &mut SchemaEdit<'_>, value: GprimOrientation) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "orientation", value);
+        self.write_schema_value(edit, "orientation", value);
         self
     }
 
@@ -5541,7 +5541,7 @@ impl GprimEdit {
     #[doc(alias = "CreateDisplayColorAttr")]
     pub fn set_display_color(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "primvars:displayColor", value);
+        self.write_schema_value(edit, "primvars:displayColor", value);
         self
     }
 
@@ -5553,7 +5553,7 @@ impl GprimEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value_at(edit, "primvars:displayColor", time, value);
+        self.write_schema_value_at(edit, "primvars:displayColor", time, value);
         self
     }
 
@@ -5564,7 +5564,7 @@ impl GprimEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "primvars:displayColor", value);
+        self.write_schema_value(edit, "primvars:displayColor", value);
         self
     }
 
@@ -5576,7 +5576,7 @@ impl GprimEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "primvars:displayColor", time, value);
+        self.write_schema_value_at(edit, "primvars:displayColor", time, value);
         self
     }
 
@@ -5587,7 +5587,7 @@ impl GprimEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "primvars:displayColor", value);
+        self.write_schema_value(edit, "primvars:displayColor", value);
         self
     }
 
@@ -5599,7 +5599,7 @@ impl GprimEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "primvars:displayColor", time, value);
+        self.write_schema_value_at(edit, "primvars:displayColor", time, value);
         self
     }
 
@@ -5613,7 +5613,7 @@ impl GprimEdit {
     #[doc(alias = "CreateDisplayOpacityAttr")]
     pub fn set_display_opacity(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "primvars:displayOpacity", value);
+        self.write_schema_value(edit, "primvars:displayOpacity", value);
         self
     }
 
@@ -5625,7 +5625,7 @@ impl GprimEdit {
         value: &[f32],
     ) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value_at(edit, "primvars:displayOpacity", time, value);
+        self.write_schema_value_at(edit, "primvars:displayOpacity", time, value);
         self
     }
 
@@ -5636,7 +5636,7 @@ impl GprimEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "primvars:displayOpacity", value);
+        self.write_schema_value(edit, "primvars:displayOpacity", value);
         self
     }
 
@@ -5648,7 +5648,7 @@ impl GprimEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "primvars:displayOpacity", time, value);
+        self.write_schema_value_at(edit, "primvars:displayOpacity", time, value);
         self
     }
 
@@ -5659,7 +5659,7 @@ impl GprimEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "primvars:displayOpacity", value);
+        self.write_schema_value(edit, "primvars:displayOpacity", value);
         self
     }
 
@@ -5671,7 +5671,7 @@ impl GprimEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "primvars:displayOpacity", time, value);
+        self.write_schema_value_at(edit, "primvars:displayOpacity", time, value);
         self
     }
 }
@@ -5823,7 +5823,7 @@ impl HermiteCurvesEdit {
     #[doc(alias = "CreateTangentsAttr")]
     pub fn set_tangents(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "tangents", value);
+        self.write_schema_value(edit, "tangents", value);
         self
     }
 
@@ -5835,7 +5835,7 @@ impl HermiteCurvesEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value_at(edit, "tangents", time, value);
+        self.write_schema_value_at(edit, "tangents", time, value);
         self
     }
 
@@ -5846,7 +5846,7 @@ impl HermiteCurvesEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "tangents", value);
+        self.write_schema_value(edit, "tangents", value);
         self
     }
 
@@ -5858,7 +5858,7 @@ impl HermiteCurvesEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "tangents", time, value);
+        self.write_schema_value_at(edit, "tangents", time, value);
         self
     }
 
@@ -5869,7 +5869,7 @@ impl HermiteCurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "tangents", value);
+        self.write_schema_value(edit, "tangents", value);
         self
     }
 
@@ -5881,7 +5881,7 @@ impl HermiteCurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "tangents", time, value);
+        self.write_schema_value_at(edit, "tangents", time, value);
         self
     }
 }
@@ -6175,7 +6175,7 @@ impl ImageableEdit {
     #[doc(alias = "CreatePurposeAttr")]
     pub fn set_purpose(&self, edit: &mut SchemaEdit<'_>, value: ImageablePurpose) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "purpose", value);
+        self.write_schema_value(edit, "purpose", value);
         self
     }
 
@@ -6187,7 +6187,7 @@ impl ImageableEdit {
     #[doc(alias = "CreateVisibilityAttr")]
     pub fn set_visibility(&self, edit: &mut SchemaEdit<'_>, value: ImageableVisibility) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "visibility", value);
+        self.write_schema_value(edit, "visibility", value);
         self
     }
 
@@ -6199,7 +6199,7 @@ impl ImageableEdit {
         value: ImageableVisibility,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value_at(edit, "visibility", time, value);
+        self.write_schema_value_at(edit, "visibility", time, value);
         self
     }
 }
@@ -6951,7 +6951,7 @@ impl MeshEdit {
     #[doc(alias = "CreateCornerIndicesAttr")]
     pub fn set_corner_indices(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "cornerIndices", value);
+        self.write_schema_value(edit, "cornerIndices", value);
         self
     }
 
@@ -6963,7 +6963,7 @@ impl MeshEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value_at(edit, "cornerIndices", time, value);
+        self.write_schema_value_at(edit, "cornerIndices", time, value);
         self
     }
 
@@ -6974,7 +6974,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "cornerIndices", value);
+        self.write_schema_value(edit, "cornerIndices", value);
         self
     }
 
@@ -6986,7 +6986,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "cornerIndices", time, value);
+        self.write_schema_value_at(edit, "cornerIndices", time, value);
         self
     }
 
@@ -6997,7 +6997,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "cornerIndices", value);
+        self.write_schema_value(edit, "cornerIndices", value);
         self
     }
 
@@ -7009,7 +7009,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "cornerIndices", time, value);
+        self.write_schema_value_at(edit, "cornerIndices", time, value);
         self
     }
 
@@ -7023,7 +7023,7 @@ impl MeshEdit {
     #[doc(alias = "CreateCornerSharpnessesAttr")]
     pub fn set_corner_sharpnesses(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "cornerSharpnesses", value);
+        self.write_schema_value(edit, "cornerSharpnesses", value);
         self
     }
 
@@ -7035,7 +7035,7 @@ impl MeshEdit {
         value: &[f32],
     ) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value_at(edit, "cornerSharpnesses", time, value);
+        self.write_schema_value_at(edit, "cornerSharpnesses", time, value);
         self
     }
 
@@ -7046,7 +7046,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "cornerSharpnesses", value);
+        self.write_schema_value(edit, "cornerSharpnesses", value);
         self
     }
 
@@ -7058,7 +7058,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "cornerSharpnesses", time, value);
+        self.write_schema_value_at(edit, "cornerSharpnesses", time, value);
         self
     }
 
@@ -7069,7 +7069,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "cornerSharpnesses", value);
+        self.write_schema_value(edit, "cornerSharpnesses", value);
         self
     }
 
@@ -7081,7 +7081,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "cornerSharpnesses", time, value);
+        self.write_schema_value_at(edit, "cornerSharpnesses", time, value);
         self
     }
 
@@ -7095,7 +7095,7 @@ impl MeshEdit {
     #[doc(alias = "CreateCreaseIndicesAttr")]
     pub fn set_crease_indices(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "creaseIndices", value);
+        self.write_schema_value(edit, "creaseIndices", value);
         self
     }
 
@@ -7107,7 +7107,7 @@ impl MeshEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value_at(edit, "creaseIndices", time, value);
+        self.write_schema_value_at(edit, "creaseIndices", time, value);
         self
     }
 
@@ -7118,7 +7118,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "creaseIndices", value);
+        self.write_schema_value(edit, "creaseIndices", value);
         self
     }
 
@@ -7130,7 +7130,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "creaseIndices", time, value);
+        self.write_schema_value_at(edit, "creaseIndices", time, value);
         self
     }
 
@@ -7141,7 +7141,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "creaseIndices", value);
+        self.write_schema_value(edit, "creaseIndices", value);
         self
     }
 
@@ -7153,7 +7153,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "creaseIndices", time, value);
+        self.write_schema_value_at(edit, "creaseIndices", time, value);
         self
     }
 
@@ -7167,7 +7167,7 @@ impl MeshEdit {
     #[doc(alias = "CreateCreaseLengthsAttr")]
     pub fn set_crease_lengths(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "creaseLengths", value);
+        self.write_schema_value(edit, "creaseLengths", value);
         self
     }
 
@@ -7179,7 +7179,7 @@ impl MeshEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value_at(edit, "creaseLengths", time, value);
+        self.write_schema_value_at(edit, "creaseLengths", time, value);
         self
     }
 
@@ -7190,7 +7190,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "creaseLengths", value);
+        self.write_schema_value(edit, "creaseLengths", value);
         self
     }
 
@@ -7202,7 +7202,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "creaseLengths", time, value);
+        self.write_schema_value_at(edit, "creaseLengths", time, value);
         self
     }
 
@@ -7213,7 +7213,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "creaseLengths", value);
+        self.write_schema_value(edit, "creaseLengths", value);
         self
     }
 
@@ -7225,7 +7225,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "creaseLengths", time, value);
+        self.write_schema_value_at(edit, "creaseLengths", time, value);
         self
     }
 
@@ -7239,7 +7239,7 @@ impl MeshEdit {
     #[doc(alias = "CreateCreaseSharpnessesAttr")]
     pub fn set_crease_sharpnesses(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "creaseSharpnesses", value);
+        self.write_schema_value(edit, "creaseSharpnesses", value);
         self
     }
 
@@ -7251,7 +7251,7 @@ impl MeshEdit {
         value: &[f32],
     ) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value_at(edit, "creaseSharpnesses", time, value);
+        self.write_schema_value_at(edit, "creaseSharpnesses", time, value);
         self
     }
 
@@ -7262,7 +7262,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "creaseSharpnesses", value);
+        self.write_schema_value(edit, "creaseSharpnesses", value);
         self
     }
 
@@ -7274,7 +7274,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "creaseSharpnesses", time, value);
+        self.write_schema_value_at(edit, "creaseSharpnesses", time, value);
         self
     }
 
@@ -7285,7 +7285,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "creaseSharpnesses", value);
+        self.write_schema_value(edit, "creaseSharpnesses", value);
         self
     }
 
@@ -7297,7 +7297,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "creaseSharpnesses", time, value);
+        self.write_schema_value_at(edit, "creaseSharpnesses", time, value);
         self
     }
 
@@ -7313,7 +7313,7 @@ impl MeshEdit {
         value: MeshFaceVaryingLinearInterpolation,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "faceVaryingLinearInterpolation", value);
+        self.write_schema_value(edit, "faceVaryingLinearInterpolation", value);
         self
     }
 
@@ -7325,7 +7325,7 @@ impl MeshEdit {
         value: MeshFaceVaryingLinearInterpolation,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value_at(edit, "faceVaryingLinearInterpolation", time, value);
+        self.write_schema_value_at(edit, "faceVaryingLinearInterpolation", time, value);
         self
     }
 
@@ -7339,7 +7339,7 @@ impl MeshEdit {
     #[doc(alias = "CreateFaceVertexCountsAttr")]
     pub fn set_face_vertex_counts(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "faceVertexCounts", value);
+        self.write_schema_value(edit, "faceVertexCounts", value);
         self
     }
 
@@ -7351,7 +7351,7 @@ impl MeshEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value_at(edit, "faceVertexCounts", time, value);
+        self.write_schema_value_at(edit, "faceVertexCounts", time, value);
         self
     }
 
@@ -7362,7 +7362,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "faceVertexCounts", value);
+        self.write_schema_value(edit, "faceVertexCounts", value);
         self
     }
 
@@ -7374,7 +7374,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "faceVertexCounts", time, value);
+        self.write_schema_value_at(edit, "faceVertexCounts", time, value);
         self
     }
 
@@ -7385,7 +7385,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "faceVertexCounts", value);
+        self.write_schema_value(edit, "faceVertexCounts", value);
         self
     }
 
@@ -7397,7 +7397,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "faceVertexCounts", time, value);
+        self.write_schema_value_at(edit, "faceVertexCounts", time, value);
         self
     }
 
@@ -7411,7 +7411,7 @@ impl MeshEdit {
     #[doc(alias = "CreateFaceVertexIndicesAttr")]
     pub fn set_face_vertex_indices(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "faceVertexIndices", value);
+        self.write_schema_value(edit, "faceVertexIndices", value);
         self
     }
 
@@ -7423,7 +7423,7 @@ impl MeshEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value_at(edit, "faceVertexIndices", time, value);
+        self.write_schema_value_at(edit, "faceVertexIndices", time, value);
         self
     }
 
@@ -7434,7 +7434,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "faceVertexIndices", value);
+        self.write_schema_value(edit, "faceVertexIndices", value);
         self
     }
 
@@ -7446,7 +7446,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "faceVertexIndices", time, value);
+        self.write_schema_value_at(edit, "faceVertexIndices", time, value);
         self
     }
 
@@ -7457,7 +7457,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "faceVertexIndices", value);
+        self.write_schema_value(edit, "faceVertexIndices", value);
         self
     }
 
@@ -7469,7 +7469,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "faceVertexIndices", time, value);
+        self.write_schema_value_at(edit, "faceVertexIndices", time, value);
         self
     }
 
@@ -7483,7 +7483,7 @@ impl MeshEdit {
     #[doc(alias = "CreateHoleIndicesAttr")]
     pub fn set_hole_indices(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "holeIndices", value);
+        self.write_schema_value(edit, "holeIndices", value);
         self
     }
 
@@ -7495,7 +7495,7 @@ impl MeshEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value_at(edit, "holeIndices", time, value);
+        self.write_schema_value_at(edit, "holeIndices", time, value);
         self
     }
 
@@ -7506,7 +7506,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "holeIndices", value);
+        self.write_schema_value(edit, "holeIndices", value);
         self
     }
 
@@ -7518,7 +7518,7 @@ impl MeshEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "holeIndices", time, value);
+        self.write_schema_value_at(edit, "holeIndices", time, value);
         self
     }
 
@@ -7529,7 +7529,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "holeIndices", value);
+        self.write_schema_value(edit, "holeIndices", value);
         self
     }
 
@@ -7541,7 +7541,7 @@ impl MeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "holeIndices", time, value);
+        self.write_schema_value_at(edit, "holeIndices", time, value);
         self
     }
 
@@ -7557,7 +7557,7 @@ impl MeshEdit {
         value: MeshInterpolateBoundary,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "interpolateBoundary", value);
+        self.write_schema_value(edit, "interpolateBoundary", value);
         self
     }
 
@@ -7569,7 +7569,7 @@ impl MeshEdit {
         value: MeshInterpolateBoundary,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value_at(edit, "interpolateBoundary", time, value);
+        self.write_schema_value_at(edit, "interpolateBoundary", time, value);
         self
     }
 
@@ -7585,7 +7585,7 @@ impl MeshEdit {
         value: MeshSubdivisionScheme,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "subdivisionScheme", value);
+        self.write_schema_value(edit, "subdivisionScheme", value);
         self
     }
 
@@ -7601,7 +7601,7 @@ impl MeshEdit {
         value: MeshTriangleSubdivisionRule,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "triangleSubdivisionRule", value);
+        self.write_schema_value(edit, "triangleSubdivisionRule", value);
         self
     }
 
@@ -7613,7 +7613,7 @@ impl MeshEdit {
         value: MeshTriangleSubdivisionRule,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value_at(edit, "triangleSubdivisionRule", time, value);
+        self.write_schema_value_at(edit, "triangleSubdivisionRule", time, value);
         self
     }
 }
@@ -7788,7 +7788,7 @@ impl MotionApiEdit {
     #[doc(alias = "CreateMotionBlurScaleAttr")]
     pub fn set_motion_blur_scale(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "motion:blurScale", value);
+        self.write_schema_value(edit, "motion:blurScale", value);
         self
     }
 
@@ -7800,7 +7800,7 @@ impl MotionApiEdit {
         value: f32,
     ) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "motion:blurScale", time, value);
+        self.write_schema_value_at(edit, "motion:blurScale", time, value);
         self
     }
 
@@ -7812,7 +7812,7 @@ impl MotionApiEdit {
     #[doc(alias = "CreateNonlinearSampleCountAttr")]
     pub fn set_nonlinear_sample_count(&self, edit: &mut SchemaEdit<'_>, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value(edit, "motion:nonlinearSampleCount", value);
+        self.write_schema_value(edit, "motion:nonlinearSampleCount", value);
         self
     }
 
@@ -7824,7 +7824,7 @@ impl MotionApiEdit {
         value: i32,
     ) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value_at(edit, "motion:nonlinearSampleCount", time, value);
+        self.write_schema_value_at(edit, "motion:nonlinearSampleCount", time, value);
         self
     }
 
@@ -7836,14 +7836,14 @@ impl MotionApiEdit {
     #[doc(alias = "CreateVelocityScaleAttr")]
     pub fn set_velocity_scale(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "motion:velocityScale", value);
+        self.write_schema_value(edit, "motion:velocityScale", value);
         self
     }
 
     #[doc = "[`Self::set_velocity_scale`] as a time sample at the time code `time`."]
     pub fn set_velocity_scale_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(edit, "motion:velocityScale", time, value);
+        self.write_schema_value_at(edit, "motion:velocityScale", time, value);
         self
     }
 }
@@ -8094,14 +8094,14 @@ impl NurbsCurvesEdit {
     #[doc(alias = "CreateKnotsAttr")]
     pub fn set_knots(&self, edit: &mut SchemaEdit<'_>, value: &[f64]) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value(edit, "knots", value);
+        self.write_schema_value(edit, "knots", value);
         self
     }
 
     #[doc = "[`Self::set_knots`] as a time sample at the time code `time`."]
     pub fn set_knots_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[f64]) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value_at(edit, "knots", time, value);
+        self.write_schema_value_at(edit, "knots", time, value);
         self
     }
 
@@ -8112,7 +8112,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value(edit, "knots", value);
+        self.write_schema_value(edit, "knots", value);
         self
     }
 
@@ -8124,7 +8124,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "knots", time, value);
+        self.write_schema_value_at(edit, "knots", time, value);
         self
     }
 
@@ -8135,7 +8135,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value(edit, "knots", value);
+        self.write_schema_value(edit, "knots", value);
         self
     }
 
@@ -8147,7 +8147,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "knots", time, value);
+        self.write_schema_value_at(edit, "knots", time, value);
         self
     }
 
@@ -8161,14 +8161,14 @@ impl NurbsCurvesEdit {
     #[doc(alias = "CreateOrderAttr")]
     pub fn set_order(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "order", value);
+        self.write_schema_value(edit, "order", value);
         self
     }
 
     #[doc = "[`Self::set_order`] as a time sample at the time code `time`."]
     pub fn set_order_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value_at(edit, "order", time, value);
+        self.write_schema_value_at(edit, "order", time, value);
         self
     }
 
@@ -8179,7 +8179,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "order", value);
+        self.write_schema_value(edit, "order", value);
         self
     }
 
@@ -8191,7 +8191,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "order", time, value);
+        self.write_schema_value_at(edit, "order", time, value);
         self
     }
 
@@ -8202,7 +8202,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "order", value);
+        self.write_schema_value(edit, "order", value);
         self
     }
 
@@ -8214,7 +8214,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "order", time, value);
+        self.write_schema_value_at(edit, "order", time, value);
         self
     }
 
@@ -8228,7 +8228,7 @@ impl NurbsCurvesEdit {
     #[doc(alias = "CreatePointWeightsAttr")]
     pub fn set_point_weights(&self, edit: &mut SchemaEdit<'_>, value: &[f64]) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value(edit, "pointWeights", value);
+        self.write_schema_value(edit, "pointWeights", value);
         self
     }
 
@@ -8240,7 +8240,7 @@ impl NurbsCurvesEdit {
         value: &[f64],
     ) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value_at(edit, "pointWeights", time, value);
+        self.write_schema_value_at(edit, "pointWeights", time, value);
         self
     }
 
@@ -8251,7 +8251,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value(edit, "pointWeights", value);
+        self.write_schema_value(edit, "pointWeights", value);
         self
     }
 
@@ -8263,7 +8263,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "pointWeights", time, value);
+        self.write_schema_value_at(edit, "pointWeights", time, value);
         self
     }
 
@@ -8274,7 +8274,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value(edit, "pointWeights", value);
+        self.write_schema_value(edit, "pointWeights", value);
         self
     }
 
@@ -8286,7 +8286,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "pointWeights", time, value);
+        self.write_schema_value_at(edit, "pointWeights", time, value);
         self
     }
 
@@ -8300,14 +8300,14 @@ impl NurbsCurvesEdit {
     #[doc(alias = "CreateRangesAttr")]
     pub fn set_ranges(&self, edit: &mut SchemaEdit<'_>, value: &[[f64; 2]]) -> &Self {
         let value = crate::value::write_double2_array(value, edit.tokens());
-        self.write_value(edit, "ranges", value);
+        self.write_schema_value(edit, "ranges", value);
         self
     }
 
     #[doc = "[`Self::set_ranges`] as a time sample at the time code `time`."]
     pub fn set_ranges_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[[f64; 2]]) -> &Self {
         let value = crate::value::write_double2_array(value, edit.tokens());
-        self.write_value_at(edit, "ranges", time, value);
+        self.write_schema_value_at(edit, "ranges", time, value);
         self
     }
 
@@ -8318,7 +8318,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::vec::Vec<[f64; 2]>,
     ) -> &Self {
         let value = crate::value::write_double2_array_owned(value, edit.tokens());
-        self.write_value(edit, "ranges", value);
+        self.write_schema_value(edit, "ranges", value);
         self
     }
 
@@ -8330,7 +8330,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::vec::Vec<[f64; 2]>,
     ) -> &Self {
         let value = crate::value::write_double2_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "ranges", time, value);
+        self.write_schema_value_at(edit, "ranges", time, value);
         self
     }
 
@@ -8341,7 +8341,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f64; 2]>>,
     ) -> &Self {
         let value = crate::value::write_double2_array_shared(value, edit.tokens());
-        self.write_value(edit, "ranges", value);
+        self.write_schema_value(edit, "ranges", value);
         self
     }
 
@@ -8353,7 +8353,7 @@ impl NurbsCurvesEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f64; 2]>>,
     ) -> &Self {
         let value = crate::value::write_double2_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "ranges", time, value);
+        self.write_schema_value_at(edit, "ranges", time, value);
         self
     }
 }
@@ -9083,7 +9083,7 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreatePointWeightsAttr")]
     pub fn set_point_weights(&self, edit: &mut SchemaEdit<'_>, value: &[f64]) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value(edit, "pointWeights", value);
+        self.write_schema_value(edit, "pointWeights", value);
         self
     }
 
@@ -9095,7 +9095,7 @@ impl NurbsPatchEdit {
         value: &[f64],
     ) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value_at(edit, "pointWeights", time, value);
+        self.write_schema_value_at(edit, "pointWeights", time, value);
         self
     }
 
@@ -9106,7 +9106,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value(edit, "pointWeights", value);
+        self.write_schema_value(edit, "pointWeights", value);
         self
     }
 
@@ -9118,7 +9118,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "pointWeights", time, value);
+        self.write_schema_value_at(edit, "pointWeights", time, value);
         self
     }
 
@@ -9129,7 +9129,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value(edit, "pointWeights", value);
+        self.write_schema_value(edit, "pointWeights", value);
         self
     }
 
@@ -9141,7 +9141,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "pointWeights", time, value);
+        self.write_schema_value_at(edit, "pointWeights", time, value);
         self
     }
 
@@ -9155,7 +9155,7 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateTrimCurveCountsAttr")]
     pub fn set_trim_curve_counts(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "trimCurve:counts", value);
+        self.write_schema_value(edit, "trimCurve:counts", value);
         self
     }
 
@@ -9167,7 +9167,7 @@ impl NurbsPatchEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value_at(edit, "trimCurve:counts", time, value);
+        self.write_schema_value_at(edit, "trimCurve:counts", time, value);
         self
     }
 
@@ -9178,7 +9178,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "trimCurve:counts", value);
+        self.write_schema_value(edit, "trimCurve:counts", value);
         self
     }
 
@@ -9190,7 +9190,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "trimCurve:counts", time, value);
+        self.write_schema_value_at(edit, "trimCurve:counts", time, value);
         self
     }
 
@@ -9201,7 +9201,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "trimCurve:counts", value);
+        self.write_schema_value(edit, "trimCurve:counts", value);
         self
     }
 
@@ -9213,7 +9213,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "trimCurve:counts", time, value);
+        self.write_schema_value_at(edit, "trimCurve:counts", time, value);
         self
     }
 
@@ -9227,7 +9227,7 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateTrimCurveKnotsAttr")]
     pub fn set_trim_curve_knots(&self, edit: &mut SchemaEdit<'_>, value: &[f64]) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value(edit, "trimCurve:knots", value);
+        self.write_schema_value(edit, "trimCurve:knots", value);
         self
     }
 
@@ -9239,7 +9239,7 @@ impl NurbsPatchEdit {
         value: &[f64],
     ) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value_at(edit, "trimCurve:knots", time, value);
+        self.write_schema_value_at(edit, "trimCurve:knots", time, value);
         self
     }
 
@@ -9250,7 +9250,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value(edit, "trimCurve:knots", value);
+        self.write_schema_value(edit, "trimCurve:knots", value);
         self
     }
 
@@ -9262,7 +9262,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "trimCurve:knots", time, value);
+        self.write_schema_value_at(edit, "trimCurve:knots", time, value);
         self
     }
 
@@ -9273,7 +9273,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value(edit, "trimCurve:knots", value);
+        self.write_schema_value(edit, "trimCurve:knots", value);
         self
     }
 
@@ -9285,7 +9285,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "trimCurve:knots", time, value);
+        self.write_schema_value_at(edit, "trimCurve:knots", time, value);
         self
     }
 
@@ -9299,7 +9299,7 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateTrimCurveOrdersAttr")]
     pub fn set_trim_curve_orders(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "trimCurve:orders", value);
+        self.write_schema_value(edit, "trimCurve:orders", value);
         self
     }
 
@@ -9311,7 +9311,7 @@ impl NurbsPatchEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value_at(edit, "trimCurve:orders", time, value);
+        self.write_schema_value_at(edit, "trimCurve:orders", time, value);
         self
     }
 
@@ -9322,7 +9322,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "trimCurve:orders", value);
+        self.write_schema_value(edit, "trimCurve:orders", value);
         self
     }
 
@@ -9334,7 +9334,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "trimCurve:orders", time, value);
+        self.write_schema_value_at(edit, "trimCurve:orders", time, value);
         self
     }
 
@@ -9345,7 +9345,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "trimCurve:orders", value);
+        self.write_schema_value(edit, "trimCurve:orders", value);
         self
     }
 
@@ -9357,7 +9357,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "trimCurve:orders", time, value);
+        self.write_schema_value_at(edit, "trimCurve:orders", time, value);
         self
     }
 
@@ -9371,7 +9371,7 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateTrimCurvePointsAttr")]
     pub fn set_trim_curve_points(&self, edit: &mut SchemaEdit<'_>, value: &[[f64; 3]]) -> &Self {
         let value = crate::value::write_double3_array(value, edit.tokens());
-        self.write_value(edit, "trimCurve:points", value);
+        self.write_schema_value(edit, "trimCurve:points", value);
         self
     }
 
@@ -9383,7 +9383,7 @@ impl NurbsPatchEdit {
         value: &[[f64; 3]],
     ) -> &Self {
         let value = crate::value::write_double3_array(value, edit.tokens());
-        self.write_value_at(edit, "trimCurve:points", time, value);
+        self.write_schema_value_at(edit, "trimCurve:points", time, value);
         self
     }
 
@@ -9394,7 +9394,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<[f64; 3]>,
     ) -> &Self {
         let value = crate::value::write_double3_array_owned(value, edit.tokens());
-        self.write_value(edit, "trimCurve:points", value);
+        self.write_schema_value(edit, "trimCurve:points", value);
         self
     }
 
@@ -9406,7 +9406,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<[f64; 3]>,
     ) -> &Self {
         let value = crate::value::write_double3_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "trimCurve:points", time, value);
+        self.write_schema_value_at(edit, "trimCurve:points", time, value);
         self
     }
 
@@ -9417,7 +9417,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f64; 3]>>,
     ) -> &Self {
         let value = crate::value::write_double3_array_shared(value, edit.tokens());
-        self.write_value(edit, "trimCurve:points", value);
+        self.write_schema_value(edit, "trimCurve:points", value);
         self
     }
 
@@ -9429,7 +9429,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f64; 3]>>,
     ) -> &Self {
         let value = crate::value::write_double3_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "trimCurve:points", time, value);
+        self.write_schema_value_at(edit, "trimCurve:points", time, value);
         self
     }
 
@@ -9443,7 +9443,7 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateTrimCurveRangesAttr")]
     pub fn set_trim_curve_ranges(&self, edit: &mut SchemaEdit<'_>, value: &[[f64; 2]]) -> &Self {
         let value = crate::value::write_double2_array(value, edit.tokens());
-        self.write_value(edit, "trimCurve:ranges", value);
+        self.write_schema_value(edit, "trimCurve:ranges", value);
         self
     }
 
@@ -9455,7 +9455,7 @@ impl NurbsPatchEdit {
         value: &[[f64; 2]],
     ) -> &Self {
         let value = crate::value::write_double2_array(value, edit.tokens());
-        self.write_value_at(edit, "trimCurve:ranges", time, value);
+        self.write_schema_value_at(edit, "trimCurve:ranges", time, value);
         self
     }
 
@@ -9466,7 +9466,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<[f64; 2]>,
     ) -> &Self {
         let value = crate::value::write_double2_array_owned(value, edit.tokens());
-        self.write_value(edit, "trimCurve:ranges", value);
+        self.write_schema_value(edit, "trimCurve:ranges", value);
         self
     }
 
@@ -9478,7 +9478,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<[f64; 2]>,
     ) -> &Self {
         let value = crate::value::write_double2_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "trimCurve:ranges", time, value);
+        self.write_schema_value_at(edit, "trimCurve:ranges", time, value);
         self
     }
 
@@ -9489,7 +9489,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f64; 2]>>,
     ) -> &Self {
         let value = crate::value::write_double2_array_shared(value, edit.tokens());
-        self.write_value(edit, "trimCurve:ranges", value);
+        self.write_schema_value(edit, "trimCurve:ranges", value);
         self
     }
 
@@ -9501,7 +9501,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f64; 2]>>,
     ) -> &Self {
         let value = crate::value::write_double2_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "trimCurve:ranges", time, value);
+        self.write_schema_value_at(edit, "trimCurve:ranges", time, value);
         self
     }
 
@@ -9515,7 +9515,7 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateTrimCurveVertexCountsAttr")]
     pub fn set_trim_curve_vertex_counts(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "trimCurve:vertexCounts", value);
+        self.write_schema_value(edit, "trimCurve:vertexCounts", value);
         self
     }
 
@@ -9527,7 +9527,7 @@ impl NurbsPatchEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value_at(edit, "trimCurve:vertexCounts", time, value);
+        self.write_schema_value_at(edit, "trimCurve:vertexCounts", time, value);
         self
     }
 
@@ -9538,7 +9538,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "trimCurve:vertexCounts", value);
+        self.write_schema_value(edit, "trimCurve:vertexCounts", value);
         self
     }
 
@@ -9550,7 +9550,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "trimCurve:vertexCounts", time, value);
+        self.write_schema_value_at(edit, "trimCurve:vertexCounts", time, value);
         self
     }
 
@@ -9561,7 +9561,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "trimCurve:vertexCounts", value);
+        self.write_schema_value(edit, "trimCurve:vertexCounts", value);
         self
     }
 
@@ -9573,7 +9573,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "trimCurve:vertexCounts", time, value);
+        self.write_schema_value_at(edit, "trimCurve:vertexCounts", time, value);
         self
     }
 
@@ -9585,7 +9585,7 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateUFormAttr")]
     pub fn set_u_form(&self, edit: &mut SchemaEdit<'_>, value: NurbsPatchUForm) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "uForm", value);
+        self.write_schema_value(edit, "uForm", value);
         self
     }
 
@@ -9599,14 +9599,14 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateUKnotsAttr")]
     pub fn set_u_knots(&self, edit: &mut SchemaEdit<'_>, value: &[f64]) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value(edit, "uKnots", value);
+        self.write_schema_value(edit, "uKnots", value);
         self
     }
 
     #[doc = "[`Self::set_u_knots`] as a time sample at the time code `time`."]
     pub fn set_u_knots_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[f64]) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value_at(edit, "uKnots", time, value);
+        self.write_schema_value_at(edit, "uKnots", time, value);
         self
     }
 
@@ -9617,7 +9617,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value(edit, "uKnots", value);
+        self.write_schema_value(edit, "uKnots", value);
         self
     }
 
@@ -9629,7 +9629,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "uKnots", time, value);
+        self.write_schema_value_at(edit, "uKnots", time, value);
         self
     }
 
@@ -9640,7 +9640,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value(edit, "uKnots", value);
+        self.write_schema_value(edit, "uKnots", value);
         self
     }
 
@@ -9652,7 +9652,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "uKnots", time, value);
+        self.write_schema_value_at(edit, "uKnots", time, value);
         self
     }
 
@@ -9664,14 +9664,14 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateUOrderAttr")]
     pub fn set_u_order(&self, edit: &mut SchemaEdit<'_>, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value(edit, "uOrder", value);
+        self.write_schema_value(edit, "uOrder", value);
         self
     }
 
     #[doc = "[`Self::set_u_order`] as a time sample at the time code `time`."]
     pub fn set_u_order_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value_at(edit, "uOrder", time, value);
+        self.write_schema_value_at(edit, "uOrder", time, value);
         self
     }
 
@@ -9683,14 +9683,14 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateURangeAttr")]
     pub fn set_u_range(&self, edit: &mut SchemaEdit<'_>, value: [f64; 2]) -> &Self {
         let value = crate::value::write_double2(value, edit.tokens());
-        self.write_value(edit, "uRange", value);
+        self.write_schema_value(edit, "uRange", value);
         self
     }
 
     #[doc = "[`Self::set_u_range`] as a time sample at the time code `time`."]
     pub fn set_u_range_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: [f64; 2]) -> &Self {
         let value = crate::value::write_double2(value, edit.tokens());
-        self.write_value_at(edit, "uRange", time, value);
+        self.write_schema_value_at(edit, "uRange", time, value);
         self
     }
 
@@ -9702,14 +9702,14 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateUVertexCountAttr")]
     pub fn set_u_vertex_count(&self, edit: &mut SchemaEdit<'_>, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value(edit, "uVertexCount", value);
+        self.write_schema_value(edit, "uVertexCount", value);
         self
     }
 
     #[doc = "[`Self::set_u_vertex_count`] as a time sample at the time code `time`."]
     pub fn set_u_vertex_count_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value_at(edit, "uVertexCount", time, value);
+        self.write_schema_value_at(edit, "uVertexCount", time, value);
         self
     }
 
@@ -9721,7 +9721,7 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateVFormAttr")]
     pub fn set_v_form(&self, edit: &mut SchemaEdit<'_>, value: NurbsPatchVForm) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "vForm", value);
+        self.write_schema_value(edit, "vForm", value);
         self
     }
 
@@ -9735,14 +9735,14 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateVKnotsAttr")]
     pub fn set_v_knots(&self, edit: &mut SchemaEdit<'_>, value: &[f64]) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value(edit, "vKnots", value);
+        self.write_schema_value(edit, "vKnots", value);
         self
     }
 
     #[doc = "[`Self::set_v_knots`] as a time sample at the time code `time`."]
     pub fn set_v_knots_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[f64]) -> &Self {
         let value = crate::value::write_double_array(value, edit.tokens());
-        self.write_value_at(edit, "vKnots", time, value);
+        self.write_schema_value_at(edit, "vKnots", time, value);
         self
     }
 
@@ -9753,7 +9753,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value(edit, "vKnots", value);
+        self.write_schema_value(edit, "vKnots", value);
         self
     }
 
@@ -9765,7 +9765,7 @@ impl NurbsPatchEdit {
         value: ::alloc::vec::Vec<f64>,
     ) -> &Self {
         let value = crate::value::write_double_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "vKnots", time, value);
+        self.write_schema_value_at(edit, "vKnots", time, value);
         self
     }
 
@@ -9776,7 +9776,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value(edit, "vKnots", value);
+        self.write_schema_value(edit, "vKnots", value);
         self
     }
 
@@ -9788,7 +9788,7 @@ impl NurbsPatchEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f64>>,
     ) -> &Self {
         let value = crate::value::write_double_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "vKnots", time, value);
+        self.write_schema_value_at(edit, "vKnots", time, value);
         self
     }
 
@@ -9800,14 +9800,14 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateVOrderAttr")]
     pub fn set_v_order(&self, edit: &mut SchemaEdit<'_>, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value(edit, "vOrder", value);
+        self.write_schema_value(edit, "vOrder", value);
         self
     }
 
     #[doc = "[`Self::set_v_order`] as a time sample at the time code `time`."]
     pub fn set_v_order_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value_at(edit, "vOrder", time, value);
+        self.write_schema_value_at(edit, "vOrder", time, value);
         self
     }
 
@@ -9819,14 +9819,14 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateVRangeAttr")]
     pub fn set_v_range(&self, edit: &mut SchemaEdit<'_>, value: [f64; 2]) -> &Self {
         let value = crate::value::write_double2(value, edit.tokens());
-        self.write_value(edit, "vRange", value);
+        self.write_schema_value(edit, "vRange", value);
         self
     }
 
     #[doc = "[`Self::set_v_range`] as a time sample at the time code `time`."]
     pub fn set_v_range_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: [f64; 2]) -> &Self {
         let value = crate::value::write_double2(value, edit.tokens());
-        self.write_value_at(edit, "vRange", time, value);
+        self.write_schema_value_at(edit, "vRange", time, value);
         self
     }
 
@@ -9838,14 +9838,14 @@ impl NurbsPatchEdit {
     #[doc(alias = "CreateVVertexCountAttr")]
     pub fn set_v_vertex_count(&self, edit: &mut SchemaEdit<'_>, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value(edit, "vVertexCount", value);
+        self.write_schema_value(edit, "vVertexCount", value);
         self
     }
 
     #[doc = "[`Self::set_v_vertex_count`] as a time sample at the time code `time`."]
     pub fn set_v_vertex_count_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value_at(edit, "vVertexCount", time, value);
+        self.write_schema_value_at(edit, "vVertexCount", time, value);
         self
     }
 }
@@ -10067,7 +10067,7 @@ impl PlaneEdit {
     #[doc(alias = "CreateAxisAttr")]
     pub fn set_axis(&self, edit: &mut SchemaEdit<'_>, value: PlaneAxis) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "axis", value);
+        self.write_schema_value(edit, "axis", value);
         self
     }
 
@@ -10079,14 +10079,14 @@ impl PlaneEdit {
     #[doc(alias = "CreateLengthAttr")]
     pub fn set_length(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "length", value);
+        self.write_schema_value(edit, "length", value);
         self
     }
 
     #[doc = "[`Self::set_length`] as a time sample at the time code `time`."]
     pub fn set_length_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value_at(edit, "length", time, value);
+        self.write_schema_value_at(edit, "length", time, value);
         self
     }
 
@@ -10098,14 +10098,14 @@ impl PlaneEdit {
     #[doc(alias = "CreateWidthAttr")]
     pub fn set_width(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "width", value);
+        self.write_schema_value(edit, "width", value);
         self
     }
 
     #[doc = "[`Self::set_width`] as a time sample at the time code `time`."]
     pub fn set_width_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value_at(edit, "width", time, value);
+        self.write_schema_value_at(edit, "width", time, value);
         self
     }
 }
@@ -10347,7 +10347,7 @@ impl PointBasedEdit {
     #[doc(alias = "CreateAccelerationsAttr")]
     pub fn set_accelerations(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "accelerations", value);
+        self.write_schema_value(edit, "accelerations", value);
         self
     }
 
@@ -10359,7 +10359,7 @@ impl PointBasedEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value_at(edit, "accelerations", time, value);
+        self.write_schema_value_at(edit, "accelerations", time, value);
         self
     }
 
@@ -10370,7 +10370,7 @@ impl PointBasedEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "accelerations", value);
+        self.write_schema_value(edit, "accelerations", value);
         self
     }
 
@@ -10382,7 +10382,7 @@ impl PointBasedEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "accelerations", time, value);
+        self.write_schema_value_at(edit, "accelerations", time, value);
         self
     }
 
@@ -10393,7 +10393,7 @@ impl PointBasedEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "accelerations", value);
+        self.write_schema_value(edit, "accelerations", value);
         self
     }
 
@@ -10405,7 +10405,7 @@ impl PointBasedEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "accelerations", time, value);
+        self.write_schema_value_at(edit, "accelerations", time, value);
         self
     }
 
@@ -10419,7 +10419,7 @@ impl PointBasedEdit {
     #[doc(alias = "CreateNormalsAttr")]
     pub fn set_normals(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "normals", value);
+        self.write_schema_value(edit, "normals", value);
         self
     }
 
@@ -10431,7 +10431,7 @@ impl PointBasedEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value_at(edit, "normals", time, value);
+        self.write_schema_value_at(edit, "normals", time, value);
         self
     }
 
@@ -10442,7 +10442,7 @@ impl PointBasedEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "normals", value);
+        self.write_schema_value(edit, "normals", value);
         self
     }
 
@@ -10454,7 +10454,7 @@ impl PointBasedEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "normals", time, value);
+        self.write_schema_value_at(edit, "normals", time, value);
         self
     }
 
@@ -10465,7 +10465,7 @@ impl PointBasedEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "normals", value);
+        self.write_schema_value(edit, "normals", value);
         self
     }
 
@@ -10477,7 +10477,7 @@ impl PointBasedEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "normals", time, value);
+        self.write_schema_value_at(edit, "normals", time, value);
         self
     }
 
@@ -10491,14 +10491,14 @@ impl PointBasedEdit {
     #[doc(alias = "CreatePointsAttr")]
     pub fn set_points(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "points", value);
+        self.write_schema_value(edit, "points", value);
         self
     }
 
     #[doc = "[`Self::set_points`] as a time sample at the time code `time`."]
     pub fn set_points_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value_at(edit, "points", time, value);
+        self.write_schema_value_at(edit, "points", time, value);
         self
     }
 
@@ -10509,7 +10509,7 @@ impl PointBasedEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "points", value);
+        self.write_schema_value(edit, "points", value);
         self
     }
 
@@ -10521,7 +10521,7 @@ impl PointBasedEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "points", time, value);
+        self.write_schema_value_at(edit, "points", time, value);
         self
     }
 
@@ -10532,7 +10532,7 @@ impl PointBasedEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "points", value);
+        self.write_schema_value(edit, "points", value);
         self
     }
 
@@ -10544,7 +10544,7 @@ impl PointBasedEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "points", time, value);
+        self.write_schema_value_at(edit, "points", time, value);
         self
     }
 
@@ -10558,7 +10558,7 @@ impl PointBasedEdit {
     #[doc(alias = "CreateVelocitiesAttr")]
     pub fn set_velocities(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "velocities", value);
+        self.write_schema_value(edit, "velocities", value);
         self
     }
 
@@ -10570,7 +10570,7 @@ impl PointBasedEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value_at(edit, "velocities", time, value);
+        self.write_schema_value_at(edit, "velocities", time, value);
         self
     }
 
@@ -10581,7 +10581,7 @@ impl PointBasedEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "velocities", value);
+        self.write_schema_value(edit, "velocities", value);
         self
     }
 
@@ -10593,7 +10593,7 @@ impl PointBasedEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "velocities", time, value);
+        self.write_schema_value_at(edit, "velocities", time, value);
         self
     }
 
@@ -10604,7 +10604,7 @@ impl PointBasedEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "velocities", value);
+        self.write_schema_value(edit, "velocities", value);
         self
     }
 
@@ -10616,7 +10616,7 @@ impl PointBasedEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "velocities", time, value);
+        self.write_schema_value_at(edit, "velocities", time, value);
         self
     }
 }
@@ -11098,7 +11098,7 @@ impl PointInstancerEdit {
     #[doc(alias = "CreateAccelerationsAttr")]
     pub fn set_accelerations(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "accelerations", value);
+        self.write_schema_value(edit, "accelerations", value);
         self
     }
 
@@ -11110,7 +11110,7 @@ impl PointInstancerEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value_at(edit, "accelerations", time, value);
+        self.write_schema_value_at(edit, "accelerations", time, value);
         self
     }
 
@@ -11121,7 +11121,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "accelerations", value);
+        self.write_schema_value(edit, "accelerations", value);
         self
     }
 
@@ -11133,7 +11133,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "accelerations", time, value);
+        self.write_schema_value_at(edit, "accelerations", time, value);
         self
     }
 
@@ -11144,7 +11144,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "accelerations", value);
+        self.write_schema_value(edit, "accelerations", value);
         self
     }
 
@@ -11156,7 +11156,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "accelerations", time, value);
+        self.write_schema_value_at(edit, "accelerations", time, value);
         self
     }
 
@@ -11170,7 +11170,7 @@ impl PointInstancerEdit {
     #[doc(alias = "CreateAngularVelocitiesAttr")]
     pub fn set_angular_velocities(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "angularVelocities", value);
+        self.write_schema_value(edit, "angularVelocities", value);
         self
     }
 
@@ -11182,7 +11182,7 @@ impl PointInstancerEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value_at(edit, "angularVelocities", time, value);
+        self.write_schema_value_at(edit, "angularVelocities", time, value);
         self
     }
 
@@ -11193,7 +11193,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "angularVelocities", value);
+        self.write_schema_value(edit, "angularVelocities", value);
         self
     }
 
@@ -11205,7 +11205,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "angularVelocities", time, value);
+        self.write_schema_value_at(edit, "angularVelocities", time, value);
         self
     }
 
@@ -11216,7 +11216,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "angularVelocities", value);
+        self.write_schema_value(edit, "angularVelocities", value);
         self
     }
 
@@ -11228,7 +11228,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "angularVelocities", time, value);
+        self.write_schema_value_at(edit, "angularVelocities", time, value);
         self
     }
 
@@ -11242,21 +11242,21 @@ impl PointInstancerEdit {
     #[doc(alias = "CreateIdsAttr")]
     pub fn set_ids(&self, edit: &mut SchemaEdit<'_>, value: &[i64]) -> &Self {
         let value = crate::value::write_int64_array(value, edit.tokens());
-        self.write_value(edit, "ids", value);
+        self.write_schema_value(edit, "ids", value);
         self
     }
 
     #[doc = "[`Self::set_ids`] as a time sample at the time code `time`."]
     pub fn set_ids_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[i64]) -> &Self {
         let value = crate::value::write_int64_array(value, edit.tokens());
-        self.write_value_at(edit, "ids", time, value);
+        self.write_schema_value_at(edit, "ids", time, value);
         self
     }
 
     #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_ids`."]
     pub fn set_ids_owned(&self, edit: &mut SchemaEdit<'_>, value: ::alloc::vec::Vec<i64>) -> &Self {
         let value = crate::value::write_int64_array_owned(value, edit.tokens());
-        self.write_value(edit, "ids", value);
+        self.write_schema_value(edit, "ids", value);
         self
     }
 
@@ -11268,7 +11268,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<i64>,
     ) -> &Self {
         let value = crate::value::write_int64_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "ids", time, value);
+        self.write_schema_value_at(edit, "ids", time, value);
         self
     }
 
@@ -11279,7 +11279,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i64>>,
     ) -> &Self {
         let value = crate::value::write_int64_array_shared(value, edit.tokens());
-        self.write_value(edit, "ids", value);
+        self.write_schema_value(edit, "ids", value);
         self
     }
 
@@ -11291,7 +11291,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i64>>,
     ) -> &Self {
         let value = crate::value::write_int64_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "ids", time, value);
+        self.write_schema_value_at(edit, "ids", time, value);
         self
     }
 
@@ -11305,7 +11305,7 @@ impl PointInstancerEdit {
     #[doc(alias = "CreateInvisibleIdsAttr")]
     pub fn set_invisible_ids(&self, edit: &mut SchemaEdit<'_>, value: &[i64]) -> &Self {
         let value = crate::value::write_int64_array(value, edit.tokens());
-        self.write_value(edit, "invisibleIds", value);
+        self.write_schema_value(edit, "invisibleIds", value);
         self
     }
 
@@ -11317,7 +11317,7 @@ impl PointInstancerEdit {
         value: &[i64],
     ) -> &Self {
         let value = crate::value::write_int64_array(value, edit.tokens());
-        self.write_value_at(edit, "invisibleIds", time, value);
+        self.write_schema_value_at(edit, "invisibleIds", time, value);
         self
     }
 
@@ -11328,7 +11328,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<i64>,
     ) -> &Self {
         let value = crate::value::write_int64_array_owned(value, edit.tokens());
-        self.write_value(edit, "invisibleIds", value);
+        self.write_schema_value(edit, "invisibleIds", value);
         self
     }
 
@@ -11340,7 +11340,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<i64>,
     ) -> &Self {
         let value = crate::value::write_int64_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "invisibleIds", time, value);
+        self.write_schema_value_at(edit, "invisibleIds", time, value);
         self
     }
 
@@ -11351,7 +11351,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i64>>,
     ) -> &Self {
         let value = crate::value::write_int64_array_shared(value, edit.tokens());
-        self.write_value(edit, "invisibleIds", value);
+        self.write_schema_value(edit, "invisibleIds", value);
         self
     }
 
@@ -11363,7 +11363,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i64>>,
     ) -> &Self {
         let value = crate::value::write_int64_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "invisibleIds", time, value);
+        self.write_schema_value_at(edit, "invisibleIds", time, value);
         self
     }
 
@@ -11375,7 +11375,7 @@ impl PointInstancerEdit {
     #[doc(alias = "CreateOrientationsAttr")]
     pub fn set_orientations(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 4]]) -> &Self {
         let value = crate::value::write_quath_array(value, edit.tokens());
-        self.write_value(edit, "orientations", value);
+        self.write_schema_value(edit, "orientations", value);
         self
     }
 
@@ -11387,7 +11387,7 @@ impl PointInstancerEdit {
         value: &[[f32; 4]],
     ) -> &Self {
         let value = crate::value::write_quath_array(value, edit.tokens());
-        self.write_value_at(edit, "orientations", time, value);
+        self.write_schema_value_at(edit, "orientations", time, value);
         self
     }
 
@@ -11401,7 +11401,7 @@ impl PointInstancerEdit {
     #[doc(alias = "CreateOrientationsfAttr")]
     pub fn set_orientationsf(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 4]]) -> &Self {
         let value = crate::value::write_quatf_array(value, edit.tokens());
-        self.write_value(edit, "orientationsf", value);
+        self.write_schema_value(edit, "orientationsf", value);
         self
     }
 
@@ -11413,7 +11413,7 @@ impl PointInstancerEdit {
         value: &[[f32; 4]],
     ) -> &Self {
         let value = crate::value::write_quatf_array(value, edit.tokens());
-        self.write_value_at(edit, "orientationsf", time, value);
+        self.write_schema_value_at(edit, "orientationsf", time, value);
         self
     }
 
@@ -11424,7 +11424,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 4]>,
     ) -> &Self {
         let value = crate::value::write_quatf_array_owned(value, edit.tokens());
-        self.write_value(edit, "orientationsf", value);
+        self.write_schema_value(edit, "orientationsf", value);
         self
     }
 
@@ -11436,7 +11436,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 4]>,
     ) -> &Self {
         let value = crate::value::write_quatf_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "orientationsf", time, value);
+        self.write_schema_value_at(edit, "orientationsf", time, value);
         self
     }
 
@@ -11447,7 +11447,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>,
     ) -> &Self {
         let value = crate::value::write_quatf_array_shared(value, edit.tokens());
-        self.write_value(edit, "orientationsf", value);
+        self.write_schema_value(edit, "orientationsf", value);
         self
     }
 
@@ -11459,7 +11459,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>,
     ) -> &Self {
         let value = crate::value::write_quatf_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "orientationsf", time, value);
+        self.write_schema_value_at(edit, "orientationsf", time, value);
         self
     }
 
@@ -11473,7 +11473,7 @@ impl PointInstancerEdit {
     #[doc(alias = "CreatePositionsAttr")]
     pub fn set_positions(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "positions", value);
+        self.write_schema_value(edit, "positions", value);
         self
     }
 
@@ -11485,7 +11485,7 @@ impl PointInstancerEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value_at(edit, "positions", time, value);
+        self.write_schema_value_at(edit, "positions", time, value);
         self
     }
 
@@ -11496,7 +11496,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "positions", value);
+        self.write_schema_value(edit, "positions", value);
         self
     }
 
@@ -11508,7 +11508,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "positions", time, value);
+        self.write_schema_value_at(edit, "positions", time, value);
         self
     }
 
@@ -11519,7 +11519,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "positions", value);
+        self.write_schema_value(edit, "positions", value);
         self
     }
 
@@ -11531,7 +11531,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "positions", time, value);
+        self.write_schema_value_at(edit, "positions", time, value);
         self
     }
 
@@ -11545,7 +11545,7 @@ impl PointInstancerEdit {
     #[doc(alias = "CreateProtoIndicesAttr")]
     pub fn set_proto_indices(&self, edit: &mut SchemaEdit<'_>, value: &[i32]) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value(edit, "protoIndices", value);
+        self.write_schema_value(edit, "protoIndices", value);
         self
     }
 
@@ -11557,7 +11557,7 @@ impl PointInstancerEdit {
         value: &[i32],
     ) -> &Self {
         let value = crate::value::write_int_array(value, edit.tokens());
-        self.write_value_at(edit, "protoIndices", time, value);
+        self.write_schema_value_at(edit, "protoIndices", time, value);
         self
     }
 
@@ -11568,7 +11568,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value(edit, "protoIndices", value);
+        self.write_schema_value(edit, "protoIndices", value);
         self
     }
 
@@ -11580,7 +11580,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<i32>,
     ) -> &Self {
         let value = crate::value::write_int_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "protoIndices", time, value);
+        self.write_schema_value_at(edit, "protoIndices", time, value);
         self
     }
 
@@ -11591,7 +11591,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value(edit, "protoIndices", value);
+        self.write_schema_value(edit, "protoIndices", value);
         self
     }
 
@@ -11603,7 +11603,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i32>>,
     ) -> &Self {
         let value = crate::value::write_int_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "protoIndices", time, value);
+        self.write_schema_value_at(edit, "protoIndices", time, value);
         self
     }
 
@@ -11657,14 +11657,14 @@ impl PointInstancerEdit {
     #[doc(alias = "CreateScalesAttr")]
     pub fn set_scales(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "scales", value);
+        self.write_schema_value(edit, "scales", value);
         self
     }
 
     #[doc = "[`Self::set_scales`] as a time sample at the time code `time`."]
     pub fn set_scales_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value_at(edit, "scales", time, value);
+        self.write_schema_value_at(edit, "scales", time, value);
         self
     }
 
@@ -11675,7 +11675,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "scales", value);
+        self.write_schema_value(edit, "scales", value);
         self
     }
 
@@ -11687,7 +11687,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "scales", time, value);
+        self.write_schema_value_at(edit, "scales", time, value);
         self
     }
 
@@ -11698,7 +11698,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "scales", value);
+        self.write_schema_value(edit, "scales", value);
         self
     }
 
@@ -11710,7 +11710,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "scales", time, value);
+        self.write_schema_value_at(edit, "scales", time, value);
         self
     }
 
@@ -11724,7 +11724,7 @@ impl PointInstancerEdit {
     #[doc(alias = "CreateVelocitiesAttr")]
     pub fn set_velocities(&self, edit: &mut SchemaEdit<'_>, value: &[[f32; 3]]) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value(edit, "velocities", value);
+        self.write_schema_value(edit, "velocities", value);
         self
     }
 
@@ -11736,7 +11736,7 @@ impl PointInstancerEdit {
         value: &[[f32; 3]],
     ) -> &Self {
         let value = crate::value::write_float3_array(value, edit.tokens());
-        self.write_value_at(edit, "velocities", time, value);
+        self.write_schema_value_at(edit, "velocities", time, value);
         self
     }
 
@@ -11747,7 +11747,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value(edit, "velocities", value);
+        self.write_schema_value(edit, "velocities", value);
         self
     }
 
@@ -11759,7 +11759,7 @@ impl PointInstancerEdit {
         value: ::alloc::vec::Vec<[f32; 3]>,
     ) -> &Self {
         let value = crate::value::write_float3_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "velocities", time, value);
+        self.write_schema_value_at(edit, "velocities", time, value);
         self
     }
 
@@ -11770,7 +11770,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value(edit, "velocities", value);
+        self.write_schema_value(edit, "velocities", value);
         self
     }
 
@@ -11782,7 +11782,7 @@ impl PointInstancerEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_float3_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "velocities", time, value);
+        self.write_schema_value_at(edit, "velocities", time, value);
         self
     }
 }
@@ -11965,21 +11965,21 @@ impl PointsEdit {
     #[doc(alias = "CreateIdsAttr")]
     pub fn set_ids(&self, edit: &mut SchemaEdit<'_>, value: &[i64]) -> &Self {
         let value = crate::value::write_int64_array(value, edit.tokens());
-        self.write_value(edit, "ids", value);
+        self.write_schema_value(edit, "ids", value);
         self
     }
 
     #[doc = "[`Self::set_ids`] as a time sample at the time code `time`."]
     pub fn set_ids_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[i64]) -> &Self {
         let value = crate::value::write_int64_array(value, edit.tokens());
-        self.write_value_at(edit, "ids", time, value);
+        self.write_schema_value_at(edit, "ids", time, value);
         self
     }
 
     #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_ids`."]
     pub fn set_ids_owned(&self, edit: &mut SchemaEdit<'_>, value: ::alloc::vec::Vec<i64>) -> &Self {
         let value = crate::value::write_int64_array_owned(value, edit.tokens());
-        self.write_value(edit, "ids", value);
+        self.write_schema_value(edit, "ids", value);
         self
     }
 
@@ -11991,7 +11991,7 @@ impl PointsEdit {
         value: ::alloc::vec::Vec<i64>,
     ) -> &Self {
         let value = crate::value::write_int64_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "ids", time, value);
+        self.write_schema_value_at(edit, "ids", time, value);
         self
     }
 
@@ -12002,7 +12002,7 @@ impl PointsEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i64>>,
     ) -> &Self {
         let value = crate::value::write_int64_array_shared(value, edit.tokens());
-        self.write_value(edit, "ids", value);
+        self.write_schema_value(edit, "ids", value);
         self
     }
 
@@ -12014,7 +12014,7 @@ impl PointsEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<i64>>,
     ) -> &Self {
         let value = crate::value::write_int64_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "ids", time, value);
+        self.write_schema_value_at(edit, "ids", time, value);
         self
     }
 
@@ -12028,14 +12028,14 @@ impl PointsEdit {
     #[doc(alias = "CreateWidthsAttr")]
     pub fn set_widths(&self, edit: &mut SchemaEdit<'_>, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value(edit, "widths", value);
+        self.write_schema_value(edit, "widths", value);
         self
     }
 
     #[doc = "[`Self::set_widths`] as a time sample at the time code `time`."]
     pub fn set_widths_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &[f32]) -> &Self {
         let value = crate::value::write_float_array(value, edit.tokens());
-        self.write_value_at(edit, "widths", time, value);
+        self.write_schema_value_at(edit, "widths", time, value);
         self
     }
 
@@ -12046,7 +12046,7 @@ impl PointsEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value(edit, "widths", value);
+        self.write_schema_value(edit, "widths", value);
         self
     }
 
@@ -12058,7 +12058,7 @@ impl PointsEdit {
         value: ::alloc::vec::Vec<f32>,
     ) -> &Self {
         let value = crate::value::write_float_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "widths", time, value);
+        self.write_schema_value_at(edit, "widths", time, value);
         self
     }
 
@@ -12069,7 +12069,7 @@ impl PointsEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value(edit, "widths", value);
+        self.write_schema_value(edit, "widths", value);
         self
     }
 
@@ -12081,7 +12081,7 @@ impl PointsEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<f32>>,
     ) -> &Self {
         let value = crate::value::write_float_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "widths", time, value);
+        self.write_schema_value_at(edit, "widths", time, value);
         self
     }
 }
@@ -12315,14 +12315,14 @@ impl SphereEdit {
     #[doc(alias = "CreateRadiusAttr")]
     pub fn set_radius(&self, edit: &mut SchemaEdit<'_>, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value(edit, "radius", value);
+        self.write_schema_value(edit, "radius", value);
         self
     }
 
     #[doc = "[`Self::set_radius`] as a time sample at the time code `time`."]
     pub fn set_radius_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f64) -> &Self {
         let value = crate::value::write_double(value, edit.tokens());
-        self.write_value_at(edit, "radius", time, value);
+        self.write_schema_value_at(edit, "radius", time, value);
         self
     }
 }
@@ -12530,7 +12530,7 @@ impl TetMeshEdit {
         value: &[[i32; 3]],
     ) -> &Self {
         let value = crate::value::write_int3_array(value, edit.tokens());
-        self.write_value(edit, "surfaceFaceVertexIndices", value);
+        self.write_schema_value(edit, "surfaceFaceVertexIndices", value);
         self
     }
 
@@ -12542,7 +12542,7 @@ impl TetMeshEdit {
         value: &[[i32; 3]],
     ) -> &Self {
         let value = crate::value::write_int3_array(value, edit.tokens());
-        self.write_value_at(edit, "surfaceFaceVertexIndices", time, value);
+        self.write_schema_value_at(edit, "surfaceFaceVertexIndices", time, value);
         self
     }
 
@@ -12553,7 +12553,7 @@ impl TetMeshEdit {
         value: ::alloc::vec::Vec<[i32; 3]>,
     ) -> &Self {
         let value = crate::value::write_int3_array_owned(value, edit.tokens());
-        self.write_value(edit, "surfaceFaceVertexIndices", value);
+        self.write_schema_value(edit, "surfaceFaceVertexIndices", value);
         self
     }
 
@@ -12565,7 +12565,7 @@ impl TetMeshEdit {
         value: ::alloc::vec::Vec<[i32; 3]>,
     ) -> &Self {
         let value = crate::value::write_int3_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "surfaceFaceVertexIndices", time, value);
+        self.write_schema_value_at(edit, "surfaceFaceVertexIndices", time, value);
         self
     }
 
@@ -12576,7 +12576,7 @@ impl TetMeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[i32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_int3_array_shared(value, edit.tokens());
-        self.write_value(edit, "surfaceFaceVertexIndices", value);
+        self.write_schema_value(edit, "surfaceFaceVertexIndices", value);
         self
     }
 
@@ -12588,7 +12588,7 @@ impl TetMeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[i32; 3]>>,
     ) -> &Self {
         let value = crate::value::write_int3_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "surfaceFaceVertexIndices", time, value);
+        self.write_schema_value_at(edit, "surfaceFaceVertexIndices", time, value);
         self
     }
 
@@ -12602,7 +12602,7 @@ impl TetMeshEdit {
     #[doc(alias = "CreateTetVertexIndicesAttr")]
     pub fn set_tet_vertex_indices(&self, edit: &mut SchemaEdit<'_>, value: &[[i32; 4]]) -> &Self {
         let value = crate::value::write_int4_array(value, edit.tokens());
-        self.write_value(edit, "tetVertexIndices", value);
+        self.write_schema_value(edit, "tetVertexIndices", value);
         self
     }
 
@@ -12614,7 +12614,7 @@ impl TetMeshEdit {
         value: &[[i32; 4]],
     ) -> &Self {
         let value = crate::value::write_int4_array(value, edit.tokens());
-        self.write_value_at(edit, "tetVertexIndices", time, value);
+        self.write_schema_value_at(edit, "tetVertexIndices", time, value);
         self
     }
 
@@ -12625,7 +12625,7 @@ impl TetMeshEdit {
         value: ::alloc::vec::Vec<[i32; 4]>,
     ) -> &Self {
         let value = crate::value::write_int4_array_owned(value, edit.tokens());
-        self.write_value(edit, "tetVertexIndices", value);
+        self.write_schema_value(edit, "tetVertexIndices", value);
         self
     }
 
@@ -12637,7 +12637,7 @@ impl TetMeshEdit {
         value: ::alloc::vec::Vec<[i32; 4]>,
     ) -> &Self {
         let value = crate::value::write_int4_array_owned(value, edit.tokens());
-        self.write_value_at(edit, "tetVertexIndices", time, value);
+        self.write_schema_value_at(edit, "tetVertexIndices", time, value);
         self
     }
 
@@ -12648,7 +12648,7 @@ impl TetMeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[i32; 4]>>,
     ) -> &Self {
         let value = crate::value::write_int4_array_shared(value, edit.tokens());
-        self.write_value(edit, "tetVertexIndices", value);
+        self.write_schema_value(edit, "tetVertexIndices", value);
         self
     }
 
@@ -12660,7 +12660,7 @@ impl TetMeshEdit {
         value: ::alloc::sync::Arc<::alloc::vec::Vec<[i32; 4]>>,
     ) -> &Self {
         let value = crate::value::write_int4_array_shared(value, edit.tokens());
-        self.write_value_at(edit, "tetVertexIndices", time, value);
+        self.write_schema_value_at(edit, "tetVertexIndices", time, value);
         self
     }
 }
@@ -12986,7 +12986,7 @@ impl VisibilityApiEdit {
         value: VisibilityApiGuideVisibility,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "guideVisibility", value);
+        self.write_schema_value(edit, "guideVisibility", value);
         self
     }
 
@@ -13002,7 +13002,7 @@ impl VisibilityApiEdit {
         value: VisibilityApiProxyVisibility,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "proxyVisibility", value);
+        self.write_schema_value(edit, "proxyVisibility", value);
         self
     }
 
@@ -13018,7 +13018,7 @@ impl VisibilityApiEdit {
         value: VisibilityApiRenderVisibility,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "renderVisibility", value);
+        self.write_schema_value(edit, "renderVisibility", value);
         self
     }
 }
@@ -13241,7 +13241,7 @@ impl XformableEdit {
     #[doc(alias = "CreateXformOpOrderAttr")]
     pub fn set_xform_op_order(&self, edit: &mut SchemaEdit<'_>, value: &[&str]) -> &Self {
         let value = crate::value::write_array(value, edit.tokens(), crate::value::write_token);
-        self.write_value(edit, "xformOpOrder", value);
+        self.write_schema_value(edit, "xformOpOrder", value);
         self
     }
 }

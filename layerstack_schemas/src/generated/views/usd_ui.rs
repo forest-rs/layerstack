@@ -313,14 +313,14 @@ impl AccessibilityApiEdit {
     #[doc(alias = "CreateDescriptionAttr")]
     pub fn set_description(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value(edit, "accessibility:__INSTANCE_NAME__:description", value);
+        self.write_schema_value(edit, "accessibility:__INSTANCE_NAME__:description", value);
         self
     }
 
     #[doc = "[`Self::set_description`] as a time sample at the time code `time`."]
     pub fn set_description_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value_at(
+        self.write_schema_value_at(
             edit,
             "accessibility:__INSTANCE_NAME__:description",
             time,
@@ -337,14 +337,14 @@ impl AccessibilityApiEdit {
     #[doc(alias = "CreateLabelAttr")]
     pub fn set_label(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value(edit, "accessibility:__INSTANCE_NAME__:label", value);
+        self.write_schema_value(edit, "accessibility:__INSTANCE_NAME__:label", value);
         self
     }
 
     #[doc = "[`Self::set_label`] as a time sample at the time code `time`."]
     pub fn set_label_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: &str) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value_at(edit, "accessibility:__INSTANCE_NAME__:label", time, value);
+        self.write_schema_value_at(edit, "accessibility:__INSTANCE_NAME__:label", time, value);
         self
     }
 
@@ -360,7 +360,7 @@ impl AccessibilityApiEdit {
         value: AccessibilityApiPriority,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "accessibility:__INSTANCE_NAME__:priority", value);
+        self.write_schema_value(edit, "accessibility:__INSTANCE_NAME__:priority", value);
         self
     }
 
@@ -372,7 +372,7 @@ impl AccessibilityApiEdit {
         value: AccessibilityApiPriority,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value_at(
+        self.write_schema_value_at(
             edit,
             "accessibility:__INSTANCE_NAME__:priority",
             time,
@@ -504,7 +504,7 @@ impl BackdropEdit {
     #[doc(alias = "CreateDescriptionAttr")]
     pub fn set_description(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "ui:description", value);
+        self.write_schema_value(edit, "ui:description", value);
         self
     }
 }
@@ -772,7 +772,7 @@ impl NodeGraphNodeApiEdit {
     #[doc(alias = "CreateDisplayColorAttr")]
     pub fn set_display_color(&self, edit: &mut SchemaEdit<'_>, value: [f32; 3]) -> &Self {
         let value = crate::value::write_float3(value, edit.tokens());
-        self.write_value(edit, "ui:nodegraph:node:displayColor", value);
+        self.write_schema_value(edit, "ui:nodegraph:node:displayColor", value);
         self
     }
 
@@ -781,7 +781,7 @@ impl NodeGraphNodeApiEdit {
     #[doc = "USD attribute `ui:nodegraph:node:docURI` (`string`, uniform)."]
     pub fn set_doc_uri(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_string(value, edit.tokens());
-        self.write_value(edit, "ui:nodegraph:node:docURI", value);
+        self.write_schema_value(edit, "ui:nodegraph:node:docURI", value);
         self
     }
 
@@ -797,7 +797,7 @@ impl NodeGraphNodeApiEdit {
         value: NodeGraphNodeApiExpansionState,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "ui:nodegraph:node:expansionState", value);
+        self.write_schema_value(edit, "ui:nodegraph:node:expansionState", value);
         self
     }
 
@@ -809,7 +809,7 @@ impl NodeGraphNodeApiEdit {
     #[doc(alias = "CreateIconAttr")]
     pub fn set_icon(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_asset(value, edit.tokens());
-        self.write_value(edit, "ui:nodegraph:node:icon", value);
+        self.write_schema_value(edit, "ui:nodegraph:node:icon", value);
         self
     }
 
@@ -821,7 +821,7 @@ impl NodeGraphNodeApiEdit {
     #[doc(alias = "CreatePosAttr")]
     pub fn set_pos(&self, edit: &mut SchemaEdit<'_>, value: [f32; 2]) -> &Self {
         let value = crate::value::write_float2(value, edit.tokens());
-        self.write_value(edit, "ui:nodegraph:node:pos", value);
+        self.write_schema_value(edit, "ui:nodegraph:node:pos", value);
         self
     }
 
@@ -833,7 +833,7 @@ impl NodeGraphNodeApiEdit {
     #[doc(alias = "CreateSizeAttr")]
     pub fn set_size(&self, edit: &mut SchemaEdit<'_>, value: [f32; 2]) -> &Self {
         let value = crate::value::write_float2(value, edit.tokens());
-        self.write_value(edit, "ui:nodegraph:node:size", value);
+        self.write_schema_value(edit, "ui:nodegraph:node:size", value);
         self
     }
 
@@ -845,7 +845,7 @@ impl NodeGraphNodeApiEdit {
     #[doc(alias = "CreateStackingOrderAttr")]
     pub fn set_stacking_order(&self, edit: &mut SchemaEdit<'_>, value: i32) -> &Self {
         let value = crate::value::write_int(value, edit.tokens());
-        self.write_value(edit, "ui:nodegraph:node:stackingOrder", value);
+        self.write_schema_value(edit, "ui:nodegraph:node:stackingOrder", value);
         self
     }
 }
@@ -988,7 +988,7 @@ impl SceneGraphPrimApiEdit {
     #[doc(alias = "CreateDisplayGroupAttr")]
     pub fn set_display_group(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "ui:displayGroup", value);
+        self.write_schema_value(edit, "ui:displayGroup", value);
         self
     }
 
@@ -1000,7 +1000,7 @@ impl SceneGraphPrimApiEdit {
     #[doc(alias = "CreateDisplayNameAttr")]
     pub fn set_display_name(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "ui:displayName", value);
+        self.write_schema_value(edit, "ui:displayName", value);
         self
     }
 }

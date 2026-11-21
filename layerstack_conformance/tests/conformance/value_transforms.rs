@@ -248,13 +248,11 @@ fn author(
     let mut edit = SchemaEdit::new(live.stage(), &mut loaded.store, target.clone());
     let handle = PrimEdit::new(&edit, prim).unwrap().expect("a prim");
     let accepted = match kind {
-        "set" => {
-            match call["key"].as_f64() {
-                Some(time) => handle.write_value_at(&mut edit, name, time, value),
-                None => handle.write_value(&mut edit, name, value),
-            }
-            true
+        "set" => match call["key"].as_f64() {
+            Some(time) => handle.write_value_at(&mut edit, name, time, value),
+            None => handle.write_value(&mut edit, name, value),
         }
+        .is_ok(),
         "prim_key" => {
             let key = call["key"].as_str().unwrap();
             handle

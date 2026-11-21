@@ -1428,11 +1428,9 @@ mod tests {
 
         // A surface input: that material alone, no item.
         let diff = edit(&mut store, &mut live, &mut list, &|edit| {
-            PrimEdit::from_path_unchecked(surface).write_value(
-                edit,
-                "inputs:roughness",
-                Value::Float(0.9),
-            );
+            PrimEdit::from_path_unchecked(surface)
+                .write_value(edit, "inputs:roughness", Value::Float(0.9))
+                .unwrap();
         });
         assert_eq!(diff.materials_changed, [plain]);
         assert_eq!(diff.work.materials_read, 1);
@@ -1444,11 +1442,9 @@ mod tests {
 
         // A material interface input a node graph forwards.
         let diff = edit(&mut store, &mut live, &mut list, &|edit| {
-            PrimEdit::from_path_unchecked(group).write_value(
-                edit,
-                "inputs:tint",
-                Value::Vec3f([1.0, 0.0, 0.0]),
-            );
+            PrimEdit::from_path_unchecked(group)
+                .write_value(edit, "inputs:tint", Value::Vec3f([1.0, 0.0, 0.0]))
+                .unwrap();
         });
         assert_eq!(diff.materials_changed, [graph]);
         assert_eq!(diff.work.materials_read, 1);
@@ -1459,11 +1455,13 @@ mod tests {
 
         // A texture's file.
         let diff = edit(&mut store, &mut live, &mut list, &|edit| {
-            PrimEdit::from_path_unchecked(albedo).write_value(
-                edit,
-                "inputs:file",
-                Value::Asset("./textures/other.png".into()),
-            );
+            PrimEdit::from_path_unchecked(albedo)
+                .write_value(
+                    edit,
+                    "inputs:file",
+                    Value::Asset("./textures/other.png".into()),
+                )
+                .unwrap();
         });
         assert_eq!(diff.materials_changed, [textured]);
         assert_eq!(diff.work.materials_read, 1);
@@ -1475,7 +1473,9 @@ mod tests {
 
         // A light's connected input: the light alone.
         let diff = edit(&mut store, &mut live, &mut list, &|edit| {
-            PrimEdit::from_path_unchecked(rig).write_value(edit, "inputs:power", Value::Float(9.0));
+            PrimEdit::from_path_unchecked(rig)
+                .write_value(edit, "inputs:power", Value::Float(9.0))
+                .unwrap();
         });
         assert_eq!(diff.lights_changed, [crate::LightId::from(lamp)]);
         assert_eq!(diff.work.lights_read, 1);

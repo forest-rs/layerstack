@@ -4352,11 +4352,9 @@ def PointInstancer "Hopping" {
         let bulb = fixture.item("/World/Beacons/North/Bulb");
         let north = fixture.path("/World/Beacons/North");
         let diff = fixture.edit(|edit| {
-            PrimEdit::from_path_unchecked(north).write_value(
-                edit,
-                "xformOp:translate",
-                Value::Vec3d([5.0, 0.0, 0.0]),
-            );
+            PrimEdit::from_path_unchecked(north)
+                .write_value(edit, "xformOp:translate", Value::Vec3d([5.0, 0.0, 0.0]))
+                .unwrap();
         });
         let mut expected = [post, bulb];
         expected.sort();
@@ -4413,11 +4411,9 @@ def PointInstancer "Hopping" {
         let rocks = fixture.path("/World/Rocks");
         let invisible = fixture.store.tokens().intern("invisible");
         let diff = fixture.edit(|edit| {
-            PrimEdit::from_path_unchecked(rocks).write_value(
-                edit,
-                "visibility",
-                Value::Token(invisible),
-            );
+            PrimEdit::from_path_unchecked(rocks)
+                .write_value(edit, "visibility", Value::Token(invisible))
+                .unwrap();
         });
         // Everything under the rocks: the rock, the pebble and the stone.
         assert_eq!(diff.visibility.len(), 3);

@@ -429,7 +429,7 @@ impl CollectionApiEdit {
         value: CollectionApiExpansionRule,
     ) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "collection:__INSTANCE_NAME__:expansionRule", value);
+        self.write_schema_value(edit, "collection:__INSTANCE_NAME__:expansionRule", value);
         self
     }
 
@@ -441,7 +441,7 @@ impl CollectionApiEdit {
     #[doc(alias = "CreateIncludeRootAttr")]
     pub fn set_include_root(&self, edit: &mut SchemaEdit<'_>, value: bool) -> &Self {
         let value = crate::value::write_bool(value, edit.tokens());
-        self.write_value(edit, "collection:__INSTANCE_NAME__:includeRoot", value);
+        self.write_schema_value(edit, "collection:__INSTANCE_NAME__:includeRoot", value);
         self
     }
 
@@ -498,7 +498,7 @@ impl CollectionApiEdit {
     #[doc(alias = "CreateMembershipExpressionAttr")]
     pub fn set_membership_expression(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_path_expression(value, edit.tokens());
-        self.write_value(
+        self.write_schema_value(
             edit,
             "collection:__INSTANCE_NAME__:membershipExpression",
             value,
@@ -514,7 +514,7 @@ impl CollectionApiEdit {
     #[doc(alias = "CreateModeAttr")]
     pub fn set_mode(&self, edit: &mut SchemaEdit<'_>, value: CollectionApiMode) -> &Self {
         let value = value.write(edit.tokens());
-        self.write_value(edit, "collection:__INSTANCE_NAME__:mode", value);
+        self.write_schema_value(edit, "collection:__INSTANCE_NAME__:mode", value);
         self
     }
 }
@@ -643,7 +643,7 @@ impl ColorSpaceApiEdit {
     #[doc(alias = "CreateColorSpaceNameAttr")]
     pub fn set_color_space_name(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "colorSpace:name", value);
+        self.write_schema_value(edit, "colorSpace:name", value);
         self
     }
 }
@@ -979,7 +979,7 @@ impl ColorSpaceDefinitionApiEdit {
     #[doc(alias = "CreateBlueChromaAttr")]
     pub fn set_blue_chroma(&self, edit: &mut SchemaEdit<'_>, value: [f32; 2]) -> &Self {
         let value = crate::value::write_float2(value, edit.tokens());
-        self.write_value(
+        self.write_schema_value(
             edit,
             "colorSpaceDefinition:__INSTANCE_NAME__:blueChroma",
             value,
@@ -995,7 +995,7 @@ impl ColorSpaceDefinitionApiEdit {
         value: [f32; 2],
     ) -> &Self {
         let value = crate::value::write_float2(value, edit.tokens());
-        self.write_value_at(
+        self.write_schema_value_at(
             edit,
             "colorSpaceDefinition:__INSTANCE_NAME__:blueChroma",
             time,
@@ -1012,14 +1012,14 @@ impl ColorSpaceDefinitionApiEdit {
     #[doc(alias = "CreateGammaAttr")]
     pub fn set_gamma(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(edit, "colorSpaceDefinition:__INSTANCE_NAME__:gamma", value);
+        self.write_schema_value(edit, "colorSpaceDefinition:__INSTANCE_NAME__:gamma", value);
         self
     }
 
     #[doc = "[`Self::set_gamma`] as a time sample at the time code `time`."]
     pub fn set_gamma_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(
+        self.write_schema_value_at(
             edit,
             "colorSpaceDefinition:__INSTANCE_NAME__:gamma",
             time,
@@ -1036,7 +1036,7 @@ impl ColorSpaceDefinitionApiEdit {
     #[doc(alias = "CreateGreenChromaAttr")]
     pub fn set_green_chroma(&self, edit: &mut SchemaEdit<'_>, value: [f32; 2]) -> &Self {
         let value = crate::value::write_float2(value, edit.tokens());
-        self.write_value(
+        self.write_schema_value(
             edit,
             "colorSpaceDefinition:__INSTANCE_NAME__:greenChroma",
             value,
@@ -1052,7 +1052,7 @@ impl ColorSpaceDefinitionApiEdit {
         value: [f32; 2],
     ) -> &Self {
         let value = crate::value::write_float2(value, edit.tokens());
-        self.write_value_at(
+        self.write_schema_value_at(
             edit,
             "colorSpaceDefinition:__INSTANCE_NAME__:greenChroma",
             time,
@@ -1069,7 +1069,7 @@ impl ColorSpaceDefinitionApiEdit {
     #[doc(alias = "CreateLinearBiasAttr")]
     pub fn set_linear_bias(&self, edit: &mut SchemaEdit<'_>, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value(
+        self.write_schema_value(
             edit,
             "colorSpaceDefinition:__INSTANCE_NAME__:linearBias",
             value,
@@ -1080,7 +1080,7 @@ impl ColorSpaceDefinitionApiEdit {
     #[doc = "[`Self::set_linear_bias`] as a time sample at the time code `time`."]
     pub fn set_linear_bias_at(&self, edit: &mut SchemaEdit<'_>, time: f64, value: f32) -> &Self {
         let value = crate::value::write_float(value, edit.tokens());
-        self.write_value_at(
+        self.write_schema_value_at(
             edit,
             "colorSpaceDefinition:__INSTANCE_NAME__:linearBias",
             time,
@@ -1097,7 +1097,7 @@ impl ColorSpaceDefinitionApiEdit {
     #[doc(alias = "CreateNameAttr")]
     pub fn set_name(&self, edit: &mut SchemaEdit<'_>, value: &str) -> &Self {
         let value = crate::value::write_token(value, edit.tokens());
-        self.write_value(edit, "colorSpaceDefinition:__INSTANCE_NAME__:name", value);
+        self.write_schema_value(edit, "colorSpaceDefinition:__INSTANCE_NAME__:name", value);
         self
     }
 
@@ -1109,7 +1109,7 @@ impl ColorSpaceDefinitionApiEdit {
     #[doc(alias = "CreateRedChromaAttr")]
     pub fn set_red_chroma(&self, edit: &mut SchemaEdit<'_>, value: [f32; 2]) -> &Self {
         let value = crate::value::write_float2(value, edit.tokens());
-        self.write_value(
+        self.write_schema_value(
             edit,
             "colorSpaceDefinition:__INSTANCE_NAME__:redChroma",
             value,
@@ -1125,7 +1125,7 @@ impl ColorSpaceDefinitionApiEdit {
         value: [f32; 2],
     ) -> &Self {
         let value = crate::value::write_float2(value, edit.tokens());
-        self.write_value_at(
+        self.write_schema_value_at(
             edit,
             "colorSpaceDefinition:__INSTANCE_NAME__:redChroma",
             time,
@@ -1142,7 +1142,7 @@ impl ColorSpaceDefinitionApiEdit {
     #[doc(alias = "CreateWhitePointAttr")]
     pub fn set_white_point(&self, edit: &mut SchemaEdit<'_>, value: [f32; 2]) -> &Self {
         let value = crate::value::write_float2(value, edit.tokens());
-        self.write_value(
+        self.write_schema_value(
             edit,
             "colorSpaceDefinition:__INSTANCE_NAME__:whitePoint",
             value,
@@ -1158,7 +1158,7 @@ impl ColorSpaceDefinitionApiEdit {
         value: [f32; 2],
     ) -> &Self {
         let value = crate::value::write_float2(value, edit.tokens());
-        self.write_value_at(
+        self.write_schema_value_at(
             edit,
             "colorSpaceDefinition:__INSTANCE_NAME__:whitePoint",
             time,

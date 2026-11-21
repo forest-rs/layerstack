@@ -769,11 +769,9 @@ impl PrimIndex {
         self.add_opinions(core::iter::once(opinion));
     }
 
-    /// Gives back the room the sources did not use, and the opinions' when
-    /// they left much of theirs unused.
+    /// Gives back unused opinion storage after composing several batches.
     pub(crate) fn trim(&mut self) {
         let data = Arc::make_mut(&mut self.data);
-        data.sources.shrink_to_fit();
         // Opinions grown by a few batches are copied back only when they
         // left more than a quarter unused.
         if data.opinions.capacity() - data.opinions.len() > data.opinions.len() / 4 {
@@ -952,14 +950,6 @@ impl PrimIndex {
             field,
             value,
         });
-    }
-
-    /// Makes room for `layers` sources, unless there is room for some
-    /// already; [`Self::trim`] gives back what is not used.
-    pub(crate) fn reserve_sources(&mut self, layers: usize) {
-        if self.sources.capacity() == 0 {
-            Arc::make_mut(&mut self.data).sources.reserve_exact(layers);
-        }
     }
 
     /// Returns the type of the strongest surviving property declaration.

@@ -486,7 +486,7 @@ fn instance_key(graph: &Graph, hasher: &hashbrown::DefaultHashBuilder) -> Instan
         if entry.culled {
             continue;
         }
-        if entry.transitive_direct && entry.can_contribute_specs() && entry.has_specs {
+        if entry.transitive_direct && entry.can_contribute_specs() && entry.has_specs() {
             let offset = entry.map_to_root.offset();
             out.push((
                 entry.arc_kind,
@@ -571,7 +571,7 @@ fn composed_depth(ctx: &Ctx<'_>, depth: usize, graph: &Graph) -> usize {
     for node in &graph.nodes {
         // A site's ancestors are no deeper than the site.
         let mut at = Some(node.site.path.clone());
-        let mut has_specs = node.has_specs;
+        let mut has_specs = node.has_specs();
         while let Some(site) = at {
             let site_depth = paths.resolve(site.prim_path()).depth();
             if site_depth <= deepest {
@@ -860,7 +860,7 @@ fn index_prim(
         index
     };
     drop(parent);
-    let active = path == ctx.root_path || is_active(ctx, &graph);
+    let active = path == ctx.root_path || is_active(&graph);
     // Found here, while the index is at hand, rather than for every
     // instance on one thread once the walk is done.
     let index_key = (active && graph.instanceable).then(|| {
@@ -1682,7 +1682,7 @@ fn can_be_culled(
     if graph.children(node).any(|child| !graph.node(child).culled) {
         return false;
     }
-    !(entry.has_specs && entry.can_contribute_specs())
+    !(entry.has_specs() && entry.can_contribute_specs())
 }
 
 /// The first node of `node`'s chain of origins whose origin is its parent.
@@ -1774,7 +1774,7 @@ fn instanceable_weak_to_strong(
         instanceable_weak_to_strong(graph, child, false, out);
     }
     let instanceable =
-        !is_root && entry.transitive_direct && entry.can_contribute_specs() && entry.has_specs;
+        !is_root && entry.transitive_direct && entry.can_contribute_specs() && entry.has_specs();
     if instanceable {
         out.push(node);
     }
@@ -1853,19 +1853,13 @@ fn apply_relocated_names(
 /// Whether the prim the finalized `graph` indexes is active: its strongest
 /// `active` opinion, on a prim spec or a selected variant branch, `true`
 /// without one.
-fn is_active(ctx: &Ctx<'_>, graph: &Graph) -> bool {
-    for entry in &graph.nodes {
-        if !entry.can_contribute_specs() || !entry.has_specs {
-            continue;
-        }
-        let stack = ctx.stacks.get(entry.site.stack);
-        for (_, _, spec) in site::specs(ctx.store, stack, &entry.site.path) {
-            if let Some(active) = spec.active(ctx.store.tokens()) {
-                return active;
-            }
-        }
-    }
-    true
+fn is_active(graph: &Graph) -> bool {
+    graph
+        .nodes
+        .iter()
+        .filter(|entry| entry.can_contribute_specs())
+        .find_map(|entry| entry.authored.active)
+        .unwrap_or(true)
 }
 
 /// The prim index the stage reads: `graph`'s nodes and the opinions of
@@ -1915,17 +1909,17 @@ fn prim_index(
         )
     });
     let mut index = PrimIndex::new(PrimIndexGraph::from_ordered_in(nodes, &ctx.shapes, like));
-    // At most one source per layer of each contributing node's stack.
-    index.reserve_sources(
+    // Graph construction counted each layer that actually authors the site.
+    index.sources.reserve_exact(
         graph
             .nodes
             .iter()
-            .filter(|node| node.can_contribute_specs() && node.has_specs)
-            .map(|node| ctx.stacks.get(node.site.stack).layers.len())
+            .filter(|node| node.can_contribute_specs())
+            .map(|node| node.authored.count)
             .sum(),
     );
     for (at, node) in graph.nodes.iter().enumerate() {
-        if !node.can_contribute_specs() || !node.has_specs {
+        if !node.can_contribute_specs() || !node.has_specs() {
             continue;
         }
         let id = NodeId::from_raw_index(at);
@@ -2014,8 +2008,6 @@ fn prim_index(
             }));
         }
     }
-    // Most prims have one source, which a vector grown by pushes would
-    // give room for four; the rest give back what their records outgrew.
     index.trim();
     index.finalize();
     index
@@ -2416,6 +2408,47 @@ pub(crate) fn expanded_prim_index(
 mod tests {
     use super::{Scope, Selection};
     use crate::{InMemoryStore, PathId, stage::PopulationMask};
+
+    #[test]
+    fn sparse_layer_sources_resolve_activity_at_each_child() {
+        use crate::{Layer, LayerId, PrimSpec, Stage, StageOptions, SublayerEntry};
+
+        let mut store = InMemoryStore::default();
+        let root = LayerId(1);
+        let group = store.path("/Group");
+        let child = store.path("/Group/Child");
+        let other = store.path("/Group/Other");
+        let mut strong = Layer::new(root);
+        strong
+            .sublayers_mut()
+            .extend([LayerId(2), LayerId(3), LayerId(4)].map(SublayerEntry::new));
+        strong.define_prim(group, PrimSpec::over().with_active(true), store.paths());
+        let mut middle = Layer::new(LayerId(2));
+        middle.define_prim(child, PrimSpec::over().with_active(false), store.paths());
+        let mut weak = Layer::new(LayerId(4));
+        weak.define_prim(group, PrimSpec::def().with_active(false), store.paths());
+        weak.define_prim(child, PrimSpec::def().with_active(true), store.paths());
+        weak.define_prim(other, PrimSpec::def(), store.paths());
+        for layer in [strong, middle, Layer::new(LayerId(3)), weak] {
+            store.insert_layer(layer);
+        }
+
+        let stage = Stage::compose(&mut store, root, StageOptions::default());
+        for (path, active, layers) in [
+            (group, true, &[LayerId(1), LayerId(2), LayerId(4)][..]),
+            (child, false, &[LayerId(2), LayerId(4)][..]),
+            (other, true, &[LayerId(4)][..]),
+        ] {
+            let prim = stage.prim(path, &store).expect("authored prim");
+            assert_eq!(prim.is_active(), active);
+            let sources: alloc::vec::Vec<_> = prim
+                .sources()
+                .iter()
+                .map(|source| source.key.layer_id)
+                .collect();
+            assert_eq!(sources, layers);
+        }
+    }
 
     /// A mask scope includes what [`PopulationMask::includes`] does, and an
     /// exact scope the selected paths and their ancestors, by ancestor

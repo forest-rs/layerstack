@@ -242,6 +242,28 @@ pub(crate) fn specs<'a>(
         })
 }
 
+/// The authored specs at one graph site. Counting them during graph construction
+/// sizes the final source table even when only one layer in a stack authors a prim.
+/// The same pass resolves the site's strongest authored `active` value.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct SiteOpinions {
+    pub(crate) active: Option<bool>,
+    pub(crate) count: usize,
+}
+
+impl SiteOpinions {
+    pub(crate) fn find(store: &dyn LayerStore, stack: &ComputedStack<'_>, site: &SpecPath) -> Self {
+        let mut result = Self::default();
+        for (_, _, spec) in specs(store, stack, site) {
+            result.count += 1;
+            if result.active.is_none() {
+                result.active = spec.active(store.tokens());
+            }
+        }
+        result
+    }
+}
+
 /// Whether a layer of `stack` authors a spec at `site`.
 /// OpenUSD: `PcpComposeSiteHasSpecs`.
 pub(crate) fn has_specs(

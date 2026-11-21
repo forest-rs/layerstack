@@ -19,6 +19,70 @@ use super::{CannotEdit, EditTarget, PathId, SchemaEdit};
 
 const ROOT: LayerId = LayerId(1);
 
+#[cfg(feature = "usd-geom")]
+#[test]
+fn grouped_pending_prims_keep_order_and_restore_parent_on_failure() {
+    use layerstack::Value;
+
+    let (mut store, mut live) = stage(|_, _| {});
+    let world = store.path("/World");
+    let a = store.path("/World/A");
+    let discarded = store.path("/World/Discarded");
+    let b = store.path("/World/B");
+    let over = store.path("/World/Over");
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(ROOT));
+    edit.define_prim(a, "Cube").unwrap();
+    edit.set_value(a, "size", None, Value::Double(3.0));
+    edit.apply_api(a, "CollectionAPI", Some("first")).unwrap();
+    edit.override_prim(over).unwrap();
+
+    let failure = edit.group(|outer| {
+        assert!(outer.is_a(a, "Cube"));
+        assert_eq!(outer.default_value(a, "size"), Some(Value::Double(3.0)));
+        outer.group(|inner| {
+            inner.remove_property(a, "size");
+            inner.define_prim(a, "Sphere").unwrap();
+            inner.define_prim(discarded, "Cube").unwrap();
+            Ok::<_, ()>(())
+        })?;
+        assert!(outer.is_a(a, "Sphere"));
+        assert_eq!(outer.all_children(world), [a, discarded, over]);
+        Err::<(), _>(())
+    });
+    assert_eq!(failure, Err(()));
+    assert!(edit.is_a(a, "Cube"));
+    assert_eq!(edit.default_value(a, "size"), Some(Value::Double(3.0)));
+    assert_eq!(edit.all_children(world), [a, over]);
+
+    edit.group(|group| {
+        group.define_prim(b, "Cube").unwrap();
+        group.set_value(a, "size", None, Value::Double(5.0));
+        group.apply_api(a, "CollectionAPI", Some("second")).unwrap();
+        Ok::<_, ()>(())
+    })
+    .unwrap();
+    assert_eq!(
+        edit.applied_names(a)
+            .iter()
+            .map(|&name| edit.store.tokens().resolve(name))
+            .collect::<Vec<_>>(),
+        ["CollectionAPI:first", "CollectionAPI:second"]
+    );
+    assert_eq!(edit.all_children(world), [a, b, over]);
+    assert_eq!(edit.default_value(a, "size"), Some(Value::Double(5.0)));
+
+    let transaction = edit.finish();
+    live.apply(&mut store, &transaction).unwrap();
+    let authored = store.layer(ROOT).unwrap();
+    assert!(authored.prim(discarded).is_none());
+    let prop = authored
+        .prim(a)
+        .unwrap()
+        .property(store.tokens().lookup("size").unwrap())
+        .unwrap();
+    assert_eq!(prop.default, Some(Value::Double(5.0)));
+}
+
 #[test]
 fn application_restrictions_on_pending_schemas_work_on_typeless_prims() {
     use layerstack::{CannotApply, SchemaDefinition, SchemaKind, SchemaRegistry};

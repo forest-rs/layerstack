@@ -34,10 +34,11 @@ store (`OpenOptions::store`) and its registry (`StageOptions::schemas`) to
 rejects a registry (`IoErrorKind::ForeignSchemaRegistry`): no registry
 built beforehand belongs to that store's tokens.
 
-The default `std` feature provides `Filesystem`. Disable default features for
-`no_std` + `alloc` with a host implementation of `Storage`. Identifiers, transport,
-write atomicity and scheduling belong to that backend. No third-party dependencies
-are added. Recoverable format errors require explicit `ImportPolicy::AllowRecovery`.
+The default `std` feature provides `Filesystem`. Use `MemoryStorage` to open
+and save documents from bytes with or without `std`. With default features
+disabled, `no_std` + `alloc` applications can also implement `Storage` for their
+own identifier policy, transport and write atomicity. Recoverable format
+errors require explicit `ImportPolicy::AllowRecovery`.
 
 A load reports where its work went: each layer it read (`LoadReport::reads`,
 with the bytes decoded and the prim specs made) and each composition after a

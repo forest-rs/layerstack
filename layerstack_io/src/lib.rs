@@ -139,6 +139,9 @@ pub use package::{PackageInclusion, PackagePreparationLimits, PreparedPackage};
 pub use timing::{Clock, Composition, LayerRead, LoadClock, ReadTime, TimeSpan};
 pub use udim::{UdimDiscovery, UdimDiscoveryWork, UdimTileAsset, UdimTiles};
 
+mod memory;
+pub use memory::MemoryStorage;
+
 #[cfg(feature = "std")]
 mod filesystem;
 #[cfg(feature = "std")]

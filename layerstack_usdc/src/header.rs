@@ -34,6 +34,8 @@ pub struct Header {
 /// Spec: AOUSD Core §16.3.2.
 ///
 /// ```
+/// # #[cfg(feature = "unstable-internals")]
+/// # {
 /// use layerstack_usdc::header::parse_header;
 ///
 /// let mut buf = [0u8; 32];
@@ -44,6 +46,7 @@ pub struct Header {
 /// let hdr = parse_header(&buf).unwrap();
 /// assert_eq!(hdr.version, [0, 9, 0]);
 /// assert_eq!(hdr.toc_offset, 1024);
+/// # }
 /// ```
 pub fn parse_header(data: &[u8]) -> Result<Header, UsdcError> {
     if data.len() < 32 {

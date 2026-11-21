@@ -15,7 +15,8 @@ extern crate alloc;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use layerstack::{
-    InMemoryStore, Layer, LayerId, PrimSpec, Stage, StageOptions, SublayerEntry, Value,
+    InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, PropertyType, Reference, Stage,
+    StageOptions, SublayerEntry, Value,
 };
 
 /// Build a scene with `n_layers` sublayers, each providing opinions on
@@ -107,5 +108,88 @@ fn bench_sublayers(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_sublayers);
+#[derive(Clone, Copy)]
+enum LocalOpinions {
+    SingleLayer,
+    Sublayers,
+    WithReferences,
+}
+
+fn prepare_local_opinions(count: usize, scene: LocalOpinions) -> InMemoryStore {
+    let mut store = InMemoryStore::default();
+    let mut strong = Layer::new(LayerId(1));
+    let mut weak = Layer::new(LayerId(2));
+    let mut asset = Layer::new(LayerId(3));
+    let target = store.path("/Asset");
+    let label = store.tokens().intern("label");
+    let display = store.tokens().intern("display");
+    let ty = PropertyType::parse("string").expect("string type");
+    let property =
+        |text: &str| PropertySpec::typed_attribute(ty.clone()).with_default(Value::string(text));
+    if !matches!(scene, LocalOpinions::SingleLayer) {
+        strong.sublayers_mut().push(SublayerEntry::new(weak.id()));
+    }
+    if matches!(scene, LocalOpinions::WithReferences) {
+        asset.define_prim(
+            target,
+            PrimSpec::def().with_property(label, property("asset")),
+            store.paths(),
+        );
+    }
+    for n in 0..count {
+        let path = store.path(&alloc::format!("/Group{}/Item{}", n / 64, n % 64));
+        let mut spec = PrimSpec::def().with_property(label, property("original"));
+        if matches!(scene, LocalOpinions::WithReferences) && n % 8 == 0 {
+            spec = spec.with_reference(Reference::new(asset.id(), target));
+        }
+        if matches!(scene, LocalOpinions::SingleLayer) {
+            strong.define_prim(path, spec, store.paths());
+        } else {
+            weak.define_prim(path, spec, store.paths());
+            if n % 4 == 0 {
+                strong.define_prim(
+                    path,
+                    PrimSpec::over().with_property(display, property("extra")),
+                    store.paths(),
+                );
+            }
+        }
+    }
+    store.insert_layer(asset);
+    store.insert_layer(weak);
+    store.insert_layer(strong);
+    store
+}
+
+fn bench_local_opinions(c: &mut Criterion) {
+    let mut group = c.benchmark_group("compose_local_opinions");
+    for count in [1_024, 65_536] {
+        for (name, scene) in [
+            ("single_layer", LocalOpinions::SingleLayer),
+            ("sublayers", LocalOpinions::Sublayers),
+            ("with_references", LocalOpinions::WithReferences),
+        ] {
+            let mut store = prepare_local_opinions(count, scene);
+            let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+            assert!(stage.composition_errors().is_empty());
+            let work = stage.composition_work();
+            let prims = count + count.div_ceil(64) + 1;
+            let references = if matches!(scene, LocalOpinions::WithReferences) {
+                count.div_ceil(8)
+            } else {
+                0
+            };
+            assert_eq!(work.composed_prim_indexes, prims);
+            assert_eq!(work.prim_index_nodes, prims + references);
+            drop(stage);
+
+            group.bench_function(BenchmarkId::new(name, count), |b| {
+                b.iter(|| Stage::compose(&mut store, LayerId(1), StageOptions::default()));
+            });
+        }
+    }
+    group.finish();
+}
+
+criterion_group!(benches, bench_sublayers, bench_local_opinions);
 criterion_main!(benches);

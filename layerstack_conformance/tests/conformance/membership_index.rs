@@ -207,10 +207,18 @@ fn forward_membership_matches_openusd() {
             let expected = &oracle.collections[&name];
             let query = collection.membership_query();
             assert_eq!(query.uses_rule_map(), expected.uses_rule_map, "{name}");
+            let text = query.to_path_expression(&scene).lossless_text();
+            let exported = layerstack::path_expression::PathExpression::parse(&text).unwrap();
+            let matcher = layerstack_schemas::ExpressionEvaluator::new(&scene, &exported).unwrap();
             let included: BTreeSet<&String> = expected.included.iter().collect();
             for path in &paths {
                 let text = path.display(store.paths(), store.tokens());
                 let got = query.is_included(&scene, *path).is_included();
+                assert_eq!(
+                    matcher.matches(&scene, *path).value,
+                    included.contains(&text),
+                    "{name} {text}: {exported}"
+                );
                 if got != included.contains(&text) {
                     failures.push(format!("{name} {text}: included {got}"));
                 }

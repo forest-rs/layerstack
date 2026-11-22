@@ -297,6 +297,39 @@ impl Prefix {
 }
 
 impl PathPattern {
+    /// Matches exactly the absolute prim or property path interned in `store`.
+    /// The pattern owns its literal names and can be used with another store.
+    #[must_use]
+    pub fn from_target(path: crate::TargetPath, store: &dyn crate::LayerStore) -> Self {
+        let tokens = store.tokens();
+        let property = path
+            .property_path()
+            .map(|p| String::from(tokens.resolve(p.property())));
+        Self {
+            is_property: property.is_some(),
+            prefix: Prefix {
+                absolute: true,
+                prims: store
+                    .paths()
+                    .resolve(path.prim_path())
+                    .segments()
+                    .iter()
+                    .map(|&name| String::from(tokens.resolve(name)))
+                    .collect(),
+                property,
+            },
+            components: Vec::new(),
+        }
+    }
+
+    /// Extends a prim pattern with a trailing `//` to include its descendants.
+    /// A property has no descendants and keeps its exact pattern.
+    #[must_use]
+    pub fn with_descendants(mut self) -> Self {
+        self.append_child(String::new(), None);
+        self
+    }
+
     /// `//`: every path.
     ///
     /// OpenUSD: `SdfPathPattern::Everything`.

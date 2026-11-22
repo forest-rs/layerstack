@@ -26,7 +26,7 @@ fn fixture(spec: PropertySpec) -> (Stage, InMemoryStore, PropertyPath) {
 fn specless_layer_targets_have_strength_and_default_queries_ignore_samples() {
     let (stage, mut store, path) =
         fixture(PropertySpec::attribute().with_time_samples(vec![(0., Value::Double(4.))]));
-    let original = store.layers.clone();
+    let original = (*store.layers).clone();
     let target = EditTarget::for_layer(LayerId(2));
     let default = stage
         .inspect_property_authoring(&mut store, path, &target, AuthoringQuery::default_value())
@@ -42,7 +42,7 @@ fn specless_layer_targets_have_strength_and_default_queries_ignore_samples() {
         AuthoringSourceKind::TimeSamples
     );
     assert_eq!(
-        store.layers, original,
+        *store.layers, original,
         "inspection does not author missing specs"
     );
 }

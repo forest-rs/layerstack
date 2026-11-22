@@ -230,20 +230,14 @@ impl LiveStage {
         store: &mut dyn LayerStore,
     ) -> Option<(Vec<PathId>, Vec<PathId>, Vec<PathId>)> {
         // Unnotified authoring and relocation changes need a unified rebuild.
-        if self
-            .generations
-            .iter()
-            .any(|(id, seen)| *seen != generations_of(store, *id))
+        if !self.generations_current(store)
             || self
                 .stage
                 .composition_errors()
                 .iter()
                 .any(|e| e.prim().is_none())
             || self.tracker.has_invalidated(OPINION_EDIT)
-            || self
-                .relocation_layers
-                .iter()
-                .any(|id| store.layer(*id).is_some_and(|l| !l.relocates().is_empty()))
+            || self.has_watched_relocates(store)
         {
             return None;
         }
@@ -459,6 +453,8 @@ impl LiveStage {
             // children still have their previous presence and activation.
             let keep_boundary = load_only
                 && self.options.mask.is_none()
+                && self.stage.instance_roots().next().is_none()
+                && !self.stage.reached_node_limit()
                 && pseudo_root.is_some_and(|parent| {
                     !self.stage.has_payloads(parent)
                         && roots.iter().all(|&root| {
@@ -912,15 +908,24 @@ mod tests {
         Specifier, StageOptions, TokenInterner, Transaction, edit::EditTarget,
     };
 
-    /// A store counting the reads of its path interner: the work of
-    /// telling whether a path is beneath the roots of a recomposition.
+    /// A store counting path interner and layer reads.
     struct CountingStore {
         inner: InMemoryStore,
         path_reads: AtomicUsize,
+        layer_reads: AtomicUsize,
+        forward_revision: bool,
     }
 
     impl LayerStore for CountingStore {
+        fn layer_change_revision(&self) -> Option<u64> {
+            if self.forward_revision {
+                self.inner.layer_change_revision()
+            } else {
+                None
+            }
+        }
         fn layer(&self, id: LayerId) -> Option<&Layer> {
+            self.layer_reads.fetch_add(1, Ordering::Relaxed);
             self.inner.layer(id)
         }
         fn layer_mut(&mut self, id: LayerId) -> Option<&mut Layer> {
@@ -932,6 +937,90 @@ mod tests {
         fn paths(&self) -> &PathInterner {
             self.path_reads.fetch_add(1, Ordering::Relaxed);
             self.inner.paths()
+        }
+    }
+
+    #[test]
+    fn unchanged_revision_skips_layer_polls_for_each_stage() {
+        for forward_revision in [false, true] {
+            let mut inner = InMemoryStore::default();
+            let root = LayerId(1);
+            let edited = LayerId(2);
+            let path = inner.path("/New");
+            let mut scene = Layer::new(root);
+            for id in 2..=16 {
+                let id = LayerId(id);
+                scene.sublayers_mut().push(crate::SublayerEntry::new(id));
+                inner.insert_layer(Layer::new(id));
+            }
+            inner.insert_layer(scene);
+            let mut store = CountingStore {
+                inner,
+                path_reads: AtomicUsize::new(0),
+                layer_reads: AtomicUsize::new(0),
+                forward_revision,
+            };
+            let mut first = LiveStage::compose(&mut store, root, StageOptions::default());
+            let mut second = LiveStage::compose(&mut store, root, StageOptions::default());
+            let unchanged_reads = if forward_revision { 0 } else { 16 };
+            for stage in [&mut first, &mut second] {
+                store.layer_reads.store(0, Ordering::Relaxed);
+                assert!(
+                    stage.notify_changed_layers(&store).is_empty(),
+                    "the store is unchanged"
+                );
+                assert_eq!(
+                    store.layer_reads.load(Ordering::Relaxed),
+                    unchanged_reads,
+                    "only opted-in stores can skip polling"
+                );
+            }
+            for stage in [&mut first, &mut second] {
+                assert!(
+                    !stage.has_watched_relocates(&store),
+                    "initial layers have no relocates"
+                );
+                store.layer_reads.store(0, Ordering::Relaxed);
+                assert!(
+                    !stage.has_watched_relocates(&store),
+                    "the checked layers are unchanged"
+                );
+                assert_eq!(
+                    store.layer_reads.load(Ordering::Relaxed),
+                    unchanged_reads,
+                    "only opted-in stores can reuse relocation evidence"
+                );
+            }
+            store
+                .layer_mut(edited)
+                .unwrap()
+                .insert_prim(path, PrimSpec::def());
+            for stage in [&mut first, &mut second] {
+                assert_eq!(
+                    stage.notify_changed_layers(&store),
+                    [edited],
+                    "each stage observes the source mutation"
+                );
+                stage.recompose(&mut store);
+                assert!(
+                    stage.stage().has_prim(path),
+                    "the observed edit reaches composition"
+                );
+            }
+            store
+                .layer_mut(edited)
+                .unwrap()
+                .relocates_mut()
+                .push(crate::Relocate {
+                    source: path,
+                    target: None,
+                });
+            for stage in [&mut first, &mut second] {
+                assert!(
+                    stage.has_watched_relocates(&store),
+                    "relocate edits invalidate the cache"
+                );
+            }
         }
     }
 
@@ -960,6 +1049,8 @@ mod tests {
         let mut store = CountingStore {
             inner: store,
             path_reads: AtomicUsize::new(0),
+            layer_reads: AtomicUsize::new(0),
+            forward_revision: false,
         };
         let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
         let target = EditTarget::for_layer(LayerId(1));

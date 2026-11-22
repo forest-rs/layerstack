@@ -587,7 +587,15 @@ impl super::Stage {
                 boundaries.insert(parent, children);
             }
         }
-        self.loadable.retain(|p| !within(*p));
+        if kept_boundary.is_some() {
+            // The complete, unmasked old subtrees are in the hierarchy
+            // delta, including inactive roots. Update those slots directly.
+            for path in hierarchy {
+                self.loadable.remove(path);
+            }
+        } else {
+            self.loadable.retain(|p| !within(*p));
+        }
         self.loadable
             .extend(partial.loadable.drain().filter(|p| within(*p)));
         self.options = options;
@@ -702,6 +710,12 @@ mod tests {
                 fresh.all_children_of(root_path),
                 "the retained order agrees with a fresh stage"
             );
+            assert_eq!(
+                live.stage().loadable_paths(root_path, &store),
+                fresh.loadable_paths(root_path, &store),
+                "the incremental payload inventory agrees with a fresh stage"
+            );
+
             assert_eq!(
                 live.stage().used_layers(false),
                 fresh.used_layers(false),

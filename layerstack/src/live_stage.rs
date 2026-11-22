@@ -523,6 +523,8 @@ pub struct LiveStage {
     default_prim_dependents: HashMap<LayerId, HashSet<PathId>>,
     /// Layers whose `layerRelocates` the last full composition consulted.
     relocation_layers: HashSet<LayerId>,
+    /// Whether the consulted layers author relocates at this store revision.
+    relocation_check: Option<(u64, bool)>,
     /// The expression variables composition read, with the values found.
     expression_variables: VariableReads,
     /// The generation and structural generation of every layer the stage
@@ -532,6 +534,8 @@ pub struct LiveStage {
     /// Whether namespace preparation still needs the current generation
     /// inventory, either because it changed or was invalidated while pending.
     preparation_generations_dirty: bool,
+    /// Store revision at which every watched generation was checked.
+    generation_poll_revision: Option<u64>,
     root: LayerId,
     options: StageOptions,
     needs_full_rebuild: bool,
@@ -605,9 +609,11 @@ impl LiveStage {
             prim_to_dynamic: HashMap::new(),
             default_prim_dependents: deps.default_prim_dependents,
             relocation_layers: deps.relocation_layers,
+            relocation_check: None,
             expression_variables: deps.expression_variables,
             generations: HashMap::new(),
             preparation_generations_dirty: true,
+            generation_poll_revision: None,
             root,
             options,
             needs_full_rebuild: false,
@@ -989,10 +995,7 @@ impl LiveStage {
             || !self.support_sources.is_empty();
         // Precision is valid only against the source generations we composed.
         // Unknown external edits must not be hidden behind this transaction.
-        let sources_current = self
-            .generations
-            .iter()
-            .all(|(&layer, seen)| generations_of(store, layer) == *seen);
+        let sources_current = self.generations_current(store);
         let local_current = !pending_recomposition
             && self
                 .local_namespace
@@ -1620,6 +1623,51 @@ impl LiveStage {
         Some((recomposed, changes))
     }
 
+    /// Store revision when the store belongs to this snapshot's domain.
+    fn store_poll_revision(&self, store: &dyn LayerStore) -> Option<u64> {
+        let revision = store.layer_change_revision()?;
+        (self.stage.store_identity()? == &store.identity()).then_some(revision)
+    }
+
+    /// Keep a completed poll only when a streaming store held one
+    /// revision for the whole check.
+    fn remember_generation_poll(&mut self, store: &dyn LayerStore, before: Option<u64>) {
+        self.generation_poll_revision =
+            before.filter(|before| self.store_poll_revision(store) == Some(*before));
+    }
+
+    fn generation_poll_is_current(&self, store: &dyn LayerStore) -> bool {
+        self.generation_poll_revision
+            .is_some_and(|revision| self.store_poll_revision(store) == Some(revision))
+    }
+
+    /// Checks the layers watched for relocates once per store revision.
+    fn has_watched_relocates(&mut self, store: &dyn LayerStore) -> bool {
+        let revision = self.store_poll_revision(store);
+        if let Some((checked, has_relocates)) = self.relocation_check
+            && revision == Some(checked)
+        {
+            return has_relocates;
+        }
+        let has_relocates = self.relocation_layers.iter().any(|id| {
+            store
+                .layer(*id)
+                .is_some_and(|layer| !layer.relocates().is_empty())
+        });
+        self.relocation_check = revision
+            .filter(|revision| self.store_poll_revision(store) == Some(*revision))
+            .map(|revision| (revision, has_relocates));
+        has_relocates
+    }
+
+    fn generations_current(&self, store: &dyn LayerStore) -> bool {
+        self.generation_poll_is_current(store)
+            || self
+                .generations
+                .iter()
+                .all(|(&layer, seen)| generations_of(store, layer) == *seen)
+    }
+
     /// Notifies the edits of every layer the stage reads whose
     /// [`Layer::generation`](crate::Layer::generation) moved since this
     /// stage last saw it, and returns those layers, sorted.
@@ -1651,6 +1699,10 @@ impl LiveStage {
     /// OpenUSD: `UsdStage` handles `SdfNotice::LayersDidChange`, resyncing
     /// the prims of significant changes and updating the info of the rest.
     pub fn notify_changed_layers(&mut self, store: &dyn LayerStore) -> Vec<LayerId> {
+        if self.generation_poll_is_current(store) {
+            return Vec::new();
+        }
+        let before = self.store_poll_revision(store);
         let mut changed: Vec<(LayerId, Option<LayerGenerations>)> = self
             .generations
             .iter()
@@ -1658,6 +1710,7 @@ impl LiveStage {
             .filter(|(_, seen, found)| seen != found)
             .map(|(layer, _, found)| (layer, found))
             .collect();
+        self.remember_generation_poll(store, before);
         sort::sort_unstable_by_key(&mut changed, |(layer, _)| *layer);
         // The layers whose changes only add layers to the layer stacks
         // holding them, or that join one: a host bound a sublayer's asset,
@@ -1729,6 +1782,7 @@ impl LiveStage {
 
     /// Records the generations of every layer the stage reads.
     fn record_generations(&mut self, store: &dyn LayerStore) {
+        let before = self.store_poll_revision(store);
         let mut layers = self.layer_discovery.participating_on(
             store,
             self.root,
@@ -1787,6 +1841,7 @@ impl LiveStage {
             .into_iter()
             .map(|layer| (layer, generations_of(store, layer)))
             .collect();
+        self.remember_generation_poll(store, before);
     }
 
     /// Notifies that opinions in `layer` have been edited.
@@ -2195,8 +2250,9 @@ impl LiveStage {
 
     /// Detects source edits and recomposes before exposing a current scene.
     ///
-    /// Scans participating layer generations once per call. Layer methods and
-    /// transactions need no observer-specific authoring session. Every
+    /// Checks participating layer generations when the store reports a new
+    /// revision or has no revision to compare. Layer methods and transactions
+    /// need no observer-specific authoring session. Every
     /// mutating [`crate::Layer`] method records its edit. Unknown source
     /// changes produce conservative resyncs. Like OpenUSD's layer notices,
     /// evidence belongs to the stage, independently of its consumers; unlike
@@ -2571,8 +2627,11 @@ impl LiveStage {
         // Relocation tables are consulted even when currently empty. A newly
         // introduced stack must receive future table-change notifications too;
         // retain conservative watches until a full rebuild re-establishes them.
-        self.relocation_layers
-            .extend(partial.relocation_layers.iter().copied());
+        for &layer in &partial.relocation_layers {
+            if self.relocation_layers.insert(layer) {
+                self.relocation_check = None;
+            }
+        }
         let affected_set: HashSet<_> = affected.iter().copied().collect();
         let mut new_arcs: Vec<_> = partial
             .arcs
@@ -2816,6 +2875,7 @@ impl LiveStage {
         self.prim_to_layers = deps.prim_to_layers;
         self.default_prim_dependents = deps.default_prim_dependents;
         self.relocation_layers = deps.relocation_layers;
+        self.relocation_check = None;
         self.expression_variables = deps.expression_variables;
         self.reindex_all_sources();
         self.record_generations(store);

@@ -731,4 +731,8 @@ npm run size         # sizes, and the budget in size-budget.json
 npm run build        # tsc into dist/
 npm run check        # type-check the tests
 npm test             # node --test over the built module
+npm run test:pack    # install the npm tarball and open a stage in a fresh consumer
 ```
+
+Run both build steps before running `npm pack` or `npm publish`. The
+archive includes the WASM and its license texts and notices in `wasm/licenses/`.

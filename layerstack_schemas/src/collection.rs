@@ -22,6 +22,7 @@ mod cache;
 mod dangling;
 mod index;
 mod layer_dangling;
+mod rule_expression;
 pub use cache::*;
 pub use dangling::*;
 pub use index::*;

@@ -338,7 +338,8 @@
 //! ([`CollectionPredicates`]: `isa`, `hasAPI`, `kind`, `model`, `group`,
 //! `variant`, `specifier`, `abstract`, `defined`), with kinds from the
 //! scene's [`KindRegistry`]. [`MembershipQuery::included_paths`] lists every
-//! member, and [`ExpressionEvaluator`] matches any expression.
+//! member. [`MembershipQuery::to_path_expression`] exports the collection for
+//! use in another expression. [`ExpressionEvaluator`] matches it against a scene.
 //! [`MembershipIndex`] answers the reverse question, which collections on
 //! the stage include a prim or property, from every collection compiled
 //! once, and follows edits through `apply_changes`.

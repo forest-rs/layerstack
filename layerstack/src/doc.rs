@@ -4930,6 +4930,21 @@ pub trait LayerStore: MaybeSync {
         }
     }
 
+    /// An optional revision for the layer presence and generation evidence
+    /// exposed by this store. Within one [`Self::identity`], equal revisions
+    /// must guarantee that every layer has the same presence and generation
+    /// ([`Layer::generation`], [`Layer::structural_generation`]).
+    ///
+    /// A store may advance the revision conservatively, for example when
+    /// lending a mutable layer. Adapters can forward the revision only if
+    /// they expose the same layer evidence as the underlying store.
+    ///
+    /// Existing implementations can keep the default `None` and continue
+    /// to participate in per-layer generation checks.
+    fn layer_change_revision(&self) -> Option<u64> {
+        None
+    }
+
     /// Returns a layer, if present.
     fn layer(&self, id: LayerId) -> Option<&Layer>;
 
@@ -5038,6 +5053,52 @@ pub trait LayerStore: MaybeSync {
     }
 }
 
+/// The store's read-only layer map and the revision advanced at every
+/// mutable entry point. A mutable borrow can edit a layer until it ends
+/// and the stage can observe the store again.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct StoreLayers {
+    layers: HashMap<LayerId, Layer>,
+    revision: u64,
+}
+
+impl core::ops::Deref for StoreLayers {
+    type Target = HashMap<LayerId, Layer>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.layers
+    }
+}
+
+impl StoreLayers {
+    fn advance(&mut self) {
+        self.revision = self
+            .revision
+            .checked_add(1)
+            .expect("layer store revision exhausted");
+    }
+
+    pub(crate) fn get_mut(&mut self, id: &LayerId) -> Option<&mut Layer> {
+        self.advance();
+        self.layers.get_mut(id)
+    }
+
+    fn insert(&mut self, id: LayerId, layer: Layer) {
+        self.advance();
+        self.layers.insert(id, layer);
+    }
+
+    pub(crate) fn remove(&mut self, id: &LayerId) -> Option<Layer> {
+        let layer = self.layers.remove(id)?;
+        self.advance();
+        Some(layer)
+    }
+
+    fn reserve(&mut self, additional: usize) {
+        self.layers.reserve(additional);
+    }
+}
+
 /// A simple in-memory [`LayerStore`] implementation.
 #[derive(Debug, Default)]
 pub struct InMemoryStore {
@@ -5048,7 +5109,7 @@ pub struct InMemoryStore {
     /// Layers by id ([`Self::layer`], [`Self::layers`]): looked up on
     /// every composition and query path, so kept hashed, and listed in id
     /// order on demand.
-    pub(crate) layers: HashMap<LayerId, Layer>,
+    pub(crate) layers: StoreLayers,
     layer_insertions: u64,
     /// The layers asset paths resolve to, by the layer each path is
     /// anchored to, then by path, for [`LayerStore::asset_layer`].
@@ -5587,6 +5648,10 @@ impl InMemoryStore {
 }
 
 impl LayerStore for InMemoryStore {
+    fn layer_change_revision(&self) -> Option<u64> {
+        Some(self.layers.revision)
+    }
+
     fn layer(&self, id: LayerId) -> Option<&Layer> {
         self.layers.get(&id)
     }

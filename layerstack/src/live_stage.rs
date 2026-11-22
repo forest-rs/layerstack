@@ -529,6 +529,9 @@ pub struct LiveStage {
     /// reads, as this stage last saw them; `None` for a layer the store
     /// did not hold (see [`LiveStage::notify_changed_layers`]).
     generations: HashMap<LayerId, Option<LayerGenerations>>,
+    /// Whether namespace preparation still needs the current generation
+    /// inventory, either because it changed or was invalidated while pending.
+    preparation_generations_dirty: bool,
     root: LayerId,
     options: StageOptions,
     needs_full_rebuild: bool,
@@ -604,6 +607,7 @@ impl LiveStage {
             relocation_layers: deps.relocation_layers,
             expression_variables: deps.expression_variables,
             generations: HashMap::new(),
+            preparation_generations_dirty: true,
             root,
             options,
             needs_full_rebuild: false,
@@ -999,6 +1003,7 @@ impl LiveStage {
             .flatten()
             .map(|index| index as &dyn crate::edit::SourceNamespace);
         let outcome = crate::edit::apply(store, txn, Some(&self.stage), namespace)?;
+        self.preparation_generations_dirty |= !outcome.layers.is_empty();
         self.reset_work();
         // Prims whose dynamic payload arguments the edits may change are
         // recomposed, though no value refresh or source mapping finds them.
@@ -1685,6 +1690,7 @@ impl LiveStage {
             self.notify_layer_stack_change();
         }
         if !changed.is_empty() {
+            self.preparation_generations_dirty = true;
             self.publish_preparation(store);
         }
         changed.into_iter().map(|(layer, _)| layer).collect()
@@ -1713,6 +1719,7 @@ impl LiveStage {
         if released.is_empty() {
             return;
         }
+        self.preparation_generations_dirty = true;
         for layer in &released {
             self.generations.remove(layer);
         }
@@ -1775,6 +1782,7 @@ impl LiveStage {
                 &self.options.muted_layers,
             ));
         }
+        self.preparation_generations_dirty = true;
         self.generations = layers
             .into_iter()
             .map(|layer| (layer, generations_of(store, layer)))
@@ -2449,9 +2457,10 @@ impl LiveStage {
         // Start watching it without acknowledging unrelated, unnotified edits
         // to layers whose generations were already tracked.
         for layer in self.stage.clip_layers() {
-            self.generations
-                .entry(layer)
-                .or_insert_with(|| generations_of(store, layer));
+            if let hashbrown::hash_map::Entry::Vacant(entry) = self.generations.entry(layer) {
+                entry.insert(generations_of(store, layer));
+                self.preparation_generations_dirty = true;
+            }
         }
 
         self.update_prim_edges(&affected, &partial_deps);
@@ -2875,14 +2884,19 @@ impl LiveStage {
             || !self.structural_roots.is_empty()
             || !self.structural_sources.is_empty()
             || !self.support_sources.is_empty();
-        let generations = (!pending).then(|| {
-            self.generations
+        if pending {
+            self.stage.record_preparation_generations(store, None);
+            self.preparation_generations_dirty = true;
+        } else if self.preparation_generations_dirty {
+            let generations = self
+                .generations
                 .iter()
                 .map(|(layer, seen)| (*layer, seen.map(|(generation, _)| generation)))
-                .collect()
-        });
-        self.stage
-            .record_preparation_generations(store, generations);
+                .collect();
+            self.stage
+                .record_preparation_generations(store, Some(generations));
+            self.preparation_generations_dirty = false;
+        }
     }
 
     /// Checks that every prim drawing on a site of a layer is recorded as

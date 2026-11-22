@@ -691,6 +691,11 @@ mod tests {
                 "the unloaded payload contributes no child"
             );
             let fresh = super::super::Stage::compose(&mut store, scene, live.options().clone());
+            let preparation = live.stage().preparation(store.paths()).unwrap();
+            assert!(
+                preparation.is_current(&store),
+                "load rules keep current namespace evidence"
+            );
             let root_path = store.path("/");
             assert_eq!(
                 live.stage().all_children_of(root_path),

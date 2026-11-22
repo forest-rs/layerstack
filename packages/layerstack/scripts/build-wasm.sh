@@ -63,3 +63,10 @@ node "$package/scripts/order-functions.mjs" "$ordered" "$ordered"
 # shellcheck disable=SC2086
 "$wasm_opt" --optimize-level=2 --shrink-level=2 --generate-stack-ir --optimize-stack-ir \
   --reorder-functions-by-name $features "$ordered" -o "$package/wasm/layerstack_bg.wasm"
+
+# Package the workspace and upstream license material with the finished module.
+licenses="$package/wasm/licenses"
+mkdir -p "$licenses"
+cp "$workspace/LICENSE-APACHE" "$workspace/LICENSE-MIT" \
+  "$workspace/layerstack_schemas/LICENSE-TOST-1.0" "$workspace/layerstack_schemas/NOTICE" \
+  "$package/scripts/licenses/"* "$licenses/"

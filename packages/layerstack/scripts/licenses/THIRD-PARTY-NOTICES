@@ -1,0 +1,46 @@
+The bundled Layerstack WebAssembly module and its JavaScript glue include
+or are derived from the following software.
+
+Layerstack's original code is copyright 2025, 2026 the LayerStack Authors.
+See LICENSE-APACHE and LICENSE-MIT.
+
+Rust runtime (core, alloc and compiler_builtins)
+  Copyright The Rust Project Developers.
+  See LICENSE-APACHE, LICENSE-MIT and LICENSE-compiler-builtins (which
+  includes the LLVM exception and the compiler-builtins attributions).
+  rustc-std-workspace-alloc is a shim that re-exports alloc.
+
+cfg-if 1.0.5, dlmalloc 0.2.14, wasm-bindgen and wasm-bindgen-shared 0.2.129
+  Copyright (c) 2014 Alex Crichton.
+  See LICENSE-MIT and LICENSE-APACHE.
+
+foldhash 0.2.0
+  See LICENSE-ZLIB for the copyright and license.
+
+hashbrown 0.17.1
+  Copyright (c) 2016 Amanieu d'Antras.
+  See LICENSE-MIT and LICENSE-APACHE.
+
+invalidation 0.3.1
+  Copyright 2025, 2026 the Invalidation Authors.
+  See LICENSE-APACHE and LICENSE-MIT.
+
+libm 0.2.16
+  See LICENSE-libm for the licenses and upstream notices.
+
+lz4_flex 0.11.6
+  Copyright (c) 2020 Pascal Seitz.
+  See LICENSE-MIT.
+
+once_cell 1.21.4
+  See LICENSE-MIT and LICENSE-APACHE.
+
+smallvec 1.16.3
+  Copyright (c) 2018 The Servo Project Developers.
+  See LICENSE-MIT and LICENSE-APACHE.
+
+unicode-ident 1.0.27
+  See LICENSE-MIT, LICENSE-APACHE and LICENSE-UNICODE.
+
+See NOTICE and LICENSE-TOST-1.0 for the OpenUSD and MaterialX material in
+Layerstack's schema crate.

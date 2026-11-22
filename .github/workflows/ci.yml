@@ -469,6 +469,9 @@ jobs:
       - name: run the Node tests
         run: npm test
 
+      - name: install and smoke-test the npm tarball
+        run: npm run test:pack
+
       # `@forest-rs/layerstack_stagehand` over its own module, with its own
       # size budget (packages/layerstack_stagehand/size-budget.json); its
       # tests read stages through the package built above.

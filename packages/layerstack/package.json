@@ -26,7 +26,8 @@
     "dist",
     "wasm/layerstack.js",
     "wasm/layerstack.d.ts",
-    "wasm/layerstack_bg.wasm"
+    "wasm/layerstack_bg.wasm",
+    "wasm/licenses"
   ],
   "engines": {
     "node": ">=22.18"
@@ -35,6 +36,8 @@
     "build:wasm": "bash scripts/build-wasm.sh",
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.test.json",
+    "prepack": "node scripts/check-pack.mjs",
+    "test:pack": "bash scripts/test-pack.sh",
     "size": "node scripts/check-size.mjs",
     "test": "node --test test/*.test.ts"
   },

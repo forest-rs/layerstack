@@ -962,6 +962,7 @@ mod tests {
         let boundaries = Boundaries {
             parents: [root].into_iter().collect(),
             retained: false,
+            root_children: None,
         };
         let child_index = crate::prim_indexing::ChildIndex::default();
         let partial = Stage::compose_local_paths(

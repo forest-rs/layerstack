@@ -219,11 +219,10 @@ impl<B: Storage> StageDocument<B> {
         layer: LayerId,
         identifier: &str,
     ) -> Result<LoadReport, IoError> {
-        let mut catalog = self.catalog.clone();
-        catalog.reserved.extend(self.store.layer_ids());
+        let transaction = self.catalog.begin_read(&self.store);
         let mut reader = Reader::new(
             &mut self.storage,
-            &mut catalog,
+            transaction.catalog,
             self.import_policy,
             self.usdc_options,
             self.package_limits,
@@ -252,8 +251,8 @@ impl<B: Storage> StageDocument<B> {
                 session: self.stage.stage().session_layer(),
             },
         )?;
-        let report = reader.commit(&mut self.store);
-        self.catalog = catalog;
+        let batch = reader.finish().0;
+        let report = transaction.publish(batch, &mut self.store);
         Ok(report)
     }
 }

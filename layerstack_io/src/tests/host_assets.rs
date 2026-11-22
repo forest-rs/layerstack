@@ -937,3 +937,31 @@ fn clip_queries_follow_edits_to_the_ancestor_clip_set() {
         None
     );
 }
+
+#[test]
+fn rejected_reads_preserve_host_layers_and_return_unpublished_ids() {
+    let mut host = Host::default();
+    host.supply("root.usda", b"#usda 1.0\n");
+    for source in ["known.usda", "weak-hash-next.usda"] {
+        host.supply(source, b"#usda 1.0\ndef \"Asset\" {}\n");
+    }
+    let mut doc = StageDocument::open(host, "root.usda", StageOptions::default()).unwrap();
+    doc.load_asset("known.usda", None).unwrap();
+
+    // A host inserts the first candidate after the last successful read.
+    let host_id = layer_ids::candidate("weak-hash-next.usda", 0);
+    doc.store_mut().insert_layer(Layer::new(host_id));
+    doc.storage_mut().broken.insert("weak-hash-bad.usda".into());
+    assert_eq!(
+        doc.load_asset("weak-hash-bad.usda", None).unwrap_err().kind,
+        IoErrorKind::Storage
+    );
+
+    // The failed read used the next candidate provisionally. It is still
+    // available to a different colliding identifier; the host keeps its id.
+    let (next, report) = doc.load_asset("weak-hash-next.usda", None).unwrap();
+    assert_eq!(next, layer_ids::candidate("weak-hash-next.usda", 1));
+    assert_eq!(report.layers, [next]);
+    assert_eq!(doc.identifier(host_id), None);
+    assert!(doc.store().contains_layer(host_id));
+}

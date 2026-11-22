@@ -5049,6 +5049,7 @@ pub struct InMemoryStore {
     /// every composition and query path, so kept hashed, and listed in id
     /// order on demand.
     pub(crate) layers: HashMap<LayerId, Layer>,
+    layer_insertions: u64,
     /// The layers asset paths resolve to, by the layer each path is
     /// anchored to, then by path, for [`LayerStore::asset_layer`].
     /// [`LayerId::UNRESOLVED`] records a confirmed missing asset.
@@ -5098,6 +5099,7 @@ impl InMemoryStore {
             tokens: self.tokens.snapshot(),
             paths: self.paths.snapshot(),
             layers: self.layers.clone(),
+            layer_insertions: self.layer_insertions,
             asset_layers: self.asset_layers.clone(),
             identifiers: self.identifiers.clone(),
             read_only: self.read_only.clone(),
@@ -5140,7 +5142,13 @@ impl InMemoryStore {
         debug_assert_ne!(layer.id, LayerId::UNRESOLVED, "reserved layer ID");
         let previous = match self.layers.get(&layer.id) {
             Some(previous) => Some((previous.generation, previous.structure)),
-            None => self.released.remove(&layer.id),
+            None => {
+                self.layer_insertions = self
+                    .layer_insertions
+                    .checked_add(1)
+                    .expect("layer insertion count exhausted");
+                self.released.remove(&layer.id)
+            }
         };
         if let Some((generation, structure)) = previous {
             layer.generation = layer
@@ -5182,6 +5190,15 @@ impl InMemoryStore {
     #[must_use]
     pub fn layer_count(&self) -> usize {
         self.layers.len()
+    }
+
+    /// Number of insertions of previously nonresident layer IDs. Re-inserting
+    /// a released layer advances this count. Replacing a resident layer,
+    /// editing its contents, and removing a layer do not. Compare only within
+    /// the same store to detect when there may be new identities to reserve.
+    #[must_use]
+    pub fn layer_insertions(&self) -> u64 {
+        self.layer_insertions
     }
 
     /// The ids of the layers the store holds, in id order.

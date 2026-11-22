@@ -111,6 +111,7 @@ pub use layerstack_usdz::{UsdcArrayLoading, UsdcReadOptions};
 use timing::ReadLog;
 
 mod apply;
+mod catalog_read;
 pub use apply::ApplyError;
 pub mod format;
 mod layer_ids;
@@ -955,6 +956,8 @@ enum State {
 /// [`LayerId::FIRST_DERIVED`] ([`Catalog::allocate`]).
 #[derive(Clone, Debug, Default)]
 struct Catalog {
+    /// Prior entries retained only while a live document reads a batch.
+    undo: Option<alloc::boxed::Box<catalog_read::Undo>>,
     cache_work: PackageCacheStats,
     /// What the document knows of each layer, in one record per layer
     /// rather than one map per fact.
@@ -966,6 +969,8 @@ struct Catalog {
     ids: HashMap<Arc<str>, LayerId>,
     /// Every id handed out or held by the store, which no new layer takes.
     reserved: BTreeSet<LayerId>,
+    /// Store additions already accounted for in `reserved`.
+    reserved_at: Option<(layerstack::StoreIdentity, u64)>,
     /// Where [`Catalog::allocate`] looks for a free id next.
     next: u64,
     #[cfg(feature = "std")]
@@ -1029,8 +1034,16 @@ impl Catalog {
     fn record(&self, layer: LayerId) -> Option<&LayerRecord> {
         self.layers.get(&layer)
     }
+    fn remember_record(&mut self, layer: LayerId) {
+        if let Some(undo) = &mut self.undo {
+            undo.records
+                .entry(layer)
+                .or_insert_with(|| self.layers.get(&layer).cloned());
+        }
+    }
     /// The record of `layer`, made empty when the catalog does not know it.
     fn record_mut(&mut self, layer: LayerId) -> &mut LayerRecord {
+        self.remember_record(layer);
         self.layers.entry(layer).or_default()
     }
     /// Where `layer` is read from.
@@ -1039,6 +1052,7 @@ impl Catalog {
     }
     /// Where `layer` is read from, mutably.
     fn source_mut(&mut self, layer: LayerId) -> Option<&mut Source> {
+        self.remember_record(layer);
         self.layers.get_mut(&layer)?.source.as_mut()
     }
     /// Records where `layer` is read from.
@@ -1061,6 +1075,7 @@ impl Catalog {
     }
     /// Forgets that `layer` was read, so a load reads it again.
     fn clear_state(&mut self, layer: LayerId) {
+        self.remember_record(layer);
         if let Some(record) = self.layers.get_mut(&layer) {
             record.state = None;
         }
@@ -1132,7 +1147,7 @@ impl Catalog {
                 ));
             }
             self.next += 1;
-            if self.reserved.insert(id) {
+            if self.reserve_id(id) {
                 return Ok(id);
             }
         }
@@ -1141,7 +1156,7 @@ impl Catalog {
     /// from the identifier ([`layer_ids`]), stepping past the ids taken.
     fn allocate_for(&mut self, identifier: &str) -> Result<LayerId, IoError> {
         let id = layer_ids::derive(identifier, |id| self.reserved.contains(&id))?;
-        self.reserved.insert(id);
+        self.reserve_id(id);
         Ok(id)
     }
 }
@@ -1589,11 +1604,10 @@ impl<B: Storage> StageDocument<B> {
         if requests.is_empty() {
             return Ok(None);
         }
-        let mut catalog = self.catalog.clone();
-        catalog.reserved.extend(self.store.layer_ids());
+        let transaction = self.catalog.begin_read(&self.store);
         let mut reader = Reader::new(
             &mut self.storage,
-            &mut catalog,
+            transaction.catalog,
             self.import_policy,
             self.usdc_options,
             self.package_limits,
@@ -1660,8 +1674,8 @@ impl<B: Storage> StageDocument<B> {
             },
         )?;
         let waiting = core::mem::take(&mut reader.waiting);
-        let report = reader.commit(&mut self.store);
-        self.catalog = catalog;
+        let batch = reader.finish().0;
+        let report = transaction.publish(batch, &mut self.store);
         for key in &settled {
             self.unavailable.remove(key);
             self.waiting.remove(key);
@@ -1702,11 +1716,10 @@ impl<B: Storage> StageDocument<B> {
         asset: &str,
         anchor: Option<LayerId>,
     ) -> Result<(LayerId, LoadReport), IoError> {
-        let mut catalog = self.catalog.clone();
-        catalog.reserved.extend(self.store.layer_ids());
+        let transaction = self.catalog.begin_read(&self.store);
         let mut reader = Reader::new(
             &mut self.storage,
-            &mut catalog,
+            transaction.catalog,
             self.import_policy,
             self.usdc_options,
             self.package_limits,
@@ -1733,8 +1746,8 @@ impl<B: Storage> StageDocument<B> {
             },
         )?;
         let start = timing::composition_start(self.clock.as_ref());
-        let mut report = reader.commit(&mut self.store);
-        self.catalog = catalog;
+        let batch = reader.finish().0;
+        let mut report = transaction.publish(batch, &mut self.store);
         self.synchronize();
         let composition = timing::composition(self.clock.as_ref(), start, report.layers.len());
         report.compositions.push(composition);
@@ -2565,6 +2578,7 @@ impl ReadBatch {
     /// Publishes the layers read to `store`, with their bindings, and
     /// records them in `catalog` as read.
     fn commit(mut self, store: &mut InMemoryStore, catalog: &mut Catalog) -> LoadReport {
+        let reservations_current = catalog.reservations_current(store);
         let clean_anchors = sort::collect_set(self.bindings.keys().copied().filter(|id| {
             store
                 .layer(*id)
@@ -2596,7 +2610,13 @@ impl ReadBatch {
                     store.set_layer_read_only(id, source.read_only());
                 }
                 store.insert_layer(layer);
+                if reservations_current {
+                    catalog.reserve_id(id);
+                }
             }
+        }
+        if reservations_current {
+            catalog.reserved_at = Some((store.identity(), store.layer_insertions()));
         }
         // One change of each anchor for all its bindings: recording one
         // looks through the anchor's specs for the deferred arcs naming
@@ -2687,12 +2707,16 @@ impl<B: Storage> Reader<'_, B> {
                 self.diagnostics.extend(read.diagnostics);
                 #[cfg(feature = "std")]
                 if let Some(values) = read.retained {
-                    self.catalog.retained_values.insert(id, values);
+                    self.catalog.retain_values(id, values);
                 }
                 read.layer?
             }
             Format::Usdz => {
                 if self.reachable_only {
+                    debug_assert!(
+                        self.catalog.undo.is_none(),
+                        "reload owns a candidate catalog"
+                    );
                     // A dependent archive may choose a different first member.
                     // Its old root alias must not claim the outer package ID
                     // when that former root becomes an ordinary member.
@@ -2729,7 +2753,9 @@ impl<B: Storage> Reader<'_, B> {
                 )
                 .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
                 #[cfg(feature = "std")]
-                self.catalog.retained_values.extend(result.retained_values);
+                for (id, values) in result.retained_values {
+                    self.catalog.retain_values(id, values);
+                }
                 let record = self.catalog.record_mut(id);
                 record.package = Some(archive);
                 record.package_root = Some(result.member_paths[&id].to_string());
@@ -2748,7 +2774,7 @@ impl<B: Storage> Reader<'_, B> {
                         },
                     );
                     if member_id != id || !self.catalog.ids.contains_key(&*member_identifier) {
-                        self.catalog.ids.insert(member_identifier, member_id);
+                        self.catalog.identify_layer(member_identifier, member_id);
                     }
                     self.catalog.set_state(member_id, State::Loaded);
                 }
@@ -3126,7 +3152,7 @@ impl<B: Storage> Reader<'_, B> {
             id
         } else {
             let id = self.catalog.allocate_for(&identifier)?;
-            self.catalog.ids.insert(Arc::clone(&identifier), id);
+            self.catalog.identify_layer(Arc::clone(&identifier), id);
             self.catalog.insert_source(
                 id,
                 Source {
@@ -3264,7 +3290,7 @@ impl<B: Storage> AssetResolver for Reader<'_, B> {
             return Some(id);
         }
         let id = self.catalog.allocate_for(&identifier).ok()?;
-        self.catalog.ids.insert(Arc::from(identifier), id);
+        self.catalog.identify_layer(Arc::from(identifier), id);
         Some(id)
     }
 }

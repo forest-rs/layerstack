@@ -886,3 +886,54 @@ fn a_clip_source_confirmed_absent_completes_the_plan() {
     assert!(prepared.unavailable.is_empty() && prepared.failures.is_empty());
     assert!(prepared.plan.is_complete(), "{prepared:?}");
 }
+
+#[test]
+fn clip_queries_follow_edits_to_the_ancestor_clip_set() {
+    let mut host = Host::default();
+    host.supply(
+        "root.usda",
+        b"#usda 1.0\ndef \"P\" {\n def \"Child\" { float x; }\n}\n",
+    );
+    for (name, value) in [("first.usda", 1), ("second.usda", 2)] {
+        let source = format!(
+            "#usda 1.0\ndef \"C\" {{\n def \"Child\" {{ float x.timeSamples = {{0:{value}}}; }}\n}}\n"
+        );
+        host.supply(name, source.as_bytes());
+    }
+    let mut doc = StageDocument::open(host, "root.usda", StageOptions::default()).unwrap();
+    let at = EditTarget::for_layer(doc.root_layer()).prim(doc.store().path("/P"));
+    let clips = doc.store().tokens().intern("clips");
+    let property = doc.store().property_path("/P/Child.x");
+    let time = Time::at(0.);
+
+    for (asset, expected) in [("first.usda", 1.), ("second.usda", 2.)] {
+        let set = Value::dictionary([
+            ("assetPaths", Value::Array(vec![Value::Asset(asset.into())])),
+            ("primPath", Value::string("/C")),
+            ("active", Value::Array(vec![Value::Vec2d([0., 0.])])),
+        ]);
+        let mut edit = Transaction::new();
+        edit.set_metadata(
+            at.clone(),
+            clips,
+            Value::dictionary([("default", set)]).into(),
+        );
+        doc.apply(&edit).unwrap();
+        let prepared = doc.prepare_clip_query(property, time, 8, 16);
+        assert!(prepared.plan.is_complete(), "{prepared:?}");
+        assert_eq!(
+            doc.view().attribute(property).unwrap().value::<f32>(time),
+            Some(expected),
+            "{prepared:?}"
+        );
+    }
+    let mut edit = Transaction::new();
+    edit.clear_metadata(at, clips);
+    doc.apply(&edit).unwrap();
+    let prepared = doc.prepare_clip_query(property, time, 8, 16);
+    assert!(prepared.plan.demands.is_empty(), "{prepared:?}");
+    assert_eq!(
+        doc.view().attribute(property).unwrap().value::<f32>(time),
+        None
+    );
+}

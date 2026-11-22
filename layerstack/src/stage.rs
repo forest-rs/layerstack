@@ -2544,8 +2544,8 @@ impl Stage {
     }
 
     /// Returns the composed descendants, outside `recomposed`, of each prim
-    /// in `recomposed` whose contributing specs a partial composition
-    /// changes, sorted by [`PathId`].
+    /// in `recomposed` whose contributing specs change or which starts
+    /// authoring clip metadata, sorted by [`PathId`].
     ///
     /// A prim's arcs are ancestral to its descendants: selecting another
     /// branch of `/P`'s variant set changes which `/P{v=x}C` specs `/P/C`
@@ -2563,7 +2563,11 @@ impl Stage {
         let recomposed_set: HashSet<PathId> = recomposed.iter().copied().collect();
         let mut out = Vec::new();
         for prim in recomposed {
-            if !self.sources_changed(partial, *prim) {
+            // AOUSD Core §12.5: a newly authored clip set applies below its
+            // owner. Those descendants have no dependency on this site yet.
+            let new_clip_owner =
+                partial.clips.owns_clip_metadata(*prim) && !self.clips.owns_clip_metadata(*prim);
+            if !new_clip_owner && !self.sources_changed(partial, *prim) {
                 continue;
             }
             out.extend(

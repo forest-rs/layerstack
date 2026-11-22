@@ -2250,6 +2250,8 @@ impl Stage {
             }
             false
         };
+        // Replace complete sites and update membership when their layer
+        // counts cross zero. The local layer stack contributes independently.
         for path in recomposed.iter().filter(|path| complete(**path)) {
             if let Some(layers) = self.used_layer_sites.remove(path) {
                 for layer in layers {
@@ -2257,12 +2259,16 @@ impl Stage {
                     *count -= 1;
                     if *count == 0 {
                         self.used_layer_counts.remove(&layer);
+                        if !self.local_layers.contains(&layer) {
+                            self.used_layers.remove(&layer);
+                        }
                     }
                 }
             }
             if let Some(layers) = partial.used_layer_sites.remove(path) {
                 for &layer in &layers {
                     *self.used_layer_counts.entry(layer).or_default() += 1;
+                    self.used_layers.insert(layer);
                 }
                 self.used_layer_sites.insert(*path, layers);
             }
@@ -2277,15 +2283,10 @@ impl Stage {
             for layer in layers {
                 if site.insert(layer) {
                     *self.used_layer_counts.entry(layer).or_default() += 1;
+                    self.used_layers.insert(layer);
                 }
             }
         }
-        self.used_layers = sort::collect_set(
-            self.local_layers
-                .iter()
-                .copied()
-                .chain(self.used_layer_counts.keys().copied()),
-        );
         self.clips.merge_from(partial.clips, recomposed);
         for path in recomposed {
             if partial.inactive.contains(path) {
@@ -3699,12 +3700,10 @@ impl Stage {
         self.loadable.contains(&prim)
     }
 
-    /// Every prim whose own composition authors payloads, inactive ones
-    /// included, in namespace order.
-    pub(crate) fn payload_prims(&self, store: &dyn LayerStore) -> Vec<PathId> {
-        let mut out: Vec<_> = self.loadable.iter().copied().collect();
-        store.paths().sort_paths(&mut out, store.tokens());
-        out
+    /// The prims whose own composition authors payloads, including inactive
+    /// prims. Callers order results after retaining the paths they need.
+    pub(crate) fn payload_prims(&self) -> impl Iterator<Item = PathId> + '_ {
+        self.loadable.iter().copied()
     }
 
     /// Whether a populated active prim has every ancestor payload included.

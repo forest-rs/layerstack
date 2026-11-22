@@ -5,7 +5,7 @@ opinion-resolution kernel from USD scene composition and file formats.
 
 | Crate | Responsibility |
 | --- | --- |
-| [`opinionated`](opinionated/) | Dependency-free `no_std + alloc` resolution of ordered opinions, list edits, recursive dictionaries, and typed sparse array edits |
+| [`opinionated`](opinionated/) | `no_std + alloc` resolution of ordered opinions, list edits, recursive dictionaries, and typed sparse array edits |
 | [`layerstack`](layerstack/) | USD layer stacks, composed prims, references, payloads, inherits, specializes, variants, relocates, atomic authoring, flattening, value queries, and provenance |
 | [`layerstack_schemas`](layerstack_schemas/) | Generated OpenUSD schema definitions and typed views, authoring, transforms, bounds, collections, bindings, shading sources, and retained queries |
 | [`layerstack_usda`](layerstack_usda/) | USDA text parsing, authored-layer import, and writing |

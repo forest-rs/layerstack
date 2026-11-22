@@ -177,6 +177,50 @@ impl LiveStage {
         }
     }
 
+    /// Finds existing payload sites whose effective rule may change.
+    /// An authored rule can select its descendants and required ancestors
+    /// (AOUSD Core §10.3.2.7); unrelated subtrees do not consult it.
+    fn load_rule_candidates(&self, store: &dyn LayerStore) -> Vec<PathId> {
+        let old = &self.stage.options().load_rules;
+        let new = &self.options.load_rules;
+        if old == new {
+            return Vec::new();
+        }
+        let paths = store.paths();
+        // Proxy indexes and an incomplete population need the inventory
+        // rather than the ordinary stage traversal.
+        if self.stage.instance_roots().next().is_some()
+            || self.stage.reached_node_limit()
+            || old.changed_paths(new).any(|path| path.depth() == 0)
+        {
+            return self.stage.payload_prims().collect();
+        }
+        let mut scopes = Vec::new();
+        let mut candidates = HashSet::new();
+        for path in old.changed_paths(new) {
+            if let Some(id) = paths.lookup(path) {
+                scopes.push(id);
+            }
+            let mut parent = path.parent();
+            while let Some(path) = parent {
+                if let Some(id) = paths.lookup(&path)
+                    && self.stage.has_payloads(id)
+                {
+                    candidates.insert(id);
+                }
+                parent = path.parent();
+            }
+        }
+        for scope in minimal_roots(store, &scopes) {
+            candidates.extend(
+                self.stage
+                    .traverse_all(scope)
+                    .filter(|&id| self.stage.has_payloads(id)),
+            );
+        }
+        candidates.into_iter().collect()
+    }
+
     /// The roots of the namespace to recompose, the prims beyond them
     /// whose prim indexes alone need refreshing, and every root requested
     /// before the roots beneath others were dropped; None for a full
@@ -212,13 +256,11 @@ impl LiveStage {
         let previous = self.stage.options();
         // Inactive prims included: their indexes hold their payloads, and
         // so the layers the stage uses (OpenUSD recomposes them too).
-        let mut roots = Vec::new();
-        if previous.load_rules != self.options.load_rules {
-            roots.extend(self.stage.payload_prims().filter(|&p| {
-                let path = store.paths().resolve(p);
-                previous.load_rules.is_loaded(path) != self.options.load_rules.is_loaded(path)
-            }));
-        }
+        let mut roots = self.load_rule_candidates(store);
+        roots.retain(|&p| {
+            let path = store.paths().resolve(p);
+            previous.load_rules.is_loaded(path) != self.options.load_rules.is_loaded(path)
+        });
         roots.extend(self.structural_roots.iter().copied());
         // A layer the store does not hold composes nothing, muted or not:
         // once read, it joins the stage as a layer read is heard
@@ -340,6 +382,17 @@ impl LiveStage {
         store: &mut dyn LayerStore,
         changes: Option<&mut Changes>,
     ) -> Vec<PathId> {
+        let old_options = self.stage.options();
+        let load_only = self.controls_pending
+            && self.options.load_rules != old_options.load_rules
+            && self.options.muted_layers == old_options.muted_layers
+            && self.structural_roots.is_empty()
+            && self.structural_sources.is_empty()
+            && self.support_sources.is_empty();
+        let static_load = load_only
+            && self.options.dynamic_formats.is_empty()
+            && self.stage.clip_layers().is_empty();
+        let pseudo_root = store.paths().lookup(&crate::Path::root());
         let local_structure_changed = self
             .structural_sources
             .iter()
@@ -359,10 +412,12 @@ impl LiveStage {
         let mut dependent_roots = Vec::new();
         if roots.is_empty() {
             self.stage.capture_controls(self.options.clone());
-            self.record_generations(store);
+            if !load_only {
+                self.record_generations(store);
+            }
             return Vec::new();
         }
-        let (mut partial, within) = loop {
+        let (mut partial, within, kept_boundary) = loop {
             let old_paths: Vec<_> = roots
                 .iter()
                 .flat_map(|r| self.stage.traverse_all(*r))
@@ -397,15 +452,30 @@ impl LiveStage {
             // ancestor walk in this set: an edit can resync as many sibling
             // roots as prims reference what it changed.
             let mut within: HashSet<PathId> = roots.iter().copied().collect();
-            let boundaries = Boundaries {
+            // A payload's inclusion changes its own index and descendants
+            // (AOUSD Core §10.3.2.7). With no authored changes or other
+            // controls, its top-level parent still has the same authored
+            // child names and order. Reuse that order if the selected
+            // children still have their previous presence and activation.
+            let keep_boundary = load_only
+                && self.options.mask.is_none()
+                && pseudo_root.is_some_and(|parent| {
+                    !self.stage.has_payloads(parent)
+                        && roots.iter().all(|&root| {
+                            store.paths().parent(root) == Some(parent) && self.stage.has_prim(root)
+                        })
+                });
+            let mut boundaries = Boundaries {
                 parents: roots
                     .iter()
                     .filter_map(|root| store.paths().parent(*root))
                     .filter(|parent| !is_beneath_set(store, *parent, &within))
                     .collect(),
                 retained: retain_boundaries,
+                root_children: keep_boundary.then(|| roots.clone()),
             };
-            let partial = Stage::compose_merged(
+            let retry = keep_boundary.then(|| options.clone());
+            let mut partial = Stage::compose_merged(
                 store,
                 self.root,
                 options,
@@ -413,7 +483,25 @@ impl LiveStage {
                 &boundaries,
                 &self.child_index,
             );
+            let mut kept_boundary = pseudo_root.filter(|_| keep_boundary);
             self.work.composed_prim_indexes += partial.composition_work().composed_prim_indexes;
+            if let Some(options) = retry
+                && roots.iter().any(|&root| {
+                    !partial.has_prim(root) || partial.is_active(root) != self.stage.is_active(root)
+                })
+            {
+                kept_boundary = None;
+                boundaries.root_children = None;
+                partial = Stage::compose_merged(
+                    store,
+                    self.root,
+                    options,
+                    false,
+                    &boundaries,
+                    &self.child_index,
+                );
+                self.work.composed_prim_indexes += partial.composition_work().composed_prim_indexes;
+            }
             if partial
                 .composition_errors()
                 .iter()
@@ -476,7 +564,7 @@ impl LiveStage {
                 .iter()
                 .all(|p| is_beneath_set(store, *p, &within))
             {
-                break (partial, within);
+                break (partial, within, kept_boundary);
             }
             dependent_roots.extend(dependents.iter().copied());
             roots.extend(dependents);
@@ -651,13 +739,21 @@ impl LiveStage {
             &within,
             self.options.clone(),
             &self.child_index,
+            kept_boundary,
         );
         self.record_boundary_orders(orders);
         self.update_prim_edges(&affected, &deps);
         for &prim in &affected {
             self.reindex_sources(store.paths(), prim);
         }
-        self.record_generations(store);
+        // Layer discovery follows potential static arcs even when their
+        // payloads are unloaded (§10.3.2.7). Changing just load rules
+        // cannot change that closure. Clip and dynamic sources can join
+        // it through the newly computed indexes, so retain the ordinary
+        // discovery path for those.
+        if !static_load || !self.stage.clip_layers().is_empty() {
+            self.record_generations(store);
+        }
         if local_structure_changed {
             self.local_namespace = local::LocalSlot::pending(store, self.root, &self.options);
         }
@@ -891,6 +987,53 @@ mod tests {
     /// siblings reference leaves and returns under each of them: removing
     /// the prims' keys from the dependency graph keeps the edges the
     /// recomposed siblings need.
+    #[test]
+    fn changed_load_rules_visit_only_related_payload_sites() {
+        let mut store = InMemoryStore::default();
+        let stage_root = LayerId(1);
+        let asset = LayerId(2);
+        let source = store.path("/Asset");
+        let a = store.path("/World/A");
+        let b = store.path("/World/B");
+        let world = store.path("/World");
+        let mut root = Layer::new(stage_root);
+        for path in [world, a, b] {
+            root.insert_prim(
+                path,
+                PrimSpec::def().with_payload(Reference::new(asset, source)),
+            );
+        }
+        store.insert_layer(root);
+        let mut asset_layer = Layer::new(asset);
+        asset_layer.insert_prim(source, PrimSpec::def());
+        store.insert_layer(asset_layer);
+
+        let options = StageOptions {
+            load_rules: crate::PayloadLoadRules::load_none(),
+            ..StageOptions::default()
+        };
+        let mut live = LiveStage::compose(&mut store, stage_root, options);
+        live.load(&store, a, crate::LoadPolicy::WithDescendants);
+        let candidates: alloc::collections::BTreeSet<_> =
+            live.load_rule_candidates(&store).into_iter().collect();
+        assert_eq!(
+            candidates,
+            [world, a].into_iter().collect(),
+            "the rule may require its ancestor payload while leaving a sibling alone"
+        );
+        live.synchronize(&mut store);
+        let mut rules = live.options().load_rules.clone();
+        rules.unload(store.paths().resolve(world).clone());
+        live.set_load_rules(rules);
+        let candidates: alloc::collections::BTreeSet<_> =
+            live.load_rule_candidates(&store).into_iter().collect();
+        assert_eq!(
+            candidates,
+            [world, a, b].into_iter().collect(),
+            "replacing a subtree rule checks payloads below it"
+        );
+    }
+
     #[test]
     fn removed_child_returns_under_every_sibling() {
         let mut store = InMemoryStore::default();

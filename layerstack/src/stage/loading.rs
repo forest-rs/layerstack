@@ -64,6 +64,20 @@ impl PayloadLoadRules {
         self.rules.iter().map(|(p, r)| (p, *r))
     }
 
+    /// Paths where two rule maps have different literal opinions.
+    pub(crate) fn changed_paths<'a>(&'a self, other: &'a Self) -> impl Iterator<Item = &'a Path> {
+        self.rules
+            .iter()
+            .filter(|(path, rule)| other.rules.get(*path) != Some(*rule))
+            .map(|(path, _)| path)
+            .chain(
+                other
+                    .rules
+                    .keys()
+                    .filter(|path| !self.rules.contains_key(*path)),
+            )
+    }
+
     /// Insert or replace a literal rule without modifying other rules.
     /// Unlike the loading convenience methods, this does not remove descendants.
     pub fn add_rule(&mut self, path: Path, rule: PayloadRule) {
@@ -526,6 +540,7 @@ impl super::Stage {
         within: &HashSet<PathId>,
         options: super::StageOptions,
         child_index: &crate::prim_indexing::ChildIndex,
+        kept_boundary: Option<PathId>,
     ) -> super::BoundaryOrders {
         // Membership walks a path's ancestors: an edit can resync as many
         // sibling roots as prims reference what it changed.
@@ -543,7 +558,10 @@ impl super::Stage {
         for &root in roots {
             if let Some(parent) = store.paths().parent(root) {
                 // Sibling roots share their parent: list its children once.
-                if boundaries.contains_key(&parent) || within(parent) {
+                if kept_boundary == Some(parent)
+                    || boundaries.contains_key(&parent)
+                    || within(parent)
+                {
                     continue;
                 }
                 if partial.has_boundary_children(parent) {
@@ -645,6 +663,14 @@ mod tests {
             assert_eq!(changes.resynced, [path], "only the toggled subtree resyncs");
             let work = live.recomposition_work();
             assert!(!work.full_rebuild, "payload control remains scoped");
+            assert_eq!(
+                work.boundary_lists_composed, 0,
+                "stable top-level toggles reuse the root child list"
+            );
+            assert_eq!(
+                work.boundary_lists_reordered, 0,
+                "the retained list keeps its order"
+            );
             assert!(
                 work.replaced_prim_indexes <= 3,
                 "index replacement is scoped: {work:?}"
@@ -665,12 +691,65 @@ mod tests {
                 "the unloaded payload contributes no child"
             );
             let fresh = super::super::Stage::compose(&mut store, scene, live.options().clone());
+            let root_path = store.path("/");
+            assert_eq!(
+                live.stage().all_children_of(root_path),
+                fresh.all_children_of(root_path),
+                "the retained order agrees with a fresh stage"
+            );
             assert_eq!(
                 live.stage().used_layers(false),
                 fresh.used_layers(false),
                 "incremental use counts agree with a fresh composition"
             );
         }
+    }
+
+    #[test]
+    fn a_payload_that_changes_activation_rebuilds_the_root_child_lists() {
+        let mut store = crate::InMemoryStore::default();
+        let root = store.path("/");
+        let hidden = store.path("/Hidden");
+        let neighbor = store.path("/Neighbor");
+        let source = store.path("/Asset");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(
+            hidden,
+            PrimSpec::def().with_payload(Reference::new(LayerId(2), source)),
+        );
+        layer.insert_prim(neighbor, PrimSpec::def());
+        store.insert_layer(layer);
+        let mut asset = Layer::new(LayerId(2));
+        asset.insert_prim(source, PrimSpec::def().with_active(false));
+        store.insert_layer(asset);
+        let mut live = LiveStage::compose(
+            &mut store,
+            LayerId(1),
+            StageOptions {
+                load_rules: PayloadLoadRules::load_none(),
+                ..StageOptions::default()
+            },
+        );
+
+        live.load(&store, hidden, LoadPolicy::WithDescendants);
+        live.synchronize(&mut store);
+        assert_eq!(
+            live.stage().children_of(root),
+            Some([neighbor].as_slice()),
+            "an inactive opinion from the payload hides the child"
+        );
+        assert_eq!(
+            live.recomposition_work().boundary_lists_composed,
+            1,
+            "activation changes require both visible and inactive child lists"
+        );
+        live.unload(&store, hidden);
+        live.synchronize(&mut store);
+        assert_eq!(
+            live.stage().children_of(root),
+            Some([hidden, neighbor].as_slice()),
+            "unloading restores the child in its original position"
+        );
     }
 
     #[test]

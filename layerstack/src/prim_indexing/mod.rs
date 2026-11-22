@@ -249,6 +249,10 @@ pub(crate) struct Boundaries {
     /// names again (`UsdStage::_ComposeChildren`); a live stage keeps no
     /// indexing graph, so the parent's is built again here.
     pub(crate) retained: bool,
+    /// Known pseudo-root children selected by a load-rule-only change.
+    /// The caller preserves the complete list after checking that these
+    /// children still exist and retain their activation.
+    pub(crate) root_children: Option<Vec<PathId>>,
 }
 
 impl Boundaries {
@@ -813,7 +817,17 @@ fn index_prim(
     graph.instanceable = path != ctx.root_path && is_instanceable(ctx.store, &ctx.stacks, &graph);
     graph.finalize();
 
-    let mut names = child_names(ctx, &graph);
+    let root_children = boundaries
+        .root_children
+        .as_deref()
+        .filter(|_| path == ctx.root_path);
+    let mut names = match root_children {
+        Some(children) => children
+            .iter()
+            .filter_map(|&child| ctx.store.paths().resolve(child).leaf())
+            .collect(),
+        None => child_names(ctx, &graph),
+    };
     // A prim at a limit composes no children: the prim index nodes ran
     // out with its own, its index is as large as an index grows, or it is
     // as far below what its layers author as composition places prims.
@@ -881,7 +895,8 @@ fn index_prim(
     let mut boundary_children = boundaries
         .parents
         .contains(&path)
-        .then(|| Vec::with_capacity(names.len()));
+        .then(|| Vec::with_capacity(names.len()))
+        .filter(|_| root_children.is_none());
     for name in names {
         let child = paths.intern_joined(path, &[name]);
         let (included, listed) = scope.places(paths, child);

@@ -1509,6 +1509,7 @@ impl LiveStage {
         let boundaries = Boundaries {
             parents: parents.iter().copied().collect(),
             retained: false,
+            root_children: None,
         };
         // Deleted specs are removal candidates, not population candidates.
         // Seeding them would leave an empty child-list entry on a parent
@@ -1703,17 +1704,18 @@ impl LiveStage {
     /// (`pxr/usd/pcp/layerStackRegistry.cpp` holds stacks weakly), and opens
     /// it again when composition next asks for it.
     pub fn forget_released_layers(&mut self, layers: &[LayerId]) {
-        let used = self.stage.used_layers(true);
+        let clips = self.stage.clip_layers();
         let released: BTreeSet<LayerId> = layers
             .iter()
             .copied()
-            .filter(|layer| !used.contains(layer))
+            .filter(|layer| !self.stage.uses_layer(*layer) && clips.binary_search(layer).is_err())
             .collect();
         if released.is_empty() {
             return;
         }
-        self.generations
-            .retain(|layer, _| !released.contains(layer));
+        for layer in &released {
+            self.generations.remove(layer);
+        }
         self.layer_discovery.forget(&released);
         self.child_index.forget(&released);
     }

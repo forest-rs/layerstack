@@ -121,34 +121,50 @@ impl<B: Storage> StageDocument<B> {
         held.extend(stage.session_layer());
         held.extend(keep.iter().copied());
         let muted = &self.stage.options().muted_layers;
-        // A package's layers go together: held or dirty, one keeps all.
-        let group = |id: LayerId| {
-            self.catalog
-                .source(id)
-                .and_then(|s| s.package)
-                .unwrap_or(id)
-        };
-        let mut kept_groups = BTreeSet::new();
         let mut kept_dirty = Vec::new();
         let mut candidates = Vec::new();
-        for id in self.store.layer_ids() {
-            if held.contains(&id) {
-                kept_groups.insert(group(id));
-            } else if self.is_dirty(id) {
-                kept_groups.insert(group(id));
+        let layer_ids = self.store.layer_ids();
+        // Both inventories are ordered by layer id, so match them in
+        // one pass without looking up every participating layer again.
+        let mut held_ids = held.iter().copied().peekable();
+        for &id in &layer_ids {
+            while held_ids.next_if(|held| *held < id).is_some() {}
+            if held_ids.next_if_eq(&id).is_some() {
+                continue;
+            }
+            if self.is_dirty(id) {
                 kept_dirty.push(id);
-            } else if self.catalog.source(id).is_none() {
-                // Nothing could read it again: an anonymous layer, clean
-                // since it was created.
-                kept_groups.insert(group(id));
-            } else {
-                candidates.push(id);
+                continue;
+            }
+            if let Some(source) = self.catalog.source(id) {
+                // An anonymous layer has no source to read it from again.
+                // Package roots and members must be released together.
+                candidates.push((id, source.package));
+            }
+        }
+        let packages: BTreeSet<_> = candidates
+            .iter()
+            .filter_map(|(_, package)| *package)
+            .collect();
+        let mut kept_packages = BTreeSet::new();
+        if !packages.is_empty() {
+            // Only packages with release candidates need this check.
+            for id in layer_ids {
+                let source = self.catalog.source(id);
+                let package = source.and_then(|s| s.package).unwrap_or(id);
+                if packages.contains(&package)
+                    && (held.contains(&id)
+                        || kept_dirty.binary_search(&id).is_ok()
+                        || source.is_none())
+                {
+                    kept_packages.insert(package);
+                }
             }
         }
         let mut released = Vec::new();
         let mut ids = Vec::new();
-        for id in candidates {
-            if kept_groups.contains(&group(id)) {
+        for (id, package) in candidates {
+            if package.is_some_and(|id| kept_packages.contains(&id)) {
                 continue;
             }
             let record = self.catalog.record(id);

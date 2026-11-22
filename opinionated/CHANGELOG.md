@@ -8,8 +8,8 @@ Subheadings to categorize changes are `added, changed, deprecated, removed, fixe
 
 # Changelog
 
-The latest published Opinionated release is [0.2.0](#020-2026-10-28) which was released on 2026-10-28.
-You can find its changes [documented below](#020-2026-10-28).
+The latest published Opinionated release is [0.1.0](#010-2026-10-14) which was released on 2026-10-14.
+You can find its changes [documented below](#010-2026-10-14).
 
 ## [Unreleased]
 
@@ -18,13 +18,12 @@ You can find its changes [documented below](#020-2026-10-28).
 - `ordered_chain_events` gives the events `resolve_ordered_chain_report`
   reports for an ordered chain without resolving its value, for a caller that
   needs only the opinions' roles.
-
-## [0.2.0][] (2026-10-28)
-
-This release has an [MSRV][] of 1.89.
-
-### Added
-
+- `append_missing` extends a list with the first occurrence of each missing
+  item in order, while preserving the existing entries.
+- `DictionaryAdapter::compose` lets adapters combine colliding dictionary
+  entries when at least one value is opaque. It defaults to keeping the
+  stronger value. Reports mark successful compositions with
+  `DictionaryEvent::Composed`.
 - `ListOp::compose_over` combines a stronger list op with a weaker one into
   the single op that edits any list as applying the two in turn does. It
   returns `None` when an add or a reorder makes the result depend on the list
@@ -98,8 +97,7 @@ This is the initial release.
 
 The crate uses `no_std` with `alloc` and has no dependencies or feature flags.
 
-[Unreleased]: https://github.com/forest-rs/layerstack/compare/opinionated-0.2.0...HEAD
-[0.2.0]: https://github.com/forest-rs/layerstack/compare/opinionated-0.1.0...opinionated-0.2.0
+[Unreleased]: https://github.com/forest-rs/layerstack/compare/opinionated-0.1.0...HEAD
 [0.1.0]: https://github.com/forest-rs/layerstack/releases/tag/opinionated-0.1.0
 [MSRV]: README.md#installation
 

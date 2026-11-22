@@ -22,9 +22,8 @@ and seeds.
 
 ## Installation
 
-```toml
-[dependencies]
-opinionated = "0.2"
+```sh
+cargo add opinionated
 ```
 
 Requires Rust **1.89** or later. The crate uses `no_std` with `alloc`. An
@@ -160,7 +159,8 @@ by `layerstack`. The specification requires unique item sequences. For duplicate
 explicit inputs, application follows OpenUSD: keep the first occurrence of each
 item in authored order. The stored input is unchanged. An explicit list makes
 the other edits in the same operation spurious. Re-inserting an existing item
-moves it to the requested position.
+moves it to the requested position. Use `append_missing` to add missing
+items in order while keeping all existing entries in place.
 
 ## Dictionaries
 
@@ -179,6 +179,10 @@ enum, domain dependency, or serialization model. `layerstack` implements the
 adapter for its `Value` and delegates USD dictionary resolution to this
 kernel, keeping only the USD-specific choice of which opinions participate.
 
+If at least one colliding value is opaque, the adapter may compose the two
+values with `DictionaryAdapter::compose`. The default keeps the stronger
+value.
+
 A chain folds strongest-first. Recursive combination is not associative when a
 key holds a dictionary in one opinion and a non-dictionary in another:
 strongest-first over `{s: {a: 1}}`, `{s: 0}`, `{s: {b: 2}}` gives
@@ -189,7 +193,8 @@ used for recursive dictionaries.
 
 `combine_dictionary_chain_report` combines the same chain and records, for
 each dictionary, the key paths it supplied, the nested dictionaries it merged
-with stronger ones, and the entries a stronger value overrode. Hosts attach
+with stronger ones, the entries it composed through the adapter, and the
+entries a stronger value overrode. Hosts attach
 their own provenance to each dictionary, so a diagnostic can say which
 opinion a combined entry came from. The lean `combine_dictionary_chain` shares
 the fold and records nothing.

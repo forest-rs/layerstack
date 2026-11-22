@@ -13,7 +13,6 @@
 //! `UsdUtilsFlattenLayerStack` / `UsdFlattenLayerStack` (`usd/flattenUtils.cpp`).
 
 use crate::doc::VariantSelections;
-use crate::listop::append_unique;
 use crate::sort;
 use crate::spec_path::VariantSelectionSite;
 use crate::{
@@ -23,6 +22,7 @@ use crate::{
 };
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::hash::Hash;
+use opinionated::append_missing;
 
 /// Evidence about a successful, exact layer-stack consolidation.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -818,7 +818,7 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
                 continue;
             };
             if site.nested.is_empty() {
-                append_unique(&mut children, &prim.authored_children);
+                append_missing(&mut children, &prim.authored_children);
                 if let Some(order) = prim.prim_order() {
                     children = ListOp::default()
                         .with_reordered(order.to_vec())
@@ -838,7 +838,7 @@ impl<F: FnMut(LayerId, &str) -> Option<String>> Context<'_, F> {
                 // spec does (`_FlattenSpec` of an `SdfVariantSpec` flattens
                 // its `GetPrimSpec`, `pxr/usd/usd/flattenUtils.cpp`).
                 if let Some(spec) = found {
-                    append_unique(&mut children, &spec.authored_children);
+                    append_missing(&mut children, &spec.authored_children);
                     if let Some(order) = &spec.prim_order {
                         children = ListOp::default()
                             .with_reordered(order.clone())
@@ -1000,7 +1000,7 @@ fn merge_variants(
 fn merge_variant(a: &mut VariantSpec, b: &VariantSpec) -> Result<(), LayerStackFlattenError> {
     merge_fields(&mut a.fields, &b.fields);
     merge_properties(&mut a.properties, &b.properties)?;
-    append_unique(&mut a.authored_children, &b.authored_children);
+    append_missing(&mut a.authored_children, &b.authored_children);
     a.variant_set_names = list(&a.variant_set_names, &b.variant_set_names).into();
     a.references = list(&a.references, &b.references).into();
     a.payloads = list(&a.payloads, &b.payloads).into();
@@ -1022,7 +1022,7 @@ fn merge_prim(a: &mut PrimSpec, b: &PrimSpec) -> Result<(), LayerStackFlattenErr
     fill(&mut a.instanceable, &b.instanceable);
     merge_fields(&mut a.fields, &b.fields);
     merge_properties(&mut a.properties, &b.properties)?;
-    append_unique(&mut a.authored_children, &b.authored_children);
+    append_missing(&mut a.authored_children, &b.authored_children);
     a.references = list(&a.references, &b.references).into();
     a.payloads = list(&a.payloads, &b.payloads).into();
     let Some(b) = b.rare() else {

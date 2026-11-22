@@ -591,6 +591,88 @@ mod tests {
     use crate::{Layer, PrimSpec, Reference};
     use crate::{LiveStage, StageOptions};
     use alloc::sync::Arc;
+    /// AOUSD Core §10.3.2.7 and §11.3: unloading a payload cuts its
+    /// contribution. An independent payload can still use the same source,
+    /// and the stage's local layer stack contributes throughout.
+    #[test]
+    fn payload_control_tracks_shared_layer_uses() {
+        let mut store = crate::InMemoryStore::default();
+        let scene = LayerId(1);
+        let shared = LayerId(2);
+        let mut unrelated = BTreeSet::from([scene]);
+        let source = store.path("/Asset");
+        let child = store.path("/Asset/Child");
+        let a = store.path("/A");
+        let b = store.path("/B");
+        let mut root = Layer::new(scene);
+        for path in [a, b] {
+            root.insert_prim(
+                path,
+                PrimSpec::def().with_payload(Reference::new(shared, source)),
+            );
+        }
+        for i in 0..64 {
+            let background = LayerId(i + 3);
+            unrelated.insert(background);
+            let mut other = Layer::new(background);
+            other.insert_prim(source, PrimSpec::def());
+            store.insert_layer(other);
+            root.insert_prim(
+                store.path(&alloc::format!("/Background{i}")),
+                PrimSpec::def().with_payload(Reference::new(background, source)),
+            );
+        }
+        store.insert_layer(root);
+        let mut asset = Layer::new(shared);
+        asset.insert_prim(source, PrimSpec::def());
+        asset.insert_prim(child, PrimSpec::def());
+        store.insert_layer(asset);
+        let mut live = LiveStage::compose(&mut store, scene, StageOptions::default());
+        let child_a = store.path("/A/Child");
+        let child_b = store.path("/B/Child");
+
+        for (path, load, uses_shared, present, absent) in [
+            (a, false, true, child_b, child_a),
+            (b, false, false, a, child_b),
+            (a, true, true, child_a, child_b),
+        ] {
+            if load {
+                live.load(&store, path, LoadPolicy::WithDescendants);
+            } else {
+                live.unload(&store, path);
+            }
+            let changes = live.recompose_changes(&mut store);
+            assert_eq!(changes.resynced, [path], "only the toggled subtree resyncs");
+            let work = live.recomposition_work();
+            assert!(!work.full_rebuild, "payload control remains scoped");
+            assert!(
+                work.replaced_prim_indexes <= 3,
+                "index replacement is scoped: {work:?}"
+            );
+            let mut used = unrelated.clone();
+            used.extend(uses_shared.then_some(shared));
+            assert_eq!(
+                live.stage().used_layers(false),
+                used,
+                "only unused layers leave the stage inventory"
+            );
+            assert!(
+                live.stage().has_prim(present),
+                "expected active path is populated"
+            );
+            assert!(
+                !live.stage().has_prim(absent),
+                "the unloaded payload contributes no child"
+            );
+            let fresh = super::super::Stage::compose(&mut store, scene, live.options().clone());
+            assert_eq!(
+                live.stage().used_layers(false),
+                fresh.used_layers(false),
+                "incremental use counts agree with a fresh composition"
+            );
+        }
+    }
+
     #[test]
     fn payload_control_preserves_unrelated_record_identity() {
         let mut store = crate::InMemoryStore::default();

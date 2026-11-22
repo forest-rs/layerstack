@@ -212,15 +212,13 @@ impl LiveStage {
         let previous = self.stage.options();
         // Inactive prims included: their indexes hold their payloads, and
         // so the layers the stage uses (OpenUSD recomposes them too).
-        let mut roots: Vec<_> = self
-            .stage
-            .payload_prims(store)
-            .into_iter()
-            .filter(|p| {
-                previous.load_rules.is_loaded(store.paths().resolve(*p))
-                    != self.options.load_rules.is_loaded(store.paths().resolve(*p))
-            })
-            .collect();
+        let mut roots = Vec::new();
+        if previous.load_rules != self.options.load_rules {
+            roots.extend(self.stage.payload_prims().filter(|&p| {
+                let path = store.paths().resolve(p);
+                previous.load_rules.is_loaded(path) != self.options.load_rules.is_loaded(path)
+            }));
+        }
         roots.extend(self.structural_roots.iter().copied());
         // A layer the store does not hold composes nothing, muted or not:
         // once read, it joins the stage as a layer read is heard
@@ -620,17 +618,24 @@ impl LiveStage {
             restacked_roots.insert(root);
             inner_resyncs.extend(inner.into_iter().map(|at| (root, at)));
         }
-        // The boundary parents' child lists before the merge: an edit that
-        // keeps every child can still change their order.
-        let boundary_lists: Vec<(PathId, Vec<PathId>)> = roots
-            .iter()
-            .filter_map(|&root| store.paths().parent(root))
-            .filter(|&parent| !is_beneath_set(store, parent, &within))
-            .map(|parent| {
-                let children = self.stage.all_children_of(parent).unwrap_or_default();
-                (parent, children.to_vec())
-            })
-            .collect();
+        // Only a candidate for an info-only restack needs a comparison of
+        // the previous and new sibling order. Ordinary resyncs already tell
+        // clients to reread the subtree and never use this comparison.
+        let boundary_lists: Vec<_> = if changes.is_some() {
+            restacked_roots
+                .iter()
+                .filter_map(|&root| store.paths().parent(root))
+                .filter(|&parent| !is_beneath_set(store, parent, &within))
+                .collect::<HashSet<_>>()
+                .into_iter()
+                .map(|parent| {
+                    let children = self.stage.all_children_of(parent).unwrap_or_default();
+                    (parent, children.to_vec())
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
         affected.extend(refreshed.iter().copied());
         store.paths().sort_paths(&mut affected, store.tokens());
         self.work.replaced_prim_indexes = affected.len();
@@ -683,7 +688,7 @@ impl LiveStage {
                 .iter()
                 .filter(|(parent, before)| {
                     let after = self.stage.all_children_of(*parent).unwrap_or_default();
-                    kept_order(before, after) != kept_order(after, before)
+                    before != after && kept_order(before, after) != kept_order(after, before)
                 })
                 .map(|(parent, _)| *parent)
                 .collect();

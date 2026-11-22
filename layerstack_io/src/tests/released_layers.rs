@@ -155,6 +155,37 @@ fn an_unloaded_payload_is_released_with_what_it_reads() {
 }
 
 #[test]
+fn a_kept_package_member_holds_the_entire_package() {
+    let mut host = Host::default();
+    host.supply(
+        "root.usda",
+        "#usda 1.0\ndef \"P\" (payload = @bundle.usdz@</P>) {}\n",
+    );
+    let package = layerstack_usdz::write_usdz(&[
+        layerstack_usdz::PackageFile::new(
+            "entry.usda",
+            b"#usda 1.0\ndef \"P\" (references = @./member.usda@</Part>) {}\n",
+        ),
+        layerstack_usdz::PackageFile::new("member.usda", b"#usda 1.0\ndef \"Part\" {}\n"),
+    ])
+    .unwrap();
+    host.supplied.insert("bundle.usdz".into(), package);
+    let mut doc = StageDocument::open(host, "root.usda", StageOptions::default()).unwrap();
+    let member = named(&doc, "bundle.usdz[member.usda]");
+    unload(&mut doc, "/P");
+    assert!(
+        doc.release_unused_layers(&[member]).is_empty(),
+        "holding a package member keeps its siblings and backing"
+    );
+    let released = doc.release_unused_layers(&[]);
+    assert_eq!(
+        identifiers(&released),
+        ["bundle.usdz", "bundle.usdz[member.usda]"],
+        "all package layers release together when unpinned"
+    );
+}
+
+#[test]
 fn a_kept_layer_stays_without_what_it_reads() {
     let mut doc = open();
     unload(&mut doc, "/P");

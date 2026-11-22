@@ -10,7 +10,6 @@
 //! AOUSD Core §7.3–7.6, §12.2, §12.4; OpenUSD `UsdUtilsStitchLayers/StitchInfo`.
 
 use crate::doc::VariantSelections;
-use crate::listop::append_unique;
 use crate::sort;
 use crate::{
     FieldEntry, FieldValue, Layer, ListOp, PrimSpec, PropertyEntry, PropertySpec, Specifier,
@@ -18,6 +17,7 @@ use crate::{
 };
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::hash::Hash;
+use opinionated::append_missing;
 
 /// Work requiring attention while combining authored descriptions.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -218,7 +218,7 @@ fn arc<T: Clone + Eq + Hash>(
 }
 fn fixed<T: Clone + Eq + Hash>(op: &ListOp<T>) -> ListOp<T> {
     let mut result = op.clone();
-    append_unique(&mut result.append, &op.add);
+    append_missing(&mut result.append, &op.add);
     result.add.clear();
     result.reorder.clear();
     result
@@ -398,7 +398,7 @@ fn variant(
 ) -> Result<(), StitchError> {
     fields(&mut strong.fields, &weak.fields, tokens, report, false);
     properties(&mut strong.properties, &weak.properties, tokens, report)?;
-    append_unique(&mut strong.authored_children, &weak.authored_children);
+    append_missing(&mut strong.authored_children, &weak.authored_children);
     strong.references = arc(&strong.references, &weak.references, report).into();
     strong.inherits = arc(&strong.inherits, &weak.inherits, report).into();
     strong.specializes = arc(&strong.specializes, &weak.specializes, report).into();
@@ -448,7 +448,7 @@ fn prim(
             arc(&strong.variant_set_names, &weak.variant_set_names, report).into();
     }
     if children {
-        append_unique(&mut strong.authored_children, &weak.authored_children);
+        append_missing(&mut strong.authored_children, &weak.authored_children);
         properties(&mut strong.properties, &weak.properties, tokens, report)?;
         if let Some(weak) = weak_rare {
             variant_sets(

@@ -201,6 +201,7 @@ mod list_edit;
 mod list_order;
 mod temporal;
 
+pub use list_edit::append_missing;
 use list_edit::{Occurrence, Positions};
 pub use list_order::{apply_list_order, apply_list_order_by_key};
 
@@ -562,7 +563,7 @@ impl<T: Clone + Eq + Hash> ListOp<T> {
             // preserve first-occurrence order without changing authored data.
             out.clear();
             out.reserve(explicit.len());
-            list_edit::push_absent(out, explicit);
+            append_missing(out, explicit);
             return;
         }
 
@@ -574,7 +575,7 @@ impl<T: Clone + Eq + Hash> ListOp<T> {
             Positions::new(&self.delete, Occurrence::First, out.len()).remove_from(out);
         }
         if !self.add.is_empty() {
-            list_edit::push_absent(out, &self.add);
+            append_missing(out, &self.add);
         }
         if !self.prepend.is_empty() {
             list_edit::move_to_front(out, &self.prepend);

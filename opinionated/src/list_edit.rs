@@ -191,10 +191,23 @@ impl<'a, T: Eq + Hash> Positions<'a, T> {
     }
 }
 
-/// Pushes the first occurrence of each item of `items` that `out` does not
-/// hold, in authored order: OpenUSD's `SdfListOp::_AddKeys`, for explicit
-/// and added items.
-pub(crate) fn push_absent<T: Clone + Eq + Hash>(out: &mut Vec<T>, items: &[T]) {
+/// Appends each missing item from `items` to `out` in first-occurrence order.
+///
+/// Existing entries keep their order and multiplicity. Each item absent
+/// from `out` is cloned at most once. This is OpenUSD's
+/// `SdfListOp::_AddKeys` for explicit and added items.
+///
+/// With the default `hash-tables` feature, long inputs use a hash table
+/// over `items`. With the feature disabled, all membership checks scan.
+///
+/// ```
+/// use opinionated::append_missing;
+///
+/// let mut names = vec!["B", "A"];
+/// append_missing(&mut names, &["A", "C", "D", "C"]);
+/// assert_eq!(names, ["B", "A", "C", "D"]);
+/// ```
+pub fn append_missing<T: Clone + Eq + Hash>(out: &mut Vec<T>, items: &[T]) {
     if scans(items.len(), out.len() + items.len()) {
         for item in items {
             if !out.contains(item) {
@@ -256,4 +269,31 @@ fn move_out<T: Clone + Eq + Hash>(out: &mut Vec<T>, items: &[T], occurrence: Occ
     let kept = out.len();
     out.extend(moved.unique().cloned());
     out.len() - kept
+}
+
+#[cfg(test)]
+mod tests {
+    use super::append_missing;
+    use alloc::{vec, vec::Vec};
+
+    #[test]
+    fn append_missing_preserves_existing_entries_and_first_new_occurrences() {
+        let mut out = vec![3, 1, 3];
+        append_missing(&mut out, &[]);
+        append_missing(&mut out, &[1, 4, 3, 2, 4]);
+        assert_eq!(out, [3, 1, 3, 4, 2]);
+    }
+
+    #[test]
+    fn append_missing_handles_long_inputs_with_empty_and_overlapping_prefixes() {
+        let items: Vec<_> = (0..400).rev().chain(0..400).collect();
+        let mut out = Vec::new();
+        append_missing(&mut out, &items);
+        assert!(out.into_iter().eq((0..400).rev()));
+
+        let mut out: Vec<_> = (0..400).step_by(2).collect();
+        append_missing(&mut out, &items);
+        let expected = (0..400).step_by(2).chain((1..400).step_by(2).rev());
+        assert!(out.into_iter().eq(expected));
+    }
 }

@@ -327,7 +327,6 @@ pub(crate) struct Catalog {
     demands: HashMap<PathId, Vec<demand::DemandSet>>,
     properties: HashMap<(PathId, TokenId), Vec<ClipProperty>>,
     sites: HashMap<PathId, HashSet<(LayerId, PathId)>>,
-    bearing: HashSet<PathId>,
     loaded: HashSet<LayerId>,
     requests: Vec<ClipAssetRequest>,
     issues: Vec<ClipIssue>,
@@ -382,12 +381,13 @@ impl Catalog {
             .sort_in_namespace_order(&mut owners, store.tokens());
         let mut raw = HashMap::new();
         let mut prepared = HashMap::new();
+        let mut metadata_owners = HashSet::new();
         for &owner in &owners {
             let index = &prims[&owner];
             if index.metadata_opinions(clips_token).is_none() {
                 continue;
             }
-            out.bearing.insert(owner);
+            metadata_owners.insert(owner);
             for source in index
                 .metadata_opinions(clips_token)
                 .into_iter()
@@ -443,9 +443,8 @@ impl Catalog {
                 }
                 // Metadata dependencies also retain definitions that currently
                 // fail preparation, so loading/fixing them can invalidate users.
-                if out.bearing.contains(&owner) {
+                if metadata_owners.contains(&owner) {
                     out.owners.entry(prim).or_default().insert(owner);
-                    out.bearing.insert(prim);
                     if let Some(sites) = out.sites.get(&owner).cloned() {
                         out.sites.entry(prim).or_default().extend(sites);
                     }
@@ -1172,6 +1171,11 @@ impl Catalog {
     pub(crate) fn issues(&self) -> &[ClipIssue] {
         &self.issues
     }
+    pub(crate) fn owns_clip_metadata(&self, prim: PathId) -> bool {
+        self.owners
+            .get(&prim)
+            .is_some_and(|owners| owners.contains(&prim))
+    }
     pub(crate) fn merge_from(&mut self, partial: Self, recomposed: &[PathId]) {
         let affected: HashSet<_> = recomposed.iter().copied().collect();
         self.properties
@@ -1183,20 +1187,27 @@ impl Catalog {
                 .filter(|((prim, _), _)| affected.contains(prim)),
         );
         for prim in recomposed {
+            self.demands.remove(prim);
             self.sites.remove(prim);
-            self.bearing.remove(prim);
+            self.owners.remove(prim);
         }
+        self.demands.extend(
+            partial
+                .demands
+                .into_iter()
+                .filter(|(prim, _)| affected.contains(prim)),
+        );
         self.sites.extend(
             partial
                 .sites
                 .into_iter()
                 .filter(|(prim, _)| affected.contains(prim)),
         );
-        self.bearing.extend(
+        self.owners.extend(
             partial
-                .bearing
+                .owners
                 .into_iter()
-                .filter(|prim| affected.contains(prim)),
+                .filter(|(prim, _)| affected.contains(prim)),
         );
         // Recompute below from current authored requests, so removed clip sets
         // stop keeping stale clip layers in the generation watch list.

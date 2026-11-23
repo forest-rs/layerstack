@@ -1,7 +1,10 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Command line tools for authored USD layers.
+//! Command line tools for USD layers and composed stages.
+
+#[path = "layerstack/explain.rs"]
+mod explain;
 
 use layerstack_io::diff::{Change, LayerDiff, diff_layers};
 use std::{
@@ -14,6 +17,15 @@ use std::{
 };
 
 const HELP: &str = "\
+Usage: layerstack COMMAND [OPTIONS]
+
+  diff     Compare the authored opinions in two layers
+  explain  Trace a composed property to its source layers
+
+Run 'layerstack COMMAND --help' for arguments and examples.
+";
+
+const DIFF_HELP: &str = "\
 Usage: layerstack diff [--json] BEFORE AFTER
 
 Compare the authored opinions in two USDA or USDC layers.
@@ -43,15 +55,22 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
         output.flush().map_err(output_error)?;
         return Ok(false);
     }
+    if command.as_deref() == Some("explain".as_ref()) {
+        return explain::run(args, &mut output).map(|()| false);
+    }
     if command.as_deref() != Some("diff".as_ref()) {
-        return Err(String::from("expected 'diff' or '--help'"));
+        return Err(String::from(
+            "expected 'diff' or 'explain'. See 'layerstack --help'",
+        ));
     }
     let mut json = false;
     let mut options = true;
     let mut paths = Vec::with_capacity(2);
     for arg in args {
         if options && is_help(&arg) {
-            output.write_all(HELP.as_bytes()).map_err(output_error)?;
+            output
+                .write_all(DIFF_HELP.as_bytes())
+                .map_err(output_error)?;
             output.flush().map_err(output_error)?;
             return Ok(false);
         }

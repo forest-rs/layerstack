@@ -181,6 +181,32 @@ the first eight differing indices. Rust callers can compare two byte slices
 through `layerstack_io::diff::diff_layers`. Values in the report are bounded
 previews. The comparison uses the full values.
 
+## Explain a composed property
+
+Take a property path from a diff and query it against the root of the stage
+that uses the layer. The source layer and authored spec path identify where to
+make an edit, including when a reference maps a prim to a different path.
+
+```sh
+layerstack explain scene.usda /Model.weight
+layerstack explain --time 5 scene.usda /Model.animated
+layerstack explain --json scene.usda /Model.parts
+```
+
+An attribute report shows its resolved value and the roles of the consulted
+opinions, strongest first. Authored connections appear separately. A relationship
+report shows the final target paths and each layer's authored list edits.
+Arrays and dictionaries have count previews. Numeric queries use stage time.
+The command composes the stage's active variants and uses authored declarations.
+Schema-only properties and schema fallback values require a registry and are
+outside this command's scope.
+
+A completed query exits with status `0`, including when an authored block
+leaves a property without a value. An invalid query, missing property or
+incomplete stage exits with status `2`. With `--json`, query results contain
+`stage`, `property`, `time` and `fields`. A stage or lookup failure produces an
+`error` object with a code and message.
+
 ## UDIM texture tiles
 
 `resolve_udim_tiles(pattern, authoring_layer, &mut discovery)` lists the

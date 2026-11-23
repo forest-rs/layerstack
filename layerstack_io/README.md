@@ -181,6 +181,31 @@ the first eight differing indices. Rust callers can compare two byte slices
 through `layerstack_io::diff::diff_layers`. Values in the report are bounded
 previews. The comparison uses the full values.
 
+## Compare composed stages
+
+Use `--composed` when a change in a sublayer, reference, payload or selected
+variant might affect the stage. Both roots open with the filesystem resolver.
+For example, two copies of a root can contain identical references to
+`./model.usda` while the models beside them have different animation.
+
+```sh
+layerstack diff --composed before/scene.usda after/scene.usda
+layerstack explain --time 10 after/scene.usda /Assembly.size
+```
+
+The comparison takes a lossless flattened snapshot in memory of each stage,
+expands instances to their stage paths and anchors asset-valued fields to their
+source layers. It compares the resulting fields, target lists, defaults and
+animation in stage time. External resource contents such as texture pixels are
+outside the comparison. As with `explain`, the CLI uses authored declarations
+and active variant selections. A changed sample identifies both the property
+and the frame to query. Explain a removal against the before stage.
+
+The exit codes and change records match the authored diff. Composed JSON
+adds `"mode":"composed"`. When a dependency cannot be read or a stage cannot
+be flattened losslessly, the command exits with status `2`. The JSON error
+identifies the input side, stage, code and reason.
+
 ## Explain a composed property
 
 Take a property path from a diff and query it against the root of the stage

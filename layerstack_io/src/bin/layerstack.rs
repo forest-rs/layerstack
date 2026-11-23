@@ -5,8 +5,10 @@
 
 #[path = "layerstack/explain.rs"]
 mod explain;
+#[path = "layerstack/stage.rs"]
+mod stage;
 
-use layerstack_io::diff::{Change, LayerDiff, diff_layers};
+use layerstack_io::diff::{Change, DiffSide, LayerDiff, diff_layers};
 use std::{
     env,
     ffi::OsString,
@@ -19,19 +21,23 @@ use std::{
 const HELP: &str = "\
 Usage: layerstack COMMAND [OPTIONS]
 
-  diff     Compare the authored opinions in two layers
+  diff     Compare two authored layers or composed stages
   explain  Trace a composed property to its source layers
 
 Run 'layerstack COMMAND --help' for arguments and examples.
 ";
 
 const DIFF_HELP: &str = "\
-Usage: layerstack diff [--json] BEFORE AFTER
+Usage: layerstack diff [--composed] [--json] BEFORE AFTER
 
 Compare the authored opinions in two USDA or USDC layers.
 Includes all variant branches. Only the two given files are read.
 Formatting and comments outside authored fields are ignored.
-USDZ and content the layer readers cannot represent are unsupported.
+Authored comparison accepts loose USDA and USDC files.
+
+--composed opens both stages and compares their losslessly flattened contents.
+Reads dependencies, selects active variants and reports expanded instance paths.
+Use 'layerstack explain STAGE /Prim.property' to trace a changed property.
 
 Exit status: 0 equal, 1 different, 2 error or incomplete comparison.
 ";
@@ -64,6 +70,7 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
         ));
     }
     let mut json = false;
+    let mut composed = false;
     let mut options = true;
     let mut paths = Vec::with_capacity(2);
     for arg in args {
@@ -76,6 +83,8 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
         }
         if options && arg == "--" {
             options = false;
+        } else if options && arg == "--composed" {
+            composed = true;
         } else if options && arg == "--json" {
             json = true;
         } else if options && arg.as_encoded_bytes().starts_with(b"-") {
@@ -87,34 +96,56 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
     let [before, after] = paths.as_slice() else {
         return Err(String::from("expected BEFORE and AFTER; see 'diff --help'"));
     };
+    let diff = if composed {
+        match stage::diff(before, after) {
+            Ok(diff) => diff,
+            Err((side, error)) => {
+                let path = match side {
+                    DiffSide::Before => before,
+                    DiffSide::After => after,
+                };
+                if json {
+                    write_stage_error(&mut output, side, path, &error).map_err(output_error)?;
+                    output.flush().map_err(output_error)?;
+                }
+                return Err(format!("{side} stage {}: {}", path.display(), error.1));
+            }
+        }
+    } else {
+        authored_diff(before, after)?
+    };
+    if json {
+        write_json(&mut output, &diff, composed).map_err(output_error)?;
+    } else {
+        write_text(&mut output, &diff, composed).map_err(output_error)?;
+    }
+    output.flush().map_err(output_error)?;
+    Ok(!diff.changes.is_empty())
+}
+
+fn authored_diff(before: &Path, after: &Path) -> Result<LayerDiff, String> {
     let read = |path: &Path| {
         fs::read(path).map_err(|error| format!("reading {}: {error}", path.display()))
     };
     let first = read(before)?;
     let second = read(after)?;
-    let diff = diff_layers(&first, &second).map_err(|error| {
+    diff_layers(&first, &second).map_err(|error| {
         let path = match error.side {
-            layerstack_io::diff::DiffSide::Before => before,
-            layerstack_io::diff::DiffSide::After => after,
+            DiffSide::Before => before,
+            DiffSide::After => after,
         };
         format!("{}: {error}", path.display())
-    })?;
-    if json {
-        write_json(&mut output, &diff).map_err(output_error)?;
-    } else {
-        write_text(&mut output, &diff).map_err(output_error)?;
-    }
-    output.flush().map_err(output_error)?;
-    Ok(!diff.changes.is_empty())
+    })
 }
 
 fn is_help(arg: &std::ffi::OsStr) -> bool {
     arg == "--help" || arg == "-h"
 }
 
-fn write_text(out: &mut impl Write, diff: &LayerDiff) -> io::Result<()> {
+fn write_text(out: &mut impl Write, diff: &LayerDiff, composed: bool) -> io::Result<()> {
     if diff.changes.is_empty() {
-        return writeln!(out, "No authored differences.");
+        let mode = if composed { "composed" } else { "authored" };
+        return writeln!(out, "No {mode} differences.");
     }
     for change in &diff.changes {
         write!(out, "{} {}", change.kind.as_str(), change.path)?;
@@ -156,8 +187,12 @@ fn write_text(out: &mut impl Write, diff: &LayerDiff) -> io::Result<()> {
     Ok(())
 }
 
-fn write_json(out: &mut impl Write, diff: &LayerDiff) -> io::Result<()> {
-    write!(out, "{{\"equal\":{},\"changes\":[", diff.changes.is_empty())?;
+fn write_json(out: &mut impl Write, diff: &LayerDiff, composed: bool) -> io::Result<()> {
+    out.write_all(b"{")?;
+    if composed {
+        out.write_all(b"\"mode\":\"composed\",")?;
+    }
+    write!(out, "\"equal\":{},\"changes\":[", diff.changes.is_empty())?;
     for (index, change) in diff.changes.iter().enumerate() {
         if index != 0 {
             out.write_all(b",")?;
@@ -165,6 +200,24 @@ fn write_json(out: &mut impl Write, diff: &LayerDiff) -> io::Result<()> {
         write_change(out, change)?;
     }
     writeln!(out, "]}}")
+}
+
+fn write_stage_error(
+    out: &mut impl Write,
+    side: DiffSide,
+    path: &Path,
+    error: &stage::QueryError,
+) -> io::Result<()> {
+    write!(
+        out,
+        "{{\"mode\":\"composed\",\"error\":{{\"side\":\"{side}\",\"stage\":"
+    )?;
+    json_string(out, path.to_str())?;
+    out.write_all(b",\"code\":")?;
+    json_string(out, Some(error.0))?;
+    out.write_all(b",\"message\":")?;
+    json_string(out, Some(&error.1))?;
+    writeln!(out, "}}}}")
 }
 
 fn write_change(out: &mut impl Write, change: &Change) -> io::Result<()> {

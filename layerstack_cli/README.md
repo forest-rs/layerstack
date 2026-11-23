@@ -32,6 +32,10 @@ changed records and distinct paths. A single path can have several field or
 sample changes. Use `--stat --json` for the counts as numbers. Full detail and
 summary use the same comparison and exit codes in both modes.
 
+By default, the CLI can decode the two authored layers concurrently when each
+input is at least 256 KiB. Pass `--jobs 1` to reduce peak memory by decoding
+one layer at a time. Byte-identical files still go through validation once.
+
 JSON output contains an `equal` boolean and a `changes` array. Each change
 identifies its spec path, change kind and field (or a whole spec). Array edits
 include the before and after lengths, the total count of differing positions and

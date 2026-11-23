@@ -110,6 +110,7 @@ pub use standard::{
     NdImageVector3Edit as ImageVector3Edit, NdInvertFloat as InvertFloat,
     NdInvertFloatEdit as InvertFloatEdit, NdMixColor3 as MixColor3,
     NdMixColor3Edit as MixColor3Edit, NdMixFloat as MixFloat, NdMixFloatEdit as MixFloatEdit,
+    NdMultiplyColor3 as MultiplyColor3, NdMultiplyColor3Edit as MultiplyColor3Edit,
     NdMultiplyColor3Fa as MultiplyColor3ByFloat,
     NdMultiplyColor3FaEdit as MultiplyColor3ByFloatEdit, NdMultiplyFloat as MultiplyFloat,
     NdMultiplyFloatEdit as MultiplyFloatEdit, NdNormalmapFloat as NormalMap,

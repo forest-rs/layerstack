@@ -10,8 +10,8 @@ use layerstack::{
 use layerstack_schemas::{
     Scene, SchemaEdit,
     materialx::{
-        ExtractVector3, ImageColor3, ImageVector3, MaterialXDefault, MaterialXPort, NormalMap,
-        OpenPbrSurface, Place2dVector2, STANDARD_NODES, TexcoordVector2,
+        ExtractVector3, ImageColor3, ImageVector3, MaterialXDefault, MaterialXPort, MultiplyColor3,
+        NormalMap, OpenPbrSurface, Place2dVector2, STANDARD_NODES, TexcoordVector2,
     },
     shading::{ConnectionModification::Replace, PortKind},
     usd_shade::Material,
@@ -218,6 +218,35 @@ fn standard_nodes_author_a_textured_openpbr_surface() {
 fn openusd_reopens_textured_openpbr_usda_and_usdc() {
     let (store, _, _, _, _) = textured_material(false);
     verify_openusd(&store, "sparse");
+}
+
+#[test]
+fn rgb_tint_modulates_the_base_color_texture() {
+    let (mut store, mut live, _, albedo, surface) = textured_material(false);
+    let tint_path = store.path("/Paint/Tint");
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LAYER));
+    let tint = MultiplyColor3::define(&mut edit, tint_path).unwrap();
+    tint.set_in2(&mut edit, [0.25, 0.5, 1.0]).unwrap();
+    let image = ImageColor3::define(&mut edit, albedo).unwrap();
+    let rgb = image.create_out_output(&mut edit).unwrap();
+    tint.create_in1_input(&mut edit)
+        .unwrap()
+        .connect_to_materialx_source(&mut edit, rgb, STANDARD_NODES, Replace)
+        .unwrap();
+    let tinted = tint.create_out_output(&mut edit).unwrap();
+    OpenPbrSurface::define(&mut edit, surface)
+        .unwrap()
+        .create_base_color_input(&mut edit)
+        .unwrap()
+        .connect_to_materialx_source(&mut edit, tinted, STANDARD_NODES, Replace)
+        .unwrap();
+    let transaction = edit.finish();
+    live.apply(&mut store, &transaction).unwrap();
+
+    let scene = Scene::new(live.stage(), &store);
+    let tint = MultiplyColor3::get(&scene, tint_path).unwrap();
+    assert_eq!(tint.in2(), Some([0.25, 0.5, 1.0]));
+    verify_openusd(&store, "tinted");
 }
 
 #[test]

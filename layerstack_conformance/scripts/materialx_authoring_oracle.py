@@ -50,14 +50,22 @@ def verify(path, graph):
     assert weight.Get() == 0.75, path
 
     types = Sdf.ValueTypeNames
-    verify_edge(surface.GetInput("base_color"), albedo.GetOutput("out"), types.Color3f, path)
+    color = albedo.GetOutput("out")
+    if graph == "tinted":
+        tint = shader(stage, "Tint", "ND_multiply_color3")
+        verify_edge(tint.GetInput("in1"), color, types.Color3f, path)
+        tint_color = tint.GetInput("in2")
+        assert tint_color.GetTypeName() == types.Color3f, path
+        assert tuple(tint_color.Get()) == (0.25, 0.5, 1.0), path
+        color = tint.GetOutput("out")
+    verify_edge(surface.GetInput("base_color"), color, types.Color3f, path)
     verify_edge(material.GetSurfaceOutput("mtlx"), surface.GetOutput("surface"), types.Token, path)
     source, name, kind = material.ComputeSurfaceSource("mtlx")
     assert source.GetPrim() == surface.GetPrim(), path
     assert (name, kind) == ("surface", UsdShade.AttributeType.Output), path
 
     assert not albedo.GetInput("filtertype"), path
-    if graph == "sparse":
+    if graph != "packed":
         assert not albedo.GetInput("texcoord"), path
         assert not surface.GetInput("specular_roughness"), path
         assert not surface.GetInput("geometry_normal"), path
@@ -95,6 +103,6 @@ def verify(path, graph):
 
 
 graph, *files = sys.argv[1:]
-assert graph in ("sparse", "packed")
+assert graph in ("sparse", "tinted", "packed")
 for file_path in files:
     verify(file_path, graph)

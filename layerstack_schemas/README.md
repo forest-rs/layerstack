@@ -701,7 +701,7 @@ With `usd-mtlx`, the `materialx` module exposes typed views and matching
 | Texture coordinates | `TexcoordVector2`, `Place2dVector2` |
 | Normal and bump mapping | `NormalMap`, `Bump` |
 | Channels | `ExtractColor3`, `ExtractVector3`, `Separate3Vector3`, `Combine3Color3` |
-| Math and color adjustment | `AddFloat`, `AddColor3`, `MultiplyFloat`, `MultiplyColor3ByFloat`, `MixFloat`, `MixColor3`, `ClampFloat`, `RemapFloat`, `InvertFloat`, `ColorCorrectColor3` |
+| Math and color adjustment | `AddFloat`, `AddColor3`, `MultiplyFloat`, `MultiplyColor3`, `MultiplyColor3ByFloat`, `MixFloat`, `MixColor3`, `ClampFloat`, `RemapFloat`, `InvertFloat`, `ColorCorrectColor3` |
 | Surface shaders | `OpenPbrSurface`, `StandardSurface`, `GltfPbr` |
 
 Define each node through a `SchemaEdit` and use its typed ports to author
@@ -709,6 +709,8 @@ values and connections. Connect `TexcoordVector2` through `Place2dVector2`
 to an image's `texcoord` input to place a texture. Use `ImageVector3` with
 `ExtractVector3` for packed scalar channels or with `NormalMap` for a normal
 texture. Feed a color image into the surface shader's `base_color` input.
+To tint an albedo texture, connect `ImageColor3` to `MultiplyColor3`’s `in1`,
+set the RGB tint on `in2`, and connect `out` to the surface’s `base_color`.
 Connect the shader's `create_surface_output` to the material terminal created
 with `MaterialEdit::create_surface_output(&mut edit, "mtlx")`.
 

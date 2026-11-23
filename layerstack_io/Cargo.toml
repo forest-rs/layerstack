@@ -29,9 +29,3 @@ layerstack_usdz = { features = ["unstable-internals"], workspace = true }
 
 [lints]
 workspace = true
-
-[[bin]]
-name = "layerstack"
-path = "src/bin/layerstack.rs"
-required-features = ["std"]
-doc = false

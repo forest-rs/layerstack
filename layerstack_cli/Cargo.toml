@@ -1,0 +1,28 @@
+[package]
+name = "layerstack_cli"
+description = "Inspect, compare and explain USD scenes from the command line."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords = ["usd", "scene-description", "cli"]
+categories = ["command-line-utilities", "encoding"]
+
+[dependencies]
+layerstack = { workspace = true }
+layerstack_io = { features = ["std"], workspace = true }
+layerstack_schemas = { features = ["usd-geom", "usd-shade"], workspace = true }
+layerstack_usda = { workspace = true }
+
+[dev-dependencies]
+layerstack_usdc = { workspace = true }
+
+[[bin]]
+name = "layerstack"
+path = "src/main.rs"
+doc = false
+
+[lints]
+workspace = true

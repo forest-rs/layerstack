@@ -19,6 +19,7 @@ env:
     -p layerstack_usdc
     -p layerstack_usdz
     -p layerstack_io
+    -p layerstack_cli
     -p layerstack_mesh_export
   # Packages that hold to the minimum supported Rust version but are not
   # published yet, so `cargo package` leaves them out: `layerstack_stagehand`
@@ -32,6 +33,7 @@ env:
   # builds meshoptimizer's C++ through `meshopt`, which needs the standard
   # library, as does its example crate.
   RUST_NO_STD_PKGS: >-
+    --exclude layerstack_cli
     --exclude layerstack_clusters
     --exclude layerstack_clusters_examples
     --exclude layerstack_conformance

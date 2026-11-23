@@ -363,6 +363,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerstack_cli"
+version = "0.1.0"
+dependencies = [
+ "layerstack",
+ "layerstack_io",
+ "layerstack_schemas",
+ "layerstack_usda",
+ "layerstack_usdc",
+]
+
+[[package]]
 name = "layerstack_clusters"
 version = "0.1.0"
 dependencies = [

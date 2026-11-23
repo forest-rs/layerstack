@@ -97,3 +97,19 @@ surface shader and each connection on the terminal path. The winning
 relationship is a property path you can query with `explain`. Repeat
 `--context` to try render contexts in order. An unbound prim yields an
 `unbound` record. A broken target or cycle has its own diagnostic record.
+
+## Find asset dependencies
+
+```sh
+layerstack deps scene.usda
+layerstack deps --json scene.usdz
+```
+
+Each record names the authored asset, role, source layer and spec. A field is
+included where the layer assigns one. Discovery visits all variant branches in
+the layers it can load. Loaded layers report their identifiers. Local resources
+are checked for existence and a UDIM pattern produces one row per tile.
+Missing files stay in the report so you can locate the broken opinion.
+Identity metadata is labeled separately. Resolver expressions, clip templates
+and opaque package resources can have `unchecked` status. Exit status 0 means
+the inventory ran, including when it found missing uses.

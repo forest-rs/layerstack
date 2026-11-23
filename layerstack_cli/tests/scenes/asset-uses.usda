@@ -1,0 +1,7 @@
+#usda 1.0
+(
+    subLayers = [@./binding.usda@]
+)
+def "Broken" (references = @./absent-model.usda@</Model>) {
+    custom asset albedo = @./absent-image.png@
+}

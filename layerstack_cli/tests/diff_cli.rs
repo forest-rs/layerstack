@@ -65,6 +65,48 @@ fn diff_distinguishes_equality_changes_and_unreadable_input() {
 
     assert_eq!(fs::read(dir.join("before.usdc")).unwrap(), binary);
     assert_eq!(fs::read_to_string(dir.join("after.usda")).unwrap(), text);
+    // Exercise both readers with distinct inputs large enough for concurrent decoding.
+    let padding = "#".repeat(256 * 1024);
+    for (path, value) in [("a.usda", 1), ("b.usda", 2)] {
+        fs::write(
+            dir.join(path),
+            format!("#usda 1.0\n{padding}\ndef \"P\" {{\n int x = {value}\n}}\n"),
+        )
+        .unwrap();
+    }
+    let serial = compare(&["--jobs", "1", "a.usda", "b.usda"]);
+    let parallel = compare(&["--jobs", "2", "a.usda", "b.usda"]);
+    assert_eq!(serial.status.code(), Some(1), "{serial:?}");
+    assert_eq!(parallel.status.code(), Some(1), "{parallel:?}");
+    assert_eq!(parallel.stdout, serial.stdout);
+    for (path, suffix) in [("a.usda", "a"), ("b.usda", "b")] {
+        fs::write(dir.join(path), format!("{padding}{suffix}")).unwrap();
+    }
+    for other in ["a.usda", "b.usda"] {
+        let invalid = compare(&["--jobs", "2", "a.usda", other]);
+        assert_eq!(invalid.status.code(), Some(2));
+        assert!(
+            String::from_utf8(invalid.stderr)
+                .unwrap()
+                .contains("a.usda: before layer")
+        );
+    }
+    for options in [["--jobs", "0"], ["--jobs", "3"]] {
+        let invalid = compare(&[options[0], options[1], "a.usda", "b.usda"]);
+        assert_eq!(invalid.status.code(), Some(2));
+        assert!(
+            String::from_utf8(invalid.stderr)
+                .unwrap()
+                .contains("--jobs expects 1 or 2")
+        );
+    }
+    let incompatible = compare(&["--composed", "--jobs", "1", "a.usda", "b.usda"]);
+    assert_eq!(incompatible.status.code(), Some(2));
+    assert!(
+        String::from_utf8(incompatible.stderr)
+            .unwrap()
+            .contains("--jobs applies only to authored comparisons")
+    );
     fs::remove_dir_all(dir).unwrap();
 }
 

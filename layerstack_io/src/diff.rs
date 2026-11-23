@@ -138,13 +138,24 @@ pub struct ArrayChange {
 /// unsupported, a reader reports incomplete import, or input is malformed.
 /// USDZ packages are unsupported.
 pub fn diff_layers(before: &[u8], after: &[u8]) -> Result<LayerDiff, DiffError> {
-    let read = |input, side| read_document(input).map_err(|message| DiffError { side, message });
-    let before = read(before, DiffSide::Before)?;
+    let read =
+        |input, side| read_authored_document(input).map_err(|message| DiffError { side, message });
+    let baseline = read(before, DiffSide::Before)?;
+    if before == after {
+        return Ok(LayerDiff::default());
+    }
     let after = read(after, DiffSide::After)?;
-    Ok(diff_documents(&before, &after))
+    Ok(diff_documents(&baseline, &after))
 }
 
-fn read_document(input: &[u8]) -> Result<Document, String> {
+/// Reads one validated USDA or USDC layer for comparison, retaining its
+/// authored namespace and opinions. Reuse the result with [`diff_documents`]
+/// when comparing several revisions to the same baseline.
+///
+/// # Errors
+///
+/// Returns a diagnostic for malformed or unsupported layer content.
+pub fn read_authored_document(input: &[u8]) -> Result<Document, String> {
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
     let id = LayerId(1);

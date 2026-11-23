@@ -10,7 +10,9 @@ mod material;
 mod query;
 mod stage;
 
-use layerstack_io::diff::{Change, ChangeKind, DiffSide, LayerDiff, diff_layers};
+use layerstack_io::diff::{
+    Change, ChangeKind, DiffSide, LayerDiff, diff_documents, diff_layers, read_authored_document,
+};
 use std::{
     env,
     ffi::OsString,
@@ -33,13 +35,15 @@ Run 'layerstack COMMAND --help' for arguments and examples.
 ";
 
 const DIFF_HELP: &str = "\
-Usage: layerstack diff [--composed] [--stat] [--json] BEFORE AFTER
+Usage: layerstack diff [--composed | --jobs N] [--stat] [--json] BEFORE AFTER
 
 Compare the authored opinions in two USDA or USDC layers.
 Includes all variant branches. Only the two given files are read.
 Formatting and comments outside authored fields are ignored.
 Authored comparison accepts loose USDA and USDC files.
 
+--jobs 1 limits authored comparisons to one reader to reduce peak memory.
+The default, --jobs 2, can read large authored layers concurrently.
 --stat shows counts of added, removed and changed records and distinct paths.
 --composed opens both stages and compares their losslessly flattened contents.
 Reads dependencies, selects active variants and reports expanded instance paths.
@@ -99,9 +103,10 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
     let mut json = false;
     let mut composed = false;
     let mut stat = false;
+    let mut jobs = None;
     let mut options = true;
     let mut paths = Vec::with_capacity(2);
-    for arg in args {
+    while let Some(arg) = args.next() {
         if options && is_help(&arg) {
             output
                 .write_all(DIFF_HELP.as_bytes())
@@ -111,6 +116,14 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
         }
         if options && arg == "--" {
             options = false;
+        } else if options && arg == "--jobs" {
+            jobs = Some(
+                match args.next().as_deref().and_then(|value| value.to_str()) {
+                    Some("1") => 1,
+                    Some("2") => 2,
+                    _ => return Err(String::from("--jobs expects 1 or 2")),
+                },
+            );
         } else if options && arg == "--stat" {
             stat = true;
         } else if options && arg == "--composed" {
@@ -126,6 +139,9 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
     let [before, after] = paths.as_slice() else {
         return Err(String::from("expected BEFORE and AFTER; see 'diff --help'"));
     };
+    if composed && jobs.is_some() {
+        return Err(String::from("--jobs applies only to authored comparisons"));
+    }
     let diff = if composed {
         match stage::diff(before, after) {
             Ok(diff) => diff,
@@ -142,7 +158,7 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
             }
         }
     } else {
-        authored_diff(before, after)?
+        authored_diff(before, after, jobs.unwrap_or(2))?
     };
     if stat {
         write_stat(&mut output, &diff, composed, json).map_err(output_error)?;
@@ -155,13 +171,47 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
     Ok(!diff.changes.is_empty())
 }
 
-fn authored_diff(before: &Path, after: &Path) -> Result<LayerDiff, String> {
+fn authored_diff(before: &Path, after: &Path, jobs: u8) -> Result<LayerDiff, String> {
     let read = |path: &Path| {
         fs::read(path).map_err(|error| format!("reading {}: {error}", path.display()))
     };
     let first = read(before)?;
     let second = read(after)?;
-    diff_layers(&first, &second).map_err(|error| {
+    // Small layers cost less to decode than starting a second reader.
+    const PARALLEL_MIN_BYTES: usize = 256 * 1024;
+    if jobs == 2
+        && first.len().min(second.len()) >= PARALLEL_MIN_BYTES
+        && first != second
+        && !cfg!(target_family = "wasm")
+        && !std::thread::available_parallelism().is_ok_and(|cpus| cpus.get() == 1)
+    {
+        return std::thread::scope(|scope| {
+            let worker =
+                std::thread::Builder::new().spawn_scoped(scope, || read_authored_document(&second));
+            if let Ok(worker) = worker {
+                let left = read_authored_document(&first)
+                    .map_err(|e| format!("{}: before layer: {e}", before.display()));
+                let right = worker
+                    .join()
+                    .unwrap_or_else(|e| std::panic::resume_unwind(e));
+                return Ok(diff_documents(
+                    &left?,
+                    &right.map_err(|e| format!("{}: after layer: {e}", after.display()))?,
+                ));
+            }
+            serial_diff(before, after, &first, &second)
+        });
+    }
+    serial_diff(before, after, &first, &second)
+}
+
+fn serial_diff(
+    before: &Path,
+    after: &Path,
+    first: &[u8],
+    second: &[u8],
+) -> Result<LayerDiff, String> {
+    diff_layers(first, second).map_err(|error| {
         let path = match error.side {
             DiffSide::Before => before,
             DiffSide::After => after,

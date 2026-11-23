@@ -32,7 +32,8 @@ caller-owned bytes. Applications own rendering and execution policy.
 To compare the opinions authored in two layers, run
 `cargo run -p layerstack_io --bin layerstack -- diff before.usda after.usdc`.
 The [diff command](layerstack_io/README.md#compare-authored-layers) accepts
-text and binary USD and can emit JSON for CI. To trace a changed property to
+text and binary USD and can emit JSON for CI. Add `--composed` to compare
+the resolved stages, including changes in their dependencies. To trace a changed property to
 the contributing layer and spec, run `layerstack explain scene.usda /Model.weight`.
 See [explaining a composed property](layerstack_io/README.md#explain-a-composed-property).
 

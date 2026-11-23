@@ -60,3 +60,66 @@ fn diff_distinguishes_equality_changes_and_unreadable_input() {
     assert_eq!(fs::read_to_string(dir.join("after.usda")).unwrap(), text);
     fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn composed_diff_reports_changes_in_stage_namespace_and_rejects_missing_dependencies() {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!(
+        "layerstack-stage-diff-{}-{nonce}",
+        std::process::id()
+    ));
+    for (side, sample, shadowed) in [("before", 4, 11), ("after", 8, 22)] {
+        let side = dir.join(side);
+        fs::create_dir_all(&side).unwrap();
+        fs::write(
+            side.join("scene.usda"),
+            r#"#usda 1.0
+def "Assembly" (references = @./model.usda@</Model>) {
+    custom float weight = 3
+}
+"#,
+        )
+        .unwrap();
+        fs::write(side.join("model.usda"), format!("#usda 1.0\ndef \"Model\" {{\n custom float weight = {shadowed}\n custom float size.timeSamples = {{0:2, 10:{sample}}}\n}}\n")).unwrap();
+    }
+    let run = |args: &[&str], code| {
+        let o = Command::new(env!("CARGO_BIN_EXE_layerstack"))
+            .args(args)
+            .current_dir(&dir)
+            .output()
+            .unwrap();
+        assert_eq!(o.status.code(), Some(code), "{o:?}");
+        String::from_utf8(o.stdout).unwrap()
+    };
+    let roots = ["before/scene.usda", "after/scene.usda"];
+    run(&["diff", roots[0], roots[1]], 0);
+    let diff = run(&["diff", "--composed", "--json", roots[0], roots[1]], 1);
+    assert!(
+        diff.contains(r#""mode":"composed""#) && diff.contains(r#""path":"/Assembly.size""#),
+        "{diff}"
+    );
+    assert!(
+        diff.contains(r#""time":10"#) && !diff.contains("weight"),
+        "{diff}"
+    );
+    let why = run(&["explain", "--time", "10", roots[1], "/Assembly.size"], 0);
+    assert!(
+        why.contains("model.usda  /Model.size") && why.contains(": 8"),
+        "{why}"
+    );
+
+    // Different layer structures, with the same resolved fields and animation.
+    fs::write(dir.join("flat.usda"), "#usda 1.0\ndef \"Assembly\" {\n custom float weight = 3\n custom float size.timeSamples = {0:2, 10:8}\n}\n").unwrap();
+    run(&["diff", "--composed", roots[1], "flat.usda"], 0);
+    fs::remove_file(dir.join("after/model.usda")).unwrap();
+    let incomplete = run(&["diff", "--composed", "--json", roots[0], roots[1]], 2);
+    assert!(
+        incomplete.contains(r#""side":"after""#) && incomplete.contains("model.usda"),
+        "{incomplete}"
+    );
+    assert!(!incomplete.contains(r#""equal""#));
+    fs::remove_dir_all(dir).unwrap();
+}

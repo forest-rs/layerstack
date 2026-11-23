@@ -141,7 +141,7 @@ pub fn diff_layers(before: &[u8], after: &[u8]) -> Result<LayerDiff, DiffError> 
     let read = |input, side| read_document(input).map_err(|message| DiffError { side, message });
     let before = read(before, DiffSide::Before)?;
     let after = read(after, DiffSide::After)?;
-    Ok(compare(&before, &after))
+    Ok(diff_documents(&before, &after))
 }
 
 fn read_document(input: &[u8]) -> Result<Document, String> {
@@ -436,7 +436,12 @@ fn property_spec(property: &Property) -> Spec<'_> {
     }
 }
 
-fn compare(before: &Document, after: &Document) -> LayerDiff {
+/// Compares the specs and fields of two validated writer documents in memory.
+/// For composed stage paths, use documents lowered from losslessly flattened
+/// layers with expanded instances. Both inputs may use their own interners
+/// during lowering because document paths and names are text.
+#[must_use]
+pub fn diff_documents(before: &Document, after: &Document) -> LayerDiff {
     let before = index(before);
     let after = index(after);
     let mut changes = Vec::new();

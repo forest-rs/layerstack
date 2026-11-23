@@ -1,12 +1,14 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use super::{is_help, json_string};
+use super::{
+    is_help, json_string,
+    stage::{self, Document, QueryError},
+};
 use layerstack::{
     Contribution, IgnoreCause, InMemoryStore, OpinionRole, SpecPath, TargetPath,
     TargetsExplanation, Time, Value, ValueSource,
 };
-use layerstack_io::{Filesystem, OpenOptions, StageDocument};
 use std::{
     ffi::OsString,
     io::{self, Write},
@@ -25,10 +27,6 @@ Arrays and dictionaries are summarized by size.
 
 Exit status: 0 explained, 2 invalid query, missing property or incomplete stage.
 ";
-
-type Document = StageDocument<Filesystem>;
-
-struct QueryError(&'static str, String);
 
 pub(super) fn run(
     args: impl Iterator<Item = OsString>,
@@ -140,35 +138,8 @@ fn site(
 }
 
 fn query(root: &str, path: &str, frame: Option<f64>) -> Result<Vec<Section>, QueryError> {
-    let fs = Filesystem::new(".", []).map_err(|e| QueryError("open", e.to_string()))?;
-    let mut doc = StageDocument::open(fs, root, OpenOptions::default())
-        .map_err(|e| QueryError("open", format!("{root}: {e}")))?;
+    let mut doc = stage::open(root)?;
     let incomplete = |msg: String| QueryError("incomplete_stage", format!("{root}: {msg}"));
-    if let Some(failure) = doc.load_report().asset_failures.first() {
-        return Err(incomplete(format!(
-            "{}: {failure}",
-            failure
-                .anchor
-                .and_then(|id| doc.identifier(id))
-                .unwrap_or(root)
-        )));
-    }
-    // A dropped target has a defined result. Its target opinion explains the drop.
-    if let Some(error) = doc
-        .stage()
-        .stage()
-        .composition_errors()
-        .iter()
-        .find(|error| {
-            !matches!(
-                error,
-                layerstack::CompositionError::InvalidExternalTargetPath(_)
-                    | layerstack::CompositionError::InvalidInstanceTargetPath(_)
-            )
-        })
-    {
-        return Err(incomplete(error.display(doc.store()).to_string()));
-    }
     let prop = doc.store().try_property_path(path).map_err(|e| {
         QueryError(
             "invalid_path",

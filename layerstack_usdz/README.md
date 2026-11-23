@@ -56,8 +56,10 @@ supported subsets; packaging does not expand their format coverage.
 unused nested packages, under `PackageLimits`. `read_usdz_snapshot` reuses those
 indexes and shared encoded views. The borrowed reader copies the outer archive
 once to obtain owned storage. Nested identifiers select explicit members or an
-inner archive's first native USD layer; relative dependencies and resources remain
-inside their innermost archive. `PackageStats` reports indexed entries, directory
+inner archive's default layer, following nested first entries until a USD layer is
+reached. A bare asset path is searched for beside its authoring layer, then beside
+the containing package’s default layer, before lookup falls back to the outer
+resolver. `PackageStats` reports indexed entries, directory
 parses, verification bytes and backing allocation size. Small views retain the
 outer allocation until dropped or explicitly detached.
 

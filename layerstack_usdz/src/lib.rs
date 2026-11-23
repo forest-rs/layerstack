@@ -426,6 +426,11 @@ fn read_package<P: access::PackageAccess>(
     })
 }
 
+/// A nested package may supply the default layer (AOUSD Core §9.7, §16.4).
+fn is_root_member(name: &str) -> bool {
+    is_usd_extension(name) || name.ends_with(".usdz")
+}
+
 /// Returns `true` if the file extension indicates a USD layer.
 fn is_usd_extension(name: &str) -> bool {
     let ext = name.rsplit('.').next().unwrap_or("");

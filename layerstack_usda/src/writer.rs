@@ -277,15 +277,30 @@ impl Document {
         validate_order(self.prim_order.as_deref(), "/", is_identifier)?;
         // Every spec in turn, prim specs before their contents, without
         // recursing through the namespace ([`walk()`]).
+        // The first duplicate is the only one validation can reach. Retain
+        // its position across a depth-first visit to a wide sibling group.
+        let mut wide_duplicates = Vec::new();
         walk(
             &self.prims,
             VariantOrder::Authored,
-            |step, path, _| match step {
+            |step, path, depth| match step {
                 Step::Prim {
                     prim,
                     siblings,
                     index,
-                } => prim.validate(path, siblings[..index].iter().any(|p| p.name == prim.name)),
+                } => {
+                    let duplicate = if siblings.len() < 32 {
+                        siblings[..index].iter().any(|p| p.name == prim.name)
+                    } else {
+                        if index == 0 {
+                            wide_duplicates.resize(depth + 1, None);
+                            wide_duplicates[depth] =
+                                first_duplicate(siblings.iter().map(|p| p.name.as_str()));
+                        }
+                        wide_duplicates[depth] == Some(index)
+                    };
+                    prim.validate(path, duplicate)
+                }
                 Step::Set {
                     set,
                     siblings,
@@ -299,6 +314,24 @@ impl Document {
                 Step::LeavePrim | Step::LeaveSet | Step::LeaveVariant => Ok(()),
             },
         )
+    }
+}
+
+// Find the first duplicate in authored order so validation still reports the
+// same first invalid spec. Narrow groups avoid allocating a hash table.
+fn first_duplicate<'a>(names: impl ExactSizeIterator<Item = &'a str>) -> Option<usize> {
+    if names.len() < 32 {
+        let mut seen = SmallVec::<[&str; 8]>::new();
+        for (i, name) in names.enumerate() {
+            if seen.contains(&name) {
+                return Some(i);
+            }
+            seen.push(name);
+        }
+        None
+    } else {
+        let mut seen = hashbrown::HashSet::with_capacity(names.len());
+        names.into_iter().position(|name| !seen.insert(name))
     }
 }
 
@@ -515,20 +548,23 @@ impl Prim {
         }
         validate_order(self.property_order.as_deref(), path, is_property_name)?;
         validate_order(self.prim_order.as_deref(), path, is_identifier)?;
-        let mut property_names = SmallVec::<[&str; 8]>::new();
-        for property in &self.properties {
+        let duplicate = first_duplicate(self.properties.iter().map(Property::name));
+        let mut prop_path = String::new();
+        for (index, property) in self.properties.iter().enumerate() {
             let name = property.name();
-            let prop_path = [path, ".", name].concat();
+            prop_path.clear();
+            prop_path.push_str(path);
+            prop_path.push('.');
+            prop_path.push_str(name);
             if !is_property_name(name) {
                 return Err(WriteError::InvalidName {
                     path: prop_path,
                     name: name.into(),
                 });
             }
-            if property_names.contains(&name) {
+            if duplicate == Some(index) {
                 return Err(WriteError::Duplicate { path: prop_path });
             }
-            property_names.push(name);
             match property {
                 Property::Attribute(attribute) => attribute.validate(&prop_path)?,
                 Property::Relationship(relationship) => relationship.validate(&prop_path)?,
@@ -4419,6 +4455,43 @@ def Xform "Root" (
         assert!(
             label.custom && !label.uniform,
             "custom attribute qualifiers"
+        );
+    }
+
+    #[test]
+    fn wide_sibling_groups_report_the_first_invalid_spec_in_walk_order() {
+        let group = || {
+            (0..48)
+                .map(|i| Prim::def("Scope", alloc::format!("P{i}")))
+                .collect::<Vec<_>>()
+        };
+        let mut doc = Document::new();
+        doc.prims = group();
+        doc.prims[47].name = "P0".into();
+        doc.prims[0].children = group();
+        doc.prims[0].children[46].name = "P2".into();
+        assert_eq!(
+            doc.validate(),
+            Err(WriteError::Duplicate {
+                path: "/P0/P2".into()
+            })
+        );
+        doc.prims[0].children[46].name = "P46".into();
+        assert_eq!(
+            doc.validate(),
+            Err(WriteError::Duplicate { path: "/P0".into() })
+        );
+        doc.prims[47].name = "P47".into();
+        let prim = &mut doc.prims[0];
+        for i in 0..48 {
+            prim.push_property(Attribute::new(alloc::format!("v{i}"), "int", Value::Int(i)));
+        }
+        prim.push_property(Relationship::new("v0", "/P1"));
+        assert_eq!(
+            doc.validate(),
+            Err(WriteError::Duplicate {
+                path: "/P0.v0".into()
+            })
         );
     }
 

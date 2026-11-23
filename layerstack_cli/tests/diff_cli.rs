@@ -48,6 +48,13 @@ fn diff_distinguishes_equality_changes_and_unreadable_input() {
             .contains("missing.usda")
     );
 
+    let stat = compare(&["--stat", "--json", "before.usdc", "after.usda"]);
+    assert_eq!(stat.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8(stat.stdout).unwrap().trim_end(),
+        r#"{"mode":"authored","equal":false,"stat":{"records":1,"paths":1,"added":1,"removed":0,"changed":0}}"#
+    );
+
     let missing = compare(&["before.usdc", "absent.usdc"]);
     assert_eq!(missing.status.code(), Some(2), "{missing:?}");
     assert!(

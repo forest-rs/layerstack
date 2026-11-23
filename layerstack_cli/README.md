@@ -10,6 +10,7 @@ Install the command from a workspace checkout and compare two files.
 cargo install --path layerstack_cli --bin layerstack
 layerstack diff before.usda after.usdc
 layerstack diff --json before.usdc after.usdc
+layerstack diff --stat before.usda after.usda
 ```
 
 The command compares each layer's own opinions, including variant branches,
@@ -25,6 +26,11 @@ changed /Mesh.points default: 2 of 8192 elements changed at indices [17, 804]
 
 Exit status is `0` for equal authored content, `1` for differences, or `2`
 when the comparison could not be completed.
+
+With `--stat`, the command prints one line with counts of added, removed and
+changed records and distinct paths. A single path can have several field or
+sample changes. Use `--stat --json` for the counts as numbers. Full detail and
+summary use the same comparison and exit codes in both modes.
 
 JSON output contains an `equal` boolean and a `changes` array. Each change
 identifies its spec path, change kind and field (or a whole spec). Array edits

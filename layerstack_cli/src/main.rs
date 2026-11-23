@@ -10,7 +10,7 @@ mod material;
 mod query;
 mod stage;
 
-use layerstack_io::diff::{Change, DiffSide, LayerDiff, diff_layers};
+use layerstack_io::diff::{Change, ChangeKind, DiffSide, LayerDiff, diff_layers};
 use std::{
     env,
     ffi::OsString,
@@ -33,13 +33,14 @@ Run 'layerstack COMMAND --help' for arguments and examples.
 ";
 
 const DIFF_HELP: &str = "\
-Usage: layerstack diff [--composed] [--json] BEFORE AFTER
+Usage: layerstack diff [--composed] [--stat] [--json] BEFORE AFTER
 
 Compare the authored opinions in two USDA or USDC layers.
 Includes all variant branches. Only the two given files are read.
 Formatting and comments outside authored fields are ignored.
 Authored comparison accepts loose USDA and USDC files.
 
+--stat shows counts of added, removed and changed records and distinct paths.
 --composed opens both stages and compares their losslessly flattened contents.
 Reads dependencies, selects active variants and reports expanded instance paths.
 Use 'layerstack explain STAGE /Prim.property' to trace a changed property.
@@ -97,6 +98,7 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
     }
     let mut json = false;
     let mut composed = false;
+    let mut stat = false;
     let mut options = true;
     let mut paths = Vec::with_capacity(2);
     for arg in args {
@@ -109,6 +111,8 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
         }
         if options && arg == "--" {
             options = false;
+        } else if options && arg == "--stat" {
+            stat = true;
         } else if options && arg == "--composed" {
             composed = true;
         } else if options && arg == "--json" {
@@ -140,7 +144,9 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
     } else {
         authored_diff(before, after)?
     };
-    if json {
+    if stat {
+        write_stat(&mut output, &diff, composed, json).map_err(output_error)?;
+    } else if json {
         write_json(&mut output, &diff, composed).map_err(output_error)?;
     } else {
         write_text(&mut output, &diff, composed).map_err(output_error)?;
@@ -166,6 +172,37 @@ fn authored_diff(before: &Path, after: &Path) -> Result<LayerDiff, String> {
 
 fn is_help(arg: &std::ffi::OsStr) -> bool {
     arg == "--help" || arg == "-h"
+}
+
+fn write_stat(
+    out: &mut impl Write,
+    diff: &LayerDiff,
+    composed: bool,
+    json: bool,
+) -> io::Result<()> {
+    let (mut added, mut removed, mut changed) = (0_usize, 0_usize, 0_usize);
+    for change in &diff.changes {
+        match change.kind {
+            ChangeKind::Added => added += 1,
+            ChangeKind::Removed => removed += 1,
+            ChangeKind::Changed => changed += 1,
+        }
+    }
+    let paths = diff.changes.chunk_by(|a, b| a.path == b.path).count();
+    let total = diff.changes.len();
+    let mode = if composed { "composed" } else { "authored" };
+    if json {
+        writeln!(
+            out,
+            "{{\"mode\":\"{mode}\",\"equal\":{},\"stat\":{{\"records\":{total},\"paths\":{paths},\"added\":{added},\"removed\":{removed},\"changed\":{changed}}}}}",
+            total == 0
+        )
+    } else {
+        writeln!(
+            out,
+            "{total} {mode} diff records across {paths} paths ({added} added, {removed} removed, {changed} changed)"
+        )
+    }
 }
 
 fn write_text(out: &mut impl Write, diff: &LayerDiff, composed: bool) -> io::Result<()> {

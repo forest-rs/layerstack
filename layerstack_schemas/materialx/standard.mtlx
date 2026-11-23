@@ -235,6 +235,12 @@
     <output name="out" type="float" default="0.0" />
   </nodedef>
 
+  <nodedef name="ND_extract_color4" node="extract" nodegroup="channel">
+    <input name="in" type="color4" value="0.0, 0.0, 0.0, 0.0" />
+    <input name="index" type="integer" value="0" uimin="0" uimax="3" uniform="true" />
+    <output name="out" type="float" default="0.0" />
+  </nodedef>
+
   <nodedef name="ND_extract_vector3" node="extract" nodegroup="channel">
     <input name="in" type="vector3" value="0.0, 0.0, 0.0" />
     <input name="index" type="integer" value="0" uimin="0" uimax="2" uniform="true" />

@@ -10,8 +10,9 @@ use layerstack::{
 use layerstack_schemas::{
     Scene, SchemaEdit,
     materialx::{
-        ExtractVector3, ImageColor3, ImageVector3, MaterialXDefault, MaterialXPort, MultiplyColor3,
-        NormalMap, OpenPbrSurface, Place2dVector2, STANDARD_NODES, TexcoordVector2,
+        ExtractColor4, ExtractVector3, ImageColor3, ImageColor4, ImageVector3, MaterialXDefault,
+        MaterialXPort, MultiplyColor3, NormalMap, OpenPbrSurface, Place2dVector2, STANDARD_NODES,
+        TexcoordVector2,
     },
     shading::{ConnectionModification::Replace, PortKind},
     usd_shade::Material,
@@ -247,6 +248,40 @@ fn rgb_tint_modulates_the_base_color_texture() {
     let tint = MultiplyColor3::get(&scene, tint_path).unwrap();
     assert_eq!(tint.in2(), Some([0.25, 0.5, 1.0]));
     verify_openusd(&store, "tinted");
+}
+
+#[test]
+fn rgba_alpha_drives_surface_opacity() {
+    let (mut store, mut live, _, _, surface) = textured_material(false);
+    let image_path = store.path("/Paint/Rgba");
+    let alpha_path = store.path("/Paint/Alpha");
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LAYER));
+    let image = ImageColor4::define(&mut edit, image_path).unwrap();
+    image.set_file(&mut edit, "cutout.png").unwrap();
+    let rgba = image.create_out_output(&mut edit).unwrap();
+    let alpha = ExtractColor4::define(&mut edit, alpha_path).unwrap();
+    alpha.set_index(&mut edit, 3).unwrap();
+    alpha
+        .create_in_value_input(&mut edit)
+        .unwrap()
+        .connect_to_materialx_source(&mut edit, rgba, STANDARD_NODES, Replace)
+        .unwrap();
+    let opacity = alpha.create_out_output(&mut edit).unwrap();
+    OpenPbrSurface::define(&mut edit, surface)
+        .unwrap()
+        .create_geometry_opacity_input(&mut edit)
+        .unwrap()
+        .connect_to_materialx_source(&mut edit, opacity, STANDARD_NODES, Replace)
+        .unwrap();
+    let transaction = edit.finish();
+    live.apply(&mut store, &transaction).unwrap();
+
+    let scene = Scene::new(live.stage(), &store);
+    assert_eq!(
+        ExtractColor4::get(&scene, alpha_path).unwrap().index(),
+        Some(3)
+    );
+    verify_openusd(&store, "alpha");
 }
 
 #[test]

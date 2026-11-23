@@ -113,6 +113,7 @@ use timing::ReadLog;
 mod apply;
 mod catalog_read;
 pub use apply::ApplyError;
+pub mod diff;
 pub mod format;
 mod layer_ids;
 mod locations;

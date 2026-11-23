@@ -113,3 +113,16 @@ Missing files stay in the report so you can locate the broken opinion.
 Identity metadata is labeled separately. Resolver expressions, clip templates
 and opaque package resources can have `unchecked` status. Exit status 0 means
 the inventory ran, including when it found missing uses.
+
+## Browse scene paths
+
+```sh
+layerstack inspect scene.usda
+layerstack inspect --json scene.usda /World
+layerstack inspect --limit 100 scene.usda /World/Mesh
+```
+
+Start at the root to see its default prim and children, then pass a child path
+to inspect that prim. Each listing includes the total direct children and
+authored properties. Up to 25 of each are shown by default. Use a property
+path with `explain` to query its value or targets.

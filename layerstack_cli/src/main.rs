@@ -5,6 +5,7 @@
 
 mod deps;
 mod explain;
+mod inspect;
 mod material;
 mod query;
 mod stage;
@@ -25,6 +26,7 @@ Usage: layerstack COMMAND [OPTIONS]
   deps     List authored asset uses and the layers that contain them
   diff     Compare two authored layers or composed stages
   explain  Trace a composed property to its source layers
+  inspect  Browse prims and their authored properties
   material Trace the winning material binding and its surface shader
 
 Run 'layerstack COMMAND --help' for arguments and examples.
@@ -66,6 +68,16 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
     }
     if command.as_deref() == Some("explain".as_ref()) {
         return explain::run(args, &mut output).map(|()| false);
+    }
+    if command.as_deref() == Some("inspect".as_ref()) {
+        return query::run(
+            args,
+            &mut output,
+            inspect::HELP,
+            &["--limit"],
+            inspect::query,
+        )
+        .map(|()| false);
     }
     if command.as_deref() == Some("deps".as_ref()) {
         return query::run(args, &mut output, deps::HELP, &[], deps::query).map(|()| false);

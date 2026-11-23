@@ -228,6 +228,7 @@ type KnotData = (f64, Vec<(String, Value)>);
 struct Spec<'a> {
     kind: SpecKind,
     fields: Fields<'a>,
+    properties: &'a [Property],
 }
 
 fn metadata(metadata: &[Metadatum]) -> Fields<'_> {
@@ -277,6 +278,7 @@ fn index(document: &Document) -> BTreeMap<String, Spec<'_>> {
         Spec {
             kind: SpecKind::Layer,
             fields,
+            properties: &[],
         },
     );
 
@@ -330,12 +332,6 @@ fn index(document: &Document) -> BTreeMap<String, Spec<'_>> {
         order(&mut fields, "primOrder", prim.prim_order.as_deref());
         order(&mut fields, "propertyOrder", prim.property_order.as_deref());
         children(&mut fields, &prim.children);
-        for property in &prim.properties {
-            specs.insert(
-                format!("{path}.{}", property.name()),
-                property_spec(property),
-            );
-        }
         let separator = if kind == SpecKind::Variant { "" } else { "/" };
         pending.extend(prim.children.iter().map(|child| {
             (
@@ -350,6 +346,7 @@ fn index(document: &Document) -> BTreeMap<String, Spec<'_>> {
                 Spec {
                     kind: SpecKind::VariantSet,
                     fields: Fields::new(),
+                    properties: &[],
                 },
             );
             pending.extend(set.variants.iter().map(|variant| {
@@ -360,7 +357,14 @@ fn index(document: &Document) -> BTreeMap<String, Spec<'_>> {
                 )
             }));
         }
-        specs.insert(path, Spec { kind, fields });
+        specs.insert(
+            path,
+            Spec {
+                kind,
+                fields,
+                properties: &prim.properties,
+            },
+        );
     }
     specs
 }
@@ -405,6 +409,7 @@ fn property_spec(property: &Property) -> Spec<'_> {
             Spec {
                 kind: SpecKind::Attribute,
                 fields,
+                properties: &[],
             }
         }
         Property::Relationship(relationship) => {
@@ -431,6 +436,7 @@ fn property_spec(property: &Property) -> Spec<'_> {
             Spec {
                 kind: SpecKind::Relationship,
                 fields,
+                properties: &[],
             }
         }
     }
@@ -445,23 +451,88 @@ pub fn diff_documents(before: &Document, after: &Document) -> LayerDiff {
     let before = index(before);
     let after = index(after);
     let mut changes = Vec::new();
-    for_each_key(&before, &after, |path, left, right| match (left, right) {
+    for_each_key(&before, &after, |path, left, right| {
+        compare_spec(&mut changes, path, left, right);
+        let left = property_index(left.map_or(&[], |s| s.properties));
+        let right = property_index(right.map_or(&[], |s| s.properties));
+        for_each_key(&left, &right, |name, a, b| {
+            if let (Some(a), Some(b)) = (a, b)
+                && same_plain_property(a, b)
+            {
+                return;
+            }
+            let a = a.map(|p| property_spec(p));
+            let b = b.map(|p| property_spec(p));
+            compare_spec(
+                &mut changes,
+                &format!("{path}.{name}"),
+                a.as_ref(),
+                b.as_ref(),
+            );
+        });
+    });
+    // A prim's properties are visited together. Restore global path order
+    // (including variant paths) while retaining field and sample order.
+    layerstack::sort::sort_by(&mut changes, |a, b| a.path.cmp(&b.path));
+    LayerDiff { changes }
+}
+
+fn property_index(properties: &[Property]) -> BTreeMap<&str, &Property> {
+    properties.iter().map(|p| (p.name(), p)).collect()
+}
+
+// Ordinary defaults and target lists can establish equality on their typed
+// storage without allocating either property's diagnostic fields. Leave all
+// other opinions to the same detailed comparison that reports changes.
+fn same_plain_property(a: &Property, b: &Property) -> bool {
+    match (a, b) {
+        (Property::Attribute(a), Property::Attribute(b)) => {
+            a.metadata.is_empty()
+                && b.metadata.is_empty()
+                && a.time_samples.is_none()
+                && b.time_samples.is_none()
+                && a.spline.is_none()
+                && b.spline.is_none()
+                && a.custom == b.custom
+                && a.variability == b.variability
+                && a.type_name == b.type_name
+                && a.connections == b.connections
+                && match (&a.value, &b.value) {
+                    (Some(a), Some(b)) => same_value(a, b),
+                    (None, None) => true,
+                    _ => false,
+                }
+        }
+        (Property::Relationship(a), Property::Relationship(b)) => {
+            a.metadata.is_empty() && b.metadata.is_empty() && a == b
+        }
+        _ => false,
+    }
+}
+
+fn compare_spec(
+    changes: &mut Vec<Change>,
+    path: &str,
+    left: Option<&Spec<'_>>,
+    right: Option<&Spec<'_>>,
+) {
+    match (left, right) {
         (Some(left), Some(right)) if left.kind == right.kind => {
             for_each_key(&left.fields, &right.fields, |field, a, b| match (a, b) {
                 (Some(Opinion::TimeSamples(a)), Some(Opinion::TimeSamples(b))) => {
-                    compare_samples(&mut changes, path, field, a, b);
+                    compare_samples(changes, path, field, a, b);
                 }
                 (Some(Opinion::TimeSamples(a)), None) if !a.is_empty() => {
-                    compare_samples(&mut changes, path, field, a, &[]);
+                    compare_samples(changes, path, field, a, &[]);
                 }
                 (None, Some(Opinion::TimeSamples(b))) if !b.is_empty() => {
-                    compare_samples(&mut changes, path, field, &[], b);
+                    compare_samples(changes, path, field, &[], b);
                 }
-                _ => compare_field(&mut changes, path, field, None, a, b),
+                _ => compare_field(changes, path, field, None, a, b),
             });
         }
         _ => changes.push(Change {
-            path: path.clone(),
+            path: path.to_string(),
             field: None,
             time: None,
             kind: kind(left, right),
@@ -469,8 +540,7 @@ pub fn diff_documents(before: &Document, after: &Document) -> LayerDiff {
             after: right.map(|spec| String::from(spec.kind.name())),
             array: None,
         }),
-    });
-    LayerDiff { changes }
+    }
 }
 
 // Visit the union of two ordered maps without allocating another index.

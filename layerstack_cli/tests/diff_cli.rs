@@ -3,7 +3,7 @@
 
 //! The command's process contract for scripts comparing authored layers.
 
-#![cfg(all(feature = "std", not(target_family = "wasm")))]
+#![cfg(not(target_family = "wasm"))]
 
 use std::fs;
 use std::process::{Command, Output};

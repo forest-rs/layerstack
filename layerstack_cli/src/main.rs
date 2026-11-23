@@ -3,9 +3,9 @@
 
 //! Command line tools for USD layers and composed stages.
 
-#[path = "layerstack/explain.rs"]
 mod explain;
-#[path = "layerstack/stage.rs"]
+mod material;
+mod query;
 mod stage;
 
 use layerstack_io::diff::{Change, DiffSide, LayerDiff, diff_layers};
@@ -23,6 +23,7 @@ Usage: layerstack COMMAND [OPTIONS]
 
   diff     Compare two authored layers or composed stages
   explain  Trace a composed property to its source layers
+  material Trace the winning material binding and its surface shader
 
 Run 'layerstack COMMAND --help' for arguments and examples.
 ";
@@ -64,10 +65,18 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
     if command.as_deref() == Some("explain".as_ref()) {
         return explain::run(args, &mut output).map(|()| false);
     }
+    if command.as_deref() == Some("material".as_ref()) {
+        return query::run(
+            args,
+            &mut output,
+            material::HELP,
+            &["--purpose", "--context"],
+            material::query,
+        )
+        .map(|()| false);
+    }
     if command.as_deref() != Some("diff".as_ref()) {
-        return Err(String::from(
-            "expected 'diff' or 'explain'. See 'layerstack --help'",
-        ));
+        return Err(String::from("expected a command. See 'layerstack --help'"));
     }
     let mut json = false;
     let mut composed = false;

@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "layerstack",
+    "layerstack_cli",
     "layerstack_clusters",
     "layerstack_clusters_examples",
     "layerstack_conformance",

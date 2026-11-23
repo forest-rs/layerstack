@@ -15,11 +15,16 @@ use std::{collections::BTreeSet, path::Path};
 
 pub(super) type Document = StageDocument<Filesystem>;
 
+#[derive(Debug)]
 pub(super) struct QueryError(pub(super) &'static str, pub(super) String);
 
 pub(super) fn open(root: &str) -> Result<Document, QueryError> {
+    open_with(root, OpenOptions::default())
+}
+
+pub(super) fn open_with(root: &str, options: OpenOptions) -> Result<Document, QueryError> {
     let fs = Filesystem::new(".", []).map_err(|e| QueryError("open", e.to_string()))?;
-    let doc = StageDocument::open(fs, root, OpenOptions::default())
+    let doc = StageDocument::open(fs, root, options)
         .map_err(|e| QueryError("open", format!("{root}: {e}")))?;
     if let Some(failure) = doc.load_report().asset_failures.first() {
         let anchor = failure

@@ -3,7 +3,7 @@
 
 //! Property explanations through the installed command's interface.
 
-#![cfg(all(feature = "std", not(target_family = "wasm")))]
+#![cfg(not(target_family = "wasm"))]
 
 use std::{
     fs,

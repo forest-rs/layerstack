@@ -2103,6 +2103,207 @@ impl NdExtractColor3Edit {
     }
 }
 
+/// The `ND_extract_color4` shader node.
+#[derive(Clone, Copy, Debug)]
+pub struct NdExtractColor4<'a> {
+    shader: Shader<'a>,
+}
+impl<'a> Deref for NdExtractColor4<'a> {
+    type Target = Shader<'a>;
+    fn deref(&self) -> &Self::Target {
+        &self.shader
+    }
+}
+impl<'a> NdExtractColor4<'a> {
+    /// The shader's definition identifier.
+    pub const ID: &'static str = "ND_extract_color4";
+    /// Reads an identifier-based Shader whose composed `info:id` matches.
+    #[must_use]
+    pub fn get(scene: &Scene<'a>, path: impl layerstack::PrimPathArg) -> Option<Self> {
+        let shader = Shader::get(scene, path)?;
+        let definition = shader.node_def_api();
+        (definition.id() == Some(Self::ID)
+            && definition.effective_implementation_source() == NodeDefApiImplementationSource::Id)
+            .then_some(Self { shader })
+    }
+    /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype; nothing is authored.
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<NdExtractColor4Edit, CannotEdit> {
+        let shader = Shader::define(edit, path)?;
+        shader.node_def_api().set_id(edit, Self::ID);
+        shader
+            .node_def_api()
+            .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
+        Ok(NdExtractColor4Edit { shader })
+    }
+    /// The MaterialX NodeDef interface, independent of authored scene state.
+    pub const DEFINITION: MaterialXNode = MaterialXNode {
+        id: Self::ID,
+        ports: &[
+            MaterialXPort {
+                name: "in",
+                direction: PortKind::Input,
+                type_name: "color4",
+                usd_name: "inputs:in",
+                usd_type_name: "color4f",
+                default: Some(layerstack_schemas::materialx::MaterialXDefault::Literal(
+                    "0.0, 0.0, 0.0, 0.0",
+                )),
+            },
+            MaterialXPort {
+                name: "index",
+                direction: PortKind::Input,
+                type_name: "integer",
+                usd_name: "inputs:index",
+                usd_type_name: "int",
+                default: Some(layerstack_schemas::materialx::MaterialXDefault::Literal(
+                    "0",
+                )),
+            },
+            MaterialXPort {
+                name: "out",
+                direction: PortKind::Output,
+                type_name: "float",
+                usd_name: "outputs:out",
+                usd_type_name: "float",
+                default: Some(layerstack_schemas::materialx::MaterialXDefault::Literal(
+                    "0.0",
+                )),
+            },
+        ],
+    };
+    #[doc = "The authored `inputs:in` port, if it exists. "]
+    #[must_use]
+    pub fn in_value_input(&self) -> Option<Port<'a>> {
+        self.shader.input("in")
+    }
+    #[doc = "The composed `inputs:in`, without node defaults or connection evaluation. "]
+    #[must_use]
+    pub fn in_value(&self) -> Option<[f32; 4]> {
+        self.read_value("inputs:in", layerstack_schemas::value::read_float4)
+    }
+    /// The composed `inputs:in` at `time`.
+    #[must_use]
+    pub fn in_value_at(&self, time: layerstack::Time) -> Option<[f32; 4]> {
+        self.read_value_at("inputs:in", time, layerstack_schemas::value::read_float4)
+    }
+    /// The `inputs:in` default in the node definition, separate from authored values.
+    #[must_use]
+    pub fn in_value_default() -> [f32; 4] {
+        [0.0, 0.0, 0.0, 0.0]
+    }
+    #[doc = "The authored `inputs:index` port, if it exists. "]
+    #[must_use]
+    pub fn index_input(&self) -> Option<Port<'a>> {
+        self.shader.input("index")
+    }
+    #[doc = "The composed `inputs:index`, without node defaults or connection evaluation. "]
+    #[must_use]
+    pub fn index(&self) -> Option<i32> {
+        self.read_value("inputs:index", layerstack_schemas::value::read_int)
+    }
+    /// The composed `inputs:index` at `time`.
+    #[must_use]
+    pub fn index_at(&self, time: layerstack::Time) -> Option<i32> {
+        self.read_value_at("inputs:index", time, layerstack_schemas::value::read_int)
+    }
+    /// The `inputs:index` default in the node definition, separate from authored values.
+    #[must_use]
+    pub fn index_default() -> i32 {
+        0_i32
+    }
+    #[doc = "The authored `outputs:out` port, if it exists. "]
+    #[must_use]
+    pub fn out_output(&self) -> Option<Port<'a>> {
+        self.shader.output("out")
+    }
+}
+
+/// Authors `ND_extract_color4` inputs and typed ports through an explicit edit target.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct NdExtractColor4Edit {
+    shader: ShaderEdit,
+}
+impl Deref for NdExtractColor4Edit {
+    type Target = ShaderEdit;
+    fn deref(&self) -> &Self::Target {
+        &self.shader
+    }
+}
+impl NdExtractColor4Edit {
+    /// A handle authoring this node's inputs on the shader `shader` authors, whatever its `info:id`.
+    #[must_use]
+    pub fn from_shader(shader: ShaderEdit) -> Self {
+        Self { shader }
+    }
+    /// Creates `inputs:in` with its node-defined USD type for values or connections.
+    /// Rejects existing ports of a different type before appending edits.
+    pub fn create_in_value_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
+        let ty = PropertyType::parse("color4f").expect("a registered value type");
+        self.shader.create_input(edit, "in", ty)
+    }
+    /// Authors `inputs:in` at default time, creating the typed input if needed.
+    pub fn set_in_value(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: [f32; 4],
+    ) -> Result<&Self, PortError> {
+        let port = self.create_in_value_input(edit)?;
+        let value = (layerstack_schemas::value::write_float4)(value, edit.tokens());
+        port.set(edit, value)?;
+        Ok(self)
+    }
+    /// Authors a `inputs:in` sample in stage time through the edit target.
+    pub fn set_in_value_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: [f32; 4],
+    ) -> Result<&Self, PortError> {
+        let port = self.create_in_value_input(edit)?;
+        let value = (layerstack_schemas::value::write_float4)(value, edit.tokens());
+        port.set_at(edit, time, value)?;
+        Ok(self)
+    }
+    /// Creates `inputs:index` with its node-defined USD type for values or connections.
+    /// Rejects existing ports of a different type before appending edits.
+    pub fn create_index_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
+        let ty = PropertyType::parse("int").expect("a registered value type");
+        self.shader.create_input(edit, "index", ty)
+    }
+    /// Authors `inputs:index` at default time, creating the typed input if needed.
+    pub fn set_index(&self, edit: &mut SchemaEdit<'_>, value: i32) -> Result<&Self, PortError> {
+        let port = self.create_index_input(edit)?;
+        let value = (layerstack_schemas::value::write_int)(value, edit.tokens());
+        port.set(edit, value)?;
+        Ok(self)
+    }
+    /// Authors a `inputs:index` sample in stage time through the edit target.
+    pub fn set_index_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: i32,
+    ) -> Result<&Self, PortError> {
+        let port = self.create_index_input(edit)?;
+        let value = (layerstack_schemas::value::write_int)(value, edit.tokens());
+        port.set_at(edit, time, value)?;
+        Ok(self)
+    }
+    /// Creates `outputs:out` with its node-defined USD type for values or connections.
+    /// Rejects existing ports of a different type before appending edits.
+    pub fn create_out_output(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
+        let ty = PropertyType::parse("float").expect("a registered value type");
+        self.shader.create_output(edit, "out", ty)
+    }
+}
+
 /// The `ND_extract_vector3` shader node.
 #[derive(Clone, Copy, Debug)]
 pub struct NdExtractVector3<'a> {
@@ -18009,6 +18210,7 @@ pub const NODE_DEFINITIONS: &[MaterialXNode] = &[
     NdColorcorrectColor3::DEFINITION,
     NdCombine3Color3::DEFINITION,
     NdExtractColor3::DEFINITION,
+    NdExtractColor4::DEFINITION,
     NdExtractVector3::DEFINITION,
     NdGltfPbrSurfaceshader::DEFINITION,
     NdImageColor3::DEFINITION,

@@ -102,6 +102,7 @@ pub use standard::{
     NdColorcorrectColor3 as ColorCorrectColor3, NdColorcorrectColor3Edit as ColorCorrectColor3Edit,
     NdCombine3Color3 as Combine3Color3, NdCombine3Color3Edit as Combine3Color3Edit,
     NdExtractColor3 as ExtractColor3, NdExtractColor3Edit as ExtractColor3Edit,
+    NdExtractColor4 as ExtractColor4, NdExtractColor4Edit as ExtractColor4Edit,
     NdExtractVector3 as ExtractVector3, NdExtractVector3Edit as ExtractVector3Edit,
     NdGltfPbrSurfaceshader as GltfPbr, NdGltfPbrSurfaceshaderEdit as GltfPbrEdit,
     NdImageColor3 as ImageColor3, NdImageColor3Edit as ImageColor3Edit,

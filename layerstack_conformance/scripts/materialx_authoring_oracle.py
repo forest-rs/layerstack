@@ -65,6 +65,14 @@ def verify(path, graph):
     assert (name, kind) == ("surface", UsdShade.AttributeType.Output), path
 
     assert not albedo.GetInput("filtertype"), path
+    if graph == "alpha":
+        rgba = shader(stage, "Rgba", "ND_image_color4")
+        alpha = shader(stage, "Alpha", "ND_extract_color4")
+        verify_file(rgba, "cutout.png", path)
+        index = alpha.GetInput("index")
+        assert index.GetTypeName() == types.Int and index.Get() == 3, path
+        verify_edge(alpha.GetInput("in"), rgba.GetOutput("out"), types.Color4f, path)
+        verify_edge(surface.GetInput("geometry_opacity"), alpha.GetOutput("out"), types.Float, path)
     if graph != "packed":
         assert not albedo.GetInput("texcoord"), path
         assert not surface.GetInput("specular_roughness"), path
@@ -103,6 +111,6 @@ def verify(path, graph):
 
 
 graph, *files = sys.argv[1:]
-assert graph in ("sparse", "tinted", "packed")
+assert graph in ("sparse", "tinted", "alpha", "packed")
 for file_path in files:
     verify(file_path, graph)

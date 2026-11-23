@@ -173,6 +173,27 @@ fn add(a: u64, b: u64) -> Result<u64, UsdzError> {
     a.checked_add(b).ok_or(UsdzError::UnexpectedEof)
 }
 
+/// AOUSD Core §9.7, §16.4. The first physical member can itself be a
+/// package. Only directory entries are needed to find the search anchor.
+fn extend_to_default<E>(
+    packages: &mut Vec<String>,
+    mut first: impl FnMut(&[String]) -> Result<Option<Arc<str>>, E>,
+) -> Result<bool, E> {
+    while let Some(member) = first(packages)? {
+        packages.push(String::from(member.as_ref()));
+        if !member.ends_with(".usdz") {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn member_path(packages: &[String]) -> String {
+    packages
+        .split_first()
+        .map_or_else(String::new, |(first, rest)| PackagePath::join(first, rest))
+}
+
 impl<S: RangeSource> RangePackage<S> {
     /// Reads the outer central directory under explicit limits. Member payloads
     /// and local headers are untouched until selection. Source content must remain
@@ -203,7 +224,7 @@ impl<S: RangeSource> RangePackage<S> {
     pub fn stats(&self) -> RangeStats {
         self.stats
     }
-    /// Default outer layer, selected by the first physical member's local-header
+    /// Default outer member (a layer or package), selected by its local-header
     /// offset. A later layer never substitutes for a non-layer first member.
     #[must_use]
     pub fn root_member(&self) -> Option<&str> {
@@ -231,23 +252,37 @@ impl<S: RangeSource> RangePackage<S> {
         self.select(path, true)
     }
     /// The containing archive's default-layer path after directories for `member`
-    /// have been opened. This inspection performs no additional source reads.
+    /// and its default layer have been opened. This inspection performs no source reads.
     #[must_use]
     pub fn containing_root(&self, member: &str) -> Option<String> {
-        let parsed = PackagePath::parse(member, 32).ok()?;
-        let mut names = alloc::vec![parsed.outer().to_string()];
-        names.extend_from_slice(parsed.members());
-        let prefix = if names.len() == 1 {
-            String::new()
-        } else {
-            PackagePath::join(&names[0], &names[1..names.len() - 1])
+        let mut names = crate::access::containers(member)?;
+        let found = extend_to_default(&mut names, |packages| {
+            Ok::<_, core::convert::Infallible>(
+                self.indexes
+                    .get(&member_path(packages))
+                    .and_then(|index| index.root.clone()),
+            )
+        })
+        .expect("cached lookup is infallible");
+        found.then(|| member_path(&names))
+    }
+
+    fn extend_to_default(&mut self, names: &mut Vec<String>) -> Result<bool, RangeError<S::Error>> {
+        extend_to_default(names, |packages| {
+            Ok(self.open_index(packages)?.root.clone())
+        })
+    }
+
+    pub(crate) fn search_root(
+        &mut self,
+        member: &str,
+    ) -> Result<Option<String>, RangeError<S::Error>> {
+        let Some(mut names) = crate::access::containers(member) else {
+            return Ok(None);
         };
-        let root = self.indexes.get(&prefix)?.root.as_deref()?;
-        if prefix.is_empty() {
-            Some(root.into())
-        } else {
-            Some(alloc::format!("{prefix}[{root}]"))
-        }
+        Ok(self
+            .extend_to_default(&mut names)?
+            .then(|| member_path(&names)))
     }
     fn read(&mut self, start: u64, size: u64) -> Result<EncodedBytes, RangeError<S::Error>> {
         let end = add(start, size)?;
@@ -361,7 +396,7 @@ impl<S: RangeSource> RangePackage<S> {
         }
         let root = order
             .first()
-            .filter(|(_, name)| crate::is_usd_extension(name))
+            .filter(|(_, name)| crate::is_root_member(name))
             .map(|(_, name)| name.clone());
         self.stats.index_parses += 1;
         self.stats.entries += count;
@@ -409,27 +444,19 @@ impl<S: RangeSource> RangePackage<S> {
         self.headers.insert(key.into(), absolute);
         Ok(absolute)
     }
-    fn nested(
-        &mut self,
-        prefix: &str,
-        name: &str,
-        depth: usize,
-    ) -> Result<String, RangeError<S::Error>> {
-        let key = if prefix.is_empty() {
-            name.into()
-        } else {
-            alloc::format!("{prefix}[{name}]")
-        };
-        if self.indexes.contains_key(&key) {
-            return Ok(key);
+    fn open_index(&mut self, packages: &[String]) -> Result<Arc<Index>, RangeError<S::Error>> {
+        let key = member_path(packages);
+        if let Some(index) = self.indexes.get(&key) {
+            return Ok(index.clone());
         }
-        if depth > self.limits.depth {
+        if packages.len() > self.limits.depth {
             return Err(constraint("package nesting exceeds depth budget").into());
         }
-        let index = self.indexes[prefix].clone();
+        let (name, parents) = packages.split_last().expect("outer index is always open");
+        let index = self.open_index(parents)?;
         let record = index
             .records
-            .get(name)
+            .get(name.as_str())
             .ok_or_else(|| UsdzError::MissingMember {
                 member: Arc::from(key.as_str()),
             })?;
@@ -437,33 +464,20 @@ impl<S: RangeSource> RangePackage<S> {
             return Err(constraint("nested package selection requires a .usdz member").into());
         }
         let offset = self.header(&key, &index, record)?;
-        let nested = self.index(offset, record.size)?;
-        self.indexes.insert(key.clone(), Arc::new(nested));
-        Ok(key)
+        let nested = Arc::new(self.index(offset, record.size)?);
+        self.indexes.insert(key, nested.clone());
+        Ok(nested)
     }
     fn select(&mut self, path: &str, layer: bool) -> Result<PackageMember, RangeError<S::Error>> {
         let parsed = PackagePath::parse(path, 32).map_err(constraint)?;
         let mut names = alloc::vec![parsed.outer().to_string()];
         names.extend_from_slice(parsed.members());
-        let mut prefix = String::new();
-        for (depth, name) in names[..names.len() - 1].iter().enumerate() {
-            prefix = self.nested(&prefix, name, depth + 1)?;
+        if layer && parsed.leaf().ends_with(".usdz") && !self.extend_to_default(&mut names)? {
+            return Err(UsdzError::NoRootLayer.into());
         }
-        let mut name = names.last().expect("nonempty member path").clone();
-        if layer && name.ends_with(".usdz") {
-            prefix = self.nested(&prefix, &name, names.len())?;
-            name = self.indexes[&prefix]
-                .root
-                .as_deref()
-                .ok_or(UsdzError::NoRootLayer)?
-                .into();
-        }
-        let key = if prefix.is_empty() {
-            name.clone()
-        } else {
-            alloc::format!("{prefix}[{name}]")
-        };
-        let index = self.indexes[&prefix].clone();
+        let key = member_path(&names);
+        let (name, packages) = names.split_last().expect("nonempty member path");
+        let index = self.open_index(packages)?;
         let record = index
             .records
             .get(name.as_str())

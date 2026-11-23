@@ -156,6 +156,42 @@ fn nested_selection_translates_ranges_without_verifying_enclosing_payload() {
     assert_eq!(reader.stats().read_attempts, 2);
 }
 #[test]
+fn nested_search_root_reads_only_directories_within_the_depth_budget() {
+    let bytes = include_bytes!("../tests/fixtures/nested-root.usdz");
+    let source = Recorded::new(bytes.to_vec());
+    let mut reader = RangePackage::open(&source, RangeLimits::default()).unwrap();
+    assert_eq!(reader.containing_root("views/model.usda"), None);
+    let root = reader.search_root("views/model.usda").unwrap();
+    assert_eq!(
+        root.as_deref(),
+        Some("middle.usdz[inner.usdz[scene/root.usda]]")
+    );
+    assert_eq!(reader.stats().index_parses, 3);
+    assert_eq!(reader.stats().verification_bytes, 0);
+    let work = reader.stats();
+    assert_eq!(reader.containing_root("views/model.usda"), root);
+    assert_eq!(reader.search_root("views/model.usda").unwrap(), root);
+    assert_eq!(reader.stats(), work);
+
+    let mut limited = RangePackage::open(
+        &source,
+        RangeLimits {
+            depth: 1,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert!(matches!(
+        limited.search_root("views/model.usda"),
+        Err(RangeError::Format(UsdzError::ConstraintViolation {
+            reason: "package nesting exceeds depth budget"
+        }))
+    ));
+    assert_eq!(limited.stats().index_parses, 2);
+    assert_eq!(limited.stats().verification_bytes, 0);
+}
+
+#[test]
 fn budgets_reject_before_directory_or_payload_reads() {
     let source = Recorded::new(package());
     for limits in [

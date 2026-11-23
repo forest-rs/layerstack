@@ -8,7 +8,7 @@
 //! implements packaged resource resolution per AOUSD Core §9.7.
 
 use alloc::collections::BTreeMap;
-use alloc::string::{String, ToString};
+use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
@@ -303,11 +303,16 @@ impl<P: PackageAccess> AssetResolver for UsdzResolver<'_, P> {
             });
             return Err(AssetResolveError::NotFound);
         }
-        let root_member = self
-            .archive
-            .containing_root(&authoring)
-            .unwrap_or_else(|| self.member_paths[&self.root].to_string());
-        if let Some(member) = member_path(&path, &root_member)
+        let root = match self.archive.search_root(&authoring) {
+            Ok(root) => root,
+            Err(error) => {
+                let message = Arc::from(alloc::format!("{error}"));
+                self.failure.get_or_insert(error);
+                return Err(AssetResolveError::LoadError(message));
+            }
+        };
+        let root = root.as_deref().unwrap_or(&self.member_paths[&self.root]);
+        if let Some(member) = member_path(&path, root)
             && let Some(resolved) = self.load_member(&member, tokens, paths)
         {
             return resolved;
@@ -561,7 +566,7 @@ mod tests {
     use alloc::vec;
 
     use super::*;
-    use crate::{PackageFile, UsdzResult, read_usdz, write_usdz};
+    use crate::{PackageFile, UsdzResult, write_usdz};
 
     /// An outer resolver that finds the empty layers named in `files`, and
     /// records what it was asked. It hands out the IDs from `next_id` on,
@@ -645,15 +650,23 @@ mod tests {
             .map(|(path, text)| PackageFile::new(path, text.as_bytes()))
             .collect();
         let package = write_usdz(&files).expect("package");
+        try_read_selected(&package, None, outside)
+    }
+
+    fn try_read_selected(
+        package: &[u8],
+        selected: Option<&str>,
+        outside: &mut Outside,
+    ) -> Result<UsdzResult, UsdzError> {
         let mut range_outside = outside.clone();
         let mut ranges = crate::range::RangePackage::open(
-            EncodedBytes::from(package.clone()),
+            EncodedBytes::from(package.to_vec()),
             crate::range::RangeLimits::default(),
         )
         .unwrap();
         let ranged = crate::read_usdz_ranges(
             &mut ranges,
-            None,
+            selected,
             LayerId(1),
             &TokenInterner::default(),
             &PathInterner::default(),
@@ -661,12 +674,19 @@ mod tests {
             &[],
             crate::UsdcReadOptions::default(),
         );
-        let complete = read_usdz(
-            &package,
+        let archive = crate::snapshot::PackageSnapshot::new(
+            package.to_vec().into(),
+            crate::snapshot::PackageLimits::default(),
+        )?;
+        let complete = crate::read_usdz_snapshot(
+            &archive,
+            selected,
             LayerId(1),
             &TokenInterner::default(),
             &PathInterner::default(),
             outside,
+            &[],
+            crate::UsdcReadOptions::default(),
         );
         match (&complete, &ranged) {
             (Ok(a), Ok(b)) => {
@@ -885,6 +905,34 @@ mod tests {
         ]);
         assert_eq!(returned(&result), ["root.usda", "models/parent.usda"]);
         assert!(outside.asked.is_empty(), "{:?}", outside.asked);
+    }
+
+    #[test]
+    fn a_search_path_finds_the_nested_default_layers_directory() {
+        // The first physical entries lead through two archives to scene/root.usda.
+        // views/model.usda references x.usda and local.usda. Both exist beside
+        // the default layer, but local.usda also exists beside the authoring layer.
+        let package = include_bytes!("../tests/fixtures/nested-root.usdz");
+        let mut outside = Outside::new(&[]);
+        let root = try_read_selected(package, None, &mut outside).unwrap();
+        assert_eq!(
+            returned(&root),
+            ["middle.usdz[inner.usdz[scene/root.usda]]"]
+        );
+        for files in [&[][..], &["x.usda", "local.usda"][..]] {
+            let mut outside = Outside::new(files);
+            let selected =
+                try_read_selected(package, Some("views/model.usda"), &mut outside).unwrap();
+            assert_eq!(
+                returned(&selected),
+                [
+                    "views/model.usda",
+                    "middle.usdz[inner.usdz[scene/x.usda]]",
+                    "views/local.usda",
+                ]
+            );
+            assert!(outside.asked.is_empty(), "{:?}", outside.asked);
+        }
     }
 
     #[test]

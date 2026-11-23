@@ -121,7 +121,7 @@ impl PackageSnapshot {
             // physical local headers. Central-directory ordering is independent.
             // AOUSD Core §16.4: first file is the root layer.
             .min_by_key(|entry| entry.data_offset)
-            .filter(|e| crate::is_usd_extension(&e.name))
+            .filter(|e| crate::is_root_member(&e.name))
             .map(|e| e.name.clone());
         let mut entries = BTreeMap::new();
         let mut nested = BTreeMap::new();
@@ -179,7 +179,7 @@ impl PackageSnapshot {
     pub fn stats(&self) -> PackageStats {
         self.stats
     }
-    /// First physical entry when it is a native USD layer. Later layers never become a default.
+    /// First physical entry when it is a USD layer or nested package.
     pub fn root_member(&self) -> Option<&str> {
         self.root.as_deref()
     }
@@ -207,7 +207,7 @@ impl PackageSnapshot {
                     })?;
         }
         let mut name = names.last().expect("nonempty path").clone();
-        if layer && let Some(inner) = archive.nested.get(name.as_str()) {
+        while layer && let Some(inner) = archive.nested.get(name.as_str()) {
             name = inner
                 .root_member()
                 .ok_or(UsdzError::NoRootLayer)?
@@ -231,15 +231,19 @@ impl PackageSnapshot {
     }
     /// Default layer in the same containing package as this physical member.
     pub fn containing_root(&self, member: &str) -> Option<String> {
-        let path = PackagePath::parse(member, 32).ok()?;
+        let mut names = crate::access::containers(member)?;
         let mut archive = self;
-        let mut names = alloc::vec![path.outer().to_string()];
-        names.extend_from_slice(path.members());
-        for name in &names[..names.len() - 1] {
+        for name in &names {
             archive = archive.nested.get(name.as_str())?;
         }
-        *names.last_mut()? = archive.root_member()?.to_string();
-        Some(PackagePath::join(&names[0], &names[1..]))
+        loop {
+            let root = archive.root_member()?;
+            names.push(root.to_string());
+            match archive.nested.get(root) {
+                Some(inner) => archive = inner,
+                None => return Some(PackagePath::join(&names[0], &names[1..])),
+            }
+        }
     }
 }
 

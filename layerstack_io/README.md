@@ -150,6 +150,37 @@ package opens, index hits, copied encoded bytes and resident archive ownership.
 Run `cargo run -p layerstack_examples --bin prepared_reload` for a complete
 reject/accept workflow with checked geometry, host budgets and packaged textures.
 
+## Compare authored layers
+
+Install the command from a workspace checkout and compare two files.
+
+```sh
+cargo install --path layerstack_io --bin layerstack
+layerstack diff before.usda after.usdc
+layerstack diff --json before.usdc after.usdc
+```
+
+The command compares each layer's own opinions, including variant branches,
+relationship target edits, connections and authored time samples. A sublayer
+or reference is compared by its authored asset path. Changing the contents of that external file alone
+leaves the referring layer equal.
+
+For example, editing two point positions in a mesh produces one line.
+
+```text
+changed /Mesh.points default: 2 of 8192 elements changed at indices [17, 804]
+```
+
+Exit status is `0` for equal authored content, `1` for differences, or `2`
+when the comparison could not be completed.
+
+JSON output contains an `equal` boolean and a `changes` array. Each change
+identifies its spec path, change kind and field (or a whole spec). Array edits
+include the before and after lengths, the total count of differing positions and
+the first eight differing indices. Rust callers can compare two byte slices
+through `layerstack_io::diff::diff_layers`. Values in the report are bounded
+previews. The comparison uses the full values.
+
 ## UDIM texture tiles
 
 `resolve_udim_tiles(pattern, authoring_layer, &mut discovery)` lists the

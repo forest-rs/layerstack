@@ -29,6 +29,11 @@ For filesystem or custom-transport loading and saving, start with
 [layerstack_io](layerstack_io/README.md). Format crates also work directly on
 caller-owned bytes. Applications own rendering and execution policy.
 
+To compare the opinions authored in two layers, run
+`cargo run -p layerstack_io --bin layerstack -- diff before.usda after.usdc`.
+The [diff command](layerstack_io/README.md#compare-authored-layers) accepts
+text and binary USD and can emit JSON for CI.
+
 All library crates require Rust **1.89** or later and use `alloc`.
 `layerstack_stagehand` (and its WebAssembly module) is not published yet: its
 triangulation and curve dependencies are Git dependencies. See each crate's

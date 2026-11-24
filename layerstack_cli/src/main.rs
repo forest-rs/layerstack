@@ -92,7 +92,7 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<u8, String> {
             args,
             &mut output,
             check::HELP,
-            &[],
+            &["--time"],
             check::query,
             check::status,
         );

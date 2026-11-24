@@ -162,33 +162,9 @@ fn query(root: &str, path: &str, frame: Option<f64>) -> Result<Vec<Section>, Que
         ));
     }
     let time = frame.map_or(Time::Default, Time::at);
-    if let Some(frame) = frame {
-        let prepared = doc.prepare_clip_query(prop, time, usize::MAX, usize::MAX);
-        if let Some(failure) = prepared.failures.first() {
-            return Err(incomplete(format!(
-                "{}: {}",
-                failure.request.identifier, failure.error
-            )));
-        }
-        if let Some(error) = prepared.plan.error {
-            return Err(incomplete(format!("{path}: {error}")));
-        }
-        if let Some(request) = prepared.plan.demands.iter().map(|d| &d.request).find(|r| {
-            matches!(
-                r.status,
-                layerstack::value_clips::ClipAssetStatus::Unavailable(_)
-            ) && r.role != layerstack::value_clips::ClipAssetRole::TemplateCandidate
-        }) {
-            return Err(incomplete(format!(
-                "{path}: unavailable clip source {}",
-                request.identifier
-            )));
-        }
-        if !prepared.plan.is_complete() {
-            return Err(incomplete(format!(
-                "could not resolve clip sources for {path} at {frame}"
-            )));
-        }
+    if frame.is_some() {
+        stage::prepare_clip_value(&mut doc, prop, time)
+            .map_err(|e| incomplete(format!("{path}: {e}")))?;
     }
     let attr = doc
         .view()

@@ -8,22 +8,26 @@ use super::{
 };
 use std::collections::BTreeSet;
 
-use layerstack::{CompositionError, LayerId, OpinionRole, PropertyPath, SpecPath, Time};
+use layerstack::{
+    CompositionError, LayerId, OpinionRole, Path, PathId, PropertyPath, SpecPath, Time,
+};
 use layerstack_schemas::{
     Scene,
     subset::MeshTopologyError,
+    usd_geom::Mesh,
     validation::{
         BuiltinRule, ValidationContext, ValidationProblem, ValidationProblemKind, ValidationScope,
     },
 };
 
 pub(super) const HELP: &str = "\
-Usage: layerstack check [--json] STAGE
+Usage: layerstack check [--json] [--time N]... STAGE
 
 Check authored asset uses, composition errors and composed mesh topology.
 Asset discovery visits all variant branches in the layers it can load.
-Mesh checks use active composition and USD default time only. Numeric time
-samples, interpolation and clip evaluation are outside mesh coverage.
+With no --time, mesh checks use active composition at USD default time.
+Repeat --time to check only the given finite stage time codes, with standard
+USD interpolation. Unavailable clip inputs make the affected mesh and time incomplete.
 Asset contents such as texture pixels are outside the check's scope.
 
 Exit status: 0 no errors (unchecked uses may remain), 1 errors found,
@@ -37,15 +41,8 @@ pub(super) fn query(args: Arguments) -> Result<Vec<Record>, QueryError> {
             "expected STAGE. See 'check --help'".into(),
         ));
     };
-    let doc = deps::open(root, stage::schema_options())?;
-    let store = doc.store();
-    let scene = Scene::new(doc.stage().stage(), store);
-    let checks =
-        ValidationContext::new([BuiltinRule::CompositionErrors, BuiltinRule::MeshTopology]);
-    let validation = checks
-        .validate(&scene, ValidationScope::Stage, &[Time::Default])
-        .map_err(|e| QueryError("validation", e.to_string()))?;
-
+    let times = requested_times(&args)?;
+    let mut doc = deps::open(root, stage::schema_options())?;
     let mut records = deps::inventory(&doc, root, deps::Inventory::Findings)?;
     let reported: BTreeSet<_> = records
         .iter()
@@ -97,23 +94,56 @@ pub(super) fn query(args: Arguments) -> Result<Vec<Record>, QueryError> {
             });
         }
     }
+    let (complete, partial) = prepare_mesh_times(&mut doc, &times, &mut records);
+    let scene = Scene::new(doc.stage().stage(), doc.store());
+    let mut rules = vec![BuiltinRule::CompositionErrors];
+    if !complete.is_empty() {
+        rules.push(BuiltinRule::MeshTopology);
+    }
+    let checks = ValidationContext::new(rules);
+    let validation = checks
+        .validate(
+            &scene,
+            ValidationScope::Stage,
+            if complete.is_empty() {
+                &times
+            } else {
+                &complete
+            },
+        )
+        .map_err(|e| QueryError("validation", e.to_string()))?;
     records.extend(
         validation
             .problems
             .iter()
             .filter_map(|problem| finding(&doc, problem)),
     );
+    let mut evaluations = validation.work.mesh_time_evaluations;
+    let mesh_check = ValidationContext::new([BuiltinRule::MeshTopology]);
+    for (prim, time) in partial {
+        let report = mesh_check
+            .validate(&scene, ValidationScope::Prim(prim), &[time])
+            .map_err(|e| QueryError("validation", e.to_string()))?;
+        evaluations += report.work.mesh_time_evaluations;
+        records.extend(
+            report
+                .problems
+                .iter()
+                .filter_map(|problem| finding(&doc, problem)),
+        );
+    }
     records.sort_unstable_by(|a, b| a.kind.cmp(b.kind).then(a.fields.cmp(&b.fields)));
     records.dedup_by(|a, b| a.kind == b.kind && a.fields == b.fields);
-    let summary = Record {
+    let mut summary = Record {
         kind: "check",
         fields: vec![
             ("stage", root.clone()),
-            ("meshTime", "default".into()),
-            (
-                "meshEvaluations",
-                validation.work.mesh_time_evaluations.to_string(),
-            ),
+            if times == [Time::Default] {
+                ("meshTime", "default".into())
+            } else {
+                ("meshTimes", time_list(&times))
+            },
+            ("meshEvaluations", evaluations.to_string()),
             (
                 "errors",
                 count(&records, |s| matches!(s, "missing" | "error")).to_string(),
@@ -125,8 +155,116 @@ pub(super) fn query(args: Arguments) -> Result<Vec<Record>, QueryError> {
             ),
         ],
     };
+    if complete.len() != times.len() {
+        summary
+            .fields
+            .push(("meshFullyEvaluatedTimes", time_list(&complete)));
+    }
     records.insert(0, summary);
     Ok(records)
+}
+
+fn requested_times(args: &Arguments) -> Result<Vec<Time>, QueryError> {
+    if args.options.is_empty() {
+        return Ok(vec![Time::Default]);
+    }
+    let mut codes = Vec::new();
+    for (_, value) in &args.options {
+        let code = value
+            .parse::<f64>()
+            .ok()
+            .filter(|code| code.is_finite())
+            .ok_or_else(|| {
+                QueryError("invalid_time", "--time expects a finite stage time".into())
+            })?;
+        codes.push(if code == 0.0 { 0.0 } else { code });
+    }
+    codes.sort_unstable_by(f64::total_cmp);
+    codes.dedup();
+    Ok(codes.into_iter().map(Time::at).collect())
+}
+
+fn time_label(time: Time) -> String {
+    match time {
+        Time::Default => "default".into(),
+        Time::At { code, .. } => code.to_string(),
+    }
+}
+
+fn time_list(times: &[Time]) -> String {
+    times
+        .iter()
+        .copied()
+        .map(time_label)
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn prepare_mesh_times(
+    doc: &mut Document,
+    times: &[Time],
+    records: &mut Vec<Record>,
+) -> (Vec<Time>, Vec<(PathId, Time)>) {
+    if times == [Time::Default] {
+        return (times.to_vec(), Vec::new());
+    }
+    let meshes = mesh_properties(doc);
+    let mut complete = Vec::new();
+    let mut partial = Vec::new();
+    let mut ready = Vec::new();
+    for &time in times {
+        ready.clear();
+        for (prim, properties) in &meshes {
+            let mut failed = false;
+            for &property in properties {
+                if let Err(message) = stage::prepare_clip_value(doc, property, time) {
+                    failed = true;
+                    let store = doc.store();
+                    records.push(Record {
+                        kind: "meshTopology",
+                        fields: vec![
+                            ("path", store.paths().display(*prim, store.tokens())),
+                            ("status", "failed".into()),
+                            ("time", time_label(time)),
+                            ("code", "clipResolution".into()),
+                            ("property", property.display(store.paths(), store.tokens())),
+                            ("message", message),
+                        ],
+                    });
+                }
+            }
+            if !failed {
+                ready.push((*prim, time));
+            }
+        }
+        if ready.len() == meshes.len() {
+            complete.push(time);
+        } else {
+            partial.extend_from_slice(&ready);
+        }
+    }
+    (complete, partial)
+}
+
+fn mesh_properties(doc: &Document) -> Vec<(PathId, Vec<PropertyPath>)> {
+    let store = doc.store();
+    let scene = Scene::new(doc.stage().stage(), store);
+    let Some(root) = store.paths().lookup(&Path::root()) else {
+        return Vec::new();
+    };
+    scene
+        .stage()
+        .traverse(root)
+        .filter_map(|prim| {
+            let mesh = Mesh::get(&scene, prim)?;
+            let properties = [COUNTS, INDICES, POINTS]
+                .into_iter()
+                .filter_map(|input| mesh.property_path(input.name))
+                .filter(|&property| doc.view().attribute(property).is_some())
+                .collect();
+            Some((prim, properties))
+        })
+        .collect()
 }
 
 fn count(records: &[Record], include: impl Fn(&str) -> bool) -> usize {
@@ -202,7 +340,8 @@ fn finding(doc: &Document, problem: &ValidationProblem) -> Option<Record> {
                 }
                 .into(),
             ));
-            fields.push(("time", "default".into()));
+            let time = problem.time?;
+            fields.push(("time", time_label(time)));
             let (code, inputs): (_, &[&Input]) = match error {
                 MeshTopologyError::InvalidFaceCounts => ("invalidFaceCounts", &[&COUNTS]),
                 MeshTopologyError::SizeMismatch => ("faceCountMismatch", &[&COUNTS, &INDICES]),
@@ -219,15 +358,33 @@ fn finding(doc: &Document, problem: &ValidationProblem) -> Option<Record> {
             fields.push(("code", code.into()));
             if let Some(prim) = problem.site.prim.and_then(|p| doc.view().prim(p)) {
                 for input in inputs {
-                    if let Some(opinion) = prim
-                        .attribute(input.name)
-                        .and_then(|attribute| attribute.explain(Time::Default))
-                        .and_then(|why| {
-                            why.opinions.into_iter().find(|op| {
-                                matches!(op.role, OpinionRole::Contributed(_) | OpinionRole::Block)
-                            })
-                        })
-                    {
+                    let Some(why) = prim.attribute(input.name).and_then(|a| a.explain(time)) else {
+                        continue;
+                    };
+                    if let Some(clip) = why.clip {
+                        if let Some(layer) = clip.lower.layer {
+                            add_source(
+                                doc,
+                                &mut fields,
+                                layer,
+                                Some(&clip.lower.spec_path),
+                                input.source_fields,
+                            );
+                        }
+                        if clip.lower != clip.upper
+                            && let Some(layer) = clip.upper.layer
+                        {
+                            add_source(
+                                doc,
+                                &mut fields,
+                                layer,
+                                Some(&clip.upper.spec_path),
+                                input.upper_source_fields,
+                            );
+                        }
+                    } else if let Some(opinion) = why.opinions.into_iter().find(|op| {
+                        matches!(op.role, OpinionRole::Contributed(_) | OpinionRole::Block)
+                    }) {
                         add_source(
                             doc,
                             &mut fields,
@@ -249,19 +406,23 @@ fn finding(doc: &Document, problem: &ValidationProblem) -> Option<Record> {
 struct Input {
     name: &'static str,
     source_fields: (&'static str, &'static str),
+    upper_source_fields: (&'static str, &'static str),
 }
 
 const COUNTS: Input = Input {
     name: "faceVertexCounts",
     source_fields: ("countsLayer", "countsSpec"),
+    upper_source_fields: ("countsUpperLayer", "countsUpperSpec"),
 };
 const INDICES: Input = Input {
     name: "faceVertexIndices",
     source_fields: ("indicesLayer", "indicesSpec"),
+    upper_source_fields: ("indicesUpperLayer", "indicesUpperSpec"),
 };
 const POINTS: Input = Input {
     name: "points",
     source_fields: ("pointsLayer", "pointsSpec"),
+    upper_source_fields: ("pointsUpperLayer", "pointsUpperSpec"),
 };
 
 fn add_source(

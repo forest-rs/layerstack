@@ -4,7 +4,7 @@
 //! Stage opening shared by the read-only composition commands.
 
 use layerstack::{
-    CompositionError, FlattenRequirements, InMemoryStore, StageOptions,
+    CompositionError, FlattenRequirements, InMemoryStore, PropertyPath, StageOptions, Time,
     stage::flatten::Instancing,
     value_clips::{ClipAssetRole, ClipAssetStatus, ClipAssetUnavailable},
 };
@@ -72,6 +72,31 @@ fn check_composition(doc: &Document) -> Result<(), QueryError> {
             "incomplete_stage",
             error.display(doc.store()).to_string(),
         ));
+    }
+    Ok(())
+}
+
+/// Prepare the clip inputs selected by numeric value resolution (AOUSD Core §12.3, §12.5).
+pub(super) fn prepare_clip_value(
+    doc: &mut Document,
+    property: PropertyPath,
+    time: Time,
+) -> Result<(), String> {
+    let prepared = doc.prepare_clip_query(property, time, usize::MAX, usize::MAX);
+    if let Some(failure) = prepared.failures.first() {
+        return Err(format!("{}: {}", failure.request.identifier, failure.error));
+    }
+    if let Some(error) = prepared.plan.error {
+        return Err(error.to_string());
+    }
+    if let Some(request) = prepared.plan.demands.iter().map(|d| &d.request).find(|r| {
+        matches!(r.status, ClipAssetStatus::Unavailable(_))
+            && r.role != ClipAssetRole::TemplateCandidate
+    }) {
+        return Err(format!("unavailable clip source {}", request.identifier));
+    }
+    if !prepared.plan.is_complete() {
+        return Err("could not resolve clip sources".into());
     }
     Ok(())
 }

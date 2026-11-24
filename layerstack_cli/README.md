@@ -148,6 +148,7 @@ path with `explain` to query its value or targets.
 ```sh
 layerstack check scene.usda
 layerstack check scene.usda --json
+layerstack check --time 1 --time 12.5 scene.usda
 ```
 
 The check reports missing assets, composition errors and inconsistent mesh face
@@ -157,12 +158,18 @@ load. Resolver expressions, clip templates and opaque package resources can
 yield `unchecked` records. Asset existence checks leave contents such as
 texture pixels unread.
 
-Mesh validation uses the stage's active composition at USD default time. It
-visits composed prims in ordinary stage traversal, which skips inactive
-branches and instance proxy descendants. Numeric samples, interpolation and
-clip evaluation are outside mesh coverage. A topology finding gives the
-composed prim path and the strongest contributing authored site for each
-implicated input when available. An authored block can also be the source.
+Mesh validation uses the stage's active composition and ordinary stage traversal,
+which skips inactive branches and instance proxy descendants. With no `--time`,
+it checks USD default time. Repeat `--time N` for specific finite stage time
+codes. Numeric requests use standard USD time resolution, including interpolation,
+arc time offsets and value clips. The check evaluates each distinct requested time
+once per mesh. It does not scan the timeline between requested times.
+
+A topology finding gives the failing stage time, composed prim path and strongest
+contributing authored site for each implicated input when available. An authored
+block can also be the source. For clip values, the source fields name the
+bracketing clip sites when available. If clip inputs cannot be resolved, the check
+reports the composed property and skips topology validation for that mesh at that time.
 
 Exit status is `0` when the checks ran and found no errors, even if some
 asset uses were unchecked. Status `1` means the check found errors. Status
@@ -170,7 +177,10 @@ asset uses were unchecked. Status `1` means the check found errors. Status
 example because a layer failed to parse.
 
 JSON output uses the `records` array shared with `deps`. Its first record
-has kind `check` and gives coverage and counts. Findings carry a `status`
+has kind `check` and gives coverage and counts. `meshTime` is `default`
+for the default invocation. Numeric requests use `meshTimes`, a comma-separated
+list of distinct stage time codes in ascending order. If clip resolution skips
+mesh evaluations, `meshFullyEvaluatedTimes` lists the times checked for every mesh. Findings carry a `status`
 of `missing`, `error`, `failed` (incomplete), or `unchecked`. Asset findings
 have the same kinds and authored fields as `deps` where available. Composition
 and topology findings have kinds `composition` and `meshTopology`.

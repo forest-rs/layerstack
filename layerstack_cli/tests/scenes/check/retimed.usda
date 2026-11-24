@@ -1,0 +1,7 @@
+#usda 1.0
+
+def "Retimed" (
+    prepend references = @./default-time.usda@</Animated> (offset = 10)
+)
+{
+}

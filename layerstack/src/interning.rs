@@ -8,7 +8,7 @@
 //! tables index by them, [`invalidation::DenseKey`]) and number values in the
 //! order they are first interned; values interned by several threads at once
 //! take ids in whichever order the threads get there. Lookups by value hash
-//! into one of [`SHARDS`] separately locked tables, which hold only ids;
+//! into one of [`SHARDS`] separately locked tables of ids and cached hashes;
 //! lookups by id read append-only storage without locking.
 //!
 //! Without the `std` feature the locks are
@@ -60,10 +60,40 @@ fn position_of(id: u32) -> u32 {
     id_of(id)
 }
 
+/// A shard holds its ids with enough of their hash to relocate them during
+/// growth without reading or hashing the values in the slot storage.
+#[derive(Clone, Copy)]
+struct Entry {
+    id: u32,
+    hash: u32,
+}
+
+impl Entry {
+    fn table_hash(&self) -> u64 {
+        table_hash(self.hash)
+    }
+}
+
+/// The low hash bits used inside a shard. Shard selection uses higher bits.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "the table stores only the low hash bits"
+)]
+fn bucket_hash(hash: u64) -> u32 {
+    hash as u32
+}
+
+/// Replicate the hash so both 32-bit and 64-bit targets can extract their
+/// probe position and fingerprint. Shard selection uses different bits.
+fn table_hash(hash: u32) -> u64 {
+    let hash = u64::from(hash);
+    hash | (hash << 32)
+}
+
 /// Values interned by id, from any number of threads.
 pub(crate) struct Interned<T> {
     hasher: DefaultHashBuilder,
-    shards: Box<[ReadLock<HashTable<u32>>]>,
+    shards: Box<[ReadLock<HashTable<Entry>>]>,
     /// The values, in interning order.
     values: Slots<T>,
     len: AtomicU32,
@@ -94,12 +124,8 @@ impl<T: Hash + Eq> Interned<T> {
         self.values.get(position_of(id))
     }
 
-    fn shard(&self, hash: u64) -> &ReadLock<HashTable<u32>> {
+    fn shard(&self, hash: u64) -> &ReadLock<HashTable<Entry>> {
         &self.shards[(hash >> SHARD_SHIFT) as usize & (SHARDS - 1)]
-    }
-
-    fn rehash(&self) -> impl Fn(&u32) -> u64 + '_ {
-        |&id| self.hasher.hash_one(self.get(id).expect("interned id"))
     }
 
     /// Returns the id of the value equal to `key`, if one is interned.
@@ -117,10 +143,14 @@ impl<T: Hash + Eq> Interned<T> {
         T: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        self.shard(hash).read(|table| {
+        let shard = self.shard(hash);
+        let hash = bucket_hash(hash);
+        shard.read(|table| {
             table
-                .find(hash, |&id| self.get(id).is_some_and(|v| v.borrow() == key))
-                .copied()
+                .find(table_hash(hash), |entry| {
+                    entry.hash == hash && self.get(entry.id).is_some_and(|v| v.borrow() == key)
+                })
+                .map(|entry| entry.id)
         })
     }
 
@@ -136,17 +166,19 @@ impl<T: Hash + Eq> Interned<T> {
         if let Some(id) = self.find_hashed(hash, key) {
             return (id, false);
         }
-        self.shard(hash).write(|table| {
-            if let Some(&id) =
-                table.find(hash, |&id| self.get(id).is_some_and(|v| v.borrow() == key))
-            {
-                return (id, false);
+        let shard = self.shard(hash);
+        let hash = bucket_hash(hash);
+        shard.write(|table| {
+            if let Some(entry) = table.find(table_hash(hash), |entry| {
+                entry.hash == hash && self.get(entry.id).is_some_and(|v| v.borrow() == key)
+            }) {
+                return (entry.id, false);
             }
             let n = self.len.fetch_add(1, Ordering::AcqRel);
             assert!(n != u32::MAX, "interner overflow");
             let id = id_of(n);
             self.values.set(n, make());
-            table.insert_unique(hash, id, self.rehash());
+            table.insert_unique(table_hash(hash), Entry { id, hash }, Entry::table_hash);
             (id, true)
         })
     }
@@ -168,7 +200,8 @@ impl<T: Hash + Eq + Clone> Interned<T> {
             let hash = copy.hasher.hash_one(&value);
             copy.values.set(n, value);
             copy.shard(hash).write(|table| {
-                table.insert_unique(hash, id, copy.rehash());
+                let hash = bucket_hash(hash);
+                table.insert_unique(table_hash(hash), Entry { id, hash }, Entry::table_hash);
             });
         }
         copy.len.store(len, Ordering::Release);
@@ -212,6 +245,30 @@ mod tests {
         assert_eq!(copy.find("w4321"), Some(id_of(4321)));
         let new = copy.intern("new", || String::from("new"));
         assert_eq!(new, (id_of(5000), true));
+    }
+
+    #[test]
+    fn equal_hashes_do_not_merge_unequal_values_after_growth() {
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        struct Colliding(u32);
+
+        impl Hash for Colliding {
+            fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+                state.write_u8(0);
+            }
+        }
+
+        let table = Interned::default();
+        for n in 0..256 {
+            let value = Colliding(n);
+            assert_eq!(table.intern(&value, || value), (id_of(n), true));
+        }
+        for n in 0..256 {
+            let value = Colliding(n);
+            assert_eq!(table.find(&value), Some(id_of(n)));
+            assert_eq!(table.intern(&value, || value), (id_of(n), false));
+        }
+        assert_eq!(table.find(&Colliding(256)), None);
     }
 
     #[cfg(feature = "std")]

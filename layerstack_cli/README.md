@@ -44,7 +44,9 @@ JSON output contains an `equal` boolean and a `changes` array. Each change
 identifies its spec path, change kind and field (or a whole spec). Array edits
 include the before and after lengths, the total count of differing positions and
 the first eight differing indices. Rust callers can compare two byte slices
-through `layerstack_io::diff::diff_layers`. Values in the report are bounded
+through `layerstack_io::diff::diff_layers`. For repeated comparisons,
+`layerstack_io::diff::ComparableLayer::read` prepares each input once and
+supports detailed changes, counts, or an equality check. Values in the report are bounded
 previews. The comparison uses the full values.
 
 ## Compare composed stages

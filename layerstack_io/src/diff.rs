@@ -20,7 +20,9 @@ use layerstack_usda::writer::{
     Document, ListOp, Metadatum, Prim, Property, Reference, Specifier, SubLayer, Value, Variability,
 };
 
+mod prepared;
 mod values;
+pub use prepared::ComparableLayer;
 use values::{array_change, debug_summary, same_value};
 
 /// Which input prevented the comparison from completing.
@@ -139,13 +141,13 @@ pub struct ArrayChange {
 /// USDZ packages are unsupported.
 pub fn diff_layers(before: &[u8], after: &[u8]) -> Result<LayerDiff, DiffError> {
     let read =
-        |input, side| read_authored_document(input).map_err(|message| DiffError { side, message });
+        |input, side| ComparableLayer::read(input).map_err(|message| DiffError { side, message });
     let baseline = read(before, DiffSide::Before)?;
     if before == after {
         return Ok(LayerDiff::default());
     }
     let after = read(after, DiffSide::After)?;
-    Ok(diff_documents(&baseline, &after))
+    Ok(baseline.diff(&after))
 }
 
 /// Reads one validated USDA or USDC layer for comparison, retaining its
@@ -156,6 +158,11 @@ pub fn diff_layers(before: &[u8], after: &[u8]) -> Result<LayerDiff, DiffError> 
 ///
 /// Returns a diagnostic for malformed or unsupported layer content.
 pub fn read_authored_document(input: &[u8]) -> Result<Document, String> {
+    let (layer, tokens, paths) = read_authored_layer(input)?;
+    layerstack_usda::save::usdc_document(&layer, &tokens, &paths).map_err(|error| error.to_string())
+}
+
+fn read_authored_layer(input: &[u8]) -> Result<(Layer, TokenInterner, PathInterner), String> {
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
     let id = LayerId(1);
@@ -190,7 +197,7 @@ pub fn read_authored_document(input: &[u8]) -> Result<Document, String> {
             layer.sublayers().len()
         ));
     }
-    layerstack_usda::save::usdc_document(&layer, &tokens, &paths).map_err(|error| error.to_string())
+    Ok((layer, tokens, paths))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -461,6 +468,10 @@ fn property_spec(property: &Property) -> Spec<'_> {
 pub fn diff_documents(before: &Document, after: &Document) -> LayerDiff {
     let mut changes = Vec::new();
     let _ = compare_documents(before, after, &mut changes);
+    ordered_diff(changes)
+}
+
+fn ordered_diff(mut changes: Vec<Change>) -> LayerDiff {
     // Properties are visited with their prim. Restore global path order for display.
     layerstack::sort::sort_by(&mut changes, |a, b| a.path.cmp(&b.path));
     LayerDiff { changes }
@@ -549,6 +560,15 @@ fn compare_documents<C: Changes>(
     after: &Document,
     changes: &mut C,
 ) -> ControlFlow<()> {
+    walk_documents(before, after, changes, compare_properties)
+}
+
+fn walk_documents<C: Changes>(
+    before: &Document,
+    after: &Document,
+    changes: &mut C,
+    mut properties: impl FnMut(&mut C, &str, &[Property], &[Property]) -> ControlFlow<()>,
+) -> ControlFlow<()> {
     if core::ptr::eq(before, after) {
         return ControlFlow::Continue(());
     }
@@ -556,24 +576,47 @@ fn compare_documents<C: Changes>(
     let after = index(after);
     for_each_key(&before, &after, |path, left, right| {
         compare_spec(changes, format_args!("{path}"), left, right)?;
-        let left = property_index(left.map_or(&[], |s| s.properties));
-        let right = property_index(right.map_or(&[], |s| s.properties));
-        for_each_key(&left, &right, |name, a, b| {
-            if let (Some(a), Some(b)) = (a, b)
-                && same_plain_property(a, b)
-            {
-                return ControlFlow::Continue(());
-            }
-            let a = a.map(|p| property_spec(p));
-            let b = b.map(|p| property_spec(p));
-            compare_spec(
-                changes,
-                format_args!("{path}.{name}"),
-                a.as_ref(),
-                b.as_ref(),
-            )
-        })
+        properties(
+            changes,
+            path,
+            left.map_or(&[], |s| s.properties),
+            right.map_or(&[], |s| s.properties),
+        )
     })
+}
+
+fn compare_properties<C: Changes>(
+    changes: &mut C,
+    path: &str,
+    left: &[Property],
+    right: &[Property],
+) -> ControlFlow<()> {
+    let left = property_index(left);
+    let right = property_index(right);
+    for_each_key(&left, &right, |name, a, b| {
+        compare_property(
+            changes,
+            format_args!("{path}.{name}"),
+            a.copied(),
+            b.copied(),
+        )
+    })
+}
+
+fn compare_property<C: Changes>(
+    changes: &mut C,
+    path: fmt::Arguments<'_>,
+    a: Option<&Property>,
+    b: Option<&Property>,
+) -> ControlFlow<()> {
+    if let (Some(a), Some(b)) = (a, b)
+        && same_plain_property(a, b)
+    {
+        return ControlFlow::Continue(());
+    }
+    let a = a.map(property_spec);
+    let b = b.map(property_spec);
+    compare_spec(changes, path, a.as_ref(), b.as_ref())
 }
 
 fn property_index(properties: &[Property]) -> BTreeMap<&str, &Property> {

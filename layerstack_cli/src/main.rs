@@ -11,11 +11,7 @@ mod material;
 mod query;
 mod stage;
 
-use layerstack_io::diff::{
-    Change, DiffSide, DiffStats, LayerDiff, diff_document_stats, diff_documents, documents_differ,
-    read_authored_document,
-};
-use layerstack_usda::writer::Document;
+use layerstack_io::diff::{Change, ComparableLayer, DiffSide, DiffStats, LayerDiff};
 use std::{
     env,
     ffi::OsString,
@@ -165,13 +161,13 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<u8, String> {
             "--quiet cannot be combined with --stat or --json",
         ));
     }
-    let compare = |before: &Document, after: &Document| {
+    let compare = |before: &ComparableLayer, after: &ComparableLayer| {
         if quiet {
-            Report::Quiet(documents_differ(before, after))
+            Report::Quiet(before.differs(after))
         } else if stat {
-            Report::Stat(diff_document_stats(before, after))
+            Report::Stat(before.stats(after))
         } else {
-            Report::Full(diff_documents(before, after))
+            Report::Full(before.diff(after))
         }
     };
     let report = if composed {
@@ -221,7 +217,7 @@ fn authored_diff<R>(
     before: &Path,
     after: &Path,
     jobs: u8,
-    compare: impl FnOnce(&Document, &Document) -> R,
+    compare: impl FnOnce(&ComparableLayer, &ComparableLayer) -> R,
 ) -> Result<R, String> {
     let read = |path: &Path| {
         fs::read(path).map_err(|error| format!("reading {}: {error}", path.display()))
@@ -229,12 +225,11 @@ fn authored_diff<R>(
     let first = read(before)?;
     let second = read(after)?;
     let left = || {
-        read_authored_document(&first)
+        ComparableLayer::read(&first)
             .map_err(|e| format!("{}: before layer: {e}", before.display()))
     };
     let right = || {
-        read_authored_document(&second)
-            .map_err(|e| format!("{}: after layer: {e}", after.display()))
+        ComparableLayer::read(&second).map_err(|e| format!("{}: after layer: {e}", after.display()))
     };
     if first == second {
         let doc = left()?;

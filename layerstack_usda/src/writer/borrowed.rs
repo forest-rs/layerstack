@@ -62,8 +62,29 @@ impl CheckedNames {
         {
             return None;
         }
+        let properties =
+            self.borrow_properties(&spec.properties, tokens, paths, declarations, order)?;
+        Some(BorrowedPrim {
+            name: tokens.resolve(name),
+            type_name: spec.type_name.map(|t| tokens.resolve(t)),
+            specifier: spec.specifier,
+            properties,
+            tokens,
+            paths,
+        })
+    }
+
+    /// Checks a complete group for exact declarations and unique property names.
+    pub(crate) fn borrow_properties<'a>(
+        &mut self,
+        entries: &'a [PropertyEntry],
+        tokens: &'a TokenInterner,
+        paths: &'a PathInterner,
+        declarations: &mut Vec<Declaration<'a>>,
+        order: Order,
+    ) -> Option<core::ops::Range<usize>> {
         let start = declarations.len();
-        for entry in &spec.properties {
+        for entry in entries {
             let name = tokens.resolve(entry.name);
             let property = checked(&mut self.property_names, entry.name, name, is_property_name)
                 .then(|| self.property(entry, name, tokens, paths))
@@ -101,14 +122,7 @@ impl CheckedNames {
             declarations.truncate(start);
             return None;
         }
-        Some(BorrowedPrim {
-            name: tokens.resolve(name),
-            type_name: spec.type_name.map(|t| tokens.resolve(t)),
-            specifier: spec.specifier,
-            properties: start..declarations.len(),
-            tokens,
-            paths,
-        })
+        Some(start..declarations.len())
     }
 
     fn property<'a>(

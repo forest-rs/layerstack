@@ -92,6 +92,125 @@ impl Imported {
     }
 }
 
+#[test]
+fn comparison_retains_exact_property_groups_and_lowers_other_groups() {
+    let Imported {
+        layer,
+        tokens,
+        paths,
+    } = Imported::new(
+        r#"#usda 1.0
+def Scope "A" (prepend apiSchemas = ["ExampleAPI"])
+{
+    reorder properties = ["same", "unlisted"]
+    uniform string same = "value"
+    rel link = </A.same>
+    def "same" {}
+}
+def "B"
+{
+    int exact = 1
+    float weight.timeSamples = { 1: 2 }
+}
+"#,
+    );
+    let original = usdc_document(&layer, &tokens, &paths).unwrap();
+    let mut prepared = prepare_comparison(layer, &tokens, &paths).unwrap();
+    assert_eq!(prepared.properties.len(), 1);
+    assert_eq!(prepared.document.prims[1].properties.len(), 2);
+    assert!(prepared.document.prims[0].properties.is_empty());
+    prepared.document.prims[0].properties = prepared.properties["/A"]
+        .iter()
+        .map(|entry| canonical_property(entry, "/A", &tokens, &paths).unwrap())
+        .collect();
+    assert_eq!(prepared.document, original);
+}
+
+#[test]
+fn comparison_keeps_variant_only_properties_in_the_document() {
+    let Imported {
+        layer,
+        tokens,
+        paths,
+    } = Imported::new(
+        r#"#usda 1.0
+def "A" (prepend variantSets = "mode")
+{
+    variantSet "mode" = {
+        "on" {
+            def "B" { int a = 1; }
+        }
+    }
+}
+"#,
+    );
+    let original = usdc_document(&layer, &tokens, &paths).unwrap();
+    let prepared = prepare_comparison(layer, &tokens, &paths).unwrap();
+    assert!(prepared.properties.is_empty());
+    assert_eq!(prepared.document, original);
+}
+
+#[test]
+fn comparison_preserves_duplicate_property_and_pseudo_root_errors() {
+    for prim_path in ["/A", "/"] {
+        let Imported {
+            mut layer,
+            tokens,
+            paths,
+        } = Imported::new("#usda 1.0\ndef \"A\" { int a = 1; int b = 2; }\n");
+        let owner = paths.intern(Path::parse_absolute(prim_path, &tokens).unwrap());
+        let source = paths.intern(Path::parse_absolute("/A", &tokens).unwrap());
+        let property = layer.prim(source).unwrap().properties[0].clone();
+        layer.prim_mut(owner).unwrap().properties.push(property);
+        let expected = usdc_document(&layer, &tokens, &paths).unwrap_err();
+        if prim_path == "/" {
+            assert!(matches!(
+                expected,
+                SaveError::Invalid {
+                    problem: Invalid::PseudoRootOpinions,
+                    ..
+                }
+            ));
+        } else {
+            assert!(matches!(
+                expected,
+                SaveError::Document(WriteError::Duplicate { .. })
+            ));
+        }
+        assert_eq!(
+            prepare_comparison(layer, &tokens, &paths).unwrap_err(),
+            expected
+        );
+    }
+}
+
+#[test]
+fn comparison_preserves_lowering_error_precedence() {
+    let declarations =
+        "#usda 1.0\ndef \"A\" { string bad = \"a\0b\"; }\ndef \"B\" { int exact = 1; }\n";
+    for extra in ["", "def \"C\" (customData = { asset[] bad = [] }) {}\n"] {
+        let Imported {
+            layer,
+            tokens,
+            paths,
+        } = Imported::new(&format!("{declarations}{extra}"));
+        let expected = usdc_document(&layer, &tokens, &paths).unwrap_err();
+        if extra.is_empty() {
+            assert!(
+                matches!(expected, SaveError::Document(WriteError::NulInString { ref path }) if path == "/A.bad")
+            );
+        } else {
+            assert!(
+                matches!(expected, SaveError::Unsupported { ref path, .. } if path == "/C#customData/bad")
+            );
+        }
+        assert_eq!(
+            prepare_comparison(layer, &tokens, &paths).unwrap_err(),
+            expected
+        );
+    }
+}
+
 /// A sink recording the pieces it is handed.
 #[derive(Default)]
 struct Pieces {

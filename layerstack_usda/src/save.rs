@@ -100,7 +100,7 @@ use alloc::vec::Vec;
 use core::fmt;
 use layerstack::sort;
 
-use hashbrown::HashSet;
+use hashbrown::{HashMap, HashSet};
 use layerstack::SharedVec;
 use layerstack::doc::{
     FieldEntry, FieldValue, Layer, LayerOffset as LayerLayerOffset, PrimSpec,
@@ -137,6 +137,98 @@ pub fn usdc_document(
     paths: &PathInterner,
 ) -> Result<Document, SaveError> {
     lower(layer, tokens, paths, false)
+}
+
+/// The canonical namespace and exact property groups of an authored comparison input.
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct ComparisonParts {
+    /// Validated document with the retained property groups omitted.
+    pub document: Document,
+    /// Retained groups in authored order, keyed by absolute prim path.
+    /// Entries refer to the original layer's token and path interners.
+    pub properties: HashMap<String, Vec<PropertyEntry>>,
+}
+
+/// Validates an authored layer, retaining exact property groups for comparison.
+/// The supplied interners must belong to the original layer.
+///
+/// # Errors
+/// Returns the same diagnostic as [`usdc_document`].
+#[doc(hidden)]
+pub fn prepare_comparison(
+    mut layer: Layer,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+) -> Result<ComparisonParts, SaveError> {
+    use crate::writer::borrowed::{CheckedNames, Order};
+
+    let root = paths.lookup(&Path::root());
+    let mut checked = CheckedNames::default();
+    let mut declarations = Vec::new();
+    let mut retained = Vec::new();
+    for (&path, prim) in layer.prims().iter() {
+        if Some(path) == root
+            || !prim.outer_variant_sites().is_empty()
+            || prim.properties.is_empty()
+        {
+            continue;
+        }
+        declarations.clear();
+        if checked
+            .borrow_properties(
+                &prim.properties,
+                tokens,
+                paths,
+                &mut declarations,
+                Order::Authored,
+            )
+            .is_some()
+        {
+            retained.push(path);
+        }
+    }
+    drop(declarations);
+
+    // The checked groups cannot introduce lowering or validation errors. Property
+    // order and child names are checked independently of these declarations.
+    // Keep pseudo-root and variant properties on the normal namespace walk.
+    let mut properties = HashMap::with_capacity(retained.len());
+    if !retained.is_empty() {
+        let prims = layer.prims_mut();
+        for path in retained {
+            let prim = prims.get_mut(&path).expect("retained prim exists");
+            properties.insert(
+                paths.display(path, tokens),
+                core::mem::take(&mut prim.properties),
+            );
+        }
+    }
+    let document = usdc_document(&layer, tokens, paths)?;
+    Ok(ComparisonParts {
+        document,
+        properties,
+    })
+}
+
+/// Lowers one authored property using the same representation as [`usdc_document`].
+///
+/// # Errors
+/// Propagates property lowering errors. Full validation is performed by
+/// [`prepare_comparison`] for its retained groups.
+#[doc(hidden)]
+pub fn canonical_property(
+    entry: &PropertyEntry,
+    prim: &str,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+) -> Result<Property, SaveError> {
+    Lowering {
+        tokens,
+        paths,
+        skip_empty_entries: false,
+    }
+    .property(entry, prim)
 }
 
 /// Lowers `layer`, skipping dictionary entries with no value when

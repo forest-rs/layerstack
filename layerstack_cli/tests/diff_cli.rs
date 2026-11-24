@@ -177,6 +177,30 @@ def "Assembly" (references = @./model.usda@</Model>) {
         diff.contains(r#""time":10"#) && !diff.contains("weight"),
         "{diff}"
     );
+    run(
+        &[
+            "diff",
+            "--composed",
+            "--path",
+            "/Assembly",
+            "--stat",
+            roots[0],
+            roots[1],
+        ],
+        1,
+    );
+    run(
+        &[
+            "diff",
+            "--composed",
+            "--path",
+            "/Model",
+            "--quiet",
+            roots[0],
+            roots[1],
+        ],
+        0,
+    );
     let why = run(&["explain", "--time", "10", roots[1], "/Assembly.size"], 0);
     assert!(
         why.contains("model.usda  /Model.size") && why.contains(": 8"),
@@ -187,11 +211,103 @@ def "Assembly" (references = @./model.usda@</Model>) {
     fs::write(dir.join("flat.usda"), "#usda 1.0\ndef \"Assembly\" {\n custom float weight = 3\n custom float size.timeSamples = {0:2, 10:8}\n}\n").unwrap();
     run(&["diff", "--composed", roots[1], "flat.usda"], 0);
     fs::remove_file(dir.join("after/model.usda")).unwrap();
+    run(
+        &[
+            "diff",
+            "--composed",
+            "--path",
+            "/Absent",
+            "--quiet",
+            roots[0],
+            roots[1],
+        ],
+        2,
+    );
     let incomplete = run(&["diff", "--composed", "--json", roots[0], roots[1]], 2);
     assert!(
         incomplete.contains(r#""side":"after""#) && incomplete.contains("model.usda"),
         "{incomplete}"
     );
     assert!(!incomplete.contains(r#""equal""#));
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn subtree_scope_matches_scene_names_inside_authored_variants() {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!(
+        "layerstack-diff-scope-{}-{nonce}",
+        std::process::id()
+    ));
+    fs::create_dir(&dir).unwrap();
+    let before = r#"#usda 1.0
+def "World" (
+    variants = { string look = "active" }
+    prepend variantSets = "look"
+) {
+    def "MeshBackup" { custom int x = 0; }
+    variantSet "look" = {
+        "active" {
+            def "Mesh" { custom int unchanged = 0; }
+        }
+        "other" {
+            def "Mesh" {
+                def "Child" { custom int x = 0; }
+            }
+        }
+    }
+}
+"#;
+    fs::write(dir.join("a"), before).unwrap();
+    fs::write(dir.join("b"), before.replace("int x = 0", "int x = 1")).unwrap();
+    let run = |args: &[&str], status| {
+        let output = Command::new(env!("CARGO_BIN_EXE_layerstack"))
+            .arg("diff")
+            .args(args)
+            .current_dir(&dir)
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(status), "{output:?}");
+        String::from_utf8(output.stdout).unwrap()
+    };
+    for (from, to) in [("a", "b"), ("b", "a")] {
+        let report = run(&["--json", "--path", "/World/Mesh", from, to], 1);
+        assert!(report.contains(r#""scope":"/World/Mesh""#));
+        assert!(
+            report.contains("/World{look=other}Mesh/Child.x"),
+            "{report}"
+        );
+        assert!(!report.contains("MeshBackup"), "{report}");
+        let counts = run(&["--stat", "--json", "--path", "/World/Mesh", from, to], 1);
+        assert!(counts.contains(r#""records":1,"paths":1"#), "{counts}");
+        assert!(run(&["--quiet", "--path", "/World/Mesh/Absent", from, to], 0).is_empty());
+        run(&["--quiet", "--path", "/World/Mesh/Child", from, to], 1);
+        assert_eq!(run(&["--path", "/", from, to], 1), run(&[from, to], 1));
+    }
+    fs::write(dir.join("empty"), "#usda 1.0\n").unwrap();
+    for (from, to, kind) in [("empty", "a", "added"), ("a", "empty", "removed")] {
+        let report = run(&["--path", "/World/Mesh", from, to], 1);
+        assert!(
+            report
+                .lines()
+                .all(|line| line.starts_with(kind) && line.contains("}Mesh")),
+            "{report}"
+        );
+        assert!(report.contains("}Mesh/Child.x"), "{report}");
+    }
+    for invalid in [
+        "World",
+        "/World//Mesh",
+        "/World/",
+        "/World.id",
+        "/World{look=active}",
+    ] {
+        run(&["--path", invalid, "a", "b"], 2);
+    }
+    fs::write(dir.join("b"), "#usda 1.0\ndef \"Outside\" { int v = }").unwrap();
+    run(&["--quiet", "--path", "/Absent", "a", "b"], 2);
     fs::remove_dir_all(dir).unwrap();
 }

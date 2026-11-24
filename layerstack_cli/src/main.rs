@@ -11,7 +11,7 @@ mod material;
 mod query;
 mod stage;
 
-use layerstack_io::diff::{Change, ComparableLayer, DiffSide, DiffStats, LayerDiff};
+use layerstack_io::diff::{Change, ComparableLayer, DiffScope, DiffSide, DiffStats, LayerDiff};
 use std::{
     env,
     ffi::OsString,
@@ -35,13 +35,15 @@ Run 'layerstack COMMAND --help' for arguments and examples.
 ";
 
 const DIFF_HELP: &str = "\
-Usage: layerstack diff [--composed | --jobs N] [--quiet | --stat] [--json] BEFORE AFTER
+Usage: layerstack diff [--composed | --jobs N] [--quiet | --stat] [--path PRIM] [--json] BEFORE AFTER
 
 Compare the authored opinions in two USDA or USDC layers.
 Includes all variant branches. Only the two given files are read.
 Formatting and comments outside authored fields are ignored.
 Authored comparison accepts loose USDA and USDC files.
 
+--path PRIM compares one absolute prim path, its properties and descendants.
+Both inputs are still validated. A subtree absent on both sides compares equal.
 --jobs 1 limits authored comparisons to one reader to reduce peak memory.
 The default, --jobs 2, can read large authored layers concurrently.
 --quiet validates both inputs and returns the exit status without a report.
@@ -116,6 +118,7 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<u8, String> {
     let mut stat = false;
     let mut quiet = false;
     let mut jobs = None;
+    let mut scope_path = None;
     let mut options = true;
     let mut paths = Vec::with_capacity(2);
     while let Some(arg) = args.next() {
@@ -128,6 +131,15 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<u8, String> {
         }
         if options && arg == "--" {
             options = false;
+        } else if options && arg == "--path" {
+            if scope_path.is_some() {
+                return Err(String::from("--path may only be given once"));
+            }
+            scope_path = Some(
+                args.next()
+                    .and_then(|arg| arg.into_string().ok())
+                    .ok_or("--path expects an absolute prim path")?,
+            );
         } else if options && arg == "--jobs" {
             jobs = Some(
                 match args.next().as_deref().and_then(|value| value.to_str()) {
@@ -161,13 +173,15 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<u8, String> {
             "--quiet cannot be combined with --stat or --json",
         ));
     }
+    let scope = DiffScope::new(scope_path.as_deref().unwrap_or("/"))
+        .map_err(|message| format!("--path: {message}"))?;
     let compare = |before: &ComparableLayer, after: &ComparableLayer| {
         if quiet {
-            Report::Quiet(before.differs(after))
+            Report::Quiet(scope.differs(before, after))
         } else if stat {
-            Report::Stat(before.stats(after))
+            Report::Stat(scope.stats(before, after))
         } else {
-            Report::Full(before.diff(after))
+            Report::Full(scope.diff(before, after))
         }
     };
     let report = if composed {
@@ -191,12 +205,14 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<u8, String> {
     let different = match report {
         Report::Quiet(different) => different,
         Report::Stat(stats) => {
-            write_stat(&mut output, &stats, composed, json).map_err(output_error)?;
+            write_stat(&mut output, &stats, composed, json, scope_path.as_deref())
+                .map_err(output_error)?;
             stats.paths != 0
         }
         Report::Full(diff) => {
             if json {
-                write_json(&mut output, &diff, composed).map_err(output_error)?;
+                write_json(&mut output, &diff, composed, scope_path.as_deref())
+                    .map_err(output_error)?;
             } else {
                 write_text(&mut output, &diff, composed).map_err(output_error)?;
             }
@@ -265,6 +281,7 @@ fn write_stat(
     stats: &DiffStats,
     composed: bool,
     json: bool,
+    scope_path: Option<&str>,
 ) -> io::Result<()> {
     let DiffStats {
         added,
@@ -275,9 +292,11 @@ fn write_stat(
     let total = added + removed + changed;
     let mode = if composed { "composed" } else { "authored" };
     if json {
+        write!(out, "{{\"mode\":\"{mode}\",")?;
+        write_scope(out, scope_path)?;
         writeln!(
             out,
-            "{{\"mode\":\"{mode}\",\"equal\":{},\"stat\":{{\"records\":{total},\"paths\":{paths},\"added\":{added},\"removed\":{removed},\"changed\":{changed}}}}}",
+            "\"equal\":{},\"stat\":{{\"records\":{total},\"paths\":{paths},\"added\":{added},\"removed\":{removed},\"changed\":{changed}}}}}",
             total == 0
         )
     } else {
@@ -333,11 +352,26 @@ fn write_text(out: &mut impl Write, diff: &LayerDiff, composed: bool) -> io::Res
     Ok(())
 }
 
-fn write_json(out: &mut impl Write, diff: &LayerDiff, composed: bool) -> io::Result<()> {
+fn write_scope(out: &mut impl Write, path: Option<&str>) -> io::Result<()> {
+    if let Some(path) = path {
+        out.write_all(b"\"scope\":")?;
+        json_string(out, Some(path))?;
+        out.write_all(b",")?;
+    }
+    Ok(())
+}
+
+fn write_json(
+    out: &mut impl Write,
+    diff: &LayerDiff,
+    composed: bool,
+    scope_path: Option<&str>,
+) -> io::Result<()> {
     out.write_all(b"{")?;
     if composed {
         out.write_all(b"\"mode\":\"composed\",")?;
     }
+    write_scope(out, scope_path)?;
     write!(out, "\"equal\":{},\"changes\":[", diff.changes.is_empty())?;
     for (index, change) in diff.changes.iter().enumerate() {
         if index != 0 {

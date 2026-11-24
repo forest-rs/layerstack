@@ -57,32 +57,93 @@ impl ComparableLayer {
     /// Compares all authored opinions, in the same order as [`diff_documents`].
     #[must_use]
     pub fn diff(&self, after: &Self) -> LayerDiff {
-        let mut changes = Vec::new();
-        let _ = self.compare(after, &mut changes);
-        ordered_diff(changes)
+        DiffScope::ALL.diff(self, after)
     }
 
     /// Counts differing paths and records without formatting or retaining changes.
     #[must_use]
     pub fn stats(&self, after: &Self) -> DiffStats {
-        let mut counter = Counter::default();
-        let _ = self.compare(after, &mut counter);
-        counter.stats
+        DiffScope::ALL.stats(self, after)
     }
 
     /// Returns whether any opinion differs, stopping at the first difference.
     #[must_use]
     pub fn differs(&self, after: &Self) -> bool {
-        self.compare(after, &mut FirstDifference).is_break()
+        DiffScope::ALL.differs(self, after)
     }
 
-    fn compare<C: Changes>(&self, after: &Self, changes: &mut C) -> ControlFlow<()> {
+    fn group(&self, path: &str) -> Option<(&Retained, &[PropertyEntry])> {
+        let retained = self.retained.as_ref()?;
+        Some((retained, retained.properties.get(path)?))
+    }
+}
+
+/// A prim subtree to compare, including its properties and all authored variant branches.
+#[derive(Clone, Copy, Debug)]
+pub struct DiffScope<'a>(&'a str);
+
+impl<'a> DiffScope<'a> {
+    /// The entire layer, including layer metadata.
+    pub const ALL: Self = Self("/");
+
+    /// Selects an absolute scene prim path or the pseudoroot.
+    ///
+    /// # Errors
+    ///
+    /// Rejects relative paths, property paths, variant selectors and invalid prim names.
+    pub fn new(path: &'a str) -> Result<Self, &'static str> {
+        if path == "/"
+            || path
+                .strip_prefix('/')
+                .is_some_and(|tail| tail.split('/').all(layerstack::ident::is_identifier))
+        {
+            Ok(Self(path))
+        } else {
+            Err("expected an absolute prim path such as /World/Mesh or /")
+        }
+    }
+
+    /// Returns the absolute scene path for this comparison.
+    #[must_use]
+    pub fn path(self) -> &'a str {
+        self.0
+    }
+
+    /// Reports changes within this subtree in the same order as a full comparison.
+    #[must_use]
+    pub fn diff(self, before: &ComparableLayer, after: &ComparableLayer) -> LayerDiff {
+        let mut changes = Vec::new();
+        let _ = self.compare(before, after, &mut changes);
+        ordered_diff(changes)
+    }
+
+    /// Counts changes within this subtree without constructing previews.
+    #[must_use]
+    pub fn stats(self, before: &ComparableLayer, after: &ComparableLayer) -> DiffStats {
+        let mut counter = Counter::default();
+        let _ = self.compare(before, after, &mut counter);
+        counter.stats
+    }
+
+    /// Stops at the first difference within this subtree.
+    #[must_use]
+    pub fn differs(self, before: &ComparableLayer, after: &ComparableLayer) -> bool {
+        self.compare(before, after, &mut FirstDifference).is_break()
+    }
+
+    fn compare<C: Changes>(
+        self,
+        before: &ComparableLayer,
+        after: &ComparableLayer,
+        changes: &mut C,
+    ) -> ControlFlow<()> {
         walk_documents(
-            &self.document,
+            &before.document,
             &after.document,
+            self,
             changes,
             |changes, path, left, right| {
-                let a = self.group(path);
+                let a = before.group(path);
                 let b = after.group(path);
                 if a.is_none() && b.is_none() {
                     return compare_properties(changes, path, left, right);
@@ -106,11 +167,6 @@ impl ComparableLayer {
                 })
             },
         )
-    }
-
-    fn group(&self, path: &str) -> Option<(&Retained, &[PropertyEntry])> {
-        let retained = self.retained.as_ref()?;
-        Some((retained, retained.properties.get(path)?))
     }
 }
 

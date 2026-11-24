@@ -1,0 +1,35 @@
+#usda 1.0
+
+def "World"
+{
+    def "MeshCopy" (
+        prepend references = @./mesh.usda@</Source>
+    )
+    {
+        asset image = @./missing.png@
+        asset opaque = @memory://site/image.png@
+    }
+
+    def "BrokenArc" (
+        prepend references = @./mesh.usda@</Absent>
+    )
+    {
+    }
+
+    def "WithVariant" (
+        variants = {
+            string detail = "present"
+        }
+        prepend variantSets = "detail"
+    )
+    {
+        variantSet "detail" = {
+            "present" {
+            }
+            "absent" (
+                prepend references = @./missing.usda@
+            ) {
+            }
+        }
+    }
+}

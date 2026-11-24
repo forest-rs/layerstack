@@ -1,0 +1,7 @@
+#usda 1.0
+
+def "Copy" (
+    prepend references = @./malformed.usda@</Malformed>
+)
+{
+}

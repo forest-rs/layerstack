@@ -19,6 +19,15 @@ pub(super) struct Record {
     pub fields: Vec<(&'static str, String)>,
 }
 
+impl Record {
+    pub(super) fn get(&self, name: &str) -> Option<&str> {
+        self.fields
+            .iter()
+            .find(|(field, _)| *field == name)
+            .map(|(_, value)| value.as_str())
+    }
+}
+
 pub(super) fn run(
     args: impl Iterator<Item = OsString>,
     out: &mut impl Write,
@@ -26,12 +35,24 @@ pub(super) fn run(
     value_flags: &[&str],
     query: impl FnOnce(Arguments) -> Result<Vec<Record>, QueryError>,
 ) -> Result<(), String> {
+    run_with_status(args, out, help, value_flags, query, |_| 0).map(|_| ())
+}
+
+pub(super) fn run_with_status(
+    args: impl Iterator<Item = OsString>,
+    out: &mut impl Write,
+    help: &str,
+    value_flags: &[&str],
+    query: impl FnOnce(Arguments) -> Result<Vec<Record>, QueryError>,
+    status: impl FnOnce(&[Record]) -> u8,
+) -> Result<u8, String> {
     let args: Vec<_> = args.collect();
     let flags = || args.iter().take_while(|arg| *arg != "--");
     if flags().any(|arg| is_help(arg)) {
         return out
             .write_all(help.as_bytes())
             .and_then(|()| out.flush())
+            .map(|()| 0)
             .map_err(|e| e.to_string());
     }
     let json = flags().any(|arg| arg == "--json");
@@ -50,7 +71,7 @@ pub(super) fn run(
     write
         .and_then(|()| out.flush())
         .map_err(|e| e.to_string())?;
-    result.map(|_| ()).map_err(|e| e.1)
+    result.map(|records| status(&records)).map_err(|e| e.1)
 }
 
 fn parse(args: Vec<OsString>, value_flags: &[&str]) -> Result<Arguments, QueryError> {

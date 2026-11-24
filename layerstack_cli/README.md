@@ -140,3 +140,37 @@ Start at the root to see its default prim and children, then pass a child path
 to inspect that prim. Each listing includes the total direct children and
 authored properties. Up to 25 of each are shown by default. Use a property
 path with `explain` to query its value or targets.
+
+## Check a stage
+
+```sh
+layerstack check scene.usda
+layerstack check scene.usda --json
+```
+
+The check reports missing assets, composition errors and inconsistent mesh face
+counts or vertex indices. Asset discovery uses the same filesystem and UDIM
+checks as `deps` and visits all authored variant branches in the layers it can
+load. Resolver expressions, clip templates and opaque package resources can
+yield `unchecked` records. Asset existence checks leave contents such as
+texture pixels unread.
+
+Mesh validation uses the stage's active composition at USD default time. It
+visits composed prims in ordinary stage traversal, which skips inactive
+branches and instance proxy descendants. Numeric samples, interpolation and
+clip evaluation are outside mesh coverage. A topology finding gives the
+composed prim path and the strongest contributing authored site for each
+implicated input when available. An authored block can also be the source.
+
+Exit status is `0` when the checks ran and found no errors, even if some
+asset uses were unchecked. Status `1` means the check found errors. Status
+`2` means the invocation was invalid or the check was incomplete, for
+example because a layer failed to parse.
+
+JSON output uses the `records` array shared with `deps`. Its first record
+has kind `check` and gives coverage and counts. Findings carry a `status`
+of `missing`, `error`, `failed` (incomplete), or `unchecked`. Asset findings
+have the same kinds and authored fields as `deps` where available. Composition
+and topology findings have kinds `composition` and `meshTopology`.
+An invocation or stage-open failure produces an `error` object with a code
+and message.

@@ -3,6 +3,7 @@
 
 //! Command line tools for USD layers and composed stages.
 
+mod check;
 mod deps;
 mod explain;
 mod inspect;
@@ -27,6 +28,7 @@ use std::{
 const HELP: &str = "\
 Usage: layerstack COMMAND [OPTIONS]
 
+  check    Report missing assets, composition errors and invalid mesh topology
   deps     List authored asset uses and the layers that contain them
   diff     Compare two authored layers or composed stages
   explain  Trace a composed property to its source layers
@@ -57,7 +59,7 @@ Exit status: 0 equal, 1 different, 2 error or incomplete comparison.
 
 fn main() -> ExitCode {
     match run(env::args_os().skip(1)) {
-        Ok(different) => ExitCode::from(u8::from(different)),
+        Ok(status) => ExitCode::from(status),
         Err(message) => {
             let _ = writeln!(io::stderr().lock(), "layerstack: {message}");
             ExitCode::from(2)
@@ -65,17 +67,17 @@ fn main() -> ExitCode {
     }
 }
 
-fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
+fn run(mut args: impl Iterator<Item = OsString>) -> Result<u8, String> {
     let output_error = |error: io::Error| format!("writing output: {error}");
     let mut output = io::BufWriter::new(io::stdout().lock());
     let command = args.next();
     if command.as_deref().is_some_and(is_help) {
         output.write_all(HELP.as_bytes()).map_err(output_error)?;
         output.flush().map_err(output_error)?;
-        return Ok(false);
+        return Ok(0);
     }
     if command.as_deref() == Some("explain".as_ref()) {
-        return explain::run(args, &mut output).map(|()| false);
+        return explain::run(args, &mut output).map(|()| 0);
     }
     if command.as_deref() == Some("inspect".as_ref()) {
         return query::run(
@@ -85,10 +87,20 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
             &["--limit"],
             inspect::query,
         )
-        .map(|()| false);
+        .map(|()| 0);
+    }
+    if command.as_deref() == Some("check".as_ref()) {
+        return query::run_with_status(
+            args,
+            &mut output,
+            check::HELP,
+            &[],
+            check::query,
+            check::status,
+        );
     }
     if command.as_deref() == Some("deps".as_ref()) {
-        return query::run(args, &mut output, deps::HELP, &[], deps::query).map(|()| false);
+        return query::run(args, &mut output, deps::HELP, &[], deps::query).map(|()| 0);
     }
     if command.as_deref() == Some("material".as_ref()) {
         return query::run(
@@ -98,7 +110,7 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
             &["--purpose", "--context"],
             material::query,
         )
-        .map(|()| false);
+        .map(|()| 0);
     }
     if command.as_deref() != Some("diff".as_ref()) {
         return Err(String::from("expected a command. See 'layerstack --help'"));
@@ -116,7 +128,7 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
                 .write_all(DIFF_HELP.as_bytes())
                 .map_err(output_error)?;
             output.flush().map_err(output_error)?;
-            return Ok(false);
+            return Ok(0);
         }
         if options && arg == "--" {
             options = false;
@@ -196,7 +208,7 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
         }
     };
     output.flush().map_err(output_error)?;
-    Ok(different)
+    Ok(u8::from(different))
 }
 
 enum Report {

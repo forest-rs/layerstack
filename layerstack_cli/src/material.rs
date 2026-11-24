@@ -5,8 +5,7 @@ use super::{
     query::{Arguments, Record},
     stage::{self, QueryError},
 };
-use layerstack::{InMemoryStore, PropertyPath, StageOptions};
-use layerstack_io::OpenOptions;
+use layerstack::PropertyPath;
 use layerstack_schemas::{
     BindingOptions, MaterialPurpose, PrimView, Scene, shading::ShadingIssue, usd_shade::Material,
 };
@@ -35,19 +34,7 @@ pub(super) fn query(args: Arguments) -> Result<Vec<Record>, QueryError> {
             purpose = MaterialPurpose::from_token(value);
         }
     }
-    let store = InMemoryStore::default();
-    let schemas = layerstack_schemas::openusd(store.tokens());
-    let doc = stage::open_with(
-        root,
-        OpenOptions {
-            stage: StageOptions {
-                schemas: Some(schemas.into()),
-                ..Default::default()
-            },
-            store: Some(store),
-            ..Default::default()
-        },
-    )?;
+    let doc = stage::open_with(root, stage::schema_options())?;
     let scene = Scene::new(doc.stage().stage(), doc.store());
     let prim = doc.view().prim(path).ok_or_else(|| {
         QueryError(

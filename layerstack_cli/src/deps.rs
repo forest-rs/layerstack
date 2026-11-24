@@ -31,10 +31,14 @@ pub(super) fn query(args: Arguments) -> Result<Vec<Record>, QueryError> {
             "expected STAGE. See 'deps --help'".into(),
         ));
     };
+    inventory(&open(root, OpenOptions::default())?, root, Inventory::All)
+}
+
+pub(super) fn open(root: &str, options: OpenOptions) -> Result<Document, QueryError> {
     let fs = Filesystem::new(".", []).map_err(|e| QueryError("open", e.to_string()))?;
     // Discovery visits authored arcs even when a different variant is selected.
     // A missing arc remains a useful row in the inventory (AOUSD Core §9, §10.3).
-    let doc = StageDocument::open(
+    StageDocument::open(
         fs,
         root,
         OpenOptions {
@@ -42,10 +46,23 @@ pub(super) fn query(args: Arguments) -> Result<Vec<Record>, QueryError> {
                 variant_arcs: VariantArcLoading::All,
                 ..Default::default()
             },
-            ..Default::default()
+            ..options
         },
     )
-    .map_err(|e| QueryError("open", format!("{root}: {e}")))?;
+    .map_err(|e| QueryError("open", format!("{root}: {e}")))
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Inventory {
+    All,
+    Findings,
+}
+
+pub(super) fn inventory(
+    doc: &Document,
+    root: &str,
+    mode: Inventory,
+) -> Result<Vec<Record>, QueryError> {
     let mut rows = Vec::new();
     let store = doc.store();
     let mut discovery = UdimDiscovery::default();
@@ -61,29 +78,50 @@ pub(super) fn query(args: Arguments) -> Result<Vec<Record>, QueryError> {
                 AssetDependencyKind::ClipTemplate => "clipTemplate",
                 _ => "other",
             };
-            let resolutions = resolve(&doc, &dep, &mut discovery)?;
-            let spec = dep
-                .spec
-                .as_ref()
-                .map_or_else(|| "/".into(), |p| p.display(store.paths(), store.tokens()));
-            for (status, resolved) in resolutions {
+            let source_fields = || {
+                let spec = dep
+                    .spec
+                    .as_ref()
+                    .map_or_else(|| "/".into(), |p| p.display(store.paths(), store.tokens()));
                 let mut fields = vec![
                     ("layer", doc.identifier(id).unwrap_or(root).into()),
-                    ("spec", spec.clone()),
+                    ("spec", spec),
                 ];
                 if let Some(field) = dep.field {
                     fields.push(("field", store.tokens().resolve(field).into()));
                 }
                 fields.push(("asset", dep.identifier.to_string()));
-                fields.push(("status", status.into()));
-                if let Some(path) = resolved {
-                    fields.push(("resolved", path));
+                fields
+            };
+            match resolve(doc, &dep, &mut discovery) {
+                Ok(resolutions) => {
+                    for (status, resolved) in resolutions {
+                        if mode == Inventory::Findings
+                            && !matches!(status, "missing" | "failed" | "unchecked")
+                        {
+                            continue;
+                        }
+                        let mut fields = source_fields();
+                        fields.push(("status", status.into()));
+                        if let Some(path) = resolved {
+                            fields.push(("resolved", path));
+                        }
+                        rows.push(Record { kind, fields });
+                    }
                 }
-                rows.push(Record { kind, fields });
+                Err(error) if mode == Inventory::Findings => {
+                    let mut fields = source_fields();
+                    fields.push(("status", "failed".into()));
+                    fields.push(("message", error.1));
+                    rows.push(Record { kind, fields });
+                }
+                Err(error) => return Err(error),
             }
         }
     }
-    rows.sort_unstable_by(|a, b| a.fields.cmp(&b.fields).then(a.kind.cmp(b.kind)));
+    if mode == Inventory::All {
+        rows.sort_unstable_by(|a, b| a.fields.cmp(&b.fields).then(a.kind.cmp(b.kind)));
+    }
     Ok(rows)
 }
 

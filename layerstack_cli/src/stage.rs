@@ -4,7 +4,7 @@
 //! Stage opening shared by the read-only composition commands.
 
 use layerstack::{
-    CompositionError, FlattenRequirements,
+    CompositionError, FlattenRequirements, InMemoryStore, StageOptions,
     stage::flatten::Instancing,
     value_clips::{ClipAssetRole, ClipAssetStatus, ClipAssetUnavailable},
 };
@@ -17,6 +17,19 @@ pub(super) type Document = StageDocument<Filesystem>;
 
 #[derive(Debug)]
 pub(super) struct QueryError(pub(super) &'static str, pub(super) String);
+
+pub(super) fn schema_options() -> OpenOptions {
+    let store = InMemoryStore::default();
+    let schemas = layerstack_schemas::openusd(store.tokens());
+    OpenOptions {
+        stage: StageOptions {
+            schemas: Some(schemas.into()),
+            ..Default::default()
+        },
+        store: Some(store),
+        ..Default::default()
+    }
+}
 
 pub(super) fn open(root: &str) -> Result<Document, QueryError> {
     open_with(root, OpenOptions::default())

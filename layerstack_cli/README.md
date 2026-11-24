@@ -11,6 +11,7 @@ cargo install --path layerstack_cli --bin layerstack
 layerstack diff before.usda after.usdc
 layerstack diff --json before.usdc after.usdc
 layerstack diff --stat before.usda after.usda
+layerstack diff --path /World/Mesh before.usda after.usda
 ```
 
 The command compares each layer's own opinions, including variant branches,
@@ -35,6 +36,12 @@ records as it compares and skips value previews. Use `layerstack diff --quiet
 BEFORE AFTER` in scripts that only need the exit status. It validates both
 inputs, stops comparing at the first difference and writes diagnostics to stderr
 if the comparison fails.
+
+Use `--path /World/Mesh` to compare that prim, its properties and descendants.
+Authored comparison includes matching prims inside every variant, even when a
+variant is on an ancestor. Composed comparison uses the stage namespace. Both
+inputs still undergo complete validation. A subtree absent on both sides compares
+equal. The JSON report records the requested path in `scope`.
 
 By default, the CLI can decode the two authored layers concurrently when each
 input is at least 256 KiB. Pass `--jobs 1` to reduce peak memory by decoding

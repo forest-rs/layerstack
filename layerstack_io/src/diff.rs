@@ -22,7 +22,7 @@ use layerstack_usda::writer::{
 
 mod prepared;
 mod values;
-pub use prepared::ComparableLayer;
+pub use prepared::{ComparableLayer, DiffScope};
 use values::{array_change, debug_summary, same_value};
 
 /// Which input prevented the comparison from completing.
@@ -271,8 +271,7 @@ fn order<'a>(fields: &mut Fields<'a>, name: &'static str, value: Option<&'a [Str
     insert(fields, name, value, Opinion::Names);
 }
 
-fn index(document: &Document) -> BTreeMap<String, Spec<'_>> {
-    let mut specs = BTreeMap::new();
+fn layer_spec(document: &Document) -> Spec<'_> {
     let mut fields = metadata(&document.metadata);
     insert(
         &mut fields,
@@ -291,21 +290,50 @@ fn index(document: &Document) -> BTreeMap<String, Spec<'_>> {
         fields.insert("subLayers", Opinion::Sublayers(&document.sublayers));
     }
     children(&mut fields, &document.prims);
-    specs.insert(
-        String::from("/"),
-        Spec {
-            kind: SpecKind::Layer,
-            fields,
-            properties: &[],
-        },
-    );
+    Spec {
+        kind: SpecKind::Layer,
+        fields,
+        properties: &[],
+    }
+}
 
-    let mut pending: Vec<_> = document
-        .prims
-        .iter()
-        .map(|prim| (format!("/{}", prim.name), prim, SpecKind::Prim))
-        .collect();
-    while let Some((path, prim, kind)) = pending.pop() {
+fn index<'a>(document: &'a Document, scope: DiffScope<'_>) -> BTreeMap<String, Spec<'a>> {
+    let mut specs = BTreeMap::new();
+    let remaining = scope.path().trim_start_matches('/');
+    if remaining.is_empty() {
+        specs.insert(String::from("/"), layer_spec(document));
+    }
+
+    // Match prim names as we descend. A variant changes the authored spec
+    // path but consumes no component of the requested scene namespace.
+    let mut pending = Vec::new();
+    push_children(&mut pending, "", "/", &document.prims, remaining);
+    while let Some((path, prim, kind, remaining)) = pending.pop() {
+        let separator = if kind == SpecKind::Variant { "" } else { "/" };
+        push_children(&mut pending, &path, separator, &prim.children, remaining);
+        for set in &prim.variant_sets {
+            if remaining.is_empty() {
+                specs.insert(
+                    format!("{path}{{{}=}}", set.name),
+                    Spec {
+                        kind: SpecKind::VariantSet,
+                        fields: Fields::new(),
+                        properties: &[],
+                    },
+                );
+            }
+            pending.extend(set.variants.iter().map(|variant| {
+                (
+                    format!("{path}{{{}={}}}", set.name, variant.name),
+                    variant,
+                    SpecKind::Variant,
+                    remaining,
+                )
+            }));
+        }
+        if !remaining.is_empty() {
+            continue;
+        }
         let mut fields = metadata(&prim.metadata);
         insert(&mut fields, "specifier", prim.specifier, Opinion::Specifier);
         insert(
@@ -350,31 +378,6 @@ fn index(document: &Document) -> BTreeMap<String, Spec<'_>> {
         order(&mut fields, "primOrder", prim.prim_order.as_deref());
         order(&mut fields, "propertyOrder", prim.property_order.as_deref());
         children(&mut fields, &prim.children);
-        let separator = if kind == SpecKind::Variant { "" } else { "/" };
-        pending.extend(prim.children.iter().map(|child| {
-            (
-                format!("{path}{separator}{}", child.name),
-                child,
-                SpecKind::Prim,
-            )
-        }));
-        for set in &prim.variant_sets {
-            specs.insert(
-                format!("{path}{{{}=}}", set.name),
-                Spec {
-                    kind: SpecKind::VariantSet,
-                    fields: Fields::new(),
-                    properties: &[],
-                },
-            );
-            pending.extend(set.variants.iter().map(|variant| {
-                (
-                    format!("{path}{{{}={}}}", set.name, variant.name),
-                    variant,
-                    SpecKind::Variant,
-                )
-            }));
-        }
         specs.insert(
             path,
             Spec {
@@ -385,6 +388,29 @@ fn index(document: &Document) -> BTreeMap<String, Spec<'_>> {
         );
     }
     specs
+}
+
+fn push_children<'doc, 'scope>(
+    pending: &mut Vec<(String, &'doc Prim, SpecKind, &'scope str)>,
+    parent: &str,
+    separator: &str,
+    children: &'doc [Prim],
+    remaining: &'scope str,
+) {
+    let (next, rest) = remaining.split_once('/').unwrap_or((remaining, ""));
+    pending.extend(
+        children
+            .iter()
+            .filter(|p| next.is_empty() || p.name == next)
+            .map(|p| {
+                (
+                    format!("{parent}{separator}{}", p.name),
+                    p,
+                    SpecKind::Prim,
+                    rest,
+                )
+            }),
+    );
 }
 
 fn children<'a>(fields: &mut Fields<'a>, children: &'a [Prim]) {
@@ -560,20 +586,21 @@ fn compare_documents<C: Changes>(
     after: &Document,
     changes: &mut C,
 ) -> ControlFlow<()> {
-    walk_documents(before, after, changes, compare_properties)
+    walk_documents(before, after, DiffScope::ALL, changes, compare_properties)
 }
 
 fn walk_documents<C: Changes>(
     before: &Document,
     after: &Document,
+    scope: DiffScope<'_>,
     changes: &mut C,
     mut properties: impl FnMut(&mut C, &str, &[Property], &[Property]) -> ControlFlow<()>,
 ) -> ControlFlow<()> {
     if core::ptr::eq(before, after) {
         return ControlFlow::Continue(());
     }
-    let before = index(before);
-    let after = index(after);
+    let before = index(before, scope);
+    let after = index(after, scope);
     for_each_key(&before, &after, |path, left, right| {
         compare_spec(changes, format_args!("{path}"), left, right)?;
         properties(

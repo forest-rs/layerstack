@@ -8,7 +8,7 @@ use layerstack::{
     stage::flatten::Instancing,
     value_clips::{ClipAssetRole, ClipAssetStatus, ClipAssetUnavailable},
 };
-use layerstack_io::diff::{DiffSide, LayerDiff, diff_documents};
+use layerstack_io::diff::DiffSide;
 use layerstack_io::{Filesystem, IoErrorKind, OpenOptions, StageDocument};
 use layerstack_usda::{save::usdc_document, writer};
 use std::{collections::BTreeSet, path::Path};
@@ -63,10 +63,14 @@ fn check_composition(doc: &Document) -> Result<(), QueryError> {
     Ok(())
 }
 
-pub(super) fn diff(before: &Path, after: &Path) -> Result<LayerDiff, (DiffSide, QueryError)> {
+pub(super) fn diff<R>(
+    before: &Path,
+    after: &Path,
+    compare: impl FnOnce(&writer::Document, &writer::Document) -> R,
+) -> Result<R, (DiffSide, QueryError)> {
     let left = snapshot(before).map_err(|e| (DiffSide::Before, e))?;
     let right = snapshot(after).map_err(|e| (DiffSide::After, e))?;
-    Ok(diff_documents(&left, &right))
+    Ok(compare(&left, &right))
 }
 
 /// Compare active composition in stage namespace, retaining all animation in

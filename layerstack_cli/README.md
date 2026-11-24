@@ -30,7 +30,11 @@ when the comparison could not be completed.
 With `--stat`, the command prints one line with counts of added, removed and
 changed records and distinct paths. A single path can have several field or
 sample changes. Use `--stat --json` for the counts as numbers. Full detail and
-summary use the same comparison and exit codes in both modes.
+summary use the same comparison and exit codes in both modes. The summary counts
+records as it compares and skips value previews. Use `layerstack diff --quiet
+BEFORE AFTER` in scripts that only need the exit status. It validates both
+inputs, stops comparing at the first difference and writes diagnostics to stderr
+if the comparison fails.
 
 By default, the CLI can decode the two authored layers concurrently when each
 input is at least 256 KiB. Pass `--jobs 1` to reduce peak memory by decoding

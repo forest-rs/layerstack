@@ -55,6 +55,28 @@ fn diff_distinguishes_equality_changes_and_unreadable_input() {
         r#"{"mode":"authored","equal":false,"stat":{"records":1,"paths":1,"added":1,"removed":0,"changed":0}}"#
     );
 
+    for (after, expected) in [("empty.usda", 0), ("before.usdc", 0), ("after.usda", 1)] {
+        let quiet = compare(&["--quiet", "before.usdc", after]);
+        assert_eq!(quiet.status.code(), Some(expected), "{quiet:?}");
+        assert!(quiet.stdout.is_empty() && quiet.stderr.is_empty());
+    }
+    for flag in ["--stat", "--json"] {
+        assert_eq!(
+            compare(&["--quiet", flag, "before.usdc", "empty.usda"])
+                .status
+                .code(),
+            Some(2)
+        );
+    }
+    fs::write(dir.join("invalid.usda"), b"invalid").unwrap();
+    let invalid = compare(&["--quiet", "after.usda", "invalid.usda"]);
+    assert_eq!(invalid.status.code(), Some(2));
+    assert!(invalid.stdout.is_empty());
+    assert!(
+        String::from_utf8(invalid.stderr)
+            .unwrap()
+            .contains("after layer")
+    );
     let missing = compare(&["before.usdc", "absent.usdc"]);
     assert_eq!(missing.status.code(), Some(2), "{missing:?}");
     assert!(
@@ -145,6 +167,7 @@ def "Assembly" (references = @./model.usda@</Model>) {
     };
     let roots = ["before/scene.usda", "after/scene.usda"];
     run(&["diff", roots[0], roots[1]], 0);
+    assert!(run(&["diff", "--composed", "--quiet", roots[0], roots[1]], 1).is_empty());
     let diff = run(&["diff", "--composed", "--json", roots[0], roots[1]], 1);
     assert!(
         diff.contains(r#""mode":"composed""#) && diff.contains(r#""path":"/Assembly.size""#),

@@ -13,7 +13,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use core::{cmp::Ordering, fmt};
+use core::{cmp::Ordering, fmt, ops::ControlFlow};
 
 use layerstack::{Layer, LayerId, NoAssets, PathInterner, TokenInterner};
 use layerstack_usda::writer::{
@@ -459,33 +459,121 @@ fn property_spec(property: &Property) -> Spec<'_> {
 /// during lowering because document paths and names are text.
 #[must_use]
 pub fn diff_documents(before: &Document, after: &Document) -> LayerDiff {
+    let mut changes = Vec::new();
+    let _ = compare_documents(before, after, &mut changes);
+    // Properties are visited with their prim. Restore global path order for display.
+    layerstack::sort::sort_by(&mut changes, |a, b| a.path.cmp(&b.path));
+    LayerDiff { changes }
+}
+
+/// Counts of differing authored records and spec paths.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DiffStats {
+    /// Distinct spec paths with differences.
+    pub paths: usize,
+    /// Records present only in the revised document.
+    pub added: usize,
+    /// Records present only in the baseline document.
+    pub removed: usize,
+    /// Records present in both documents with different content.
+    pub changed: usize,
+}
+
+/// Counts differences between validated documents without formatting or retaining records.
+#[must_use]
+pub fn diff_document_stats(before: &Document, after: &Document) -> DiffStats {
+    let mut counter = Counter::default();
+    let _ = compare_documents(before, after, &mut counter);
+    counter.stats
+}
+
+/// Returns whether two validated documents differ, stopping at the first difference.
+#[must_use]
+pub fn documents_differ(before: &Document, after: &Document) -> bool {
+    compare_documents(before, after, &mut FirstDifference).is_break()
+}
+
+trait Changes {
+    const DETAILS: bool;
+
+    fn begin_path(&mut self) {}
+
+    fn record(&mut self, kind: ChangeKind, detail: impl FnOnce() -> Change) -> ControlFlow<()>;
+}
+
+impl Changes for Vec<Change> {
+    const DETAILS: bool = true;
+
+    fn record(&mut self, _: ChangeKind, detail: impl FnOnce() -> Change) -> ControlFlow<()> {
+        self.push(detail());
+        ControlFlow::Continue(())
+    }
+}
+
+#[derive(Default)]
+struct Counter {
+    stats: DiffStats,
+    first_on_path: bool,
+}
+
+impl Changes for Counter {
+    const DETAILS: bool = false;
+
+    fn begin_path(&mut self) {
+        self.first_on_path = true;
+    }
+
+    fn record(&mut self, kind: ChangeKind, _: impl FnOnce() -> Change) -> ControlFlow<()> {
+        self.stats.paths += usize::from(core::mem::take(&mut self.first_on_path));
+        match kind {
+            ChangeKind::Added => self.stats.added += 1,
+            ChangeKind::Removed => self.stats.removed += 1,
+            ChangeKind::Changed => self.stats.changed += 1,
+        }
+        ControlFlow::Continue(())
+    }
+}
+
+struct FirstDifference;
+
+impl Changes for FirstDifference {
+    const DETAILS: bool = false;
+
+    fn record(&mut self, _: ChangeKind, _: impl FnOnce() -> Change) -> ControlFlow<()> {
+        ControlFlow::Break(())
+    }
+}
+
+fn compare_documents<C: Changes>(
+    before: &Document,
+    after: &Document,
+    changes: &mut C,
+) -> ControlFlow<()> {
+    if core::ptr::eq(before, after) {
+        return ControlFlow::Continue(());
+    }
     let before = index(before);
     let after = index(after);
-    let mut changes = Vec::new();
     for_each_key(&before, &after, |path, left, right| {
-        compare_spec(&mut changes, path, left, right);
+        compare_spec(changes, format_args!("{path}"), left, right)?;
         let left = property_index(left.map_or(&[], |s| s.properties));
         let right = property_index(right.map_or(&[], |s| s.properties));
         for_each_key(&left, &right, |name, a, b| {
             if let (Some(a), Some(b)) = (a, b)
                 && same_plain_property(a, b)
             {
-                return;
+                return ControlFlow::Continue(());
             }
             let a = a.map(|p| property_spec(p));
             let b = b.map(|p| property_spec(p));
             compare_spec(
-                &mut changes,
-                &format!("{path}.{name}"),
+                changes,
+                format_args!("{path}.{name}"),
                 a.as_ref(),
                 b.as_ref(),
-            );
-        });
-    });
-    // A prim's properties are visited together. Restore global path order
-    // (including variant paths) while retaining field and sample order.
-    layerstack::sort::sort_by(&mut changes, |a, b| a.path.cmp(&b.path));
-    LayerDiff { changes }
+            )
+        })
+    })
 }
 
 fn property_index(properties: &[Property]) -> BTreeMap<&str, &Property> {
@@ -521,28 +609,29 @@ fn same_plain_property(a: &Property, b: &Property) -> bool {
     }
 }
 
-fn compare_spec(
-    changes: &mut Vec<Change>,
-    path: &str,
+fn compare_spec<C: Changes>(
+    changes: &mut C,
+    path: fmt::Arguments<'_>,
     left: Option<&Spec<'_>>,
     right: Option<&Spec<'_>>,
-) {
+) -> ControlFlow<()> {
+    changes.begin_path();
     match (left, right) {
         (Some(left), Some(right)) if left.kind == right.kind => {
             for_each_key(&left.fields, &right.fields, |field, a, b| match (a, b) {
                 (Some(Opinion::TimeSamples(a)), Some(Opinion::TimeSamples(b))) => {
-                    compare_samples(changes, path, field, a, b);
+                    compare_samples(changes, path, field, a, b)
                 }
                 (Some(Opinion::TimeSamples(a)), None) if !a.is_empty() => {
-                    compare_samples(changes, path, field, a, &[]);
+                    compare_samples(changes, path, field, a, &[])
                 }
                 (None, Some(Opinion::TimeSamples(b))) if !b.is_empty() => {
-                    compare_samples(changes, path, field, &[], b);
+                    compare_samples(changes, path, field, &[], b)
                 }
                 _ => compare_field(changes, path, field, None, a, b),
-            });
+            })
         }
-        _ => changes.push(Change {
+        _ => changes.record(kind(left, right), || Change {
             path: path.to_string(),
             field: None,
             time: None,
@@ -558,8 +647,8 @@ fn compare_spec(
 fn for_each_key<K: Ord, V>(
     before: &BTreeMap<K, V>,
     after: &BTreeMap<K, V>,
-    mut visit: impl FnMut(&K, Option<&V>, Option<&V>),
-) {
+    mut visit: impl FnMut(&K, Option<&V>, Option<&V>) -> ControlFlow<()>,
+) -> ControlFlow<()> {
     let mut before = before.iter().peekable();
     let mut after = after.iter().peekable();
     loop {
@@ -567,25 +656,23 @@ fn for_each_key<K: Ord, V>(
             (Some((a, _)), Some((b, _))) => match a.cmp(b) {
                 Ordering::Less => {
                     let (key, value) = before.next().expect("peeked baseline");
-                    visit(key, Some(value), None);
+                    visit(key, Some(value), None)?;
                 }
                 Ordering::Greater => {
                     let (key, value) = after.next().expect("peeked revision");
-                    visit(key, None, Some(value));
+                    visit(key, None, Some(value))?;
                 }
                 Ordering::Equal => {
                     let (key, a) = before.next().expect("peeked baseline");
                     let (_, b) = after.next().expect("peeked revision");
-                    visit(key, Some(a), Some(b));
+                    visit(key, Some(a), Some(b))?;
                 }
             },
             (Some(_), None) => {
-                before.for_each(|(key, value)| visit(key, Some(value), None));
-                return;
+                return before.try_for_each(|(key, value)| visit(key, Some(value), None));
             }
             (None, _) => {
-                after.for_each(|(key, value)| visit(key, None, Some(value)));
-                return;
+                return after.try_for_each(|(key, value)| visit(key, None, Some(value)));
             }
         }
     }
@@ -599,13 +686,13 @@ fn kind<T>(before: Option<T>, after: Option<T>) -> ChangeKind {
     }
 }
 
-fn compare_samples(
-    changes: &mut Vec<Change>,
-    path: &str,
+fn compare_samples<C: Changes>(
+    changes: &mut C,
+    path: fmt::Arguments<'_>,
     field: &str,
     mut before: &[(f64, Value)],
     mut after: &[(f64, Value)],
-) {
+) -> ControlFlow<()> {
     // Document validation guarantees finite times in ascending order.
     // AOUSD Core §12.3. An authored sample is keyed by its exact time.
     while !before.is_empty() || !after.is_empty() {
@@ -632,21 +719,24 @@ fn compare_samples(
             time,
             a.as_ref().map(|(_, v)| v),
             b.as_ref().map(|(_, v)| v),
-        );
+        )?;
     }
+    ControlFlow::Continue(())
 }
 
-fn compare_field(
-    changes: &mut Vec<Change>,
-    path: &str,
+fn compare_field<C: Changes>(
+    changes: &mut C,
+    path: fmt::Arguments<'_>,
     field: &str,
     time: Option<f64>,
     before: Option<&Opinion<'_>>,
     after: Option<&Opinion<'_>>,
-) {
+) -> ControlFlow<()> {
     let mut array = None;
     if let (Some(a), Some(b)) = (before, after) {
-        if let (Opinion::Value(a), Opinion::Value(b)) = (a, b) {
+        if C::DETAILS
+            && let (Opinion::Value(a), Opinion::Value(b)) = (a, b)
+        {
             array = array_change(a, b);
         }
         let equal = match &array {
@@ -654,28 +744,31 @@ fn compare_field(
             None => a.same(b),
         };
         if equal {
-            return;
+            return ControlFlow::Continue(());
         }
     }
-    let mut before_summary = before.map(Opinion::summary);
-    let mut after_summary = after.map(Opinion::summary);
-    if let (Some(Opinion::Paths(a)), Some(Opinion::Paths(b))) = (before, after)
-        && (before_summary.as_deref().is_some_and(|s| s.ends_with('…'))
-            || after_summary.as_deref().is_some_and(|s| s.ends_with('…')))
-        && let Some((left, right)) = values::path_list_change(a, b)
-    {
-        before_summary = Some(left);
-        after_summary = Some(right);
-    }
-    changes.push(Change {
-        path: String::from(path),
-        field: Some(String::from(field)),
-        time,
-        kind: kind(before, after),
-        before: before_summary,
-        after: after_summary,
-        array,
-    });
+    let kind = kind(before, after);
+    changes.record(kind, || {
+        let mut before_summary = before.map(Opinion::summary);
+        let mut after_summary = after.map(Opinion::summary);
+        if let (Some(Opinion::Paths(a)), Some(Opinion::Paths(b))) = (before, after)
+            && (before_summary.as_deref().is_some_and(|s| s.ends_with('…'))
+                || after_summary.as_deref().is_some_and(|s| s.ends_with('…')))
+            && let Some((left, right)) = values::path_list_change(a, b)
+        {
+            before_summary = Some(left);
+            after_summary = Some(right);
+        }
+        Change {
+            path: path.to_string(),
+            field: Some(String::from(field)),
+            time,
+            kind,
+            before: before_summary,
+            after: after_summary,
+            array,
+        }
+    })
 }
 
 impl Opinion<'_> {
@@ -732,9 +825,21 @@ mod tests {
     use super::*;
 
     fn diff(before: &str, after: &str) -> Vec<Change> {
-        diff_layers(before.as_bytes(), after.as_bytes())
-            .unwrap()
-            .changes
+        let before = read_authored_document(before.as_bytes()).unwrap();
+        let after = read_authored_document(after.as_bytes()).unwrap();
+        let changes = diff_documents(&before, &after).changes;
+        let count = |kind| changes.iter().filter(|c| c.kind == kind).count();
+        assert_eq!(
+            diff_document_stats(&before, &after),
+            DiffStats {
+                paths: changes.chunk_by(|a, b| a.path == b.path).count(),
+                added: count(ChangeKind::Added),
+                removed: count(ChangeKind::Removed),
+                changed: count(ChangeKind::Changed),
+            }
+        );
+        assert_eq!(documents_differ(&before, &after), !changes.is_empty());
+        changes
     }
 
     #[test]

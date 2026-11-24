@@ -11,8 +11,10 @@ mod query;
 mod stage;
 
 use layerstack_io::diff::{
-    Change, ChangeKind, DiffSide, LayerDiff, diff_documents, diff_layers, read_authored_document,
+    Change, DiffSide, DiffStats, LayerDiff, diff_document_stats, diff_documents, documents_differ,
+    read_authored_document,
 };
+use layerstack_usda::writer::Document;
 use std::{
     env,
     ffi::OsString,
@@ -35,7 +37,7 @@ Run 'layerstack COMMAND --help' for arguments and examples.
 ";
 
 const DIFF_HELP: &str = "\
-Usage: layerstack diff [--composed | --jobs N] [--stat] [--json] BEFORE AFTER
+Usage: layerstack diff [--composed | --jobs N] [--quiet | --stat] [--json] BEFORE AFTER
 
 Compare the authored opinions in two USDA or USDC layers.
 Includes all variant branches. Only the two given files are read.
@@ -44,6 +46,7 @@ Authored comparison accepts loose USDA and USDC files.
 
 --jobs 1 limits authored comparisons to one reader to reduce peak memory.
 The default, --jobs 2, can read large authored layers concurrently.
+--quiet validates both inputs and returns the exit status without a report.
 --stat shows counts of added, removed and changed records and distinct paths.
 --composed opens both stages and compares their losslessly flattened contents.
 Reads dependencies, selects active variants and reports expanded instance paths.
@@ -103,6 +106,7 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
     let mut json = false;
     let mut composed = false;
     let mut stat = false;
+    let mut quiet = false;
     let mut jobs = None;
     let mut options = true;
     let mut paths = Vec::with_capacity(2);
@@ -124,6 +128,8 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
                     _ => return Err(String::from("--jobs expects 1 or 2")),
                 },
             );
+        } else if options && arg == "--quiet" {
+            quiet = true;
         } else if options && arg == "--stat" {
             stat = true;
         } else if options && arg == "--composed" {
@@ -142,8 +148,22 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
     if composed && jobs.is_some() {
         return Err(String::from("--jobs applies only to authored comparisons"));
     }
-    let diff = if composed {
-        match stage::diff(before, after) {
+    if quiet && (stat || json) {
+        return Err(String::from(
+            "--quiet cannot be combined with --stat or --json",
+        ));
+    }
+    let compare = |before: &Document, after: &Document| {
+        if quiet {
+            Report::Quiet(documents_differ(before, after))
+        } else if stat {
+            Report::Stat(diff_document_stats(before, after))
+        } else {
+            Report::Full(diff_documents(before, after))
+        }
+    };
+    let report = if composed {
+        match stage::diff(before, after, compare) {
             Ok(diff) => diff,
             Err((side, error)) => {
                 let path = match side {
@@ -158,66 +178,75 @@ fn run(mut args: impl Iterator<Item = OsString>) -> Result<bool, String> {
             }
         }
     } else {
-        authored_diff(before, after, jobs.unwrap_or(2))?
+        authored_diff(before, after, jobs.unwrap_or(2), compare)?
     };
-    if stat {
-        write_stat(&mut output, &diff, composed, json).map_err(output_error)?;
-    } else if json {
-        write_json(&mut output, &diff, composed).map_err(output_error)?;
-    } else {
-        write_text(&mut output, &diff, composed).map_err(output_error)?;
-    }
+    let different = match report {
+        Report::Quiet(different) => different,
+        Report::Stat(stats) => {
+            write_stat(&mut output, &stats, composed, json).map_err(output_error)?;
+            stats.paths != 0
+        }
+        Report::Full(diff) => {
+            if json {
+                write_json(&mut output, &diff, composed).map_err(output_error)?;
+            } else {
+                write_text(&mut output, &diff, composed).map_err(output_error)?;
+            }
+            !diff.changes.is_empty()
+        }
+    };
     output.flush().map_err(output_error)?;
-    Ok(!diff.changes.is_empty())
+    Ok(different)
 }
 
-fn authored_diff(before: &Path, after: &Path, jobs: u8) -> Result<LayerDiff, String> {
+enum Report {
+    Full(LayerDiff),
+    Stat(DiffStats),
+    Quiet(bool),
+}
+
+fn authored_diff<R>(
+    before: &Path,
+    after: &Path,
+    jobs: u8,
+    compare: impl FnOnce(&Document, &Document) -> R,
+) -> Result<R, String> {
     let read = |path: &Path| {
         fs::read(path).map_err(|error| format!("reading {}: {error}", path.display()))
     };
     let first = read(before)?;
     let second = read(after)?;
+    let left = || {
+        read_authored_document(&first)
+            .map_err(|e| format!("{}: before layer: {e}", before.display()))
+    };
+    let right = || {
+        read_authored_document(&second)
+            .map_err(|e| format!("{}: after layer: {e}", after.display()))
+    };
+    if first == second {
+        let doc = left()?;
+        return Ok(compare(&doc, &doc));
+    }
     // Small layers cost less to decode than starting a second reader.
     const PARALLEL_MIN_BYTES: usize = 256 * 1024;
     if jobs == 2
         && first.len().min(second.len()) >= PARALLEL_MIN_BYTES
-        && first != second
         && !cfg!(target_family = "wasm")
         && !std::thread::available_parallelism().is_ok_and(|cpus| cpus.get() == 1)
     {
         return std::thread::scope(|scope| {
-            let worker =
-                std::thread::Builder::new().spawn_scoped(scope, || read_authored_document(&second));
-            if let Ok(worker) = worker {
-                let left = read_authored_document(&first)
-                    .map_err(|e| format!("{}: before layer: {e}", before.display()));
-                let right = worker
+            if let Ok(worker) = std::thread::Builder::new().spawn_scoped(scope, right) {
+                let baseline = left();
+                let revision = worker
                     .join()
                     .unwrap_or_else(|e| std::panic::resume_unwind(e));
-                return Ok(diff_documents(
-                    &left?,
-                    &right.map_err(|e| format!("{}: after layer: {e}", after.display()))?,
-                ));
+                return Ok(compare(&baseline?, &revision?));
             }
-            serial_diff(before, after, &first, &second)
+            Ok(compare(&left()?, &right()?))
         });
     }
-    serial_diff(before, after, &first, &second)
-}
-
-fn serial_diff(
-    before: &Path,
-    after: &Path,
-    first: &[u8],
-    second: &[u8],
-) -> Result<LayerDiff, String> {
-    diff_layers(first, second).map_err(|error| {
-        let path = match error.side {
-            DiffSide::Before => before,
-            DiffSide::After => after,
-        };
-        format!("{}: {error}", path.display())
-    })
+    Ok(compare(&left()?, &right()?))
 }
 
 fn is_help(arg: &std::ffi::OsStr) -> bool {
@@ -226,20 +255,17 @@ fn is_help(arg: &std::ffi::OsStr) -> bool {
 
 fn write_stat(
     out: &mut impl Write,
-    diff: &LayerDiff,
+    stats: &DiffStats,
     composed: bool,
     json: bool,
 ) -> io::Result<()> {
-    let (mut added, mut removed, mut changed) = (0_usize, 0_usize, 0_usize);
-    for change in &diff.changes {
-        match change.kind {
-            ChangeKind::Added => added += 1,
-            ChangeKind::Removed => removed += 1,
-            ChangeKind::Changed => changed += 1,
-        }
-    }
-    let paths = diff.changes.chunk_by(|a, b| a.path == b.path).count();
-    let total = diff.changes.len();
+    let DiffStats {
+        added,
+        removed,
+        changed,
+        paths,
+    } = *stats;
+    let total = added + removed + changed;
     let mode = if composed { "composed" } else { "authored" };
     if json {
         writeln!(

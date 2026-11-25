@@ -1001,6 +1001,10 @@ impl Catalog {
                 });
         }
     }
+    pub(crate) fn has_prepared_property(&self, prim: PathId, field: TokenId) -> bool {
+        self.properties.contains_key(&(prim, field))
+    }
+
     pub(crate) fn opinions(
         &self,
         prim: PathId,

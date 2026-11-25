@@ -207,5 +207,36 @@ fn bench_resolve(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_resolve);
+fn bench_animation_variation(c: &mut Criterion) {
+    let mut group = c.benchmark_group("attribute_variation");
+    for count in [0, 1, 2, 1_000, 100_000] {
+        let mut store = InMemoryStore::default();
+        let prim = store.path("/P");
+        let field = store.tokens().intern("weight");
+        let spec = PropertySpec::typed_attribute(PropertyType::parse("double").unwrap());
+        let spec = if count == 0 {
+            spec.with_default(Value::Double(0.0))
+        } else {
+            spec.with_time_samples(
+                (0..count)
+                    .map(|i| (f64::from(i), Value::Double(1.0)))
+                    .collect(),
+            )
+        };
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(prim, PrimSpec::def().with_property(field, spec));
+        store.insert_layer(layer);
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        let attribute = stage
+            .view(&store)
+            .attribute(PropertyPath::new(prim, field))
+            .unwrap();
+        group.bench_function(count.to_string(), |b| {
+            b.iter(|| black_box(attribute).might_be_time_varying());
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(benches, bench_resolve, bench_animation_variation);
 criterion_main!(benches);

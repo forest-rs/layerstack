@@ -1516,6 +1516,12 @@ mod early_reuse_tests {
     fn clips_exclude_early_reuse_and_nested_arcs_do_not() {
         let (mut store, source, _) = scene();
         let clips = store.tokens.intern("clips");
+        let unrelated = store.path("/Animation");
+        store.layers.get_mut(&LayerId(1)).unwrap().insert_prim(
+            unrelated,
+            PrimSpec::def().with_field(clips, Value::Dictionary(vec![])),
+        );
+        assert_matches_full(&mut store, 4);
         store.layers.get_mut(&LayerId(2)).unwrap().insert_prim(
             source,
             PrimSpec::def().with_field(clips, Value::Dictionary(vec![])),

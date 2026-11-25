@@ -552,6 +552,34 @@ impl PortEdit {
         }
         Ok(())
     }
+    /// Authors the port attribute's `colorSpace` token, for example on an image's file input.
+    ///
+    /// # Errors
+    ///
+    /// See [`PrimEdit::set_attribute_color_space`].
+    pub fn set_color_space(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        name: &str,
+    ) -> Result<&Self, crate::MetadataError> {
+        PrimEdit::from_path_unchecked(self.prim)
+            .set_attribute_color_space(edit, &self.name, name)?;
+        Ok(self)
+    }
+
+    /// Clears the port attribute's `colorSpace` opinion from the edit target.
+    ///
+    /// # Errors
+    ///
+    /// See [`PrimEdit::clear_attribute_color_space`].
+    pub fn clear_color_space(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+    ) -> Result<&Self, crate::MetadataError> {
+        PrimEdit::from_path_unchecked(self.prim).clear_attribute_color_space(edit, &self.name)?;
+        Ok(self)
+    }
+
     /// Authors this attribute's default value. Type validation is performed by
     /// the core transaction at commit, as with generated attribute setters.
     pub fn set(&self, edit: &mut SchemaEdit<'_>, value: Value) -> Result<&Self, PortError> {

@@ -731,6 +731,39 @@ impl PrimEdit {
         Ok(self)
     }
 
+    /// Authors the attribute's USD `colorSpace` metadata token. Custom names are
+    /// allowed. An empty name explicitly suppresses inherited color space.
+    ///
+    /// Spec: AOUSD Core §12.3 (attribute resolution), §13.3.2 (schemas).
+    ///
+    /// # Errors
+    ///
+    /// Returns a metadata error if the property is missing or is a relationship.
+    #[doc(alias = "SetColorSpace")]
+    pub fn set_attribute_color_space(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        attribute: &str,
+        name: &str,
+    ) -> Result<&Self, crate::MetadataError> {
+        let token = edit.tokens().intern(name);
+        self.write_property_metadata(edit, attribute, "colorSpace", Value::Token(token))
+    }
+
+    /// Clears this edit target's attribute color space so weaker opinions can resolve.
+    ///
+    /// # Errors
+    ///
+    /// Returns a metadata error if the property is missing or is a relationship.
+    #[doc(alias = "ClearColorSpace")]
+    pub fn clear_attribute_color_space(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        attribute: &str,
+    ) -> Result<&Self, crate::MetadataError> {
+        self.clear_property_metadata(edit, attribute, "colorSpace")
+    }
+
     /// Clears the metadata field `field` of the property `property` in the edit
     /// target, so weaker opinions or the field's fallback show through. The
     /// field is checked as [`Self::write_property_metadata`] checks it; a

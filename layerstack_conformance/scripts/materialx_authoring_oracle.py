@@ -45,6 +45,7 @@ def verify(path, graph):
     surface = shader(stage, "Surface", "ND_open_pbr_surface_surfaceshader")
 
     verify_file(albedo, "albedo.exr", path)
+    assert albedo.GetInput("file").GetAttr().GetColorSpace() == "lin_rec709_scene", path
     weight = surface.GetInput("base_weight")
     assert weight.GetTypeName() == Sdf.ValueTypeNames.Float, path
     assert weight.Get() == 0.75, path

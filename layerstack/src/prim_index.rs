@@ -748,24 +748,29 @@ impl FieldDirectory {
         &self.columns[self.groups as usize..]
     }
 
-    fn range(&self, i: usize) -> Range<usize> {
-        let ends = self.ends();
-        if ends.is_empty() {
-            i..i + 1
+    fn start(&self, i: usize) -> usize {
+        if i == 0 || self.columns.len() == self.groups as usize {
+            i
         } else {
-            let start = if i == 0 { 0 } else { ends[i - 1] };
-            start as usize..ends[i] as usize
+            self.columns[self.groups as usize + i - 1] as usize
         }
     }
 
-    fn find(&self, field: FieldKey) -> Option<Range<usize>> {
+    fn range(&self, i: usize) -> Range<usize> {
+        if self.columns.len() == self.groups as usize {
+            i..i + 1
+        } else {
+            self.start(i)..self.columns[self.groups as usize + i] as usize
+        }
+    }
+
+    fn slot(&self, field: FieldKey) -> Option<usize> {
         let mid = self.metadata as usize;
         let (names, offset, token) = match field {
             FieldKey::Metadata(token) => (&self.columns[..mid], 0, token),
             FieldKey::Property(token) => (&self.columns[mid..self.groups as usize], mid, token),
         };
-        let i = names.binary_search(&token.get()).ok()?;
-        Some(self.range(i + offset))
+        names.binary_search(&token.get()).ok().map(|i| i + offset)
     }
 }
 
@@ -971,6 +976,24 @@ impl PrimIndex {
         }
     }
 
+    /// The first property spec in strength order. This lookup needs only
+    /// the group's first record, even when other layers contribute to it.
+    #[inline]
+    pub(crate) fn strongest_property(&self, name: TokenId) -> Option<&PropertySpec> {
+        let data = &*self.data;
+        // One or two records fit a short scan. Reading them directly also
+        // skips the directory load on the common single-attribute prim.
+        if data.opinions.len() <= 2 {
+            return data
+                .opinions
+                .iter()
+                .filter(|op| op.field == name)
+                .find_map(|op| op.value.as_property());
+        }
+        let slot = data.fields.slot(FieldKey::Property(name))?;
+        data.opinions[data.fields.start(slot)].value.as_property()
+    }
+
     /// The opinions of the property `name`.
     pub(crate) fn property_opinions(&self, name: TokenId) -> Option<Opinions<'_>> {
         self.field_opinions(FieldKey::Property(name))
@@ -982,12 +1005,12 @@ impl PrimIndex {
     }
 
     fn field_opinions(&self, field: FieldKey) -> Option<Opinions<'_>> {
-        let range = self.fields.find(field)?;
+        let range = self.fields.range(self.fields.slot(field)?);
         Some(Opinions::new(&self.opinions[range], &self.sources))
     }
 
     pub(crate) fn field_opinions_mut(&mut self, field: FieldKey) -> Option<&mut [Opinion]> {
-        let range = self.fields.find(field)?;
+        let range = self.fields.range(self.fields.slot(field)?);
         Some(&mut self.opinions[range])
     }
 

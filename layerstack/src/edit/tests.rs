@@ -2661,17 +2661,97 @@ fn attribute_block_preserves_empty_sample_fields_and_splines_on_undo() {
     let mut create = Transaction::new();
     create.create_property(at.clone(), attr.clone());
     create.apply(&mut store).unwrap();
+    type ResetAttribute = fn(&mut Transaction, Address) -> &mut Transaction;
+    let operations: [ResetAttribute; 3] = [
+        Transaction::block_attribute,
+        Transaction::block_animation,
+        Transaction::clear_attribute,
+    ];
+    for operation in operations {
+        let mut edit = Transaction::new();
+        operation(&mut edit, at.clone());
+        let inverse = edit.apply(&mut store).unwrap();
+        let reset = store.layers[&ROCK].property_at(&path).unwrap();
+        assert!(!reset.time_samples.is_authored() && reset.spline.is_none());
+        inverse.apply(&mut store).unwrap();
+        let restored = store.layers[&ROCK].property_at(&path).unwrap();
+        assert!(
+            same::Same::same(restored, &attr),
+            "undo restores all authored bits"
+        );
+    }
+}
+
+#[test]
+fn clear_and_animation_block_reveal_different_weaker_values() {
+    let mut store = rocks();
+    let rock = store.path("/Rock");
+    let spin = store.tokens.intern("spin");
+    let weak = store
+        .layers
+        .get_mut(&ROCK)
+        .unwrap()
+        .prim_mut(rock)
+        .unwrap()
+        .property_mut(spin)
+        .unwrap();
+    weak.custom = true;
+    weak.default = Some(Value::Double(7.0));
+
+    let path = store.property_path("/World/RockA.spin");
+    let local = spec(&mut store, "/World/RockA.spin");
+    let at = EditTarget::for_layer(SCENE).property(path);
+    let mut live = crate::LiveStage::compose(&mut store, SCENE, StageOptions::default());
+    let read = |stage: &crate::LiveStage, store: &InMemoryStore| {
+        stage
+            .stage()
+            .view(store)
+            .attribute(path)
+            .unwrap()
+            .get(Time::at(10.))
+            .unwrap()
+            .value
+    };
+    assert_eq!(read(&live, &store), Value::Double(100.0));
+    let mut clear = Transaction::new();
+    clear.clear_attribute(at.clone());
+    assert!(live.apply(&mut store, &clear).unwrap().inverse.is_empty());
+    assert!(store.layers[&SCENE].property_at(&local).is_none());
+
     let mut block = Transaction::new();
-    block.block_attribute(at);
-    let inverse = block.apply(&mut store).unwrap();
-    let blocked = store.layers[&ROCK].property_at(&path).unwrap();
-    assert!(!blocked.time_samples.is_authored() && blocked.spline.is_none());
-    inverse.apply(&mut store).unwrap();
-    let restored = store.layers[&ROCK].property_at(&path).unwrap();
+    block.block_animation(at.clone());
+    let undo_block = live.apply(&mut store, &block).unwrap().inverse;
+    assert_eq!(read(&live, &store), Value::Double(7.0));
+    let strong = store.layers[&SCENE].property_at(&local).unwrap();
+    assert_eq!(strong.default, Some(Value::AnimationBlock));
+    assert!(strong.custom);
+
+    let undo_clear = live.apply(&mut store, &clear).unwrap().inverse;
+    assert_eq!(read(&live, &store), Value::Double(100.0));
     assert!(
-        same::Same::same(restored, &attr),
-        "all authored bits survive block/undo"
+        store.layers[&SCENE]
+            .property_at(&local)
+            .unwrap()
+            .default
+            .is_none()
     );
+    live.apply(&mut store, &undo_clear).unwrap();
+    assert_eq!(read(&live, &store), Value::Double(7.0));
+    live.apply(&mut store, &undo_block).unwrap();
+    assert!(store.layers[&SCENE].property_at(&local).is_none());
+}
+
+#[test]
+fn animation_block_is_only_valid_at_default_time() {
+    let mut store = rocks();
+    let path = spec(&mut store, "/Rock.spin");
+    let at = Address::spec(ROCK, path.clone());
+    let mut tx = Transaction::new();
+    tx.clear_attribute(at.clone())
+        .set_time_sample(at, 1.0, Value::AnimationBlock);
+    let original = store.layers[&ROCK].property_at(&path).unwrap().clone();
+    assert!(tx.apply(&mut store).is_err());
+    assert_eq!(store.layers[&ROCK].property_at(&path), Some(&original));
 }
 
 #[test]

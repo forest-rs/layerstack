@@ -22,7 +22,7 @@ use super::{
     same::Same,
     spec::{Loc, SpecRef, conforms, spec_at, spec_at_mut},
     target::Address,
-    transaction::{Op, Precondition, Transaction, authored},
+    transaction::{AttributeReset, Op, Precondition, Transaction, authored},
 };
 use crate::{
     doc::{
@@ -32,9 +32,7 @@ use crate::{
     interner::TokenId,
     listop::{ListOp, resolve_list_chain},
     path::{PathId, PathInterner, TargetPath},
-    property::{
-        PropertyEntry, PropertyKind, PropertySpec, PropertyType, Variability, get_property,
-    },
+    property::{PropertyEntry, PropertyKind, PropertySpec, PropertyType, get_property},
     schema::{PropertyDefinition, SchemaKind},
     spec_path::{SpecPath, VariantSelectionSite},
     stage::Stage,
@@ -2120,15 +2118,13 @@ fn apply_op(
             let id = at.layer();
             if let Some(ty) = &spec.type_name {
                 check_registered(&path, ty)?;
-                let values = spec.default.iter().chain(
-                    spec.time_samples
-                        .get()
-                        .into_iter()
-                        .flatten()
-                        .map(|(_, value)| value),
-                );
-                for value in values {
-                    check_type(&path, ty, value)?;
+                if let Some(value) = &spec.default {
+                    check_type(&path, ty, value, None)?;
+                }
+                if let Some(samples) = spec.time_samples.get() {
+                    for (time, value) in samples {
+                        check_type(&path, ty, value, Some(*time))?;
+                    }
                 }
             }
             ensure(store, id, &loc, journal)?;
@@ -2173,13 +2169,21 @@ fn apply_op(
                 None => remove_subtree(store, id, &loc, journal),
             }
         }
-        Op::BlockAttribute { at } => {
-            set_value(store, at, None, &Value::Blocked, stage, journal)?;
+        Op::ResetAttribute { at, mode } => {
+            match mode {
+                AttributeReset::Block => {
+                    set_value(store, at, None, &Value::Blocked, stage, journal)?;
+                }
+                AttributeReset::BlockAnimation => {
+                    set_value(store, at, None, &Value::AnimationBlock, stage, journal)?;
+                }
+                AttributeReset::Clear => clear_default(store, at, journal)?,
+            }
             let (path, loc, name) = property_address(store, at)?;
             let id = at.layer();
-            let attr =
-                attribute_at(store, id, &loc, name, &path)?.expect("set_value ensured attribute");
-            if attr.time_samples.is_authored() || attr.spline.is_some() {
+            if attribute_at(store, id, &loc, name, &path)?
+                .is_some_and(|attr| attr.time_samples.is_authored() || attr.spline.is_some())
+            {
                 journal.run(
                     store,
                     Raw::Animation {
@@ -2227,22 +2231,7 @@ fn apply_op(
             let value = mapped.as_ref().unwrap_or(value);
             set_value(store, at, Some(at.layer_time(*time)), value, stage, journal)
         }
-        Op::ClearDefault { at } => {
-            let (path, loc, name) = property_address(store, at)?;
-            let id = at.layer();
-            match attribute_at(store, id, &loc, name, &path)? {
-                Some(attr) if attr.default.is_some() => journal.run(
-                    store,
-                    Raw::Default {
-                        layer: id,
-                        loc,
-                        name,
-                        value: None,
-                    },
-                ),
-                _ => Ok(()),
-            }
-        }
+        Op::ClearDefault { at } => clear_default(store, at, journal),
         Op::RemoveTimeSample { at, time } => {
             let (path, loc, name) = property_address(store, at)?;
             let id = at.layer();
@@ -2452,9 +2441,19 @@ fn check_registered(path: &SpecPath, ty: &PropertyType) -> Result<(), Rejection>
     })
 }
 
-fn check_type(path: &SpecPath, ty: &PropertyType, value: &Value) -> Result<(), Rejection> {
+fn check_type(
+    path: &SpecPath,
+    ty: &PropertyType,
+    value: &Value,
+    time: Option<f64>,
+) -> Result<(), Rejection> {
     check_registered(path, ty)?;
-    if conforms(ty, value) {
+    // SdfAnimationBlock is valid only in the default value slot.
+    let valid = match value {
+        Value::AnimationBlock => time.is_none(),
+        _ => conforms(ty, value),
+    };
+    if valid {
         Ok(())
     } else {
         Err(Rejection::TypeMismatch {
@@ -2544,6 +2543,27 @@ fn planned_definition(
     schemas.property_definition(type_name, &applied, name, tokens)
 }
 
+fn clear_default(
+    store: &mut dyn LayerStore,
+    at: &Address,
+    journal: &mut Journal<'_>,
+) -> Result<(), Rejection> {
+    let (path, loc, name) = property_address(store, at)?;
+    let id = at.layer();
+    match attribute_at(store, id, &loc, name, &path)? {
+        Some(attr) if attr.default.is_some() => journal.run(
+            store,
+            Raw::Default {
+                layer: id,
+                loc,
+                name,
+                value: None,
+            },
+        ),
+        _ => Ok(()),
+    }
+}
+
 /// Sets the default (`time` is `None`) or the time sample at the layer
 /// time `time` of the attribute `at`, creating its spec when missing.
 ///
@@ -2576,10 +2596,10 @@ fn set_value(
     let declared = stage
         .zip(at.stage_path())
         .and_then(|(stage, (prim, _))| stage.resolve_property_declaration(prim, name))
-        .map(|d| (d.type_name, d.variability));
+        .map(|d| (d.type_name, d.variability, d.custom));
     let declared = match defined {
         Some(defined) if defined.type_name.is_some() => {
-            Some((defined.type_name.clone(), defined.variability))
+            Some((defined.type_name.clone(), defined.variability, false))
         }
         _ => declared,
     };
@@ -2587,9 +2607,9 @@ fn set_value(
     let ty = existing
         .as_ref()
         .and_then(|spec| spec.type_name.clone())
-        .or_else(|| declared.as_ref().and_then(|(ty, _)| ty.clone()))
+        .or_else(|| declared.as_ref().and_then(|(ty, _, _)| ty.clone()))
         .ok_or(Rejection::UndeclaredType(path.clone()))?;
-    check_type(&path, &ty, value)?;
+    check_type(&path, &ty, value, time)?;
     if existing.is_some() {
         let step = match time {
             None => Raw::Default {
@@ -2611,7 +2631,10 @@ fn set_value(
     }
     ensure(store, id, &loc, journal)?;
     let mut spec = PropertySpec::typed_attribute(ty);
-    spec.variability = declared.map_or(Variability::Varying, |(_, variability)| variability);
+    if let Some((_, variability, custom)) = declared {
+        spec.variability = variability;
+        spec.custom = custom;
+    }
     match time {
         None => spec.default = Some(value.clone()),
         Some(time) => spec.time_samples = alloc::vec![(time, value.clone())].into(),

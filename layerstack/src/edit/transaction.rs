@@ -99,6 +99,14 @@ pub struct Transaction {
     pub(crate) ops: Vec<Op>,
 }
 
+/// How a whole-attribute value edit leaves the default after removing local animation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AttributeReset {
+    Clear,
+    Block,
+    BlockAnimation,
+}
+
 /// One edit of a [`Transaction`].
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Op {
@@ -126,8 +134,9 @@ pub(crate) enum Op {
     ClearDefault {
         at: Address,
     },
-    BlockAttribute {
+    ResetAttribute {
         at: Address,
+        mode: AttributeReset,
     },
     SetTimeSample {
         at: Address,
@@ -1085,7 +1094,37 @@ impl Transaction {
     ///
     /// OpenUSD: `UsdAttribute::Block`; AOUSD Core §12.3.6 (value blocking).
     pub fn block_attribute(&mut self, at: Address) -> &mut Self {
-        self.push(Op::BlockAttribute { at })
+        self.push(Op::ResetAttribute {
+            at,
+            mode: AttributeReset::Block,
+        })
+    }
+
+    /// Removes the attribute's default, time samples and spline in the edit
+    /// target, revealing weaker values. Preserves the declaration, metadata
+    /// and connections. An absent local spec stays absent.
+    ///
+    /// OpenUSD: `UsdAttribute::Clear`. AOUSD Core §12.3 (value resolution).
+    #[doc(alias = "UsdAttribute::Clear")]
+    pub fn clear_attribute(&mut self, at: Address) -> &mut Self {
+        self.push(Op::ResetAttribute {
+            at,
+            mode: AttributeReset::Clear,
+        })
+    }
+
+    /// Replaces the attribute's local default, samples and spline with an
+    /// animation block. Weaker animation is suppressed, but a weaker static
+    /// default can still supply the value. Declaration, metadata and connections
+    /// are preserved. A missing local spec uses the composed declaration.
+    ///
+    /// OpenUSD: `UsdAttribute::BlockAnimation`. AOUSD Core §12.3 (value resolution).
+    #[doc(alias = "BlockAnimation")]
+    pub fn block_animation(&mut self, at: Address) -> &mut Self {
+        self.push(Op::ResetAttribute {
+            at,
+            mode: AttributeReset::BlockAnimation,
+        })
     }
 
     /// Clears the default value of the attribute at `at`; the attribute
@@ -1322,7 +1361,7 @@ impl Op {
     fn slot(&self) -> Option<(&Address, Slot)> {
         Some(match self {
             Self::CreatePrim { at, .. } | Self::RemoveSpec { at } => (at, Slot::Spec),
-            Self::CreateProperty { at, .. } | Self::BlockAttribute { at } => (at, Slot::Spec),
+            Self::CreateProperty { at, .. } | Self::ResetAttribute { at, .. } => (at, Slot::Spec),
             Self::SetDefault { at, .. } | Self::ClearDefault { at } => (at, Slot::Default),
             Self::SetTimeSample { at, time, .. } | Self::RemoveTimeSample { at, time } => {
                 (at, Slot::TimeSample(*time))

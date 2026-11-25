@@ -323,6 +323,53 @@ describe("edit kinds", () => {
     });
   });
 
+  it("clearAttribute reveals weaker values and blockAnimation hides only weaker animation", async () => {
+    using stage = layerstack.open({
+      identifier: "scene.usda",
+      bytes: text.encode(`#usda 1.0
+(
+    subLayers = [@./under.usda@]
+)
+def "World" {
+    double spin = 3
+    double spin.timeSamples = {
+        1: 10,
+        2: 20,
+    }
+}
+`),
+    });
+    await stage.resolve(mockSource({
+      "under.usda": `#usda 1.0
+def "World" {
+    double spin = 7
+    double spin.timeSamples = {
+        1: 70,
+        4: 100,
+    }
+}
+`,
+    }));
+
+    const path = "/World.spin";
+    const authored = usda(stage);
+    const cleared = stage.apply([{ type: "clearAttribute", path }], stage.root);
+    assert.deepEqual(stage.attribute(path)?.get(), double(7));
+    assert.deepEqual(stage.attribute(path)?.timeSamples(), [1, 4]);
+    assert.deepEqual(stage.attribute(path)?.get(1), double(70));
+    cleared.undo().release();
+    assert.equal(usda(stage), authored);
+
+    const blocked = stage.apply([{ type: "blockAnimation", path }], stage.root);
+    assert.deepEqual(stage.attribute(path)?.get(), double(7));
+    assert.deepEqual(stage.attribute(path)?.timeSamples(), []);
+    assert.deepEqual(stage.attribute(path)?.get(1), double(7));
+    const redo = blocked.undo();
+    assert.equal(usda(stage), authored);
+    redo.undo().release();
+    assert.deepEqual(stage.attribute(path)?.get(1), double(7));
+  });
+
   it("setTargets sets a relationship's targets", async () => {
     using stage = await roundTrip(
       [{ type: "setTargets", path: "/World.lookAt", targets: ["/Spare", "/World.size"] }],

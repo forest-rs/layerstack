@@ -71,8 +71,12 @@ pub(crate) enum EditInput {
     },
     /// `UsdAttribute::ClearAtTime`: the default, or one time sample.
     ClearValue { path: String, time: Option<f64> },
+    /// `UsdAttribute::Clear`.
+    ClearAttribute { path: String },
     /// `UsdAttribute::Block`.
     BlockValue { path: String },
+    /// `UsdAttribute::BlockAnimation`.
+    BlockAnimation { path: String },
     /// `UsdRelationship::SetTargets`.
     SetTargets { path: String, targets: Vec<String> },
     /// `UsdRelationship::AddTarget`, or `UsdAttribute::AddConnection`
@@ -241,7 +245,9 @@ impl EditInput {
             | Self::CreateAttribute { path, .. }
             | Self::SetValue { path, .. }
             | Self::ClearValue { path, .. }
+            | Self::ClearAttribute { path }
             | Self::BlockValue { path }
+            | Self::BlockAnimation { path }
             | Self::SetTargets { path, .. }
             | Self::AddTarget { path, .. }
             | Self::RemoveTarget { path, .. }
@@ -434,10 +440,22 @@ impl EditBatch {
         self.edits.push(EditInput::ClearValue { path, time });
     }
 
+    /// Pushes a `clearAttribute` edit.
+    #[wasm_bindgen(js_name = clearAttribute)]
+    pub fn clear_attribute(&mut self, path: String) {
+        self.edits.push(EditInput::ClearAttribute { path });
+    }
+
     /// Pushes a `blockValue` edit.
     #[wasm_bindgen(js_name = blockValue)]
     pub fn block_value(&mut self, path: String) {
         self.edits.push(EditInput::BlockValue { path });
+    }
+
+    /// Pushes a `blockAnimation` edit.
+    #[wasm_bindgen(js_name = blockAnimation)]
+    pub fn block_animation(&mut self, path: String) {
+        self.edits.push(EditInput::BlockAnimation { path });
     }
 
     /// Pushes a `setTargets` edit.
@@ -1254,8 +1272,14 @@ fn lower_one(
                 None => txn.clear_default(at),
             };
         }
+        EditInput::ClearAttribute { path } => {
+            txn.clear_attribute(at.property(property(path)?));
+        }
         EditInput::BlockValue { path } => {
             txn.block_attribute(at.property(property(path)?));
+        }
+        EditInput::BlockAnimation { path } => {
+            txn.block_animation(at.property(property(path)?));
         }
         EditInput::SetTargets { path, targets } => {
             let at = at.property(property(path)?);

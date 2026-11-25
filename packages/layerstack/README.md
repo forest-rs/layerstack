@@ -281,8 +281,9 @@ await stage.resolve(source);
   `status().compositionErrors` lists them with `composition.*` codes.
 - **Edits are plain data.** `stage.apply(edits, target?)` applies an `Edit[]`
   (`definePrim`, `removePrim`, `removeProperty`, `createAttribute`,
-  `setValue`, `clearValue`, `blockValue`, `setTargets`, `addTarget`,
-  `removeTarget`, `clearTargets`, `addConnection`, `removeConnection`,
+  `setValue`, `clearValue`, `clearAttribute`, `blockValue`, `blockAnimation`,
+  `setTargets`, `addTarget`, `removeTarget`, `clearTargets`,
+  `addConnection`, `removeConnection`,
   `clearConnections`, `copySpec`, `addReference`,
   `addPayload`, `removeReference`, `removePayload`, `addInherit`,
   `removeInherit`, `addSpecialize`, `removeSpecialize`, `addVariantSet`,
@@ -300,7 +301,10 @@ await stage.resolve(source);
   through one edit target atomically: all of them or none. Each is named after the
   OpenUSD call whose semantics it has (`UsdStage::DefinePrim`,
   `UsdAttribute::Set`, `UsdShadeMaterialBindingAPI::Bind`, ...). A failure
-  names the edit (`error.edit`, its index) and changes nothing. A schema-shaped
+  names the edit (`error.edit`, its index) and changes nothing.
+  `clearAttribute` removes the target layer's default, time samples and
+  spline. `blockAnimation` authors a block that suppresses weaker animation
+  while allowing weaker defaults to resolve. A schema-shaped
   edit sees the prims, types and API schemas earlier edits of the same
   `apply` define and apply, and every edit sees the attributes earlier
   ones create (a `createAttribute` of a shader's output, then a

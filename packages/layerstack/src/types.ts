@@ -1332,9 +1332,30 @@ export interface ClearValueEdit {
   readonly time?: number;
 }
 
+/**
+ * `UsdAttribute::Clear` removes the authored default, time samples and
+ * spline from the target layer. The attribute declaration remains.
+ */
+export interface ClearAttributeEdit {
+  readonly type: "clearAttribute";
+  /** The attribute's property path. */
+  readonly path: string;
+}
+
 /** `UsdAttribute::Block`: clears the time samples and authors a blocked default, hiding weaker opinions. */
 export interface BlockValueEdit {
   readonly type: "blockValue";
+  readonly path: string;
+}
+
+/**
+ * `UsdAttribute::BlockAnimation` clears local time samples and spline
+ * and authors an animation block in the target layer's default slot.
+ * The block suppresses weaker animation and lets weaker defaults resolve.
+ */
+export interface BlockAnimationEdit {
+  readonly type: "blockAnimation";
+  /** The attribute's property path. */
   readonly path: string;
 }
 
@@ -1849,7 +1870,9 @@ export type Edit =
   | CreateAttributeEdit
   | SetValueEdit
   | ClearValueEdit
+  | ClearAttributeEdit
   | BlockValueEdit
+  | BlockAnimationEdit
   | SetTargetsEdit
   | AddTargetEdit
   | RemoveTargetEdit

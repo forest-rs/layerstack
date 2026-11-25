@@ -65,6 +65,14 @@ def verify(path, graph):
     assert (name, kind) == ("surface", UsdShade.AttributeType.Output), path
 
     assert not albedo.GetInput("filtertype"), path
+    if graph == "luminance":
+        luma = shader(stage, "Luminance", "ND_luminance_color3")
+        brightness = shader(stage, "Brightness", "ND_extract_color3")
+        verify_edge(luma.GetInput("in"), color, types.Color3f, path)
+        assert not luma.GetInput("lumacoeffs"), path
+        verify_edge(brightness.GetInput("in"), luma.GetOutput("out"), types.Color3f, path)
+        assert brightness.GetInput("index").Get() == 0, path
+        verify_edge(surface.GetInput("geometry_opacity"), brightness.GetOutput("out"), types.Float, path)
     if graph == "alpha":
         rgba = shader(stage, "Rgba", "ND_image_color4")
         alpha = shader(stage, "Alpha", "ND_extract_color4")
@@ -111,6 +119,6 @@ def verify(path, graph):
 
 
 graph, *files = sys.argv[1:]
-assert graph in ("sparse", "tinted", "alpha", "packed")
+assert graph in ("sparse", "tinted", "luminance", "alpha", "packed")
 for file_path in files:
     verify(file_path, graph)

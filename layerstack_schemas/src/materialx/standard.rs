@@ -7501,6 +7501,219 @@ impl NdInvertFloatEdit {
     }
 }
 
+/// The `ND_luminance_color3` shader node.
+#[derive(Clone, Copy, Debug)]
+pub struct NdLuminanceColor3<'a> {
+    shader: Shader<'a>,
+}
+impl<'a> Deref for NdLuminanceColor3<'a> {
+    type Target = Shader<'a>;
+    fn deref(&self) -> &Self::Target {
+        &self.shader
+    }
+}
+impl<'a> NdLuminanceColor3<'a> {
+    /// The shader's definition identifier.
+    pub const ID: &'static str = "ND_luminance_color3";
+    /// Reads an identifier-based Shader whose composed `info:id` matches.
+    #[must_use]
+    pub fn get(scene: &Scene<'a>, path: impl layerstack::PrimPathArg) -> Option<Self> {
+        let shader = Shader::get(scene, path)?;
+        let definition = shader.node_def_api();
+        (definition.id() == Some(Self::ID)
+            && definition.effective_implementation_source() == NodeDefApiImplementationSource::Id)
+            .then_some(Self { shader })
+    }
+    /// Defines a Shader with this node's `info:id`, as [`Shader::define`] does; inputs remain unauthored.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotEdit`] for a path beneath an instance or in a prototype; nothing is authored.
+    pub fn define(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<NdLuminanceColor3Edit, CannotEdit> {
+        let shader = Shader::define(edit, path)?;
+        shader.node_def_api().set_id(edit, Self::ID);
+        shader
+            .node_def_api()
+            .set_implementation_source(edit, NodeDefApiImplementationSource::Id);
+        Ok(NdLuminanceColor3Edit { shader })
+    }
+    /// The MaterialX NodeDef interface, independent of authored scene state.
+    pub const DEFINITION: MaterialXNode = MaterialXNode {
+        id: Self::ID,
+        ports: &[
+            MaterialXPort {
+                name: "in",
+                direction: PortKind::Input,
+                type_name: "color3",
+                usd_name: "inputs:in",
+                usd_type_name: "color3f",
+                default: Some(layerstack_schemas::materialx::MaterialXDefault::Literal(
+                    "0.0, 0.0, 0.0",
+                )),
+            },
+            MaterialXPort {
+                name: "lumacoeffs",
+                direction: PortKind::Input,
+                type_name: "color3",
+                usd_name: "inputs:lumacoeffs",
+                usd_type_name: "color3f",
+                default: Some(layerstack_schemas::materialx::MaterialXDefault::Literal(
+                    "0.2722287, 0.6740818, 0.0536895",
+                )),
+            },
+            MaterialXPort {
+                name: "out",
+                direction: PortKind::Output,
+                type_name: "color3",
+                usd_name: "outputs:out",
+                usd_type_name: "color3f",
+                default: Some(layerstack_schemas::materialx::MaterialXDefault::Input {
+                    name: "in",
+                    fallback: None,
+                }),
+            },
+        ],
+    };
+    #[doc = "The authored `inputs:in` port, if it exists. "]
+    #[must_use]
+    pub fn in_value_input(&self) -> Option<Port<'a>> {
+        self.shader.input("in")
+    }
+    #[doc = "The composed `inputs:in`, without node defaults or connection evaluation. "]
+    #[must_use]
+    pub fn in_value(&self) -> Option<[f32; 3]> {
+        self.read_value("inputs:in", layerstack_schemas::value::read_float3)
+    }
+    /// The composed `inputs:in` at `time`.
+    #[must_use]
+    pub fn in_value_at(&self, time: layerstack::Time) -> Option<[f32; 3]> {
+        self.read_value_at("inputs:in", time, layerstack_schemas::value::read_float3)
+    }
+    /// The `inputs:in` default in the node definition, separate from authored values.
+    #[must_use]
+    pub fn in_value_default() -> [f32; 3] {
+        [0.0, 0.0, 0.0]
+    }
+    #[doc = "The authored `inputs:lumacoeffs` port, if it exists. "]
+    #[must_use]
+    pub fn lumacoeffs_input(&self) -> Option<Port<'a>> {
+        self.shader.input("lumacoeffs")
+    }
+    #[doc = "The composed `inputs:lumacoeffs`, without node defaults or connection evaluation. "]
+    #[must_use]
+    pub fn lumacoeffs(&self) -> Option<[f32; 3]> {
+        self.read_value("inputs:lumacoeffs", layerstack_schemas::value::read_float3)
+    }
+    /// The composed `inputs:lumacoeffs` at `time`.
+    #[must_use]
+    pub fn lumacoeffs_at(&self, time: layerstack::Time) -> Option<[f32; 3]> {
+        self.read_value_at(
+            "inputs:lumacoeffs",
+            time,
+            layerstack_schemas::value::read_float3,
+        )
+    }
+    /// The `inputs:lumacoeffs` default in the node definition, separate from authored values.
+    #[must_use]
+    pub fn lumacoeffs_default() -> [f32; 3] {
+        [0.2722287, 0.6740818, 0.0536895]
+    }
+    #[doc = "The authored `outputs:out` port, if it exists. "]
+    #[must_use]
+    pub fn out_output(&self) -> Option<Port<'a>> {
+        self.shader.output("out")
+    }
+}
+
+/// Authors `ND_luminance_color3` inputs and typed ports through an explicit edit target.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct NdLuminanceColor3Edit {
+    shader: ShaderEdit,
+}
+impl Deref for NdLuminanceColor3Edit {
+    type Target = ShaderEdit;
+    fn deref(&self) -> &Self::Target {
+        &self.shader
+    }
+}
+impl NdLuminanceColor3Edit {
+    /// A handle authoring this node's inputs on the shader `shader` authors, whatever its `info:id`.
+    #[must_use]
+    pub fn from_shader(shader: ShaderEdit) -> Self {
+        Self { shader }
+    }
+    /// Creates `inputs:in` with its node-defined USD type for values or connections.
+    /// Rejects existing ports of a different type before appending edits.
+    pub fn create_in_value_input(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
+        let ty = PropertyType::parse("color3f").expect("a registered value type");
+        self.shader.create_input(edit, "in", ty)
+    }
+    /// Authors `inputs:in` at default time, creating the typed input if needed.
+    pub fn set_in_value(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: [f32; 3],
+    ) -> Result<&Self, PortError> {
+        let port = self.create_in_value_input(edit)?;
+        let value = (layerstack_schemas::value::write_float3)(value, edit.tokens());
+        port.set(edit, value)?;
+        Ok(self)
+    }
+    /// Authors a `inputs:in` sample in stage time through the edit target.
+    pub fn set_in_value_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: [f32; 3],
+    ) -> Result<&Self, PortError> {
+        let port = self.create_in_value_input(edit)?;
+        let value = (layerstack_schemas::value::write_float3)(value, edit.tokens());
+        port.set_at(edit, time, value)?;
+        Ok(self)
+    }
+    /// Creates `inputs:lumacoeffs` with its node-defined USD type for values or connections.
+    /// Rejects existing ports of a different type before appending edits.
+    pub fn create_lumacoeffs_input(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+    ) -> Result<PortEdit, PortError> {
+        let ty = PropertyType::parse("color3f").expect("a registered value type");
+        self.shader.create_input(edit, "lumacoeffs", ty)
+    }
+    /// Authors `inputs:lumacoeffs` at default time, creating the typed input if needed.
+    pub fn set_lumacoeffs(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        value: [f32; 3],
+    ) -> Result<&Self, PortError> {
+        let port = self.create_lumacoeffs_input(edit)?;
+        let value = (layerstack_schemas::value::write_float3)(value, edit.tokens());
+        port.set(edit, value)?;
+        Ok(self)
+    }
+    /// Authors a `inputs:lumacoeffs` sample in stage time through the edit target.
+    pub fn set_lumacoeffs_at(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        time: f64,
+        value: [f32; 3],
+    ) -> Result<&Self, PortError> {
+        let port = self.create_lumacoeffs_input(edit)?;
+        let value = (layerstack_schemas::value::write_float3)(value, edit.tokens());
+        port.set_at(edit, time, value)?;
+        Ok(self)
+    }
+    /// Creates `outputs:out` with its node-defined USD type for values or connections.
+    /// Rejects existing ports of a different type before appending edits.
+    pub fn create_out_output(&self, edit: &mut SchemaEdit<'_>) -> Result<PortEdit, PortError> {
+        let ty = PropertyType::parse("color3f").expect("a registered value type");
+        self.shader.create_output(edit, "out", ty)
+    }
+}
+
 /// The `ND_mix_color3` shader node.
 #[derive(Clone, Copy, Debug)]
 pub struct NdMixColor3<'a> {
@@ -18218,6 +18431,7 @@ pub const NODE_DEFINITIONS: &[MaterialXNode] = &[
     NdImageFloat::DEFINITION,
     NdImageVector3::DEFINITION,
     NdInvertFloat::DEFINITION,
+    NdLuminanceColor3::DEFINITION,
     NdMixColor3::DEFINITION,
     NdMixFloat::DEFINITION,
     NdMultiplyColor3::DEFINITION,

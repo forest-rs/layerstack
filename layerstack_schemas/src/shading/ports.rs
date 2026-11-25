@@ -922,7 +922,8 @@ mod tests {
         input
             .set_connectability(&mut edit, InputConnectability::InterfaceOnly)
             .unwrap();
-        live.apply(&mut store, &edit.finish()).unwrap();
+        let transaction = edit.finish();
+        live.apply(&mut store, &transaction).unwrap();
 
         let destination = store.property_path("/Material/Shader.inputs:weight");
         let source = store.property_path("/Material/Texture.outputs:result");
@@ -948,12 +949,14 @@ mod tests {
         input
             .set_connectability(&mut edit, InputConnectability::Full)
             .unwrap();
-        live.apply(&mut store, &edit.finish()).unwrap();
+        let transaction = edit.finish();
+        live.apply(&mut store, &transaction).unwrap();
         assert_eq!(read(&live, &store), Ok(()));
 
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(root));
         input.clear_connectability(&mut edit).unwrap();
-        live.apply(&mut store, &edit.finish()).unwrap();
+        let transaction = edit.finish();
+        live.apply(&mut store, &transaction).unwrap();
         assert_eq!(read(&live, &store), Err(ConnectionIssue::InterfaceOnly));
 
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(weak));
@@ -965,7 +968,8 @@ mod tests {
             Value::Token(token),
         )
         .unwrap();
-        live.apply(&mut store, &edit.finish()).unwrap();
+        let transaction = edit.finish();
+        live.apply(&mut store, &transaction).unwrap();
         assert_eq!(
             read(&live, &store),
             Err(ConnectionIssue::UnknownConnectability)
@@ -973,7 +977,8 @@ mod tests {
 
         let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(weak));
         input.clear_connectability(&mut edit).unwrap();
-        live.apply(&mut store, &edit.finish()).unwrap();
+        let transaction = edit.finish();
+        live.apply(&mut store, &transaction).unwrap();
         assert_eq!(read(&live, &store), Ok(()));
     }
 }

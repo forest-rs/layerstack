@@ -38,7 +38,7 @@ fn both_terminals_and_their_shared_inputs_compose() {
     let scene = Scene::new(live.stage(), &store);
     let material = Material::get(&scene, path).unwrap();
     let config = MaterialXConfigApi::get(&scene, path).unwrap();
-    assert_eq!(config.config_mtlx_version().as_deref(), Some("1.39.5"));
+    assert_eq!(config.config_mtlx_version().as_deref(), Some("1.39"));
     let open_pbr = OpenPbrSurface::get(&scene, handles.open_pbr.path()).unwrap();
     let preview = PreviewSurface::get(&scene, handles.preview.path()).unwrap();
     assert_eq!(preview.use_specular_workflow(), Some(0));

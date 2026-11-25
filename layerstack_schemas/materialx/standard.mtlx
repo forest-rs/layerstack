@@ -195,6 +195,12 @@
     <output name="out" type="float" defaultinput="in" />
   </nodedef>
 
+  <nodedef name="ND_luminance_color3" node="luminance" nodegroup="adjustment">
+    <input name="in" type="color3" value="0.0, 0.0, 0.0" />
+    <input name="lumacoeffs" type="color3" value="0.2722287, 0.6740818, 0.0536895" enum="acescg, rec709, rec2020, rec2100" enumvalues="0.2722287,0.6740818,0.0536895, 0.2126,0.7152,0.0722, 0.2627,0.6780,0.0593, 0.2627,0.6780,0.0593" />
+    <output name="out" type="color3" defaultinput="in" />
+  </nodedef>
+
   <nodedef name="ND_colorcorrect_color3" node="colorcorrect" nodegroup="adjustment">
     <input name="in" type="color3" uiname="Input Color" value="1, 1, 1" doc="The input color to be adjusted." />
     <input name="hue" type="float" uiname="Hue" uisoftmin="0.0" uisoftmax="1.0" value="0" doc="Rotates the color hue, with values wrapping at 0-1 boundaries." />

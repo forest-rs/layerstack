@@ -10,9 +10,9 @@ use layerstack::{
 use layerstack_schemas::{
     Scene, SchemaEdit,
     materialx::{
-        ExtractColor4, ExtractVector3, ImageColor3, ImageColor4, ImageVector3, MaterialXDefault,
-        MaterialXPort, MultiplyColor3, NormalMap, OpenPbrSurface, Place2dVector2, STANDARD_NODES,
-        TexcoordVector2,
+        ExtractColor3, ExtractColor4, ExtractVector3, ImageColor3, ImageColor4, ImageVector3,
+        LuminanceColor3, MaterialXDefault, MaterialXPort, MultiplyColor3, NormalMap,
+        OpenPbrSurface, Place2dVector2, STANDARD_NODES, TexcoordVector2,
     },
     shading::{ConnectionModification::Replace, PortKind},
     usd_shade::Material,
@@ -248,6 +248,59 @@ fn rgb_tint_modulates_the_base_color_texture() {
     let tint = MultiplyColor3::get(&scene, tint_path).unwrap();
     assert_eq!(tint.in2(), Some([0.25, 0.5, 1.0]));
     verify_openusd(&store, "tinted");
+}
+
+#[test]
+fn grayscale_luminance_drives_a_scalar_through_one_channel() {
+    let (mut store, mut live, _, albedo, surface) = textured_material(false);
+    let luma_path = store.path("/Paint/Luminance");
+    let channel_path = store.path("/Paint/Brightness");
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LAYER));
+    let rgb = ImageColor3::define(&mut edit, albedo)
+        .unwrap()
+        .create_out_output(&mut edit)
+        .unwrap();
+    let luma = LuminanceColor3::define(&mut edit, luma_path).unwrap();
+    luma.create_in_value_input(&mut edit)
+        .unwrap()
+        .connect_to_materialx_source(&mut edit, rgb, STANDARD_NODES, Replace)
+        .unwrap();
+    let gray = luma.create_out_output(&mut edit).unwrap();
+    let brightness = ExtractColor3::define(&mut edit, channel_path).unwrap();
+    brightness.set_index(&mut edit, 0).unwrap();
+    brightness
+        .create_in_value_input(&mut edit)
+        .unwrap()
+        .connect_to_materialx_source(&mut edit, gray, STANDARD_NODES, Replace)
+        .unwrap();
+    let scalar = brightness.create_out_output(&mut edit).unwrap();
+    OpenPbrSurface::define(&mut edit, surface)
+        .unwrap()
+        .create_geometry_opacity_input(&mut edit)
+        .unwrap()
+        .connect_to_materialx_source(&mut edit, scalar, STANDARD_NODES, Replace)
+        .unwrap();
+    let transaction = edit.finish();
+    live.apply(&mut store, &transaction).unwrap();
+
+    let scene = Scene::new(live.stage(), &store);
+    let luma = LuminanceColor3::get(&scene, luma_path).unwrap();
+    assert!(luma.lumacoeffs_input().is_none());
+    assert_eq!(
+        LuminanceColor3::lumacoeffs_default(),
+        [0.272_228_7, 0.674_081_8, 0.053_689_5]
+    );
+    assert_eq!(
+        ExtractColor3::get(&scene, channel_path)
+            .unwrap()
+            .in_value_input()
+            .unwrap()
+            .shader_sources()
+            .sources[0]
+            .output,
+        luma.out_output().unwrap().path()
+    );
+    verify_openusd(&store, "luminance");
 }
 
 #[test]

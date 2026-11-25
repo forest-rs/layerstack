@@ -28,8 +28,8 @@ mod ports;
 mod sdr_metadata;
 mod stringify;
 pub use ports::{
-    ConnectionModification, ConnectionSource, ConnectionSourceInfo, Port, PortEdit, PortError,
-    PortKind,
+    ConnectionModification, ConnectionSource, ConnectionSourceInfo, InputConnectability, Port,
+    PortEdit, PortError, PortKind,
 };
 /// Immutable upstream material capture and caller-owned retention.
 pub mod network;

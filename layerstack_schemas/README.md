@@ -769,6 +769,19 @@ for values and explicit connection replacement. `disconnect_sources` blocks
 weaker connections with an empty list; `clear_sources` removes the local opinion.
 Both use the existing mapped transaction and undo path.
 
+Use `shading::InputConnectability` to author the connection policy of an
+input, including one created in the same edit:
+
+```rust
+use layerstack_schemas::shading::InputConnectability;
+
+input.set_connectability(&mut edit, InputConnectability::InterfaceOnly)?;
+```
+
+Author `Full` to override a weaker restriction. Use `clear_connectability` to
+remove the edit target's opinion and reveal a weaker opinion if present. The
+default is `Full`.
+
 This slice requires source ports to exist (including ports created earlier in
 the edit). It does not implement `CanConnect`, source-port auto-creation,
 individual list insertion/deletion helpers, Sdr, or connectability behaviors

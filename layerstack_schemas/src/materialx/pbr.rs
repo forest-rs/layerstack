@@ -133,9 +133,10 @@ pub fn define_pbr_material(
 
     edit.group(|edit| {
         let material = Material::define(edit, path)?;
+        // MaterialX spec, “MTLX File Format Definition”: document versions use major.minor.
         MaterialXConfigApi::apply(edit, path)
             .map_err(PbrMaterialError::Configuration)?
-            .set_config_mtlx_version(edit, "1.39.5");
+            .set_config_mtlx_version(edit, "1.39");
 
         let open_pbr_name = edit.tokens().intern("OpenPBR");
         let preview_name = edit.tokens().intern("PreviewSurface");

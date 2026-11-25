@@ -1368,23 +1368,34 @@ fn site_moves(
 /// it are re-rooted: no value clip in their opinions (clips resolve per
 /// prim path), and no error or asset request reported for them.
 fn prototype_is_shareable(ctx: &Ctx<'_>, out: &Composition, representative: PathId) -> bool {
-    let paths = ctx.store.paths();
-    let root = paths.resolve(representative).clone();
-    let beneath = |path: PathId| path != representative && root.is_prefix_of(paths.resolve(path));
     let clips = ctx.store.tokens().lookup("clips");
     let clip_sets = ctx.store.tokens().lookup("clipSets");
-    if clips.is_some() || clip_sets.is_some() {
-        for (path, index) in &out.prims {
-            if beneath(*path)
-                && index
-                    .opinions
-                    .iter()
-                    .any(|opinion| Some(opinion.field) == clips || Some(opinion.field) == clip_sets)
-            {
-                return false;
+    if let Some(children) = out.children.get(&representative)
+        && (clips.is_some() || clip_sets.is_some())
+    {
+        // Follow the same child lists as copy_prototype. A clip opinion
+        // elsewhere in the stage cannot affect any of the copied indexes.
+        let mut pending = smallvec::SmallVec::<[&[PathId]; 8]>::new();
+        pending.push(children);
+        while let Some(children) = pending.pop() {
+            for child in children {
+                if out.prims.get(child).is_some_and(|index| {
+                    index
+                        .opinions
+                        .iter()
+                        .any(|op| Some(op.field) == clips || Some(op.field) == clip_sets)
+                }) {
+                    return false;
+                }
+                if let Some(children) = out.children.get(child) {
+                    pending.push(children);
+                }
             }
         }
     }
+    let paths = ctx.store.paths();
+    let root = paths.resolve(representative);
+    let beneath = |path: PathId| path != representative && root.is_prefix_of(paths.resolve(path));
     !out.errors
         .iter()
         .any(|error| error.prim().is_some_and(beneath))

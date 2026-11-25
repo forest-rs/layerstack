@@ -1722,7 +1722,12 @@ impl Stage {
     /// OpenUSD's is: `true` over a single weaker time sample.
     #[must_use]
     pub(crate) fn property_might_be_time_varying(&self, prim: PathId, field: TokenId) -> bool {
-        self.property_time_info(prim, field).varying || self.clip_variation_unknown(prim, field)
+        let varying = if self.clips.has_prepared_property(prim, field) {
+            self.property_time_info(prim, field).varying
+        } else {
+            self.authored_might_vary(prim, field, VariationQuery::Value)
+        };
+        varying || self.clip_variation_unknown(prim, field)
     }
 
     /// Whether a clip set that may supply the property waits for clip
@@ -1754,8 +1759,47 @@ impl Stage {
         prim: PathId,
         field: TokenId,
     ) -> bool {
-        self.resident_value_source_might_be_time_varying(prim, field)
-            || self.clip_variation_unknown(prim, field)
+        let varying = if self.clips.has_prepared_property(prim, field) {
+            self.resident_value_source_might_be_time_varying(prim, field)
+        } else {
+            self.authored_might_vary(prim, field, VariationQuery::Source)
+        };
+        varying || self.clip_variation_unknown(prim, field)
+    }
+
+    /// Classify ordinary opinions directly in strength order. A sparse default
+    /// asks whether the weaker *source* varies, so even a single sample under
+    /// it counts. An animation block masks every weaker animated source.
+    /// AOUSD Core §12.3.2 (numeric-time resolution), §12.3.6 (blocks).
+    fn authored_might_vary(&self, prim: PathId, field: TokenId, mut query: VariationQuery) -> bool {
+        let Some(opinions) = self
+            .prims
+            .get(&prim)
+            .and_then(|i| i.property_opinions(field))
+        else {
+            return false;
+        };
+        for opinion in opinions.records() {
+            let value = &opinion.value;
+            if let Some(samples) = value.time_samples() {
+                return match (query, samples) {
+                    (VariationQuery::Value, [(_, sample)]) => shows_weaker_samples(sample),
+                    _ => true,
+                };
+            }
+            if value.spline().is_some() {
+                return true;
+            }
+            if let Some(default) = value.default_value() {
+                if !shows_weaker_samples(default) {
+                    break;
+                }
+                query = VariationQuery::Source;
+            } else if value.blocks_animation() {
+                break;
+            }
+        }
+        false
     }
 
     /// [`Self::property_value_source_might_be_time_varying`] from the
@@ -4975,6 +5019,14 @@ pub(crate) struct TimeInfo {
     pub(crate) has_value: bool,
 }
 
+/// Whether the authored source can change across numeric times or only
+/// between default time and numeric time.
+#[derive(Clone, Copy)]
+enum VariationQuery {
+    Value,
+    Source,
+}
+
 /// What the strongest property opinion offering a value is, for
 /// [`Stage::property_might_be_time_varying`].
 enum Strongest {
@@ -5751,6 +5803,43 @@ mod tests {
             .with_time_samples(vec![(1.0, Value::Double(2.0))]);
         let (stage, prim, field) = property_stack_fixture(vec![dense]);
         assert!(!stage.property_might_be_time_varying(prim, field));
+    }
+
+    #[test]
+    fn authored_variation_matches_full_resolution_across_opinion_stacks() {
+        let attr = PropertySpec::attribute();
+        let dense = Value::Double(1.0);
+        let sparse = Value::PathExpression("%_".into());
+        let cases = [
+            attr.clone(),
+            attr.clone().with_default(dense.clone()),
+            attr.clone().with_default(sparse.clone()),
+            attr.clone().with_default(Value::Blocked),
+            attr.clone().with_default(Value::AnimationBlock),
+            attr.clone().with_time_samples(vec![]),
+            attr.clone().with_time_samples(vec![(1.0, dense.clone())]),
+            attr.clone().with_time_samples(vec![(1.0, sparse.clone())]),
+            attr.with_default(Value::AnimationBlock)
+                .with_time_samples(vec![(0.0, sparse), (2.0, dense)]),
+        ];
+        for strong in &cases {
+            for middle in &cases {
+                for weak in &cases {
+                    let (stage, prim, field) =
+                        property_stack_fixture(vec![strong.clone(), middle.clone(), weak.clone()]);
+                    assert_eq!(
+                        stage.property_might_be_time_varying(prim, field),
+                        stage.property_time_info(prim, field).varying,
+                        "{strong:?} over {middle:?} over {weak:?}"
+                    );
+                    assert_eq!(
+                        stage.property_value_source_might_be_time_varying(prim, field),
+                        stage.resident_value_source_might_be_time_varying(prim, field),
+                        "{strong:?} over {middle:?} over {weak:?}"
+                    );
+                }
+            }
+        }
     }
 
     /// A path expression's type composes over a weaker one, so the sample

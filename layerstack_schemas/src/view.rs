@@ -483,9 +483,9 @@ impl<'a> PrimView<'a> {
     }
 
     /// Whether an opinion authors a value for the attribute `name`, at any
-    /// time: the strongest opinion with a spline, time samples or a
-    /// default decides, and a default block authors none. Attribute reads
-    /// resolve the value at the requested time: an attribute with only
+    /// time. A value block stops the search. An animation block skips
+    /// weaker animation sources and still allows weaker defaults. Attribute
+    /// reads resolve the value at the requested time: an attribute with only
     /// time samples still reads its fallback at the default time.
     ///
     /// OpenUSD: `UsdAttribute::HasAuthoredValue` (`UsdResolveInfo` with no
@@ -502,15 +502,15 @@ impl<'a> PrimView<'a> {
         {
             return true;
         }
-        for spec in property
-            .opinions()
-            .iter()
-            .filter_map(|o| o.value().as_property())
-        {
-            if spec.spline.is_some() || spec.time_samples.get().is_some_and(|s| !s.is_empty()) {
+        let mut animation_blocked = false;
+        for opinion in property.opinions().iter().map(|opinion| opinion.value()) {
+            if !animation_blocked
+                && (opinion.spline().is_some() || opinion.time_samples().is_some())
+            {
                 return true;
             }
-            match &spec.default {
+            match opinion.as_property().and_then(|spec| spec.default.as_ref()) {
+                Some(Value::AnimationBlock) => animation_blocked = true,
                 Some(Value::Blocked) => return false,
                 Some(_) => return true,
                 None => {}
@@ -1303,6 +1303,102 @@ mod handle_tests {
         );
         assert!(scene.applied_schemas(bare).is_empty());
         assert!(scene.applied_schemas(store.path("/Nowhere")).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod value_query_tests {
+    use super::*;
+    use layerstack::{
+        InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, StageOptions, SublayerEntry,
+    };
+
+    #[test]
+    fn animation_block_value_queries() {
+        let animation_block = PropertySpec::attribute().with_default(Value::AnimationBlock);
+        let ordinary_block = PropertySpec::attribute().with_default(Value::Blocked);
+        let samples = Vec::from([(1.0, Value::Double(2.0))]);
+        let sampled = PropertySpec::attribute().with_time_samples(samples.clone());
+        let default = PropertySpec::attribute().with_default(Value::Double(3.0));
+        let cases = [
+            ("lone block", animation_block.clone(), None, false),
+            (
+                "weaker samples",
+                animation_block.clone(),
+                Some(sampled.clone()),
+                false,
+            ),
+            (
+                "weaker default",
+                animation_block.clone(),
+                Some(default.with_time_samples(samples.clone())),
+                true,
+            ),
+            (
+                "weaker ordinary block",
+                animation_block.clone(),
+                Some(ordinary_block.clone().with_time_samples(samples.clone())),
+                false,
+            ),
+            (
+                "same-layer samples",
+                animation_block.with_time_samples(samples),
+                None,
+                true,
+            ),
+            (
+                "unmasked samples",
+                PropertySpec::attribute(),
+                Some(sampled.clone()),
+                true,
+            ),
+            ("ordinary block", ordinary_block, Some(sampled), false),
+        ];
+        for (label, strong, weak, expected) in cases {
+            let mut store = InMemoryStore::default();
+            let path = store.path("/Prim");
+            let field = store.tokens().intern("weight");
+            let mut root = Layer::new(LayerId(1));
+            root.insert_prim(path, PrimSpec::def().with_property(field, strong));
+            if let Some(weak) = weak {
+                let mut sub = Layer::new(LayerId(2));
+                sub.insert_prim(path, PrimSpec::over().with_property(field, weak));
+                store.insert_layer(sub);
+                root.sublayers_mut().push(SublayerEntry::new(LayerId(2)));
+            }
+            store.insert_layer(root);
+            let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+            let prim = PrimView::new(Scene::new(&stage, &store), path);
+            assert!(prim.has_attribute("weight"), "{label}");
+            assert_eq!(prim.has_authored_value("weight"), expected, "{label}");
+            assert_eq!(prim.has_value("weight"), expected, "{label}");
+        }
+    }
+
+    #[cfg(feature = "usd-geom")]
+    #[test]
+    fn animation_block_preserves_schema_fallback() {
+        let mut store = InMemoryStore::default();
+        let path = store.path("/Prim");
+        let field = store.tokens().intern("radius");
+        let schema = store.tokens().intern("Sphere");
+        let block = PropertySpec::attribute().with_default(Value::AnimationBlock);
+        let mut root = Layer::new(LayerId(1));
+        root.insert_prim(
+            path,
+            PrimSpec::def()
+                .with_type_name(schema)
+                .with_property(field, block),
+        );
+        store.insert_layer(root);
+        let options = StageOptions {
+            schemas: Some(alloc::sync::Arc::new(crate::openusd(store.tokens()))),
+            ..StageOptions::default()
+        };
+        let stage = Stage::compose(&mut store, LayerId(1), options);
+        let prim = PrimView::new(Scene::new(&stage, &store), path);
+        assert!(!prim.has_authored_value("radius"));
+        assert!(prim.has_value("radius"));
     }
 }
 

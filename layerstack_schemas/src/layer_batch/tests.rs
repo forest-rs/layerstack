@@ -14,6 +14,48 @@ use layerstack::{
 };
 
 #[test]
+fn batch_color_space_belongs_to_the_attribute() {
+    let store = InMemoryStore::default();
+    let path = store.path("/Asset");
+    let schemas = openusd(store.tokens());
+    let mut batch = LayerBatch::new(LayerId(1), &store, &schemas).unwrap();
+    batch
+        .define(path, Xform::SCHEMA, |prim| {
+            assert!(matches!(
+                prim.set_attribute_color_space("texture", "raw"),
+                Err(BatchError::UnknownProperty(_))
+            ));
+            prim.define_attribute(
+                "texture",
+                PropertyType::parse("asset").unwrap(),
+                Value::Asset("image.exr".into()),
+            )?;
+            prim.set_attribute_color_space("texture", "studio_linear")?;
+            prim.apply(CollectionApi::SCHEMA, Some("parts"))?
+                .set_targets(CollectionApi::INCLUDES, vec![])?;
+            assert!(matches!(
+                prim.set_attribute_color_space("collection:parts:includes", "raw"),
+                Err(BatchError::WrongPropertyKind {
+                    expected: PropertyKind::Attribute,
+                    ..
+                })
+            ));
+            Ok(())
+        })
+        .unwrap();
+    let layer = batch.finish();
+    let texture = layer
+        .prim(path)
+        .unwrap()
+        .property(store.tokens().intern("texture"))
+        .unwrap();
+    assert_eq!(
+        texture.metadata(store.tokens().intern("colorSpace")),
+        Some(&Value::Token(store.tokens().intern("studio_linear")).into())
+    );
+}
+
+#[test]
 fn authored_fields_match_generated_edits_and_compose_through_schema_views() {
     let mut store = InMemoryStore::default();
     let path = store.path("/Mesh");

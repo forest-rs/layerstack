@@ -720,6 +720,20 @@ Connect it to `ExtractColor3` with index 0 to drive a float input. The
 Connect the shader's `create_surface_output` to the material terminal created
 with `MaterialEdit::create_surface_output(&mut edit, "mtlx")`.
 
+Set the texture asset attribute’s color space on its port, including in the edit
+that creates the image:
+
+```rust
+image.set_file(&mut edit, "albedo.exr")?;
+image.create_file_input(&mut edit)?.set_color_space(&mut edit, "lin_rec709_scene")?;
+```
+
+For a named attribute, use `PrimEdit::set_attribute_color_space` in a stage
+edit or `BatchPrim::set_attribute_color_space` after writing the attribute in a
+layer batch. An empty token suppresses inheritance. Clearing the local opinion
+with `clear_color_space` on a port or `clear_attribute_color_space` on its prim
+allows weaker opinions to resolve again.
+
 Each view's `DEFINITION` exposes the MaterialX and USD port names, types,
 directions and defaults. `materialx::STANDARD_NODES` collects all shipped
 definitions. Use the associated `_default` functions to read literal input

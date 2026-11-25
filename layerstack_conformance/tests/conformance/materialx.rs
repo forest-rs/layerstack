@@ -54,6 +54,11 @@ fn textured_material(with_packed_maps: bool) -> (InMemoryStore, LiveStage, PathI
     let albedo = ImageColor3::define(&mut edit, albedo_path).unwrap();
     let surface = OpenPbrSurface::define(&mut edit, surface_path).unwrap();
     albedo.set_file(&mut edit, "albedo.exr").unwrap();
+    albedo
+        .create_file_input(&mut edit)
+        .unwrap()
+        .set_color_space(&mut edit, "lin_rec709_scene")
+        .unwrap();
     surface.set_base_weight(&mut edit, 0.75).unwrap();
 
     let color = albedo.create_out_output(&mut edit).unwrap();
@@ -213,6 +218,41 @@ fn standard_nodes_author_a_textured_openpbr_surface() {
         source.trace.sources[0].output,
         surface.surface_output().unwrap().path()
     );
+}
+
+#[test]
+fn an_empty_port_color_space_and_a_cleared_opinion_are_distinct() {
+    use layerstack_schemas::color::ColorSpaceSource;
+
+    let (mut store, mut live, _, image_path, _) = textured_material(false);
+    let file = store.property_path("/Paint/Albedo.inputs:file");
+    for (name, source) in [
+        (Some(""), ColorSpaceSource::Attribute(file)),
+        (None, ColorSpaceSource::Unassigned),
+    ] {
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LAYER));
+        let port = layerstack_schemas::shading::PortEdit::get(&mut edit, file)
+            .unwrap()
+            .unwrap();
+        if let Some(name) = name {
+            port.set_color_space(&mut edit, name).unwrap();
+        } else {
+            port.clear_color_space(&mut edit).unwrap();
+        }
+        let transaction = edit.finish();
+        live.apply(&mut store, &transaction).unwrap();
+        let scene = Scene::new(live.stage(), &store);
+        let assignment = scene.compute_attribute_color_space_name(file).unwrap();
+        assert_eq!(assignment.name.as_ref(), "");
+        assert_eq!(assignment.source, source);
+        assert_eq!(
+            ImageColor3::get(&scene, image_path)
+                .unwrap()
+                .file()
+                .as_deref(),
+            Some("albedo.exr")
+        );
+    }
 }
 
 #[test]

@@ -135,6 +135,29 @@ impl<'a> BatchPrim<'a> {
         name: &str,
         interpolation: crate::primvar::PrimvarInterpolation,
     ) -> Result<(), BatchError> {
+        self.set_attribute_token_metadata(name, "interpolation", interpolation.token())
+    }
+
+    /// Sets the `colorSpace` metadata token on an attribute authored in this batch.
+    /// Custom and empty color space names are preserved (AOUSD Core §12.3).
+    ///
+    /// # Errors
+    ///
+    /// Rejects a missing attribute or a relationship.
+    pub fn set_attribute_color_space(
+        &mut self,
+        attribute: &str,
+        name: &str,
+    ) -> Result<(), BatchError> {
+        self.set_attribute_token_metadata(attribute, "colorSpace", name)
+    }
+
+    fn set_attribute_token_metadata(
+        &mut self,
+        name: &str,
+        field: &str,
+        value: &str,
+    ) -> Result<(), BatchError> {
         let id = self.property_name(name)?;
         let spec = match &self.property_slots {
             Some(slots) => slots
@@ -150,8 +173,8 @@ impl<'a> BatchPrim<'a> {
             });
         }
         spec.set_metadata(
-            self.tokens.intern("interpolation"),
-            Value::Token(self.tokens.intern(interpolation.token())),
+            self.tokens.intern(field),
+            Value::Token(self.tokens.intern(value)),
         );
         Ok(())
     }

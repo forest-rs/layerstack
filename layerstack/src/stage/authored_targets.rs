@@ -388,11 +388,10 @@ impl Stage {
                 continue;
             };
             properties.clear();
-            for (field, range) in &*index.fields {
-                let FieldKey::Property(name) = *field else {
+            for (field, opinions) in index.field_groups() {
+                let FieldKey::Property(name) = field else {
                     continue;
                 };
-                let opinions = index.opinions_in(range);
                 if opinions
                     .records()
                     .iter()

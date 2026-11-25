@@ -17,7 +17,6 @@ use core::hash::{BuildHasher, Hash, Hasher};
 struct RecordBucket<'a>(&'a PrimIndexData);
 impl Hash for RecordBucket<'_> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.fields.hash(state);
         for source in &self.0.sources {
             source.key.hash(state);
             source.layer_offset.offset.to_bits().hash(state);
@@ -370,7 +369,7 @@ impl Stage {
             if seen.insert(Arc::as_ptr(&index.data)) {
                 result.record_buffers += 1;
                 result.physical_opinions += index.opinions.len();
-                result.physical_fields += index.fields.len();
+                result.physical_fields += index.field_count();
                 result.physical_sources += index.sources.len();
             }
         }

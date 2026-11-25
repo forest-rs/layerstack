@@ -3649,16 +3649,7 @@ impl Stage {
 
     /// [`Self::authored_names`] of the prim whose index is `index`.
     fn authored_names_of(index: &PrimIndex) -> impl Iterator<Item = TokenId> + '_ {
-        use crate::prim_index::FieldKey;
-
-        index
-            .fields
-            .iter()
-            .map(|(field, _)| field)
-            .filter_map(|key| match key {
-                FieldKey::Property(name) => Some(*name),
-                FieldKey::Metadata(_) => None,
-            })
+        index.property_names()
     }
 
     /// The prims composed as instances, in no particular order.
@@ -3769,7 +3760,7 @@ impl Stage {
     /// Spec: AOUSD Core §10.4 (strength ordering).
     #[must_use]
     pub(crate) fn explain_prim(&self, prim: PathId) -> Option<&[OpinionSource]> {
-        self.prims.get(&prim).map(|index| index.sources.as_slice())
+        self.prims.get(&prim).map(|index| index.sources.as_ref())
     }
 
     /// Returns the composition graph of `prim`: one node per arc expansion

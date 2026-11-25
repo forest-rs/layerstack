@@ -690,27 +690,88 @@ pub(crate) struct PrimIndex {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct PrimIndexData {
     /// Every opinion, each naming one of [`Self::sources`].
-    pub(crate) opinions: Vec<Opinion>,
-    /// Each field's opinions, a range of [`Self::opinions`]
-    /// ([`Self::opinions_in`]), sorted by field.
-    pub(crate) fields: Box<[(FieldKey, Range<u32>)]>,
+    pub(crate) opinions: Box<[Opinion]>,
+    /// Sorted field names and the range of opinions for each name.
+    fields: FieldDirectory,
     /// Shared by snapshots with the same authored fields. Only wide prims
     /// allocate a slot, and only repeated queries build the sorted tokens.
     namespace_index: Option<Arc<NamespaceIndex>>,
     /// The sites the opinions are read from, strongest first once
     /// finalized ([`PrimIndex::finalize`]).
-    pub(crate) sources: Vec<OpinionSource>,
+    pub(crate) sources: Box<[OpinionSource]>,
 }
 
+// Keep the common per-prim header within the space of its original three vectors.
 const _: () = assert!(
-    size_of::<PrimIndexData>()
-        == size_of::<(
-            Vec<Opinion>,
-            Vec<(FieldKey, Range<u32>)>,
-            Vec<OpinionSource>,
-        )>(),
-    "namespace indexing must preserve the size of per-prim data",
+    size_of::<PrimIndexData>() <= 3 * size_of::<Vec<Opinion>>(),
+    "field lookup must not enlarge the per-prim header"
 );
+
+/// Contiguous token ids in field order (metadata, then properties). When a
+/// field has several opinions, a second column holds each group's exclusive
+/// end in the opinion buffer. Otherwise field i is simply opinion i.
+#[derive(Clone, Debug, Default)]
+struct FieldDirectory {
+    columns: Box<[u32]>,
+    groups: u32,
+    metadata: u32,
+}
+
+impl FieldDirectory {
+    fn new(opinions: &[Opinion]) -> Self {
+        let runs = || opinions.chunk_by(|a, b| FieldKey::of(a) == FieldKey::of(b));
+        let count = runs().count();
+        let stacked = count != opinions.len();
+        let mut columns = alloc::vec![0; if stacked { count * 2 } else { count }];
+        let (names, ends) = columns.split_at_mut(count);
+        let mut end = 0;
+        let mut metadata = 0;
+        for (i, group) in runs().enumerate() {
+            let op = &group[0];
+            names[i] = op.field.get();
+            if matches!(op.value, OpinionValue::Field(_)) {
+                metadata += 1;
+            }
+            if stacked {
+                end += group.len();
+                ends[i] = position(end);
+            }
+        }
+        Self {
+            columns: columns.into_boxed_slice(),
+            groups: position(count),
+            metadata,
+        }
+    }
+
+    fn ends(&self) -> &[u32] {
+        &self.columns[self.groups as usize..]
+    }
+
+    fn range(&self, i: usize) -> Range<usize> {
+        let ends = self.ends();
+        if ends.is_empty() {
+            i..i + 1
+        } else {
+            let start = if i == 0 { 0 } else { ends[i - 1] };
+            start as usize..ends[i] as usize
+        }
+    }
+
+    fn find(&self, field: FieldKey) -> Option<Range<usize>> {
+        let mid = self.metadata as usize;
+        let (names, offset, token) = match field {
+            FieldKey::Metadata(token) => (&self.columns[..mid], 0, token),
+            FieldKey::Property(token) => (&self.columns[mid..self.groups as usize], mid, token),
+        };
+        let i = names.binary_search(&token.get()).ok()?;
+        Some(self.range(i + offset))
+    }
+}
+
+fn position(at: usize) -> u32 {
+    u32::try_from(at).expect("prim index opinion count overflow")
+}
 
 /// Index only wide prims, where repeated scans justify preparing a
 /// namespace index.
@@ -727,8 +788,44 @@ struct NamespaceIndex {
 }
 
 impl PrimIndexData {
-    fn replace_fields(&mut self, fields: Vec<(FieldKey, Range<u32>)>) {
-        self.fields = fields.into_boxed_slice();
+    /// The metadata and property groups, in field order.
+    pub(crate) fn field_groups(&self) -> impl Iterator<Item = (FieldKey, Opinions<'_>)> {
+        self.metadata_names()
+            .map(FieldKey::Metadata)
+            .chain(self.property_names().map(FieldKey::Property))
+            .enumerate()
+            .map(|(i, key)| {
+                (
+                    key,
+                    Opinions::new(&self.opinions[self.fields.range(i)], &self.sources),
+                )
+            })
+    }
+
+    pub(crate) fn metadata_names(&self) -> impl Iterator<Item = TokenId> + '_ {
+        self.fields.columns[..self.fields.metadata as usize]
+            .iter()
+            .copied()
+            .map(TokenId::from_raw)
+    }
+
+    pub(crate) fn property_names(&self) -> impl Iterator<Item = TokenId> + '_ {
+        self.fields.columns[self.fields.metadata as usize..self.fields.groups as usize]
+            .iter()
+            .copied()
+            .map(TokenId::from_raw)
+    }
+
+    pub(crate) fn has_stacked_fields(&self) -> bool {
+        !self.fields.ends().is_empty()
+    }
+
+    pub(crate) fn field_count(&self) -> usize {
+        self.fields.groups as usize
+    }
+
+    fn index_fields(&mut self) {
+        self.fields = FieldDirectory::new(&self.opinions);
         #[cfg(feature = "std")]
         {
             self.namespace_index = self.has_wide_properties().then(Arc::default);
@@ -740,23 +837,11 @@ impl PrimIndexData {
     }
 
     fn has_wide_properties(&self) -> bool {
-        self.fields.len() >= NAMESPACE_INDEX_MIN_FIELDS
-            && self.fields.len()
-                - self
-                    .fields
-                    .partition_point(|(key, _)| matches!(key, FieldKey::Metadata(_)))
-                >= NAMESPACE_INDEX_MIN_FIELDS
+        (self.fields.groups - self.fields.metadata) as usize >= NAMESPACE_INDEX_MIN_FIELDS
     }
 
     fn sorted_property_names(&self, tokens: &crate::TokenInterner) -> Box<[TokenId]> {
-        let mut names: Vec<_> = self
-            .fields
-            .iter()
-            .filter_map(|(key, _)| match key {
-                FieldKey::Property(name) => Some(*name),
-                FieldKey::Metadata(_) => None,
-            })
-            .collect();
+        let mut names: Vec<_> = self.property_names().collect();
         // Names are unique. Unstable sort needs no extra scratch beyond
         // the token buffer.
         sort::sort_unstable_by(&mut names, |a, b| {
@@ -797,16 +882,10 @@ impl PrimIndexData {
         (count <= names.len() / 2).then_some(&tail[..count])
     }
 
-    /// The opinions of one of [`Self::fields`]' ranges.
-    pub(crate) fn opinions_in(&self, range: &Range<u32>) -> Opinions<'_> {
-        Opinions::new(&self.opinions[span(range)], &self.sources)
-    }
-
     /// Exact record identity for sharing; public value equality stays IEEE.
     pub(crate) fn same_records(&self, other: &Self) -> bool {
         use crate::edit::same::Same;
-        self.fields == other.fields
-            && self.sources.len() == other.sources.len()
+        self.sources.len() == other.sources.len()
             && self.sources.iter().zip(&other.sources).all(|(a, b)| {
                 a.key == b.key
                     && a.layer_offset.offset.to_bits() == b.layer_offset.offset.to_bits()
@@ -836,17 +915,6 @@ fn namespace_cmp(name: &str, namespace: &str) -> Ordering {
         .then_with(|| tail.first().cmp(&Some(&b':')))
 }
 
-/// `range` as indices of [`PrimIndexData::opinions`].
-fn span(range: &Range<u32>) -> Range<usize> {
-    range.start as usize..range.end as usize
-}
-
-/// The position `at` in [`PrimIndexData::opinions`], as a field range
-/// holds it.
-fn position(at: usize) -> u32 {
-    u32::try_from(at).expect("prim index opinion count overflow")
-}
-
 impl core::ops::Deref for PrimIndex {
     type Target = PrimIndexData;
     fn deref(&self) -> &Self::Target {
@@ -860,21 +928,36 @@ impl core::ops::DerefMut for PrimIndex {
 }
 
 impl PrimIndex {
-    /// An empty prim index over `graph`.
-    pub(crate) fn new(graph: PrimIndexGraph) -> Self {
-        // Not `..Self::default()`: an empty graph allocates its shape.
+    /// Freezes the buffers filled while visiting authored sites. Snapshots
+    /// retain exactly their records, with no capacity or builder state.
+    pub(crate) fn from_records(
+        graph: PrimIndexGraph,
+        opinions: Vec<Opinion>,
+        sources: Vec<OpinionSource>,
+    ) -> Self {
         Self {
             type_info: None,
             type_name: None,
             graph,
-            data: Arc::default(),
+            data: Arc::new(PrimIndexData {
+                opinions: opinions.into_boxed_slice(),
+                sources: sources.into_boxed_slice(),
+                ..PrimIndexData::default()
+            }),
             dynamic: None,
         }
     }
 
     #[cfg(test)]
+    pub(crate) fn new(graph: PrimIndexGraph) -> Self {
+        Self::from_records(graph, Vec::new(), Vec::new())
+    }
+
+    #[cfg(test)]
     pub(crate) fn add_opinion(&mut self, opinion: Opinion) {
-        self.add_opinions(core::iter::once(opinion));
+        let mut opinions = core::mem::take(&mut self.opinions).into_vec();
+        opinions.push(opinion);
+        self.opinions = opinions.into_boxed_slice();
     }
 
     /// Build the wide prefix index as part of composition on targets
@@ -888,34 +971,6 @@ impl PrimIndex {
         }
     }
 
-    /// Gives back unused opinion storage after composing several batches.
-    pub(crate) fn trim(&mut self) {
-        let data = Arc::make_mut(&mut self.data);
-        // Opinions grown by a few batches are copied back only when they
-        // left more than a quarter unused.
-        if data.opinions.capacity() - data.opinions.len() > data.opinions.len() / 4 {
-            data.opinions.shrink_to_fit();
-        }
-    }
-
-    /// Appends one batch before finalization, preserving equal-key
-    /// insertion order. Detach shared snapshots once and reserve the first
-    /// batch exactly, by its size hint, so sparse prims do not reserve four
-    /// large records.
-    pub(crate) fn add_opinions(&mut self, opinions: impl Iterator<Item = Opinion>) {
-        let len = opinions.size_hint().0;
-        let mut opinions = opinions.peekable();
-        if opinions.peek().is_none() {
-            return;
-        }
-        let data = Arc::make_mut(&mut self.data);
-        debug_assert!(data.fields.is_empty(), "append before finalization");
-        if data.opinions.capacity() == 0 {
-            data.opinions.reserve_exact(len);
-        }
-        data.opinions.extend(opinions);
-    }
-
     /// The opinions of the property `name`.
     pub(crate) fn property_opinions(&self, name: TokenId) -> Option<Opinions<'_>> {
         self.field_opinions(FieldKey::Property(name))
@@ -926,120 +981,43 @@ impl PrimIndex {
         self.field_opinions(FieldKey::Metadata(key))
     }
 
-    fn field_range(&self, field: FieldKey) -> Option<Range<usize>> {
-        let slot = self
-            .fields
-            .binary_search_by_key(&field, |(key, _)| *key)
-            .ok()?;
-        Some(span(&self.fields[slot].1))
-    }
-
     fn field_opinions(&self, field: FieldKey) -> Option<Opinions<'_>> {
-        let range = self.field_range(field)?;
+        let range = self.fields.find(field)?;
         Some(Opinions::new(&self.opinions[range], &self.sources))
     }
 
     pub(crate) fn field_opinions_mut(&mut self, field: FieldKey) -> Option<&mut [Opinion]> {
-        let range = self.field_range(field)?;
+        let range = self.fields.find(field)?;
         Some(&mut self.opinions[range])
-    }
-
-    /// Rebuilds ranges after grouping or removing opinions. No authored data
-    /// moves into a second representation: fields only index this buffer.
-    fn index_fields(&mut self) {
-        let data = Arc::make_mut(&mut self.data);
-        let runs = data
-            .opinions
-            .chunk_by(|a, b| FieldKey::of(a) == FieldKey::of(b))
-            .count();
-        let mut fields: Vec<(FieldKey, Range<u32>)> = Vec::with_capacity(runs);
-        for (at, opinion) in data.opinions.iter().enumerate() {
-            let field = FieldKey::of(opinion);
-            let end = position(at + 1);
-            if let Some((last, range)) = fields.last_mut()
-                && *last == field
-            {
-                range.end = end;
-            } else {
-                fields.push((field, position(at)..end));
-            }
-        }
-        data.replace_fields(fields);
-    }
-
-    /// Groups fields while preserving insertion order within each stack.
-    fn group_by_field(&mut self) {
-        let data = Arc::make_mut(&mut self.data);
-        if data
-            .opinions
-            .is_sorted_by(|a, b| FieldKey::of(a) <= FieldKey::of(b))
-        {
-            self.index_fields();
-            return;
-        }
-        // Count field contributions before moving payloads. Sorting only
-        // field identities avoids comparing graph keys across unrelated fields.
-        let mut keys: Vec<FieldKey> = data.opinions.iter().map(FieldKey::of).collect();
-        sort::sort_unstable(&mut keys);
-        keys.dedup();
-        let mut fields: Vec<_> = keys.iter().map(|&key| (key, 0..0)).collect();
-        for opinion in &data.opinions {
-            let field = keys
-                .binary_search(&FieldKey::of(opinion))
-                .expect("counted field");
-            fields[field].1.end += 1;
-        }
-        let mut offset = 0;
-        for (_, range) in &mut fields {
-            let count = range.end;
-            *range = offset..offset;
-            offset += count;
-        }
-        let mut order = alloc::vec![0; data.opinions.len()];
-        for (source, opinion) in data.opinions.iter().enumerate() {
-            let field = keys
-                .binary_search(&FieldKey::of(opinion))
-                .expect("counted field");
-            let range = &mut fields[field].1;
-            order[range.end as usize] = source;
-            range.end += 1;
-        }
-        // Each cycle places records in their destination field once. The
-        // increasing source indices preserve equal-key insertion order.
-        for start in 0..order.len() {
-            let mut current = start;
-            while order[current] != start {
-                let next = order[current];
-                data.opinions.swap(current, next);
-                order[current] = current;
-                current = next;
-            }
-            order[current] = current;
-        }
-        data.replace_fields(fields);
     }
 
     /// Groups hand-built indexes that do not have a ranked composition graph.
     #[cfg(test)]
     pub(crate) fn group_fields(&mut self) {
-        if self.fields.is_empty() {
-            self.group_by_field();
-        }
+        let data = Arc::make_mut(&mut self.data);
+        sort::sort_by_key(&mut data.opinions, FieldKey::of);
+        data.index_fields();
     }
 
-    /// Keeps the opinions `keep` accepts; the sources stay.
+    /// Keeps the opinions `keep` accepts; the sources and field ordering stay.
     pub(crate) fn retain_opinions(&mut self, keep: impl FnMut(&Opinion) -> bool) {
-        let before = self.opinions.len();
-        Arc::make_mut(&mut self.data).opinions.retain(keep);
-        if self.opinions.len() != before && !self.fields.is_empty() {
-            self.index_fields();
+        let data = Arc::make_mut(&mut self.data);
+        let mut opinions = core::mem::take(&mut data.opinions).into_vec();
+        let before = opinions.len();
+        opinions.retain(keep);
+        data.opinions = opinions.into_boxed_slice();
+        if data.opinions.len() != before {
+            data.index_fields();
         }
     }
 
     /// Adds a source for opinions to name, returning its id.
+    #[cfg(test)]
     pub(crate) fn add_source(&mut self, source: OpinionSource) -> SourceId {
         let id = SourceId::at(self.sources.len());
-        self.sources.push(source);
+        let mut sources = core::mem::take(&mut self.sources).into_vec();
+        sources.push(source);
+        self.sources = sources.into_boxed_slice();
         id
     }
 
@@ -1084,7 +1062,6 @@ impl PrimIndex {
     /// [`PrimIndexGraph::cmp_keys`] and then each field's opinions by their
     /// sources, so that equally strong opinions keep their insertion order.
     pub(crate) fn finalize(&mut self) {
-        self.group_by_field();
         let graph = &self.graph;
         let data = Arc::make_mut(&mut self.data);
         if !data
@@ -1114,9 +1091,11 @@ impl PrimIndex {
                 }
             }
         }
-        for (_, range) in &*data.fields {
-            sort::sort_by_key(&mut data.opinions[span(range)], |opinion| opinion.source);
+        let key = |op: &Opinion| (FieldKey::of(op), op.source);
+        if !data.opinions.is_sorted_by_key(key) {
+            sort::sort_by_key(&mut data.opinions, key);
         }
+        data.index_fields();
     }
 }
 
@@ -1126,7 +1105,7 @@ mod tests {
     use crate::InMemoryStore;
 
     #[test]
-    fn batched_opinions_preserve_shared_snapshots_and_equal_key_order() {
+    fn cloned_opinion_buffers_preserve_snapshots_and_equal_key_order() {
         let store = InMemoryStore::default();
         let prim = store.path("/Emitter");
         let field = store.tokens.intern("value");
@@ -1151,7 +1130,8 @@ mod tests {
         };
         index.add_opinion(opinion(1));
         let mut snapshot = index.clone();
-        index.add_opinions([opinion(2), opinion(3)].into_iter());
+        index.add_opinion(opinion(2));
+        index.add_opinion(opinion(3));
         snapshot.finalize();
         index.finalize();
         let values = |index: &PrimIndex| {
@@ -1210,8 +1190,7 @@ mod tests {
         ] {
             index.add_keyed(key(strength), LayerOffset::IDENTITY, field, value);
         }
-        // A deep stack also exercises grouping without moving large payloads
-        // at every comparison, including a repeated key whose order matters.
+        // Exercise stable ordering across a deep stack, including equal keys.
         for strength in 0..40 {
             index.add_keyed(
                 key(strength),
@@ -1252,6 +1231,8 @@ mod tests {
             1,
             "metadata stays separate"
         );
+        assert_eq!(index.fields.ends().len(), index.field_count());
+        assert!(index.metadata_opinions(b).is_none());
         let strongest = index.sources[0].key.clone();
         assert_eq!(strongest.layer_strength, 0, "sources are strongest first");
         index.retain_opinions(|opinion| {
@@ -1259,6 +1240,11 @@ mod tests {
                 || FieldKey::of(opinion) == FieldKey::Property(a)
                     && opinion.source == SourceId::at(0))
         });
+        assert!(
+            index.fields.ends().is_empty(),
+            "singleton groups need no offsets"
+        );
+        assert_eq!(index.field_count(), 2);
         assert!(
             index.property_opinions(b).is_none(),
             "removed fields disappear"

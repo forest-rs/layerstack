@@ -5,7 +5,7 @@
 
 use super::{ConnectedSources, ShaderSources, ValueSources, shading_kind};
 use crate::diagnostic::{Describe, Names, with_store};
-use crate::{CannotEdit, PrimEdit, PrimView, Scene, SchemaEdit, Time};
+use crate::{CannotEdit, MetadataError, PrimEdit, PrimView, Scene, SchemaEdit, Time};
 use alloc::{format, string::String, vec::Vec};
 use layerstack::{
     LayerStore, ListOp, ListPosition, PathId, PropertyPath, PropertyType, TargetPath, Value,
@@ -29,6 +29,16 @@ impl PortKind {
     fn of(name: &str) -> Option<Self> {
         shading_kind(name).map(|input| if input { Self::Input } else { Self::Output })
     }
+}
+
+/// Authored connection policy for a `UsdShadeInput`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum InputConnectability {
+    /// Allows both input and output sources subject to the prim's connection policy.
+    #[default]
+    Full,
+    /// Restricts sources to interface-only inputs subject to the prim's connection policy.
+    InterfaceOnly,
 }
 
 /// An existing input or output attribute. Its prim need not be a Shader.
@@ -161,6 +171,13 @@ pub enum PortError {
         /// Full property name.
         name: String,
     },
+    /// Connectability can only be authored on inputs.
+    ExpectedInput {
+        /// Full property name.
+        name: String,
+    },
+    /// The port's metadata edit was refused.
+    Metadata(MetadataError),
     /// Creating a port would change an existing attribute's declared type.
     TypeMismatch {
         /// Full property name.
@@ -190,6 +207,11 @@ impl Describe for PortError {
                 "{}.{name} exists but is not a typed shading attribute",
                 names.path(*prim)
             ),
+            Self::ExpectedInput { name } => write!(
+                f,
+                "`{name}` is an output; connectability can only be authored on inputs"
+            ),
+            Self::Metadata(error) => core::fmt::Display::fmt(error, f),
             Self::TypeMismatch { name } => write!(
                 f,
                 "`{name}` is already declared with another type; the port would change it"
@@ -561,7 +583,7 @@ impl PortEdit {
         &self,
         edit: &mut SchemaEdit<'_>,
         name: &str,
-    ) -> Result<&Self, crate::MetadataError> {
+    ) -> Result<&Self, MetadataError> {
         PrimEdit::from_path_unchecked(self.prim)
             .set_attribute_color_space(edit, &self.name, name)?;
         Ok(self)
@@ -572,12 +594,68 @@ impl PortEdit {
     /// # Errors
     ///
     /// See [`PrimEdit::clear_attribute_color_space`].
-    pub fn clear_color_space(
-        &self,
-        edit: &mut SchemaEdit<'_>,
-    ) -> Result<&Self, crate::MetadataError> {
+    pub fn clear_color_space(&self, edit: &mut SchemaEdit<'_>) -> Result<&Self, MetadataError> {
         PrimEdit::from_path_unchecked(self.prim).clear_attribute_color_space(edit, &self.name)?;
         Ok(self)
+    }
+
+    /// Authors the input's `connectability` metadata in the edit target.
+    ///
+    /// OpenUSD: `UsdShadeInput::SetConnectability`.
+    /// Spec: AOUSD Core §7.4 (metadata), §12.2 (metadata resolution).
+    ///
+    /// # Errors
+    ///
+    /// Returns a port error if this is an output, the input no longer exists,
+    /// or the edit cannot author its metadata.
+    #[doc(alias = "SetConnectability")]
+    pub fn set_connectability(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        connectability: InputConnectability,
+    ) -> Result<&Self, PortError> {
+        self.validate_connectability_edit(edit)?;
+        let name = match connectability {
+            InputConnectability::Full => "full",
+            InputConnectability::InterfaceOnly => "interfaceOnly",
+        };
+        let token = edit.tokens().intern(name);
+        edit.author_property_metadata(
+            self.prim,
+            &self.name,
+            "connectability",
+            Some(Value::Token(token).into()),
+        )
+        .map_err(PortError::Metadata)?;
+        Ok(self)
+    }
+
+    /// Clears the input's `connectability` opinion in the edit target.
+    ///
+    /// A weaker opinion can then resolve. The fallback is `full`.
+    ///
+    /// OpenUSD: `UsdShadeInput::ClearConnectability`.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`Self::set_connectability`].
+    #[doc(alias = "ClearConnectability")]
+    pub fn clear_connectability(&self, edit: &mut SchemaEdit<'_>) -> Result<&Self, PortError> {
+        self.validate_connectability_edit(edit)?;
+        edit.author_property_metadata(self.prim, &self.name, "connectability", None)
+            .map_err(PortError::Metadata)?;
+        Ok(self)
+    }
+
+    fn validate_connectability_edit(&self, edit: &mut SchemaEdit<'_>) -> Result<(), PortError> {
+        if PortKind::of(&self.name) == Some(PortKind::Output) {
+            return Err(PortError::ExpectedInput {
+                name: self.name.clone(),
+            });
+        }
+        edit.can_edit(self.prim)
+            .map_err(|error| PortError::Metadata(MetadataError::CannotEdit(error)))?;
+        self.validate(edit)
     }
 
     /// Authors this attribute's default value. Type validation is performed by
@@ -803,5 +881,99 @@ impl PrimEdit {
             prim: self.path(),
             name,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::sync::Arc;
+
+    use layerstack::{
+        EditTarget, InMemoryStore, Layer, LayerId, LiveStage, StageOptions, SublayerEntry,
+    };
+
+    use super::*;
+    use crate::shading::ConnectionIssue;
+
+    #[test]
+    fn input_connectability_authors_and_clears_local_opinions() {
+        let root = LayerId(1);
+        let weak = LayerId(2);
+        let mut store = InMemoryStore::default();
+        let mut root_layer = Layer::new(root);
+        root_layer.sublayers_mut().push(SublayerEntry::new(weak));
+        store.insert_layer(root_layer);
+        store.insert_layer(Layer::new(weak));
+        let options = StageOptions {
+            schemas: Some(Arc::new(crate::openusd(store.tokens()))),
+            ..StageOptions::default()
+        };
+        let mut live = LiveStage::compose(&mut store, root, options);
+        let material_path = store.path("/Material");
+        let prim_path = store.path("/Material/Shader");
+        let texture_path = store.path("/Material/Texture");
+        let ty = PropertyType::parse("float").unwrap();
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(weak));
+        edit.define_prim(material_path, "Material").unwrap();
+        let prim = edit.define_prim(prim_path, "Shader").unwrap();
+        let texture = edit.define_prim(texture_path, "Shader").unwrap();
+        let input = prim.create_input(&mut edit, "weight", ty.clone()).unwrap();
+        let output = texture.create_output(&mut edit, "result", ty).unwrap();
+        input
+            .set_connectability(&mut edit, InputConnectability::InterfaceOnly)
+            .unwrap();
+        live.apply(&mut store, &edit.finish()).unwrap();
+
+        let destination = store.property_path("/Material/Shader.inputs:weight");
+        let source = store.property_path("/Material/Texture.outputs:result");
+        let read = |live: &LiveStage, store: &InMemoryStore| {
+            Scene::new(live.stage(), store)
+                .validate_shading_connection(destination, source)
+                .map_err(|error| error.issue)
+        };
+        assert_eq!(read(&live, &store), Err(ConnectionIssue::InterfaceOnly));
+
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(root));
+        assert!(matches!(
+            output.set_connectability(&mut edit, InputConnectability::Full),
+            Err(PortError::ExpectedInput { .. })
+        ));
+        assert!(matches!(
+            output.clear_connectability(&mut edit),
+            Err(PortError::ExpectedInput { .. })
+        ));
+        assert!(edit.finish().is_empty());
+
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(root));
+        input
+            .set_connectability(&mut edit, InputConnectability::Full)
+            .unwrap();
+        live.apply(&mut store, &edit.finish()).unwrap();
+        assert_eq!(read(&live, &store), Ok(()));
+
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(root));
+        input.clear_connectability(&mut edit).unwrap();
+        live.apply(&mut store, &edit.finish()).unwrap();
+        assert_eq!(read(&live, &store), Err(ConnectionIssue::InterfaceOnly));
+
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(weak));
+        let token = edit.tokens().intern("unknown");
+        prim.write_property_metadata(
+            &mut edit,
+            input.name(),
+            "connectability",
+            Value::Token(token),
+        )
+        .unwrap();
+        live.apply(&mut store, &edit.finish()).unwrap();
+        assert_eq!(
+            read(&live, &store),
+            Err(ConnectionIssue::UnknownConnectability)
+        );
+
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(weak));
+        input.clear_connectability(&mut edit).unwrap();
+        live.apply(&mut store, &edit.finish()).unwrap();
+        assert_eq!(read(&live, &store), Ok(()));
     }
 }

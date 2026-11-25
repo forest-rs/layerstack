@@ -27,7 +27,9 @@ export interface NativeEditBatch extends Disposable {
   createAttribute(path: string, typeName: string, uniform: boolean, custom: boolean, value?: number | null): void;
   setValue(path: string, time: number | null | undefined, value: number): void;
   clearValue(path: string, time?: number | null): void;
+  clearAttribute(path: string): void;
   blockValue(path: string): void;
+  blockAnimation(path: string): void;
   setTargets(path: string, targets: string[]): void;
   addTarget(connection: boolean, path: string, target: string, position: string): void;
   removeTarget(connection: boolean, path: string, target: string): void;
@@ -237,8 +239,14 @@ function lowerEdit(batch: NativeEditBatch, edit: Edit, host: ArrayHost): void {
     case "clearValue":
       batch.clearValue(path, time(edit.time));
       return;
+    case "clearAttribute":
+      batch.clearAttribute(path);
+      return;
     case "blockValue":
       batch.blockValue(path);
+      return;
+    case "blockAnimation":
+      batch.blockAnimation(path);
       return;
     case "setTargets": {
       if (!Array.isArray(edit.targets)) fail("`targets` must be an array of paths");

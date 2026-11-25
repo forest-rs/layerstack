@@ -88,10 +88,7 @@ impl Stage {
             return Some(defined.kind);
         }
         index
-            .property_opinions(path.property())?
-            .records()
-            .iter()
-            .find_map(|opinion| opinion.value.as_property())
+            .strongest_property(path.property())
             .map(|spec| spec.kind)
     }
     /// Ordered, deduplicated relationship targets with recursive forwarding.

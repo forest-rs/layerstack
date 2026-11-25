@@ -5,8 +5,7 @@
 use super::{SkelError, compose, invalid, length, read, tokens};
 use crate::{PrimView, Time, usd_skel::SkelAnimation};
 use alloc::vec::Vec;
-use layerstack::PropertyPath;
-use layerstack::sort;
+use layerstack::{Attribute, PropertyPath};
 const TRS: [&str; 3] = ["translations", "rotations", "scales"];
 
 /// Sampled joint-local transform components in the animation's joint order.
@@ -19,24 +18,20 @@ pub struct JointTransformComponents {
     /// Authored half scales widened to floats.
     pub scales: Vec<[f32; 3]>,
 }
-fn sample_info(prim: &PrimView<'_>, names: &[&str]) -> (Vec<f64>, bool) {
-    let mut result = Vec::new();
-    let mut varying = false;
-    for name in names {
-        if let Some(attribute) = prim.attribute(name) {
-            result.extend(attribute.sample_times());
-            varying |= attribute.might_be_time_varying();
-        }
-    }
-    sort::sort_by(&mut result, f64::total_cmp);
-    result.dedup_by(|a, b| *a == *b);
-    (result, varying)
-}
 fn samples(prim: &PrimView<'_>, names: &[&str]) -> Vec<f64> {
-    sample_info(prim, names).0
+    let mut times = Vec::new();
+    for attribute in names.iter().filter_map(|name| prim.attribute(name)) {
+        times.extend(attribute.sample_times());
+    }
+    layerstack::sort::sort_by(&mut times, f64::total_cmp);
+    times.dedup_by(|a, b| *a == *b);
+    times
 }
 fn varying(prim: &PrimView<'_>, names: &[&str]) -> bool {
-    sample_info(prim, names).1
+    names
+        .iter()
+        .filter_map(|name| prim.attribute(name))
+        .any(Attribute::might_be_time_varying)
 }
 fn interval(mut samples: Vec<f64>, bounds: impl core::ops::RangeBounds<f64>) -> Vec<f64> {
     samples.retain(|time| bounds.contains(time));

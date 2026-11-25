@@ -105,14 +105,16 @@ pub(crate) fn drop_inconsistent_property_kinds(
     index: &mut PrimIndex,
     findings: &mut Findings,
 ) {
+    if !index.has_stacked_fields() {
+        return;
+    }
     let mut removed = Vec::new();
-    for (field, range) in &*index.fields {
+    for (field, opinions) in index.field_groups() {
         // One opinion has none to differ from.
-        if range.len() < 2 {
+        if opinions.len() < 2 {
             continue;
         }
-        let opinions = index.opinions_in(range);
-        let FieldKey::Property(property) = *field else {
+        let FieldKey::Property(property) = field else {
             continue;
         };
         let mut specs = opinions
@@ -142,7 +144,7 @@ pub(crate) fn drop_inconsistent_property_kinds(
         removed.extend(
             conflicting
                 .into_iter()
-                .map(|opinion| (*field, opinion.opinion().source)),
+                .map(|opinion| (field, opinion.opinion().source)),
         );
     }
     if !removed.is_empty() {
@@ -420,9 +422,8 @@ pub(crate) fn drop_instance_targets(
             continue;
         }
         let prim_path = paths.resolve(prim);
-        for (field, range) in &*index.fields {
-            let opinions = index.opinions_in(range);
-            let FieldKey::Property(property) = *field else {
+        for (field, opinions) in index.field_groups() {
+            let FieldKey::Property(property) = field else {
                 continue;
             };
             for opinion in opinions {

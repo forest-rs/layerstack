@@ -1934,9 +1934,10 @@ fn prim_index(
             stack_offsets,
         )
     });
-    let mut index = PrimIndex::new(PrimIndexGraph::from_ordered_in(nodes, &ctx.shapes, like));
+    let prim_graph = PrimIndexGraph::from_ordered_in(nodes, &ctx.shapes, like);
+    let mut opinions = Vec::new();
     // Graph construction counted each layer that actually authors the site.
-    index.sources.reserve_exact(
+    let mut sources = Vec::with_capacity(
         graph
             .nodes
             .iter()
@@ -1973,7 +1974,8 @@ fn prim_index(
             // The spec's opinions share its source's key and offset
             // (AOUSD Core §12.3.2.1), as OpenUSD's prim stack entries share
             // their node and layer.
-            let source = index.add_source(OpinionSource {
+            let source = crate::prim_index::SourceId::at(sources.len());
+            sources.push(OpinionSource {
                 key: OpinionKey {
                     node: id,
                     layer_strength,
@@ -1984,7 +1986,11 @@ fn prim_index(
                 layer_offset,
             });
             let entries = crate::doc::composed_entries(spec.fields(), spec.properties());
-            index.add_opinions(entries.map(|entry| {
+            // A small first batch needs only its actual records.
+            if opinions.capacity() == 0 {
+                opinions.reserve_exact(entries.size_hint().0);
+            }
+            opinions.extend(entries.map(|entry| {
                 let (field, mut value) = (entry.name(), entry.value());
                 // Relative expressions anchor at every node, the root's
                 // included.
@@ -2034,7 +2040,7 @@ fn prim_index(
             }));
         }
     }
-    index.trim();
+    let mut index = PrimIndex::from_records(prim_graph, opinions, sources);
     index.finalize();
     index
 }

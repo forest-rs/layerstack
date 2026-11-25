@@ -17,7 +17,7 @@ use crate::{
     doc::{FieldValue, LayerStore, Value},
     interner::{TokenId, TokenInterner},
     path::{PathId, PathInterner, PropertyPath, TargetPath},
-    prim_index::{FieldKey, OpinionSource},
+    prim_index::OpinionSource,
     property::{Time, Variability},
     stage::{ResolvedValue, Stage, stage_time::map_leaves},
 };
@@ -738,11 +738,7 @@ fn metadata_keys(source: &Stage, flattened: &Stage, prim: PathId) -> Vec<TokenId
     let mut keys: Vec<TokenId> = [source, flattened]
         .iter()
         .filter_map(|stage| stage.prims.get(&prim))
-        .flat_map(|index| index.fields.iter().map(|(field, _)| field))
-        .filter_map(|key| match key {
-            FieldKey::Metadata(key) => Some(*key),
-            FieldKey::Property(_) => None,
-        })
+        .flat_map(|index| index.metadata_names())
         .collect();
     sort::sort_unstable(&mut keys);
     keys.dedup();

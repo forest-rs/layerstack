@@ -115,7 +115,7 @@ use crate::{
     interner::TokenId,
     listop::ListOp,
     path::{Path, PathId, PropertyPath, TargetPath},
-    prim_index::{ArcKind, FieldKey, Opinion, OpinionList, OpinionRef, OpinionSource, Opinions},
+    prim_index::{ArcKind, Opinion, OpinionList, OpinionRef, OpinionSource, Opinions},
     property::{PropertyEntry, PropertyKind, PropertySpec, PropertyType, Variability},
     spec_path::VariantSelectionSite,
 };
@@ -782,15 +782,7 @@ impl Flattener<'_> {
             }
         }
 
-        let mut keys: Vec<TokenId> = index
-            .fields
-            .iter()
-            .map(|(field, _)| field)
-            .filter_map(|key| match key {
-                FieldKey::Metadata(key) => Some(*key),
-                FieldKey::Property(_) => None,
-            })
-            .collect();
+        let mut keys: Vec<TokenId> = index.metadata_names().collect();
         {
             let tokens = self.store.tokens();
             tokens.sort_by_text(&mut keys);

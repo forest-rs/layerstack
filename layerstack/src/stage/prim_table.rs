@@ -219,6 +219,8 @@ mod tests {
         );
         let sample = prim.attribute(field).unwrap();
         assert_eq!(sample.sample_times(), [1.0]);
+        assert!(sample.value_source_might_be_time_varying());
+        assert!(sample.clip_source(Time::held(1.0)).is_none());
         let sampled = sample.get(Time::held(1.0)).unwrap();
         assert_eq!(sampled.value, Value::Int(9));
         assert_eq!(sampled.provenance.unwrap().layer, asset);

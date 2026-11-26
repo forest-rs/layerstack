@@ -1402,7 +1402,7 @@ impl Stage {
             return self.clips.untimed_plan(
                 property,
                 max_demands,
-                self.prims.get(&property.prim_path()),
+                self.prims.shared_index(&property.prim_path()),
             );
         };
         self.clips.query_plan(
@@ -1410,7 +1410,7 @@ impl Stage {
             code,
             interpolation,
             max_demands,
-            self.prims.get(&property.prim_path()),
+            self.prims.shared_index(&property.prim_path()),
         )
     }
 
@@ -1459,7 +1459,7 @@ impl Stage {
         else {
             return None;
         };
-        let index = self.prims.get(&prim)?;
+        let index = self.prims.shared_index(&prim)?;
         self.clip_time_opinions(prim, field, index, code, interpolation)
             .source
     }
@@ -1484,7 +1484,7 @@ impl Stage {
         else {
             return None;
         };
-        let index = self.prims.get(&prim)?;
+        let index = self.prims.shared_index(&prim)?;
         let selected = self
             .clip_time_opinions(prim, field, index, code, interpolation)
             .selected?;
@@ -1788,7 +1788,7 @@ impl Stage {
     fn authored_might_vary(&self, prim: PathId, field: TokenId, mut query: VariationQuery) -> bool {
         let Some(opinions) = self
             .prims
-            .get(&prim)
+            .shared_index(&prim)
             .and_then(|i| i.property_opinions(field))
         else {
             return false;

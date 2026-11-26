@@ -563,6 +563,8 @@ pub(crate) struct Outcome {
     pub(crate) properties: Option<Vec<(LayerId, PathId, super::PropertyChange)>>,
     /// Exact existing-attribute value slots, or None for other edit kinds.
     pub(crate) values: Option<Vec<PropertyValueEdit>>,
+    /// Existing scalar prim metadata replaced without changing field presence.
+    pub(crate) metadata: Option<Vec<PrimMetadataEdit>>,
     pub(crate) inverse: Transaction,
     /// Every layer the transaction changed.
     pub(crate) layers: Vec<LayerId>,
@@ -738,6 +740,78 @@ impl PropertyValueEdit {
         let spec = spec_at(store.layer(self.layer)?, &loc)?;
         get_property(spec.properties(), self.name)
     }
+}
+
+/// A namespace-independent metadata value replacing an existing opinion.
+#[derive(Debug)]
+pub(crate) struct PrimMetadataEdit {
+    pub(crate) layer: LayerId,
+    pub(crate) path: SpecPath,
+    pub(crate) field: TokenId,
+    pub(crate) value: FieldValue,
+}
+
+impl PrimMetadataEdit {
+    pub(crate) fn plain(value: &FieldValue) -> bool {
+        matches!(
+            value,
+            FieldValue::Value(
+                Value::Bool(_)
+                    | Value::UChar(_)
+                    | Value::Int(_)
+                    | Value::UInt(_)
+                    | Value::Int64(_)
+                    | Value::UInt64(_)
+                    | Value::Half(_)
+                    | Value::Float(_)
+                    | Value::Double(_)
+                    | Value::String(_)
+                    | Value::Token(_)
+            )
+        )
+    }
+}
+
+fn metadata_edits(steps: &[Guarded], store: &dyn LayerStore) -> Option<Vec<PrimMetadataEdit>> {
+    steps
+        .iter()
+        .map(|guarded| {
+            let Raw::Field {
+                layer,
+                loc,
+                property: None,
+                key,
+                value: Some(value),
+                ..
+            } = &guarded.written
+            else {
+                return None;
+            };
+            let Raw::Field {
+                value: Some(previous),
+                ..
+            } = &guarded.step
+            else {
+                return None;
+            };
+            // These are generic prim metadata opinions. Dedicated composition
+            // fields, schema/kind/clip metadata and mapped values require composition.
+            let field = store.tokens().resolve(*key);
+            if RESERVED_FIELDS.contains(&field)
+                || resyncs_prim(field)
+                || !PrimMetadataEdit::plain(previous)
+                || !PrimMetadataEdit::plain(value)
+            {
+                return None;
+            }
+            Some(PrimMetadataEdit {
+                layer: *layer,
+                path: loc.spec_path(store.paths()),
+                field: *key,
+                value: value.clone(),
+            })
+        })
+        .collect()
 }
 
 /// The property field `raw` changes, as `(layer, source prim path,
@@ -1614,10 +1688,12 @@ pub(crate) fn apply(
         .collect();
     let values = value_edits(&steps, store);
     let properties = property_edits(&steps);
+    let metadata = metadata_edits(&steps, store);
     steps.reverse();
     Ok(Outcome {
         properties,
         values,
+        metadata,
         local_structure,
         child_lists,
         resync_sites,

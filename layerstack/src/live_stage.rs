@@ -1128,6 +1128,33 @@ impl LiveStage {
             }
             self.stage.refresh_values(store, edits, &dependents)
         });
+        let refreshed = refreshed.or_else(|| {
+            if !attributable
+                || !argument_dependents.is_empty()
+                || outcome.structural
+                || self.stage.reached_node_limit()
+            {
+                return None;
+            }
+            let edits = outcome.metadata.as_deref()?;
+            let mut by_prim: HashMap<PathId, SmallVec<[usize; 2]>> = HashMap::new();
+            for (at, edit) in edits.iter().enumerate() {
+                for &prim in self.source_share(edit.layer).prims(edit.path.prim_path()) {
+                    by_prim.entry(prim).or_default().push(at);
+                }
+            }
+            // Preserve every path the ordinary invalidation walk would
+            // report, including graph dependents of a directly edited prim.
+            if by_prim.keys().any(|&prim| {
+                self.tracker
+                    .graph()
+                    .dependents(prim, OPINION_EDIT)
+                    .any(|dependent| !by_prim.contains_key(&dependent))
+            }) {
+                return None;
+            }
+            self.stage.refresh_prim_metadata(edits, &by_prim)
+        });
         if refreshed.is_none() {
             if outcome.structural
                 && sources_current
@@ -5075,6 +5102,125 @@ mod tests {
             [scene.c]
         );
         assert_matches_fresh(&live, &mut store, &[scene.x]);
+    }
+
+    #[test]
+    fn shared_scalar_metadata_refresh_retains_occurrence_notices_and_old_snapshots() {
+        let mut store = InMemoryStore::default();
+        let field = store.tokens.intern("shade");
+        let name = store.tokens.intern("Leaf");
+        let asset = store.path("/Asset");
+        let leaf = store.path("/Asset/Leaf");
+        let a = store.path("/A");
+        let b = store.path("/B");
+        let a_leaf = store.path("/A/Leaf");
+        let b_leaf = store.path("/B/Leaf");
+        let mut source = Layer::new(LayerId(2));
+        source.insert_prim(asset, PrimSpec::def().with_children(vec![name]));
+        source.insert_prim(leaf, PrimSpec::def().with_field(field, Value::Int(1)));
+        store.insert_layer(source);
+        let mut scene = Layer::new(LayerId(1));
+        for path in [a, b] {
+            scene.insert_prim(
+                path,
+                PrimSpec::def()
+                    .with_instanceable(true)
+                    .with_reference(Reference::new(LayerId(2), asset)),
+            );
+        }
+        store.insert_layer(scene);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let before_storage = live.stage().composition_storage();
+        let before_root = live.stage().prim_snapshot(a);
+        let before_leaves = [a_leaf, b_leaf].map(|path| live.stage().prim_snapshot(path));
+        let mut edit = Transaction::new();
+        edit.set_metadata(
+            crate::EditTarget::for_layer(LayerId(2)).prim(leaf),
+            field,
+            Value::Int(2).into(),
+        );
+        let applied = live.apply(&mut store, &edit).unwrap();
+        assert_eq!(applied.recomposed, [a_leaf, b_leaf]);
+        assert_eq!(applied.changes.changed_info_only, [a_leaf, b_leaf]);
+        assert_eq!(
+            applied.changes.prim_fields,
+            [a_leaf, b_leaf].map(|prim| crate::PrimFieldChange {
+                prim,
+                field: crate::PrimInfoField::Metadata(field),
+            }),
+        );
+        assert_eq!(live.work.composed_prim_indexes, 0);
+        assert_eq!(
+            live.stage().composition_storage().record_buffers,
+            before_storage.record_buffers,
+        );
+        assert!(before_root.is_current(live.stage()));
+        assert!(
+            before_leaves
+                .iter()
+                .all(|leaf| !leaf.is_current(live.stage()))
+        );
+        for path in [a_leaf, b_leaf] {
+            assert_eq!(
+                live.stage().resolve_value(path, field).unwrap().value,
+                crate::ResolvedValue::Scalar(Value::Int(2))
+            );
+        }
+        assert_matches_fresh(&live, &mut store, &[field]);
+        let undo = live.apply(&mut store, &applied.inverse).unwrap();
+        assert_eq!(undo.recomposed, [a_leaf, b_leaf]);
+        assert_eq!(live.work.composed_prim_indexes, 0);
+        assert_matches_fresh(&live, &mut store, &[field]);
+    }
+
+    #[test]
+    fn scalar_metadata_edit_reports_indirect_invalidation_paths() {
+        let mut store = InMemoryStore::default();
+        let root = LayerId(1);
+        let source_layer = LayerId(2);
+        let other_layer = LayerId(3);
+        let field = store.tokens.intern("shade");
+        let source = store.path("/Source");
+        let bridge = store.path("/Bridge");
+        let indirect = store.path("/Indirect");
+        let end = store.path("/End");
+        let mut scene = Layer::new(root);
+        scene.insert_prim(
+            bridge,
+            PrimSpec::def().with_reference(Reference::new(source_layer, source)),
+        );
+        scene.insert_prim(
+            indirect,
+            PrimSpec::def().with_reference(Reference::new(other_layer, bridge)),
+        );
+        scene.insert_prim(
+            end,
+            PrimSpec::def().with_reference(Reference::new(root, indirect)),
+        );
+        let mut source_spec = Layer::new(source_layer);
+        source_spec.insert_prim(source, PrimSpec::def().with_field(field, Value::Int(1)));
+        // The invalidation graph keys arcs by path. This later arc reads
+        // /Bridge in the other layer, which does not have the field.
+        let mut other = Layer::new(other_layer);
+        other.insert_prim(bridge, PrimSpec::def());
+        store.insert_layer(scene);
+        store.insert_layer(source_spec);
+        store.insert_layer(other);
+        let mut live = LiveStage::compose(&mut store, root, StageOptions::default());
+        let mut oracle = LiveStage::compose(&mut store, root, StageOptions::default());
+        let mut edit = Transaction::new();
+        edit.set_metadata(
+            crate::EditTarget::for_layer(source_layer).prim(source),
+            field,
+            Value::Int(2).into(),
+        );
+
+        let applied = live.apply(&mut store, &edit).unwrap();
+        oracle.notify_layer_prim_edits(source_layer, &[source]);
+        assert_eq!(applied.recomposed, oracle.recompose(&mut store));
+        assert_eq!(applied.recomposed, [bridge, end, indirect]);
+        assert!(live.recomposition_work().composed_prim_indexes > 0);
+        assert_matches_fresh(&live, &mut store, &[field]);
     }
 
     /// Regression: `notify_layer_prim_edits` documented paths "within the

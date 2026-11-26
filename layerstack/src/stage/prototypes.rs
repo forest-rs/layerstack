@@ -696,13 +696,28 @@ mod tests {
         let target = store.property_path("/Asset/Child.outputs:target");
         store.layers.get_mut(&LayerId(2)).unwrap().set_property(
             source,
-            PropertySpec::attribute()
+            PropertySpec::typed_attribute(PropertyType::parse("double").unwrap())
+                .with_time_samples(vec![(1.0, Value::Double(3.0))])
                 .with_targets(ListOp::explicit(vec![TargetPath::Property(target)])),
         );
         let mut stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        let mut first_samples = None;
         for instance in &instances {
             let child = stage.traverse(*instance).nth(1).unwrap();
             let connection = PropertyPath::new(child, source.property());
+            let samples = stage.prims[&child]
+                .property_opinions(source.property())
+                .unwrap()
+                .first()
+                .unwrap()
+                .value()
+                .time_samples()
+                .unwrap();
+            assert_eq!(samples, &[(1.0, Value::Double(3.0))]);
+            assert!(
+                core::ptr::eq(*first_samples.get_or_insert(samples), samples),
+                "re-rooting connections must retain the shared sample buffer"
+            );
             assert_eq!(
                 stage.resolve_target_list_path(connection).unwrap().value,
                 vec![TargetPath::Property(PropertyPath::new(
@@ -1449,12 +1464,20 @@ mod early_reuse_tests {
             PrimSpec::def().with_property(
                 field,
                 PropertySpec::typed_attribute(PropertyType::parse("pathExpression").unwrap())
-                    .with_default(Value::PathExpression(Arc::from("../C"))),
+                    .with_default(Value::PathExpression(Arc::from("../C")))
+                    .with_time_samples(vec![(1.0, Value::PathExpression(Arc::from("../D")))]),
             ),
         );
         let stage = assert_matches_full(&mut store, 4);
         for name in ["Left", "Right"] {
             let child = store.path(&alloc::format!("/{name}/A/B"));
+            assert_eq!(
+                stage
+                    .resolve_property_path_at_time(PropertyPath::new(child, field), Time::held(1.0))
+                    .unwrap()
+                    .value,
+                Value::PathExpression(Arc::from(alloc::format!("/{name}/A/D")))
+            );
             assert_eq!(
                 stage
                     .resolve_field_path(PropertyPath::new(child, field))

@@ -626,15 +626,74 @@ pub struct PrimIndexGraph {
     /// children strongest first, as prim indexing lists them. Shared with
     /// every graph of the composition whose nodes are the same.
     shape: Arc<GraphShape>,
-    /// Each node's site, in the order of [`Self::shape`].
-    sites: alloc::boxed::Box<[SpecPath]>,
+    sites: GraphSites,
+}
+
+/// The root names the occurrence. Non-root sites can be shared by copies
+/// of a prototype descendant until one copy re-roots a site in that tail.
+/// AOUSD Core §11.3.3 (instances share prototypes).
+#[derive(Clone, Debug, Default)]
+struct GraphSites {
+    root: Option<SpecPath>,
+    tail: Option<Arc<GraphSiteTail>>,
+}
+
+#[derive(Clone, Debug)]
+enum GraphSiteTail {
+    One(SpecPath),
+    Many(alloc::boxed::Box<[SpecPath]>),
+}
+
+type TailBuilder = smallvec::SmallVec<[SpecPath; 1]>;
+
+impl GraphSites {
+    fn with_tail(root: Option<SpecPath>, mut tail: TailBuilder) -> Self {
+        let tail = match tail.len() {
+            0 => None,
+            1 => tail.pop().map(GraphSiteTail::One),
+            _ => Some(GraphSiteTail::Many(tail.into_boxed_slice())),
+        };
+        Self {
+            root,
+            tail: tail.map(Arc::new),
+        }
+    }
+
+    fn iter(&self) -> impl Iterator<Item = &SpecPath> {
+        let tail = match self.tail.as_deref() {
+            Some(GraphSiteTail::One(site)) => core::slice::from_ref(site),
+            Some(GraphSiteTail::Many(sites)) => sites,
+            None => &[],
+        };
+        self.root.iter().chain(tail)
+    }
+
+    fn get(&self, index: usize) -> &SpecPath {
+        if index == 0 {
+            return self.root.as_ref().expect("root site");
+        }
+        match self.tail.as_deref().expect("non-root sites") {
+            GraphSiteTail::One(site) => site,
+            GraphSiteTail::Many(sites) => &sites[index - 1],
+        }
+    }
+
+    fn get_mut(&mut self, index: usize) -> &mut SpecPath {
+        if index == 0 {
+            return self.root.as_mut().expect("root site");
+        }
+        match Arc::make_mut(self.tail.as_mut().expect("non-root sites")) {
+            GraphSiteTail::One(site) => site,
+            GraphSiteTail::Many(sites) => &mut sites[index - 1],
+        }
+    }
 }
 
 impl Default for PrimIndexGraph {
     fn default() -> Self {
         Self {
             shape: GraphShape::of(ShapeBuffer::new()),
-            sites: alloc::boxed::Box::default(),
+            sites: GraphSites::default(),
         }
     }
 }
@@ -736,7 +795,8 @@ impl PrimIndexGraph {
         like: Option<&'a Arc<GraphShape>>,
     ) -> Self {
         let nodes = nodes.into_iter();
-        let mut sites: Vec<SpecPath> = Vec::with_capacity(nodes.size_hint().0);
+        let mut root = None;
+        let mut sites = TailBuilder::with_capacity(nodes.size_hint().0.saturating_sub(1));
         // While every node so far is `like`'s, nothing is built but the
         // sites; the first that differs builds the shape, from `like`'s
         // nodes before it.
@@ -744,7 +804,11 @@ impl PrimIndexGraph {
         let mut built: Option<ShapeBuffer<'_>> = None;
         for node in nodes {
             let (node, site) = Self::shape_of(node);
-            sites.push(site);
+            if root.is_none() {
+                root = Some(site);
+            } else {
+                sites.push(site);
+            }
             let shape = match (&mut built, like) {
                 (Some(shape), _) => shape,
                 (None, Some(like))
@@ -765,7 +829,7 @@ impl PrimIndexGraph {
         };
         Self {
             shape,
-            sites: sites.into_boxed_slice(),
+            sites: GraphSites::with_tail(root, sites),
         }
     }
 
@@ -792,16 +856,21 @@ impl PrimIndexGraph {
     #[cfg(test)]
     fn split<'a>(
         nodes: impl IntoIterator<Item = OrderedNode<'a>>,
-    ) -> (ShapeBuffer<'a>, alloc::boxed::Box<[SpecPath]>) {
-        let nodes = nodes.into_iter();
+    ) -> (ShapeBuffer<'a>, GraphSites) {
+        let mut nodes = nodes.into_iter();
         let mut shape = ShapeBuffer::with_capacity(nodes.size_hint().0);
-        let mut sites: Vec<SpecPath> = Vec::with_capacity(nodes.size_hint().0);
+        let root = nodes.next().map(|node| {
+            let (node, site) = Self::shape_of(node);
+            Self::push(&mut shape, node);
+            site
+        });
+        let mut sites = TailBuilder::with_capacity(nodes.size_hint().0);
         for node in nodes {
             let (node, site) = Self::shape_of(node);
             Self::push(&mut shape, node);
             sites.push(site);
         }
-        (shape, sites.into_boxed_slice())
+        (shape, GraphSites::with_tail(root, sites))
     }
 
     /// `node`'s shape, without children, and its site.
@@ -941,7 +1010,7 @@ impl PrimIndexGraph {
         let mut recent: smallvec::SmallVec<[RecentReroot; RECENT_REROOTS]> =
             smallvec::SmallVec::new();
         for step in plan {
-            let (site, moved) = (&mut self.sites[step.node], &moves[step.by]);
+            let (site, moved) = (self.sites.get_mut(step.node), &moves[step.by]);
             let old = site.prim_path();
             let (from, to) = (moved.from.prim_path(), moved.to.prim_path());
             let known = recent
@@ -978,7 +1047,7 @@ impl PrimIndexGraph {
     ///
     /// [`PrimDependencies::dedup_arcs`]: crate::dependency_map::PrimDependencies::dedup_arcs
     pub(crate) fn dependency_arcs(&self) -> Vec<(crate::path::PathId, ArcKind, LayerId)> {
-        let mut arcs = Vec::with_capacity(self.sites.len().saturating_sub(1));
+        let mut arcs = Vec::with_capacity(self.shape.len().saturating_sub(1));
         arcs.extend(
             self.shape
                 .iter()
@@ -997,7 +1066,7 @@ impl PrimIndexGraph {
     /// `true` when two nodes read the same site of the same layer stack.
     fn same_site(&self, a: NodeId, b: NodeId) -> bool {
         self.shape[a.index()].layer_stack == self.shape[b.index()].layer_stack
-            && self.sites[a.index()] == self.sites[b.index()]
+            && self.sites.get(a.index()) == self.sites.get(b.index())
     }
 
     /// `true` for a specializes node propagated to the root: a child of the
@@ -1126,7 +1195,7 @@ impl PrimIndexGraph {
     pub fn node(&self, id: NodeId) -> Option<PrimNode<'_>> {
         Some(PrimNode {
             shape: self.shape.get(id.index())?,
-            site: &self.sites[id.index()],
+            site: self.sites.get(id.index()),
         })
     }
 
@@ -1221,6 +1290,26 @@ mod tests {
         path::{Path, PathId, PathInterner},
     };
     use alloc::{vec, vec::Vec};
+
+    #[test]
+    fn graph_site_copies_share_tail_until_an_occurrence_moves_it() {
+        let source = SpecPath::from_prim_path(PathId::from_raw(1));
+        let arc = SpecPath::from_prim_path(PathId::from_raw(2));
+        let target = SpecPath::from_prim_path(PathId::from_raw(3));
+        let mut sites =
+            GraphSites::with_tail(Some(source.clone()), smallvec::smallvec![arc.clone()]);
+        let previous = sites.clone();
+
+        *sites.get_mut(0) = target.clone();
+        assert_eq!(sites.iter().collect::<Vec<_>>(), [&target, &arc]);
+        assert_eq!(previous.iter().collect::<Vec<_>>(), [&source, &arc]);
+        assert!(core::ptr::eq(sites.get(1), previous.get(1)));
+
+        *sites.get_mut(1) = target.clone();
+        assert_eq!(sites.iter().collect::<Vec<_>>(), [&target, &target]);
+        assert_eq!(previous.iter().collect::<Vec<_>>(), [&source, &arc]);
+        assert!(!core::ptr::eq(sites.get(1), previous.get(1)));
+    }
 
     fn spec_path(text: &str) -> SpecPath {
         let tokens = TokenInterner::default();

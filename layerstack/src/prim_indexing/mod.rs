@@ -93,7 +93,7 @@ pub(crate) struct Composition {
     /// found on the thread that indexed it.
     pub(crate) instance_keys: InstanceIndexKeys,
     /// What each composed prim depends on, which `deps` holds at the end.
-    records: HashMap<PathId, PrimDependencies>,
+    records: HashMap<PathId, Arc<PrimDependencies>>,
     /// The layer stacks whose errors a prim has reported.
     reported_stacks: HashSet<StackId>,
     /// The parents of the boundary parents indexed only for their children
@@ -633,7 +633,7 @@ struct Indexed {
     /// its parent's.
     arc_stacks: smallvec::SmallVec<[StackId; 1]>,
     /// What the prim depends on, when the composition records it.
-    record: Option<PrimDependencies>,
+    record: Option<Arc<PrimDependencies>>,
     index: PrimIndex,
     /// The errors, asset requests and variable reads it reported, if any.
     reports: Option<Box<Reports>>,
@@ -922,8 +922,8 @@ fn index_prim(
             arc_stacks.push(node.site.stack);
         }
     }
-    let record =
-        (with_dependencies && !graph_only).then(|| prim_record(ctx, &graph, &index, &mut outputs));
+    let record = (with_dependencies && !graph_only)
+        .then(|| Arc::new(prim_record(ctx, &graph, &index, &mut outputs)));
     let (has_payloads, instanceable) = (graph.has_payloads, graph.instanceable);
     // Only the children of the prim read its shape from its graph.
     if !graph_only && !composed_children.is_empty() {
@@ -1471,26 +1471,22 @@ fn reroot_opinion_paths(
             path.property(),
         )),
     };
-    let from_names: Vec<alloc::string::String> = {
-        let paths = store.paths();
-        paths
-            .resolve(from)
+    let path_names = |path| {
+        store
+            .paths()
+            .resolve(path)
             .segments()
             .iter()
             .map(|t| alloc::string::String::from(store.tokens().resolve(*t)))
-            .collect()
+            .collect::<Vec<_>>()
     };
-    let to_names: Vec<alloc::string::String> = {
-        let paths = store.paths();
-        paths
-            .resolve(to)
-            .segments()
-            .iter()
-            .map(|t| alloc::string::String::from(store.tokens().resolve(*t)))
-            .collect()
-    };
+    // Concrete targets re-root by PathId. Only expressions need the names
+    // of the occurrence roots.
+    let mut root_names = None;
     let mut reroot_names = |names: &[alloc::string::String]| -> Option<Vec<alloc::string::String>> {
-        if !names.starts_with(&from_names) {
+        let (from_names, to_names) =
+            root_names.get_or_insert_with(|| (path_names(from), path_names(to)));
+        if !names.starts_with(from_names) {
             return Some(names.to_vec());
         }
         let mut out = to_names.clone();
@@ -1641,10 +1637,20 @@ fn copy_prototype(
                 out.prims[&source].graph.dependency_arcs(),
                 "a record's arcs are its graph's"
             );
-            PrimDependencies {
-                layers: record.layers.clone(),
-                default_prim_layers: record.default_prim_layers.clone(),
-                arcs: index.graph.dependency_arcs(),
+            if reroot
+                .sites
+                .iter()
+                .all(|site| site.node == NodeId::ROOT.index())
+            {
+                // The local site is occurrence-specific. Its node never
+                // contributes an arc dependency (AOUSD Core §11.3.3).
+                Arc::clone(record)
+            } else {
+                Arc::new(PrimDependencies {
+                    layers: record.layers.clone(),
+                    default_prim_layers: record.default_prim_layers.clone(),
+                    arcs: index.graph.dependency_arcs(),
+                })
             }
         });
         out.prims.insert(target, index);

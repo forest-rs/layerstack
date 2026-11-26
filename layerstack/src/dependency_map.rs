@@ -13,7 +13,7 @@
 //! diagnostic and notification queries.
 
 use crate::sort;
-use alloc::vec::Vec;
+use alloc::{sync::Arc, vec::Vec};
 mod layer_sets;
 pub use layer_sets::LayerDependencyStorage;
 pub(crate) use layer_sets::LayerSets;
@@ -137,7 +137,7 @@ pub(crate) enum DependencyMaps {
 /// kept for queries.
 pub(crate) struct DependencyRecords {
     /// What each composed prim the composition keeps depends on.
-    prims: HashMap<PathId, PrimDependencies>,
+    prims: HashMap<PathId, Arc<PrimDependencies>>,
     /// Which maps [`Self::build`] builds.
     maps: DependencyMaps,
     relocation_layers: HashSet<LayerId>,
@@ -146,7 +146,7 @@ pub(crate) struct DependencyRecords {
 
 impl DependencyRecords {
     /// The records of `prims`, each composed prim's under its path.
-    pub(crate) fn new(prims: HashMap<PathId, PrimDependencies>) -> Self {
+    pub(crate) fn new(prims: HashMap<PathId, Arc<PrimDependencies>>) -> Self {
         Self {
             prims,
             maps: DependencyMaps::All,
@@ -259,7 +259,7 @@ impl DependencyRecords {
 /// edge with the graph's own cycle search instead walked everything its
 /// source depends on, once per edge, quadratic in a chain of prims whose
 /// indexes each name the ones above. A self-dependency is left out too.
-fn arc_graph(prims: &HashMap<PathId, PrimDependencies>) -> InvalidationGraph<PathId> {
+fn arc_graph(prims: &HashMap<PathId, Arc<PrimDependencies>>) -> InvalidationGraph<PathId> {
     /// Where a walk is at a prim: still below it, or done with it.
     #[derive(Clone, Copy, PartialEq, Eq)]
     enum Visit {
@@ -317,7 +317,7 @@ fn arc_graph(prims: &HashMap<PathId, PrimDependencies>) -> InvalidationGraph<Pat
 }
 
 /// The arcs of `prims`, for diagnostic queries.
-fn arc_set(prims: &HashMap<PathId, PrimDependencies>) -> HashSet<ArcDependency> {
+fn arc_set(prims: &HashMap<PathId, Arc<PrimDependencies>>) -> HashSet<ArcDependency> {
     let mut arcs = HashSet::with_capacity(prims.values().map(|record| record.arcs.len()).sum());
     for (&target, record) in prims {
         arcs.extend(
@@ -337,7 +337,7 @@ fn arc_set(prims: &HashMap<PathId, PrimDependencies>) -> HashSet<ArcDependency> 
 
 /// The prims of `prims` each layer contributes to, and those whose
 /// composition consulted each layer's `defaultPrim`.
-fn layer_prims(prims: &HashMap<PathId, PrimDependencies>) -> (PrimsByLayer, PrimsByLayer) {
+fn layer_prims(prims: &HashMap<PathId, Arc<PrimDependencies>>) -> (PrimsByLayer, PrimsByLayer) {
     // Each layer's set is sized once, rather than rehashed as it grows.
     let mut counts: HashMap<LayerId, usize> = HashMap::new();
     for record in prims.values() {
@@ -376,7 +376,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_prims_arcs_are_listed_once() {
+    fn a_shared_record_lists_each_arc_once_per_occurrence() {
         let arc = (PathId::from_raw(1), ArcKind::References, LayerId(10));
         let mut record = PrimDependencies {
             arcs: alloc::vec![
@@ -387,17 +387,27 @@ mod tests {
             ..PrimDependencies::default()
         };
         record.dedup_arcs();
-        let prims = HashMap::from([(PathId::from_raw(2), record)]);
+        let record = Arc::new(record);
+        let occurrences = [PathId::from_raw(2), PathId::from_raw(4)];
+        let prims = occurrences
+            .into_iter()
+            .map(|path| (path, Arc::clone(&record)))
+            .collect();
         let deps = DependencyRecords::new(prims).build(&Threads::new(1));
-        assert_eq!(deps.arcs.len(), 2, "each arc once");
+        assert_eq!(deps.arcs.len(), 4, "two arcs for each occurrence");
+        for occurrence in occurrences {
+            assert_eq!(deps.graph.dependencies(occurrence, OPINION_EDIT).count(), 2);
+        }
     }
 
     #[test]
     fn layer_maps_list_each_prims_layers() {
-        let record = |layers: &[u64], default_prims: &[u64]| PrimDependencies {
-            layers: layers.iter().map(|&id| LayerId(id)).collect(),
-            default_prim_layers: default_prims.iter().map(|&id| LayerId(id)).collect(),
-            arcs: Vec::new(),
+        let record = |layers: &[u64], default_prims: &[u64]| {
+            Arc::new(PrimDependencies {
+                layers: layers.iter().map(|&id| LayerId(id)).collect(),
+                default_prim_layers: default_prims.iter().map(|&id| LayerId(id)).collect(),
+                arcs: Vec::new(),
+            })
         };
         let prims = HashMap::from([
             (PathId::from_raw(5), record(&[1, 2], &[])),
@@ -434,7 +444,7 @@ mod tests {
     /// on one.
     #[test]
     fn dependencies_are_the_same_on_any_number_of_threads() {
-        let prims: HashMap<PathId, PrimDependencies> = (0..200_u32)
+        let prims: HashMap<PathId, Arc<PrimDependencies>> = (0..200_u32)
             .map(|at| {
                 let layer = u64::from(at);
                 let record = PrimDependencies {
@@ -445,7 +455,7 @@ mod tests {
                         (PathId::from_raw(at + 1), ArcKind::Inherits, LayerId(2)),
                     ],
                 };
-                (PathId::from_raw(at), record)
+                (PathId::from_raw(at), Arc::new(record))
             })
             .collect();
         let edges = |deps: &CompositionDeps| {
@@ -479,10 +489,10 @@ mod tests {
                 .collect(),
             ..PrimDependencies::default()
         };
-        let prims: HashMap<PathId, PrimDependencies> =
+        let prims: HashMap<PathId, Arc<PrimDependencies>> =
             [(2, &[1][..]), (3, &[2]), (1, &[3]), (4, &[3, 4])]
                 .into_iter()
-                .map(|(target, sources)| (PathId::from_raw(target), record(sources)))
+                .map(|(target, sources)| (PathId::from_raw(target), Arc::new(record(sources))))
                 .collect();
         let graph = arc_graph(&prims);
         let mut edges: Vec<(u32, u32)> = graph
@@ -505,7 +515,7 @@ mod tests {
             arcs: alloc::vec![(PathId::from_raw(1), ArcKind::Inherits, LayerId(1))],
             ..PrimDependencies::default()
         };
-        let prims = HashMap::from([(PathId::from_raw(2), record)]);
+        let prims = HashMap::from([(PathId::from_raw(2), Arc::new(record))]);
         let deps = DependencyRecords::new(prims).build(&Threads::new(1));
 
         // target (2) depends on source (1).

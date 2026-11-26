@@ -1406,32 +1406,56 @@ fn prototype_is_shareable(ctx: &Ctx<'_>, out: &Composition, representative: Path
         && !out.pending.iter().any(|pending| beneath(pending.prim))
 }
 
-/// Re-roots the paths beneath `from` that the opinions of `index` name
-/// (relationship targets, connections, path list fields and path
-/// expressions) beneath `to`, detaching only opinions that name one.
-fn reroot_opinion_paths(store: &dyn LayerStore, index: &mut PrimIndex, from: PathId, to: PathId) {
-    use crate::doc::FieldValue;
-    use crate::path::TargetPath;
+/// An opinion with targets or path expressions that a copy may need to map.
+/// Samples have a separate copy-on-write buffer from the property's targets.
+struct OpinionReroot {
+    slot: usize,
+    sampled_expressions: bool,
+}
+
+impl OpinionReroot {
+    fn plan(index: &PrimIndex) -> Vec<Self> {
+        use crate::{
+            doc::FieldValue, path_expression::value::has_path_expression, prim_index::OpinionValue,
+        };
+        index
+            .opinions
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, op)| {
+                let (mapped, sampled_expressions) = match &op.value {
+                    OpinionValue::Property(spec) => (
+                        spec.targets.is_some()
+                            || spec.default.as_ref().is_some_and(has_path_expression),
+                        spec.time_samples.get().is_some_and(|samples| {
+                            samples.iter().any(|(_, v)| has_path_expression(v))
+                        }),
+                    ),
+                    OpinionValue::Field(FieldValue::PathListOp(_)) => (true, false),
+                    OpinionValue::Field(FieldValue::Value(v)) => (has_path_expression(v), false),
+                    OpinionValue::Field(_) => (false, false),
+                };
+                (mapped || sampled_expressions).then_some(Self {
+                    slot,
+                    sampled_expressions,
+                })
+            })
+            .collect()
+    }
+}
+
+/// Re-roots the targets and expressions the representative's plan identifies.
+/// AOUSD Core §11.3.3: each instance sees its own composed namespace.
+fn reroot_opinion_paths(
+    store: &dyn LayerStore,
+    index: &mut PrimIndex,
+    from: PathId,
+    to: PathId,
+    plan: &[OpinionReroot],
+) {
     use crate::path_expression::value::{anchor_value_with, has_path_expression};
-    use crate::prim_index::OpinionValue;
-    let names_path = |value: &OpinionValue| match value {
-        OpinionValue::Property(spec) => {
-            spec.targets.is_some()
-                || spec.default.as_ref().is_some_and(has_path_expression)
-                || spec
-                    .time_samples
-                    .get()
-                    .is_some_and(|samples| samples.iter().any(|(_, v)| has_path_expression(v)))
-        }
-        OpinionValue::Field(FieldValue::PathListOp(_)) => true,
-        OpinionValue::Field(FieldValue::Value(value)) => has_path_expression(value),
-        OpinionValue::Field(_) => false,
-    };
-    if !index
-        .opinions
-        .iter()
-        .any(|opinion| names_path(&opinion.value))
-    {
+    use crate::{doc::FieldValue, path::TargetPath, prim_index::OpinionValue};
+    if plan.is_empty() {
         return;
     }
     let reroot = |store: &dyn LayerStore, path: PathId| {
@@ -1473,11 +1497,8 @@ fn reroot_opinion_paths(store: &dyn LayerStore, index: &mut PrimIndex, from: Pat
         out.extend_from_slice(&names[from_names.len()..]);
         Some(out)
     };
-    for opinion in &mut index.opinions {
-        if !names_path(&opinion.value) {
-            continue;
-        }
-        match &mut opinion.value {
+    for step in plan {
+        match &mut index.opinions[step.slot].value {
             OpinionValue::Property(spec) => {
                 let spec = Arc::make_mut(spec);
                 if let Some(targets) = spec.targets.as_mut() {
@@ -1490,7 +1511,9 @@ fn reroot_opinion_paths(store: &dyn LayerStore, index: &mut PrimIndex, from: Pat
                 if let Some(value) = spec.default.as_mut() {
                     anchor_value_with(value, &[], &mut reroot_names);
                 }
-                if let Some(samples) = spec.time_samples.get_mut() {
+                if step.sampled_expressions
+                    && let Some(samples) = spec.time_samples.get_mut()
+                {
                     for (_, value) in samples {
                         if has_path_expression(value) {
                             anchor_value_with(value, &[], &mut reroot_names);
@@ -1524,7 +1547,12 @@ struct CopyPlan {
     /// moves move ([`SiteMove::node`]).
     nodes: Vec<usize>,
     /// The plan of each descendant, by path.
-    descendants: HashMap<PathId, Vec<Reroot>>,
+    descendants: HashMap<PathId, DescendantReroot>,
+}
+
+struct DescendantReroot {
+    sites: Vec<Reroot>,
+    opinions: Vec<OpinionReroot>,
 }
 
 impl CopyPlan {
@@ -1596,9 +1624,14 @@ fn copy_prototype(
         let reroot = plan
             .descendants
             .entry(source)
-            .or_insert_with(|| index.graph.reroot_plan(ctx.store.paths(), moves));
-        index.graph.reroot_sites(ctx.store.paths(), moves, reroot);
-        reroot_opinion_paths(ctx.store, &mut index, from, to);
+            .or_insert_with(|| DescendantReroot {
+                sites: index.graph.reroot_plan(ctx.store.paths(), moves),
+                opinions: OpinionReroot::plan(&index),
+            });
+        index
+            .graph
+            .reroot_sites(ctx.store.paths(), moves, &reroot.sites);
+        reroot_opinion_paths(ctx.store, &mut index, from, to, &reroot.opinions);
         let paths = ctx.store.paths();
         // The copy's arcs are those of its re-rooted graph, as composing it
         // records them (`record_dependencies`).

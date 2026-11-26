@@ -240,7 +240,9 @@
 //!   for many prims, an [`XformCache`] owned by the caller shares each
 //!   ancestor's work, reports what it computed ([`XformCacheStats`]), and
 //!   is invalidated explicitly after edits. `relative_transform` composes
-//!   local ops toward an ancestor and reports any intervening reset;
+//!   local ops toward an ancestor and reports any intervening reset.
+//!   [`XformSelection`] retains output rows in selection order for advancing
+//!   frames and refreshes affected rows from live change reports;
 //! - `bounds::BoundsCache` computes world, local, untransformed and relative
 //!   bounds from authored extents or model extents hints, with purpose and
 //!   visibility filtering. Relative bounds convert world coordinate frames,
@@ -585,7 +587,7 @@ pub use view::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene};
 pub use xform::{
     INVERT_PREFIX, LocalTransform, LocalTransformInputs, RESET_XFORM_STACK, RelativeTransform,
     XformCache, XformCacheStats, XformOp, XformOpType, XformOps, XformProblem, XformProblemKind,
-    is_transform_property,
+    XformSelection, is_transform_property,
 };
 #[cfg(feature = "usd-geom")]
 pub use xform_edit::{MatrixXformError, XformOpEdit, XformOpError, XformOpPrecision, XformOpValue};

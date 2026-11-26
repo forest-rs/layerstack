@@ -19,7 +19,7 @@
 //! Spec: AOUSD Core §7.3 (specs and their paths), §7.6 (spec fields),
 //! §12.4 (list ops).
 
-use alloc::{string::String, vec, vec::Vec};
+use alloc::{vec, vec::Vec};
 
 use layerstack::{
     FieldEntry, FieldValue, InMemoryStore, Layer, LayerId, ListOp, Path, PathId, PrimSpec,
@@ -182,10 +182,10 @@ fn list_op_or_null<T>(op: Option<&ListOp<T>>, item: impl Fn(&T) -> Wire) -> Wire
 }
 
 /// Field names, sorted, each once.
-fn sorted_names(mut names: Vec<String>) -> Wire {
-    names.sort_unstable();
+fn sorted_names(mut names: Vec<&str>) -> Wire {
+    layerstack::sort::sort_unstable(&mut names);
     names.dedup();
-    Wire::List(names.into_iter().map(Wire::Text).collect())
+    Wire::List(names.into_iter().map(Wire::text).collect())
 }
 
 /// The names of `tokens`, in order.
@@ -284,14 +284,14 @@ impl Stage {
     fn pseudo_root_record(&self, shown: Wire, layer: &Layer, root: PathId) -> Wire {
         let tokens = self.document().store().tokens();
         let spec = layer.prim(root);
-        let mut fields: Vec<String> = layer
+        let mut fields: Vec<&str> = layer
             .metadata_fields()
             .iter()
-            .map(|entry| String::from(tokens.resolve(entry.name)))
+            .map(|entry| tokens.resolve(entry.name))
             .collect();
-        let mut add = |authored: bool, name: &str| {
+        let mut add = |authored: bool, name: &'static str| {
             if authored {
-                fields.push(String::from(name));
+                fields.push(name);
             }
         };
         add(layer.default_prim().is_some(), "defaultPrim");
@@ -345,10 +345,10 @@ impl Stage {
                 FieldValue::TokenListOp(op) => Some(&**op),
                 _ => None,
             });
-        let mut fields: Vec<String> = spec
+        let mut fields: Vec<&str> = spec
             .fields()
             .iter()
-            .map(|entry| String::from(tokens.resolve(entry.name)))
+            .map(|entry| tokens.resolve(entry.name))
             .collect();
         for (authored, name) in [
             (specifier.is_some(), "specifier"),
@@ -371,7 +371,7 @@ impl Stage {
             (spec.has_property_order(), "propertyOrder"),
         ] {
             if authored {
-                fields.push(String::from(name));
+                fields.push(name);
             }
         }
         let reference = |item: &Reference| self.reference_item(layer.id(), item);
@@ -382,7 +382,7 @@ impl Stage {
                 .iter()
                 .map(|(set, variant)| (tokens.resolve(set), tokens.resolve(variant)))
                 .collect();
-            pairs.sort_unstable();
+            layerstack::sort::sort_unstable(&mut pairs);
             Wire::List(
                 pairs
                     .into_iter()
@@ -484,10 +484,10 @@ impl Stage {
 /// The record of an attribute or relationship spec.
 fn property_record(store: &InMemoryStore, shown: Wire, spec: &PropertySpec) -> Wire {
     let tokens = store.tokens();
-    let mut fields: Vec<String> = spec
+    let mut fields: Vec<&str> = spec
         .metadata
         .iter()
-        .map(|entry| String::from(tokens.resolve(entry.name)))
+        .map(|entry| tokens.resolve(entry.name))
         .collect();
     let attribute = spec.kind == PropertyKind::Attribute;
     for (authored, name) in [
@@ -511,7 +511,7 @@ fn property_record(store: &InMemoryStore, shown: Wire, spec: &PropertySpec) -> W
         ),
     ] {
         if authored {
-            fields.push(String::from(name));
+            fields.push(name);
         }
     }
     let targets = list_op_or_null(spec.targets.as_deref(), |target| {

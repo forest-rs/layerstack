@@ -993,16 +993,14 @@ impl Stage {
     pub(crate) fn load_rules(&self) -> Wire {
         let store = self.document.store();
         let rules = self.document.stage().stage().load_rules();
-        let mut ids: Vec<(PathId, PayloadRule)> = rules
-            .rules()
-            .map(|(path, rule)| (store.paths().intern(path.clone()), rule))
-            .collect();
-        ids.sort_by(|a, b| store.paths().cmp_paths(a.0, b.0, store.tokens()));
+        let mut rules: Vec<_> = rules.rules().collect();
+        layerstack::sort::sort_by(&mut rules, |a, b| a.0.cmp_with_tokens(b.0, store.tokens()));
         Wire::List(
-            ids.into_iter()
-                .map(|(id, rule)| {
+            rules
+                .into_iter()
+                .map(|(path, rule)| {
                     Wire::List(vec![
-                        Wire::text(store.paths().display(id, store.tokens())),
+                        Wire::Text(path.display(store.tokens())),
                         Wire::text(rule_name(rule)),
                     ])
                 })
@@ -1790,30 +1788,30 @@ impl Stage {
                     .collect(),
             )
         };
-        let mut rows: Vec<(String, Wire)> = registry
-            .schemas()
-            .map(|schema| {
-                let name = tokens.resolve(schema.name).to_string();
-                let kind = match schema.kind {
-                    SchemaKind::ConcreteTyped => "concreteTyped",
-                    SchemaKind::AbstractTyped => "abstractTyped",
-                    SchemaKind::SingleApplyApi => "singleApplyApi",
-                    SchemaKind::MultipleApplyApi => "multipleApplyApi",
-                };
-                // `ancestors` starts with the schema itself.
-                let bases = registry.ancestors(schema.name);
-                let row = Wire::List(vec![
-                    Wire::text(&name),
-                    Wire::text(kind),
-                    names(bases.get(1..).unwrap_or(&[])),
-                    names(&schema.can_only_apply_to),
-                    names(&schema.allowed_instance_names),
-                ]);
-                (name, row)
-            })
-            .collect();
-        rows.sort_by(|a, b| a.0.cmp(&b.0));
-        Wire::List(rows.into_iter().map(|(_, row)| row).collect())
+        let mut schemas: Vec<_> = registry.schemas().collect();
+        layerstack::sort::sort_unstable_by_key(&mut schemas, |schema| tokens.resolve(schema.name));
+        Wire::List(
+            schemas
+                .into_iter()
+                .map(|schema| {
+                    let kind = match schema.kind {
+                        SchemaKind::ConcreteTyped => "concreteTyped",
+                        SchemaKind::AbstractTyped => "abstractTyped",
+                        SchemaKind::SingleApplyApi => "singleApplyApi",
+                        SchemaKind::MultipleApplyApi => "multipleApplyApi",
+                    };
+                    // `ancestors` starts with the schema itself.
+                    let bases = registry.ancestors(schema.name);
+                    Wire::List(vec![
+                        Wire::text(tokens.resolve(schema.name)),
+                        Wire::text(kind),
+                        names(bases.get(1..).unwrap_or(&[])),
+                        names(&schema.can_only_apply_to),
+                        names(&schema.allowed_instance_names),
+                    ])
+                })
+                .collect(),
+        )
     }
 
     /// The relationship at the property path `path`: `[custom, targets]`,

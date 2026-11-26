@@ -258,7 +258,7 @@ impl Stage {
                 (path.display(store.paths(), store.tokens()), rule)
             })
             .collect();
-        rules.sort_unstable();
+        layerstack::sort::sort_unstable(&mut rules);
         let mut key = String::from(query.expansion_rule().as_str());
         for (path, rule) in &rules {
             key.push_str(&alloc::format!("\n{path} {rule}"));

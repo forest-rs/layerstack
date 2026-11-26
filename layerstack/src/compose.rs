@@ -173,6 +173,7 @@ fn compose_indexed(
         .with_asset_requests(asset_requests)
         .with_pending_prims(composed.pending)
         .with_instances(composed.instances)
+        .with_virtual_leaves(composed.virtual_leaves)
         .with_boundary_children(composed.boundary_children)
         .with_variant_fallbacks(options.variant_fallbacks.clone());
     Composed {

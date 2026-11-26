@@ -141,7 +141,7 @@ impl Stage {
         // node of one stack holds its layers.
         let mut old: HashMap<LayerStackIdentifier, StackOffsets> = HashMap::new();
         let mut shapes: HashSet<usize> = HashSet::new();
-        for index in self.prims.values() {
+        for index in self.prims.physical.values() {
             if !shapes.insert(Arc::as_ptr(index.graph.shape()) as usize) {
                 continue;
             }
@@ -292,7 +292,7 @@ impl Stage {
             }
         }
         let mut found: HashMap<PathId, bool> = HashMap::new();
-        for (&prim, index) in &self.prims {
+        for (&prim, index) in &self.prims.physical {
             for (_, node) in index.graph.nodes() {
                 let id = node.layer_stack_identifier();
                 let site = node.site().prim_path();
@@ -375,7 +375,7 @@ impl Stage {
                         .unwrap_or(GONE)
                 })
         };
-        for index in self.prims.values_mut() {
+        for index in self.prims.physical.values_mut() {
             // Node ids and stacks are kept: the strengths are read by the
             // node's stack, before or after.
             if !index.graph.restack(&mut shapes, |id| {

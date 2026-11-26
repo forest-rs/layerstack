@@ -459,7 +459,9 @@ impl Stage {
 
     /// The prim and variant sites the stage reads from each layer.
     fn read_sites(&self) -> HashSet<(LayerId, &SpecPath)> {
+        // Virtual leaves read exactly the same sites as their representatives.
         self.prims
+            .physical
             .values()
             .flat_map(|index| index.sources.iter())
             .map(|source| (source.key.layer_id, &source.key.spec_path))

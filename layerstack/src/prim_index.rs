@@ -687,6 +687,14 @@ pub(crate) struct PrimIndex {
     pub(crate) dynamic: Option<Arc<crate::dynamic_format::DynamicDependency>>,
 }
 
+impl PrimIndex {
+    pub(crate) fn at_instance_leaf(&self, path: PathId) -> Self {
+        let mut index = self.clone();
+        index.graph.set_instance_leaf(path);
+        index
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub(crate) struct PrimIndexData {
     /// Every opinion, each naming one of [`Self::sources`].

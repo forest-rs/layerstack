@@ -60,6 +60,7 @@ pub(crate) use self::site::{ChildIndex, ChildIndexWork};
 #[derive(Default)]
 pub(crate) struct Composition {
     pub(crate) prims: HashMap<PathId, PrimIndex>,
+    pub(crate) virtual_leaves: HashMap<PathId, crate::stage::InstanceLeaf>,
     pub(crate) children: HashMap<PathId, Vec<PathId>>,
     pub(crate) inactive: HashSet<PathId>,
     pub(crate) inactive_children: HashMap<PathId, Vec<PathId>>,
@@ -336,7 +337,8 @@ pub(crate) fn compose(
         keys: ReadLock::default(),
         hasher: hashbrown::DefaultHashBuilder::default(),
     };
-    let budget = Budget::new(options);
+    let virtual_leaves = share && !options.with_dependencies && !store.tokens().has_expressions();
+    let budget = Budget::new(options, virtual_leaves);
     let work = |prim: Pending, added: &mut Vec<Pending>| {
         index_prim(
             &ctx,
@@ -412,6 +414,26 @@ pub(crate) fn compose(
             .flat_map(|stack| stack.layers.iter().copied())
             .collect();
         deps.add_relocation_layers(layers);
+    }
+    // Global diagnostics and late filtering inspect the complete table.
+    // Instantiate the projections before those uncommon paths run.
+    let has_clips = !out.virtual_leaves.is_empty()
+        && store.tokens().lookup("clips").is_some_and(|clips| {
+            out.prims
+                .values()
+                .any(|index| index.metadata_opinions(clips).is_some())
+        });
+    if out.spent
+        || has_clips
+        || !out.errors.is_empty()
+        || !out.asset_requests.is_empty()
+        || !out.pending.is_empty()
+        || !checks.is_empty()
+    {
+        for (path, leaf) in core::mem::take(&mut out.virtual_leaves) {
+            let index = out.prims[&leaf.representative].at_instance_leaf(path);
+            out.prims.insert(path, index);
+        }
     }
     finish(&mut out);
     out
@@ -516,6 +538,7 @@ fn instance_key(graph: &Graph, hasher: &hashbrown::DefaultHashBuilder) -> Instan
 /// Spec: AOUSD Core §10.6, §11; OpenUSD has no limit (see
 /// [`crate::composition_limits`]).
 struct Budget {
+    virtual_leaves: bool,
     /// [`crate::CompositionLimits::prim_index_nodes`].
     nodes: Option<usize>,
     /// [`crate::CompositionLimits::composed_depth`].
@@ -528,8 +551,9 @@ struct Budget {
 }
 
 impl Budget {
-    fn new(options: &StageOptions) -> Self {
+    fn new(options: &StageOptions, virtual_leaves: bool) -> Self {
         Self {
+            virtual_leaves,
             nodes: options.limits.prim_index_nodes,
             depth: options.limits.composed_depth,
             used: AtomicUsize::new(0),
@@ -1584,7 +1608,21 @@ fn copy_prototype(
     moves: &[SiteMove],
     plan: &mut CopyPlan,
 ) {
+    let paths = ctx.store.paths();
+    let under_instance = |path| {
+        core::iter::successors(paths.parent(path), |path| paths.parent(*path))
+            .any(|ancestor| out.instances.contains(&ancestor))
+    };
     let mut pending: Vec<PathId> = out.children.get(&from).cloned().unwrap_or_default();
+    let flat = budget.virtual_leaves
+        && !under_instance(from)
+        && !under_instance(to)
+        && pending.iter().all(|path| {
+            !out.instances.contains(path)
+                && !out.inactive.contains(path)
+                && !out.loadable.contains(path)
+                && !out.children.contains_key(path)
+        });
     let mut moved: Vec<(PathId, PathId)> = Vec::new();
     while let Some(source) = pending.pop() {
         let Some(target) = ctx.store.paths().intern_reparented(source, from, to) else {
@@ -1616,14 +1654,26 @@ fn copy_prototype(
         let Some(index) = out.prims.get(&source) else {
             continue;
         };
-        let mut index = index.clone();
         let reroot = plan
             .descendants
             .entry(source)
             .or_insert_with(|| DescendantReroot {
-                sites: index.graph.reroot_plan(ctx.store.paths(), moves),
-                opinions: OpinionReroot::plan(&index),
+                sites: index.graph.reroot_plan(paths, moves),
+                opinions: OpinionReroot::plan(index),
             });
+        // AOUSD Core §11.3.3: the local node is inert under an instance.
+        // A plain reference leaf with no mapped values needs only this
+        // occurrence's concrete path to derive its full graph on request.
+        if flat
+            && !out.used_layer_sites.contains_key(&source)
+            && can_project_leaf(index, source, from, to, moves, reroot)
+        {
+            out.virtual_leaves
+                .insert(target, crate::stage::InstanceLeaf::new(source));
+            out.reused_prim_indexes += 1;
+            continue;
+        }
+        let mut index = index.clone();
         index
             .graph
             .reroot_sites(ctx.store.paths(), moves, &reroot.sites);
@@ -1686,6 +1736,42 @@ fn copy_prototype(
             out.records.insert(target, record);
         }
     }
+}
+
+fn can_project_leaf(
+    index: &PrimIndex,
+    source: PathId,
+    from: PathId,
+    to: PathId,
+    moves: &[SiteMove],
+    reroot: &DescendantReroot,
+) -> bool {
+    let [site] = reroot.sites.as_slice() else {
+        return false;
+    };
+    if !reroot.opinions.is_empty()
+        || site.node != NodeId::ROOT.index()
+        || index.graph.len() != 2
+        || index.sources.len() != 1
+        || index.sources[0].key.node == NodeId::ROOT
+        || index.dynamic.is_some()
+    {
+        return false;
+    }
+    let moved = &moves[site.by];
+    let plain = SpecPath::from_prim_path;
+    moved.from == plain(from)
+        && moved.to == plain(to)
+        && index
+            .graph
+            .node(NodeId::ROOT)
+            .is_some_and(|node| *node.site() == plain(source))
+        && index
+            .graph
+            .node(index.sources[0].key.node)
+            .is_some_and(|node| {
+                node.arc_kind() == ArcKind::References && !node.site().has_variant_selections()
+            })
 }
 
 /// Marks the subtrees of `graph` that contribute no specs culled.

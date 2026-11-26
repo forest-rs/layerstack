@@ -15,6 +15,8 @@ pub use authoring::{
     CurrentSource, SampleBracket, SourceComposability, SourceStanding, SpanTimes,
 };
 mod objects;
+mod prim_table;
+pub(crate) use prim_table::InstanceLeaf;
 mod relationships;
 mod sample_reads;
 pub use sample_reads::BracketingSamples;
@@ -595,7 +597,7 @@ pub struct Stage {
     #[cfg(test)]
     prototype_preparations: usize,
     composition_work: CompositionWork,
-    prims: HashMap<PathId, PrimIndex>,
+    prims: prim_table::PrimTable,
     children: HashMap<PathId, Vec<PathId>>,
     with_provenance: bool,
     deps: Option<CompositionDeps>,
@@ -1039,6 +1041,11 @@ impl Stage {
         orders
     }
 
+    pub(crate) fn with_virtual_leaves(mut self, leaves: HashMap<PathId, InstanceLeaf>) -> Self {
+        self.prims.install_virtual_leaves(leaves);
+        self
+    }
+
     /// Resolve schema identity once with the composed snapshot. Ordinary value
     /// refreshes retain it; partial composition replaces affected identities.
     fn prepare_type_info(&mut self, store: &mut dyn LayerStore) {
@@ -1050,6 +1057,7 @@ impl Stage {
             match (self.schemas.as_ref(), store.tokens().lookup("apiSchemas")) {
                 (Some(_), Some(field)) => self
                     .prims
+                    .physical
                     .iter()
                     .filter(|(_, index)| index.metadata_opinions(field).is_some())
                     .map(|(&path, _)| (path, self.applied_schema_names(path, store)))
@@ -1060,7 +1068,7 @@ impl Stage {
         // The info of the prim before: prims of one type often come
         // together, and their identity is then compared, not hashed.
         let mut last: Option<Arc<PrimTypeInfo>> = None;
-        for (&path, index) in &mut self.prims {
+        for (&path, index) in &mut self.prims.physical {
             let type_name = index
                 .type_name
                 .unwrap_or_else(|| Self::source_type_name(index, store, any_type));
@@ -1330,8 +1338,11 @@ impl Stage {
             root: self.root_layer.unwrap_or(LayerId(0)),
             muted: &self.options.muted_layers,
         };
-        self.clips =
-            crate::value_clips::Catalog::prepare(&mut controlled, &self.prims, &self.instances);
+        self.clips = crate::value_clips::Catalog::prepare(
+            &mut controlled,
+            &self.prims.physical,
+            &self.instances,
+        );
     }
 
     /// Records that each prim reading value clips depends on the layers of
@@ -1418,6 +1429,7 @@ impl Stage {
     pub(crate) fn dynamic_layers(&self) -> alloc::collections::BTreeSet<LayerId> {
         sort::collect_set(
             self.prims
+                .physical
                 .values()
                 .filter_map(|index| index.dynamic.as_deref())
                 .flat_map(|dynamic| dynamic.targets.iter().copied()),
@@ -1490,7 +1502,7 @@ impl Stage {
         time: f64,
         interp: InterpolationType,
     ) -> Vec<ClipOpinion> {
-        let Some(index) = self.prims.get(&prim) else {
+        let Some(index) = self.prims.shared_index(&prim) else {
             return Vec::new();
         };
         let initial = self.clips.opinions(prim, field, time, interp, &[]);
@@ -1659,7 +1671,7 @@ impl Stage {
         with_source: bool,
         below: Option<LayerId>,
     ) -> (Option<Resolved<Value>>, bool) {
-        let Some(index) = self.prims.get(&prim) else {
+        let Some(index) = self.prims.shared_index(&prim) else {
             return (None, false);
         };
         let ClipPlan {
@@ -1736,8 +1748,10 @@ impl Stage {
     /// [`Time::Default`] names them). The time-variation answers are
     /// conservative, `true`, while it is.
     fn clip_variation_unknown(&self, prim: PathId, field: TokenId) -> bool {
-        self.clips
-            .untimed_pending(PropertyPath::new(prim, field), self.prims.get(&prim))
+        self.clips.untimed_pending(
+            PropertyPath::new(prim, field),
+            self.prims.shared_index(&prim),
+        )
     }
 
     /// Whether the property's value source might vary with time: the
@@ -1805,7 +1819,7 @@ impl Stage {
     /// [`Self::property_value_source_might_be_time_varying`] from the
     /// resident clip metadata alone.
     fn resident_value_source_might_be_time_varying(&self, prim: PathId, field: TokenId) -> bool {
-        let Some(index) = self.prims.get(&prim) else {
+        let Some(index) = self.prims.shared_index(&prim) else {
             return false;
         };
         let authored = index.property_opinions(field).unwrap_or_default();
@@ -1874,7 +1888,7 @@ impl Stage {
     // OpenUSD still answers from the strongest source alone where it is a
     // sparse default or a single sample that composes (`Strongest`).
     pub(crate) fn property_time_info(&self, prim: PathId, field: TokenId) -> TimeInfo {
-        let Some(index) = self.prims.get(&prim) else {
+        let Some(index) = self.prims.shared_index(&prim) else {
             return TimeInfo::default();
         };
         let authored = index.property_opinions(field).unwrap_or_default();
@@ -2038,7 +2052,7 @@ impl Stage {
             composition_work: CompositionWork::default(),
             root_layer: None,
             clips: crate::value_clips::Catalog::default(),
-            prims,
+            prims: prims.into(),
             children,
             with_provenance,
             deps,
@@ -2975,7 +2989,7 @@ impl Stage {
         name: TokenId,
         lookup: Lookup,
     ) -> Option<(&PrimIndex, Opinions<'_>)> {
-        let index = self.prims.get(&prim)?;
+        let index = self.prims.shared_index(&prim)?;
         let opinions = match lookup {
             Lookup::Property => index.property_opinions(name),
             Lookup::Metadata => index.metadata_opinions(name),
@@ -3354,7 +3368,10 @@ impl Stage {
         property: TokenId,
         key: TokenId,
     ) -> Option<Resolved<ResolvedValue>> {
-        let opinions = self.prims.get(&prim)?.property_opinions(property)?;
+        let opinions = self
+            .prims
+            .shared_index(&prim)?
+            .property_opinions(property)?;
         self.resolve_property_metadata_over(opinions, property, key)
     }
 
@@ -3426,7 +3443,7 @@ impl Stage {
         prim: PathId,
         property: TokenId,
     ) -> Option<PropertyDeclaration> {
-        let index = self.prims.get(&prim)?;
+        let index = self.prims.shared_index(&prim)?;
         let opinions = index.property_opinions(property)?;
         let mut specs = opinions
             .records()
@@ -3873,7 +3890,9 @@ impl Stage {
     /// Spec: AOUSD Core §10.4 (strength ordering).
     #[must_use]
     pub(crate) fn explain_prim(&self, prim: PathId) -> Option<&[OpinionSource]> {
-        self.prims.get(&prim).map(|index| index.sources.as_ref())
+        self.prims
+            .shared_index(&prim)
+            .map(|index| index.sources.as_ref())
     }
 
     /// Returns the composition graph of `prim`: one node per arc expansion
@@ -4087,7 +4106,7 @@ impl Stage {
         prim: PathId,
         store: &dyn LayerStore,
     ) -> Option<Specifier> {
-        let index = self.prims.get(&prim)?;
+        let index = self.prims.shared_index(&prim)?;
         Some(Self::specifier_of(prim, index, store))
     }
 
@@ -4765,7 +4784,14 @@ impl Stage {
     /// Spec: AOUSD Core §13.3.2.3 (the prim definition).
     #[must_use]
     pub(crate) fn prim_definition_ref(&self, prim: PathId) -> Option<&PrimDefinition> {
-        Some(&self.prims.get(&prim)?.type_info.as_ref()?.definition)
+        Some(
+            &self
+                .prims
+                .shared_index(&prim)?
+                .type_info
+                .as_ref()?
+                .definition,
+        )
     }
 
     /// The owned schema definition of a property. Use

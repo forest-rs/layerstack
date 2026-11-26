@@ -251,10 +251,10 @@ pub(super) struct PrototypeTable {
 pub struct CompositionWork {
     /// Prim indexes constructed by ordinary composition, including pruned prims.
     pub composed_prim_indexes: usize,
-    /// Descendant indexes materialized from a proven equivalent representative.
+    /// Descendant occurrences that reuse a proven equivalent representative.
     pub reused_prim_indexes: usize,
     /// The nodes of the prim indexes composed (culled nodes included) and
-    /// materialized: the work [`crate::CompositionLimits::prim_index_nodes`]
+    /// projected, even when their occurrence indexes are virtual: the work [`crate::CompositionLimits::prim_index_nodes`]
     /// bounds. The same on any number of threads.
     pub prim_index_nodes: usize,
 }
@@ -266,6 +266,9 @@ pub struct CompositionWork {
 pub struct CompositionStorage {
     /// Number of composed prim occurrences.
     pub prim_indexes: usize,
+    /// Occurrence indexes retained in full, including requested graph projections.
+    /// Use [`Self::prim_indexes`] to count populated prims regardless of representation.
+    pub materialized_prim_indexes: usize,
     /// Number of distinct opinion-record buffers.
     pub record_buffers: usize,
     /// Opinions counted once per occurrence.
@@ -354,9 +357,13 @@ impl Stage {
     /// Reports exact retained record counts without decoding numeric payloads.
     pub fn composition_storage(&self) -> CompositionStorage {
         let mut seen = HashSet::new();
-        let mut result = CompositionStorage::default();
-        for index in self.prims.values() {
-            result.prim_indexes += 1;
+        let mut result = CompositionStorage {
+            prim_indexes: self.prims.len(),
+            materialized_prim_indexes: self.prims.resolved_count(),
+            ..CompositionStorage::default()
+        };
+        for path in self.prims.keys() {
+            let index = self.prims.shared_index(path).expect("populated prim");
             result.logical_opinions += index.opinions.len();
             if seen.insert(Arc::as_ptr(&index.data)) {
                 result.record_buffers += 1;
@@ -476,7 +483,8 @@ impl Stage {
         for record in &self.prototypes.records {
             if record.instances.len() > 1 {
                 for prim in &record.prims {
-                    comparisons += record.reshare(&mut self.prims, paths, &prim.relative_path);
+                    comparisons +=
+                        record.reshare(&mut self.prims.physical, paths, &prim.relative_path);
                 }
             }
         }
@@ -513,7 +521,8 @@ impl Stage {
         }
         let mut comparisons = 0;
         for (id, relative) in groups {
-            comparisons += self.prototypes.records[id].reshare(&mut self.prims, paths, relative);
+            comparisons +=
+                self.prototypes.records[id].reshare(&mut self.prims.physical, paths, relative);
         }
         comparisons
     }
@@ -741,7 +750,14 @@ mod tests {
     #[test]
     fn bucket_collisions_preserve_signed_zero_and_share_identical_nan_records() {
         let (mut store, instances, _, field) = scene();
-        let mut stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        let mut stage = Stage::compose(
+            &mut store,
+            LayerId(1),
+            StageOptions {
+                with_dependencies: true,
+                ..StageOptions::default()
+            },
+        );
         let children: Vec<_> = instances
             .iter()
             .map(|p| stage.traverse(*p).nth(1).unwrap())
@@ -846,7 +862,16 @@ mod tests {
     }
 
     fn assert_fresh_prototypes(stage: &Stage, store: &mut InMemoryStore) {
-        let fresh = Stage::compose(store, LayerId(1), StageOptions::default());
+        // A live stage retains materialized occurrence indexes. Compare the
+        // same storage policy as well as the canonical prototype inventory.
+        let fresh = Stage::compose(
+            store,
+            LayerId(1),
+            StageOptions {
+                with_dependencies: true,
+                ..StageOptions::default()
+            },
+        );
         assert_eq!(inventory(stage), inventory(&fresh));
         assert_eq!(stage.composition_storage(), fresh.composition_storage());
     }
@@ -1375,7 +1400,8 @@ mod early_reuse_tests {
             alloc::format!("{:?}", optimized.composition_errors()),
             alloc::format!("{:?}", full.composition_errors())
         );
-        for (path, index) in &optimized.prims {
+        for path in optimized.prims.keys() {
+            let index = &optimized.prims[path];
             let expected = &full.prims[path];
             assert!(
                 index.data.same_records(&expected.data),

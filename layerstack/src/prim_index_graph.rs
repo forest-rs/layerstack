@@ -901,6 +901,11 @@ impl PrimIndexGraph {
         (shape, site)
     }
 
+    /// The corresponding graph when only its plain occurrence site moves.
+    pub(crate) fn set_instance_leaf(&mut self, path: crate::PathId) {
+        self.sites.root = Some(SpecPath::from_prim_path(path));
+    }
+
     /// The nodes' shapes, which graphs of the same shape share.
     pub(crate) fn shape(&self) -> &Arc<GraphShape> {
         &self.shape

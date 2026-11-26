@@ -160,7 +160,7 @@ impl Stage {
     #[doc(alias = "GetPrimAtPath")]
     #[inline]
     pub fn prim<'a>(&'a self, path: PathId, store: &'a dyn LayerStore) -> Option<Prim<'a>> {
-        let index = self.prims.get(&path)?;
+        let index = self.prims.shared_index(&path)?;
         Some(Prim {
             stage: self,
             store,
@@ -735,6 +735,9 @@ impl<'a> Prim<'a> {
     /// instance that is: the two agree but for those inert nodes, and on
     /// every opinion and source.
     ///
+    /// For a virtual instance leaf, the first graph query retains the
+    /// occurrence's concrete graph for subsequent borrowed reads.
+    ///
     /// OpenUSD: `PcpPrimIndex::GetGraph`.
     ///
     /// Spec: AOUSD Core §10.4 (strength ordering), §11.3.3 (scene graph
@@ -952,7 +955,7 @@ impl<'a> Attribute<'a> {
         stage
             .property_definition_ref(prim, name)
             .and_then(|defined| defined.type_name.as_ref())
-            .or_else(|| stage.prims.get(&prim)?.property_type_for(&name))
+            .or_else(|| stage.prims.shared_index(&prim)?.property_type_for(&name))
             .map(PropertyType::type_name)
     }
     /// Whether the value may vary over time: the variability the prim's
@@ -1407,7 +1410,7 @@ pub struct PrimSnapshot {
 impl Stage {
     /// Retains the immutable records currently describing this prim or absence.
     pub fn prim_snapshot(&self, path: PathId) -> PrimSnapshot {
-        let current = self.prims.get(&path);
+        let current = self.prims.shared_index(&path);
         PrimSnapshot {
             store_identity: self.store_identity.clone(),
             path,
@@ -1419,7 +1422,7 @@ impl Stage {
 impl PrimSnapshot {
     /// Whether this current stage still has the captured records and schema data.
     pub fn is_current(&self, stage: &Stage) -> bool {
-        let current = stage.prims.get(&self.path);
+        let current = stage.prims.shared_index(&self.path);
         self.store_identity.as_ref() == stage.store_identity()
             && same_arc(self.index.as_ref(), current.map(|i| &i.data))
             && same_arc(
@@ -1438,7 +1441,7 @@ struct QueryStamp {
 }
 impl QueryStamp {
     fn matches(&self, stage: &Stage, path: PropertyPath) -> bool {
-        let current = stage.prims.get(&path.prim_path());
+        let current = stage.prims.shared_index(&path.prim_path());
         self.store_identity.as_ref() == stage.store_identity()
             && same_arc(self.index.as_ref(), current.map(|i| &i.data))
             && same_arc(
@@ -1568,7 +1571,7 @@ impl AttributeQuery {
         {
             return;
         }
-        let current = stage.prims.get(&self.path.prim_path());
+        let current = stage.prims.shared_index(&self.path.prim_path());
         self.stamp = Some(QueryStamp {
             store_identity: stage.store_identity.clone(),
             index: current.map(|i| i.data.clone()),

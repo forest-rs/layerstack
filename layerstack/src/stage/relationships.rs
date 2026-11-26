@@ -79,7 +79,7 @@ impl Stage {
     /// spec's kind without building the whole declaration.
     #[inline]
     pub(crate) fn property_kind(&self, path: PropertyPath) -> Option<PropertyKind> {
-        let index = self.prims.get(&path.prim_path())?;
+        let index = self.prims.shared_index(&path.prim_path())?;
         if let Some(defined) = index
             .type_info
             .as_ref()

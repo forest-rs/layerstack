@@ -633,7 +633,7 @@ impl Stage {
         let index = self.preparation.as_deref()?;
         index
             .composed
-            .get_or_init(|| ComposedEvidence::of(paths, &self.prims));
+            .get_or_init(|| ComposedEvidence::of(paths, &self.prims.physical));
         Some(index)
     }
 

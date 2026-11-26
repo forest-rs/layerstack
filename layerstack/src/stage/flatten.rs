@@ -97,7 +97,7 @@ pub use report::{
 };
 pub use verify::{FlattenVerification, Mismatch, MismatchKind, SkipReason, Skipped, VerifiedScope};
 
-use super::prototypes::InstanceKey;
+use super::prototypes::PrototypeId;
 use crate::sort;
 use crate::target_translation::{is_relational, replace_relational_prefix};
 
@@ -245,7 +245,6 @@ impl Stage {
             requirements,
             out,
             prototypes: HashMap::new(),
-            prototype_of: HashMap::new(),
             anchored: HashMap::new(),
             unanchored: HashSet::new(),
             report: FlattenReport::default(),
@@ -298,7 +297,7 @@ impl Stage {
         flattener.report.preserved.metadata_fields = metadata.len();
         flattener.out.metadata = metadata;
         let prototypes = match requirements.instancing {
-            Instancing::Preserve => flattener.find_prototypes(pseudo_root),
+            Instancing::Preserve => flattener.find_prototypes(),
             Instancing::Expand => Vec::new(),
         };
         let mut root_children = Vec::new();
@@ -328,21 +327,13 @@ struct Flattener<'a> {
     assets: &'a dyn AssetResolver,
     requirements: &'a FlattenRequirements,
     out: Layer,
-    /// The prototype path of each instance key.
-    prototypes: HashMap<InstanceKey, PathId>,
-    /// The prototype each instance references.
-    prototype_of: HashMap<PathId, PathId>,
+    /// Flattened-layer paths for the stage's snapshot-local prototype IDs.
+    prototypes: HashMap<PrototypeId, PathId>,
     /// Each anchored asset path written, with the path it was authored as.
     anchored: HashMap<Arc<str>, Arc<str>>,
     /// The authored asset paths that could not be anchored.
     unanchored: HashSet<Arc<str>>,
     report: FlattenReport,
-}
-
-/// The instances sharing one [`InstanceKey`], in traversal order.
-struct PrototypeGroup {
-    key: InstanceKey,
-    instances: Vec<PathId>,
 }
 
 impl Flattener<'_> {
@@ -532,9 +523,8 @@ impl Flattener<'_> {
         }
     }
 
-    /// Groups the stage's instances by [`InstanceKey`] and names a prototype
-    /// for each group: `/Flattened_Prototype_N`, skipping names the stage
-    /// uses. Returns each prototype with the first instance of its group in
+    /// Names each prototype in the stage's inventory `/Flattened_Prototype_N`,
+    /// skipping names the stage uses. Returns each prototype with the first instance of its group in
     /// traversal order, whose descendants it copies.
     ///
     /// The numbering is OpenUSD 26.11's with
@@ -551,27 +541,8 @@ impl Flattener<'_> {
     /// (`_GenerateFlattenedPrototypePath`, `pxr/usd/usd/stage.cpp`).
     ///
     /// Spec: AOUSD Core §11.3.3 (instances share a prototype).
-    fn find_prototypes(&mut self, pseudo_root: PathId) -> Vec<(PathId, PathId)> {
-        let instances: Vec<PathId> = self
-            .stage
-            .traverse(pseudo_root)
-            .filter(|prim| self.stage.instances.contains(prim))
-            .collect();
-        let mut groups: Vec<PrototypeGroup> = Vec::new();
-        let mut group_of: HashMap<PathId, usize> = HashMap::new();
-        let mut by_key: HashMap<InstanceKey, usize> = HashMap::new();
-        for &instance in &instances {
-            let key = self.stage.instance_key(instance, self.store);
-            let group = *by_key.entry(key.clone()).or_insert_with(|| {
-                groups.push(PrototypeGroup {
-                    key,
-                    instances: Vec::new(),
-                });
-                groups.len() - 1
-            });
-            groups[group].instances.push(instance);
-            group_of.insert(instance, group);
-        }
+    fn find_prototypes(&mut self) -> Vec<(PathId, PathId)> {
+        let groups: Vec<_> = self.stage.prototypes().collect();
         // `/__Prototype_N` by least instance path, then `GetPrototypes`
         // order: by that name as a path.
         let paths = self.store.paths();
@@ -580,7 +551,7 @@ impl Flattener<'_> {
             .iter()
             .map(|group| {
                 group
-                    .instances
+                    .instances()
                     .iter()
                     .copied()
                     .min_by(|a, b| paths.cmp_paths(*a, *b, tokens))
@@ -599,7 +570,6 @@ impl Flattener<'_> {
         sort::sort(&mut order);
         let mut found = Vec::new();
         let mut name = 1_usize;
-        let mut prototype_of_group = alloc::vec![None; groups.len()];
         for (_, index) in order {
             let prototype = loop {
                 let token = self
@@ -612,16 +582,9 @@ impl Flattener<'_> {
                     break path;
                 }
             };
-            prototype_of_group[index] = Some(prototype);
-            found.push((groups[index].instances[0], prototype));
-        }
-        for (&instance, &group) in &group_of {
-            let prototype = prototype_of_group[group].expect("every group is named");
-            self.prototype_of.insert(instance, prototype);
-        }
-        for (group, prototype) in groups.into_iter().zip(prototype_of_group) {
-            self.prototypes
-                .insert(group.key, prototype.expect("every group is named"));
+            let group = groups[index];
+            self.prototypes.insert(group.id(), prototype);
+            found.push((group.instances()[0], prototype));
         }
         found
     }
@@ -706,7 +669,9 @@ impl Flattener<'_> {
             );
         }
 
-        if let Some(&prototype) = self.prototype_of.get(&source) {
+        if let Some(prototype) = self.stage.instance_prototype(source)
+            && let Some(&prototype) = self.prototypes.get(&prototype)
+        {
             // Spec: AOUSD Core §11.3.3 (the instance shares its prototype).
             spec.references.make_mut().explicit =
                 Some(alloc::vec![Reference::new(self.out.id, prototype)]);

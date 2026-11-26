@@ -422,10 +422,7 @@ impl<'a> PrimView<'a> {
         let Some(attribute) = self.attribute(name) else {
             return false;
         };
-        if attribute.clip_source(Time::held(0.0)).is_some() {
-            return true;
-        }
-        attribute.opinions().iter().any(|opinion| {
+        let has_authored_animation = attribute.opinions().iter().any(|opinion| {
             opinion.value().as_property().is_some_and(|spec| {
                 spec.spline.is_some()
                     || spec
@@ -433,7 +430,8 @@ impl<'a> PrimView<'a> {
                         .get()
                         .is_some_and(|samples| !samples.is_empty())
             })
-        })
+        });
+        has_authored_animation || attribute.value_source_might_be_time_varying()
     }
 
     /// Whether an attribute has a resolved value source, including a schema

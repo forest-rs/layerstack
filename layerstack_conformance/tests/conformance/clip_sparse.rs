@@ -685,12 +685,18 @@ fn retained_world_selection_follows_value_clip_transforms() {
                     uniform token[] xformOpOrder = [\"xformOp:translate\"]
                     double3 xformOp:translate
                 }}",
-                metadata()
+                r#"clips = { dictionary default = {
+                    asset[] assetPaths = [@empty.usda@, @a.usda@]
+                    string primPath = "/C"
+                    double2[] active = [(0,0), (10,1)]
+                    asset manifestAssetPath = @manifest.usda@
+                }}"#
             )),
         ),
+        ("empty.usda".into(), clip("")),
         (
             "a.usda".into(),
-            clip("double3 xformOp:translate.timeSamples = { 0: (1, 2, 3), 10: (11, 2, 3) }"),
+            clip("double3 xformOp:translate.timeSamples = { 10: (1, 2, 3), 20: (11, 2, 3) }"),
         ),
         ("manifest.usda".into(), clip("double3 xformOp:translate")),
     ];
@@ -698,21 +704,48 @@ fn retained_world_selection_follows_value_clip_transforms() {
     let scene = Scene::new(&stage, &store);
     let path = store.path("/P");
     let translate = store.property_path("/P.xformOp:translate");
-    assert!(
-        attribute(&stage, &store, translate)
-            .dense_numeric_samples()
-            .is_none()
-    );
+    let attr = attribute(&stage, &store, translate);
+    assert!(attr.get(Time::held(0.)).is_none());
+    assert!(attr.value_source_might_be_time_varying());
+    assert!(attr.dense_numeric_samples().is_none());
     let mut selection = XformSelection::new(&scene, [path], Time::Default);
     for (time, position) in [
-        (Time::at(0.), [1., 2., 3., 1.]),
-        (Time::at(5.), [6., 2., 3., 1.]),
-        (Time::held(5.), [1., 2., 3., 1.]),
-        (Time::at(10.), [11., 2., 3., 1.]),
+        (Time::at(0.), [0., 0., 0., 1.]),
+        (Time::at(10.), [1., 2., 3., 1.]),
+        (Time::at(15.), [6., 2., 3., 1.]),
+        (Time::held(15.), [1., 2., 3., 1.]),
+        (Time::at(20.), [11., 2., 3., 1.]),
     ] {
         selection.set_time(&scene, time);
         let expected = XformCache::new(time).local_to_world(&scene, path);
         assert_eq!(selection.matrices(), &[expected]);
         assert_eq!(expected.unwrap()[3], position);
     }
+}
+
+#[test]
+fn unresolved_transform_clip_remains_a_temporal_dependency() {
+    use layerstack_schemas::{Scene, XformCache};
+
+    let layers = vec![(
+        "root.usda".into(),
+        text(&format!(
+            r#"def Xform "P" ({}) {{
+                uniform token[] xformOpOrder = ["xformOp:translate"]
+                double3 xformOp:translate
+            }}"#,
+            metadata()
+        )),
+    )];
+    let (store, stage) = compose(&layers);
+    let translate = store.property_path("/P.xformOp:translate");
+    let attr = attribute(&stage, &store, translate);
+    assert!(attr.clip_source(Time::held(0.)).is_none());
+    assert!(attr.value_source_might_be_time_varying());
+    let scene = Scene::new(&stage, &store);
+    let mut cache = XformCache::new(Time::Default);
+    assert_eq!(
+        cache.local_to_world_might_vary(&scene, store.path("/P")),
+        Some(true),
+    );
 }

@@ -2558,6 +2558,75 @@ impl Stage {
         Some(changed)
     }
 
+    /// Replaces existing scalar metadata opinions on precisely identified
+    /// source sites. Exact copy records with the same edits detach once.
+    /// Prepare every replacement before installing any of them.
+    ///
+    /// AOUSD Core §7.6 (prim metadata) and §11.3.3 (instance descendants).
+    pub(crate) fn refresh_prim_metadata(
+        &mut self,
+        edits: &[crate::edit::PrimMetadataEdit],
+        by_prim: &HashMap<PathId, SmallVec<[usize; 2]>>,
+    ) -> Option<Vec<PathId>> {
+        use crate::prim_index::FieldKey;
+
+        if edits
+            .iter()
+            .any(|edit| self.clips.layers().contains(&edit.layer))
+        {
+            return None;
+        }
+        let mut refreshed = HashMap::new();
+        let mut replacements = Vec::with_capacity(by_prim.len());
+        for (&prim, edit_indices) in by_prim {
+            let index = self.prims.get(&prim)?;
+            let key = (Arc::as_ptr(&index.data), edit_indices.as_slice());
+            let data = match refreshed.entry(key) {
+                hashbrown::hash_map::Entry::Occupied(entry) => entry.into_mut(),
+                hashbrown::hash_map::Entry::Vacant(entry) => {
+                    let mut replacement = index.clone();
+                    for &at in edit_indices {
+                        let edit = &edits[at];
+                        let matching: SmallVec<[usize; 2]> = replacement
+                            .metadata_opinions(edit.field)?
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(position, opinion)| {
+                                let key = &opinion.source().key;
+                                (key.layer_id == edit.layer && key.spec_path == edit.path)
+                                    .then_some(position)
+                            })
+                            .collect();
+                        if matching.is_empty() {
+                            return None;
+                        }
+                        let opinions =
+                            replacement.field_opinions_mut(FieldKey::Metadata(edit.field))?;
+                        for position in matching {
+                            let OpinionValue::Field(old) = &mut opinions[position].value else {
+                                return None;
+                            };
+                            if !crate::edit::PrimMetadataEdit::plain(old) {
+                                return None;
+                            }
+                            *old = edit.value.clone();
+                        }
+                    }
+                    entry.insert(replacement.data)
+                }
+            };
+            replacements.push((prim, Arc::clone(data)));
+        }
+
+        let mut changed = Vec::with_capacity(replacements.len());
+        for (prim, data) in replacements {
+            self.prims.get_mut(&prim).expect("validated prim").data = data;
+            changed.push(prim);
+        }
+        sort::sort_unstable(&mut changed);
+        Some(changed)
+    }
+
     /// Returns `true` if a partial composition shows that recomposing
     /// `recomposed` changes hierarchy: a recomposed prim appears or
     /// disappears, becomes active or inactive (which changes its parent's

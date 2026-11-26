@@ -130,7 +130,7 @@ pub use prim_fields::{ListPosition, PrimField};
 pub use target::{Address, EditTarget};
 pub use transaction::Transaction;
 
-pub(crate) use apply::{Outcome, PropertyValueEdit, SourceNamespace, apply};
+pub(crate) use apply::{Outcome, PrimMetadataEdit, PropertyValueEdit, SourceNamespace, apply};
 
 /// What [`LiveStage::apply`](crate::LiveStage::apply) did.
 #[derive(Clone, Debug, PartialEq)]

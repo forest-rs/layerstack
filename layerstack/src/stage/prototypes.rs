@@ -93,10 +93,10 @@ fn hash_expression_paths<H: Hasher>(value: &Value, state: &mut H) {
 /// variant selections ([`InstanceIndexKey`]), clip definitions and populated
 /// descendants. OpenUSD: `PcpInstanceKey`, `Usd_InstanceKey`
 /// (`usd/instanceKey.cpp`).
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(super) struct InstanceKey {
+#[derive(Debug, PartialEq, Eq, Hash)]
+struct InstanceKey<'paths> {
     root: InstanceRootKey,
-    topology: Vec<(Vec<TokenId>, bool)>,
+    topology: Vec<(&'paths [TokenId], bool)>,
 }
 
 /// Identity contributed by an instance root independently of its population
@@ -114,7 +114,7 @@ struct InstanceRootKey {
 /// variant selections.
 ///
 /// Composition finds it on the thread that indexes the root, while the
-/// index is at hand ([`InstanceIndexKeys`]); [`Stage::instance_key`] finds
+/// index is at hand ([`InstanceIndexKeys`]); [`Stage::instance_index_key`] finds
 /// it again for an index built otherwise.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct InstanceIndexKey {
@@ -300,21 +300,14 @@ impl Stage {
         }
     }
 
-    /// The [`InstanceKey`] of `instance`: its [`InstanceIndexKey`], clip
-    /// definitions and populated namespace.
-    pub(super) fn instance_key(&self, instance: PathId, store: &dyn LayerStore) -> InstanceKey {
-        let index = self.instance_index_key(instance, store);
-        self.instance_key_with(instance, index, store)
-    }
-
-    /// The [`InstanceKey`] of `instance`, whose [`InstanceIndexKey`] is
-    /// `index`.
-    fn instance_key_with(
+    /// Root arcs, clips and populated topology used while grouping instances.
+    /// Relative paths borrow the interner while this inventory is being built.
+    fn instance_key_with<'paths>(
         &self,
         instance: PathId,
         index: InstanceIndexKey,
-        store: &dyn LayerStore,
-    ) -> InstanceKey {
+        store: &'paths dyn LayerStore,
+    ) -> InstanceKey<'paths> {
         let clips = self.prims.get(&instance).map_or_else(Vec::new, |index| {
             crate::value_clips::instance_keys(instance, index, store)
         });
@@ -331,8 +324,7 @@ impl Stage {
                         .paths()
                         .resolve(prim)
                         .strip_prefix(prefix)
-                        .expect("descendant")
-                        .to_vec(),
+                        .expect("descendant"),
                     self.is_instance(prim),
                 )
             })
@@ -541,6 +533,7 @@ impl PrototypeRecord {
         let builder = hashbrown::DefaultHashBuilder::default();
         let mut comparisons = 0;
         let mut buckets: HashMap<u64, Vec<Arc<PrimIndexData>>> = HashMap::new();
+        let mut previous = None;
         for &instance in &self.instances {
             // An exact partial composition can retain a boundary child name
             // without composing that child's index.
@@ -550,6 +543,11 @@ impl PrototypeRecord {
             else {
                 continue;
             };
+            // Ordinary copies already point at the representative. The bucket
+            // retains the previous buffer, so its address is stable here.
+            if previous == Some(Arc::as_ptr(&index.data)) {
+                continue;
+            }
             let candidates = buckets
                 .entry(builder.hash_one(RecordBucket(&index.data)))
                 .or_default();
@@ -561,6 +559,7 @@ impl PrototypeRecord {
             } else {
                 candidates.push(Arc::clone(&index.data));
             }
+            previous = Some(Arc::as_ptr(&index.data));
         }
         comparisons
     }

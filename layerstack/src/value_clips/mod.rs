@@ -338,6 +338,14 @@ pub(crate) struct Catalog {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ClipQueryIdentity(Vec<Arc<PreparedClipProperty>>);
 impl Catalog {
+    // Include a prim's unresolved clip demands conservatively. Unlike a
+    // query at one time, a retained numeric source must cover every time.
+    pub(crate) fn may_supply_samples(&self, path: PropertyPath) -> bool {
+        self.properties
+            .contains_key(&(path.prim_path(), path.property()))
+            || self.demands.contains_key(&path.prim_path())
+    }
+
     pub(crate) fn query_identity(&self, prim: PathId, property: TokenId) -> ClipQueryIdentity {
         ClipQueryIdentity(
             self.properties

@@ -30,8 +30,8 @@ pub use dangling::{
     DanglingByName, DanglingCounts, DanglingKind, DanglingTarget, DanglingTargetReport,
 };
 pub use objects::{
-    Attribute, AttributeQuery, AttributeQueryWork, Object, Prim, PrimSnapshot, Property,
-    Relationship,
+    Attribute, AttributeQuery, AttributeQueryWork, DenseNumericSamples, Object, Prim, PrimSnapshot,
+    Property, Relationship,
 };
 pub use relationships::{RelationshipQuery, RelationshipQueryWork};
 pub use targets::{DropReason, DroppedTarget, TargetOpinion, TargetsExplanation};

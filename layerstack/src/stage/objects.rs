@@ -5,6 +5,9 @@
 //! AOUSD Core §11–§13; OpenUSD `UsdPrim`, `UsdProperty`, `UsdAttribute`,
 //! `UsdRelationship`, `UsdAttributeQuery`. Views borrow immutable snapshots;
 //! queries borrow no mutable stage between evaluations.
+mod dense_samples;
+pub use dense_samples::DenseNumericSamples;
+
 use alloc::collections::BTreeMap;
 
 use super::*;

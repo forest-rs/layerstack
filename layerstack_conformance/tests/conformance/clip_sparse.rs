@@ -672,3 +672,47 @@ fn synthetic_sparse_clip_lower_metadata_advances_the_weaker_sample_query() {
         );
     }
 }
+
+#[test]
+fn retained_world_selection_follows_value_clip_transforms() {
+    use layerstack_schemas::{Scene, XformCache, XformSelection};
+
+    let layers = vec![
+        (
+            "root.usda".into(),
+            text(&format!(
+                "def Xform \"P\" ({}) {{
+                    uniform token[] xformOpOrder = [\"xformOp:translate\"]
+                    double3 xformOp:translate
+                }}",
+                metadata()
+            )),
+        ),
+        (
+            "a.usda".into(),
+            clip("double3 xformOp:translate.timeSamples = { 0: (1, 2, 3), 10: (11, 2, 3) }"),
+        ),
+        ("manifest.usda".into(), clip("double3 xformOp:translate")),
+    ];
+    let (store, stage) = compose(&layers);
+    let scene = Scene::new(&stage, &store);
+    let path = store.path("/P");
+    let translate = store.property_path("/P.xformOp:translate");
+    assert!(
+        attribute(&stage, &store, translate)
+            .dense_numeric_samples()
+            .is_none()
+    );
+    let mut selection = XformSelection::new(&scene, [path], Time::Default);
+    for (time, position) in [
+        (Time::at(0.), [1., 2., 3., 1.]),
+        (Time::at(5.), [6., 2., 3., 1.]),
+        (Time::held(5.), [1., 2., 3., 1.]),
+        (Time::at(10.), [11., 2., 3., 1.]),
+    ] {
+        selection.set_time(&scene, time);
+        let expected = XformCache::new(time).local_to_world(&scene, path);
+        assert_eq!(selection.matrices(), &[expected]);
+        assert_eq!(expected.unwrap()[3], position);
+    }
+}

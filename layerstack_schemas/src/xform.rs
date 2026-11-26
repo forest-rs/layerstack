@@ -17,6 +17,9 @@
 //! multiply-adds.
 //!
 
+mod selection;
+pub use selection::XformSelection;
+
 use alloc::{
     borrow::Cow, boxed::Box, collections::BTreeMap, format, string::String, sync::Arc, vec::Vec,
 };
@@ -24,7 +27,7 @@ use core::{num::NonZeroUsize, ops::Bound};
 use layerstack::sort;
 
 use hashbrown::HashMap;
-use layerstack::{Path, PathId, PropertyPath, TokenId, Value, half};
+use layerstack::{Changes, DenseNumericSamples, Path, PathId, PropertyPath, TokenId, Value, half};
 
 use crate::gf::{self, Matrix4, Rotation};
 use crate::usd_geom::{Imageable, Xformable};
@@ -485,7 +488,7 @@ fn evaluate_ops<'a, 'v>(
     resets_xform_stack: bool,
     mut problems: Vec<XformProblem>,
     get_op: impl Fn(usize) -> XformOp<'a>,
-    get_value: impl Fn(usize) -> Option<Cow<'v, Value>>,
+    mut get_value: impl FnMut(usize) -> Option<Cow<'v, Value>>,
     get_name: impl Fn(usize) -> String,
 ) -> LocalTransform {
     let mut matrix = gf::IDENTITY;
@@ -704,6 +707,7 @@ pub struct XformCacheStats {
 // Slots never escape the cache. Vec relocation preserves indices, and subtree
 // retirement removes every incoming parent link before a slot can be reused.
 type Slot = NonZeroUsize;
+type SampleBindings = Box<[(usize, DenseNumericSamples)]>;
 
 #[derive(Clone, Copy, Debug)]
 enum Parent {
@@ -775,7 +779,26 @@ impl PreparedTransform {
         })
     }
 
-    fn evaluate(&self, scene: &Scene<'_>, path: PathId, time: Time) -> LocalTransform {
+    fn bind_samples(&self, scene: &Scene<'_>, path: PathId) -> Vec<(usize, DenseNumericSamples)> {
+        self.ops
+            .iter()
+            .enumerate()
+            .filter_map(|(index, op)| {
+                op.kind?;
+                let attribute = scene.attribute(PropertyPath::new(path, op.attribute))?;
+                Some((index, attribute.dense_numeric_samples()?))
+            })
+            .collect()
+    }
+
+    fn evaluate<const HAS_BINDINGS: bool>(
+        &self,
+        scene: &Scene<'_>,
+        path: PathId,
+        time: Time,
+        samples: &[(usize, DenseNumericSamples)],
+    ) -> LocalTransform {
+        let mut samples = samples.iter().rev().peekable();
         evaluate_ops(
             self.ops.len(),
             self.resets,
@@ -791,6 +814,19 @@ impl PreparedTransform {
                 }
             },
             |i| {
+                // evaluate_ops visits values in reverse op order, skipping
+                // inverse pairs and unknown ops.
+                if HAS_BINDINGS {
+                    while samples.peek().is_some_and(|(index, _)| *index > i) {
+                        samples.next();
+                    }
+                    if let Some(value) = samples
+                        .next_if(|(index, _)| *index == i)
+                        .and_then(|(_, source)| source.value_at(time))
+                    {
+                        return Some(Cow::Owned(value));
+                    }
+                }
                 let token = self.ops[i].attribute;
                 let attribute = scene.attribute(PropertyPath::new(path, token))?;
                 let value = attribute.get(time)?.value;
@@ -927,6 +963,8 @@ pub struct XformCache {
     nodes: Vec<Node>,
     transforms: Vec<Transforms>,
     prepared: PreparedCache,
+    // Opt-in selection only. Plain caches retain just shared op recipes.
+    samples: Option<Box<HashMap<Slot, SampleBindings>>>,
     free: Option<Slot>,
     // Path's segment ordering places a prefix and its descendants together.
     // Manual invalidation builds this lazily, including sparse local-only
@@ -948,6 +986,7 @@ impl XformCache {
             nodes: Vec::new(),
             transforms: Vec::new(),
             prepared: PreparedCache::default(),
+            samples: None,
             free: None,
             namespace: None,
             chain: Vec::new(),
@@ -999,6 +1038,9 @@ impl XformCache {
         self.nodes.clear();
         self.transforms.clear();
         self.prepared.clear();
+        if let Some(samples) = &mut self.samples {
+            samples.clear();
+        }
         self.free = None;
         self.namespace = None;
         self.chain.clear();
@@ -1048,7 +1090,7 @@ impl XformCache {
     /// descendant worlds validate lazily. No namespace index is constructed.
     ///
     /// Spec: AOUSD Core §11 (population), §12 (composed changes).
-    pub fn apply_changes(&mut self, scene: &Scene<'_>, changes: &layerstack::Changes) {
+    pub fn apply_changes(&mut self, scene: &Scene<'_>, changes: &Changes) {
         for &path in &changes.removed {
             self.remove_cached(scene, path);
         }
@@ -1065,11 +1107,15 @@ impl XformCache {
                     let transforms = &mut self.transforms;
                     let free = &mut self.free;
                     let prepared = &mut self.prepared;
+                    let samples = &mut self.samples;
                     self.entries.retain(|path, slot| {
                         if !prefix.is_prefix_of(paths.resolve(*path)) {
                             return true;
                         }
                         prepared.remove(slot);
+                        if let Some(samples) = samples {
+                            samples.remove(slot);
+                        }
                         Self::retire_slot(nodes, transforms, free, *slot);
                         false
                     });
@@ -1082,27 +1128,14 @@ impl XformCache {
             }
         }
         self.finish_retirement();
-        // A prim's own information changed: conservatively, its transform.
-        for &path in &changes.changed_info_only {
+        for path in transform_change_paths(scene, changes) {
             self.invalidate_transform(path);
-        }
-        for change in &changes.changed_properties {
-            if is_transform_property(scene.store().tokens().resolve(change.property.property())) {
-                self.invalidate_transform(change.property.prim_path());
-            }
-        }
-        // A transform property added or removed changes the local transform;
-        // any other property resync, such as `visibility`, does not.
-        for property in &changes.resynced_properties {
-            if is_transform_property(scene.store().tokens().resolve(property.property())) {
-                self.invalidate_transform(property.prim_path());
-            }
         }
     }
 
     fn remove_cached(&mut self, scene: &Scene<'_>, path: PathId) {
         if let Some(slot) = self.entries.remove(&path) {
-            self.prepared.remove(&slot);
+            self.forget_local_sources(slot);
             Self::retire_slot(&mut self.nodes, &mut self.transforms, &mut self.free, slot);
         }
         if let Some(namespace) = &mut self.namespace {
@@ -1155,13 +1188,20 @@ impl XformCache {
             self.clear();
         }
         self.epoch += 1;
-        if let Some(slot) = self.entries.get(&path) {
-            self.prepared.remove(slot);
+        if let Some(&slot) = self.entries.get(&path) {
+            self.forget_local_sources(slot);
             let index = slot.get() - 1;
             self.transforms[index].local = None;
             self.nodes[index].world_valid = false;
             self.nodes[index].local_stamp = self.epoch;
             self.nodes[index].time_dependency = TimeDependency::Unknown;
+        }
+    }
+
+    fn forget_local_sources(&mut self, slot: Slot) {
+        self.prepared.remove(&slot);
+        if let Some(samples) = &mut self.samples {
+            samples.remove(&slot);
         }
     }
 
@@ -1250,7 +1290,13 @@ impl XformCache {
         } else {
             let path = self.nodes[index].path;
             if let Some(prepared) = self.prepared.get(&slot) {
-                self.transforms[index].local = Some(prepared.evaluate(scene, path, self.time));
+                let samples = self.samples.as_ref().and_then(|sources| sources.get(&slot));
+                let local = if let Some(samples) = samples {
+                    prepared.evaluate::<true>(scene, path, self.time, samples)
+                } else {
+                    prepared.evaluate::<false>(scene, path, self.time, &[])
+                };
+                self.transforms[index].local = Some(local);
                 self.stats.local_computed += 1;
                 return;
             }
@@ -1274,6 +1320,12 @@ impl XformCache {
             if self.nodes[index].time_dependency == TimeDependency::Varying
                 && let Some(prepared) = PreparedTransform::new(scene, &inputs)
             {
+                if let Some(sources) = &mut self.samples {
+                    let bound = prepared.bind_samples(scene, path);
+                    if !bound.is_empty() {
+                        sources.insert(slot, bound.into_boxed_slice());
+                    }
+                }
                 self.prepared.insert(slot, prepared);
             }
             self.transforms[index].local = Some(inputs.evaluate());
@@ -1311,8 +1363,13 @@ impl XformCache {
         if scene.store().paths().resolve(path).segments().is_empty() {
             return Some(gf::IDENTITY);
         }
+        let slot = self.ensure_slot(scene, path);
+        self.world_at_slot(scene, slot)
+    }
+
+    fn world_at_slot(&mut self, scene: &Scene<'_>, slot: Slot) -> Option<Matrix4> {
         self.chain.clear();
-        let mut at = Some(self.ensure_slot(scene, path));
+        let mut at = Some(slot);
         let mut above = gf::IDENTITY;
         let mut above_stamp = 0;
         let mut above_time_dependent = false;
@@ -1490,6 +1547,24 @@ impl XformCache {
             None => Some(gf::IDENTITY),
         }
     }
+}
+
+// A prim's info changes can affect its transform. An attribute declaration
+// or value edit affects the transform only in the transform namespace.
+fn transform_change_paths<'a>(
+    scene: &'a Scene<'_>,
+    changes: &'a Changes,
+) -> impl Iterator<Item = PathId> + 'a {
+    let tokens = scene.store().tokens();
+    changes.changed_info_only.iter().copied().chain(
+        changes
+            .changed_properties
+            .iter()
+            .map(|change| change.property)
+            .chain(changes.resynced_properties.iter().copied())
+            .filter(move |property| is_transform_property(tokens.resolve(property.property())))
+            .map(|property| property.prim_path()),
+    )
 }
 
 /// Whether a property can affect a native local transform.

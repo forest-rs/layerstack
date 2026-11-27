@@ -8,22 +8,28 @@ Subheadings to categorize changes are `added, changed, deprecated, removed, fixe
 
 # Changelog
 
-The latest published Opinionated release is [0.1.0](#010-2026-10-14) which was released on 2026-10-14.
-You can find its changes [documented below](#010-2026-10-14).
+See the [0.2.0 release notes](#020-2026-11-27) for changes since 0.1.0.
 
 ## [Unreleased]
+
+## [0.2.0][] (2026-11-27)
+
+This release has an [MSRV][] of 1.89.
 
 ### Added
 
 - `ordered_chain_events` gives the events `resolve_ordered_chain_report`
   reports for an ordered chain without resolving its value, for a caller that
   needs only the opinions' roles.
+  ([#368][] by [@waywardmonkeys][])
 - `append_missing` extends a list with the first occurrence of each missing
   item in order, while preserving the existing entries.
+  ([#500][] by [@waywardmonkeys][])
 - `DictionaryAdapter::compose` lets adapters combine colliding dictionary
   entries when at least one value is opaque. It defaults to keeping the
   stronger value. Reports mark successful compositions with
   `DictionaryEvent::Composed`.
+  ([#322][] by [@waywardmonkeys][])
 - `ListOp::compose_over` combines a stronger list op with a weaker one into
   the single op that edits any list as applying the two in turn does. It
   returns `None` when an add or a reorder makes the result depend on the list
@@ -37,9 +43,11 @@ You can find its changes [documented below](#010-2026-10-14).
   ([#223][] by [@waywardmonkeys][])
 - `ListOp::with_explicit` sets an operation's explicit list, so every list
   of a `ListOp` has a constructor and a `with_` builder.
+  ([#309][] by [@waywardmonkeys][])
 - `ResolutionEvent::provenance`, `FamilyEvent::provenance` and
   `DictionaryEvent::provenance` return the provenance every event carries,
   so callers can sort or group events without matching every variant.
+  ([#309][] by [@waywardmonkeys][])
 
 ### Changed
 
@@ -48,16 +56,20 @@ You can find its changes [documented below](#010-2026-10-14).
   destructure with `..`; build one with `ListOp::new`, the constructors
   (`explicit`, `prepended`, `appended`, `deleted`, `added`, `reordered`) and
   the `with_` builders instead of a struct literal.
+  ([#309][] by [@waywardmonkeys][])
 - Breaking: the enums that report or select are `#[non_exhaustive]`, so a
   `match` on them needs a fallback arm: `ResolutionEvent`, `FamilyEvent`,
   `DictionaryEvent`, `OpinionKind`, `FamilyBase` and `TemporalMode`,
   joining `IgnoreReason`. `SamplePick` stays exhaustive: the planner takes
   a lower and an upper sample, so another pick would need a new planner
   API.
+  ([#309][] by [@waywardmonkeys][])
 - Breaking: the structs the crate returns are `#[non_exhaustive]`, so they
   can gain fields: `UnknownLayer`, `DuplicateLayer`, `OpinionRef` and
   `TemporalSelection`, joining `ResolutionReport`, `ListReport`,
-  `FamilyReport` and `DictionaryReport`. Their fields stay public to read.
+  `FamilyReport` and `DictionaryReport`. Read their fields directly and use `..`
+  when destructuring them.
+  ([#309][] by [@waywardmonkeys][])
 - Breaking: list items must implement `Hash`, with or without the
   `hash-tables` feature. The bound is added to `ListOp::apply_to`,
   `ListOp::apply_in_place`, `resolve_list_chain`, `resolve_list_chain_report`,
@@ -97,11 +109,16 @@ This is the initial release.
 
 The crate uses `no_std` with `alloc` and has no dependencies or feature flags.
 
-[Unreleased]: https://github.com/forest-rs/layerstack/compare/opinionated-0.1.0...HEAD
+[Unreleased]: https://github.com/forest-rs/layerstack/compare/opinionated-0.2.0...HEAD
+[0.2.0]: https://github.com/forest-rs/layerstack/compare/opinionated-0.1.0...opinionated-0.2.0
 [0.1.0]: https://github.com/forest-rs/layerstack/releases/tag/opinionated-0.1.0
 [MSRV]: README.md#installation
 
 [#223]: https://github.com/forest-rs/layerstack/pull/223
 [#237]: https://github.com/forest-rs/layerstack/pull/237
+[#309]: https://github.com/forest-rs/layerstack/pull/309
+[#322]: https://github.com/forest-rs/layerstack/pull/322
+[#368]: https://github.com/forest-rs/layerstack/pull/368
+[#500]: https://github.com/forest-rs/layerstack/pull/500
 
 [@waywardmonkeys]: https://github.com/waywardmonkeys

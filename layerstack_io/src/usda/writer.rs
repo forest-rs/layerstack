@@ -107,10 +107,11 @@ use core::ptr;
 use layerstack::sort;
 
 use layerstack::SharedVec;
-use layerstack::array_edit::{ArrayIndex, Instruction, Operand};
+use layerstack::array_edit::ArrayIndex;
 use layerstack::ident::dictionary_cmp;
 use layerstack::spline::SplineData;
 use layerstack::value_type::ValueType;
+use opinionated::{ArrayEditOp as Instruction, ArrayEditOperand as Operand};
 use smallvec::SmallVec;
 
 use layerstack::float_text;

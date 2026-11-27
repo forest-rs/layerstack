@@ -26,6 +26,9 @@ hashbrown = { workspace = true }
 layerstack = { features = ["unstable-internals"], workspace = true }
 # LZ4 block decompression and compression for USDC sections.
 lz4_flex = { workspace = true }
+# Array-edit instructions over the writers' own value types; `layerstack`
+# already depends on it and exposes its types.
+opinionated = { workspace = true }
 smallvec = { workspace = true }
 
 [lints]

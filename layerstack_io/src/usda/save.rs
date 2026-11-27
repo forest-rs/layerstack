@@ -1368,7 +1368,7 @@ impl<'l> Lowering<'l> {
         site: Site<'_>,
         path: &str,
     ) -> Result<Value, LayerSaveError> {
-        use layerstack::array_edit::{Instruction as I, Operand as O};
+        use opinionated::{ArrayEditOp as I, ArrayEditOperand as O};
         let descriptor = descriptor
             .map(|v| self.value(v, Site::Metadata, path))
             .transpose()?;

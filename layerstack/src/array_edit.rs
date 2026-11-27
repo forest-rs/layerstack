@@ -25,8 +25,6 @@ use crate::{
 };
 
 pub use opinionated::ArrayIndex;
-// Portable instruction types for format adapters with their own literal model.
-pub use opinionated::{ArrayEditOp as Instruction, ArrayEditOperand as Operand};
 
 /// A sparse array edit over USD values.
 ///

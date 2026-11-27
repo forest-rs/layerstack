@@ -753,10 +753,11 @@ fn natural(value: &mut UsdaValue) -> Value {
 
 fn native_edit(
     element: &UsdaValue,
-    instructions: &mut [layerstack::array_edit::Instruction<UsdaValue>],
+    instructions: &mut [opinionated::ArrayEditOp<UsdaValue>],
 ) -> Value {
     use crate::usdc::value_rep::CrateArrayEditOp as C;
-    use layerstack::array_edit::{ArrayIndex, Instruction as I, Operand as O};
+    use layerstack::array_edit::ArrayIndex;
+    use opinionated::{ArrayEditOp as I, ArrayEditOperand as O};
     let mut values = Vec::new();
     let mut literal = |value: &mut UsdaValue| {
         let i = values.len();

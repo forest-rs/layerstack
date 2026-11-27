@@ -5,8 +5,8 @@ use alloc::{format, string::String, vec::Vec};
 use core::fmt::{self, Debug, Write};
 
 use crate::usda::writer::{LayerOffset, ListOp, Reference, Value};
-use layerstack::array_edit::{Instruction, Operand};
 use layerstack::spline::{Extrapolation, SplineData};
+use opinionated::{ArrayEditOp as Instruction, ArrayEditOperand as Operand};
 
 use super::{ArrayChange, KnotData};
 

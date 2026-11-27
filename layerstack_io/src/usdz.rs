@@ -137,7 +137,12 @@ pub use error::{LayerReadError, UsdzError};
 pub use writer::{PackageFile, UsdzWriteError, write_usdz};
 
 /// How USDC field values are loaded within a package or stage document.
+///
+/// `Retained` exists only with the `std` feature, so the enum is
+/// `non_exhaustive`: a `match` written without `std` keeps compiling when
+/// another crate in the build turns it on.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum UsdcArrayLoading {
     /// Decode every value during import: the read pays for all of them, and
     /// keeps no encoded bytes.

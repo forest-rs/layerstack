@@ -33,8 +33,9 @@
 // - `geometry_opacity` → `opacity` (`alphaMap`, green), blended.
 // - `thin_film_*` → `iridescence`, `iridescenceIOR`, and its thickness
 //   (micrometres) as `iridescenceThicknessMinimum` and `Maximum` (nanometres).
-// - `geometry_normal`'s image → `normalMap` at the `ND_normalmap` scale; a
-//   flipped red or green channel negates `normalScale`'s x or y.
+// - `geometry_normal`'s image → `normalMap` at the normal map node's scale
+//   (`ND_normalmap_float`, `ND_normalmap_vector2`, or 1.38's `ND_normalmap`);
+//   a flipped red or green channel negates `normalScale`'s x or y.
 //
 // The sphere's `st` runs four times around its equator and twice from
 // pole to pole: a square texture tile stays square, and a tile of about a
@@ -304,7 +305,7 @@ export function openPbrMaterial(surface: OpenPbrSurface, store: TextureStore): M
   const normal = surface.normal;
   if (normal !== null) {
     material.normalMap = use(store, NO_CHANNELS, normal.texture, false);
-    material.normalScale.set(normal.scale * (normal.flip[0] ? -1 : 1), normal.scale * (normal.flip[1] ? -1 : 1));
+    material.normalScale.set(normal.scale[0] * (normal.flip[0] ? -1 : 1), normal.scale[1] * (normal.flip[1] ? -1 : 1));
   }
   return material;
 }

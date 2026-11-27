@@ -140,6 +140,53 @@ test("an OpenPBR surface reads its image through the interface", () => {
   assert.equal(readOpenPbr(stage, "/base", undefined), null);
 });
 
+/** An OpenPBR surface whose normal reads an image through the normal map node `id`, scaled by `scale`. */
+function normalMapped(id: string, scale: string): string {
+  return `#usda 1.0
+def Material "Bumpy"
+{
+    token outputs:mtlx:surface.connect = </Bumpy/surface.outputs:out>
+
+    def Shader "image"
+    {
+        uniform token info:id = "ND_image_vector3"
+        asset inputs:file = @textures/bumps.png@
+        vector3f outputs:out
+    }
+
+    def Shader "normals"
+    {
+        uniform token info:id = "${id}"
+        vector3f inputs:in.connect = </Bumpy/image.outputs:out>
+        ${scale}
+        vector3f outputs:out
+    }
+
+    def Shader "surface"
+    {
+        uniform token info:id = "ND_open_pbr_surface_surfaceshader"
+        vector3f inputs:geometry_normal.connect = </Bumpy/normals.outputs:out>
+        token outputs:out
+    }
+}
+`;
+}
+
+test("a normal map keeps its scale under each MaterialX name for the node", () => {
+  const cases: [string, string, readonly [number, number]][] = [
+    ["ND_normalmap_float", "float inputs:scale = 0.5", [0.5, 0.5]],
+    ["ND_normalmap_vector2", "float2 inputs:scale = (0.5, 2)", [0.5, 2]],
+    ["ND_normalmap", "float inputs:scale = 0.25", [0.25, 0.25]],
+  ];
+  for (const [id, scale, expected] of cases) {
+    const bumpy = layerstack.open({ identifier: "looks/bumpy.usda", bytes: new TextEncoder().encode(normalMapped(id, scale)) });
+    const normal = readOpenPbr(bumpy, "/Bumpy", undefined)?.normal ?? null;
+    assert.ok(normal !== null, id);
+    assert.equal(normal.texture.file.assetPath, "textures/bumps.png", id);
+    assert.deepEqual(normal.scale, expected, id);
+  }
+});
+
 /** A chain `a → b → out` with an unconnected port on each shader, placed by hand. */
 function chain(positions: ReadonlyMap<string, readonly [number, number]>): ShadingNetwork {
   const port = (path: string, kind: "input" | "output", connections: string[] = []) => ({ path, name: path.split(":").pop()!, kind, typeName: "float", connections, invalid: [], authored: true });

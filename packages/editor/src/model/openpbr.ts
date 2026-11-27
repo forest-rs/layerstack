@@ -17,7 +17,8 @@
 // takes its fallback, and a note says so.
 //
 // The normal (`geometry_normal`) is the image node found upstream of it
-// through `ND_normalmap` (whose `scale` is kept); a channel flip built of
+// through a normal map node (`ND_normalmap_float` or `ND_normalmap_vector2`,
+// or MaterialX 1.38's `ND_normalmap`), whose `scale` is kept; a channel flip built of
 // `ND_ifequal_*` nodes choosing between the image and its `ND_invert` is
 // read by evaluating each switch's `value1 == value2`.
 import type { Stage, Value } from "@forest-rs/layerstack";
@@ -66,7 +67,7 @@ export interface OpenPbrSurface {
   readonly thinFilmThickness: number;
   readonly thinFilmIor: number;
   /** The tangent-space normal map, its strength, and which of its channels are flipped. */
-  readonly normal: { readonly texture: MaterialTexture; readonly scale: number; readonly flip: readonly [boolean, boolean, boolean] } | null;
+  readonly normal: { readonly texture: MaterialTexture; readonly scale: readonly [number, number]; readonly flip: readonly [boolean, boolean, boolean] } | null;
   /** What the preview cannot draw as authored, in words. */
   readonly notes: readonly string[];
 }
@@ -115,6 +116,8 @@ export function readOpenPbr(stage: Stage, path: string, time: number | undefined
 }
 
 const IMAGE = /^ND_(tiled)?image_(float|color3|color4|vector2|vector3|vector4)$/;
+/** MaterialX's normal map nodes: 1.39's float and `vector2` scaled ones, and 1.38's. */
+const NORMAL_MAP = /^ND_normalmap(_float|_vector2)?$/;
 
 class PbrReader {
   readonly #stage: Stage;
@@ -217,8 +220,14 @@ class PbrReader {
     if (image === undefined) return null;
     const texture = this.#texture(image, false);
     if (texture === null) return null;
-    const normalmap = nodes.find((node) => this.#stage.shader(node)?.id === "ND_normalmap");
-    const scale = normalmap === undefined ? 1 : (this.#readInput(normalmap, "scale", (value) => (value.kind === "scalar" ? Number(value.value) : null)) ?? 1);
+    const normalmap = nodes.find((node) => NORMAL_MAP.test(this.#stage.shader(node)?.id ?? ""));
+    // A float scale scales both directions; a `vector2` one each its own.
+    const readScale = (value: Value): readonly [number, number] | null => {
+      if (value.kind === "scalar") return [Number(value.value), Number(value.value)];
+      if (value.kind === "tuple" && value.value.length === 2) return [Number(value.value[0]), Number(value.value[1])];
+      return null;
+    };
+    const scale = normalmap === undefined ? ([1, 1] as const) : (this.#readInput(normalmap, "scale", readScale) ?? ([1, 1] as const));
     const combine = nodes.find((node) => /^ND_combine3_/.test(this.#stage.shader(node)?.id ?? ""));
     const flip: [boolean, boolean, boolean] = [false, false, false];
     if (combine !== undefined) {

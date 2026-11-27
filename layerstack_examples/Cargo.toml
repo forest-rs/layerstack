@@ -18,9 +18,12 @@ workspace = true
 [dependencies]
 layerstack = { workspace = true }
 layerstack_io = { features = ["std"], workspace = true }
-layerstack_mesh_export = { workspace = true }
 layerstack_schemas = { features = ["all"], workspace = true }
 opinionated = { workspace = true }
+
+# Only the mesh export examples use it.
+[dev-dependencies]
+layerstack_mesh_export = { workspace = true }
 
 [build-dependencies]
 layerstack_schemagen = { path = "../layerstack_schemagen" }

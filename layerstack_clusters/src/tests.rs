@@ -343,8 +343,7 @@ fn subset_borders_stay_put() {
         "the column at x = 0.5"
     );
     let clusters = set.clusters();
-    for c in 0..clusters.len() {
-        let subset = clusters.subset[c];
+    for (c, &subset) in clusters.subset.iter().enumerate() {
         for &v in set.cluster_indices(c) {
             let x = grid.positions[v as usize][0];
             let inside = if subset == 0 { x <= 0.5 } else { x >= 0.5 };

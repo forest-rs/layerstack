@@ -338,8 +338,8 @@ impl MeshPlan {
         // last range.
         let unassigned = small(input.subsets.len());
         let mut owner = vec![unassigned; faces as usize];
-        for index in 0..input.subsets.len() {
-            let entry = &mut report.subsets[index];
+        // One report entry per input subset.
+        for (index, entry) in report.subsets.iter_mut().enumerate() {
             for &face in input.subsets.get(index) {
                 match usize::try_from(face)
                     .ok()

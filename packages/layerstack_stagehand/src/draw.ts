@@ -185,6 +185,14 @@ export interface DrawItem {
   /** Each face subset's bound material, in the order of {@link DrawBuffers.subsets}. */
   readonly subsetMaterials: readonly (string | null)[];
   /**
+   * Whether both sides of its surfaces are meant to be drawn and lit:
+   * {@link prim}'s `doubleSided`, `false` when unauthored and for a
+   * stand-in. A renderer may cull a one-sided surface's back faces
+   * (OpenUSD's `UsdGeomGprim::GetDoubleSidedAttr`; Storm culls them only
+   * when asked to, as usdview's "Cull Backfaces" does).
+   */
+  readonly doubleSided: boolean;
+  /**
    * The paths light links are matched against ({@link LinkTarget}): the
    * gprim; every instance proxy of a prototype's item, hidden ones
    * included; the point instancer, for its items.
@@ -311,7 +319,7 @@ export interface DrawDiff {
   readonly instancesAdded: readonly ItemInstance[];
   /** Instances a point instancer's item no longer draws: gone from its arrays, masked (`invisibleIds`, `inactiveIds`) or hidden. Their items are in {@link matrices} too. */
   readonly instancesRemoved: readonly ItemInstance[];
-  /** Items whose bound materials changed. */
+  /** Items whose bound materials, or whether they are drawn double-sided ({@link DrawItem.doubleSided}), changed. */
   readonly materials: readonly number[];
   /** Items now drawing another buffer. */
   readonly rebound: readonly number[];
@@ -461,7 +469,8 @@ function propertyDirt(name: string): Dirty {
   const dirty = none();
   if (name === "xformOpOrder" || name.startsWith("xformOp:")) dirty.transform = true;
   else if (name === "visibility" || name === "purpose" || (name.endsWith("Visibility") && !name.startsWith("model:"))) dirty.visibility = true;
-  else if (name.startsWith("material:binding")) dirty.material = true;
+  // A renderer draws one side or both through the item's material.
+  else if (name.startsWith("material:binding") || name === "doubleSided") dirty.material = true;
   else if (GEOMETRY.has(name)) dirty.geometry = true;
   if (STANDIN_INPUTS.has(name)) dirty.standin = true;
   return dirty;
@@ -2603,6 +2612,12 @@ export class DrawList implements Disposable {
     return this.#stage.prim(path)?.boundMaterial({ purpose: "preview" })?.material ?? null;
   }
 
+  /** Whether the gprim at `path` authors `doubleSided` true: a uniform attribute, read at the default time. */
+  #doubleSided(path: string): boolean {
+    const value = this.#stage.attribute(`${path}.doubleSided`)?.get() ?? null;
+    return value?.kind === "scalar" && value.value === true;
+  }
+
   /** Which of `paths` are drawn: visible, of a drawn purpose. */
   #shown(paths: readonly string[]): boolean[] {
     if (paths.length === 0) return [];
@@ -2668,6 +2683,7 @@ export class DrawList implements Disposable {
       hidden: true,
       material: null,
       subsetMaterials: [],
+      doubleSided: false,
       linkPaths: [],
     };
     let depends = previous?.depends ?? [];
@@ -2804,10 +2820,11 @@ export class DrawList implements Disposable {
       // A stand-in draws its own material, whatever the model binds.
       const material = standin ? null : source.kind === "prototype" ? source.material : this.#material(item.prim);
       const subsets = (this.#buffers.get(item.buffer)?.buffers.subsets ?? []).map((subset) => this.#material(subset));
-      if (!isNew && (material !== item.material || subsets.join("\n") !== item.subsetMaterials.join("\n"))) {
+      const doubleSided = !standin && this.#doubleSided(item.prim);
+      if (!isNew && (material !== item.material || subsets.join("\n") !== item.subsetMaterials.join("\n") || doubleSided !== item.doubleSided)) {
         gather.materials.add(id);
       }
-      item = { ...item, material, subsetMaterials: subsets };
+      item = { ...item, material, subsetMaterials: subsets, doubleSided };
     }
     for (const subset of this.#buffers.get(item.buffer)?.buffers.subsets ?? []) {
       if (!depends.includes(subset)) depends = [...depends, subset];

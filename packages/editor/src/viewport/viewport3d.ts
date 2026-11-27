@@ -1781,7 +1781,10 @@ function materials(
   const colors = view.buffers.vertices.color;
   // One map for every range's material: a subset's reads its sets' channels.
   const channels = uvChannels(view.buffers.vertices);
-  const doubleSided = view.kind === "mesh" || view.kind === "Plane";
+  // Both sides of an authored `doubleSided` gprim, lit from each. Meshes
+  // and planes, often open and authored without it, keep both sides
+  // too, as usdview draws them unless asked to cull back faces.
+  const doubleSided = view.item.doubleSided || view.kind === "mesh" || view.kind === "Plane";
   const record = (path: string | null) => {
     const found = path === null ? undefined : records.get(path);
     return found?.surface == null ? null : found;

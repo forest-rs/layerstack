@@ -224,6 +224,14 @@ pub struct DrawItem {
     /// The material bound to each face subset, in the order of the
     /// buffer's [`DrawBuffers::subsets`].
     pub subset_materials: Vec<Option<PathId>>,
+    /// Whether both sides of its surfaces are meant to be drawn and lit:
+    /// [`Self::prim`]'s `doubleSided`, `false` when unauthored and for a
+    /// stand-in. A renderer may cull a one-sided surface's back faces.
+    ///
+    /// OpenUSD: `UsdGeomGprim::GetDoubleSidedAttr`. Storm culls a one-sided
+    /// gprim's back faces only when asked to
+    /// (`HdCullStyleBackUnlessDoubleSided`, usdview's "Cull Backfaces").
+    pub double_sided: bool,
     /// The paths light links are matched against ([`LinkTarget`]): the
     /// gprim; every instance proxy of a prototype's item, hidden ones
     /// included; the point instancer, for its items.
@@ -428,7 +436,8 @@ pub struct DrawDiff {
     /// arrays, masked (`invisibleIds`, `inactiveIds`) or hidden. Their
     /// items are in [`Self::matrices`] too.
     pub instances_removed: Vec<ItemInstance>,
-    /// Items whose bound materials changed.
+    /// Items whose bound materials, or whether they are drawn double-sided
+    /// ([`DrawItem::double_sided`]), changed.
     pub materials: Vec<ItemId>,
     /// Items now drawing another buffer: a shape resized to one another
     /// item already draws, or newly tessellated.
@@ -565,7 +574,8 @@ fn property_dirt(name: &str) -> Dirty {
         || (name.ends_with("Visibility") && !name.starts_with("model:"))
     {
         dirty.visibility = true;
-    } else if name.starts_with("material:binding") {
+    } else if name.starts_with("material:binding") || name == "doubleSided" {
+        // A renderer draws one side or both through the item's material.
         dirty.material = true;
     } else if GEOMETRY_INPUTS.contains(&name) || SUBSET_INPUTS.contains(&name) {
         dirty.geometry = true;
@@ -2431,6 +2441,7 @@ impl DrawList {
             ids: Vec::new(),
             material: None,
             subset_materials: Vec::new(),
+            double_sided: false,
             link_paths: Vec::new(),
         });
         let mut depends = self
@@ -2630,11 +2641,20 @@ impl DrawList {
                         .collect()
                 })
                 .unwrap_or_default();
-            if !new && (material != item.material || subsets != item.subset_materials) {
+            let double_sided = !matches!(source, ItemSource::DrawMode { .. })
+                && layerstack_schemas::usd_geom::Gprim::get(scene, item.prim)
+                    .and_then(|gprim| gprim.double_sided())
+                    == Some(true);
+            if !new
+                && (material != item.material
+                    || subsets != item.subset_materials
+                    || double_sided != item.double_sided)
+            {
                 gather.materials.insert(id);
             }
             item.material = material;
             item.subset_materials = subsets;
+            item.double_sided = double_sided;
         }
         if let Some(buffer) = self.buffers.get(&item.buffer) {
             for &subset in &buffer.subsets {
@@ -4422,6 +4442,28 @@ def PointInstancer "Hopping" {
         assert!(fixture.list.item(pebble).unwrap().hidden());
         assert_eq!(diff.work.triangulations + diff.work.tessellations, 0);
         assert_eq!(diff.work.items_untouched, 3);
+    }
+
+    #[test]
+    fn authoring_double_sided_reads_the_item_again_without_its_buffer() {
+        let (mut fixture, _) = Fixture::new();
+        let pebble = fixture.item("/World/Rocks/Pebble");
+        let path = fixture.path("/World/Rocks/Pebble");
+        assert!(
+            !fixture.list.item(pebble).unwrap().double_sided,
+            "unauthored: one-sided"
+        );
+        let diff = fixture.edit(|edit| {
+            PrimEdit::from_path_unchecked(path)
+                .write_value(edit, "doubleSided", Value::Bool(true))
+                .unwrap();
+        });
+        assert!(fixture.list.item(pebble).unwrap().double_sided);
+        // Reported as a change of how its material draws it; the
+        // tessellation stays.
+        assert_eq!(diff.materials, [pebble]);
+        assert!(diff.rebound.is_empty() && diff.buffers_added.is_empty());
+        assert_eq!(diff.work.triangulations + diff.work.tessellations, 0);
     }
 
     #[test]

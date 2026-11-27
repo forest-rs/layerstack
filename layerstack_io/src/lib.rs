@@ -3506,7 +3506,10 @@ fn package_member_path(identifier: &str) -> Option<String> {
     Some(PackagePath::join(first, rest))
 }
 
+// The document tests share storages across threads through `std`'s
+// `Mutex`; the format modules' own tests run without `std` too.
 #[cfg(test)]
+#[cfg(feature = "std")]
 mod tests;
 
 /// Whether `rules` exclude any payload, so that the layers read leave

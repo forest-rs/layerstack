@@ -65,9 +65,12 @@ use layerstack_schemas::shading::{
     MaterialNetwork, MaterialTerminal, ShadingDependency, ShadingIssue,
 };
 
-/// How deep a surface input's expression may nest: texture, transform,
-/// primvar reader and one spare.
-const MAX_DEPTH: usize = 6;
+/// How deep a surface input's expression may nest: a guard against a
+/// runaway network, not a limit on what is read: a texture, its primvar
+/// reader and a chain of `UsdTransform2d`s between them take a level each,
+/// and real networks chain a few. The TypeScript reader takes chains of
+/// any length, ending at a cycle.
+const MAX_DEPTH: usize = 32;
 
 /// Where a surface input's value comes from.
 #[derive(Clone, Debug, PartialEq)]
@@ -1356,6 +1359,110 @@ mod tests {
                 },
             ]
         );
+    }
+
+    /// Four transforms in a row, each reading the one before, reach the
+    /// record in the order they apply.
+    #[test]
+    fn a_chain_of_transforms_is_read_whole() {
+        use core::fmt::Write;
+
+        let mut shaders = String::new();
+        let mut from = "/Looks/Chain/Reader.outputs:result".to_string();
+        for index in 0..4 {
+            write!(
+                shaders,
+                "        def Shader \"T{index}\"\n        {{\n            \
+                 uniform token info:id = \"UsdTransform2d\"\n            \
+                 float2 inputs:in.connect = <{from}>\n            \
+                 float inputs:rotation = {index}\n            \
+                 float2 outputs:result\n        }}\n"
+            )
+            .unwrap();
+            from = alloc::format!("/Looks/Chain/T{index}.outputs:result");
+        }
+        let text = alloc::format!(
+            r#"#usda 1.0
+def Cube "Box" (
+    prepend apiSchemas = ["MaterialBindingAPI"]
+)
+{{
+    rel material:binding = </Looks/Chain>
+}}
+
+def Scope "Looks"
+{{
+    def Material "Chain"
+    {{
+        token outputs:surface.connect = </Looks/Chain/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {{
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor.connect = </Looks/Chain/Albedo.outputs:rgb>
+            token outputs:surface
+        }}
+
+        def Shader "Reader"
+        {{
+            uniform token info:id = "UsdPrimvarReader_float2"
+            string inputs:varname = "st"
+            float2 outputs:result
+        }}
+
+{shaders}
+        def Shader "Albedo"
+        {{
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @./grid.png@
+            float2 inputs:st.connect = <{from}>
+            float3 outputs:rgb
+        }}
+    }}
+}}
+"#
+        );
+        let mut store = InMemoryStore::default();
+        let read = layerstack_io::usda::read_usda(
+            &text,
+            LayerId(1),
+            store.tokens(),
+            store.paths(),
+            &mut NoAssets,
+        );
+        assert!(!read.has_errors(), "the scene reads");
+        store.insert_layer(read.emitted.layer);
+        store.set_layer_identifier(LayerId(1), "chain.usda");
+        let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
+        let live = LiveStage::compose(
+            &mut store,
+            LayerId(1),
+            StageOptions {
+                schemas: Some(schemas),
+                ..StageOptions::default()
+            },
+        );
+        let scene = Scene::new(live.stage(), &store);
+        let mut list = DrawList::new(DrawOptions::default());
+        list.refresh(&scene);
+        let item = list
+            .material(
+                store.paths().intern(
+                    layerstack::Path::parse_absolute("/Looks/Chain", store.tokens()).unwrap(),
+                ),
+            )
+            .unwrap();
+        assert!(item.notes.is_empty(), "{:?}", item.notes);
+        let transforms = &item.textures[0].coordinates.transforms;
+        assert_eq!(
+            transforms
+                .iter()
+                .map(|transform| transform.rotation)
+                .collect::<Vec<_>>(),
+            [0.0, 1.0, 2.0, 3.0],
+            "the one reading st first"
+        );
+        assert_eq!(item.textures[0].coordinates.primvar.as_deref(), Some("st"));
     }
 
     #[test]

@@ -723,8 +723,8 @@ The package and the `layerstack_wasm` crate are released together, at the
 same version. They meet at an ABI number, the layout of the records the
 module exchanges with this package: `layerstack.version` is `{ package,
 crate, revision, abi }`, and loading a module of another ABI fails with
-`module.abi`. This package speaks ABI 8; changing an export's arguments or
-record layout brings a new ABI.
+`module.abi`. The package exports the ABI it speaks as `ABI`; changing an
+export's arguments or record layout brings a new ABI.
 
 ## Building and testing
 

@@ -50,4 +50,5 @@ cp "$workspace/LICENSE-APACHE" "$workspace/LICENSE-MIT" \
   "$workspace/packages/layerstack/scripts/licenses/LICENSE-compiler-builtins" \
   "$workspace/packages/layerstack/scripts/licenses/LICENSE-libm" \
   "$workspace/packages/layerstack/scripts/licenses/LICENSE-ZLIB" \
+  "$workspace/packages/layerstack/scripts/licenses/LICENSE-UNICODE" \
   "$package/scripts/licenses/THIRD-PARTY-NOTICES" "$licenses/"

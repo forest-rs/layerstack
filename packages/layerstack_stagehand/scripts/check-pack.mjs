@@ -15,6 +15,7 @@ const groups = [
       ...[
         "LICENSE-APACHE",
         "LICENSE-MIT",
+        "LICENSE-UNICODE",
         "LICENSE-ZLIB",
         "LICENSE-compiler-builtins",
         "LICENSE-libm",

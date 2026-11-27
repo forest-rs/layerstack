@@ -41,6 +41,7 @@ pub const BUILTIN_COLOR_SPACES: &[&str] = &[
 ];
 /// Where an effective color-space name originated.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ColorSpaceSource {
     /// Authored `colorSpace` metadata on this attribute, even when empty/unknown.
     Attribute(PropertyPath),

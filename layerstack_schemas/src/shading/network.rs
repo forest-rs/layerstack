@@ -57,6 +57,7 @@ impl MaterialValue {
 }
 /// Why a constant was selected. USD fallbacks and shader defaults are distinct.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum MaterialValueOrigin {
     /// Authored value selected through the provider trace, including own input.
     Authored,

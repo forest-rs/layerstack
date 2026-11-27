@@ -129,6 +129,7 @@ pub enum CommonComponent {
 
 /// Where a [`CommonTransformReading`] came from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum CommonTransformSource {
     /// The prim's ops are a common stack; each value is its op's (identity
     /// for an absent op or one with no value of the op's common type).

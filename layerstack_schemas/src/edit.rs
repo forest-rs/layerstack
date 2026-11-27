@@ -46,6 +46,7 @@ mod tests;
 /// itself. Through another target, such as a reference's node, the edit is
 /// the caller's choice and is allowed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum CannotEdit {
     /// A segment of the prim path is not a USD identifier (AOUSD Core §7.3.3).
     InvalidPrimName(TokenId),

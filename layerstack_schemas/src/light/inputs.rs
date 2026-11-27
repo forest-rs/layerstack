@@ -75,6 +75,7 @@ impl LightKind {
 }
 /// Whether a captured parameter can be consumed as a constant.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum LightInputStatus {
     /// One readable constant, or an unconnected schema fallback.
     Constant,

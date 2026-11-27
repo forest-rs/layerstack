@@ -168,9 +168,20 @@ impl Error {
 
 impl From<IoError> for Error {
     fn from(error: IoError) -> Self {
+        // The error as `IoError` prints it, which adds why a rejected
+        // source was rejected (its first diagnostic), less the identifier
+        // it starts with: `identifier` carries that.
+        let printed = error.to_string();
+        let message = match &error.identifier {
+            Some(identifier) => printed
+                .strip_prefix(identifier.as_str())
+                .and_then(|rest| rest.strip_prefix(": "))
+                .map_or_else(|| printed.clone(), String::from),
+            None => printed,
+        };
         Self {
             code: error.code(),
-            message: error.message,
+            message,
             identifier: error.identifier,
             path: None,
             edit: None,

@@ -151,6 +151,13 @@ test("a MaterialX shader's unauthored inputs show their node definition's defaul
       assert.equal(value?.type, port.usdTypeName, `${node.id}.${port.name} = ${port.default.value}`);
     }
   }
+  // Text that is not one of the type's values reads as nothing.
+  assert.equal(materialXLiteral("1.5", "int"), null, "not an integer");
+  assert.equal(materialXLiteral("2147483648", "int"), null, "past a 32-bit int");
+  assert.equal(materialXLiteral("1,,3", "float3"), null, "an empty component");
+  assert.equal(materialXLiteral("", "float"), null);
+  assert.equal(materialXLiteral("0.5, 0.5", "float3"), null, "too few components");
+  assert.deepEqual(materialXLiteral("-1e-3", "float"), { kind: "scalar", type: "float", value: -0.001 });
   const definition = shaderDefinition("ND_open_pbr_surface_surfaceshader");
   assert.ok(definition !== null);
   // The Stone's surface authors two inputs; base_weight is the definition's.

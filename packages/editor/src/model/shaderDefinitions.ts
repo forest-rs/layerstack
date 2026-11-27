@@ -182,6 +182,9 @@ function materialXDefinition(node: MaterialXNode): ShaderDefinition {
   };
 }
 
+/** A decimal number, as MaterialX writes one: an optional sign, digits with an optional point, an optional exponent. */
+const NUMBER = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+
 /** The number of components of each tuple type a MaterialX port is authored as. */
 const COMPONENTS = new Map([
   ["float2", 2], ["float3", 3], ["float4", 4],
@@ -195,9 +198,17 @@ const COMPONENTS = new Map([
  * matrix) or text that is not one of its values.
  */
 export function materialXLiteral(text: string, typeName: string): DefinedValue | null {
-  const numbers = text.split(",").map((part) => Number(part.trim()));
-  const finite = text.trim() !== "" && numbers.every(Number.isFinite);
-  if (typeName === "float" || typeName === "double" || typeName === "half" || typeName === "int") {
+  // Each component a decimal number: no empty one (`"1,,3"`), which `Number` would read as 0.
+  const parts = text.split(",").map((part) => part.trim());
+  const finite = parts.every((part) => NUMBER.test(part));
+  const numbers = parts.map(Number);
+  if (typeName === "int") {
+    const value = numbers[0]!;
+    return finite && numbers.length === 1 && Number.isInteger(value) && value >= -(2 ** 31) && value < 2 ** 31
+      ? { kind: "scalar", type: typeName, value }
+      : null;
+  }
+  if (typeName === "float" || typeName === "double" || typeName === "half") {
     return finite && numbers.length === 1 ? { kind: "scalar", type: typeName, value: numbers[0]! } : null;
   }
   if (typeName === "bool") return text === "true" || text === "false" ? { kind: "scalar", type: typeName, value: text === "true" } : null;

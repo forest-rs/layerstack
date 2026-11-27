@@ -44,20 +44,29 @@ export interface Transform2d {
 
 /**
  * The matrix taking a lookup's `st` to the coordinates it samples its
- * image at, as `(u, v, 1)`: `transform` (scale, then rotate
- * counter-clockwise, then translate, as the header says; identity for
- * none), then, for a UDIM set drawn as an atlas of `columns` × `rows`
+ * image at, as `(u, v, 1)`: each of `transforms` in turn (scale, then
+ * rotate counter-clockwise, then translate, as the header says; identity
+ * for none), then, for a UDIM set drawn as an atlas of `columns` × `rows`
  * tiles, the tile grid scaled into [0, 1] (tile 1001 + u + 10 v covers
  * [u, u + 1] × [v, v + 1]). three.js's own offset, repeat and rotation
  * rotate before scaling, and clockwise, so they are not used.
  */
-export function coordinateMatrix(transform: Transform2d | null, columns = 1, rows = 1): Mat3 {
-  const rotation = ((transform?.rotation ?? 0) * Math.PI) / 180;
-  const [sx, sy] = transform?.scale ?? [1, 1];
-  const [tx, ty] = transform?.translation ?? [0, 0];
-  const [c, s] = [Math.cos(rotation), Math.sin(rotation)];
-  const [ax, ay] = [1 / columns, 1 / rows];
-  return [ax * c * sx, -ax * s * sy, ax * tx, ay * s * sx, ay * c * sy, ay * ty, 0, 0, 1];
+export function coordinateMatrix(transforms: readonly Transform2d[], columns = 1, rows = 1): Mat3 {
+  let matrix: Mat3 = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+  for (const transform of transforms) {
+    const rotation = (transform.rotation * Math.PI) / 180;
+    const [sx, sy] = transform.scale;
+    const [tx, ty] = transform.translation;
+    const [c, s] = [Math.cos(rotation), Math.sin(rotation)];
+    matrix = multiply([c * sx, -s * sy, tx, s * sx, c * sy, ty, 0, 0, 1], matrix);
+  }
+  return multiply([1 / columns, 0, 0, 0, 1 / rows, 0, 0, 0, 1], matrix);
+}
+
+/** `a` times `b`: `b` applied first. */
+function multiply(a: Mat3, b: Mat3): Mat3 {
+  const at = (row: number, column: number) => a[row * 3]! * b[column]! + a[row * 3 + 1]! * b[3 + column]! + a[row * 3 + 2]! * b[6 + column]!;
+  return [at(0, 0), at(0, 1), at(0, 2), at(1, 0), at(1, 1), at(1, 2), at(2, 0), at(2, 1), at(2, 2)];
 }
 
 /** Four channels, `r`, `g`, `b`, `a`. */

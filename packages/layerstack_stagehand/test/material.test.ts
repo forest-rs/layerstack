@@ -109,7 +109,7 @@ describe("materials", () => {
       const { stage, list } = open(contexts, time);
       try {
         const rows = oracle.materials.filter((row: Json) => row.contexts.length === contexts.length);
-        assert.equal(rows.length, 10);
+        assert.equal(rows.length, 11);
         for (const row of rows) {
           const at = `${row.path} ${JSON.stringify(contexts)} ${key}`;
           const item = list.material(row.path);
@@ -152,8 +152,8 @@ describe("materials", () => {
             assert.equal(texture.colorSpace, tex("sourceColorSpace"), where);
             for (const name of ["fallback", "scale", "bias"] as const) assert.deepEqual(texture[name].map(f32), floats(tex(name)), where);
             let st: Json[] = node.inputs.st ?? [];
-            const transform = texture.coordinates.transform;
-            if (transform !== null) {
+            // Outermost first, as `st` leads to them.
+            for (const transform of [...texture.coordinates.transforms].reverse()) {
               const place = st[0].attribute.split(".")[0];
               assert.equal(transform.shader, place, where);
               const t = (name: string) => floats(valueOf(row.nodes[place], "UsdTransform2d", name, key));
@@ -240,8 +240,8 @@ describe("materials", () => {
   it("are read again only when what they read changes", () => {
     const { stage, list, first, edit } = open();
     try {
-      assert.equal(first.materialsAdded.length, 10);
-      assert.equal(first.work.materialsRead, 10);
+      assert.equal(first.materialsAdded.length, 11);
+      assert.equal(first.work.materialsRead, 11);
       // A surface input: that material alone, no item.
       let diff = edit([{ type: "setValue", path: "/Looks/Plain/Surface.inputs:roughness", value: { type: "float", value: 0.9 } }]);
       assert.deepEqual(diff.materialsChanged, ["/Looks/Plain"]);

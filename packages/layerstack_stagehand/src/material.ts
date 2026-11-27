@@ -62,8 +62,13 @@ export interface TextureCoordinates {
   readonly primvar: string | null;
   /** The constant `st`, or the reader's fallback where the prim has no such primvar. */
   readonly fallback: readonly [number, number];
-  /** The transform applied to them, if any. */
-  readonly transform: TextureTransform | null;
+  /**
+   * The transforms applied to them, in the order they apply: the one
+   * reading the coordinates first, the one the texture reads last. Empty
+   * when `st` is read untransformed. A `UsdTransform2d`'s `in` is an
+   * ordinary connectable `float2`, so transforms chain.
+   */
+  readonly transforms: readonly TextureTransform[];
 }
 
 /** A texture's file: the asset path as composed and its identifier, anchored to the layer that authors it. */
@@ -461,34 +466,43 @@ class Reader {
 
   coordinates(shader: string, input: string): TextureCoordinates | null {
     let at = this.resolve(shader, "st");
-    let transform: TextureTransform | null = null;
-    if (at.kind === "output" && at.id === "UsdTransform2d" && at.output === "result") {
+    // From the texture's `st` towards the coordinates: the outermost
+    // transform first, so reversed below into the order they apply.
+    const found: TextureTransform[] = [];
+    while (at.kind === "output" && at.id === "UsdTransform2d" && at.output === "result") {
       const place = at.shader;
+      if (found.some((transform) => transform.shader === place)) {
+        this.note("cycle", place, input);
+        return null;
+      }
       const vec2 = (name: string, fallback: [number, number]) => this.constant<[number, number]>(place, name, "float2", fallback, input);
-      transform = Object.freeze({
-        shader: place,
-        rotation: this.constant<number>(place, "rotation", "float", 0, input),
-        scale: vec2("scale", [1, 1]),
-        translation: vec2("translation", [0, 0]),
-      });
+      found.push(
+        Object.freeze({
+          shader: place,
+          rotation: this.constant<number>(place, "rotation", "float", 0, input),
+          scale: vec2("scale", [1, 1]),
+          translation: vec2("translation", [0, 0]),
+        }),
+      );
       at = this.resolve(place, "in");
     }
+    const transforms = Object.freeze(found.reverse());
     switch (at.kind) {
       case "value": {
         const value = convert(at.value, "float2") as [number, number] | undefined;
         const fallback: [number, number] = value ?? [0, 0];
-        return Object.freeze({ primvar: null, fallback, transform });
+        return Object.freeze({ primvar: null, fallback, transforms });
       }
       case "none": {
         const fallback: [number, number] = [0, 0];
-        return Object.freeze({ primvar: null, fallback, transform });
+        return Object.freeze({ primvar: null, fallback, transforms });
       }
       case "output":
         if (at.id === "UsdPrimvarReader_float2" && at.output === "result") {
           const primvar = this.constant<string>(at.shader, "varname", "text", "", input);
           if (primvar !== "") this.primvars.add(primvar);
           const fallback = this.constant<[number, number]>(at.shader, "fallback", "float2", [0, 0], input);
-          return Object.freeze({ primvar: primvar === "" ? null : primvar, fallback, transform });
+          return Object.freeze({ primvar: primvar === "" ? null : primvar, fallback, transforms });
         }
         this.note("unsupported", at.shader, input);
         return null;

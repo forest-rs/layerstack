@@ -414,7 +414,7 @@ export function sampling(store: TextureStore, channels: UvChannels, texture: Mat
   return {
     texture: use(store, channels, texture, color),
     set: channelOf(texture, channels),
-    matrix: coordinateMatrix(texture.coordinates.transform, image?.columns, image?.rows),
+    matrix: coordinateMatrix(texture.coordinates.transforms, image?.columns, image?.rows),
   };
 }
 
@@ -436,7 +436,7 @@ export function use(store: TextureStore, channels: UvChannels, texture: Material
   const channel = channelOf(texture, channels);
   const srgb = texture.colorSpace === "sRGB" || (texture.colorSpace === "auto" && (image.auto === null ? color : image.auto === "sRGB"));
   // `UsdTransform2d`, then a UDIM atlas's grid, for the maps three.js samples itself.
-  const matrix = coordinateMatrix(texture.coordinates.transform, image.columns, image.rows);
+  const matrix = coordinateMatrix(texture.coordinates.transforms, image.columns, image.rows);
   const key = [channel, srgb, texture.wrapS, texture.wrapT, ...matrix].join(" ");
   let uses = USES.get(image.texture);
   if (uses === undefined) {

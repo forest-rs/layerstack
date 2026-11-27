@@ -18,7 +18,7 @@ const constant = <T>(value: T): MaterialValue<T> => ({ kind: "constant", value }
 const RAMP = {
   shader: "/Looks/M/Texture",
   file: { identifier: null, layer: null, udim: false },
-  coordinates: { primvar: "st", transform: null },
+  coordinates: { primvar: "st", transforms: [] },
   wrapS: "repeat",
   wrapT: "repeat",
   fallback: [0.5, 0.5, 0.5, 1],

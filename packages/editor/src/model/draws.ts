@@ -808,7 +808,9 @@ export function materialLine(material: MaterialItem): string {
   );
   const textures = material.textures.map((texture, index) => {
     const coordinates = texture.coordinates;
-    const transform = coordinates.transform === null ? "" : ` rotated ${round(coordinates.transform.rotation)} scaled (${coordinates.transform.scale.map(round).join(", ")})`;
+    const transform = coordinates.transforms
+      .map((transform) => ` rotated ${round(transform.rotation)} scaled (${transform.scale.map(round).join(", ")})`)
+      .join(", then");
     return (
       `texture ${index} ${texture.file.identifier ?? texture.file.assetPath}${texture.file.udim ? " (udim)" : ""} ` +
       `${texture.colorSpace} ${texture.wrapS}/${texture.wrapT} scale (${texture.scale.map(round).join(", ")}) ` +

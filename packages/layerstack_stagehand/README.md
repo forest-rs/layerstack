@@ -257,7 +257,8 @@ through `renderContexts`, then the universal context; each input a
 `textures` with their `file` anchored to the layer authoring it (`udim`
 sets list their tiles with `udimTiles(file, exists)`), `wrapS`/`wrapT`,
 `fallback`, `scale`, `bias`, `colorSpace` and `coordinates` (the
-`UsdPrimvarReader_float2` primvar and a `UsdTransform2d`); the `alpha` mode
+`UsdPrimvarReader_float2` primvar and the `UsdTransform2d`s chained between
+it and the texture, in the order they apply); the `alpha` mode
 the opacity inputs come to, and `notes` for what could not be
 represented). A diff lists `materialsAdded`, `materialsRemoved` and
 `materialsChanged`, and `work.materialsRead`: a material is read again

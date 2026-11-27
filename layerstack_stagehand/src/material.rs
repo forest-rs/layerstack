@@ -36,8 +36,8 @@
 //!   texture's scale and bias as authored.
 //! - **Coordinates.** `st` is read by a `UsdPrimvarReader_float2` (its
 //!   `varname`, possibly from a material interface input) and optionally
-//!   moved by a `UsdTransform2d`: `st * scale`, rotated by `rotation`
-//!   degrees counter-clockwise, plus `translation`.
+//!   moved by `UsdTransform2d`s, each reading the one before: `st * scale`,
+//!   rotated by `rotation` degrees counter-clockwise, plus `translation`.
 //!
 //! The record is built from the material's captured network
 //! (`layerstack_schemas::shading::MaterialNetwork`), which follows the
@@ -150,8 +150,13 @@ pub struct TextureCoordinates {
     /// The constant `st`, or the reader's fallback where the prim has no
     /// such primvar.
     pub fallback: [f32; 2],
-    /// The transform applied to them, if any.
-    pub transform: Option<TextureTransform>,
+    /// The transforms applied to them, in the order they apply: the one
+    /// reading the coordinates first, the one the texture reads last.
+    /// Empty when `st` is read untransformed.
+    ///
+    /// A `UsdTransform2d`'s `in` is an ordinary connectable `float2`, so
+    /// transforms chain: each moves the result of the one it reads.
+    pub transforms: Vec<TextureTransform>,
 }
 
 /// A texture's file: the asset path as composed and its identifier, the
@@ -269,8 +274,8 @@ pub enum MaterialNoteKind {
     /// that read either; the fallback is used.
     ChannelMismatch(String),
     /// The input's expression is not representable here (a constant-only
-    /// input connected to a shader, nested transforms); the fallback is
-    /// used.
+    /// input connected to a shader, a texture read as coordinates); the
+    /// fallback is used.
     Unsupported,
 }
 
@@ -717,24 +722,27 @@ impl Builder<'_, '_> {
         input: &str,
         expression: &PreviewExpression,
     ) -> Option<TextureCoordinates> {
-        let (inner, transform) = match expression {
-            PreviewExpression::Transform2d {
-                node,
-                input: inner,
-                rotation,
-                scale,
-                translation,
-            } => (
-                &**inner,
-                Some(TextureTransform {
-                    shader: *node,
-                    rotation: *rotation,
-                    scale: *scale,
-                    translation: *translation,
-                }),
-            ),
-            other => (other, None),
-        };
+        // From the texture's `st` towards the coordinates: the outermost
+        // transform first, so reversed below into the order they apply.
+        let mut inner = expression;
+        let mut transforms = Vec::new();
+        while let PreviewExpression::Transform2d {
+            node,
+            input: read,
+            rotation,
+            scale,
+            translation,
+        } = inner
+        {
+            transforms.push(TextureTransform {
+                shader: *node,
+                rotation: *rotation,
+                scale: *scale,
+                translation: *translation,
+            });
+            inner = read;
+        }
+        transforms.reverse();
         let float2 = |constant: &PreviewConstant| match constant.value {
             PreviewConstantValue::Float2(v) => v,
             _ => [0.0; 2],
@@ -745,6 +753,8 @@ impl Builder<'_, '_> {
                 self.primvars.push(name.clone());
                 (Some(name.clone()), float2(fallback))
             }
+            // A texture read as coordinates; the loop above took every
+            // transform.
             PreviewExpression::Texture(PreviewTexture { node, .. })
             | PreviewExpression::Transform2d { node, .. } => {
                 self.note(MaterialNoteKind::Unsupported, Some(*node), Some(input));
@@ -754,7 +764,7 @@ impl Builder<'_, '_> {
         Some(TextureCoordinates {
             primvar,
             fallback,
-            transform,
+            transforms,
         })
     }
 }
@@ -1053,7 +1063,7 @@ mod tests {
         let (store, live) = open();
         let scene = Scene::new(live.stage(), &store);
         let rows = oracle["materials"].as_array().unwrap();
-        assert_eq!(rows.len(), 20);
+        assert_eq!(rows.len(), 22);
         for (contexts, key, time) in [
             (&[][..], "value", Time::Default),
             (&["mtlx"][..], "value", Time::Default),
@@ -1211,7 +1221,8 @@ mod tests {
                     assert_eq!(texture.bias.to_vec(), floats(tex("bias")), "{at}");
                     // Coordinates: a transform's values, and the reader's.
                     let mut st = node["inputs"]["st"].as_array().cloned().unwrap_or_default();
-                    if let Some(transform) = &texture.coordinates.transform {
+                    // Outermost first, as `st` leads to them.
+                    for transform in texture.coordinates.transforms.iter().rev() {
                         let place = st[0]["attribute"]
                             .as_str()
                             .unwrap()
@@ -1399,8 +1410,8 @@ mod tests {
         let (mut store, mut live) = open();
         let mut list = DrawList::new(DrawOptions::default());
         let diff = list.refresh(&Scene::new(live.stage(), &store));
-        assert_eq!(diff.materials_added.len(), 10);
-        assert_eq!(diff.work.materials_read, 10);
+        assert_eq!(diff.materials_added.len(), 11);
+        assert_eq!(diff.work.materials_read, 11);
         let edit = |store: &mut InMemoryStore,
                     live: &mut LiveStage,
                     list: &mut DrawList,

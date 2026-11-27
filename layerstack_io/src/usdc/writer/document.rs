@@ -2086,7 +2086,7 @@ def Xform "A" (
         assert_eq!(
             save_usdc(&layer, &tokens, &paths),
             Err(UsdcWriteError::Save(
-                crate::usda::save::SaveError::Document(WriteError::UnknownType {
+                crate::usda::save::LayerSaveError::Document(WriteError::UnknownType {
                     path: "/A.a".into(),
                     type_name: "vec3f".into(),
                 })

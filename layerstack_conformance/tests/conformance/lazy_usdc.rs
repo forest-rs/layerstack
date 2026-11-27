@@ -309,7 +309,7 @@ fn failures_never_select_weaker_defaults_or_hold_a_good_endpoint() {
     assert!(
         matches!(
             error,
-            layerstack_io::usda::save::SaveError::ArrayRead { .. }
+            layerstack_io::usda::save::LayerSaveError::ArrayRead { .. }
         ),
         "{error:?}"
     );

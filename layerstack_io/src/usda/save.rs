@@ -68,18 +68,18 @@
 //! [`usdc_document`] checks the whole layer before a writer runs and
 //! returns the first problem it finds, naming its source path:
 //!
-//! - [`SaveError::Unsupported`]: untyped sparse array edits outside attributes;
+//! - [`LayerSaveError::Unsupported`]: untyped sparse array edits outside attributes;
 //!   list ops mixing an explicit list with
 //!   edits; `varying` relationships; path list-op metadata; and values the
 //!   writers have no representation for (`opaque`, and
 //!   arrays whose element type is not recorded, such as an empty array in
 //!   a dictionary);
-//! - [`SaveError::Invalid`]: a layer the file formats cannot hold as it
+//! - [`LayerSaveError::Invalid`]: a layer the file formats cannot hold as it
 //!   stands, such as a prim spec that no parent or variant lists among its
 //!   children, an attribute without a type, a relationship with time
 //!   samples, or a sublayer or arc into another layer built from a layer id
 //!   alone, with no authored asset path to write;
-//! - [`SaveError::Document`]: what the writers' shared validation rejects
+//! - [`LayerSaveError::Document`]: what the writers' shared validation rejects
 //!   (invalid identifiers, a `defaultPrim` that names no prim of the layer, keys
 //!   whose USDA syntax the writer does not produce, sample times that are not
 //!   finite and increasing, asset paths the formats cannot quote, arc
@@ -129,13 +129,13 @@ use crate::usda::writer::{
 ///
 /// # Errors
 ///
-/// A [`SaveError`] naming the source path of the first unsupported or
+/// A [`LayerSaveError`] naming the source path of the first unsupported or
 /// invalid spec, field or value.
 pub fn usdc_document(
     layer: &Layer,
     tokens: &TokenInterner,
     paths: &PathInterner,
-) -> Result<Document, SaveError> {
+) -> Result<Document, LayerSaveError> {
     lower(layer, tokens, paths, false)
 }
 
@@ -158,7 +158,7 @@ pub(crate) fn prepare_comparison(
     mut layer: Layer,
     tokens: &TokenInterner,
     paths: &PathInterner,
-) -> Result<ComparisonParts, SaveError> {
+) -> Result<ComparisonParts, LayerSaveError> {
     use crate::usda::writer::borrowed::{CheckedNames, Order};
 
     let root = paths.lookup(&Path::root());
@@ -219,7 +219,7 @@ pub(crate) fn canonical_property(
     prim: &str,
     tokens: &TokenInterner,
     paths: &PathInterner,
-) -> Result<Property, SaveError> {
+) -> Result<Property, LayerSaveError> {
     Lowering {
         tokens,
         paths,
@@ -236,7 +236,7 @@ fn lower(
     tokens: &TokenInterner,
     paths: &PathInterner,
     skip_empty_entries: bool,
-) -> Result<Document, SaveError> {
+) -> Result<Document, LayerSaveError> {
     let mut builder = namespace::DocumentBuilder::default();
     Lowering {
         tokens,
@@ -245,7 +245,7 @@ fn lower(
     }
     .layer(layer, &mut builder)?;
     let doc = builder.document;
-    doc.validate().map_err(SaveError::Document)?;
+    doc.validate().map_err(LayerSaveError::Document)?;
     Ok(doc)
 }
 
@@ -265,7 +265,7 @@ pub fn save_usda(
     layer: &Layer,
     tokens: &TokenInterner,
     paths: &PathInterner,
-) -> Result<String, SaveError> {
+) -> Result<String, LayerSaveError> {
     lower_text::<crate::usda::writer::TextString<'_>>(layer, tokens, paths)
 }
 
@@ -274,21 +274,21 @@ pub fn save_usda(
 /// ([`Document::write_usda_to`]).
 ///
 /// The layer is lowered and checked before anything reaches `sink`, so a
-/// [`SaveError`] other than [`SaveError::Sink`] leaves `sink` untouched.
+/// [`LayerSaveError`] other than [`LayerSaveError::Sink`] leaves `sink` untouched.
 ///
 /// # Errors
 ///
-/// See [`save_usda`]; [`SaveError::Sink`] when `sink` refuses text, after
+/// See [`save_usda`]; [`LayerSaveError::Sink`] when `sink` refuses text, after
 /// which it holds an incomplete prefix.
 pub fn save_usda_to<W: fmt::Write + ?Sized>(
     layer: &Layer,
     tokens: &TokenInterner,
     paths: &PathInterner,
     sink: &mut W,
-) -> Result<(), SaveError> {
+) -> Result<(), LayerSaveError> {
     prepare_usda(layer, tokens, paths)?
         .write_to(sink)
-        .map_err(SaveError::from_usda)
+        .map_err(LayerSaveError::from_usda)
 }
 
 /// The document [`save_usda`] writes for `layer`, checked as text
@@ -306,9 +306,10 @@ pub fn usda_document(
     layer: &Layer,
     tokens: &TokenInterner,
     paths: &PathInterner,
-) -> Result<Document, SaveError> {
+) -> Result<Document, LayerSaveError> {
     let doc = lower(layer, tokens, paths, true)?;
-    doc.validate_text_specs().map_err(SaveError::Document)?;
+    doc.validate_text_specs()
+        .map_err(LayerSaveError::Document)?;
     Ok(doc)
 }
 
@@ -325,7 +326,7 @@ pub fn prepare_usda<'a>(
     layer: &'a Layer,
     tokens: &'a TokenInterner,
     paths: &'a PathInterner,
-) -> Result<PreparedUsda<'a>, SaveError> {
+) -> Result<PreparedUsda<'a>, LayerSaveError> {
     lower_text::<PreparedUsda<'_>>(layer, tokens, paths)
 }
 
@@ -333,7 +334,7 @@ fn lower_text<'a, O: crate::usda::writer::TextOutput<'a>>(
     layer: &'a Layer,
     tokens: &'a TokenInterner,
     paths: &'a PathInterner,
-) -> Result<O::Finished, SaveError> {
+) -> Result<O::Finished, LayerSaveError> {
     let mut sink = namespace::TextBuilder::<O>::new();
     Lowering {
         tokens,
@@ -344,10 +345,15 @@ fn lower_text<'a, O: crate::usda::writer::TextOutput<'a>>(
     sink.finish()
 }
 
-/// Why an authored layer could not be saved.
+/// Why one authored layer could not be written, in any format: USDA,
+/// USDC and USDZ saves lower the layer the same way first.
+///
+/// A document save reports it per layer, as the [`IoCause`](crate::IoCause)
+/// of each [`LayerFailure`](crate::LayerFailure) its
+/// [`SaveError`](crate::SaveError) lists.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum SaveError {
+pub enum LayerSaveError {
     /// The layer authors something this save does not write yet.
     Unsupported {
         /// Source path: `/` for the layer, a prim or property path, with a
@@ -378,7 +384,7 @@ pub enum SaveError {
     Sink,
 }
 
-impl SaveError {
+impl LayerSaveError {
     /// A writer error as a save error: [`WriteError::Sink`] as
     /// [`Self::Sink`], the others as [`Self::Document`].
     fn from_usda(error: WriteError) -> Self {
@@ -389,7 +395,7 @@ impl SaveError {
     }
 }
 
-impl fmt::Display for SaveError {
+impl fmt::Display for LayerSaveError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Unsupported { path, feature } => {
@@ -403,7 +409,7 @@ impl fmt::Display for SaveError {
     }
 }
 
-impl core::error::Error for SaveError {
+impl core::error::Error for LayerSaveError {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
             Self::Document(e) => Some(e),
@@ -480,15 +486,15 @@ struct Lowering<'a> {
     skip_empty_entries: bool,
 }
 
-fn unsupported<T>(path: impl Into<String>, feature: Unsupported) -> Result<T, SaveError> {
-    Err(SaveError::Unsupported {
+fn unsupported<T>(path: impl Into<String>, feature: Unsupported) -> Result<T, LayerSaveError> {
+    Err(LayerSaveError::Unsupported {
         path: path.into(),
         feature,
     })
 }
 
-fn invalid<T>(path: impl Into<String>, problem: Invalid) -> Result<T, SaveError> {
-    Err(SaveError::Invalid {
+fn invalid<T>(path: impl Into<String>, problem: Invalid) -> Result<T, LayerSaveError> {
+    Err(LayerSaveError::Invalid {
         path: path.into(),
         problem,
     })
@@ -524,7 +530,7 @@ impl<'l> Lowering<'l> {
         &self,
         layer: &'l Layer,
         sink: &mut impl namespace::Sink<'l>,
-    ) -> Result<(), SaveError> {
+    ) -> Result<(), LayerSaveError> {
         let mut doc = Document::new();
         doc.default_prim = layer.default_prim().map(|t| self.name(t));
         doc.relocates = layer.has_relocates().then(|| {
@@ -656,7 +662,7 @@ impl<'l> Lowering<'l> {
         roots: &[TokenId],
         visited: &mut Visited,
         sink: &mut impl namespace::Sink<'l>,
-    ) -> Result<(), SaveError> {
+    ) -> Result<(), LayerSaveError> {
         let mut stack: Vec<Task<'l>> = Vec::new();
         for &name in roots {
             let parent = Parent {
@@ -754,7 +760,7 @@ impl<'l> Lowering<'l> {
         name: TokenId,
         visited: &mut Visited,
         sink: &mut impl namespace::Sink<'l>,
-    ) -> Result<SpecTask<'l>, SaveError> {
+    ) -> Result<SpecTask<'l>, LayerSaveError> {
         let shown = || {
             let name = self.tokens.resolve(name);
             match parent.shown {
@@ -861,7 +867,7 @@ impl<'l> Lowering<'l> {
         prim: &mut Prim,
         shown: &str,
         names: &LayerListOp<TokenId>,
-    ) -> Result<(), SaveError> {
+    ) -> Result<(), LayerSaveError> {
         if is_authored(names) {
             let path = format!("{shown}#variantSetNames");
             prim.variant_set_names = Some(self.list_op(names, &path, |set| Ok(self.name(*set)))?);
@@ -879,7 +885,7 @@ impl<'l> Lowering<'l> {
         arcs: Arcs<'_>,
         prim: &mut Prim,
         shown: &str,
-    ) -> Result<(), SaveError> {
+    ) -> Result<(), LayerSaveError> {
         // An arc list an edit emptied in place stays authored, and is
         // written with no statements (`def "A" (` `)`), as OpenUSD writes
         // the arc list op field a namespace edit emptied
@@ -940,7 +946,7 @@ impl<'l> Lowering<'l> {
         name: TokenId,
         variant: &'l VariantSpec,
         sink: &mut impl namespace::Sink<'l>,
-    ) -> Result<SpecTask<'l>, SaveError> {
+    ) -> Result<SpecTask<'l>, LayerSaveError> {
         let shown = branch_display(
             owner.shown.expect("variant set owner"),
             self.tokens.resolve(set),
@@ -990,7 +996,7 @@ impl<'l> Lowering<'l> {
 
     /// Spec: AOUSD Core §7.6.3–§7.6.5 (property, attribute and relationship
     /// spec fields).
-    fn property(&self, entry: &PropertyEntry, prim: &str) -> Result<Property, SaveError> {
+    fn property(&self, entry: &PropertyEntry, prim: &str) -> Result<Property, LayerSaveError> {
         let name = self.name(entry.name);
         let path = [prim, ".", &name].concat();
         let spec = &entry.spec;
@@ -1017,7 +1023,7 @@ impl<'l> Lowering<'l> {
                         samples
                             .iter()
                             .map(|(time, value)| Ok((*time, self.value(value, site, &path)?)))
-                            .collect::<Result<Vec<_>, SaveError>>()?,
+                            .collect::<Result<Vec<_>, LayerSaveError>>()?,
                     ),
                     None => None,
                 };
@@ -1047,10 +1053,10 @@ impl<'l> Lowering<'l> {
                                         self.entry_value(value, &path)?,
                                     ))
                                 })
-                                .collect::<Result<_, SaveError>>()?;
+                                .collect::<Result<_, LayerSaveError>>()?;
                             Ok((k.time, entries))
                         })
-                        .collect::<Result<_, SaveError>>()?,
+                        .collect::<Result<_, LayerSaveError>>()?,
                     connections: targets,
                     metadata,
                 })
@@ -1082,7 +1088,7 @@ impl<'l> Lowering<'l> {
         &self,
         op: &LayerListOp<TargetPath>,
         path: &str,
-    ) -> Result<ListOp<String>, SaveError> {
+    ) -> Result<ListOp<String>, LayerSaveError> {
         self.list_op(op, path, |t| Ok(t.display(self.paths, self.tokens)))
     }
 
@@ -1090,7 +1096,12 @@ impl<'l> Lowering<'l> {
     /// it resolved to (an unresolved arc keeps its asset path too), its
     /// prim path or none for the `defaultPrim`, and its layer offset. An
     /// arc into `layer` itself without an asset path is internal.
-    fn arc(&self, layer: &Layer, arc: &LayerReference, prim: &str) -> Result<Reference, SaveError> {
+    fn arc(
+        &self,
+        layer: &Layer,
+        arc: &LayerReference,
+        prim: &str,
+    ) -> Result<Reference, LayerSaveError> {
         let internal = matches!(
             arc.source(),
             ReferenceSource::Layer { layer: id, asset: None } if id == layer.id()
@@ -1112,7 +1123,7 @@ impl<'l> Lowering<'l> {
                 .custom_data
                 .iter()
                 .map(|(k, v)| Ok((String::from(k.as_ref()), self.entry_value(v, prim)?)))
-                .collect::<Result<_, SaveError>>()?,
+                .collect::<Result<_, LayerSaveError>>()?,
         })
     }
 
@@ -1122,8 +1133,8 @@ impl<'l> Lowering<'l> {
         &self,
         op: &LayerListOp<T>,
         path: &str,
-        item: impl Fn(&T) -> Result<U, SaveError>,
-    ) -> Result<ListOp<U>, SaveError> {
+        item: impl Fn(&T) -> Result<U, LayerSaveError>,
+    ) -> Result<ListOp<U>, LayerSaveError> {
         let edits = !(op.prepend.is_empty()
             && op.append.is_empty()
             && op.delete.is_empty()
@@ -1147,7 +1158,11 @@ impl<'l> Lowering<'l> {
 
     /// Spec: AOUSD Core §7.4 (metadata fields). USDA spells the
     /// `documentation` field `doc`.
-    fn metadata(&self, fields: &[FieldEntry], owner: &str) -> Result<Vec<Metadatum>, SaveError> {
+    fn metadata(
+        &self,
+        fields: &[FieldEntry],
+        owner: &str,
+    ) -> Result<Vec<Metadatum>, LayerSaveError> {
         let mut out = Vec::with_capacity(fields.len());
         for field in fields {
             let key = self.tokens.resolve(field.name);
@@ -1167,7 +1182,12 @@ impl<'l> Lowering<'l> {
     /// (`CrateFile::_PackValue`, `pxr/usd/sdf/crateFile.cpp`).
     ///
     /// Spec: AOUSD Core §7.4 (metadata fields), §6.2 (dictionary type).
-    fn field_value(&self, value: &FieldValue, key: &str, path: &str) -> Result<Value, SaveError> {
+    fn field_value(
+        &self,
+        value: &FieldValue,
+        key: &str,
+        path: &str,
+    ) -> Result<Value, LayerSaveError> {
         Ok(match value {
             FieldValue::Value(value) => self.metadata_value(value, key, path)?,
             FieldValue::TokenListOp(op) => {
@@ -1193,7 +1213,7 @@ impl<'l> Lowering<'l> {
     }
 
     /// An entry of an arc's or a spline knot's custom data.
-    fn entry_value(&self, value: &FieldValue, path: &str) -> Result<Value, SaveError> {
+    fn entry_value(&self, value: &FieldValue, path: &str) -> Result<Value, LayerSaveError> {
         match value {
             FieldValue::Value(value) => self.value(value, Site::Metadata, path),
             other => self.field_value(other, "", path),
@@ -1207,7 +1227,7 @@ impl<'l> Lowering<'l> {
         value: &LayerValue,
         key: &str,
         path: &str,
-    ) -> Result<Value, SaveError> {
+    ) -> Result<Value, LayerSaveError> {
         if let LayerValue::Array(items) = value
             && items.is_empty()
         {
@@ -1230,7 +1250,12 @@ impl<'l> Lowering<'l> {
 
     /// Converts a value, keeping its type. Spec: AOUSD Core §6.2–§6.3
     /// (value types), §12.3 (value blocks).
-    fn value(&self, value: &LayerValue, site: Site<'_>, path: &str) -> Result<Value, SaveError> {
+    fn value(
+        &self,
+        value: &LayerValue,
+        site: Site<'_>,
+        path: &str,
+    ) -> Result<Value, LayerSaveError> {
         use LayerValue as L;
         let no = |kind: &'static str| unsupported(path, Unsupported::Value(kind));
         Ok(match value {
@@ -1288,13 +1313,13 @@ impl<'l> Lowering<'l> {
                         let path = format!("{path}/{k}");
                         Ok((String::from(&**k), self.field_value(v, "", &path)?))
                     })
-                    .collect::<Result<_, SaveError>>()?,
+                    .collect::<Result<_, LayerSaveError>>()?,
             ),
             L::Array(items) => self.array(items, site, path)?,
             L::TypedArray(items) => {
                 let items = items
                     .try_materialize()
-                    .map_err(|error| SaveError::ArrayRead {
+                    .map_err(|error| LayerSaveError::ArrayRead {
                         path: path.into(),
                         error: error.clone(),
                     })?;
@@ -1321,12 +1346,13 @@ impl<'l> Lowering<'l> {
             L::PathExpression(text) => Value::PathExpression(String::from(&**text)),
             // Written as the value it decodes to, as an eager read holds it.
             L::Deferred(_) => {
-                let decoded = value
-                    .try_materialize()
-                    .map_err(|error| SaveError::ArrayRead {
-                        path: path.into(),
-                        error: error.clone(),
-                    })?;
+                let decoded =
+                    value
+                        .try_materialize()
+                        .map_err(|error| LayerSaveError::ArrayRead {
+                            path: path.into(),
+                            error: error.clone(),
+                        })?;
                 return self.value(decoded, site, path);
             }
             L::Opaque { .. } => return no("opaque"),
@@ -1341,7 +1367,7 @@ impl<'l> Lowering<'l> {
         descriptor: Option<&LayerValue>,
         site: Site<'_>,
         path: &str,
-    ) -> Result<Value, SaveError> {
+    ) -> Result<Value, LayerSaveError> {
         use layerstack::array_edit::{Instruction as I, Operand as O};
         let descriptor = descriptor
             .map(|v| self.value(v, Site::Metadata, path))
@@ -1387,7 +1413,7 @@ impl<'l> Lowering<'l> {
                     },
                 })
             })
-            .collect::<Result<_, SaveError>>()?;
+            .collect::<Result<_, LayerSaveError>>()?;
         Ok(Value::ArrayEdit {
             element: Box::new(element),
             instructions,
@@ -1397,7 +1423,12 @@ impl<'l> Lowering<'l> {
     /// Converts an array. The element type comes from the declared type of
     /// an attribute default, otherwise from the elements themselves, which
     /// must all have the first one's type.
-    fn array(&self, items: &[LayerValue], site: Site<'_>, path: &str) -> Result<Value, SaveError> {
+    fn array(
+        &self,
+        items: &[LayerValue],
+        site: Site<'_>,
+        path: &str,
+    ) -> Result<Value, LayerSaveError> {
         // An array holding text OpenUSD keeps as it recorded it (an
         // identifier in metadata no schema registers) is one such text, its
         // items as the parser records them (`[foo, 1]`,
@@ -1514,7 +1545,7 @@ struct Parent<'a> {
 /// variant sets are written.
 struct SpecTask<'l> {
     /// A malformed set names list is reported after visiting the children.
-    set_names_error: Option<SaveError>,
+    set_names_error: Option<LayerSaveError>,
     /// The variant-qualified display path (`/A{v=x}`).
     shown: Option<String>,
     /// The variant branches enclosing the spec's child prims.

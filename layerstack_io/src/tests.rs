@@ -1177,7 +1177,7 @@ fn prepared_commit_reuses_sources_and_preserves_stage_observers_and_dependencies
 /// keeps the save error naming the spec, in either format.
 #[test]
 fn a_layer_that_cannot_be_written_keeps_its_typed_cause() {
-    use crate::usda::save::{Invalid, SaveError};
+    use crate::usda::save::{Invalid, LayerSaveError};
     let source = "#usda 1.0\ndef \"A\" {\n    int a = 1\n}\n";
     let document = StageDocument::open(
         Memory::with(&[("root.usda", source)]),
@@ -1190,7 +1190,7 @@ fn a_layer_that_cannot_be_written_keeps_its_typed_cause() {
     let (tokens, paths) = (document.store().tokens(), document.store().paths());
     let path = layerstack::PropertyPath::parse("/A.a", tokens, paths).unwrap();
     layer.property_mut(path).unwrap().type_name = None;
-    let expected = SaveError::Invalid {
+    let expected = LayerSaveError::Invalid {
         path: "/A.a".into(),
         problem: Invalid::MissingTypeName,
     };

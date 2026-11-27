@@ -297,7 +297,7 @@ pub enum IoCause {
     /// failed ([`IoErrorKind::Rejected`] for a layer that cannot be
     /// written as it stands, [`IoErrorKind::Decode`] for a retained array
     /// that could not decode, [`IoErrorKind::Unsupported`] otherwise).
-    Save(usda::save::SaveError),
+    Save(usda::save::LayerSaveError),
     /// Writing a layer as USDC failed.
     UsdcWrite(usdc::writer::UsdcWriteError),
     /// Localizing a package's layers and assets failed.
@@ -326,7 +326,7 @@ impl IoCause {
         }
     }
     /// The save error inside the cause, however it is wrapped.
-    fn save_error(&self) -> Option<&usda::save::SaveError> {
+    fn save_error(&self) -> Option<&usda::save::LayerSaveError> {
         match self {
             Self::Save(error)
             | Self::UsdcWrite(usdc::writer::UsdcWriteError::Save(error))
@@ -358,11 +358,11 @@ impl IoError {
     }
     /// The retained array or deferred value that could not decode, when
     /// `kind` is [`IoErrorKind::Decode`]: the cause's
-    /// [`usda::save::SaveError::ArrayRead`].
+    /// [`usda::save::LayerSaveError::ArrayRead`].
     #[must_use]
     pub fn array_read_error(&self) -> Option<&layerstack::ArrayReadError> {
         match self.cause()?.save_error()? {
-            usda::save::SaveError::ArrayRead { error, .. } => Some(error),
+            usda::save::LayerSaveError::ArrayRead { error, .. } => Some(error),
             _ => None,
         }
     }
@@ -3338,10 +3338,10 @@ fn write_usda(
     document.write_to(&mut text).map_err(|error| {
         text.error
             .take()
-            .unwrap_or_else(|| save_error(usda::save::SaveError::Document(error)))
+            .unwrap_or_else(|| save_error(usda::save::LayerSaveError::Document(error)))
     })
 }
-fn save_error(error: usda::save::SaveError) -> IoError {
+fn save_error(error: usda::save::LayerSaveError) -> IoError {
     caused(IoCause::Save(error))
 }
 /// A failed save or export, keeping `cause` and taking its kind from the
@@ -3350,10 +3350,10 @@ fn save_error(error: usda::save::SaveError) -> IoError {
 /// cannot be written as it stands, [`IoErrorKind::Unsupported`] for the
 /// rest.
 fn caused(cause: IoCause) -> IoError {
-    use crate::usda::save::SaveError;
+    use crate::usda::save::LayerSaveError;
     let kind = match cause.save_error() {
-        Some(SaveError::ArrayRead { .. }) => IoErrorKind::Decode,
-        Some(SaveError::Invalid { .. }) => IoErrorKind::Rejected,
+        Some(LayerSaveError::ArrayRead { .. }) => IoErrorKind::Decode,
+        Some(LayerSaveError::Invalid { .. }) => IoErrorKind::Rejected,
         _ => IoErrorKind::Unsupported,
     };
     let message = cause.message();

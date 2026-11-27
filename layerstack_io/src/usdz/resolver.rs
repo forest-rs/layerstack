@@ -406,7 +406,7 @@ pub(crate) fn parse_layer_data(
         }
         _ => Err(UsdzError::LayerRead {
             member: Arc::from(name),
-            layer_id,
+            layer: layer_id,
             cause: LayerReadError::UnsupportedFormat,
         }),
     }
@@ -465,7 +465,7 @@ fn parse_usdc(
     );
     let result = result.map_err(|cause| UsdzError::LayerRead {
         member: Arc::from(name),
-        layer_id,
+        layer: layer_id,
         cause: LayerReadError::Usdc(cause),
     })?;
     Ok(ParsedLayer {
@@ -499,13 +499,13 @@ fn parse_usda(
     if let Some(mark) = crate::usda::ByteOrderMark::find(data) {
         return Err(UsdzError::LayerRead {
             member: Arc::from(name),
-            layer_id,
+            layer: layer_id,
             cause: LayerReadError::ByteOrderMark(mark),
         });
     }
     let source = core::str::from_utf8(data).map_err(|error| UsdzError::LayerRead {
         member: Arc::from(name),
-        layer_id,
+        layer: layer_id,
         cause: LayerReadError::InvalidUtf8(error),
     })?;
 

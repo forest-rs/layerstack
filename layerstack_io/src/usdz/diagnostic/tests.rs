@@ -67,7 +67,7 @@ fn hard_decoder_errors_keep_the_same_cause_at_root_and_in_a_member() {
             error,
             UsdzError::LayerRead {
                 member: Arc::from(member),
-                layer_id: id,
+                layer: id,
                 cause: LayerReadError::Usdc(UsdcError::UnsupportedVersion {
                     major: 0,
                     minor: 255,

@@ -475,7 +475,7 @@ pub trait AssetResolver {
     /// Allocates a [`LayerId`] for a layer loaded on this resolver's behalf
     /// by someone else: a layer inside a package that
     /// [`AssetResolver::resolve`] never sees, such as a member of a USDZ
-    /// package read by `layerstack_usdz::read_usdz`.
+    /// package read by `layerstack_io::usdz::read_usdz`.
     ///
     /// The layers this resolver returns and the layers it allocates IDs for
     /// end up in one store, so the resolver owns the one ID space for both:
@@ -579,7 +579,7 @@ pub trait AssetResolver {
 /// An [`AssetResolver`] that finds no asset: every asset path is
 /// [`AssetResolveError::NotFound`], so the arcs and sublayers a layer
 /// authors resolve to nothing and the layer reads on its own. For parsing
-/// one layer alone (`layerstack_usda::read_usda`), tests and tools.
+/// one layer alone (`layerstack_io::usda::read_usda`), tests and tools.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NoAssets;
 

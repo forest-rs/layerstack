@@ -46,10 +46,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
 use layerstack::{EditTarget, LayerId, NoAssets, Transaction, Value};
+use layerstack_io::usda::read_usda;
 use layerstack_io::{
     IoError, IoErrorKind, LoadReport, ReloadPolicy, SourceVersion, StageDocument, Storage,
 };
-use layerstack_usda::read_usda;
 use serde_json::{Value as Json, json};
 
 use crate::support::notices;

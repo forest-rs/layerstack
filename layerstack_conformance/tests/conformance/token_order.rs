@@ -122,13 +122,13 @@ fn sorted_paths() -> String {
 #[test]
 fn utf8_names_order_as_openusd_orders_them() {
     let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
-    let read = layerstack_usda::read_usda(SOURCE, LayerId(1), &tokens, &paths, &mut NoAssets);
+    let read = layerstack_io::usda::read_usda(SOURCE, LayerId(1), &tokens, &paths, &mut NoAssets);
     assert!(
         read.parse_diagnostics.is_empty(),
         "{:?}",
         read.parse_diagnostics
     );
-    let text = layerstack_usda::save_usda(&read.emitted.layer, &tokens, &paths).unwrap();
+    let text = layerstack_io::usda::save_usda(&read.emitted.layer, &tokens, &paths).unwrap();
     assert_eq!(text, SOURCE, "layerstack's USDA");
     let ours = sorted_paths();
     assert_eq!(ours, "/Z /a /ab /aé /e /z /é /ü /ÿ /Ā /Ω /日本");
@@ -196,13 +196,14 @@ def "R" (
 #[test]
 fn embedded_nuls_end_tokens_as_openusd_ends_them() {
     let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
-    let read = layerstack_usda::read_usda(WITH_NULS, LayerId(1), &tokens, &paths, &mut NoAssets);
+    let read =
+        layerstack_io::usda::read_usda(WITH_NULS, LayerId(1), &tokens, &paths, &mut NoAssets);
     assert!(
         read.parse_diagnostics.is_empty(),
         "{:?}",
         read.parse_diagnostics
     );
-    let text = layerstack_usda::save_usda(&read.emitted.layer, &tokens, &paths).unwrap();
+    let text = layerstack_io::usda::save_usda(&read.emitted.layer, &tokens, &paths).unwrap();
     assert_eq!(text, WITHOUT_NULS, "layerstack's USDA");
 
     let explicit_python = std::env::var("LAYERSTACK_USD_PYTHON").ok();

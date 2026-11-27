@@ -1,0 +1,2301 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+//! Lowering of an authored USDA [`Document`] to crate specs.
+//!
+//! The result is what OpenUSD's text parser stores for the USDA the same
+//! document writes (`Document::to_usda`), so both files describe one layer:
+//! the same specs, fields, field types and children order. Only the order
+//! of each spec's metadata fields and properties differs: the text writer
+//! sorts them by name, as OpenUSD's does, while the crate file keeps the
+//! document's order, as OpenUSD's crate writer keeps the layer's. In
+//! particular:
+//!
+//! - the pseudo-root holds `defaultPrim`, then the layer metadata in order,
+//!   then `subLayers` (a string vector of the authored asset paths) and
+//!   `subLayerOffsets` when there are sublayers, then `primOrder` (`reorder
+//!   rootPrims`) and `primChildren`;
+//! - a prim holds `specifier`, `typeName` (for typed prims), its metadata
+//!   in order (a token list op such as `prepend apiSchemas` included), then
+//!   its arcs, `inheritPaths`, `payload`, `references` and `specializes`
+//!   (as the USDA writes them), then `propertyOrder` and `primOrder` (the
+//!   `reorder` statements), then `primChildren` and `properties` (in the
+//!   document's property order); `variantSelection` and `variantSetNames`
+//!   follow the arcs, and `variantSetChildren` precedes `primChildren`;
+//! - a variant set is a variant set spec (`/P{v=}`) holding
+//!   `variantChildren`, and each variant a variant spec (`/P{v=x}`) holding
+//!   the fields of a prim spec but `specifier` and `typeName`, with its
+//!   properties (`/P{v=x}.a`), child prims (`/P{v=x}C`) and nested variant
+//!   sets (`/P{v=x}{w=}`) below it;
+//! - an attribute holds `custom`, `typeName` (the declared name, role and
+//!   `[]` included), `variability`, `default` when a value is authored (a
+//!   value block included), its metadata in order, then `connectionPaths`
+//!   (a path list op) when it has connections, which USDA writes as later
+//!   `.connect` statements, `timeSamples` (an `SdfTimeSampleMap`) when it
+//!   has time samples, which USDA writes as a `.timeSamples` statement,
+//!   and `spline` (a `TsSpline`) when it has a spline;
+//! - a relationship holds `variability` (uniform unless `varying`), `custom` only
+//!   when custom, then `targetPaths` (a path list op, an empty explicit one
+//!   for `rel r = None`) and its metadata: an explicit target list is part
+//!   of the declaration, so it precedes the metadata, while list edits are
+//!   later statements and follow it;
+//! - metadata keys become field names (`doc` is stored as `documentation`)
+//!   and values must already have the field's registered type (strings
+//!   and tokens are interchangeable, since both are written as quoted
+//!   text), so the USDA and the USDC carry the same value: a `float` for a
+//!   `double` field would print as `0.1` in USDA, parse as the double
+//!   `0.1`, but widen to `0.10000000149011612` here;
+//! - a `timecode` / `timecode[]` default or time sample is an
+//!   `SdfTimeCode` value (crate version 0.9.0), as is a `timecode` metadata
+//!   value or dictionary entry; every other value keeps its own type;
+//! - `permission` is an `SdfPermission`.
+//!
+//! Metadata keys outside the table in [`metadata_field`] are stored as the
+//! text parser stores them, as an `SdfUnregisteredValue`: a dictionary as
+//! itself (prim `profilesInfo` among them,
+//! [`FieldType::UnregisteredDictionary`]), an unregistered list op
+//! (`prepend key = ["a", 1]`) as an `SdfUnregisteredValueListOp` of each
+//! item's text, and any other value as the text of its USDA value. A typed
+//! list op (a token or integer list op, say) under such a key has no such
+//! form and is rejected.
+//!
+//! Spec: AOUSD Core §7.4 (metadata), §7.6 (core fields), §16.3 (crate
+//! format).
+
+use alloc::boxed::Box;
+use alloc::string::String;
+use alloc::vec::Vec;
+
+use crate::usda::save::{Declaration, LayerSpec, Payload, visit_layer_specs};
+use crate::usda::writer::{
+    Attribute, Document, ListOp as UsdaListOp, Metadatum, Prim, Property,
+    Reference as UsdaReference, Relationship, Specifier as UsdaSpecifier, Value as UsdaValue,
+    Variability as UsdaVariability,
+};
+use layerstack::doc::Layer;
+use layerstack::interner::TokenInterner;
+use layerstack::path::PathInterner;
+
+use super::error::UsdcWriteError;
+use super::specs::{LayerSpecs, SpecSink};
+use super::{ListOp, Reference, Spec, SpecForm, Specifier, Value, Variability};
+
+/// Serializes `doc` as a USDC file.
+///
+/// The document is validated exactly as [`Document::to_usda`] validates it,
+/// then its fields are packed in crate order (see the [module docs](self)).
+///
+/// # Errors
+///
+/// [`UsdcWriteError::Document`] when the USDA writer would reject the
+/// document; [`UsdcWriteError::MetadataType`] for metadata of the wrong
+/// type;
+/// otherwise the errors of [`super::write_crate`].
+pub fn write_document(doc: &Document) -> Result<Vec<u8>, UsdcWriteError> {
+    let mut specs = LayerSpecs::default();
+    visit_document(doc, &mut specs)?;
+    super::encode::write(&specs)
+}
+
+/// Saves an authored layer as a USDC file.
+///
+/// The shared authored-layer walk validates each prim and sends its fields to
+/// the crate writer. Only the current spec body is materialized during the
+/// walk. `tokens` and `paths` are the layer's interners.
+/// A namespace of any depth saves, on any thread's stack: neither the
+/// lowering nor the writer recurses through it.
+///
+/// # Errors
+///
+/// [`UsdcWriteError::Save`] for what the lowering rejects, before any
+/// output; otherwise the errors of [`write_document`].
+pub fn save_usdc(
+    layer: &Layer,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+) -> Result<Vec<u8>, UsdcWriteError> {
+    let mut specs = LayerSpecs::default();
+    let mut result = Ok(());
+    visit_layer_specs(layer, tokens, paths, |item| {
+        if result.is_err() {
+            return;
+        }
+        result = match item {
+            LayerSpec::Root(doc, children) => root_spec(doc, children, &mut specs),
+            LayerSpec::Body {
+                path,
+                prim,
+                variant,
+                children,
+                sets,
+            } => lower_body(prim, path, variant, children, sets, &mut specs),
+            LayerSpec::Declarations {
+                path,
+                prim,
+                properties,
+            } => {
+                declarations(path, prim, properties, tokens, paths, &mut specs);
+                Ok(())
+            }
+            LayerSpec::Set(path, variants) => {
+                set_spec(&path, variants, &mut specs);
+                Ok(())
+            }
+        };
+    })
+    .map_err(UsdcWriteError::Save)?;
+    result?;
+    super::encode::write(&specs)
+}
+
+/// Store exact-typed declarations directly in the field table, preserving the
+/// authored order used for OpenUSD's first-use indexes (AOUSD Core §16.3).
+fn declarations(
+    id: layerstack::PathId,
+    prim: &layerstack::PrimSpec,
+    properties: &[Declaration<'_>],
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+    sink: &mut LayerSpecs,
+) {
+    let owner = sink.plain_prim(id, paths, tokens);
+    if let Some(s) = prim.specifier {
+        sink.field("specifier", Value::Specifier(s));
+    }
+    if let Some(t) = prim.type_name {
+        sink.token("typeName", tokens.resolve(t));
+    }
+    if !prim.authored_children.is_empty() {
+        sink.names(
+            "primChildren",
+            prim.authored_children.iter().map(|&t| tokens.resolve(t)),
+        );
+    }
+    if !properties.is_empty() {
+        sink.names("properties", properties.iter().map(|p| p.name));
+    }
+    for p in properties {
+        let variability = match p.variability {
+            UsdaVariability::Varying => Variability::Varying,
+            UsdaVariability::Uniform => Variability::Uniform,
+        };
+        if let Payload::Targets(targets) = p.payload {
+            sink.property(owner, p.name, SpecForm::Relationship);
+            sink.field("variability", Value::Variability(variability));
+            if p.custom {
+                sink.field("custom", Value::Bool(true));
+            }
+            if let Some(targets) = targets {
+                sink.field(
+                    "targetPaths",
+                    Value::PathListOp(ListOp::explicit(
+                        targets.iter().map(|t| t.display(paths, tokens)).collect(),
+                    )),
+                );
+            }
+            continue;
+        }
+        sink.property(owner, p.name, SpecForm::Attribute);
+        sink.field("custom", Value::Bool(p.custom));
+        sink.token("typeName", p.ty);
+        sink.field("variability", Value::Variability(variability));
+        let value = match &p.payload {
+            Payload::String(s) => {
+                sink.string("default", s);
+                continue;
+            }
+            Payload::Token(s) => {
+                sink.token("default", s);
+                continue;
+            }
+            Payload::Int(v) => Value::Int(*v),
+            Payload::Int64(v) => Value::Int64(*v),
+            Payload::Bool(v) => Value::Bool(*v),
+            Payload::Float(v) => Value::Float(*v),
+            Payload::Double(v) => Value::Double(*v),
+            Payload::Ints(v) => Value::Int64Array(v.to_vec()),
+            Payload::Floats(v) => Value::FloatArray(v.to_vec()),
+            Payload::Doubles(v) => Value::DoubleArray(v.to_vec()),
+            Payload::Tokens(v) => {
+                Value::TokenArray(v.iter().map(|&t| tokens.resolve(t).into()).collect())
+            }
+            Payload::Strings(v) => Value::StringArray(v.iter().map(String::from).collect()),
+            Payload::Targets(_) => unreachable!("relationship handled above"),
+        };
+        sink.field("default", value);
+    }
+}
+
+/// Lowers `doc` to the crate specs [`write_document`] writes.
+///
+/// # Errors
+///
+/// See [`write_document`].
+pub fn document_specs(doc: &Document) -> Result<Vec<Spec>, UsdcWriteError> {
+    let mut specs = Vec::new();
+    visit_document(doc, &mut specs)?;
+    Ok(specs)
+}
+
+fn visit_document(doc: &Document, sink: &mut impl SpecSink) -> Result<(), UsdcWriteError> {
+    doc.validate().map_err(UsdcWriteError::Document)?;
+    let root = Document {
+        default_prim: doc.default_prim.clone(),
+        metadata: doc.metadata.clone(),
+        prim_order: doc.prim_order.clone(),
+        sublayers: doc.sublayers.clone(),
+        relocates: doc.relocates.clone(),
+        prims: Vec::new(),
+    };
+    lower_specs(root, &doc.prims, sink)
+}
+
+/// Copies just the fields of a caller-owned prim, leaving its descendants
+/// for the iterative namespace walk.
+fn shallow_prim(prim: &Prim) -> Prim {
+    Prim {
+        specifier: prim.specifier,
+        type_name: prim.type_name.clone(),
+        name: prim.name.clone(),
+        metadata: prim.metadata.clone(),
+        properties: prim.properties.clone(),
+        property_order: prim.property_order.clone(),
+        prim_order: prim.prim_order.clone(),
+        inherits: prim.inherits.clone(),
+        payloads: prim.payloads.clone(),
+        references: prim.references.clone(),
+        specializes: prim.specializes.clone(),
+        variant_selections: prim.variant_selections.clone(),
+        variant_set_names: prim.variant_set_names.clone(),
+        children: Vec::new(),
+        variant_sets: Vec::new(),
+    }
+}
+
+/// A step of [`lower_specs`] still to take.
+enum Task<'a> {
+    /// A prim spec, the child of the prim or variant at `parent` (empty for
+    /// a root prim).
+    Prim { source: &'a Prim, parent: String },
+    /// A variant spec at `path` (`/P{v=x}`).
+    Variant { source: &'a Prim, path: String },
+    /// A variant set spec, complete.
+    Set { path: String, variants: Vec<String> },
+}
+
+fn root_spec(
+    mut doc: Document,
+    children: Vec<String>,
+    sink: &mut impl SpecSink,
+) -> Result<(), UsdcWriteError> {
+    sink.begin("/", SpecForm::PseudoRoot);
+    if let Some(name) = doc.default_prim.take() {
+        sink.field("defaultPrim", Value::Token(name));
+    }
+    for entry in &mut doc.metadata {
+        sink.metadata(metadatum(Owner::Layer, "/", entry)?);
+    }
+    if let Some(relocates) = doc.relocates.take() {
+        sink.field("layerRelocates", Value::Relocates(relocates));
+    }
+    if !doc.sublayers.is_empty() {
+        let assets = doc
+            .sublayers
+            .iter_mut()
+            .map(|s| core::mem::take(&mut s.asset))
+            .collect();
+        let offsets = doc
+            .sublayers
+            .iter()
+            .map(|s| (s.offset.offset, s.offset.scale))
+            .collect();
+        sink.field("subLayers", Value::StringVector(assets));
+        sink.field("subLayerOffsets", Value::LayerOffsetVector(offsets));
+    }
+    if let Some(order) = doc.prim_order.take() {
+        sink.field("primOrder", Value::TokenVector(order));
+    }
+    if !children.is_empty() {
+        sink.field("primChildren", Value::TokenVector(children));
+    }
+    Ok(())
+}
+
+fn set_spec(path: &str, variants: Vec<String>, sink: &mut impl SpecSink) {
+    sink.begin(path, SpecForm::VariantSet);
+    sink.field("variantChildren", Value::TokenVector(variants));
+}
+
+/// Lowers the pseudo-root `doc` describes (its `prims` aside) and every
+/// spec below it, `prims` being its root prims.
+///
+/// A namespace has no depth limit (OpenUSD writes and reads any depth), so
+/// the specs still to lower wait on a heap stack, not the call stack; they
+/// are lowered, and the first error found, in the order a depth-first walk
+/// visits them: a spec, its properties, its child prims, then each of its
+/// variant sets and that set's variants.
+fn lower_specs(
+    doc: Document,
+    prims: &[Prim],
+    sink: &mut impl SpecSink,
+) -> Result<(), UsdcWriteError> {
+    root_spec(doc, prims.iter().map(|p| p.name.clone()).collect(), sink)?;
+    let mut tasks: Vec<Task<'_>> = prims
+        .iter()
+        .rev()
+        .map(|source| Task::Prim {
+            source,
+            parent: String::new(),
+        })
+        .collect();
+    while let Some(task) = tasks.pop() {
+        let (source, path, variant) = match task {
+            Task::Prim { source, parent } => {
+                let path = if parent.ends_with('}') {
+                    alloc::format!("{parent}{}", source.name)
+                } else {
+                    alloc::format!("{parent}/{}", source.name)
+                };
+                (source, path, false)
+            }
+            Task::Variant { source, path } => (source, path, true),
+            Task::Set { path, variants } => {
+                set_spec(&path, variants, sink);
+                continue;
+            }
+        };
+        let mut prim = shallow_prim(source);
+        let children = source.children.iter().map(|p| p.name.clone()).collect();
+        let sets = source
+            .variant_sets
+            .iter()
+            .map(|set| set.name.clone())
+            .collect();
+        lower_body(&mut prim, &path, variant, children, sets, sink)?;
+        for set in source.variant_sets.iter().rev() {
+            let name = &set.name;
+            let variants = set.variants.iter().map(|v| v.name.clone()).collect();
+            for source in set.variants.iter().rev() {
+                let path = alloc::format!("{path}{{{name}={}}}", source.name);
+                tasks.push(Task::Variant { source, path });
+            }
+            tasks.push(Task::Set {
+                path: alloc::format!("{path}{{{name}=}}"),
+                variants,
+            });
+        }
+        for source in source.children.iter().rev() {
+            tasks.push(Task::Prim {
+                source,
+                parent: path.clone(),
+            });
+        }
+    }
+    Ok(())
+}
+
+/// The prim spec of `prim`, a child of the prim or variant at `parent`,
+/// with its `specifier` and `typeName`.
+fn prim_fields(prim: &mut Prim, sink: &mut impl SpecSink) {
+    // A prim spec that authors no specifier stores no field, as OpenUSD's
+    // crate stores one `Sdf.CreatePrimInLayer` makes.
+    if let Some(specifier) = prim.specifier {
+        sink.field(
+            "specifier",
+            Value::Specifier(match specifier {
+                UsdaSpecifier::Def => Specifier::Def,
+                UsdaSpecifier::Over => Specifier::Over,
+                UsdaSpecifier::Class => Specifier::Class,
+            }),
+        );
+    }
+    if let Some(type_name) = prim.type_name.take() {
+        sink.field("typeName", Value::Token(type_name));
+    }
+}
+
+/// Completes `spec`, a prim spec or a variant's (`/P{v=x}`, which has no
+/// `specifier` or `typeName`), with the fields `prim` holds and its
+/// property specs, in the order the text parser stores them: the metadata,
+/// the arcs, `variantSelection` and `variantSetNames` (the header), then
+/// `propertyOrder` and `primOrder` (the `reorder` statements, first in the
+/// body), `variantSetChildren` (set as each `variantSet` statement ends),
+/// and `primChildren` and `properties` (set as the body ends).
+///
+/// Each variant set is a `SdfSpecTypeVariantSet` spec (`/P{v=}`) holding
+/// `variantChildren`, and each of its variants a `SdfSpecTypeVariant` spec
+/// (`/P{v=x}`), as `Sdf_TextFileFormatParser` creates them.
+///
+/// Spec: AOUSD Core §7.6.2 (prim spec fields), §7.6.6 (variant set spec
+/// fields), §7.6.7 (variant spec fields).
+fn lower_body(
+    prim: &mut Prim,
+    path: &str,
+    variant: bool,
+    children: Vec<String>,
+    sets: Vec<String>,
+    sink: &mut impl SpecSink,
+) -> Result<(), UsdcWriteError> {
+    if variant {
+        sink.begin(path, SpecForm::Variant);
+    } else {
+        sink.begin(path, SpecForm::Prim);
+        prim_fields(prim, sink);
+    }
+    for entry in &mut prim.metadata {
+        sink.metadata(metadatum(Owner::Prim, path, entry)?);
+    }
+    if let Some(op) = &mut prim.inherits {
+        sink.field("inheritPaths", Value::PathListOp(list_op(op)));
+    }
+    if let Some(op) = &mut prim.payloads {
+        sink.field("payload", Value::PayloadListOp(map_list_op(op, arc)));
+    }
+    if let Some(op) = &mut prim.references {
+        sink.field("references", Value::ReferenceListOp(map_list_op(op, arc)));
+    }
+    if let Some(op) = &mut prim.specializes {
+        sink.field("specializes", Value::PathListOp(list_op(op)));
+    }
+    if !prim.variant_selections.is_empty() {
+        sink.field(
+            "variantSelection",
+            Value::VariantSelectionMap(core::mem::take(&mut prim.variant_selections)),
+        );
+    }
+    if let Some(op) = &mut prim.variant_set_names {
+        sink.field("variantSetNames", Value::StringListOp(list_op(op)));
+    }
+    if let Some(order) = prim.property_order.take() {
+        sink.field("propertyOrder", Value::TokenVector(order));
+    }
+    if let Some(order) = prim.prim_order.take() {
+        sink.field("primOrder", Value::TokenVector(order));
+    }
+    if !sets.is_empty() {
+        sink.field("variantSetChildren", Value::TokenVector(sets));
+    }
+    if !children.is_empty() {
+        sink.field("primChildren", Value::TokenVector(children));
+    }
+    if !prim.properties.is_empty() {
+        let names = prim.properties.iter().map(|p| String::from(p.name()));
+        sink.field("properties", Value::TokenVector(names.collect()));
+    }
+    for property in &mut prim.properties {
+        match property {
+            Property::Attribute(attribute) => lower_attribute(attribute, path, sink)?,
+            Property::Relationship(relationship) => lower_relationship(relationship, path, sink)?,
+        }
+    }
+    Ok(())
+}
+
+fn lower_attribute(
+    attribute: &mut Attribute,
+    prim: &str,
+    sink: &mut impl SpecSink,
+) -> Result<(), UsdcWriteError> {
+    let path = [prim, ".", &attribute.name].concat();
+    let type_name = core::mem::take(&mut attribute.type_name);
+    let scalar = type_name.strip_suffix("[]").unwrap_or(&type_name);
+    let declared = match scalar {
+        "timecode" => Declared::TimeCode,
+        "duration" => Declared::Duration,
+        _ => Declared::Other,
+    };
+    sink.begin(path, SpecForm::Attribute);
+    sink.field("custom", Value::Bool(attribute.custom));
+    sink.field("typeName", Value::Token(type_name));
+    sink.field(
+        "variability",
+        Value::Variability(match attribute.variability {
+            UsdaVariability::Varying => Variability::Varying,
+            UsdaVariability::Uniform => Variability::Uniform,
+        }),
+    );
+    if let Some(value) = &mut attribute.value {
+        sink.field("default", attribute_value(declared, value));
+    }
+    for entry in &mut attribute.metadata {
+        sink.metadata(metadatum(Owner::Attribute, sink.path(), entry)?);
+    }
+    if let Some(connections) = &mut attribute.connections {
+        sink.field("connectionPaths", Value::PathListOp(list_op(connections)));
+    }
+    if let Some(samples) = &mut attribute.time_samples {
+        let samples = samples
+            .iter_mut()
+            .map(|(time, value)| (*time, attribute_value(declared, value)))
+            .collect();
+        sink.field("timeSamples", Value::TimeSamples(samples));
+    }
+    if let Some(spline) = attribute.spline.take() {
+        sink.field(
+            "spline",
+            Value::Spline(
+                *spline,
+                attribute
+                    .spline_custom_data
+                    .iter_mut()
+                    .map(|(time, entries)| {
+                        (
+                            *time,
+                            entries
+                                .iter_mut()
+                                .map(|(k, v)| (k.clone(), natural(v)))
+                                .collect(),
+                        )
+                    })
+                    .collect(),
+            ),
+        );
+    }
+    Ok(())
+}
+
+/// The declared attribute types whose values a document may hold as
+/// doubles.
+#[derive(Clone, Copy)]
+enum Declared {
+    TimeCode,
+    Duration,
+    Other,
+}
+
+/// An attribute default or time sample: a double of a `timecode` /
+/// `timecode[]` attribute is an `SdfTimeCode`, of a `duration` /
+/// `duration[]` attribute a `GfDuration`; every other value keeps its own
+/// type.
+fn attribute_value(declared: Declared, value: &mut UsdaValue) -> Value {
+    match (declared, value) {
+        (Declared::TimeCode, UsdaValue::Double(v)) => Value::TimeCode(*v),
+        (Declared::TimeCode, UsdaValue::DoubleArray(v)) => {
+            Value::TimeCodeArray(core::mem::take(v).into_vec())
+        }
+        (Declared::Duration, UsdaValue::Double(v)) => Value::Duration(*v),
+        (Declared::Duration, UsdaValue::DoubleArray(v)) => {
+            Value::DurationArray(core::mem::take(v).into_vec())
+        }
+        (_, v) => natural(v),
+    }
+}
+
+fn lower_relationship(
+    relationship: &mut Relationship,
+    prim: &str,
+    sink: &mut impl SpecSink,
+) -> Result<(), UsdcWriteError> {
+    let path = [prim, ".", &relationship.name].concat();
+    // A relationship's legacy `default` is an `SdfPath` value, which no
+    // crate value type holds: OpenUSD 26.11 posts "Attempted to pack
+    // unsupported type 'SdfPath'" and writes an invalid value its reader
+    // refuses (`CrateFile::_PackValue`, `crateFile.cpp`), so the save
+    // refuses it before any output instead.
+    if relationship.default.is_some() {
+        return Err(UsdcWriteError::UnencodedField {
+            path,
+            key: "default".into(),
+        });
+    }
+    sink.begin(path, SpecForm::Relationship);
+    sink.field(
+        "variability",
+        Value::Variability(if relationship.varying {
+            Variability::Varying
+        } else {
+            Variability::Uniform
+        }),
+    );
+    if relationship.custom {
+        sink.field("custom", Value::Bool(true));
+    }
+    let mut targets = relationship.targets.as_mut();
+    if let Some(targets) = targets.as_deref_mut().filter(|op| op.explicit.is_some()) {
+        sink.field("targetPaths", Value::PathListOp(list_op(targets)));
+    }
+    for entry in &mut relationship.metadata {
+        sink.metadata(metadatum(Owner::Relationship, sink.path(), entry)?);
+    }
+    if let Some(targets) = targets.filter(|op| op.explicit.is_none()) {
+        sink.field("targetPaths", Value::PathListOp(list_op(targets)));
+    }
+    Ok(())
+}
+
+fn list_op(op: &mut UsdaListOp<String>) -> ListOp<String> {
+    map_list_op(op, core::mem::take)
+}
+
+fn map_list_op<T, U>(op: &mut UsdaListOp<T>, item: impl Fn(&mut T) -> U) -> ListOp<U> {
+    let list = |items: &mut [T]| items.iter_mut().map(&item).collect::<Vec<_>>();
+    ListOp {
+        explicit: op.explicit.as_deref_mut().map(list),
+        prepended: list(&mut op.prepended),
+        appended: list(&mut op.appended),
+        deleted: list(&mut op.deleted),
+        added: list(&mut op.added),
+        reordered: list(&mut op.reordered),
+    }
+}
+
+/// A reference or payload as `SdfReference` / `SdfPayload` hold it: an
+/// empty asset path for an internal arc, an empty prim path for the
+/// `defaultPrim`.
+fn arc(arc: &mut UsdaReference) -> Reference {
+    Reference {
+        asset: arc.asset.take().unwrap_or_default(),
+        prim_path: arc.prim_path.take().unwrap_or_default(),
+        offset: arc.offset.offset,
+        scale: arc.offset.scale,
+        custom_data: arc
+            .custom_data
+            .iter_mut()
+            .map(|(k, v)| (core::mem::take(k), natural(v)))
+            .collect(),
+    }
+}
+
+/// The value type each value keeps outside a typed field: the type its
+/// USDA spelling (or typed dictionary entry) declares.
+fn natural(value: &mut UsdaValue) -> Value {
+    use UsdaValue as U;
+    match value {
+        U::Bool(v) => Value::Bool(*v),
+        U::UChar(v) => Value::UChar(*v),
+        U::Int(v) => Value::Int(*v),
+        U::UInt(v) => Value::UInt(*v),
+        U::Int64(v) => Value::Int64(*v),
+        U::UInt64(v) => Value::UInt64(*v),
+        U::Half(v) => Value::Half(*v),
+        U::Float(v) => Value::Float(*v),
+        U::Double(v) => Value::Double(*v),
+        U::TimeCode(v) => Value::TimeCode(*v),
+        U::Duration(v) => Value::Duration(*v),
+        U::String(v) => Value::String(core::mem::take(v)),
+        U::Token(v) => Value::Token(core::mem::take(v)),
+        U::Asset(v) => Value::Asset(core::mem::take(v)),
+        U::PathExpression(v) => Value::PathExpression(core::mem::take(v)),
+        // A crate stores an `SdfUnregisteredValue` as the text it holds.
+        U::Unregistered(v) => Value::UnregisteredValue(Box::new(Value::String(core::mem::take(v)))),
+        U::PathExpressionArray(v) => Value::PathExpressionArray(core::mem::take(v)),
+        U::Float2(v) => Value::Vec2f(*v),
+        U::Float3(v) => Value::Vec3f(*v),
+        U::Float4(v) => Value::Vec4f(*v),
+        U::Double2(v) => Value::Vec2d(*v),
+        U::Double3(v) => Value::Vec3d(*v),
+        U::Double4(v) => Value::Vec4d(*v),
+        U::Int2(v) => Value::Vec2i(*v),
+        U::Int3(v) => Value::Vec3i(*v),
+        U::Int4(v) => Value::Vec4i(*v),
+        U::Half2(v) => Value::Vec2h(*v),
+        U::Half3(v) => Value::Vec3h(*v),
+        U::Half4(v) => Value::Vec4h(*v),
+        U::Quath(v) => Value::Quath(*v),
+        U::Quatf(v) => Value::Quatf(*v),
+        U::Quatd(v) => Value::Quatd(*v),
+        U::Matrix2d(v) => Value::Matrix2d(*v),
+        U::Matrix3d(v) => Value::Matrix3d(*v),
+        U::Matrix4d(v) => Value::Matrix4d(*v),
+        U::BoolArray(v) => Value::BoolArray(core::mem::take(v).into_vec()),
+        U::UCharArray(v) => Value::UCharArray(core::mem::take(v).into_vec()),
+        U::IntArray(v) => Value::IntArray(core::mem::take(v).into_vec()),
+        U::UIntArray(v) => Value::UIntArray(core::mem::take(v).into_vec()),
+        U::Int64Array(v) => Value::Int64Array(core::mem::take(v).into_vec()),
+        U::UInt64Array(v) => Value::UInt64Array(core::mem::take(v).into_vec()),
+        U::HalfArray(v) => Value::HalfArray(core::mem::take(v).into_vec()),
+        U::FloatArray(v) => Value::FloatArray(core::mem::take(v).into_vec()),
+        U::DoubleArray(v) => Value::DoubleArray(core::mem::take(v).into_vec()),
+        U::TimeCodeArray(v) => Value::TimeCodeArray(core::mem::take(v).into_vec()),
+        U::DurationArray(v) => Value::DurationArray(core::mem::take(v).into_vec()),
+        U::StringArray(v) => Value::StringArray(core::mem::take(v)),
+        U::TokenArray(v) => Value::TokenArray(core::mem::take(v)),
+        U::AssetArray(v) => Value::AssetArray(core::mem::take(v)),
+        U::Float2Array(v) => Value::Vec2fArray(core::mem::take(v).into_vec()),
+        U::Float3Array(v) => Value::Vec3fArray(core::mem::take(v).into_vec()),
+        U::Float4Array(v) => Value::Vec4fArray(core::mem::take(v).into_vec()),
+        U::Double2Array(v) => Value::Vec2dArray(core::mem::take(v).into_vec()),
+        U::Double3Array(v) => Value::Vec3dArray(core::mem::take(v).into_vec()),
+        U::Double4Array(v) => Value::Vec4dArray(core::mem::take(v).into_vec()),
+        U::Int2Array(v) => Value::Vec2iArray(core::mem::take(v).into_vec()),
+        U::Int3Array(v) => Value::Vec3iArray(core::mem::take(v).into_vec()),
+        U::Int4Array(v) => Value::Vec4iArray(core::mem::take(v).into_vec()),
+        U::Half2Array(v) => Value::Vec2hArray(core::mem::take(v).into_vec()),
+        U::Half3Array(v) => Value::Vec3hArray(core::mem::take(v).into_vec()),
+        U::Half4Array(v) => Value::Vec4hArray(core::mem::take(v).into_vec()),
+        U::QuathArray(v) => Value::QuathArray(core::mem::take(v).into_vec()),
+        U::QuatfArray(v) => Value::QuatfArray(core::mem::take(v).into_vec()),
+        U::QuatdArray(v) => Value::QuatdArray(core::mem::take(v).into_vec()),
+        U::Matrix2dArray(v) => Value::Matrix2dArray(core::mem::take(v)),
+        U::Matrix3dArray(v) => Value::Matrix3dArray(core::mem::take(v)),
+        U::Matrix4dArray(v) => Value::Matrix4dArray(core::mem::take(v)),
+        U::TokenListOp(op) => Value::TokenListOp(list_op(op)),
+        U::StringListOp(op) => Value::StringListOp(list_op(op)),
+        U::IntListOp(op) => Value::IntListOp(map_list_op(op, |x| *x)),
+        U::UIntListOp(op) => Value::UIntListOp(map_list_op(op, |x| *x)),
+        U::Int64ListOp(op) => Value::Int64ListOp(map_list_op(op, |x| *x)),
+        U::UInt64ListOp(op) => Value::UInt64ListOp(map_list_op(op, |x| *x)),
+        U::UnregisteredListOp(op) => Value::UnregisteredValueListOp(list_op(op)),
+        U::ArrayEdit {
+            element,
+            instructions,
+        } => native_edit(element, instructions),
+        U::Block => Value::Block,
+        U::AnimationBlock => Value::AnimationBlock,
+        U::Dictionary(entries) => Value::Dictionary(
+            entries
+                .iter_mut()
+                .map(|(k, v)| (core::mem::take(k), natural(v)))
+                .collect(),
+        ),
+    }
+}
+
+fn native_edit(
+    element: &UsdaValue,
+    instructions: &mut [layerstack::array_edit::Instruction<UsdaValue>],
+) -> Value {
+    use crate::usdc::value_rep::CrateArrayEditOp as C;
+    use layerstack::array_edit::{ArrayIndex, Instruction as I, Operand as O};
+    let mut values = Vec::new();
+    let mut literal = |value: &mut UsdaValue| {
+        let i = values.len();
+        values.push(core::mem::replace(value, UsdaValue::Block));
+        i
+    };
+    let index = |i: ArrayIndex| match i {
+        ArrayIndex::Position(i) => i,
+        ArrayIndex::End => i64::MIN,
+    };
+    let instructions = instructions
+        .iter_mut()
+        .map(|op| match op {
+            I::Write {
+                src: O::Literal(value),
+                index: i,
+            } => C::WriteLiteral {
+                literal: literal(value),
+                index: index(*i),
+            },
+            I::Write {
+                src: O::CopyFrom(src),
+                index: i,
+            } => C::WriteRef {
+                src: index(*src),
+                index: index(*i),
+            },
+            I::Insert {
+                src: O::Literal(value),
+                index: i,
+            } => C::InsertLiteral {
+                literal: literal(value),
+                index: index(*i),
+            },
+            I::Insert {
+                src: O::CopyFrom(src),
+                index: i,
+            } => C::InsertRef {
+                src: index(*src),
+                index: index(*i),
+            },
+            I::Erase { index: i } => C::Erase { index: index(*i) },
+            I::MinSize { len } => C::MinSize { len: *len as u64 },
+            I::MinSizeFill { len, fill } => C::MinSizeFill {
+                len: *len as u64,
+                literal: literal(fill),
+            },
+            I::Resize { len } => C::SetSize { len: *len as u64 },
+            I::ResizeFill { len, fill } => C::SetSizeFill {
+                len: *len as u64,
+                literal: literal(fill),
+            },
+            I::MaxSize { len } => C::MaxSize { len: *len as u64 },
+        })
+        .collect();
+    // Document validation rejects incompatible descriptors and literals before
+    // lowering. A sentinel here also makes an invalid raw program fail preflight
+    // if this routine ever gains an unchecked caller.
+    let literals =
+        UsdaValue::array_of(element, values).map_or(Value::Block, |mut v| natural(&mut v));
+    Value::ArrayEdit {
+        literals: Box::new(literals),
+        instructions,
+    }
+}
+
+/// Which spec a metadatum belongs to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Owner {
+    /// Layer metadata (the pseudo-root).
+    Layer,
+    /// Prim metadata.
+    Prim,
+    /// Attribute metadata.
+    Attribute,
+    /// Relationship metadata.
+    Relationship,
+}
+
+/// The value type a metadata field is registered with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FieldType {
+    /// `TfToken`; a USDA string or token value.
+    Token,
+    /// `std::string`; a USDA string or token value.
+    String,
+    /// `double`; a USDA double only (a `float` or integer is rejected).
+    Double,
+    /// `int`; a USDA `int` only.
+    Int,
+    /// `int64`; a USDA `int64` only.
+    Int64,
+    /// `float`; a USDA `float` only.
+    Float,
+    /// `bool`.
+    Bool,
+    /// `VtDictionary`.
+    Dictionary,
+    /// `SdfAssetPath`.
+    Asset,
+    /// `VtArray<SdfAssetPath>`; a USDA asset-path array.
+    AssetArray,
+    /// `VtTokenArray`; a USDA token or string array.
+    TokenArray,
+    /// `VtStringArray`; a USDA string or token array.
+    StringArray,
+    /// `SdfTokenListOp`; a USDA token list op.
+    TokenListOp,
+    /// `SdfStringListOp`; a USDA string list op.
+    StringListOp,
+    /// `SdfInt64ListOp`; a USDA `int64` list op.
+    Int64ListOp,
+    /// No registered field: a USDA dictionary, stored as the text parser
+    /// stores an unregistered dictionary literal, an `SdfUnregisteredValue`
+    /// holding the `VtDictionary`.
+    UnregisteredDictionary,
+    /// `SdfPermission`; a USDA `public` or `private`.
+    Permission,
+}
+
+impl FieldType {
+    /// The type in words with its article, as a diagnostic names it (`an
+    /// int64 list op`).
+    pub(crate) fn article_name(self) -> &'static str {
+        match self {
+            Self::Token => "a token",
+            Self::String => "a string",
+            Self::Double => "a double",
+            Self::Int => "an int",
+            Self::Int64 => "an int64",
+            Self::Float => "a float",
+            Self::Bool => "a bool",
+            Self::Dictionary | Self::UnregisteredDictionary => "a dictionary",
+            Self::Asset => "an asset path",
+            Self::AssetArray => "an asset path array",
+            Self::TokenArray => "a token array",
+            Self::StringArray => "a string array",
+            Self::TokenListOp => "a token list op",
+            Self::StringListOp => "a string list op",
+            Self::Int64ListOp => "an int64 list op",
+            Self::Permission => "a permission (`public` or `private`)",
+        }
+    }
+}
+
+/// The crate field name and registered type of the USDA metadata `key` on
+/// an `owner`, or `None` when the key is not registered for it.
+///
+/// The table covers the core fields `SdfSchema` registers for each spec
+/// type (`pxr/usd/sdf/schema.cpp`, `_Define(SdfSpecTypePseudoRoot)`,
+/// `SdfSpecTypePrim`, the property, `SdfSpecTypeAttribute` and
+/// `SdfSpecTypeRelationship` definitions) and the plugin metadata of `usd`
+/// (`apiSchemas`, `clipSets`), `usdGeom` (`upAxis`, `metersPerUnit`,
+/// `interpolation`, `elementSize`, `unauthoredValuesIndex`,
+/// `constraintTargetIdentifier`, `inactiveIds`),
+/// `usdPhysics` (`kilogramsPerUnit`) and `usdShade` (`bindMaterialAs`,
+/// `connectability`, `renderType`, `sdrMetadata`) in their `plugInfo.json`
+/// files, plus `usdSkel`'s `weight`, `usdRender`'s `renderSettingsPrimPath`,
+/// `usdUI`'s `uiHints` and the core `limits`, `symmetryArguments`,
+/// `fallbackPrimTypes` and `clips` dictionaries. USDA's `doc` is the
+/// `documentation` field, and its bare string the `comment` field.
+///
+/// `profilesInfo` is the one unregistered key: `UsdProfilesClaimsAPI`
+/// (`pxr/usd/usdProfiles/schema.usda`) documents it as prim metadata, but
+/// OpenUSD v26.08 registers no such field, so its text parser keeps the
+/// dictionary as an `SdfUnregisteredValue` and the crate carries the same.
+/// `ClaimsAPI` itself reads and writes the dictionary under `customData`;
+/// both spellings are transported as authored data, and nothing here adds,
+/// checks or certifies a profile claim.
+pub fn metadata_field(owner: Owner, key: &str) -> Option<(&'static str, FieldType)> {
+    use FieldType as F;
+    let shared = match key {
+        "doc" => Some(("documentation", F::String)),
+        "comment" => Some(("comment", F::String)),
+        _ => None,
+    };
+    // `SdfSchema` registers these for prims and both property forms.
+    let named = match (owner, key) {
+        (Owner::Layer, _) => None,
+        (_, "permission") => Some(("permission", F::Permission)),
+        (_, "prefix") => Some(("prefix", F::String)),
+        (_, "suffix") => Some(("suffix", F::String)),
+        (_, "symmetricPeer") => Some(("symmetricPeer", F::String)),
+        (_, "symmetryFunction") => Some(("symmetryFunction", F::Token)),
+        _ => None,
+    };
+    let specific = match owner {
+        Owner::Layer => match key {
+            "defaultPrim" => Some(("defaultPrim", F::Token)),
+            "hasOwnedSubLayers" => Some(("hasOwnedSubLayers", F::Bool)),
+            "customLayerData" => Some(("customLayerData", F::Dictionary)),
+            "fallbackPrimTypes" => Some(("fallbackPrimTypes", F::Dictionary)),
+            "expressionVariables" => Some(("expressionVariables", F::Dictionary)),
+            "startTimeCode" => Some(("startTimeCode", F::Double)),
+            "endTimeCode" => Some(("endTimeCode", F::Double)),
+            "timeCodesPerSecond" => Some(("timeCodesPerSecond", F::Double)),
+            "framesPerSecond" => Some(("framesPerSecond", F::Double)),
+            "framePrecision" => Some(("framePrecision", F::Int)),
+            "startFrame" => Some(("startFrame", F::Double)),
+            "endFrame" => Some(("endFrame", F::Double)),
+            "renderSettingsPrimPath" => Some(("renderSettingsPrimPath", F::String)),
+            "owner" => Some(("owner", F::String)),
+            "sessionOwner" => Some(("sessionOwner", F::String)),
+            "colorConfiguration" => Some(("colorConfiguration", F::Asset)),
+            "colorManagementSystem" => Some(("colorManagementSystem", F::Token)),
+            "upAxis" => Some(("upAxis", F::Token)),
+            "metersPerUnit" => Some(("metersPerUnit", F::Double)),
+            "kilogramsPerUnit" => Some(("kilogramsPerUnit", F::Double)),
+            _ => None,
+        },
+        Owner::Prim => match key {
+            "kind" => Some(("kind", F::Token)),
+            "active" => Some(("active", F::Bool)),
+            "hidden" => Some(("hidden", F::Bool)),
+            "instanceable" => Some(("instanceable", F::Bool)),
+            "customData" => Some(("customData", F::Dictionary)),
+            "assetInfo" => Some(("assetInfo", F::Dictionary)),
+            // Sdf plugin metadata; AOUSD Core §7.4 (registered field types).
+            "payloadAssetDependencies" => Some(("payloadAssetDependencies", F::AssetArray)),
+            "displayName" => Some(("displayName", F::String)),
+            "displayGroupOrder" => Some(("displayGroupOrder", F::StringArray)),
+            "sdrMetadata" => Some(("sdrMetadata", F::Dictionary)),
+            "uiHints" => Some(("uiHints", F::Dictionary)),
+            "symmetryArguments" => Some(("symmetryArguments", F::Dictionary)),
+            "clips" => Some(("clips", F::Dictionary)),
+            "profilesInfo" => Some(("profilesInfo", F::UnregisteredDictionary)),
+            "apiSchemas" => Some(("apiSchemas", F::TokenListOp)),
+            "clipSets" => Some(("clipSets", F::StringListOp)),
+            "inactiveIds" => Some(("inactiveIds", F::Int64ListOp)),
+            _ => None,
+        },
+        Owner::Relationship => match key {
+            "customData" => Some(("customData", F::Dictionary)),
+            "assetInfo" => Some(("assetInfo", F::Dictionary)),
+            "displayGroup" => Some(("displayGroup", F::String)),
+            "displayName" => Some(("displayName", F::String)),
+            "hidden" => Some(("hidden", F::Bool)),
+            "noLoadHint" => Some(("noLoadHint", F::Bool)),
+            "bindMaterialAs" => Some(("bindMaterialAs", F::Token)),
+            "outputName" => Some(("outputName", F::Token)),
+            "renderType" => Some(("renderType", F::Token)),
+            "uiHints" => Some(("uiHints", F::Dictionary)),
+            "symmetryArguments" => Some(("symmetryArguments", F::Dictionary)),
+            _ => None,
+        },
+        Owner::Attribute => match key {
+            "customData" => Some(("customData", F::Dictionary)),
+            "assetInfo" => Some(("assetInfo", F::Dictionary)),
+            "displayGroup" => Some(("displayGroup", F::String)),
+            "displayName" => Some(("displayName", F::String)),
+            "hidden" => Some(("hidden", F::Bool)),
+            "colorSpace" => Some(("colorSpace", F::Token)),
+            "allowedTokens" => Some(("allowedTokens", F::TokenArray)),
+            "interpolation" => Some(("interpolation", F::Token)),
+            "elementSize" => Some(("elementSize", F::Int)),
+            "arraySizeConstraint" => Some(("arraySizeConstraint", F::Int64)),
+            "weight" => Some(("weight", F::Float)),
+            "unauthoredValuesIndex" => Some(("unauthoredValuesIndex", F::Int)),
+            "constraintTargetIdentifier" => Some(("constraintTargetIdentifier", F::Token)),
+            "connectability" => Some(("connectability", F::Token)),
+            "renderType" => Some(("renderType", F::Token)),
+            "sdrMetadata" => Some(("sdrMetadata", F::Dictionary)),
+            "limits" => Some(("limits", F::Dictionary)),
+            "uiHints" => Some(("uiHints", F::Dictionary)),
+            "symmetryArguments" => Some(("symmetryArguments", F::Dictionary)),
+            _ => None,
+        },
+    };
+    shared.or(named).or(specific)
+}
+
+/// Converts a metadatum to its typed field. The value must have the
+/// field's registered type, so that the USDA text of the same document
+/// parses to the same value; only text types convert (a USDA string or
+/// token is quoted text either way).
+fn metadatum(
+    owner: Owner,
+    path: &str,
+    entry: &mut Metadatum,
+) -> Result<super::Field, UsdcWriteError> {
+    if owner == Owner::Attribute && entry.key == "displayUnit" {
+        return Err(UsdcWriteError::UnencodedField {
+            path: path.into(),
+            key: entry.key.clone(),
+        });
+    }
+    let Some((name, ty)) = metadata_field(owner, &entry.key) else {
+        // OpenUSD's text parser keeps metadata no schema registers as an
+        // `SdfUnregisteredValue`: a dictionary as itself, a list op as an
+        // `SdfUnregisteredValueListOp` of each item's text, anything else
+        // as the text of its value (`textParserHelpers.cpp`), which a
+        // crate stores as it is.
+        let value = match &mut entry.value {
+            v @ UsdaValue::Dictionary(_) => natural(v),
+            UsdaValue::UnregisteredListOp(op) => Value::UnregisteredValueListOp(list_op(op)),
+            // A typed list op under such a key, which the parser never
+            // makes but a crate holds (`Sdf.CopySpec` sets one as it is),
+            // is stored as its own list-op type, as `CrateFile::_PackValue`
+            // stores any value of a type the crate knows
+            // (`pxr/usd/sdf/crateFile.cpp`).
+            v @ (UsdaValue::TokenListOp(_)
+            | UsdaValue::StringListOp(_)
+            | UsdaValue::IntListOp(_)
+            | UsdaValue::UIntListOp(_)
+            | UsdaValue::Int64ListOp(_)
+            | UsdaValue::UInt64ListOp(_)) => {
+                return Ok(super::Field {
+                    name: core::mem::take(&mut entry.key),
+                    value: natural(v),
+                });
+            }
+            v => Value::String(v.to_usda_text()),
+        };
+        return Ok(super::Field {
+            name: core::mem::take(&mut entry.key),
+            value: Value::UnregisteredValue(Box::new(value)),
+        });
+    };
+    use UsdaValue as U;
+    let value = match (ty, &mut entry.value) {
+        (FieldType::Token, U::Token(v) | U::String(v)) => Some(Value::Token(core::mem::take(v))),
+        (FieldType::String, U::Token(v) | U::String(v)) => Some(Value::String(core::mem::take(v))),
+        (FieldType::Double, U::Double(v)) => Some(Value::Double(*v)),
+        (FieldType::Int, U::Int(v)) => Some(Value::Int(*v)),
+        (FieldType::Int64, U::Int64(v)) => Some(Value::Int64(*v)),
+        (FieldType::Float, U::Float(v)) => Some(Value::Float(*v)),
+        (FieldType::Bool, U::Bool(v)) => Some(Value::Bool(*v)),
+        (FieldType::Dictionary, v @ U::Dictionary(_)) => Some(natural(v)),
+        (FieldType::Asset, U::Asset(v)) => Some(Value::Asset(core::mem::take(v))),
+        (FieldType::AssetArray, U::AssetArray(v)) => Some(Value::AssetArray(core::mem::take(v))),
+        (FieldType::TokenArray, U::TokenArray(v) | U::StringArray(v)) => {
+            Some(Value::TokenArray(core::mem::take(v)))
+        }
+        (FieldType::StringArray, U::StringArray(v) | U::TokenArray(v)) => {
+            Some(Value::StringArray(core::mem::take(v)))
+        }
+        (FieldType::TokenListOp, U::TokenListOp(op)) => Some(Value::TokenListOp(list_op(op))),
+        (FieldType::StringListOp, U::StringListOp(op)) => Some(Value::StringListOp(list_op(op))),
+        (FieldType::Int64ListOp, U::Int64ListOp(op)) => {
+            Some(Value::Int64ListOp(map_list_op(op, |x| *x)))
+        }
+        (FieldType::UnregisteredDictionary, v @ U::Dictionary(_)) => {
+            Some(Value::UnregisteredValue(Box::new(natural(v))))
+        }
+        (FieldType::Permission, U::Token(v) | U::String(v)) => match v.as_str() {
+            "public" => Some(Value::Permission(super::Permission::Public)),
+            "private" => Some(Value::Permission(super::Permission::Private)),
+            _ => None,
+        },
+        _ => None,
+    };
+    let value = value.ok_or_else(|| UsdcWriteError::MetadataType {
+        path: path.into(),
+        key: entry.key.clone(),
+        expected: ty,
+    })?;
+    Ok(super::Field {
+        name: String::from(name),
+        value,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::vec;
+
+    use crate::usda::writer::WriteError;
+
+    use super::*;
+    use crate::usdc::writer::Field;
+
+    fn natural(value: &UsdaValue) -> Value {
+        super::natural(&mut value.clone())
+    }
+
+    #[test]
+    fn owned_attribute_and_dictionary_arrays_keep_their_buffers() {
+        let times = vec![1.25, 2.5];
+        let times_ptr = times.as_ptr();
+        let mut times = UsdaValue::DoubleArray(times.into());
+        let Value::TimeCodeArray(times) = attribute_value(Declared::TimeCode, &mut times) else {
+            panic!("timecode array");
+        };
+        assert_eq!(times.as_ptr(), times_ptr);
+
+        let numbers = vec![1.25_f32; 128];
+        let numbers_ptr = numbers.as_ptr();
+        let mut metadata = UsdaValue::Dictionary(vec![(
+            "numbers".into(),
+            UsdaValue::FloatArray(numbers.into()),
+        )]);
+        let Value::Dictionary(entries) = super::natural(&mut metadata) else {
+            panic!("dictionary");
+        };
+        let Value::FloatArray(numbers) = &entries[0].1 else {
+            panic!("float array");
+        };
+        assert_eq!(numbers.as_ptr(), numbers_ptr);
+    }
+
+    fn mesh_doc() -> Document {
+        let mut mesh = Prim::def("Mesh", "Tri");
+        mesh.push_property(Attribute::new(
+            "points",
+            "point3f[]",
+            UsdaValue::Float3Array(vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]].into()),
+        ));
+        mesh.push_property(
+            Attribute::new(
+                "primvars:st",
+                "texCoord2f[]",
+                UsdaValue::Float2Array(vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]].into()),
+            )
+            .with_metadata("interpolation", UsdaValue::String("vertex".into()))
+            .with_metadata("elementSize", UsdaValue::Int(1)),
+        );
+        mesh.push_property(
+            Attribute::new(
+                "subdivisionScheme",
+                "token",
+                UsdaValue::Token("none".into()),
+            )
+            .uniform(),
+        );
+        mesh.push_property(Attribute {
+            value: None,
+            ..Attribute::new("h", "half", UsdaValue::Int(0)).custom()
+        });
+        mesh.push_property(Attribute::new("t", "timecode", UsdaValue::Double(24.0)).custom());
+        let mut root = Prim::def("Xform", "Root");
+        root.metadata
+            .push(Metadatum::new("kind", UsdaValue::Token("component".into())));
+        root.metadata
+            .push(Metadatum::new("doc", UsdaValue::Token("A root.".into())));
+        root.children.push(mesh);
+        root.children
+            .push(Prim::new(UsdaSpecifier::Over, None, "Untyped"));
+        Document {
+            default_prim: Some("Root".into()),
+            metadata: vec![
+                Metadatum::new("metersPerUnit", UsdaValue::Double(1.0)),
+                Metadatum::new("upAxis", UsdaValue::Token("Z".into())),
+                Metadatum::new(
+                    "customLayerData",
+                    UsdaValue::Dictionary(vec![("n".into(), UsdaValue::Int(3))]),
+                ),
+            ],
+            prims: vec![root],
+            ..Document::new()
+        }
+    }
+
+    fn fields(specs: &[Spec], path: &str) -> Vec<Field> {
+        specs
+            .iter()
+            .find(|s| s.path == path)
+            .unwrap()
+            .fields
+            .clone()
+    }
+
+    #[test]
+    fn lowers_as_the_text_parser_stores() {
+        let specs = document_specs(&mesh_doc()).unwrap();
+        let paths: Vec<&str> = specs.iter().map(|s| s.path.as_str()).collect();
+        assert_eq!(
+            paths,
+            [
+                "/",
+                "/Root",
+                "/Root/Tri",
+                "/Root/Tri.points",
+                "/Root/Tri.primvars:st",
+                "/Root/Tri.subdivisionScheme",
+                "/Root/Tri.h",
+                "/Root/Tri.t",
+                "/Root/Untyped",
+            ],
+            "specs"
+        );
+        assert_eq!(
+            fields(&specs, "/"),
+            [
+                Field::new("defaultPrim", Value::Token("Root".into())),
+                Field::new("metersPerUnit", Value::Double(1.0)),
+                Field::new("upAxis", Value::Token("Z".into())),
+                Field::new(
+                    "customLayerData",
+                    Value::Dictionary(vec![("n".into(), Value::Int(3))])
+                ),
+                Field::new("primChildren", Value::TokenVector(vec!["Root".into()])),
+            ],
+            "pseudo-root"
+        );
+        assert_eq!(
+            fields(&specs, "/Root"),
+            [
+                Field::new("specifier", Value::Specifier(Specifier::Def)),
+                Field::new("typeName", Value::Token("Xform".into())),
+                Field::new("kind", Value::Token("component".into())),
+                Field::new("documentation", Value::String("A root.".into())),
+                Field::new(
+                    "primChildren",
+                    Value::TokenVector(vec!["Tri".into(), "Untyped".into()])
+                ),
+            ],
+            "prim"
+        );
+        assert_eq!(
+            fields(&specs, "/Root/Untyped"),
+            [Field::new("specifier", Value::Specifier(Specifier::Over))],
+            "untyped over"
+        );
+        assert_eq!(
+            fields(&specs, "/Root/Tri.primvars:st"),
+            [
+                Field::new("custom", Value::Bool(false)),
+                Field::new("typeName", Value::Token("texCoord2f[]".into())),
+                Field::new("variability", Value::Variability(Variability::Varying)),
+                Field::new(
+                    "default",
+                    Value::Vec2fArray(vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]])
+                ),
+                Field::new("interpolation", Value::Token("vertex".into())),
+                Field::new("elementSize", Value::Int(1)),
+            ],
+            "primvar"
+        );
+        assert_eq!(
+            fields(&specs, "/Root/Tri.h"),
+            [
+                Field::new("custom", Value::Bool(true)),
+                Field::new("typeName", Value::Token("half".into())),
+                Field::new("variability", Value::Variability(Variability::Varying)),
+            ],
+            "declaration only"
+        );
+        assert_eq!(
+            fields(&specs, "/Root/Tri.t")[3],
+            Field::new("default", Value::TimeCode(24.0)),
+            "timecode"
+        );
+        let uniform = &fields(&specs, "/Root/Tri.subdivisionScheme")[2];
+        assert_eq!(
+            uniform.value,
+            Value::Variability(Variability::Uniform),
+            "uniform"
+        );
+    }
+
+    #[test]
+    fn writes_and_reads_back() {
+        let bytes = write_document(&mesh_doc()).unwrap();
+        assert_eq!(&bytes[..8], b"PXR-USDC", "magic");
+        assert_eq!(&bytes[8..11], &[0, 9, 0], "timecode needs 0.9.0");
+        assert_eq!(bytes, write_document(&mesh_doc()).unwrap(), "deterministic");
+        let header = crate::usdc::header::parse_header(&bytes).unwrap();
+        let toc = crate::usdc::toc::parse_toc(&bytes, header.toc_offset).unwrap();
+        let sections = crate::usdc::section::parse_sections(
+            &bytes,
+            &toc,
+            header.crate_version(),
+            &mut crate::usdc::DecodeBudget::with_limit(u64::MAX),
+        )
+        .unwrap();
+        assert_eq!(sections.specs.len(), 9, "spec count");
+    }
+
+    /// Double-typed layer metadata reads back as the same value from the
+    /// USDA (through the text parser) and from the USDC (through the crate
+    /// reader), including values that are not exactly a `float`.
+    #[test]
+    fn double_metadata_agrees_between_usda_and_usdc() {
+        use crate::usda::ast::{LayerMeta, MetadataValue, Value as AstValue};
+
+        let values = [
+            ("metersPerUnit", 0.1),
+            ("kilogramsPerUnit", 0.001),
+            ("timeCodesPerSecond", 23.976),
+            ("startTimeCode", 1e-300),
+        ];
+        let mut doc = mesh_doc();
+        doc.metadata.retain(|m| m.key != "metersPerUnit");
+        for (key, v) in values {
+            doc.metadata.push(Metadatum::new(key, UsdaValue::Double(v)));
+        }
+
+        let text = doc.to_usda().unwrap();
+        let parsed = crate::usda::parser::parse(&text);
+        assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+        let bytes = write_document(&doc).unwrap();
+        let header = crate::usdc::header::parse_header(&bytes).unwrap();
+        let toc = crate::usdc::toc::parse_toc(&bytes, header.toc_offset).unwrap();
+        let sections = crate::usdc::section::parse_sections(
+            &bytes,
+            &toc,
+            header.crate_version(),
+            &mut crate::usdc::DecodeBudget::with_limit(u64::MAX),
+        )
+        .unwrap();
+        let root = sections
+            .specs
+            .iter()
+            .find(|s| sections.path(s.path_index as usize) == Some("/"))
+            .unwrap();
+
+        for (key, v) in values {
+            let from_usda = parsed
+                .layer
+                .metadata
+                .iter()
+                .find_map(|m| match m {
+                    LayerMeta::Custom(e) if e.key == key => match &e.value {
+                        MetadataValue::Value(AstValue::Number(n)) => Some(*n),
+                        _ => None,
+                    },
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("{key} in the USDA"));
+            let mut i = root.fieldset_index as usize;
+            let from_usdc = loop {
+                let index = sections.fieldsets[i];
+                assert!(index >= 0, "{key} in the USDC");
+                let field = sections.fields[index as usize];
+                if &sections.tokens[field.token_index as usize] == key {
+                    let rep = crate::usdc::value_rep::RawValueRep::new(field.value_rep);
+                    match crate::usdc::value_rep::decode_value(&rep, &bytes, &sections) {
+                        Ok(crate::usdc::value_rep::CrateValue::Double(d)) => break d,
+                        other => panic!("{key}: expected a double, got {other:?}"),
+                    }
+                }
+                i += 1;
+            };
+            assert_eq!(from_usda.to_bits(), v.to_bits(), "{key} from USDA");
+            assert_eq!(from_usdc.to_bits(), v.to_bits(), "{key} from USDC");
+        }
+    }
+
+    #[test]
+    fn lowers_relationships_connections_and_api_schemas() {
+        let mut shader = Prim::def("Shader", "S");
+        shader.push_property(Attribute {
+            value: None,
+            ..Attribute::new("outputs:surface", "token", UsdaValue::Int(0))
+        });
+        let mut surface = Attribute::new("outputs:surface", "token", UsdaValue::Int(0));
+        surface.value = None;
+        surface.connections = Some(UsdaListOp::explicit(vec![
+            "/Root/M/S.outputs:surface".into(),
+        ]));
+        let mut input = Attribute::new("inputs:x", "float", UsdaValue::Float(0.5))
+            .with_metadata("connectability", UsdaValue::Token("interfaceOnly".into()));
+        input.connections = Some(UsdaListOp::explicit(vec![
+            "/Root/M/S.outputs:surface".into(),
+        ]));
+        let mut material = Prim::def("Material", "M");
+        material.push_property(surface);
+        material.push_property(input);
+        material.children.push(shader);
+        let mut root = Prim::def("Mesh", "Root");
+        root.metadata.push(Metadatum::new(
+            "apiSchemas",
+            UsdaValue::TokenListOp(UsdaListOp::prepend(vec!["MaterialBindingAPI".into()])),
+        ));
+        root.push_property(Attribute::new("a", "int", UsdaValue::Int(1)));
+        let mut binding = Relationship::new("material:binding", "/Root/M");
+        binding.metadata.push(Metadatum::new(
+            "bindMaterialAs",
+            UsdaValue::Token("strongerThanDescendants".into()),
+        ));
+        root.push_property(binding);
+        root.push_property(Relationship {
+            targets: Some(UsdaListOp::explicit(vec![])),
+            ..Relationship::new("blocked", "/Root").custom()
+        });
+        root.push_property(Relationship {
+            targets: None,
+            ..Relationship::new("bare", "/Root")
+        });
+        root.children.push(material);
+        let doc = Document {
+            prims: vec![root],
+            ..Document::new()
+        };
+        let specs = document_specs(&doc).unwrap();
+        let explicit = |paths: &[&str]| {
+            Value::PathListOp(ListOp::explicit(
+                paths.iter().map(|p| (*p).into()).collect(),
+            ))
+        };
+        assert_eq!(
+            fields(&specs, "/Root"),
+            [
+                Field::new("specifier", Value::Specifier(Specifier::Def)),
+                Field::new("typeName", Value::Token("Mesh".into())),
+                Field::new(
+                    "apiSchemas",
+                    Value::TokenListOp(ListOp::prepend(vec!["MaterialBindingAPI".into()]))
+                ),
+                Field::new("primChildren", Value::TokenVector(vec!["M".into()])),
+                Field::new(
+                    "properties",
+                    Value::TokenVector(vec![
+                        "a".into(),
+                        "material:binding".into(),
+                        "blocked".into(),
+                        "bare".into()
+                    ])
+                ),
+            ],
+            "prim"
+        );
+        assert_eq!(
+            fields(&specs, "/Root.material:binding"),
+            [
+                Field::new("variability", Value::Variability(Variability::Uniform)),
+                Field::new("targetPaths", explicit(&["/Root/M"])),
+                Field::new(
+                    "bindMaterialAs",
+                    Value::Token("strongerThanDescendants".into())
+                ),
+            ],
+            "relationship"
+        );
+        assert_eq!(
+            fields(&specs, "/Root.blocked"),
+            [
+                Field::new("variability", Value::Variability(Variability::Uniform)),
+                Field::new("custom", Value::Bool(true)),
+                Field::new("targetPaths", explicit(&[])),
+            ],
+            "custom relationship with an explicit empty target list"
+        );
+        assert_eq!(
+            fields(&specs, "/Root.bare"),
+            [Field::new(
+                "variability",
+                Value::Variability(Variability::Uniform)
+            )],
+            "bare relationship"
+        );
+        assert_eq!(
+            fields(&specs, "/Root/M.inputs:x"),
+            [
+                Field::new("custom", Value::Bool(false)),
+                Field::new("typeName", Value::Token("float".into())),
+                Field::new("variability", Value::Variability(Variability::Varying)),
+                Field::new("default", Value::Float(0.5)),
+                Field::new("connectability", Value::Token("interfaceOnly".into())),
+                Field::new("connectionPaths", explicit(&["/Root/M/S.outputs:surface"])),
+            ],
+            "value, metadata and connection"
+        );
+        assert_eq!(
+            fields(&specs, "/Root/M.outputs:surface")[3],
+            Field::new("connectionPaths", explicit(&["/Root/M/S.outputs:surface"])),
+            "connection only"
+        );
+        let file = write_document(&doc).unwrap();
+        assert_eq!(&file[..8], b"PXR-USDC", "writes");
+    }
+
+    /// Dictionary metadata: the registered UI hint, limit and symmetry
+    /// dictionaries on every owner, and prim `profilesInfo`, which OpenUSD
+    /// registers nowhere and so stores as an `SdfUnregisteredValue`. The
+    /// profile data is carried exactly as authored; nothing is added.
+    #[test]
+    fn transports_dictionary_metadata_and_profiles_info() {
+        let dict = |entries: Vec<(&str, UsdaValue)>| {
+            UsdaValue::Dictionary(entries.into_iter().map(|(k, v)| (k.into(), v)).collect())
+        };
+        let profiles = dict(vec![
+            (
+                "capabilityUsages",
+                dict(vec![("usd.geom.mesh", UsdaValue::String("hard".into()))]),
+            ),
+            (
+                "profileCompatibility",
+                dict(vec![(
+                    "vnd.apple.visionos_v1",
+                    UsdaValue::StringArray(vec!["usd.geom.hairAndFur".into()]),
+                )]),
+            ),
+        ]);
+        let limits = dict(vec![
+            ("soft", dict(vec![("min", UsdaValue::Float(0.0))])),
+            ("hard", dict(vec![("max", UsdaValue::Float(10.0))])),
+        ]);
+        let hints = dict(vec![("displayGroup", UsdaValue::String("Shape".into()))]);
+        let mut prim = Prim::def("Xform", "Root");
+        prim.metadata.push(Metadatum::new(
+            "apiSchemas",
+            UsdaValue::TokenListOp(UsdaListOp::prepend(vec!["ClaimsAPI".into()])),
+        ));
+        prim.metadata
+            .push(Metadatum::new("profilesInfo", profiles.clone()));
+        prim.metadata.push(Metadatum::new(
+            "customData",
+            dict(vec![("profilesInfo", profiles.clone())]),
+        ));
+        prim.metadata.push(Metadatum::new("uiHints", hints.clone()));
+        prim.metadata.push(Metadatum::new(
+            "symmetryArguments",
+            dict(vec![("axis", UsdaValue::Token("x".into()))]),
+        ));
+        prim.push_property(
+            Attribute::new("size", "float", UsdaValue::Float(1.0))
+                .with_metadata("limits", limits.clone())
+                .with_metadata("uiHints", hints.clone()),
+        );
+        let mut rel = Relationship::new("target", "/Root");
+        rel.metadata.push(Metadatum::new("uiHints", hints.clone()));
+        prim.push_property(rel);
+        let doc = Document {
+            metadata: vec![Metadatum::new(
+                "fallbackPrimTypes",
+                dict(vec![(
+                    "MyType",
+                    UsdaValue::TokenArray(vec!["Xform".into()]),
+                )]),
+            )],
+            prims: vec![prim],
+            ..Document::new()
+        };
+        let specs = document_specs(&doc).unwrap();
+        assert_eq!(
+            fields(&specs, "/")[0],
+            Field::new("fallbackPrimTypes", natural(&doc.metadata[0].value)),
+            "layer fallbackPrimTypes"
+        );
+        let root = fields(&specs, "/Root");
+        assert_eq!(
+            root[3],
+            Field::new(
+                "profilesInfo",
+                Value::UnregisteredValue(Box::new(natural(&profiles)))
+            ),
+            "bare profilesInfo is an unregistered dictionary"
+        );
+        assert_eq!(
+            root[4].value,
+            Value::Dictionary(vec![("profilesInfo".into(), natural(&profiles))]),
+            "ClaimsAPI's customData.profilesInfo is ordinary customData"
+        );
+        assert_eq!(root[5], Field::new("uiHints", natural(&hints)), "uiHints");
+        assert_eq!(
+            fields(&specs, "/Root.size")[4],
+            Field::new("limits", natural(&limits)),
+            "limits"
+        );
+        assert_eq!(
+            fields(&specs, "/Root.target")[2],
+            Field::new("uiHints", natural(&hints)),
+            "relationship uiHints"
+        );
+        let unregistered = specs
+            .iter()
+            .flat_map(|s| &s.fields)
+            .filter(|f| matches!(f.value, Value::UnregisteredValue(_)))
+            .count();
+        assert_eq!(unregistered, 1, "only profilesInfo is unregistered");
+
+        // The crate reader sees the dictionary itself.
+        let bytes = write_document(&doc).unwrap();
+        let header = crate::usdc::header::parse_header(&bytes).unwrap();
+        let toc = crate::usdc::toc::parse_toc(&bytes, header.toc_offset).unwrap();
+        let sections = crate::usdc::section::parse_sections(
+            &bytes,
+            &toc,
+            header.crate_version(),
+            &mut crate::usdc::DecodeBudget::with_limit(u64::MAX),
+        )
+        .unwrap();
+        let profiles_field = sections
+            .fields
+            .iter()
+            .find(|f| &sections.tokens[f.token_index as usize] == "profilesInfo")
+            .unwrap();
+        let rep = crate::usdc::value_rep::RawValueRep::new(profiles_field.value_rep);
+        assert_eq!(
+            rep.value_type().unwrap(),
+            crate::usdc::value_type::ValueType::UnregisteredValue,
+            "stored as an unregistered value"
+        );
+        let crate::usdc::value_rep::CrateValue::Dictionary(entries) =
+            crate::usdc::value_rep::decode_value(&rep, &bytes, &sections).unwrap()
+        else {
+            panic!("profilesInfo holds a dictionary");
+        };
+        let keys: Vec<&str> = entries.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(keys, ["capabilityUsages", "profileCompatibility"], "keys");
+
+        // Any other unregistered dictionary is transported the same way.
+        let mut doc = doc;
+        doc.prims[0]
+            .metadata
+            .push(Metadatum::new("exedraInfo", hints));
+        let specs = document_specs(&doc).unwrap();
+        assert!(
+            specs[1].fields.iter().any(|f| f.name == "exedraInfo"
+                && matches!(&f.value, Value::UnregisteredValue(inner)
+                    if matches!(**inner, Value::Dictionary(_)))),
+            "exedraInfo is transported as an unregistered dictionary"
+        );
+    }
+
+    /// Reorder statements, list-edited targets and connections and a value
+    /// block land where the text parser stores them.
+    #[test]
+    fn lowers_reorders_list_edits_and_blocks() {
+        let mut prim = Prim::def("Xform", "A");
+        prim.property_order = Some(vec!["x".into(), "r".into()]);
+        prim.prim_order = Some(vec!["C".into()]);
+        let mut edited = Relationship {
+            targets: Some(UsdaListOp::prepend(vec!["/A/C".into()])),
+            ..Relationship::new("r", "/A").custom()
+        };
+        edited
+            .metadata
+            .push(Metadatum::new("doc", UsdaValue::String("r".into())));
+        prim.push_property(edited);
+        let mut explicit = Relationship::new("s", "/A/C");
+        explicit
+            .metadata
+            .push(Metadatum::new("doc", UsdaValue::String("s".into())));
+        prim.push_property(explicit);
+        let mut x = Attribute::new("x", "float", UsdaValue::Block);
+        x.connections = Some(UsdaListOp {
+            deleted: vec!["/A.y".into()],
+            ..UsdaListOp::default()
+        });
+        prim.push_property(x);
+        prim.children.push(Prim::def("Scope", "C"));
+        let doc = Document {
+            prim_order: Some(vec!["A".into()]),
+            prims: vec![prim],
+            ..Document::new()
+        };
+        let specs = document_specs(&doc).unwrap();
+        let tokens =
+            |names: &[&str]| Value::TokenVector(names.iter().map(|n| String::from(*n)).collect());
+        assert_eq!(
+            fields(&specs, "/"),
+            [
+                Field::new("primOrder", tokens(&["A"])),
+                Field::new("primChildren", tokens(&["A"])),
+            ],
+            "pseudo-root"
+        );
+        assert_eq!(
+            fields(&specs, "/A"),
+            [
+                Field::new("specifier", Value::Specifier(Specifier::Def)),
+                Field::new("typeName", Value::Token("Xform".into())),
+                Field::new("propertyOrder", tokens(&["x", "r"])),
+                Field::new("primOrder", tokens(&["C"])),
+                Field::new("primChildren", tokens(&["C"])),
+                Field::new("properties", tokens(&["r", "s", "x"])),
+            ],
+            "prim"
+        );
+        let paths = |items: &[&str]| items.iter().map(|p| String::from(*p)).collect();
+        assert_eq!(
+            fields(&specs, "/A.r"),
+            [
+                Field::new("variability", Value::Variability(Variability::Uniform)),
+                Field::new("custom", Value::Bool(true)),
+                Field::new("documentation", Value::String("r".into())),
+                Field::new(
+                    "targetPaths",
+                    Value::PathListOp(ListOp::prepend(paths(&["/A/C"])))
+                ),
+            ],
+            "list edits follow the declaration's metadata"
+        );
+        assert_eq!(
+            fields(&specs, "/A.s")[1..],
+            [
+                Field::new(
+                    "targetPaths",
+                    Value::PathListOp(ListOp::explicit(paths(&["/A/C"])))
+                ),
+                Field::new("documentation", Value::String("s".into())),
+            ],
+            "an explicit list is part of the declaration"
+        );
+        assert_eq!(
+            fields(&specs, "/A.x")[3..],
+            [
+                Field::new("default", Value::Block),
+                Field::new(
+                    "connectionPaths",
+                    Value::PathListOp(ListOp {
+                        deleted: paths(&["/A.y"]),
+                        ..ListOp::default()
+                    })
+                ),
+            ],
+            "blocked default and deleted connection"
+        );
+    }
+
+    /// Imports USDA text into a layer with its own interners.
+    fn import_usda(source: &str) -> (Layer, TokenInterner, PathInterner) {
+        let parsed = crate::usda::parser::parse(source);
+        assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
+        let result = crate::usda::emit::emit(
+            &parsed.layer,
+            layerstack::LayerId(1),
+            &tokens,
+            &paths,
+            &mut NoAssets,
+        );
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        (result.layer, tokens, paths)
+    }
+
+    use layerstack::NoAssets;
+
+    /// A layer saved as USDC reads back as the layer it was saved from:
+    /// saving the read-back layer as USDA gives the same text as saving
+    /// the original, so both formats carried the same authored slots.
+    #[test]
+    fn saved_layer_reads_back_as_the_same_layer() {
+        let source = r#"#usda 1.0
+(
+    "A layer."
+    defaultPrim = "A"
+    hasOwnedSubLayers = true
+    upAxis = "Z"
+)
+
+reorder rootPrims = ["A"]
+
+def Xform "A" (
+    permission = private
+    prepend apiSchemas = ["ClaimsAPI", "exedra:Tagged:one"]
+    customData = {
+        timecode cue = 12
+        timecode[] marks = [1, 2.5]
+    }
+    profilesInfo = {
+        dictionary capabilityUsages = {
+            string "usd.geom.mesh" = "hard"
+        }
+    }
+)
+{
+    reorder properties = ["y", "x"]
+    uniform token exedra:mode = "a"
+    rel r = </A.x>
+    float x = 1 (
+        limits = {
+            dictionary soft = {
+                float min = 0
+            }
+        }
+    )
+    delete float y.connect = </A.x>
+    custom double z = None (
+        permission = public
+    )
+    timecode t = 24
+    asset[] files = [@./a.png@, @b/c.exr@]
+    double height.spline = {
+        bezier,
+        pre: linear,
+        post: sloped(0.57),
+        loop: (15, 25, 0, 2, 11.7),
+        7: 5.5 & 7.21; pre (0, 0); post held,
+        15: 8.18; post curve (2.49, 1.17),
+        20: 14.72; pre (3.77, -1.4); post curve (1.1, -1.4),
+    }
+    float sway.spline = {
+        hermite,
+        post: loop oscillate,
+        0: 0.1; pre (0); post curve (0.25),
+        10: 1; pre (-0.5); post linear,
+    }
+    half twist.spline = {
+        0: 0.5; pre (0, 0); post held,
+    }
+
+    def Scope "C"
+    {
+    }
+}
+"#;
+        let (layer, tokens, paths) = import_usda(source);
+        let usda = crate::usda::save_usda(&layer, &tokens, &paths).unwrap();
+        let bytes = save_usdc(&layer, &tokens, &paths).unwrap();
+
+        let tokens = TokenInterner::default();
+        let paths = PathInterner::default();
+        let read = crate::usdc::read_usdc(
+            &bytes,
+            layerstack::LayerId(1),
+            &tokens,
+            &paths,
+            &mut NoAssets,
+        )
+        .unwrap();
+        assert!(read.diagnostics.is_empty(), "{:?}", read.diagnostics);
+        let again = crate::usda::save_usda(&read.layer, &tokens, &paths).unwrap();
+        assert_eq!(again, usda, "USDC and USDA carry the same layer");
+    }
+
+    /// A `quath[]` default reads back as the same quaternions from the USDA
+    /// text and from the USDC: real part first in text, `[i, j, k, r]` in
+    /// both layers.
+    #[test]
+    fn quath_arrays_agree_between_usda_and_usdc() {
+        let quats = vec![[0, 0, 0x39a8, 0x39a8], [0x3c00, 0, 0, 0], [0, 0, 0, 0x3c00]];
+        let mut root = Prim::def("PointInstancer", "Root");
+        root.push_property(Attribute::new(
+            "orientations",
+            "quath[]",
+            UsdaValue::QuathArray(quats.clone().into()),
+        ));
+        let doc = Document {
+            prims: vec![root],
+            ..Document::new()
+        };
+        let (layer, tokens, paths) = import_usda(&doc.to_usda().unwrap());
+        let usdc_tokens = TokenInterner::default();
+        let usdc_paths = PathInterner::default();
+        let read = crate::usdc::read_usdc(
+            &write_document(&doc).unwrap(),
+            layerstack::LayerId(1),
+            &usdc_tokens,
+            &usdc_paths,
+            &mut NoAssets,
+        )
+        .unwrap();
+        assert!(read.diagnostics.is_empty(), "{:?}", read.diagnostics);
+        let expected = Some(layerstack::Value::Array(
+            quats.iter().map(|&q| layerstack::Value::Quath(q)).collect(),
+        ));
+        let path = layerstack::PropertyPath::parse("/Root.orientations", &tokens, &paths).unwrap();
+        assert_eq!(layer.property(path).unwrap().default, expected, "USDA");
+        let path = layerstack::PropertyPath::parse("/Root.orientations", &usdc_tokens, &usdc_paths)
+            .unwrap();
+        assert_eq!(read.layer.property(path).unwrap().default, expected, "USDC");
+    }
+
+    /// Arcs land where the text parser stores them: sublayers as the
+    /// `subLayers` string vector and `subLayerOffsets` after the layer
+    /// metadata, prim arcs after the prim metadata. An explicit payload
+    /// list of one external payload is stored as a single `SdfPayload`, as
+    /// OpenUSD stores it.
+    #[test]
+    fn lowers_composition_arcs() {
+        use crate::usda::writer::{LayerOffset, SubLayer};
+
+        let arc = |asset: Option<&str>, prim_path: Option<&str>| UsdaReference {
+            custom_data: Vec::new(),
+            asset: asset.map(Into::into),
+            prim_path: prim_path.map(Into::into),
+            offset: LayerOffset {
+                offset: 2.0,
+                scale: 1.0,
+            },
+        };
+        let mut prim = Prim::def("Xform", "P");
+        prim.metadata
+            .push(Metadatum::new("kind", UsdaValue::Token("group".into())));
+        prim.inherits = Some(UsdaListOp::explicit(vec!["/C".into()]));
+        prim.payloads = Some(UsdaListOp::explicit(vec![arc(Some("./p.usda"), None)]));
+        prim.references = Some(UsdaListOp::prepend(vec![
+            arc(Some("./r.usda"), Some("/R")),
+            arc(None, Some("/C")),
+        ]));
+        prim.specializes = Some(UsdaListOp::explicit(vec![]));
+        let doc = Document {
+            metadata: vec![Metadatum::new("upAxis", UsdaValue::Token("Z".into()))],
+            sublayers: vec![SubLayer {
+                asset: "./base.usda".into(),
+                offset: LayerOffset {
+                    offset: 10.0,
+                    scale: 2.0,
+                },
+            }],
+            prims: vec![prim, Prim::new(UsdaSpecifier::Class, None, "C")],
+            ..Document::new()
+        };
+        let specs = document_specs(&doc).unwrap();
+        assert_eq!(
+            fields(&specs, "/")[1..3],
+            [
+                Field::new("subLayers", Value::StringVector(vec!["./base.usda".into()])),
+                Field::new(
+                    "subLayerOffsets",
+                    Value::LayerOffsetVector(vec![(10.0, 2.0)])
+                ),
+            ],
+            "sublayers"
+        );
+        let reference = |asset: &str, prim_path: &str| Reference {
+            asset: asset.into(),
+            prim_path: prim_path.into(),
+            offset: 2.0,
+            scale: 1.0,
+            custom_data: Vec::new(),
+        };
+        assert_eq!(
+            fields(&specs, "/P")[2..7],
+            [
+                Field::new("kind", Value::Token("group".into())),
+                Field::new(
+                    "inheritPaths",
+                    Value::PathListOp(ListOp::explicit(vec!["/C".into()]))
+                ),
+                Field::new(
+                    "payload",
+                    Value::PayloadListOp(ListOp::explicit(vec![reference("./p.usda", "")]))
+                ),
+                Field::new(
+                    "references",
+                    Value::ReferenceListOp(ListOp::prepend(vec![
+                        reference("./r.usda", "/R"),
+                        reference("", "/C"),
+                    ]))
+                ),
+                Field::new("specializes", Value::PathListOp(ListOp::explicit(vec![]))),
+            ],
+            "prim arcs"
+        );
+
+        let bytes = write_document(&doc).unwrap();
+        let header = crate::usdc::header::parse_header(&bytes).unwrap();
+        let toc = crate::usdc::toc::parse_toc(&bytes, header.toc_offset).unwrap();
+        let sections = crate::usdc::section::parse_sections(
+            &bytes,
+            &toc,
+            header.crate_version(),
+            &mut crate::usdc::DecodeBudget::with_limit(u64::MAX),
+        )
+        .unwrap();
+        let payload = sections
+            .fields
+            .iter()
+            .find(|f| &sections.tokens[f.token_index as usize] == "payload")
+            .unwrap();
+        let rep = crate::usdc::value_rep::RawValueRep::new(payload.value_rep);
+        assert_eq!(
+            rep.value_type().unwrap(),
+            crate::usdc::value_type::ValueType::Payload,
+            "one external payload is an SdfPayload"
+        );
+        let crate::usdc::value_rep::CrateValue::Dictionary(entries) =
+            crate::usdc::value_rep::decode_value(&rep, &bytes, &sections).unwrap()
+        else {
+            panic!("the payload decodes");
+        };
+        assert!(
+            matches!(&entries[1], (key, crate::usdc::value_rep::CrateValue::String(path)) if key == "primPath" && path.is_empty()),
+            "the empty prim path reads back empty: {entries:?}"
+        );
+    }
+
+    /// A borrowed document lowers one spec at a time: a namespace far
+    /// deeper than a small stack holds frames for writes every spec, prim
+    /// chain and nested variants alike.
+    #[cfg(feature = "std")]
+    #[test]
+    #[cfg_attr(target_os = "wasi", ignore = "WASI runs tests without threads")]
+    fn deep_documents_write_on_a_small_stack() {
+        const DEPTH: usize = 1000;
+        const VARIANT_DEPTH: usize = 100;
+        let specs = std::thread::Builder::new()
+            .stack_size(128 * 1024)
+            .spawn(|| {
+                let mut variant = Prim::new(UsdaSpecifier::Over, None, "x");
+                for _ in 1..VARIANT_DEPTH {
+                    let mut outer = Prim::new(UsdaSpecifier::Over, None, "x");
+                    outer.variant_sets.push(crate::usda::writer::VariantSet {
+                        name: String::from("v"),
+                        variants: vec![variant],
+                    });
+                    variant = outer;
+                }
+                let mut prim = Prim::new(UsdaSpecifier::Def, None, "A");
+                prim.variant_sets.push(crate::usda::writer::VariantSet {
+                    name: String::from("v"),
+                    variants: vec![variant],
+                });
+                for _ in 1..DEPTH {
+                    let mut parent = Prim::new(UsdaSpecifier::Def, None, "A");
+                    parent.children.push(prim);
+                    prim = parent;
+                }
+                let mut doc = Document::new();
+                doc.prims.push(prim);
+                let bytes = write_document(&doc).unwrap();
+                let header = crate::usdc::header::parse_header(&bytes).unwrap();
+                let toc = crate::usdc::toc::parse_toc(&bytes, header.toc_offset).unwrap();
+                crate::usdc::section::parse_sections(
+                    &bytes,
+                    &toc,
+                    header.crate_version(),
+                    &mut crate::usdc::DecodeBudget::with_limit(u64::MAX),
+                )
+                .unwrap()
+                .specs
+                .len()
+            })
+            .unwrap()
+            .join()
+            .expect("fits the small stack");
+        // The pseudo-root, the prims, and a set and a variant per level.
+        assert_eq!(specs, 1 + DEPTH + 2 * VARIANT_DEPTH);
+    }
+
+    /// An attribute of a type name no type registers holds only the text
+    /// OpenUSD records for its values; a typed value there is refused.
+    #[test]
+    fn save_layer_rejects_before_writing() {
+        let (mut layer, tokens, paths) = import_usda("#usda 1.0\ndef \"A\"\n{\n    vec3f a\n}\n");
+        let a = paths.intern(layerstack::path::Path::parse_absolute("/A", &tokens).unwrap());
+        layer
+            .prim_mut(a)
+            .and_then(|prim| prim.property_mut(tokens.intern("a")))
+            .expect("the attribute")
+            .default = Some(layerstack::Value::Int(1));
+        assert_eq!(
+            save_usdc(&layer, &tokens, &paths),
+            Err(UsdcWriteError::Save(
+                crate::usda::save::SaveError::Document(WriteError::UnknownType {
+                    path: "/A.a".into(),
+                    type_name: "vec3f".into(),
+                })
+            )),
+            "the USDA save's error, before any output"
+        );
+    }
+
+    #[test]
+    fn borrowed_declarations_preserve_authored_field_order_and_types() {
+        let source = r#"#usda 1.0
+def Scope "A" {
+    custom token z = "same"
+    uniform int64 wide = 1
+    string same = "same"
+    bool enabled = 1
+    float f = -0
+    double d = 0.25
+    int a = 1
+    float[] floats = [1.25]
+    double[] doubles = [-2.5]
+    int64[] ids = [4, -2]
+    string[] labels = ["b", "a"]
+    token[] names = ["b", "a"]
+    rel none = None
+    varying rel links = [</A.z>, </A>]
+    rel bare
+}
+"#;
+        let (layer, tokens, paths) = import_usda(source);
+        let doc = crate::usda::save::usdc_document(&layer, &tokens, &paths).unwrap();
+        assert_eq!(
+            save_usdc(&layer, &tokens, &paths).unwrap(),
+            write_document(&doc).unwrap()
+        );
+    }
+
+    #[test]
+    fn declaration_paths_keep_namespace_and_first_use_order() {
+        let (layer, tokens, paths) = import_usda(
+            r#"#usda 1.0
+def "A0" {
+    float x = 1
+}
+def "A" {
+    rel links = [</A/Child.x>, </A0.x>, </Outside.x>]
+    float x = 2
+    def "Child" {
+        float x = 3
+        rel links = </A.x>
+    }
+}
+"#,
+        );
+        let document = crate::usda::save::usdc_document(&layer, &tokens, &paths).unwrap();
+        assert_eq!(
+            save_usdc(&layer, &tokens, &paths).unwrap(),
+            write_document(&document).unwrap(),
+            "structured owners and forward targets retain the same crate indexes"
+        );
+    }
+
+    #[test]
+    fn layer_errors_keep_source_and_validation_precedence() {
+        let (mut layer, tokens, paths) = import_usda("#usda 1.0\ndef \"A\" {}\n");
+        let root = paths.lookup(&layerstack::path::Path::root()).unwrap();
+        let children = &mut layer.prim_mut(root).unwrap().authored_children;
+        children.push(tokens.intern("A"));
+        children.push(tokens.intern("Missing"));
+        let expected = |layer: &Layer| {
+            let error = crate::usda::save::usdc_document(layer, &tokens, &paths).unwrap_err();
+            assert_eq!(
+                save_usdc(layer, &tokens, &paths),
+                Err(UsdcWriteError::Save(error))
+            );
+        };
+        expected(&layer); // Missing source spec takes precedence over the duplicate.
+        layer.prim_mut(root).unwrap().authored_children.pop();
+        expected(&layer); // The duplicate is now the first error.
+    }
+
+    /// Relational attribute and mapper targets save as the crate paths
+    /// OpenUSD stores (`/A.b[/C].d`, its target path `/A.b[/C]` and `/C`
+    /// among them) and read back as the targets they were.
+    #[test]
+    fn relational_targets_read_back() {
+        let source = "#usda 1.0\ndef \"A\"\n{\n    float c.connect = </A.b[/C].d>\n    \
+                      rel r = [</A.b[/C].d>, </A.b.mapper[/C]>, </A.b[/C].d.mapper[/E]>]\n}\n";
+        let (layer, tokens, paths) = import_usda(source);
+        let text = crate::usda::save::save_usda(&layer, &tokens, &paths).unwrap();
+        let bytes = save_usdc(&layer, &tokens, &paths).unwrap();
+        let read = crate::usdc::read_usdc(
+            &bytes,
+            layerstack::LayerId(2),
+            &tokens,
+            &paths,
+            &mut NoAssets,
+        )
+        .unwrap();
+        assert!(read.diagnostics.is_empty(), "{:?}", read.diagnostics);
+        let reread = crate::usda::save::save_usda(&read.layer, &tokens, &paths).unwrap();
+        assert_eq!(reread, text);
+    }
+
+    /// `opaque` declares an attribute that holds no value, such as
+    /// `UsdCollectionAPI`'s `collection:__INSTANCE_NAME__`.
+    #[test]
+    fn opaque_attributes_are_declared_without_a_value() {
+        let (layer, tokens, paths) = import_usda("#usda 1.0\ndef \"A\"\n{\n    opaque a\n}\n");
+        let bytes = save_usdc(&layer, &tokens, &paths).expect("an opaque declaration saves");
+        let read = crate::usdc::read_usdc(
+            &bytes,
+            layerstack::LayerId(2),
+            &tokens,
+            &paths,
+            &mut NoAssets,
+        )
+        .unwrap();
+        let a = layerstack::PropertyPath::parse("/A.a", &tokens, &paths).unwrap();
+        let spec = read.layer.property(a).expect("the attribute reads back");
+        assert_eq!(
+            spec.type_name.as_ref().map(|t| t.type_name()),
+            Some("opaque")
+        );
+        assert_eq!(spec.default, None, "no value");
+    }
+
+    #[test]
+    fn rejects_what_usda_rejects_and_untypable_metadata() {
+        // Unregistered metadata is stored as the text parser stores it: the
+        // text of its value; a typed list op under such a key as itself.
+        let mut doc = mesh_doc();
+        doc.metadata
+            .push(Metadatum::new("fooBar", UsdaValue::String("x".into())));
+        assert!(
+            document_specs(&doc).unwrap()[0]
+                .fields
+                .contains(&Field::new(
+                    "fooBar",
+                    Value::UnregisteredValue(Box::new(Value::String("\"x\"".into())))
+                )),
+            "unregistered layer metadata"
+        );
+        let mut doc = mesh_doc();
+        doc.prims[0].metadata.push(Metadatum::new(
+            "fooBar",
+            UsdaValue::TokenListOp(crate::usda::writer::ListOp::prepend(vec!["x".into()])),
+        ));
+        assert!(
+            document_specs(&doc).unwrap()[1]
+                .fields
+                .contains(&Field::new(
+                    "fooBar",
+                    Value::TokenListOp(ListOp {
+                        prepended: vec!["x".into()],
+                        ..ListOp::default()
+                    })
+                )),
+            "typed list op under an unregistered key"
+        );
+        let mut doc = mesh_doc();
+        doc.prims[0]
+            .metadata
+            .push(Metadatum::new("elementSize", UsdaValue::Int(2)));
+        assert!(
+            document_specs(&doc).unwrap()[1]
+                .fields
+                .contains(&Field::new(
+                    "elementSize",
+                    Value::UnregisteredValue(Box::new(Value::String("2".into())))
+                )),
+            "elementSize is attribute metadata, unregistered on a prim"
+        );
+        // A registered type is required, not converted to: USDA would print
+        // a `float` 0.1 as `0.1`, which parses as the double 0.1, while
+        // widening the `float` gives 0.10000000149011612.
+        for value in [
+            UsdaValue::String("1".into()),
+            UsdaValue::Float(0.1),
+            UsdaValue::Int(1),
+        ] {
+            let mut doc = mesh_doc();
+            doc.metadata[0].value = value.clone();
+            assert_eq!(
+                document_specs(&doc),
+                Err(UsdcWriteError::MetadataType {
+                    path: "/".into(),
+                    key: "metersPerUnit".into(),
+                    expected: FieldType::Double
+                }),
+                "metersPerUnit is a double, not {value:?}"
+            );
+        }
+        let mut doc = mesh_doc();
+        let Property::Attribute(points) = &mut doc.prims[0].children[0].properties[0] else {
+            unreachable!("points is an attribute");
+        };
+        points
+            .metadata
+            .push(Metadatum::new("elementSize", UsdaValue::UInt(2)));
+        assert!(
+            matches!(
+                document_specs(&doc),
+                Err(UsdcWriteError::MetadataType {
+                    expected: FieldType::Int,
+                    ..
+                })
+            ),
+            "elementSize is an int"
+        );
+    }
+}

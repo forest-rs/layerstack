@@ -369,8 +369,6 @@ dependencies = [
  "layerstack",
  "layerstack_io",
  "layerstack_schemas",
- "layerstack_usda",
- "layerstack_usdc",
 ]
 
 [[package]]
@@ -402,9 +400,6 @@ dependencies = [
  "layerstack_mesh_export",
  "layerstack_schemagen",
  "layerstack_schemas",
- "layerstack_usda",
- "layerstack_usdc",
- "layerstack_usdz",
  "serde",
  "serde_json",
 ]
@@ -414,9 +409,9 @@ name = "layerstack_custom_schemas"
 version = "0.1.0"
 dependencies = [
  "layerstack",
+ "layerstack_io",
  "layerstack_schemagen",
  "layerstack_schemas",
- "layerstack_usda",
 ]
 
 [[package]]
@@ -428,8 +423,6 @@ dependencies = [
  "layerstack_mesh_export",
  "layerstack_schemagen",
  "layerstack_schemas",
- "layerstack_usda",
- "layerstack_usdz",
  "opinionated",
 ]
 
@@ -439,9 +432,8 @@ version = "0.1.0"
 dependencies = [
  "hashbrown",
  "layerstack",
- "layerstack_usda",
- "layerstack_usdc",
- "layerstack_usdz",
+ "lz4_flex",
+ "smallvec",
 ]
 
 [[package]]
@@ -449,10 +441,8 @@ name = "layerstack_mesh_export"
 version = "0.1.0"
 dependencies = [
  "layerstack",
+ "layerstack_io",
  "layerstack_schemas",
- "layerstack_usda",
- "layerstack_usdc",
- "layerstack_usdz",
  "libm",
 ]
 
@@ -462,7 +452,6 @@ version = "0.1.0"
 dependencies = [
  "layerstack",
  "layerstack_io",
- "layerstack_usda",
  "serde_json",
 ]
 
@@ -484,8 +473,8 @@ dependencies = [
  "exedra_triangulate",
  "hashbrown",
  "layerstack",
+ "layerstack_io",
  "layerstack_schemas",
- "layerstack_usda",
  "libm",
  "serde_json",
 ]
@@ -500,35 +489,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "layerstack_usda"
-version = "0.1.0"
-dependencies = [
- "hashbrown",
- "layerstack",
- "smallvec",
-]
-
-[[package]]
-name = "layerstack_usdc"
-version = "0.1.0"
-dependencies = [
- "hashbrown",
- "layerstack",
- "layerstack_usda",
- "lz4_flex",
- "smallvec",
-]
-
-[[package]]
-name = "layerstack_usdz"
-version = "0.1.0"
-dependencies = [
- "layerstack",
- "layerstack_usda",
- "layerstack_usdc",
-]
-
-[[package]]
 name = "layerstack_wasm"
 version = "0.1.0"
 dependencies = [
@@ -536,7 +496,6 @@ dependencies = [
  "layerstack",
  "layerstack_io",
  "layerstack_schemas",
- "layerstack_usda",
  "wasm-bindgen",
 ]
 
@@ -963,9 +922,6 @@ dependencies = [
  "layerstack_conformance",
  "layerstack_io",
  "layerstack_schemas",
- "layerstack_usda",
- "layerstack_usdc",
- "layerstack_usdz",
  "opinionated",
 ]
 

@@ -7,7 +7,7 @@ use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, LayerId, PathInterner, ResolvedAsset,
     TokenInterner, Value,
 };
-use layerstack_usda::{emit, parser, read_usda};
+use layerstack_io::usda::{emit, parser, read_usda};
 
 struct NoAssets;
 impl AssetResolver for NoAssets {

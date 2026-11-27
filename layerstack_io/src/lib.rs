@@ -1,11 +1,21 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Application-owned stage I/O, above the composition kernel and format crates.
-//! Storage determines identifiers and transport; this crate coordinates imported
-//! layers, dirty generations and explicit reloads. No global resolver or cache.
-//! AOUSD Core §9 (asset resolution), §16 (formats); OpenUSD `UsdStage::Open`,
-//! `Save`, `SaveSessionLayers`, `Reload`. Packages are read-only source layers.
+//! OpenUSD file formats and application-owned stage I/O, above the
+//! composition kernel.
+//!
+//! The format modules turn bytes into layers and layers into bytes, without
+//! file access: [`usda`] reads and writes text layers (AOUSD Core §16.2),
+//! [`usdc`] binary crate files (§16.3), and [`usdz`] packages (§16.4). Each
+//! keeps its syntax and encoding layers internal; the `unstable-internals`
+//! feature makes them public modules for this repository's tests, benchmarks
+//! and fuzzing, with no semver promise.
+//!
+//! [`StageDocument`] builds on them: storage determines identifiers and
+//! transport, and the document coordinates imported layers, dirty generations
+//! and explicit reloads. No global resolver or cache. AOUSD Core §9 (asset
+//! resolution), §16 (formats); OpenUSD `UsdStage::Open`, `Save`,
+//! `SaveSessionLayers`, `Reload`. Packages are read-only source layers.
 //!
 //! With the default `std` feature, open a filesystem-backed stage explicitly:
 //!
@@ -92,6 +102,33 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+/// Declares a format module that is public with the `unstable-internals`
+/// feature, for this repository's tests, benchmarks and fuzzing, and
+/// crate-private without it: its items are format internals that follow no
+/// semver promise.
+macro_rules! internal_mod {
+    ($(#[$attr:meta])* $name:ident) => {
+        $(#[$attr])*
+        #[cfg(feature = "unstable-internals")]
+        pub mod $name;
+        $(#[$attr])*
+        #[cfg(not(feature = "unstable-internals"))]
+        #[allow(
+            unreachable_pub,
+            dead_code,
+            reason = "public only with the `unstable-internals` feature"
+        )]
+        pub(crate) mod $name;
+    };
+}
+
+pub mod usda;
+pub mod usdc;
+pub mod usdz;
+
+use crate::usdz::snapshot::{PackageLimits, PackageSnapshot, PackageStats};
+use crate::usdz::{ImportDiagnostic, MemberDiagnostic};
+pub use crate::usdz::{UsdcArrayLoading, UsdcReadOptions};
 use alloc::{
     collections::{BTreeMap, BTreeSet},
     string::{String, ToString},
@@ -105,9 +142,6 @@ use layerstack::{
     LiveStage, PathId, PathInterner, ReadOnlyReason, ResolvedAsset, StageOptions, TokenInterner,
 };
 use layerstack::{asset::PackagePath, encoded_bytes::EncodedBytes, parallel::Threads};
-use layerstack_usdz::snapshot::{PackageLimits, PackageSnapshot, PackageStats};
-use layerstack_usdz::{ImportDiagnostic, MemberDiagnostic};
-pub use layerstack_usdz::{UsdcArrayLoading, UsdcReadOptions};
 use timing::ReadLog;
 
 mod apply;
@@ -212,7 +246,7 @@ impl IoErrorKind {
     /// Codes are part of the public contract: a released code keeps its
     /// spelling and meaning, and a new variant brings a new code. The
     /// `io.`, `edit.` and `composition.` codes are the whole contract: the
-    /// format crates' errors have no codes, and reach an [`IoError`] as
+    /// format modules' errors have no codes, and reach an [`IoError`] as
     /// its typed [`IoError::cause`].
     #[must_use]
     pub const fn code(self) -> &'static str {
@@ -248,12 +282,12 @@ pub struct IoError {
     /// reader refusing a layer as OpenUSD refuses it, the error diagnostics
     /// of the source it rejected, with their spans; empty otherwise.
     pub diagnostics: Vec<MemberDiagnostic>,
-    /// The format crate's typed error behind a failed save or export
+    /// The format module's typed error behind a failed save or export
     /// ([`Self::cause`]), shared so that the error stays small and cheap
     /// to clone.
     cause: Option<Arc<IoCause>>,
 }
-/// The typed error of a format crate behind an [`IoError`]: what a save,
+/// The typed error of a format module behind an [`IoError`]: what a save,
 /// export or package localization refused, kept whole so that its spec
 /// path and variant are not reduced to a message.
 #[derive(Debug, PartialEq)]
@@ -263,11 +297,11 @@ pub enum IoCause {
     /// failed ([`IoErrorKind::Rejected`] for a layer that cannot be
     /// written as it stands, [`IoErrorKind::Decode`] for a retained array
     /// that could not decode, [`IoErrorKind::Unsupported`] otherwise).
-    Save(layerstack_usda::save::SaveError),
+    Save(usda::save::SaveError),
     /// Writing a layer as USDC failed.
-    UsdcWrite(layerstack_usdc::writer::UsdcWriteError),
+    UsdcWrite(usdc::writer::UsdcWriteError),
     /// Localizing a package's layers and assets failed.
-    Localization(layerstack_usdz::localize::LocalizationError),
+    Localization(usdz::localize::LocalizationError),
 }
 impl IoCause {
     /// The cause as an error.
@@ -292,15 +326,13 @@ impl IoCause {
         }
     }
     /// The save error inside the cause, however it is wrapped.
-    fn save_error(&self) -> Option<&layerstack_usda::save::SaveError> {
+    fn save_error(&self) -> Option<&usda::save::SaveError> {
         match self {
             Self::Save(error)
-            | Self::UsdcWrite(layerstack_usdc::writer::UsdcWriteError::Save(error))
+            | Self::UsdcWrite(usdc::writer::UsdcWriteError::Save(error))
             | Self::Localization(
-                layerstack_usdz::localize::LocalizationError::Usda(error)
-                | layerstack_usdz::localize::LocalizationError::Usdc(
-                    layerstack_usdc::writer::UsdcWriteError::Save(error),
-                ),
+                usdz::localize::LocalizationError::Usda(error)
+                | usdz::localize::LocalizationError::Usdc(usdc::writer::UsdcWriteError::Save(error)),
             ) => Some(error),
             _ => None,
         }
@@ -317,7 +349,7 @@ impl IoError {
             cause: None,
         }
     }
-    /// The format crate's typed error that caused a failed save or
+    /// The format module's typed error that caused a failed save or
     /// export, naming the spec it is about; `None` for other failures.
     /// [`core::error::Error::source`] returns it too.
     #[must_use]
@@ -326,11 +358,11 @@ impl IoError {
     }
     /// The retained array or deferred value that could not decode, when
     /// `kind` is [`IoErrorKind::Decode`]: the cause's
-    /// [`layerstack_usda::save::SaveError::ArrayRead`].
+    /// [`usda::save::SaveError::ArrayRead`].
     #[must_use]
     pub fn array_read_error(&self) -> Option<&layerstack::ArrayReadError> {
         match self.cause()?.save_error()? {
-            layerstack_usda::save::SaveError::ArrayRead { error, .. } => Some(error),
+            usda::save::SaveError::ArrayRead { error, .. } => Some(error),
             _ => None,
         }
     }
@@ -418,8 +450,8 @@ pub trait Storage: layerstack::MaybeSync {
             .map(EncodedBytes::from)
     }
     /// Opens a fixed logical source for explicit package range imports through
-    /// [`layerstack_usdz::range::RangePackage`] and [`layerstack_usdz::read_usdz_ranges`].
-    /// The source must satisfy [`layerstack_usdz::range::RangeSource`]'s stability
+    /// [`usdz::range::RangePackage`] and [`usdz::read_usdz_ranges`].
+    /// The source must satisfy [`usdz::range::RangeSource`]'s stability
     /// contract. The default fails without reading; there is no full-read fallback.
     /// [`StageDocument`] continues to use complete package verification.
     ///
@@ -427,11 +459,11 @@ pub trait Storage: layerstack::MaybeSync {
     /// # #[cfg(feature = "std")]
     /// # fn example() -> Result<(), Box<dyn core::error::Error>> {
     /// use layerstack_io::{Filesystem, Storage};
-    /// use layerstack_usdz::range::{RangeLimits, RangePackage};
+    /// use layerstack_io::usdz::range::{RangeLimits, RangePackage};
     /// let mut storage = Filesystem::new(".", [])?;
     /// let identifier = storage.identify("scene.usdz", None)?;
     /// let mut package = RangePackage::open(storage.open_ranges(&identifier)?, RangeLimits::default())?;
-    /// let root = package.root_member().ok_or(layerstack_usdz::UsdzError::NoRootLayer)?.to_owned();
+    /// let root = package.root_member().ok_or(layerstack_io::usdz::UsdzError::NoRootLayer)?.to_owned();
     /// let selected = package.layer(&root)?;
     /// println!("{} bytes, {:?}", selected.bytes.len(), package.stats());
     /// # Ok(())
@@ -440,8 +472,7 @@ pub trait Storage: layerstack::MaybeSync {
     fn open_ranges(
         &self,
         _identifier: &str,
-    ) -> Result<Arc<dyn layerstack_usdz::range::RangeSource<Error = IoError> + Send + Sync>, IoError>
-    {
+    ) -> Result<Arc<dyn usdz::range::RangeSource<Error = IoError> + Send + Sync>, IoError> {
         Err(IoError::new(
             IoErrorKind::Unsupported,
             "storage does not implement range sources",
@@ -975,7 +1006,7 @@ struct Catalog {
     /// Where [`Catalog::allocate`] looks for a free id next.
     next: u64,
     #[cfg(feature = "std")]
-    retained_values: BTreeMap<LayerId, layerstack_usdc::RetainedValues>,
+    retained_values: BTreeMap<LayerId, usdc::RetainedValues>,
     /// The latest failed read of each dependency, by anchor layer and
     /// authored asset path, which [`StageDocument::asset_status`] gives
     /// the unresolved assets composition reports.
@@ -1770,7 +1801,7 @@ impl<B: Storage> StageDocument<B> {
     /// old snapshots after reload. Footprints exclude structural and composed data;
     /// demand-all queries retain encoded bytes plus decoded buffers.
     #[cfg(feature = "std")]
-    pub fn retained_values(&self, layer: LayerId) -> Option<&layerstack_usdc::RetainedValues> {
+    pub fn retained_values(&self, layer: LayerId) -> Option<&usdc::RetainedValues> {
         self.catalog.retained_values.get(&layer)
     }
     /// Directory/verification work and retained backing bytes for the package
@@ -2152,7 +2183,7 @@ impl<B: Storage> StageDocument<B> {
     pub fn export_usdz(
         &mut self,
         target: &str,
-        plan: &layerstack_usdz::localize::LocalizationPlan,
+        plan: &usdz::localize::LocalizationPlan,
     ) -> Result<(), IoError> {
         let identifier = self
             .storage
@@ -2219,8 +2250,7 @@ impl<B: Storage> StageDocument<B> {
             .ok_or_else(|| IoError::new(IoErrorKind::MissingLayer, "selected layer is absent"))?;
         let (tokens, paths) = (&self.store.tokens(), &self.store.paths());
         if format == Format::Usda {
-            let document =
-                layerstack_usda::save::prepare_usda(layer, tokens, paths).map_err(save_error)?;
+            let document = usda::save::prepare_usda(layer, tokens, paths).map_err(save_error)?;
             return self
                 .storage
                 .write_streamed(identifier, &mut |sink| write_usda(&document, sink))
@@ -2242,11 +2272,11 @@ impl<B: Storage> StageDocument<B> {
         let (tokens, paths) = (&self.store.tokens(), &self.store.paths());
         let bytes = match format {
             Format::Usda => {
-                let document = layerstack_usda::save::prepare_usda(layer, tokens, paths)
-                    .map_err(save_error)?;
+                let document =
+                    usda::save::prepare_usda(layer, tokens, paths).map_err(save_error)?;
                 return write_usda(&document, sink);
             }
-            Format::Usdc => layerstack_usdc::save_usdc(layer, tokens, paths)
+            Format::Usdc => usdc::save_usdc(layer, tokens, paths)
                 .map_err(|error| caused(IoCause::UsdcWrite(error)))?,
             Format::Usdz => {
                 return Err(IoError::new(
@@ -2503,12 +2533,10 @@ impl<'a, B: Storage> Reader<'a, B> {
                         self.diagnostics.push(MemberDiagnostic::new(
                             Arc::from(request.asset_path),
                             request.anchor,
-                            ImportDiagnostic::UsdaEmit(
-                                layerstack_usda::diagnostic::Diagnostic::error(
-                                    layerstack_usda::Span::new(0, 0),
-                                    error.message,
-                                ),
-                            ),
+                            ImportDiagnostic::UsdaEmit(usda::diagnostic::Diagnostic::error(
+                                usda::Span::new(0, 0),
+                                error.message,
+                            )),
                         ));
                     }
                 }
@@ -2742,7 +2770,7 @@ impl<B: Storage> Reader<'_, B> {
                 let selection = package_member_path(identifier);
                 self.catalog.cache_work.opens += 1;
                 self.catalog.cache_work.index_parses += archive.stats().index_parses;
-                let result = layerstack_usdz::read_usdz_snapshot(
+                let result = usdz::read_usdz_snapshot(
                     &archive,
                     selection.as_deref(),
                     id,
@@ -2846,7 +2874,7 @@ struct LooseRead {
     resolved_layers: Vec<Layer>,
     diagnostics: Vec<MemberDiagnostic>,
     #[cfg(feature = "std")]
-    retained: Option<layerstack_usdc::RetainedValues>,
+    retained: Option<usdc::RetainedValues>,
 }
 
 /// Reads the USDA, USDC or registered-format layer `data`, `identifier`
@@ -2895,7 +2923,7 @@ fn read_loose(
         // order mark before parsing it, naming the mark
         // (`SdfUsdaFileFormat::_ReadFromAsset`, `pxr/usd/sdf/usdaFileFormat.cpp`).
         // Spec: AOUSD Core §16.2 (USDA is UTF-8).
-        if let Some(mark) = layerstack_usda::ByteOrderMark::find(data) {
+        if let Some(mark) = usda::ByteOrderMark::find(data) {
             read.layer = Err(IoError::new(
                 IoErrorKind::Rejected,
                 alloc::format!("<{identifier}> is not a valid usda layer: {mark}"),
@@ -2910,9 +2938,9 @@ fn read_loose(
             }
         };
         let result = if let Some(registry) = schemas {
-            layerstack_usda::read_usda_with_registry(source, id, tokens, paths, resolver, registry)
+            usda::read_usda_with_registry(source, id, tokens, paths, resolver, registry)
         } else {
-            layerstack_usda::read_usda(source, id, tokens, paths, resolver)
+            usda::read_usda(source, id, tokens, paths, resolver)
         };
         read.resolved_layers = result.emitted.resolved_layers;
         read.diagnostics = result
@@ -2953,11 +2981,10 @@ fn read_loose(
         return read;
     }
     let mut budget = usdc_options.budget(data.len());
-    let rejected =
-        |e: layerstack_usdc::UsdcError| IoError::new(IoErrorKind::Rejected, e.to_string());
+    let rejected = |e: usdc::UsdcError| IoError::new(IoErrorKind::Rejected, e.to_string());
     #[cfg(feature = "std")]
     let result = match usdc_options.arrays {
-        UsdcArrayLoading::Retained => layerstack_usdc::read_usdc_lazy_range_within(
+        UsdcArrayLoading::Retained => usdc::read_usdc_lazy_range_within(
             data.clone(),
             id,
             tokens,
@@ -2970,19 +2997,12 @@ fn read_loose(
             read.retained = Some(result.values);
             result.assembled
         }),
-        UsdcArrayLoading::Eager => layerstack_usdc::read_usdc_within(
-            data,
-            id,
-            tokens,
-            paths,
-            resolver,
-            &mut budget,
-            threads,
-        ),
+        UsdcArrayLoading::Eager => {
+            usdc::read_usdc_within(data, id, tokens, paths, resolver, &mut budget, threads)
+        }
     };
     #[cfg(not(feature = "std"))]
-    let result =
-        layerstack_usdc::read_usdc_within(data, id, tokens, paths, resolver, &mut budget, threads);
+    let result = usdc::read_usdc_within(data, id, tokens, paths, resolver, &mut budget, threads);
     match result {
         Ok(result) => {
             read.resolved_layers = result.resolved_layers;
@@ -3311,23 +3331,23 @@ fn strict_rejection(identifier: &str, diagnostics: &[MemberDiagnostic]) -> IoErr
         .collect();
     error
 }
-fn localization_error(error: layerstack_usdz::localize::LocalizationError) -> IoError {
+fn localization_error(error: usdz::localize::LocalizationError) -> IoError {
     caused(IoCause::Localization(error))
 }
 /// Streams the prepared USDA text into `sink`; a failed write fails with
 /// the sink's error.
 fn write_usda(
-    document: &layerstack_usda::save::PreparedUsda<'_>,
+    document: &usda::save::PreparedUsda<'_>,
     sink: &mut dyn ByteSink,
 ) -> Result<(), IoError> {
     let mut text = TextSink { sink, error: None };
     document.write_to(&mut text).map_err(|error| {
         text.error
             .take()
-            .unwrap_or_else(|| save_error(layerstack_usda::save::SaveError::Document(error)))
+            .unwrap_or_else(|| save_error(usda::save::SaveError::Document(error)))
     })
 }
-fn save_error(error: layerstack_usda::save::SaveError) -> IoError {
+fn save_error(error: usda::save::SaveError) -> IoError {
     caused(IoCause::Save(error))
 }
 /// A failed save or export, keeping `cause` and taking its kind from the
@@ -3336,7 +3356,7 @@ fn save_error(error: layerstack_usda::save::SaveError) -> IoError {
 /// cannot be written as it stands, [`IoErrorKind::Unsupported`] for the
 /// rest.
 fn caused(cause: IoCause) -> IoError {
-    use layerstack_usda::save::SaveError;
+    use crate::usda::save::SaveError;
     let kind = match cause.save_error() {
         Some(SaveError::ArrayRead { .. }) => IoErrorKind::Decode,
         Some(SaveError::Invalid { .. }) => IoErrorKind::Rejected,

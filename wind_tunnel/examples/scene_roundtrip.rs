@@ -12,7 +12,7 @@ use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, LayerId, PathInterner, ResolvedAsset,
     TokenInterner,
 };
-use layerstack_usdz::localize::{LocalizationError, LocalizationTarget, localize_asset};
+use layerstack_io::usdz::localize::{LocalizationError, LocalizationTarget, localize_asset};
 use std::{collections::BTreeMap, error::Error, path::PathBuf, sync::Arc, time::Instant};
 
 struct NoAssets;
@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let data = std::fs::read(&input)?;
     let mut store = InMemoryStore::default();
     let layer = if data.starts_with(b"PXR-USDC") {
-        let result = layerstack_usdc::read_usdc(
+        let result = layerstack_io::usdc::read_usdc(
             &data,
             LayerId(1),
             store.tokens(),
@@ -52,7 +52,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
         result.layer
     } else if data.starts_with(b"PK") {
-        let result = layerstack_usdz::read_usdz(
+        let result = layerstack_io::usdz::read_usdz(
             &data,
             LayerId(1),
             store.tokens(),
@@ -67,7 +67,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         result.layer
     } else {
         let source = std::str::from_utf8(&data)?;
-        let imported = layerstack_usda::read_usda(
+        let imported = layerstack_io::usda::read_usda(
             source,
             LayerId(1),
             store.tokens(),
@@ -95,7 +95,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     store.insert_layer(layer);
     drop(data);
     let start = Instant::now();
-    let crate_bytes = layerstack_usdc::save_usdc(
+    let crate_bytes = layerstack_io::usdc::save_usdc(
         store.layer(LayerId(1)).unwrap(),
         store.tokens(),
         store.paths(),

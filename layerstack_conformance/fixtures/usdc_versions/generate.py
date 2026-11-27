@@ -4,7 +4,7 @@
 
 The `.usdc` files in this directory are written by OpenUSD itself, not by
 Layerstack, so they are independent evidence for the crate reader in
-`layerstack_usdc`. `expected.json` records what the same OpenUSD computes
+`layerstack_io::usdc`. `expected.json` records what the same OpenUSD computes
 for every fixture (`UsdAttribute.Get` at default and at sample times), plus
 the generator provenance. It also records OpenUSD's values for the AOUSD
 supplemental spec's `gen_splines.usdc`, which is read but not written here.

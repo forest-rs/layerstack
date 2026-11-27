@@ -980,7 +980,7 @@ def Xform "World" {
     impl Fixture {
         fn new() -> (Self, DrawDiff) {
             let mut store = InMemoryStore::default();
-            let read = layerstack_usda::read_usda(
+            let read = layerstack_io::usda::read_usda(
                 SCENE,
                 LayerId(1),
                 store.tokens(),
@@ -1233,7 +1233,7 @@ def Xform "World" {
     /// draw list.
     fn instanced() -> (InMemoryStore, LiveStage, DrawList) {
         let mut store = InMemoryStore::default();
-        let read = layerstack_usda::read_usda(
+        let read = layerstack_io::usda::read_usda(
             include_str!(
                 "../../layerstack_conformance/fixtures/stagehand_instanced_lights/scene.usda"
             ),
@@ -1660,7 +1660,7 @@ def Xform "World" {
             Some(layerstack_schemas::OPENUSD_VERSION)
         );
         let mut store = InMemoryStore::default();
-        let read = layerstack_usda::read_usda(
+        let read = layerstack_io::usda::read_usda(
             include_str!("../../layerstack_conformance/fixtures/stagehand_lights/scene.usda"),
             LayerId(1),
             store.tokens(),

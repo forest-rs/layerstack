@@ -1022,7 +1022,7 @@ def Xform "World" {
         );
         stage.apply_target(&input(&chrome), &mut batch).unwrap();
         let store = stage.document().store();
-        let text = layerstack_usda::save_usda(
+        let text = layerstack_io::usda::save_usda(
             store.layer(layerstack::LayerId(scene)).unwrap(),
             store.tokens(),
             store.paths(),

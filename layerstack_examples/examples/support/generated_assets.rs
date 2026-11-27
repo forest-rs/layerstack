@@ -52,7 +52,8 @@ impl AssetResolver for Sources {
 
 /// Imports a fixture layer with the same strict diagnostics as the runnable example.
 pub(crate) fn import(store: &mut InMemoryStore, text: &str, id: LayerId) {
-    let read = layerstack_usda::read_usda(text, id, store.tokens(), store.paths(), &mut Sources);
+    let read =
+        layerstack_io::usda::read_usda(text, id, store.tokens(), store.paths(), &mut Sources);
     assert!(
         read.parse_diagnostics.is_empty(),
         "{:?}",

@@ -5,7 +5,7 @@
 //! Usage: `workflow_fixtures output_directory [array_elements] [wide_prims]`.
 //! Defaults: 1,000,000 array elements and 256 prims. Other shapes keep 256 prims.
 use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, PropertyType, Value};
-use layerstack_usdz::{PackageFile, write_usdz};
+use layerstack_io::usdz::{PackageFile, write_usdz};
 use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 parent = id;
             }
         }
-        let bytes = layerstack_usdc::save_usdc(&layer, store.tokens(), store.paths())?;
+        let bytes = layerstack_io::usdc::save_usdc(&layer, store.tokens(), store.paths())?;
         std::fs::write(directory.join(format!("{shape}.usdc")), &bytes)?;
         if shape == "wide" {
             let inner = write_usdz(&[

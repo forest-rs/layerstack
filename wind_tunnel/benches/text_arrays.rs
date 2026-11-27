@@ -11,8 +11,8 @@ use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, Layer, LayerId, PathInterner, PrimSpec,
     PropertySpec, PropertyType, ResolvedAsset, Stage, StageOptions, TokenInterner, Value,
 };
+use layerstack_io::usdc::writer::{Spec, SpecForm, Specifier, Value as Crate, write_crate};
 use layerstack_schemas::{Scene, usd_render::RenderPass};
-use layerstack_usdc::writer::{Spec, SpecForm, Specifier, Value as Crate, write_crate};
 
 struct NoAssets;
 impl AssetResolver for NoAssets {
@@ -72,7 +72,7 @@ fn text_arrays(c: &mut Criterion) {
         |b, bytes| {
             b.iter(|| {
                 black_box(
-                    layerstack_usdc::read_usdc(
+                    layerstack_io::usdc::read_usdc(
                         black_box(bytes),
                         LayerId(1),
                         &TokenInterner::default(),

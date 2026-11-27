@@ -53,8 +53,8 @@ pub(crate) fn layered_scene(weak: &str) -> (InMemoryStore, LiveStage) {
 }
 
 fn scene_in(mut store: InMemoryStore, text: &str, id: LayerId) -> (InMemoryStore, LiveStage) {
-    let parsed = layerstack_usda::parser::parse(text);
-    let emitted = layerstack_usda::emit::emit(
+    let parsed = layerstack_io::usda::parser::parse(text);
+    let emitted = layerstack_io::usda::emit::emit(
         &parsed.layer,
         id,
         store.tokens(),

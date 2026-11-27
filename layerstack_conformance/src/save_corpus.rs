@@ -21,7 +21,7 @@
 //! variant sets with their selections, branch prim specs and sets nested in
 //! branches (a set reusing an enclosing set's name, and one name nested under
 //! two branches, included),
-//! within the supported subset of [`layerstack_usda::save`]. [`unsupported_cases`] are
+//! within the supported subset of [`layerstack_io::usda::save`]. [`unsupported_cases`] are
 //! encodings outside that subset, each with the error naming its source
 //! path.
 //!
@@ -44,7 +44,7 @@ use layerstack::spec_path::SpecPath;
 use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset, Stage, StageOptions, Time,
 };
-use layerstack_usda::save::{SaveError, Unsupported};
+use layerstack_io::usda::save::{SaveError, Unsupported};
 
 use crate::export_fixtures::OpenUsdRelease;
 
@@ -99,11 +99,11 @@ impl Imported {
     ///
     /// Panics if the parser or the layer emitter reports a diagnostic.
     pub fn usda(source: &str) -> Self {
-        let parsed = layerstack_usda::parser::parse(source);
+        let parsed = layerstack_io::usda::parser::parse(source);
         assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
         let tokens = TokenInterner::default();
         let paths = PathInterner::default();
-        let result = layerstack_usda::emit::emit(
+        let result = layerstack_io::usda::emit::emit(
             &parsed.layer,
             LayerId(1),
             &tokens,
@@ -126,7 +126,7 @@ impl Imported {
     pub fn usdc(bytes: &[u8]) -> Self {
         let tokens = TokenInterner::default();
         let paths = PathInterner::default();
-        let result = layerstack_usdc::read_usdc(
+        let result = layerstack_io::usdc::read_usdc(
             bytes,
             LayerId(1),
             &tokens,
@@ -150,7 +150,7 @@ impl Imported {
     pub fn usdc_retained(bytes: Arc<[u8]>) -> Self {
         let tokens = TokenInterner::default();
         let paths = PathInterner::default();
-        let read = layerstack_usdc::read_usdc_lazy(
+        let read = layerstack_io::usdc::read_usdc_lazy(
             bytes,
             LayerId(1),
             &tokens,
@@ -174,18 +174,18 @@ impl Imported {
     ///
     /// # Errors
     ///
-    /// See [`layerstack_usda::save::usdc_document`].
+    /// See [`layerstack_io::usda::save::usdc_document`].
     pub fn save_usda(&self) -> Result<String, SaveError> {
-        layerstack_usda::save_usda(&self.layer, &self.tokens, &self.paths)
+        layerstack_io::usda::save_usda(&self.layer, &self.tokens, &self.paths)
     }
 
     /// Saves the layer as USDC.
     ///
     /// # Errors
     ///
-    /// See [`layerstack_usdc::save_usdc`].
-    pub fn save_usdc(&self) -> Result<Vec<u8>, layerstack_usdc::writer::UsdcWriteError> {
-        layerstack_usdc::save_usdc(&self.layer, &self.tokens, &self.paths)
+    /// See [`layerstack_io::usdc::save_usdc`].
+    pub fn save_usdc(&self) -> Result<Vec<u8>, layerstack_io::usdc::writer::UsdcWriteError> {
+        layerstack_io::usdc::save_usdc(&self.layer, &self.tokens, &self.paths)
     }
 
     /// The authored prim spec at `path`, for editing.
@@ -822,9 +822,9 @@ impl AssetResolver for Assets<'_> {
             .ok_or(AssetResolveError::NotFound)?;
         let layer_id = LayerId(100 + self.ids.len() as u64);
         self.ids.insert(asset_path.into(), layer_id);
-        let parsed = layerstack_usda::parser::parse(text);
+        let parsed = layerstack_io::usda::parser::parse(text);
         assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
-        let result = layerstack_usda::emit::emit(&parsed.layer, layer_id, tokens, paths, self);
+        let result = layerstack_io::usda::emit::emit(&parsed.layer, layer_id, tokens, paths, self);
         assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
         self.loaded.extend(result.resolved_layers);
         Ok(ResolvedAsset {
@@ -862,9 +862,9 @@ pub fn composed(root: Root<'_>, assets: &[(&str, &str)]) -> String {
     };
     let (layer, resolved) = match root {
         Root::Usda(text) => {
-            let parsed = layerstack_usda::parser::parse(text);
+            let parsed = layerstack_io::usda::parser::parse(text);
             assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
-            let result = layerstack_usda::emit::emit(
+            let result = layerstack_io::usda::emit::emit(
                 &parsed.layer,
                 LayerId(1),
                 store.tokens(),
@@ -875,7 +875,7 @@ pub fn composed(root: Root<'_>, assets: &[(&str, &str)]) -> String {
             (result.layer, result.resolved_layers)
         }
         Root::Usdc(bytes) => {
-            let result = layerstack_usdc::read_usdc(
+            let result = layerstack_io::usdc::read_usdc(
                 bytes,
                 LayerId(1),
                 store.tokens(),

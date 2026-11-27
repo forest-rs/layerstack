@@ -21,7 +21,7 @@ use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 use layerstack::{AssetResolveError, AssetResolver, ResolvedAsset};
 use layerstack_conformance::workspace_root;
-use layerstack_usdc::UsdcError;
+use layerstack_io::usdc::UsdcError;
 
 /// Directories holding crate files, relative to the workspace root.
 const ROOTS: &[&str] = &[
@@ -88,7 +88,7 @@ fn every_crate_file_in_the_repository_reads() {
             .replace('\\', "/");
         let data = std::fs::read(path).expect("crate file");
         let result = catch_unwind(AssertUnwindSafe(|| {
-            layerstack_usdc::read_usdc(
+            layerstack_io::usdc::read_usdc(
                 &data,
                 LayerId(1),
                 &TokenInterner::default(),

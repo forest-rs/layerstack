@@ -37,9 +37,9 @@ use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, LayerId, PathInterner, ResolvedAsset,
     TokenInterner,
 };
-use layerstack_usda::diagnostic::Severity;
-use layerstack_usda::read_usda;
-use layerstack_usda::save::{save_usda, save_usda_to};
+use layerstack_io::usda::diagnostic::Severity;
+use layerstack_io::usda::read_usda;
+use layerstack_io::usda::save::{save_usda, save_usda_to};
 
 /// What became of one corpus file.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

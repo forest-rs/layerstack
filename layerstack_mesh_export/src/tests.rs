@@ -4,8 +4,8 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use layerstack_usda::ast;
-use layerstack_usda::parser::parse;
+use layerstack_io::usda::ast;
+use layerstack_io::usda::parser::parse;
 
 use crate::{
     ExportError, Faces, Interpolation, Mesh, MeshProblem, Primvar, PrimvarData, Scene,
@@ -87,7 +87,7 @@ fn custom_attributes_must_be_attribute_types() {
     assert_eq!(
         tri_scene(mesh).to_usda(),
         Err(ExportError::Usda(
-            layerstack_usda::writer::WriteError::UnknownType {
+            layerstack_io::usda::writer::WriteError::UnknownType {
                 path: "/Root/Tri.site:data".into(),
                 type_name: "dictionary".into()
             }
@@ -258,7 +258,7 @@ fn usdz_requires_authored_assets_to_be_packaged() {
         let bytes = scene
             .to_usdz(profile, &[crate::PackageFile::new("textures/a.png", png)])
             .expect("texture packaged");
-        let archive = layerstack_usdz::zip::ZipArchive::parse(&bytes).unwrap();
+        let archive = layerstack_io::usdz::zip::ZipArchive::parse(&bytes).unwrap();
         let names: Vec<&str> = archive.entries().iter().map(|e| &*e.name).collect();
         assert_eq!(
             names,
@@ -276,7 +276,7 @@ fn usdz_requires_authored_assets_to_be_packaged() {
             ]
         ),
         Err(ExportError::Usdz(
-            layerstack_usdz::UsdzWriteError::UnsupportedMemberType {
+            layerstack_io::usdz::UsdzWriteError::UnsupportedMemberType {
                 path: "data.json".into()
             }
         )),
@@ -289,7 +289,7 @@ fn profiles_choose_the_root_layer_format() {
     let scene = tri_scene(Mesh::new("Tri", &TRI_POINTS, Faces::triangles(&[0, 1, 2])));
     let root_layer = |profile| {
         let bytes = scene.to_usdz(profile, &[]).unwrap();
-        let archive = layerstack_usdz::zip::ZipArchive::parse(&bytes).unwrap();
+        let archive = layerstack_io::usdz::zip::ZipArchive::parse(&bytes).unwrap();
         archive.entry_data(&archive.entries()[0]).to_vec()
     };
     assert_eq!(

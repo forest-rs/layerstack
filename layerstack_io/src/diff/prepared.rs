@@ -1,10 +1,10 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+use crate::usda::save::{canonical_property, prepare_comparison};
 use alloc::borrow::Cow;
 use hashbrown::HashMap;
 use layerstack::{TargetPath, TypedArray, Value as LayerValue, property::PropertyEntry};
-use layerstack_usda::save::{canonical_property, prepare_comparison};
 
 use super::*;
 

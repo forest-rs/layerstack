@@ -6,7 +6,7 @@
 use alloc::borrow::Cow;
 use alloc::vec::Vec;
 
-use layerstack_usda::writer::Value;
+use layerstack_io::usda::writer::Value;
 
 use crate::Transform;
 

@@ -57,10 +57,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let transaction = edit.finish();
     live.apply(&mut store, &transaction)?;
     let text =
-        layerstack_usda::save_usda(store.layer(root).unwrap(), store.tokens(), store.paths())?;
+        layerstack_io::usda::save_usda(store.layer(root).unwrap(), store.tokens(), store.paths())?;
 
     let mut reopened = InMemoryStore::default();
-    let layer = layerstack_usda::read_usda(
+    let layer = layerstack_io::usda::read_usda(
         &text,
         root,
         reopened.tokens(),

@@ -13,23 +13,21 @@ categories = ["graphics", "encoding"]
 
 [dependencies]
 layerstack = { workspace = true }
+# The USDA and USDC writers and USDZ packaging it exports through.
+layerstack_io = { workspace = true }
 # The schema, property and token names it authors, so an OpenUSD schema
 # change breaks the build rather than the files.
 layerstack_schemas = { default-features = false, features = [
     "usd-geom",
     "usd-shade",
 ], workspace = true }
-layerstack_usda = { workspace = true }
-layerstack_usdc = { workspace = true }
-layerstack_usdz = { workspace = true }
 # Square roots for instance transforms in `no_std`; `layerstack` already
 # depends on it.
 libm = { workspace = true }
 
 [dev-dependencies]
 # Tests inspect the exported USDA and USDZ through the format internals.
-layerstack_usda = { features = ["unstable-internals"], workspace = true }
-layerstack_usdz = { features = ["unstable-internals"], workspace = true }
+layerstack_io = { features = ["unstable-internals"], workspace = true }
 
 [lints]
 workspace = true

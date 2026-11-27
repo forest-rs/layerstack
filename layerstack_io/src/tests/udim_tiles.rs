@@ -305,9 +305,9 @@ fn an_anchor_without_a_source_and_a_storage_without_probes_are_errors() {
 fn usdz(files: &[(&str, &[u8])]) -> Vec<u8> {
     let files: Vec<_> = files
         .iter()
-        .map(|(name, data)| layerstack_usdz::PackageFile::new(name, data))
+        .map(|(name, data)| usdz::PackageFile::new(name, data))
         .collect();
-    layerstack_usdz::write_usdz(&files).unwrap()
+    usdz::write_usdz(&files).unwrap()
 }
 
 #[test]
@@ -440,7 +440,7 @@ fn packaged_scene() -> Tree {
 
 /// The authored asset values of every layer in `plan`, by layer member.
 fn values(
-    plan: &layerstack_usdz::localize::LocalizationPlan,
+    plan: &usdz::localize::LocalizationPlan,
     store: &InMemoryStore,
 ) -> BTreeSet<(String, String)> {
     plan.layers

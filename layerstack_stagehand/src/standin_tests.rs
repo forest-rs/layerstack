@@ -74,7 +74,7 @@ struct Fixture {
 impl Fixture {
     fn new() -> (Self, DrawDiff) {
         let mut store = InMemoryStore::default();
-        let read = layerstack_usda::read_usda(
+        let read = layerstack_io::usda::read_usda(
             SCENE,
             LayerId(1),
             store.tokens(),

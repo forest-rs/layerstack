@@ -9,8 +9,8 @@ use layerstack::{
     ArrayReadError, AssetResolveError, AssetResolver, InMemoryStore, LayerId, PathInterner,
     ResolvedAsset, Stage, StageOptions, Time, TokenInterner, TypedArray, Value,
 };
-use layerstack_usdc::writer::{Spec, SpecForm, Specifier, Value as W, write_crate};
-use layerstack_usdc::{DecodeBudget, read_usdc, read_usdc_lazy, read_usdc_lazy_within};
+use layerstack_io::usdc::writer::{Spec, SpecForm, Specifier, Value as W, write_crate};
+use layerstack_io::usdc::{DecodeBudget, read_usdc, read_usdc_lazy, read_usdc_lazy_within};
 use std::sync::Arc;
 
 struct NoAssets;
@@ -304,9 +304,13 @@ fn failures_never_select_weaker_defaults_or_hold_a_good_endpoint() {
         store.path("/"),
         PrimSpec::default().with_children(vec![store.tokens().lookup("P").unwrap()]),
     );
-    let error = layerstack_usda::save_usda(&to_save, store.tokens(), store.paths()).unwrap_err();
+    let error =
+        layerstack_io::usda::save_usda(&to_save, store.tokens(), store.paths()).unwrap_err();
     assert!(
-        matches!(error, layerstack_usda::save::SaveError::ArrayRead { .. }),
+        matches!(
+            error,
+            layerstack_io::usda::save::SaveError::ArrayRead { .. }
+        ),
         "{error:?}"
     );
     let mut edits = Layer::new(LayerId(3));
@@ -373,7 +377,7 @@ fn every_native_numeric_kind_and_empty_kind_survives_lazy_save() {
     assert_eq!(read.values.stats().decode_attempts, 0);
     assert_eq!(read.values.stats().live_arrays, kinds.len() * 2);
     assert_eq!(
-        layerstack_usda::save_usda(&read.assembled.layer, &tokens, &paths).unwrap(),
+        layerstack_io::usda::save_usda(&read.assembled.layer, &tokens, &paths).unwrap(),
         expected
     );
     assert_eq!(read.values.stats().materialized_arrays, kinds.len() * 2);
@@ -383,7 +387,7 @@ fn every_native_numeric_kind_and_empty_kind_survives_lazy_save() {
 fn malformed_payload_is_deferred_and_failure_is_cached() {
     let input = bytes();
     let mut budget = DecodeBudget::for_input(input.len());
-    let file = layerstack_usdc::CrateFile::open(&input, &mut budget).unwrap();
+    let file = layerstack_io::usdc::CrateFile::open(&input, &mut budget).unwrap();
     let offset = usize::try_from(
         file.spec("/P.a")
             .unwrap()

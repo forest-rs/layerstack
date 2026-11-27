@@ -32,7 +32,7 @@ impl AssetResolver for NoAssets {
 
 fn main() {
     let mut store = InMemoryStore::default();
-    let read = layerstack_usda::read_usda(
+    let read = layerstack_io::usda::read_usda(
         SOURCE,
         LayerId(1),
         store.tokens(),

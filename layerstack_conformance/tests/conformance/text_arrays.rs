@@ -15,7 +15,7 @@ use layerstack::{
     InterpolationType, Layer, LayerId, PathInterner, PropertyPath, ResolvedAsset, Stage,
     StageOptions, StringArray, Time, TokenId, TokenInterner, TypedArray, Value,
 };
-use layerstack_usdc::{read_usdc, read_usdc_lazy, save_usdc};
+use layerstack_io::usdc::{read_usdc, read_usdc_lazy, save_usdc};
 
 /// Resolves `./weak.usda` to layer 2.
 struct Weak;
@@ -79,7 +79,7 @@ over "P"
 "#;
 
 fn read(store: &mut InMemoryStore, source: &str, id: LayerId) {
-    let read = layerstack_usda::read_usda(source, id, store.tokens(), store.paths(), &mut Weak);
+    let read = layerstack_io::usda::read_usda(source, id, store.tokens(), store.paths(), &mut Weak);
     assert!(
         read.parse_diagnostics.is_empty() && read.lower_diagnostics.is_empty(),
         "{:?} {:?}",
@@ -195,7 +195,7 @@ fn text_arrays_round_trip_through_usda_and_usdc() {
     let mut store = scene();
     let text = {
         let weak = store.layer(LayerId(2)).unwrap();
-        layerstack_usda::save_usda(weak, store.tokens(), store.paths()).unwrap()
+        layerstack_io::usda::save_usda(weak, store.tokens(), store.paths()).unwrap()
     };
     // USDA text reads back as the layer it was saved from.
     read(&mut store, &text, LayerId(3));

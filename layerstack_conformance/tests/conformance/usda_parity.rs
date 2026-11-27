@@ -26,9 +26,9 @@ use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, LayerId, PathInterner, ResolvedAsset, Stage,
     StageOptions, TokenInterner,
 };
-use layerstack_usda::diagnostic::{Diagnostic, Severity};
-use layerstack_usda::read_usda;
-use layerstack_usda::save::{save_usda, save_usda_to};
+use layerstack_io::usda::diagnostic::{Diagnostic, Severity};
+use layerstack_io::usda::read_usda;
+use layerstack_io::usda::save::{save_usda, save_usda_to};
 use serde_json::Value as Json;
 
 const ORACLE: &str = include_str!("../../fixtures/usda_parity/oracle.json");

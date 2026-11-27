@@ -9,8 +9,8 @@ use layerstack::{
     value_clips::{ClipAssetRole, ClipAssetStatus, ClipAssetUnavailable},
 };
 use layerstack_io::diff::{ComparableLayer, DiffSide};
+use layerstack_io::usda::{save::usdc_document, writer};
 use layerstack_io::{Filesystem, IoErrorKind, OpenOptions, StageDocument};
-use layerstack_usda::{save::usdc_document, writer};
 use std::{collections::BTreeSet, path::Path};
 
 pub(super) type Document = StageDocument<Filesystem>;

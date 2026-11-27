@@ -15,10 +15,10 @@ use alloc::{
 };
 use core::{cmp::Ordering, fmt, ops::ControlFlow};
 
-use layerstack::{Layer, LayerId, NoAssets, PathInterner, TokenInterner};
-use layerstack_usda::writer::{
+use crate::usda::writer::{
     Document, ListOp, Metadatum, Prim, Property, Reference, Specifier, SubLayer, Value, Variability,
 };
+use layerstack::{Layer, LayerId, NoAssets, PathInterner, TokenInterner};
 
 mod prepared;
 mod values;
@@ -159,7 +159,7 @@ pub fn diff_layers(before: &[u8], after: &[u8]) -> Result<LayerDiff, DiffError> 
 /// Returns a diagnostic for malformed or unsupported layer content.
 pub fn read_authored_document(input: &[u8]) -> Result<Document, String> {
     let (layer, tokens, paths) = read_authored_layer(input)?;
-    layerstack_usda::save::usdc_document(&layer, &tokens, &paths).map_err(|error| error.to_string())
+    crate::usda::save::usdc_document(&layer, &tokens, &paths).map_err(|error| error.to_string())
 }
 
 fn read_authored_layer(input: &[u8]) -> Result<(Layer, TokenInterner, PathInterner), String> {
@@ -167,7 +167,7 @@ fn read_authored_layer(input: &[u8]) -> Result<(Layer, TokenInterner, PathIntern
     let paths = PathInterner::default();
     let id = LayerId(1);
     let layer: Layer = if input.starts_with(b"PXR-USDC") {
-        let imported = layerstack_usdc::read_usdc(input, id, &tokens, &paths, &mut NoAssets)
+        let imported = crate::usdc::read_usdc(input, id, &tokens, &paths, &mut NoAssets)
             .map_err(|error| error.to_string())?;
         if let Some(first) = imported.diagnostics.first() {
             let field = first.field.as_deref().unwrap_or("<spec>");
@@ -182,7 +182,7 @@ fn read_authored_layer(input: &[u8]) -> Result<(Layer, TokenInterner, PathIntern
         if !source.trim_start_matches('\u{feff}').starts_with("#usda ") {
             return Err(String::from("expected a USDA or USDC layer"));
         }
-        let imported = layerstack_usda::read_usda(source, id, &tokens, &paths, &mut NoAssets);
+        let imported = crate::usda::read_usda(source, id, &tokens, &paths, &mut NoAssets);
         if let Some(first) = imported.diagnostics().next() {
             return Err(format!("{:?}: {}", first.span, first.message));
         }
@@ -1047,7 +1047,7 @@ mod tests {
 
     #[test]
     fn refuses_crate_offsets_that_would_be_replaced_by_defaults() {
-        use layerstack_usdc::writer::{Spec, SpecForm, Value, write_crate};
+        use crate::usdc::writer::{Spec, SpecForm, Value, write_crate};
 
         let malformed = write_crate(&[Spec::new("/", SpecForm::PseudoRoot)
             .with_field(

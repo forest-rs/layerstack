@@ -24,14 +24,14 @@ use layerstack::{
     encoded_bytes::EncodedBytes,
     variable_expression::{ExpressionVariables, VariableExpression},
 };
+use layerstack_io::usda::diagnostic::Severity;
+use layerstack_io::usdz::{
+    range::{RangeLimits, RangePackage},
+    snapshot::{PackageLimits, PackageSnapshot},
+};
 use layerstack_io::{
     ImportPolicy, IoError, IoErrorKind, LoadOptions, OpenOptions, StageDocument, Storage,
     UsdcArrayLoading, UsdcReadOptions,
-};
-use layerstack_usda::diagnostic::Severity;
-use layerstack_usdz::{
-    range::{RangeLimits, RangePackage},
-    snapshot::{PackageLimits, PackageSnapshot},
 };
 
 /// The identifier of the root layer, the only source the fuzzed storage
@@ -86,15 +86,15 @@ pub fn usda(data: &[u8]) {
     let Ok(source) = core::str::from_utf8(data) else {
         return;
     };
-    let _ = layerstack_usda::parser::parse(source);
-    let _ = layerstack_usda::parser::parse_cst(source);
+    let _ = layerstack_io::usda::parser::parse(source);
+    let _ = layerstack_io::usda::parser::parse_cst(source);
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
-    let read = layerstack_usda::read_usda(source, LayerId(1), &tokens, &paths, &mut NoAssets);
+    let read = layerstack_io::usda::read_usda(source, LayerId(1), &tokens, &paths, &mut NoAssets);
     // The writers take whatever a recovered read holds, and refuse what
     // they cannot write with an error.
-    let _ = layerstack_usda::save_usda(&read.emitted.layer, &tokens, &paths);
-    let _ = layerstack_usdc::save_usdc(&read.emitted.layer, &tokens, &paths);
+    let _ = layerstack_io::usda::save_usda(&read.emitted.layer, &tokens, &paths);
+    let _ = layerstack_io::usdc::save_usdc(&read.emitted.layer, &tokens, &paths);
 }
 
 /// Imports USDA text, and when it imports without errors, saves it and
@@ -114,18 +114,19 @@ pub fn usda_round_trip(data: &[u8]) {
 
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
-    let read = layerstack_usda::read_usda(&first, LayerId(1), &tokens, &paths, &mut NoAssets);
-    let Ok(crate_file) = layerstack_usdc::save_usdc(&read.emitted.layer, &tokens, &paths) else {
+    let read = layerstack_io::usda::read_usda(&first, LayerId(1), &tokens, &paths, &mut NoAssets);
+    let Ok(crate_file) = layerstack_io::usdc::save_usdc(&read.emitted.layer, &tokens, &paths)
+    else {
         return;
     };
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
     let reread =
-        layerstack_usdc::read_usdc(&crate_file, LayerId(1), &tokens, &paths, &mut NoAssets)
+        layerstack_io::usdc::read_usdc(&crate_file, LayerId(1), &tokens, &paths, &mut NoAssets)
             .unwrap_or_else(|error| {
                 panic!("saved crate file does not read back ({error}):\n{first}")
             });
-    let third = layerstack_usda::save_usda(&reread.layer, &tokens, &paths)
+    let third = layerstack_io::usda::save_usda(&reread.layer, &tokens, &paths)
         .unwrap_or_else(|error| panic!("crate layer does not save ({error}):\n{first}"));
     assert_eq!(first, third, "the crate file reads back differently");
 }
@@ -135,7 +136,7 @@ pub fn usda_round_trip(data: &[u8]) {
 fn save_clean(source: &str) -> Option<String> {
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
-    let read = layerstack_usda::read_usda(source, LayerId(1), &tokens, &paths, &mut NoAssets);
+    let read = layerstack_io::usda::read_usda(source, LayerId(1), &tokens, &paths, &mut NoAssets);
     let clean = !read.emitted.rejected
         && read
             .parse_diagnostics
@@ -146,7 +147,7 @@ fn save_clean(source: &str) -> Option<String> {
     if !clean {
         return None;
     }
-    layerstack_usda::save_usda(&read.emitted.layer, &tokens, &paths).ok()
+    layerstack_io::usda::save_usda(&read.emitted.layer, &tokens, &paths).ok()
 }
 
 /// Reads a crate file eagerly, retained (decoding every retained value by
@@ -154,20 +155,24 @@ fn save_clean(source: &str) -> Option<String> {
 pub fn usdc(data: &[u8]) {
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
-    let _ = layerstack_usdc::read_usdc(data, LayerId(1), &tokens, &paths, &mut NoAssets);
+    let _ = layerstack_io::usdc::read_usdc(data, LayerId(1), &tokens, &paths, &mut NoAssets);
 
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
-    if let Ok(read) =
-        layerstack_usdc::read_usdc_lazy(Arc::from(data), LayerId(1), &tokens, &paths, &mut NoAssets)
-    {
+    if let Ok(read) = layerstack_io::usdc::read_usdc_lazy(
+        Arc::from(data),
+        LayerId(1),
+        &tokens,
+        &paths,
+        &mut NoAssets,
+    ) {
         // Saving reads every value, so every retained one decodes.
-        let _ = layerstack_usda::save_usda(&read.assembled.layer, &tokens, &paths);
+        let _ = layerstack_io::usda::save_usda(&read.assembled.layer, &tokens, &paths);
         let _ = read.values.stats();
     }
 
-    let mut budget = layerstack_usdc::DecodeBudget::for_input(data.len());
-    if let Ok(file) = layerstack_usdc::CrateFile::open(data, &mut budget) {
+    let mut budget = layerstack_io::usdc::DecodeBudget::for_input(data.len());
+    if let Ok(file) = layerstack_io::usdc::CrateFile::open(data, &mut budget) {
         for spec in file.specs() {
             let _ = spec.path();
             for field in spec.fields() {
@@ -188,7 +193,7 @@ pub fn usdz(data: &[u8]) {
             arrays,
             decode_budget: None,
         };
-        let _ = layerstack_usdz::read_usdz_with_options(
+        let _ = layerstack_io::usdz::read_usdz_with_options(
             data,
             LayerId(1),
             &tokens,

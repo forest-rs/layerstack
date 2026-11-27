@@ -39,8 +39,8 @@ fn import(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("ast_emit", count), &source, |b, source| {
             b.iter(|| {
                 let store = InMemoryStore::default();
-                let parsed = layerstack_usda::parser::parse(black_box(source));
-                black_box(layerstack_usda::emit::emit(
+                let parsed = layerstack_io::usda::parser::parse(black_box(source));
+                black_box(layerstack_io::usda::emit::emit(
                     &parsed.layer,
                     LayerId(1),
                     store.tokens(),
@@ -52,7 +52,7 @@ fn import(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("direct", count), &source, |b, source| {
             b.iter(|| {
                 let store = InMemoryStore::default();
-                black_box(layerstack_usda::read_usda(
+                black_box(layerstack_io::usda::read_usda(
                     black_box(source),
                     LayerId(1),
                     store.tokens(),

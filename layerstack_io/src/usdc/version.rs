@@ -1,0 +1,152 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+//! Crate file format versions and the features they introduce.
+//!
+//! A USDC header carries a `major.minor.patch` format version (AOUSD Core
+//! §16.3.2). This reader accepts files from [`CrateVersion::OLDEST_READABLE`]
+//! through [`CrateVersion::NEWEST_READABLE`] and rejects everything else with
+//! [`UsdcError::UnsupportedVersion`]. Within that range, a value that needs a
+//! newer version than the file declares is rejected with
+//! [`UsdcError::FeatureRequiresVersion`].
+//!
+//! The version history below is OpenUSD's (`pxr/usd/sdf/crateFile.cpp:393`,
+//! v26.11). Versions after 0.12 postdate AOUSD Core 1.0.1; the reader follows
+//! the OpenUSD v26.11 encoding for them.
+//!
+//! | Version | Adds | Reader support |
+//! |---------|------|----------------|
+//! | 0.4  | compressed structural sections (tokens, fields, field sets, paths, specs) | oldest readable version |
+//! | 0.5  | compressed `int`, `uint`, `int64` and `uint64` arrays; arrays no longer store a rank | yes |
+//! | 0.6  | compressed `half`, `float` and `double` arrays (integer-coded or lookup table) | yes |
+//! | 0.7  | 64-bit array sizes | yes |
+//! | 0.8  | payload list ops, payload layer offsets | yes |
+//! | 0.9  | `timecode` and `timecode[]` values | yes |
+//! | 0.10 | `pathExpression` values | yes |
+//! | 0.11 | relocates in layer metadata | yes |
+//! | 0.12 | splines (Ts binary format 1) | yes |
+//! | 0.13 | spline tangent algorithms (Ts binary format 2) | yes; algorithms and stored tangents are preserved |
+//! | 0.14 | native array edits (`VtArrayEdit`) | yes, as [`Value::TypedArrayEdit`] |
+//! | 0.15 | spline `loopBoundaryTime` and `GfTimeCode`-valued splines (Ts binary format 3) | yes; boundary times and `TimeCode` values are preserved |
+//! | 0.16 | `duration` and `duration[]` values (value type 61); `GfDuration`-valued splines (Ts binary format 4) | yes |
+//!
+//! Versions before 0.4 store the structural sections uncompressed and are
+//! rejected with [`UsdcError::UnsupportedVersion`], although OpenUSD still
+//! reads them (back to 0.0.1). Before 0.7, the reader frames arrays as OpenUSD's does: a
+//! `uint32` element count, preceded before 0.5 by a `uint32` rank that is
+//! skipped, and the compressed bit of an array value is ignored for element
+//! types whose compression the file's version predates
+//! (`_ArrayValueHandlerBase::UnpackArray`, `_ReadUncompressedArray` and
+//! `_ReadPossiblyCompressedArray` in `crateFile.cpp`). AOUSD Core §16.3
+//! describes the 0.7 and later framing only. Files before 0.8 hold payloads
+//! without layer offsets, which read as the identity offset.
+//!
+//! Value type 60 (`SdfAnimationBlock`) is not tied to a version: OpenUSD
+//! v26.08 writes it without raising the file version. It is read
+//! and written as [`layerstack::Value::AnimationBlock`].
+//!
+//! [`Value::TypedArrayEdit`]: layerstack::doc::Value::TypedArrayEdit
+//! [`UsdcError::UnsupportedVersion`]: crate::usdc::UsdcError::UnsupportedVersion
+//! [`UsdcError::FeatureRequiresVersion`]: crate::usdc::UsdcError::FeatureRequiresVersion
+//! [`UsdcError::UnsupportedFeature`]: crate::usdc::UsdcError::UnsupportedFeature
+//! [`UsdcError::UnknownValueType`]: crate::usdc::UsdcError::UnknownValueType
+
+use core::fmt;
+
+/// A crate file format version, `major.minor.patch`.
+///
+/// Versions order lexicographically by component.
+///
+/// Spec: AOUSD Core §16.3.2.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CrateVersion {
+    /// Major version. Every readable version has major version 0.
+    pub major: u8,
+    /// Minor version. Minor versions add encodings; see the module docs.
+    pub minor: u8,
+    /// Patch version. Patch-level changes are forward compatible.
+    pub patch: u8,
+}
+
+impl CrateVersion {
+    /// The oldest version this reader accepts, 0.4.0, the first with
+    /// compressed structural sections.
+    pub const OLDEST_READABLE: Self = Self::new(0, 4, 0);
+    /// The newest version this reader accepts, 0.16 (any patch level).
+    pub const NEWEST_READABLE: Self = Self::new(0, 16, 0);
+
+    /// Version 0.5.0, which introduced compressed `int`, `uint`, `int64` and
+    /// `uint64` arrays and dropped the rank arrays stored before their size.
+    pub const COMPRESSED_INTEGER_ARRAYS: Self = Self::new(0, 5, 0);
+    /// Version 0.6.0, which introduced compressed `half`, `float` and
+    /// `double` arrays.
+    pub const COMPRESSED_FLOAT_ARRAYS: Self = Self::new(0, 6, 0);
+    /// Version 0.7.0, which widened array sizes from 32 to 64 bits.
+    pub const ARRAY_SIZES_64_BIT: Self = Self::new(0, 7, 0);
+    /// Version 0.8.0, OpenUSD's version for newly created files
+    /// (`DEFAULT_NEW_VERSION`, `USD_WRITE_NEW_USDC_FILES_AS_VERSION` in
+    /// `crateFile.cpp`) and the version the writer starts from.
+    pub const NEW_FILE_DEFAULT: Self = Self::new(0, 8, 0);
+    /// Version 0.8.0, which introduced payload layer offsets.
+    pub const PAYLOAD_LAYER_OFFSETS: Self = Self::new(0, 8, 0);
+    /// Version 0.9.0, which introduced `timecode` and `timecode[]` values.
+    pub const TIMECODES: Self = Self::new(0, 9, 0);
+    /// Version 0.12.0, which introduced splines.
+    pub const SPLINES: Self = Self::new(0, 12, 0);
+    /// Version 0.13.0, which introduced spline tangent algorithms.
+    pub const SPLINE_TANGENT_ALGORITHMS: Self = Self::new(0, 13, 0);
+    /// Version 0.14.0, which introduced native array edits.
+    pub const ARRAY_EDITS: Self = Self::new(0, 14, 0);
+    /// Version 0.15.0, which introduced spline `loopBoundaryTime` and
+    /// `GfTimeCode`-valued splines.
+    pub const SPLINE_LOOP_BOUNDARY_AND_TIMECODE: Self = Self::new(0, 15, 0);
+    /// Version 0.16.0, which introduced `duration` and `duration[]` values
+    /// (`Write(GfDuration)` in OpenUSD 26.11 `crateFile.cpp`).
+    pub const DURATIONS: Self = Self::new(0, 16, 0);
+
+    /// Creates a version from its components.
+    #[must_use]
+    pub const fn new(major: u8, minor: u8, patch: u8) -> Self {
+        Self {
+            major,
+            minor,
+            patch,
+        }
+    }
+
+    /// Whether this reader can read a file with this version.
+    ///
+    /// Following OpenUSD (`SdfFileVersion::CanRead`,
+    /// `pxr/usd/sdf/fileVersion.h:76`), the patch level is not compared:
+    /// patch-level changes are forward compatible.
+    ///
+    /// ```
+    /// use layerstack_io::usdc::version::CrateVersion;
+    ///
+    /// assert!(CrateVersion::new(0, 16, 0).is_readable());
+    /// assert!(CrateVersion::new(0, 16, 1).is_readable());
+    /// assert!(!CrateVersion::new(0, 17, 0).is_readable());
+    /// assert!(CrateVersion::new(0, 4, 0).is_readable());
+    /// assert!(!CrateVersion::new(0, 3, 0).is_readable());
+    /// assert!(!CrateVersion::new(1, 0, 0).is_readable());
+    /// ```
+    #[must_use]
+    pub const fn is_readable(self) -> bool {
+        self.major == Self::NEWEST_READABLE.major
+            && self.minor >= Self::OLDEST_READABLE.minor
+            && self.minor <= Self::NEWEST_READABLE.minor
+    }
+
+    /// Whether a file of this version may contain a feature introduced in
+    /// `introduced`.
+    #[must_use]
+    pub fn has(self, introduced: Self) -> bool {
+        self >= introduced
+    }
+}
+
+impl fmt::Display for CrateVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
+    }
+}

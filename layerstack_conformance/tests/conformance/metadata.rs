@@ -251,14 +251,16 @@ use crate::support::schema_scene as support;
 
 #[test]
 fn registered_asset_array_metadata_retains_its_crate_type() {
-    use layerstack_usdc::{CrateFile, DecodeBudget, value_rep::CrateValue, value_type::ValueType};
+    use layerstack_io::usdc::{
+        CrateFile, DecodeBudget, value_rep::CrateValue, value_type::ValueType,
+    };
     let (store, _) = support::scene(
         r#"#usda 1.0
         def "Empty" (payloadAssetDependencies = []) {}
         def "Populated" (payloadAssetDependencies = [@a.usda@, @b.usda@]) {}
     "#,
     );
-    let bytes = layerstack_usdc::save_usdc(
+    let bytes = layerstack_io::usdc::save_usdc(
         store.layer(LayerId(1)).unwrap(),
         store.tokens(),
         store.paths(),

@@ -43,7 +43,7 @@ use layerstack::spec_path::SpecPath;
 use layerstack::{Address, InMemoryStore, LayerOffset, ListPosition, Transaction};
 use layerstack_conformance::save_corpus::Imported;
 use layerstack_conformance::workspace_root;
-use layerstack_usda::writer::Value as WriterValue;
+use layerstack_io::usda::writer::Value as WriterValue;
 use serde_json::Value as Json;
 
 const ORACLE: &str = include_str!("../../fixtures/usda_field_order/oracle.json");
@@ -269,9 +269,12 @@ fn scrambled_authoring_saves_as_openusd_writes_it() {
                 panic!("{name}: step {i} ({step}) is rejected: {error:?}");
             }
         }
-        let text =
-            layerstack_usda::save_usda(store.layer(SCENE).unwrap(), store.tokens(), store.paths())
-                .expect("saves");
+        let text = layerstack_io::usda::save_usda(
+            store.layer(SCENE).unwrap(),
+            store.tokens(),
+            store.paths(),
+        )
+        .expect("saves");
         let expected = case["text"].as_str().unwrap();
         assert_eq!(text, expected, "{name}");
         // OpenUSD's text reads back as the same layer: every number it

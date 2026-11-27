@@ -33,7 +33,7 @@ use layerstack::path::PathInterner;
 use layerstack::property::PropertyEntry;
 use layerstack::{AssetResolveError, AssetResolver, ResolvedAsset};
 use layerstack_conformance::workspace_root;
-use layerstack_usdc::DecodeBudget;
+use layerstack_io::usdc::DecodeBudget;
 
 /// Crate files covering every section and the variable-length encodings:
 /// list ops of references with layer offsets, dictionaries, time samples,
@@ -237,11 +237,11 @@ fn read_counting(
     data: &[u8],
     budget: &mut DecodeBudget,
 ) -> (
-    Result<layerstack_usdc::AssembleResult, layerstack_usdc::UsdcError>,
+    Result<layerstack_io::usdc::AssembleResult, layerstack_io::usdc::UsdcError>,
     u64,
 ) {
     allocated_by(|| {
-        layerstack_usdc::read_usdc_within(
+        layerstack_io::usdc::read_usdc_within(
             data,
             LayerId(1),
             &TokenInterner::default(),
@@ -387,12 +387,12 @@ fn byte_mutations_read_cleanly() {
 /// reading their text does, and is charged as much.
 #[test]
 fn the_path_tree_reads_what_the_text_does() {
-    use layerstack_usdc::section::{PathTable, parse_sections};
+    use layerstack_io::usdc::section::{PathTable, parse_sections};
     let compare = |data: &[u8]| -> Result<(), String> {
-        let Ok(header) = layerstack_usdc::header::parse_header(data) else {
+        let Ok(header) = layerstack_io::usdc::header::parse_header(data) else {
             return Ok(());
         };
-        let Ok(toc) = layerstack_usdc::toc::parse_toc(data, header.toc_offset) else {
+        let Ok(toc) = layerstack_io::usdc::toc::parse_toc(data, header.toc_offset) else {
             return Ok(());
         };
         let mut budget = DecodeBudget::for_input(data.len());
@@ -404,7 +404,7 @@ fn the_path_tree_reads_what_the_text_does() {
         let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
         let read = |sections| {
             let mut budget = DecodeBudget::for_input(data.len());
-            let read = layerstack_usdc::assemble::assemble(
+            let read = layerstack_io::usdc::assemble::assemble(
                 data,
                 sections,
                 LayerId(1),
@@ -493,7 +493,7 @@ fn unmodified_files_hold_only_charged_values() {
         );
         let read = match read {
             Ok(read) => read,
-            Err(layerstack_usdc::UsdcError::UnsupportedFeature { .. }) => continue,
+            Err(layerstack_io::usdc::UsdcError::UnsupportedFeature { .. }) => continue,
             Err(e) => panic!("{name}: {e}"),
         };
         let values = count_values(&read.layer);
@@ -507,8 +507,8 @@ fn unmodified_files_hold_only_charged_values() {
 /// with `name_len` bytes. The writer shares one fieldset, and so one field
 /// name, between them, as OpenUSD does.
 fn shared_field_name_file(specs: usize, name_len: usize) -> Vec<u8> {
-    use layerstack_usdc::value_type::SpecForm;
-    use layerstack_usdc::writer::{Spec, Value, write_crate};
+    use layerstack_io::usdc::value_type::SpecForm;
+    use layerstack_io::usdc::writer::{Spec, Value, write_crate};
 
     let name = "x".repeat(name_len);
     let children = (0..specs).map(|i| format!("P{i}")).collect();
@@ -554,7 +554,7 @@ fn shared_field_names_are_charged_by_length() {
     assert!(
         matches!(
             read,
-            Err(layerstack_usdc::UsdcError::DecodeBudgetExceeded { limit: l }) if l == limit
+            Err(layerstack_io::usdc::UsdcError::DecodeBudgetExceeded { limit: l }) if l == limit
         ),
         "{:?}",
         read.map(|_| ())
@@ -618,7 +618,7 @@ fn shared_array_edit_literals_stay_within_the_budget() {
 fn spline_value(
     knots: u32,
     trailing_byte: bool,
-) -> (layerstack_usdc::value_rep::RawValueRep, Vec<u8>) {
+) -> (layerstack_io::usdc::value_rep::RawValueRep, Vec<u8>) {
     let mut blob = vec![0x91, 0x09];
     blob.extend_from_slice(&knots.to_le_bytes());
     for i in 0..knots {
@@ -636,8 +636,8 @@ fn spline_value(
     data.extend_from_slice(&0_u64.to_le_bytes());
     let mut rep = [0_u8; 8];
     rep[0] = 8;
-    rep[6] = layerstack_usdc::value_type::ValueType::Spline as u8;
-    (layerstack_usdc::value_rep::RawValueRep::new(rep), data)
+    rep[6] = layerstack_io::usdc::value_type::ValueType::Spline as u8;
+    (layerstack_io::usdc::value_rep::RawValueRep::new(rep), data)
 }
 
 /// Spline knots are charged before they are parsed, so a budget too small
@@ -645,17 +645,17 @@ fn spline_value(
 /// otherwise parse.
 #[test]
 fn spline_knots_are_charged_before_parsing() {
-    use layerstack_usdc::section::CrateSections;
-    use layerstack_usdc::value_rep::{CrateValue, decode_value_within};
+    use layerstack_io::usdc::section::CrateSections;
+    use layerstack_io::usdc::value_rep::{CrateValue, decode_value_within};
 
     let sections = CrateSections {
-        tokens: layerstack_usdc::section::TokenTable::default(),
+        tokens: layerstack_io::usdc::section::TokenTable::default(),
         strings: Vec::new(),
         fields: Vec::new(),
         fieldsets: Vec::new(),
-        paths: layerstack_usdc::section::PathTable::default(),
+        paths: layerstack_io::usdc::section::PathTable::default(),
         specs: Vec::new(),
-        version: layerstack_usdc::CrateVersion::NEWEST_READABLE,
+        version: layerstack_io::usdc::CrateVersion::NEWEST_READABLE,
     };
     let knots = 100_000;
 
@@ -679,7 +679,7 @@ fn spline_knots_are_charged_before_parsing() {
             allocated_by(|| decode_value_within(&rep, &data, &sections, &mut budget));
         assert_eq!(
             value.err(),
-            Some(layerstack_usdc::UsdcError::DecodeBudgetExceeded { limit: 1 }),
+            Some(layerstack_io::usdc::UsdcError::DecodeBudgetExceeded { limit: 1 }),
             "trailing byte: {trailing_byte}"
         );
         assert!(

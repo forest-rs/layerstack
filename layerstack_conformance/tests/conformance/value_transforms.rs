@@ -323,8 +323,9 @@ fn flattening_writes_the_values_openusd_writes() {
             &FlattenRequirements::default(),
         )
         .expect("flattens");
-    let text = layerstack_usda::save_usda(&flat.layer, loaded.store.tokens(), loaded.store.paths())
-        .expect("saves");
+    let text =
+        layerstack_io::usda::save_usda(&flat.layer, loaded.store.tokens(), loaded.store.paths())
+            .expect("saves");
     assert_eq!(text, oracle["flatten"].as_str().unwrap());
 }
 
@@ -389,7 +390,7 @@ fn replay(case: &Json) {
     let layer = layer_named(&loaded, case["layer"].as_str().unwrap());
     let store = &loaded.store;
     let text =
-        layerstack_usda::save_usda(store.layer(layer).unwrap(), store.tokens(), store.paths())
+        layerstack_io::usda::save_usda(store.layer(layer).unwrap(), store.tokens(), store.paths())
             .expect("saves");
     assert_eq!(text, case["text"].as_str().unwrap(), "layer text");
     assert_same(

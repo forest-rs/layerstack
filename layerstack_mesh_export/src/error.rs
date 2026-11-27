@@ -6,9 +6,9 @@
 use alloc::string::String;
 use core::fmt;
 
-use layerstack_usda::writer::WriteError;
-use layerstack_usdc::writer::UsdcWriteError;
-use layerstack_usdz::UsdzWriteError;
+use layerstack_io::usda::writer::WriteError;
+use layerstack_io::usdc::writer::UsdcWriteError;
+use layerstack_io::usdz::UsdzWriteError;
 
 use crate::{Interpolation, UsdzProfile};
 

@@ -1020,16 +1020,24 @@ fn authored_layers_round_trip_in_both_formats_and_match_openusd() {
         ] {
             let layer = generated.store.layer(id).unwrap();
             let bytes = if binary {
-                layerstack_usdc::save_usdc(layer, generated.store.tokens(), generated.store.paths())
-                    .unwrap()
+                layerstack_io::usdc::save_usdc(
+                    layer,
+                    generated.store.tokens(),
+                    generated.store.paths(),
+                )
+                .unwrap()
             } else {
-                layerstack_usda::save_usda(layer, generated.store.tokens(), generated.store.paths())
-                    .unwrap()
-                    .into_bytes()
+                layerstack_io::usda::save_usda(
+                    layer,
+                    generated.store.tokens(),
+                    generated.store.paths(),
+                )
+                .unwrap()
+                .into_bytes()
             };
             std::fs::write(directory.join(name), &bytes).unwrap();
             if binary {
-                let read = layerstack_usdc::read_usdc(
+                let read = layerstack_io::usdc::read_usdc(
                     &bytes,
                     id,
                     imported.tokens(),

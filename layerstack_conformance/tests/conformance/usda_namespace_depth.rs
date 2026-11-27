@@ -23,8 +23,8 @@ use layerstack::path::{Path, PathId};
 use layerstack::property::{PropertySpec, PropertyType};
 use layerstack::spec_path::VariantSelectionSite;
 use layerstack::{InMemoryStore, LayerId, NoAssets, PathInterner, TokenInterner, Value};
-use layerstack_usda::read_usda;
-use layerstack_usda::save::save_usda;
+use layerstack_io::usda::read_usda;
+use layerstack_io::usda::save::save_usda;
 use serde_json::Value as Json;
 
 const ORACLE: &str = include_str!("../../fixtures/usda_namespace_depth/oracle.json");

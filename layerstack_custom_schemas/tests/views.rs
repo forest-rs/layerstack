@@ -90,7 +90,7 @@ fn stage() -> (InMemoryStore, LiveStage) {
     let mut store = InMemoryStore::default();
     let schemas = registry(store.tokens());
     assert!(schemas.issues().is_empty(), "{:?}", schemas.issues());
-    let read = layerstack_usda::read_usda(
+    let read = layerstack_io::usda::read_usda(
         SCENE,
         LayerId(1),
         store.tokens(),
@@ -396,7 +396,7 @@ fn library_kinds_drive_model_queries() {
     assert!(again.contains(&KindError::AlreadyRegistered("lab_bench".into())));
 
     let mut store = InMemoryStore::default();
-    let read = layerstack_usda::read_usda(
+    let read = layerstack_io::usda::read_usda(
         r#"#usda 1.0
 def Xform "Site" (kind = "lab_station")
 {

@@ -39,7 +39,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use layerstack::Specifier;
-use layerstack_usda::writer::{
+use layerstack_io::usda::writer::{
     Attribute, Document, LayerOffset, ListOp, Metadatum, Prim, Relationship, SubLayer, Value,
 };
 
@@ -819,7 +819,7 @@ impl LibraryScene {
                         .to_usda()
                         .map_err(|error| std::io::Error::other(error.to_string()))?
                         .into_bytes(),
-                    LibraryFormat::Usdc => layerstack_usdc::writer::write_document(document)
+                    LibraryFormat::Usdc => layerstack_io::usdc::writer::write_document(document)
                         .map_err(|error| std::io::Error::other(error.to_string()))?,
                 };
                 Ok((format!("{stem}.{extension}"), bytes))

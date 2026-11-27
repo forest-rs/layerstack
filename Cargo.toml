@@ -14,9 +14,6 @@ members = [
     "layerstack_schemas",
     "layerstack_stagehand",
     "layerstack_stagehand_wasm",
-    "layerstack_usda",
-    "layerstack_usdc",
-    "layerstack_usdz",
     "layerstack_wasm",
     "opinionated",
     "wind_tunnel",
@@ -42,9 +39,6 @@ layerstack = { path = "layerstack", version = "0.1.0" }
 layerstack_io = { default-features = false, path = "layerstack_io", version = "0.1.0" }
 layerstack_mesh_export = { path = "layerstack_mesh_export", version = "0.1.0" }
 layerstack_schemas = { default-features = false, path = "layerstack_schemas", version = "0.1.0" }
-layerstack_usda = { path = "layerstack_usda", version = "0.1.0" }
-layerstack_usdc = { path = "layerstack_usdc", version = "0.1.0" }
-layerstack_usdz = { path = "layerstack_usdz", version = "0.1.0" }
 libm = { default-features = false, version = "0.2.16" }
 lz4_flex = { default-features = false, version = "0.11" }
 opinionated = { path = "opinionated", version = "0.2.0" }

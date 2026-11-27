@@ -193,7 +193,7 @@ fn record(loaded: &LoadedStage, stage: &Stage) -> Json {
         let layer = store.layer(layer_named(loaded, name)).unwrap();
         layers.insert(name.into(), layer_record(store, layer));
         let saved =
-            layerstack_usda::save_usda(layer, store.tokens(), store.paths()).expect("saves");
+            layerstack_io::usda::save_usda(layer, store.tokens(), store.paths()).expect("saves");
         text.insert(name.into(), Json::String(saved));
     }
     json!({"layers": layers, "text": text, "composed": composed_record(store, stage)})

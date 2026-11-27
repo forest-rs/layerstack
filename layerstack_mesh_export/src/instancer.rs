@@ -8,11 +8,11 @@ use alloc::vec;
 use alloc::vec::Vec;
 use layerstack_schemas::usd_geom as geom;
 
-use layerstack_usda::writer::Value;
+use layerstack_io::usda::writer::Value;
 
 use alloc::string::ToString;
 
-use layerstack_usda::writer::is_identifier;
+use layerstack_io::usda::writer::is_identifier;
 
 use crate::{
     CustomAttribute, CustomPrimvar, Instance, InstancerProblem, Interpolation, Mesh, Node,

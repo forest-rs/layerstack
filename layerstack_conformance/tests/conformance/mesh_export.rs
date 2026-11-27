@@ -18,11 +18,11 @@ use layerstack::path::PathInterner;
 use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset, Stage, StageOptions,
 };
+use layerstack_io::usda::ast;
 use layerstack_mesh_export::{
     Faces, Mesh, PackageFile, Primvar, PrimvarData, Scene, StageSettings, Transform, UpAxis,
     UsdzProfile, Value as AuthoredValue, Xform,
 };
-use layerstack_usda::ast;
 
 /// The composed targets of the relationship, or connections of the
 /// attribute, at `path`: `None` when no opinion authors any, except for an
@@ -304,7 +304,7 @@ fn usda_roundtrip_through_parser_and_stage() {
     let text = scene().to_usda().expect("export");
     assert_eq!(text, scene().to_usda().unwrap(), "deterministic output");
 
-    let parsed = layerstack_usda::parser::parse(&text);
+    let parsed = layerstack_io::usda::parser::parse(&text);
     assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
 
     // Authored details the composition model drops: check them on the AST.
@@ -366,7 +366,7 @@ fn usda_roundtrip_through_parser_and_stage() {
     assert!(!attribute("points").custom, "schema attribute");
 
     let mut store = InMemoryStore::default();
-    let result = layerstack_usda::emit::emit(
+    let result = layerstack_io::usda::emit::emit(
         &parsed.layer,
         LayerId(1),
         store.tokens(),
@@ -384,7 +384,7 @@ fn usdc_roundtrip_through_reader_and_stage() {
     assert_eq!(bytes, scene().to_usdc().unwrap(), "deterministic output");
     assert_eq!(&bytes[..8], b"PXR-USDC", "crate file");
     let mut store = InMemoryStore::default();
-    let result = layerstack_usdc::read_usdc(
+    let result = layerstack_io::usdc::read_usdc(
         &bytes,
         LayerId(1),
         store.tokens(),
@@ -404,7 +404,7 @@ fn usdz_roundtrip_through_package_reader() {
             .to_usdz(profile, &[PackageFile::new("textures/checker.png", png)])
             .expect("package");
 
-        let archive = layerstack_usdz::zip::ZipArchive::parse(&bytes).expect("valid USDZ");
+        let archive = layerstack_io::usdz::zip::ZipArchive::parse(&bytes).expect("valid USDZ");
         let names: Vec<&str> = archive.entries().iter().map(|e| &*e.name).collect();
         assert_eq!(
             names,
@@ -427,7 +427,7 @@ fn usdz_roundtrip_through_package_reader() {
         );
 
         let mut store = InMemoryStore::default();
-        let result = layerstack_usdz::read_usdz(
+        let result = layerstack_io::usdz::read_usdz(
             &bytes,
             LayerId(1),
             store.tokens(),
@@ -444,10 +444,10 @@ fn usdz_roundtrip_through_package_reader() {
 
 /// Parses and emits exported USDA into a fresh store (root layer 1).
 fn load_usda(text: &str) -> InMemoryStore {
-    let parsed = layerstack_usda::parser::parse(text);
+    let parsed = layerstack_io::usda::parser::parse(text);
     assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
     let mut store = InMemoryStore::default();
-    let result = layerstack_usda::emit::emit(
+    let result = layerstack_io::usda::emit::emit(
         &parsed.layer,
         LayerId(1),
         store.tokens(),
@@ -650,7 +650,7 @@ fn asymmetric_one_metre_object_keeps_units_axis_and_transform_order() {
         .to_usda()
         .unwrap();
 
-    let parsed = layerstack_usda::parser::parse(&text);
+    let parsed = layerstack_io::usda::parser::parse(&text);
     let meta: Vec<String> = parsed
         .layer
         .metadata
@@ -787,9 +787,9 @@ fn moved_usdz_resolves_every_internal_asset() {
     let bytes = std::fs::read(&package).unwrap();
     std::fs::remove_dir_all(&base).unwrap();
 
-    let archive = layerstack_usdz::zip::ZipArchive::parse(&bytes).unwrap();
+    let archive = layerstack_io::usdz::zip::ZipArchive::parse(&bytes).unwrap();
     let store = InMemoryStore::default();
-    let result = layerstack_usdz::read_usdz(
+    let result = layerstack_io::usdz::read_usdz(
         &bytes,
         LayerId(1),
         store.tokens(),
@@ -828,7 +828,7 @@ fn moved_usdz_resolves_every_internal_asset() {
 /// Reads a USDZ package's root layer into a fresh store (root layer 1).
 fn load_usdz(bytes: &[u8]) -> InMemoryStore {
     let mut store = InMemoryStore::default();
-    let result = layerstack_usdz::read_usdz(
+    let result = layerstack_io::usdz::read_usdz(
         bytes,
         LayerId(1),
         store.tokens(),
@@ -842,7 +842,7 @@ fn load_usdz(bytes: &[u8]) -> InMemoryStore {
 
 fn load_usdc(bytes: &[u8]) -> InMemoryStore {
     let mut store = InMemoryStore::default();
-    let result = layerstack_usdc::read_usdc(
+    let result = layerstack_io::usdc::read_usdc(
         bytes,
         LayerId(1),
         store.tokens(),
@@ -1076,7 +1076,7 @@ fn materials_round_trip_through_readers() {
     assert_textured_cube(&mut load_usdz(&arkit));
     let bytes = textured.to_usdz(UsdzProfile::Generic, &files).unwrap();
     assert_textured_cube(&mut load_usdz(&bytes));
-    let archive = layerstack_usdz::zip::ZipArchive::parse(&bytes).unwrap();
+    let archive = layerstack_io::usdz::zip::ZipArchive::parse(&bytes).unwrap();
     let names: Vec<&str> = archive.entries().iter().map(|e| &*e.name).collect();
     assert_eq!(
         names,
@@ -1132,7 +1132,7 @@ fn batch_mesh_reopens_with_export_equivalent_geometry_and_indexed_seams() {
     panel.author(&mut batch, authored_paths[0]).unwrap();
     plain.author(&mut batch, authored_paths[1]).unwrap();
     let layer = batch.finish();
-    let saved = layerstack_usda::save_usda(&layer, store.tokens(), store.paths()).unwrap();
+    let saved = layerstack_io::usda::save_usda(&layer, store.tokens(), store.paths()).unwrap();
     let exported = Scene::new(
         StageSettings::new(UpAxis::Y, 1.0),
         Xform::new("Root").with_mesh(panel).with_mesh(plain),
@@ -1141,9 +1141,9 @@ fn batch_mesh_reopens_with_export_equivalent_geometry_and_indexed_seams() {
     .unwrap();
 
     let read = |text: &str| {
-        let parsed = layerstack_usda::parser::parse(text);
+        let parsed = layerstack_io::usda::parser::parse(text);
         assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
-        let result = layerstack_usda::emit::emit(
+        let result = layerstack_io::usda::emit::emit(
             &parsed.layer,
             LayerId(1),
             store.tokens(),

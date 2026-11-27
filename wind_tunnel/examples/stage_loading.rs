@@ -69,7 +69,7 @@ impl Files {
             AssetResolveError::LoadError(format!("{}: {message}", path.display()).into())
         };
         let layer = if data.starts_with(b"PXR-USDC") {
-            let result = layerstack_usdc::read_usdc(&data, id, tokens, paths, self)
+            let result = layerstack_io::usdc::read_usdc(&data, id, tokens, paths, self)
                 .map_err(|e| fail(e.to_string()))?;
             if !result.diagnostics.is_empty() {
                 return Err(fail(format!("{:?}", result.diagnostics)));
@@ -78,7 +78,7 @@ impl Files {
             result.layer
         } else {
             let source = std::str::from_utf8(&data).map_err(|e| fail(e.to_string()))?;
-            let imported = layerstack_usda::read_usda(source, id, tokens, paths, self);
+            let imported = layerstack_io::usda::read_usda(source, id, tokens, paths, self);
             if !imported.parse_diagnostics.is_empty() || !imported.lower_diagnostics.is_empty() {
                 return Err(fail(format!(
                     "{:?} {:?}",
@@ -182,7 +182,7 @@ fn main() {
                     !location.contains(['\t', '\r', '\n']),
                     "manifest requires one path per line"
                 );
-                let bytes = layerstack_usdc::save_usdc(
+                let bytes = layerstack_io::usdc::save_usdc(
                     store.layer(*id).unwrap(),
                     store.tokens(),
                     store.paths(),

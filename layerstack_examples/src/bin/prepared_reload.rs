@@ -34,14 +34,14 @@ fn package(points: &str, image: &[u8]) -> Vec<u8> {
     let mesh = format!(
         "#usda 1.0\ndef Mesh \"Mesh\" {{ point3f[] points=[{points}]\n custom asset texture=@../images/color.png@; }}"
     );
-    layerstack_usdz::write_usdz(&[
-        layerstack_usdz::PackageFile::new(
+    layerstack_io::usdz::write_usdz(&[
+        layerstack_io::usdz::PackageFile::new(
             "root.usda",
             b"#usda 1.0\n(subLayers=[@geometry/mesh.usda@])",
         ),
-        layerstack_usdz::PackageFile::new("geometry/mesh.usda", mesh.as_bytes()),
+        layerstack_io::usdz::PackageFile::new("geometry/mesh.usda", mesh.as_bytes()),
         // Opaque demonstration bytes: an engine supplies its image decoder.
-        layerstack_usdz::PackageFile::new("images/color.png", image),
+        layerstack_io::usdz::PackageFile::new("images/color.png", image),
     ])
     .expect("supported package members")
 }

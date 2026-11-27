@@ -53,9 +53,9 @@ fn connections(
 }
 use layerstack_conformance::authored::{Names, dump_layer, render_value};
 use layerstack_conformance::workspace_root;
-use layerstack_usda::emit::emit;
-use layerstack_usda::lower::lower;
-use layerstack_usda::parser::parse_cst;
+use layerstack_io::usda::emit::emit;
+use layerstack_io::usda::lower::lower;
+use layerstack_io::usda::parser::parse_cst;
 
 fn assets_dir() -> PathBuf {
     workspace_root()
@@ -142,7 +142,7 @@ fn load_usdc(path: &Path) -> InMemoryStore {
     let data =
         std::fs::read(path).unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()));
     let mut store = InMemoryStore::default();
-    let result = layerstack_usdc::read_usdc(
+    let result = layerstack_io::usdc::read_usdc(
         &data,
         LayerId(1),
         store.tokens(),

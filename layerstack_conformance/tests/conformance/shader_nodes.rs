@@ -241,9 +241,9 @@ def NodeGraph "Graph" {
     }
 }
 "#;
-    let parsed = layerstack_usda::parser::parse(source);
+    let parsed = layerstack_io::usda::parser::parse(source);
     assert!(parsed.diagnostics.is_empty());
-    let emitted = layerstack_usda::emit::emit(
+    let emitted = layerstack_io::usda::emit::emit(
         &parsed.layer,
         LayerId(1),
         store.tokens(),

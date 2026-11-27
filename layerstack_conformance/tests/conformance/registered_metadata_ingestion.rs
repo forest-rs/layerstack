@@ -8,7 +8,7 @@ use layerstack::{
     MetadataTarget, MetadataType, PathInterner, ResolvedAsset, SchemaRegistry, TokenInterner,
     Value,
 };
-use layerstack_usda::{emit, parser, read_usda, read_usda_with_registry};
+use layerstack_io::usda::{emit, parser, read_usda, read_usda_with_registry};
 
 struct NoAssets;
 impl AssetResolver for NoAssets {

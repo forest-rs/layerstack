@@ -8,7 +8,7 @@
 //! produces for the same edits (through `Usd.EditTarget`, `UsdEditContext`
 //! and `Sdf` authoring), and that the live stage matches a fresh
 //! composition. The last step saves both layers with
-//! `layerstack_usda::save`, reopens them, and checks the same values.
+//! `layerstack_io::usda::save`, reopens them, and checks the same values.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -19,7 +19,7 @@ use layerstack::{
     LiveStage, PathId, PathInterner, PropertyPath, ResolvedAsset, SpecPath, Stage, StageOptions,
     Time, TokenInterner, Transaction, Value,
 };
-use layerstack_usda::{emit, lower, parser::parse_cst};
+use layerstack_io::usda::{emit, lower, parser::parse_cst};
 
 const ROCK_USDA: &str = r#"#usda 1.0
 (
@@ -569,7 +569,7 @@ fn rocks_authoring_session_matches_openusd() {
     s.apply(&edit);
     s.check("h");
     let save = |s: &Session, layer: LayerId| {
-        layerstack_usda::save_usda(
+        layerstack_io::usda::save_usda(
             s.store.layer(layer).unwrap(),
             s.store.tokens(),
             s.store.paths(),

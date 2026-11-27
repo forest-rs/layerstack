@@ -31,13 +31,13 @@ use layerstack::{InMemoryStore, Stage, StageOptions};
 use layerstack_conformance::save_corpus::{
     AnyAsset, Imported, MISSING, Root, cases, composed, in_text_order, unsupported_cases,
 };
-use layerstack_usdc::writer::UsdcWriteError;
+use layerstack_io::usdc::writer::UsdcWriteError;
 
 /// Emits USDA text into `store` as layer `id`, sharing its interners.
 fn emit_into(store: &mut InMemoryStore, id: u64, text: &str) {
-    let parsed = layerstack_usda::parser::parse(text);
+    let parsed = layerstack_io::usda::parser::parse(text);
     assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
-    let result = layerstack_usda::emit::emit(
+    let result = layerstack_io::usda::emit::emit(
         &parsed.layer,
         LayerId(id),
         store.tokens(),
@@ -228,17 +228,18 @@ fn corpus_saves_as_expected_in_both_formats() {
         assert_eq!(usda, expected, "{name}: saved USDA");
 
         let usdc = layer.save_usdc().unwrap_or_else(|e| panic!("{name}: {e}"));
-        let doc = layerstack_usda::save::usdc_document(&layer.layer, &layer.tokens, &layer.paths)
-            .unwrap();
+        let doc =
+            layerstack_io::usda::save::usdc_document(&layer.layer, &layer.tokens, &layer.paths)
+                .unwrap();
         assert_eq!(
             usdc,
-            layerstack_usdc::writer::write_document(&doc).unwrap(),
+            layerstack_io::usdc::writer::write_document(&doc).unwrap(),
             "{name}: streamed spec bodies preserve crate order and field encodings"
         );
-        let specs = layerstack_usdc::writer::document::document_specs(&doc).unwrap();
+        let specs = layerstack_io::usdc::writer::document::document_specs(&doc).unwrap();
         assert_eq!(
             usdc,
-            layerstack_usdc::writer::write_crate(&specs).unwrap(),
+            layerstack_io::usdc::writer::write_crate(&specs).unwrap(),
             "{name}: field interning preserves the raw spec encoding"
         );
         let from_usdc = Imported::usdc(&usdc).save_usda().unwrap();
@@ -384,9 +385,9 @@ fn corpus_edits_change_what_they_edit() {
 /// Imports USDA text into `layer`'s interners, so token and path ids
 /// compare with its own.
 fn reimport_usda(layer: &mut Imported, text: &str) -> Layer {
-    let parsed = layerstack_usda::parser::parse(text);
+    let parsed = layerstack_io::usda::parser::parse(text);
     assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
-    let result = layerstack_usda::emit::emit(
+    let result = layerstack_io::usda::emit::emit(
         &parsed.layer,
         LayerId(1),
         &layer.tokens,
@@ -399,7 +400,7 @@ fn reimport_usda(layer: &mut Imported, text: &str) -> Layer {
 
 /// Imports a USDC file into `layer`'s interners.
 fn reimport_usdc(layer: &mut Imported, bytes: &[u8]) -> Layer {
-    let result = layerstack_usdc::read_usdc(
+    let result = layerstack_io::usdc::read_usdc(
         bytes,
         LayerId(1),
         &layer.tokens,
@@ -617,8 +618,8 @@ fn sparse_edit_descriptors_and_preflight_errors() {
     ));
     assert!(matches!(
         source.save_usda(),
-        Err(layerstack_usda::save::SaveError::Document(
-            layerstack_usda::writer::WriteError::TypeMismatch { .. }
+        Err(layerstack_io::usda::save::SaveError::Document(
+            layerstack_io::usda::writer::WriteError::TypeMismatch { .. }
         ))
     ));
     assert!(matches!(source.save_usdc(), Err(UsdcWriteError::Save(_))));
@@ -652,7 +653,7 @@ fn sparse_end_index_survives_signed_text_and_binary() {
 #[test]
 fn text_refuses_sparse_edit_kind_changes_while_binary_preserves_retiming() {
     use layerstack::{LayerOffset, PropertyType, Time, Value};
-    use layerstack_usda::{save::SaveError, writer::WriteError};
+    use layerstack_io::usda::{save::SaveError, writer::WriteError};
     for (kind, declaration, expected) in [
         ("double", "timecode", Value::from(vec![5_f64])),
         (
@@ -678,7 +679,7 @@ fn text_refuses_sparse_edit_kind_changes_while_binary_preserves_retiming() {
             ));
             let bytes = authored.save_usdc().unwrap();
             let mut store = InMemoryStore::default();
-            let read = layerstack_usdc::read_usdc(
+            let read = layerstack_io::usdc::read_usdc(
                 &bytes,
                 LayerId(1),
                 store.tokens(),

@@ -8,7 +8,7 @@ use layerstack::asset_dependencies::{DependencyTarget, collect_dependencies};
 use layerstack::{
     InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, PropertyType, Reference, Value,
 };
-use layerstack_usdz::localize::{LocalizationTarget, localize_asset};
+use layerstack_io::usdz::localize::{LocalizationTarget, localize_asset};
 use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {

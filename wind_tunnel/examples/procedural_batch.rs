@@ -238,7 +238,8 @@ impl Scene {
 
     fn text(&self) -> String {
         let layer = self.store.layer(ROOT).expect("the root layer");
-        layerstack_usda::save_usda(layer, self.store.tokens(), self.store.paths()).expect("saves")
+        layerstack_io::usda::save_usda(layer, self.store.tokens(), self.store.paths())
+            .expect("saves")
     }
 }
 

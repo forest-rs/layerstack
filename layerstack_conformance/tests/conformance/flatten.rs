@@ -326,11 +326,11 @@ impl AssetResolver for NoAssets {
 
 /// Reads `text` back into `store` as layer `id`.
 fn read_usda(store: &mut InMemoryStore, id: LayerId, text: &str) -> Result<(), String> {
-    let parsed = layerstack_usda::parser::parse(text);
+    let parsed = layerstack_io::usda::parser::parse(text);
     if !parsed.diagnostics.is_empty() {
         return Err(format!("{:?}", parsed.diagnostics));
     }
-    let result = layerstack_usda::emit::emit(
+    let result = layerstack_io::usda::emit::emit(
         &parsed.layer,
         id,
         store.tokens(),
@@ -347,7 +347,7 @@ fn read_usda(store: &mut InMemoryStore, id: LayerId, text: &str) -> Result<(), S
 /// Reads `bytes` back into `store` as layer `id`.
 fn read_usdc(store: &mut InMemoryStore, id: LayerId, bytes: &[u8]) -> Result<(), String> {
     let result =
-        layerstack_usdc::read_usdc(bytes, id, store.tokens(), store.paths(), &mut NoAssets)
+        layerstack_io::usdc::read_usdc(bytes, id, store.tokens(), store.paths(), &mut NoAssets)
             .map_err(|e| format!("{e:?}"))?;
     store.insert_layer(result.layer);
     Ok(())
@@ -695,8 +695,8 @@ fn declarations_follow_the_schema_and_the_weakest_opinion() {
 fn save(layer: &Layer, store: &InMemoryStore) -> (Result<String, String>, Result<Vec<u8>, String>) {
     let (tokens, paths) = (&store.tokens(), &store.paths());
     (
-        layerstack_usda::save_usda(layer, tokens, paths).map_err(|e| e.to_string()),
-        layerstack_usdc::save_usdc(layer, tokens, paths).map_err(|e| e.to_string()),
+        layerstack_io::usda::save_usda(layer, tokens, paths).map_err(|e| e.to_string()),
+        layerstack_io::usdc::save_usdc(layer, tokens, paths).map_err(|e| e.to_string()),
     )
 }
 

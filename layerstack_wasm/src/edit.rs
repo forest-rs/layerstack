@@ -2226,7 +2226,8 @@ def "Spare" (
     /// The USDA text of layer `id`.
     fn text(stage: &Stage, id: LayerId) -> String {
         let store = stage.document().store();
-        layerstack_usda::save_usda(store.layer(id).unwrap(), store.tokens(), store.paths()).unwrap()
+        layerstack_io::usda::save_usda(store.layer(id).unwrap(), store.tokens(), store.paths())
+            .unwrap()
     }
 
     /// Every composed prim with its fields, attribute values, samples,
@@ -4112,7 +4113,8 @@ def Xform "Robot" {
 
     fn text(stage: &Stage, id: LayerId) -> String {
         let store = stage.document().store();
-        layerstack_usda::save_usda(store.layer(id).unwrap(), store.tokens(), store.paths()).unwrap()
+        layerstack_io::usda::save_usda(store.layer(id).unwrap(), store.tokens(), store.paths())
+            .unwrap()
     }
 
     /// The target of the `kind` node of `prim`'s graph that reads

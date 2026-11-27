@@ -32,7 +32,7 @@
 //! `pluginfo/<plugin>/resources` directories hold each schema plugin's
 //! `generatedSchema.usda` and `plugInfo.json`. The generator reads the
 //! domains `model::DOMAINS` lists, parses each `generatedSchema.usda` with
-//! `layerstack_usda`, reads its schemas with
+//! `layerstack_io::usda`, reads its schemas with
 //! `layerstack::schema::read_generated_schema`, and takes each schema's
 //! kind, base and auto-applies from `plugInfo.json`. Its `SdfMetadata`
 //! declarations generate registry fields and typed metadata readers. Standard
@@ -438,7 +438,7 @@ pub fn generate_shader_library(path: impl AsRef<Path>) -> Result<String, String>
 #[cfg(test)]
 fn generate_shader_text(text: &str) -> Result<String, String> {
     let mut store = layerstack::InMemoryStore::default();
-    let read = layerstack_usda::read_usda(
+    let read = layerstack_io::usda::read_usda(
         text,
         layerstack::LayerId(0),
         store.tokens(),

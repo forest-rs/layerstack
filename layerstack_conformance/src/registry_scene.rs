@@ -26,7 +26,7 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-use layerstack_usda::writer::{Attribute, Document, Prim, Relationship, Value};
+use layerstack_io::usda::writer::{Attribute, Document, Prim, Relationship, Value};
 
 use crate::library_scene::LibraryFormat;
 
@@ -207,7 +207,7 @@ impl RegistryScene {
                 .to_usda()
                 .map_err(|error| std::io::Error::other(error.to_string()))?
                 .into_bytes(),
-            LibraryFormat::Usdc => layerstack_usdc::writer::write_document(&self.document)
+            LibraryFormat::Usdc => layerstack_io::usdc::writer::write_document(&self.document)
                 .map_err(|error| std::io::Error::other(error.to_string()))?,
         };
         std::fs::write(&path, &bytes)?;

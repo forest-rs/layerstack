@@ -839,7 +839,7 @@ mod tests {
 
     fn open() -> (InMemoryStore, LiveStage) {
         let mut store = InMemoryStore::default();
-        let read = layerstack_usda::read_usda(
+        let read = layerstack_io::usda::read_usda(
             include_str!("../../layerstack_conformance/fixtures/stagehand_materials/scene.usda"),
             LayerId(1),
             store.tokens(),

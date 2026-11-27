@@ -26,7 +26,7 @@ use layerstack::{
     SchemaRegistry, TokenInterner, Value, is_spec_field,
 };
 use layerstack_conformance::workspace_root;
-use layerstack_usda::{read_usda_with_registry, save::save_usda};
+use layerstack_io::usda::{read_usda_with_registry, save::save_usda};
 use serde::Deserialize;
 use serde_json::{Value as Json, json};
 

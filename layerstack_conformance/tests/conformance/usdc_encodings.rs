@@ -30,10 +30,10 @@ use layerstack::{
 };
 use layerstack_conformance::usdc::crate_sections;
 use layerstack_conformance::workspace_root;
-use layerstack_usda::read_usda;
-use layerstack_usda::save::save_usda;
-use layerstack_usdc::writer::UsdcWriteError;
-use layerstack_usdc::{read_usdc, save_usdc};
+use layerstack_io::usda::read_usda;
+use layerstack_io::usda::save::save_usda;
+use layerstack_io::usdc::writer::UsdcWriteError;
+use layerstack_io::usdc::{read_usdc, save_usdc};
 use serde_json::Value as Json;
 
 fn fixtures() -> PathBuf {

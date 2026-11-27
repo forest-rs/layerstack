@@ -5,8 +5,8 @@
 - Add a core sparse array edit value family to `layerstack`.
 - Preserve enough property declaration metadata to resolve typed array edits.
 - Refactor value resolution so sparse array opinions compose over weaker opinions, including time samples.
-- Extend `layerstack_usda` to parse and emit authored `edit(...)` values.
-- Extend `layerstack_usdc` behind an explicit cargo feature for experimental sparse array edit decoding/assembly.
+- Extend `layerstack_io::usda` to parse and emit authored `edit(...)` values.
+- Extend `layerstack_io::usdc` behind an explicit cargo feature for experimental sparse array edit decoding/assembly.
 - Keep the work as a sequence of clean, coherent commits.
 
 ## Non-goals

@@ -16,7 +16,7 @@ use layerstack::{
     AssetResolveError, AssetResolver, LayerOffset, ResolvedAsset, Stage, StageOptions,
     SublayerEntry, Time, Value,
 };
-use layerstack_usda::read_usda;
+use layerstack_io::usda::read_usda;
 
 /// Stub asset resolver for inline USDA examples with no external assets.
 struct StubResolver {

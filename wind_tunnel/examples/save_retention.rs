@@ -14,7 +14,7 @@ use std::{hint::black_box, io::Write, time::Instant};
 fn report(
     document: &StageDocument<Filesystem>,
     root: layerstack::LayerId,
-    old: &layerstack_usdc::RetainedValues,
+    old: &layerstack_io::usdc::RetainedValues,
     phase: &str,
     started: Instant,
 ) {
@@ -151,8 +151,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let saved_bytes = std::fs::read(&target)?;
     let started = Instant::now();
     for _ in 0..100 {
-        let mut budget = layerstack_usdc::DecodeBudget::for_input(saved_bytes.len());
-        black_box(layerstack_usdc::CrateFile::open(&saved_bytes, &mut budget)?);
+        let mut budget = layerstack_io::usdc::DecodeBudget::for_input(saved_bytes.len());
+        black_box(layerstack_io::usdc::CrateFile::open(
+            &saved_bytes,
+            &mut budget,
+        )?);
     }
     report(
         &document,

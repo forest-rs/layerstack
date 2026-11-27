@@ -196,7 +196,7 @@ impl FileFormat for TestDynamic {
         if depth <= 0 {
             let text = core::str::from_utf8(source.bytes.unwrap_or_default())
                 .map_err(|_| source.rejected("the source is not text"))?;
-            let read = layerstack_usda::read_usda(
+            let read = usda::read_usda(
                 text,
                 source.layer,
                 source.tokens,

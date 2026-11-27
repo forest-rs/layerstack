@@ -4,15 +4,13 @@
 //! Explicit dependency preparation and immutable package export.
 use super::*;
 use crate::udim::Discovery;
+use crate::usdz::localize::{LocalizationPlan, LocalizedAsset, LocalizedLayer, relative_member};
 use layerstack::asset::{UdimPattern, UdimTile};
 use layerstack::asset_dependencies::{
     AssetDependency, AssetDependencyKind, DependencyReport, DependencyTarget, ResolvedDependency,
     extract_layer_dependencies, rewrite_layer_assets,
 };
 use layerstack::sort;
-use layerstack_usdz::localize::{
-    LocalizationPlan, LocalizedAsset, LocalizedLayer, relative_member,
-};
 
 /// Host decision for an authored dependency, including inactive list items.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -180,7 +178,7 @@ fn permitted_member(identifier: &str) -> bool {
     PackagePath::parse(identifier, 32).is_ok_and(|path| {
         path.leaf()
             .rsplit_once('.')
-            .is_some_and(|(_, ext)| layerstack_usdz::writer::MEMBER_EXTENSIONS.contains(&ext))
+            .is_some_and(|(_, ext)| usdz::writer::MEMBER_EXTENSIONS.contains(&ext))
     })
 }
 
@@ -218,7 +216,7 @@ impl<B: Storage> StageDocument<B> {
     /// Missing resources, expressions, clip templates and patterns in
     /// composition arcs remain inspectable and prevent export. For custom
     /// pattern expansion use the lower-level
-    /// `layerstack_usdz::localize::localize_asset` callback.
+    /// `layerstack_io::usdz::localize::localize_asset` callback.
     /// AOUSD Core §9.4, §9.7, §16.4; `UsdUtilsCreateNewUsdzPackage`,
     /// `UsdUtils_LocalizationContext::_GetUdimTiles`.
     ///
@@ -247,11 +245,8 @@ impl<B: Storage> StageDocument<B> {
         limits: PackagePreparationLimits,
         mut include: impl FnMut(&AssetDependency) -> PackageInclusion,
     ) -> Result<PreparedPackage, IoError> {
-        layerstack_usdz::write_usdz(&[layerstack_usdz::PackageFile::new(
-            root_member,
-            b"#usda 1.0",
-        )])
-        .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
+        usdz::write_usdz(&[usdz::PackageFile::new(root_member, b"#usda 1.0")])
+            .map_err(|e| IoError::new(IoErrorKind::Rejected, e.to_string()))?;
         let mut store = self.store.snapshot();
         let mut catalog = self.catalog.clone();
         // The layers to visit, sorted with the smallest id last, so `pop`

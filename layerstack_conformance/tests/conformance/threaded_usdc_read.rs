@@ -20,7 +20,7 @@ use layerstack::{
 };
 use layerstack_conformance::library_scene::{LibraryFormat, LibraryScene, LibraryShape};
 use layerstack_conformance::registry_scene::{RegistryScene, RegistryShape};
-use layerstack_usdc::DecodeBudget;
+use layerstack_io::usdc::DecodeBudget;
 
 /// A resolver that resolves nothing.
 struct NoAssets;
@@ -70,7 +70,7 @@ fn render(bytes: &[u8], threads: usize, retained: bool) -> (String, Vec<String>)
     let budget = DecodeBudget::for_input(bytes.len());
     let result = if retained {
         let bytes: Arc<[u8]> = bytes.into();
-        let read = layerstack_usdc::read_usdc_lazy_within(
+        let read = layerstack_io::usdc::read_usdc_lazy_within(
             bytes,
             LayerId(1),
             &tokens,
@@ -82,7 +82,7 @@ fn render(bytes: &[u8], threads: usize, retained: bool) -> (String, Vec<String>)
         read.expect("the layer reads").assembled
     } else {
         let mut budget = budget;
-        let read = layerstack_usdc::read_usdc_within(
+        let read = layerstack_io::usdc::read_usdc_within(
             bytes,
             LayerId(1),
             &tokens,
@@ -93,7 +93,8 @@ fn render(bytes: &[u8], threads: usize, retained: bool) -> (String, Vec<String>)
         );
         read.expect("the layer reads")
     };
-    let text = layerstack_usda::save_usda(&result.layer, &tokens, &paths).expect("the layer saves");
+    let text =
+        layerstack_io::usda::save_usda(&result.layer, &tokens, &paths).expect("the layer saves");
     let diagnostics = result
         .diagnostics
         .iter()

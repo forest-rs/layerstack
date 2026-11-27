@@ -3512,7 +3512,7 @@ class Xform "Beacon" {
     impl Fixture {
         fn new() -> (Self, DrawDiff) {
             let mut store = InMemoryStore::default();
-            let read = layerstack_usda::read_usda(
+            let read = layerstack_io::usda::read_usda(
                 SCENE,
                 LayerId(1),
                 store.tokens(),
@@ -3759,7 +3759,7 @@ class Xform "Beacon" {
     fn prims_of_derived_schemas_are_drawn_as_their_base() {
         use layerstack::{SchemaDefinition, SchemaRegistry};
         let mut store = InMemoryStore::default();
-        let read = layerstack_usda::read_usda(
+        let read = layerstack_io::usda::read_usda(
             r#"#usda 1.0
 def Xform "Lab" {
     def RockMesh "Rock" {
@@ -3926,7 +3926,7 @@ def Scope "Looks" {
     #[test]
     fn a_material_reading_another_uv_set_gets_its_channel() {
         let mut store = InMemoryStore::default();
-        let read = layerstack_usda::read_usda(
+        let read = layerstack_io::usda::read_usda(
             UV_SETS,
             LayerId(1),
             store.tokens(),
@@ -4001,7 +4001,7 @@ def Scope "Looks" {
     /// `text` composed with the OpenUSD schemas.
     fn compose(text: &str) -> (InMemoryStore, LiveStage) {
         let mut store = InMemoryStore::default();
-        let read = layerstack_usda::read_usda(
+        let read = layerstack_io::usda::read_usda(
             text,
             LayerId(1),
             store.tokens(),

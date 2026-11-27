@@ -21,14 +21,14 @@ fn checksum(c: &mut Criterion) {
             u64::try_from(size).expect("buffer size fits u64"),
         ));
         group.bench_function(size.to_string(), |b| {
-            b.iter(|| black_box(layerstack_usdz::crc32::crc32(black_box(&bytes))));
+            b.iter(|| black_box(layerstack_io::usdz::crc32::crc32(black_box(&bytes))));
         });
     }
     group.finish();
 }
 fn package_root(c: &mut Criterion) {
     use layerstack::encoded_bytes::EncodedBytes;
-    use layerstack_usdz::{
+    use layerstack_io::usdz::{
         PackageFile,
         snapshot::{PackageLimits, PackageSnapshot},
         write_usdz,
@@ -55,9 +55,9 @@ fn package_root(c: &mut Criterion) {
             root,
             "root bytes are correct"
         );
-        let mut ranged = layerstack_usdz::range::RangePackage::open(
+        let mut ranged = layerstack_io::usdz::range::RangePackage::open(
             bytes.clone(),
-            layerstack_usdz::range::RangeLimits::default(),
+            layerstack_io::usdz::range::RangeLimits::default(),
         )
         .unwrap();
         assert_eq!(
@@ -79,9 +79,9 @@ fn package_root(c: &mut Criterion) {
             &bytes,
             |b, bytes| {
                 b.iter(|| {
-                    let mut package = layerstack_usdz::range::RangePackage::open(
+                    let mut package = layerstack_io::usdz::range::RangePackage::open(
                         black_box(bytes.clone()),
-                        layerstack_usdz::range::RangeLimits::default(),
+                        layerstack_io::usdz::range::RangeLimits::default(),
                     )
                     .unwrap();
                     black_box(package.layer("root.usda").unwrap());

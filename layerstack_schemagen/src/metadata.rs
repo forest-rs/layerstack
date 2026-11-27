@@ -54,7 +54,7 @@ use crate::model::Model;
 use layerstack::{
     MetadataDefinition, MetadataField, MetadataTarget, MetadataType, TokenInterner, Value,
 };
-use layerstack_usda::metadata::MetadataValueError;
+use layerstack_io::usda::metadata::MetadataValueError;
 use serde_json::Value as Json;
 
 /// A metadata field a plugin declares and OpenUSD registers.
@@ -466,7 +466,7 @@ fn default_value(
         value => vec![scalar(value).ok_or(MetadataRejection::DefaultNotAValue)?.1],
     };
     let literal = shaped(value_type, &values);
-    match layerstack_usda::metadata::metadata_value(&literal, value_type, tokens) {
+    match layerstack_io::usda::metadata::metadata_value(&literal, value_type, tokens) {
         Ok(layerstack::FieldValue::Value(value)) => Ok(value),
         Ok(_) => Err(MetadataRejection::DefaultNotAllowed),
         Err(error) => Err(MetadataRejection::DefaultNotOfType(error)),

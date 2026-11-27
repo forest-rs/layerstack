@@ -60,8 +60,8 @@ exercise that invariant.
 An import result can contain a usable partial scene and errors. Preserve structured
 causes, source/member identity and locations across bare files, packages and nested
 packages. Applications select recovery policy using typed diagnostics, rather
-than matching display strings. See [USDZ import guidance](../layerstack_usdz/README.md)
-and [I/O policy](../layerstack_io/README.md).
+than matching display strings. See the `layerstack_io::usdz` module documentation for
+USDZ import and [I/O policy](../layerstack_io/README.md).
 
 Successful directory inventory does not prove every field can decode or every
 dependency can compose. Retained numeric reads can fail on first demand. Validate

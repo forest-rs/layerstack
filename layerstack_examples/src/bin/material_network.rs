@@ -15,7 +15,7 @@ use std::sync::Arc;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut store = InMemoryStore::default();
     let schemas = Arc::new(layerstack_schemas::openusd(store.tokens()));
-    let read = layerstack_usda::read_usda(
+    let read = layerstack_io::usda::read_usda(
         r#"#usda 1.0
  def Material "Paint" {
     token outputs:surface.connect = </Paint/Surface.outputs:surface>

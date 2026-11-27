@@ -73,7 +73,8 @@ fn layers_record(loaded: &LoadedStage) -> Json {
     let mut out = Map::new();
     for name in LAYERS {
         let layer = store.layer(layer_named(loaded, name)).unwrap();
-        let text = layerstack_usda::save_usda(layer, store.tokens(), store.paths()).expect("saves");
+        let text =
+            layerstack_io::usda::save_usda(layer, store.tokens(), store.paths()).expect("saves");
         out.insert(name.into(), Json::String(text));
     }
     Json::Object(out)

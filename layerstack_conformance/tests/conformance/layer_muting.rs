@@ -405,8 +405,8 @@ fn namespace_edits_leave_muted_layers_as_openusd_does() {
         for (file, id) in &ids {
             let text = &case["layers"][file];
             let layer = store.layer(*id).unwrap();
-            let written =
-                layerstack_usda::save_usda(layer, store.tokens(), store.paths()).expect("saves");
+            let written = layerstack_io::usda::save_usda(layer, store.tokens(), store.paths())
+                .expect("saves");
             assert_eq!(written, text.as_str().unwrap(), "{name}: {file}");
         }
         let errors = live

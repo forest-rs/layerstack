@@ -3,7 +3,7 @@
 
 //! USDZ loader for conformance testing.
 //!
-//! Reads `.usdz` packages through `layerstack_usdz::read_usdz` and
+//! Reads `.usdz` packages through `layerstack_io::usdz::read_usdz` and
 //! produces a [`LoadedStage`] ready for composition.
 
 use std::path::Path;
@@ -29,12 +29,20 @@ pub fn load_entry_usdz(entry: &Path) -> LoadedStage {
 ///
 /// A member is named by its path inside the package, and a file outside
 /// it by its path relative to `directory`.
-pub fn load_usdz(data: &[u8], directory: &Path) -> Result<LoadedStage, layerstack_usdz::UsdzError> {
+pub fn load_usdz(
+    data: &[u8],
+    directory: &Path,
+) -> Result<LoadedStage, layerstack_io::usdz::UsdzError> {
     let mut store = InMemoryStore::default();
     let mut resolver = FileResolver::new(directory.to_path_buf());
     let layer_id = resolver.allocate_layer_id().expect("allocates");
-    let result =
-        layerstack_usdz::read_usdz(data, layer_id, store.tokens(), store.paths(), &mut resolver)?;
+    let result = layerstack_io::usdz::read_usdz(
+        data,
+        layer_id,
+        store.tokens(),
+        store.paths(),
+        &mut resolver,
+    )?;
 
     let mut layer_names = resolver.layer_names;
     for (id, path) in result.member_paths {

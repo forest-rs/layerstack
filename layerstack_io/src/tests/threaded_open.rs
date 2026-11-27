@@ -63,7 +63,7 @@ def "E" (
     memory
         .files
         .insert("binary.usda".into(), vec![b'#', 0xff, 0xfe, b'\n']);
-    let package = layerstack_usdz::write_usdz(&[layerstack_usdz::PackageFile::new(
+    let package = usdz::write_usdz(&[usdz::PackageFile::new(
         "member.usda",
         b"#usda 1.0\ndef \"M\" (prepend references = @nested.usda@</N>) {}\n",
     )])

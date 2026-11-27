@@ -533,7 +533,7 @@ impl<'a, B: Storage> Discovery<'a, B> {
                 outer: identifier,
                 member: selected.path,
             })),
-            Err(layerstack_usdz::UsdzError::MissingMember { .. }) => Ok(None),
+            Err(usdz::UsdzError::MissingMember { .. }) => Ok(None),
             Err(error) => Err(IoError::new(IoErrorKind::Rejected, error.to_string())),
         }
     }

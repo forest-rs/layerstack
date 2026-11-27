@@ -212,7 +212,7 @@ pub(crate) struct BorrowedPrim<'a> {
 
 /// A checked property declaration borrowed from an authored prim.
 #[derive(Debug)]
-pub struct Declaration<'a> {
+pub(crate) struct Declaration<'a> {
     /// Property name, including any namespace.
     pub name: &'a str,
     /// Declared attribute type or `rel`.
@@ -227,7 +227,7 @@ pub struct Declaration<'a> {
 
 /// Native values that can be written directly at their declared type.
 #[derive(Debug)]
-pub enum Payload<'a> {
+pub(crate) enum Payload<'a> {
     /// String default.
     String(&'a str),
     /// Resolved token default.

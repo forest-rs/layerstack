@@ -477,6 +477,22 @@ def PointInstancer "Hopping" {
     }
   });
 
+  it("read doubleSided again on its own, as a change of the item's material", () => {
+    const { stage, list, edit } = fixture();
+    try {
+      const pebble = () => list.items().find((item) => item.prim === "/World/Rocks/Pebble")!;
+      assert.equal(pebble().doubleSided, false, "unauthored: one-sided");
+      const diff = edit([{ type: "setValue", path: "/World/Rocks/Pebble.doubleSided", value: { type: "bool", value: true } }]);
+      assert.equal(pebble().doubleSided, true);
+      assert.deepEqual(diff.materials, [pebble().id]);
+      assert.deepEqual(diff.rebound, []);
+      assert.equal(diff.work.triangulations + diff.work.tessellations, 0);
+    } finally {
+      list.dispose();
+      stage.free();
+    }
+  });
+
   it("hide items without dropping their buffers, and rebuild only a resynced subtree", () => {
     const { stage, list, edit } = fixture();
     try {

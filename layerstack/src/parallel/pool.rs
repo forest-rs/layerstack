@@ -748,6 +748,10 @@ pub(super) mod tests {
     /// pool is done however the body ends.
     #[cfg(feature = "std")]
     #[test]
+    #[cfg_attr(
+        target_os = "wasi",
+        ignore = "WASI runs tests without threads, and aborts on a panic"
+    )]
     fn a_panicking_body_stops_its_workers() {
         use std::sync::mpsc;
         use std::time::Duration;
@@ -775,6 +779,7 @@ pub(super) mod tests {
     /// so the budget keeps every thread it had.
     #[cfg(feature = "std")]
     #[test]
+    #[cfg_attr(target_os = "wasi", ignore = "WASI aborts on a panic")]
     fn a_panicking_join_gives_its_thread_back() {
         let threads = Threads::new(2);
         let spare = threads.spare();

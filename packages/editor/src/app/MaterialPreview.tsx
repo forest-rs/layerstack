@@ -134,11 +134,13 @@ export function MaterialPreview({
         onPointerUp={() => (drag.current = null)}
       />
       {ball ? (
-        <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-end justify-between gap-2 text-[11px] text-white/80">
+        // The overlay spans the preview, so an opened list grows up to its
+        // top edge at most and scrolls there, its toggle kept in view.
+        <div className="pointer-events-none absolute inset-2 flex items-end justify-between gap-2 text-[11px] text-white/80">
           <p className="min-w-0 truncate rounded-md bg-black/40 px-2 py-1 backdrop-blur-sm">{failed ?? `${material} · ${reading.summary}`}</p>
           {approximates(reading) && (
-            <details className="pointer-events-auto max-h-64 max-w-[60%] shrink-0 overflow-auto rounded-md bg-black/40 px-2 py-1 backdrop-blur-sm">
-              <summary className="cursor-pointer hover:text-white">{approximationLabel(reading)}</summary>
+            <details className="pointer-events-auto max-h-full max-w-[60%] shrink-0 overflow-auto rounded-md bg-black/40 px-2 pb-1 backdrop-blur-sm">
+              <summary className="sticky top-0 cursor-pointer bg-inherit pt-1 hover:text-white">{approximationLabel(reading)}</summary>
               <Approximations reading={reading} />
             </details>
           )}

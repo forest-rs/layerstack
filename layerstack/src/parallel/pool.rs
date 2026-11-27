@@ -252,6 +252,9 @@ where
         let helped = &std::sync::Mutex::new(None);
         let mut a = Some(a);
         let mut out = None;
+        // Returns the claimed thread to the budget however the scope ends,
+        // a panic of `a` or `b` included.
+        let _claimed = Claimed(threads);
         threads.executor().scope(&mut |scope| {
             scope.spawn(Box::new(move |_: &dyn Scope<'_>| {
                 let taken = lock(task).take();
@@ -266,7 +269,6 @@ where
             let taken = lock(task).take();
             out = Some((a, taken.map(|b| b())));
         });
-        threads.give_back();
         let (a, b) = out.expect("a scope runs its body");
         let b = b.unwrap_or_else(|| {
             let helped = lock(helped).take().expect("the second task runs once");
@@ -318,9 +320,11 @@ where
                 threaded: Some((threaded, &spawner)),
             };
             let body = body.take().expect("a scope runs its body once");
+            // Tells the workers the pool is done however the body ends:
+            // were it to panic, the scope would otherwise wait for workers
+            // waiting for more tasks.
+            let _done = Done(threaded);
             out = Some(body(&pool));
-            lock(&threaded.shared).done = true;
-            threaded.changed.notify_all();
         });
         return out.expect("a scope runs its body");
     }
@@ -330,6 +334,30 @@ where
         #[cfg(feature = "std")]
         threaded: None,
     })
+}
+
+/// A thread claimed from the budget, given back when dropped.
+#[cfg(feature = "std")]
+struct Claimed<'a>(&'a Threads);
+
+#[cfg(feature = "std")]
+impl Drop for Claimed<'_> {
+    fn drop(&mut self) {
+        self.0.give_back();
+    }
+}
+
+/// Shuts the pool down when dropped: marks it done and wakes its waiting
+/// workers, which then return.
+#[cfg(feature = "std")]
+struct Done<'a, 'b, T, R>(&'a Threaded<'b, T, R>);
+
+#[cfg(feature = "std")]
+impl<T, R> Drop for Done<'_, '_, T, R> {
+    fn drop(&mut self) {
+        lock(&self.0.shared).done = true;
+        self.0.changed.notify_all();
+    }
 }
 
 /// A pool of threads doing one kind of task (see [`with_pool`]).
@@ -713,6 +741,48 @@ pub(super) mod tests {
             added.extend([task - 1, task - 1]);
         }
         task
+    }
+
+    /// A body that panics after its workers started still returns, its
+    /// panic resumed, once every worker has stopped: the workers learn the
+    /// pool is done however the body ends.
+    #[cfg(feature = "std")]
+    #[test]
+    fn a_panicking_body_stops_its_workers() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let (sent, received) = mpsc::channel();
+        std::thread::spawn(move || {
+            let outcome = std::panic::catch_unwind(|| {
+                with_pool(4, &tree, |pool| {
+                    // A phase wide enough to start workers, which then
+                    // wait for the next one.
+                    assert!(!pool.run(alloc::vec![12]).is_empty(), "the phase ran");
+                    panic!("the body panics after its phase");
+                })
+            });
+            let _ = sent.send(outcome.is_err());
+        });
+        assert_eq!(
+            received.recv_timeout(Duration::from_secs(30)),
+            Ok(true),
+            "the panic reached the caller, every worker stopped"
+        );
+    }
+
+    /// A `join` whose first closure panics gives its claimed thread back,
+    /// so the budget keeps every thread it had.
+    #[cfg(feature = "std")]
+    #[test]
+    fn a_panicking_join_gives_its_thread_back() {
+        let threads = Threads::new(2);
+        let spare = threads.spare();
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            join(&threads, || panic!("the first closure panics"), || 1)
+        }));
+        assert!(outcome.is_err(), "the panic reached the caller");
+        assert_eq!(threads.spare(), spare);
     }
 
     #[test]

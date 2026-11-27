@@ -360,7 +360,7 @@ impl<'a> Scene<'a> {
             let path = asset.strip_prefix("./").unwrap_or(asset);
             if !assets.iter().any(|file| file.path == path) {
                 return Err(ExportError::UnpackagedAsset {
-                    asset: asset.into(),
+                    asset_path: asset.into(),
                 });
             }
         }

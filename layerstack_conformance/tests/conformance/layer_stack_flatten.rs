@@ -65,7 +65,7 @@ fn arcs(list: &mut layerstack::ListOp<Reference>, output: LayerId) {
             Some(path) => ReferenceSource::Unresolved { path },
             None => ReferenceSource::Layer {
                 layer: output,
-                asset: None,
+                asset_path: None,
             },
         };
         *reference = reference.clone().with_source(source);

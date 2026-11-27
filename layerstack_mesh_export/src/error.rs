@@ -66,7 +66,7 @@ pub enum ExportError {
     /// An authored asset path names no file in the package being written.
     UnpackagedAsset {
         /// The asset path as authored.
-        asset: String,
+        asset_path: String,
     },
     /// A package member is a file type the USDZ profile excludes (e.g. a
     /// second USD layer or an EXR image in an [`UsdzProfile::Arkit`]
@@ -320,7 +320,7 @@ impl fmt::Display for ExportError {
                     "{path}: binds the material `{material}`, which is not defined"
                 )
             }
-            Self::UnpackagedAsset { asset } => {
+            Self::UnpackagedAsset { asset_path: asset } => {
                 write!(f, "the asset path @{asset}@ names no file in the package")
             }
             Self::ProfileMember { path, profile } => {

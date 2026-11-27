@@ -1970,7 +1970,7 @@ fn arc(
         None => Reference::from_source(
             ReferenceSource::Layer {
                 layer: scope.target.layer(),
-                asset: None,
+                asset_path: None,
             },
             target,
         ),
@@ -2069,7 +2069,9 @@ fn authored_arc(
 /// expression arc); `None` for an internal arc.
 fn authored_asset(arc: &Reference) -> Option<String> {
     match arc.source() {
-        ReferenceSource::Layer { asset, .. } => asset.map(ToString::to_string),
+        ReferenceSource::Layer {
+            asset_path: asset, ..
+        } => asset.map(ToString::to_string),
         ReferenceSource::Asset { path, .. } | ReferenceSource::Unresolved { path } => {
             Some(path.to_string())
         }

@@ -3088,7 +3088,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             if asset_path.is_empty() {
                 let internal = ReferenceSource::Layer {
                     layer: self.layer_id,
-                    asset: None,
+                    asset_path: None,
                 };
                 return Some(
                     Reference::from_source(internal, target)

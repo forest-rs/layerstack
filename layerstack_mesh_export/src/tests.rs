@@ -251,7 +251,7 @@ fn usdz_requires_authored_assets_to_be_packaged() {
         assert_eq!(
             scene.to_usdz(profile, &[]),
             Err(ExportError::UnpackagedAsset {
-                asset: "./textures/a.png".into()
+                asset_path: "./textures/a.png".into()
             }),
             "missing texture ({profile:?})"
         );

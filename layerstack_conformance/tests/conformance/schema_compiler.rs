@@ -227,7 +227,7 @@ fn unresolved_sublayers_are_named() {
     assert!(
         matches!(
             &error,
-            CompileError::UnresolvedSublayer { asset, layer }
+            CompileError::UnresolvedSublayer { asset_path: asset, layer }
                 if asset == "usdGeom/schema.usda"
                     && Path::new(layer).ends_with(Path::new("observatory").join("schema.usda"))
         ),

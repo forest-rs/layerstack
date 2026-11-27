@@ -1315,10 +1315,10 @@ pub enum ReferenceTarget {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ReferenceSource<'a> {
     /// The layer stack whose root layer is `layer`, which the store holds.
-    /// `asset` is the asset path the arc was authored with, which writers
-    /// write back; `None` for an arc made by layer id alone.
+    /// `asset_path` is the asset path the arc was authored with, which
+    /// writers write back; `None` for an arc made by layer id alone.
     ///
-    /// An arc with no `asset` whose `layer` is the layer that authors it is
+    /// An arc with no `asset_path` whose `layer` is the layer that authors it is
     /// internal (`</Prim>`, `<>`): it targets the layer stack containing
     /// the site that authors it, not that layer alone, so an internal arc
     /// authored in a sublayer reads every layer of the stack. Composition
@@ -1331,7 +1331,7 @@ pub enum ReferenceSource<'a> {
         /// The root layer of the targeted layer stack.
         layer: LayerId,
         /// The authored asset path, if the arc has one.
-        asset: Option<&'a str>,
+        asset_path: Option<&'a str>,
     },
     /// An asset path the importer left for composition to resolve relative
     /// to `anchor` ([`Reference::deferred`]): composition asks the store for
@@ -1528,7 +1528,7 @@ impl Reference {
         } else {
             ReferenceSource::Layer {
                 layer: self.layer,
-                asset,
+                asset_path: asset,
             }
         }
     }
@@ -1538,7 +1538,10 @@ impl Reference {
     #[must_use]
     pub fn from_source(source: ReferenceSource<'_>, target: ReferenceTarget) -> Self {
         let (layer, asset, deferred) = match source {
-            ReferenceSource::Layer { layer, asset } => (layer, asset, false),
+            ReferenceSource::Layer {
+                layer,
+                asset_path: asset,
+            } => (layer, asset, false),
             ReferenceSource::Asset { anchor, path } => (anchor, Some(path), true),
             ReferenceSource::Expression { anchor, text } => (anchor, Some(text), false),
             ReferenceSource::Unresolved { path } => (LayerId::UNRESOLVED, Some(path), false),
@@ -5917,14 +5920,14 @@ mod tests {
                 Reference::to_default_prim(scene),
                 ReferenceSource::Layer {
                     layer: scene,
-                    asset: None,
+                    asset_path: None,
                 },
             ),
             (
                 Reference::with_asset_default_prim(rock, "./rock.usda"),
                 ReferenceSource::Layer {
                     layer: rock,
-                    asset: Some("./rock.usda"),
+                    asset_path: Some("./rock.usda"),
                 },
             ),
             (
@@ -5961,7 +5964,9 @@ mod tests {
             assert_eq!(
                 reference.asset_path(),
                 match source {
-                    ReferenceSource::Layer { asset, .. } => asset,
+                    ReferenceSource::Layer {
+                        asset_path: asset, ..
+                    } => asset,
                     ReferenceSource::Asset { path, .. } | ReferenceSource::Unresolved { path } => {
                         Some(path)
                     }
@@ -5975,7 +5980,7 @@ mod tests {
                 .with_custom_data(vec![("note".into(), Value::Bool(true).into())])
                 .with_source(ReferenceSource::Layer {
                     layer: rock,
-                    asset: Some("plant.usda"),
+                    asset_path: Some("plant.usda"),
                 });
         assert_eq!(localized.layer_offset, at(2.0));
         assert_eq!(localized.custom_data.len(), 1);

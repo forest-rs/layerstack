@@ -399,7 +399,7 @@ fn prototypes_are_checked_like_any_mesh() {
     assert_eq!(
         scene(instancer).to_usdz(UsdzProfile::Generic, &[]),
         Err(ExportError::UnpackagedAsset {
-            asset: "t.png".into()
+            asset_path: "t.png".into()
         }),
         "prototype asset paths must be packaged"
     );

@@ -53,7 +53,7 @@ fn fixture() -> InMemoryStore {
     spec.references.make_mut().explicit = Some(vec![Reference::from_source(
         layerstack::ReferenceSource::Layer {
             layer: LayerId(1),
-            asset: Some("root.usda"),
+            asset_path: Some("root.usda"),
         },
         ReferenceTarget::Prim(asset),
     )]);

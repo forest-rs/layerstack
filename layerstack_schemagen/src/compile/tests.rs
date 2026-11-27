@@ -416,7 +416,7 @@ fn unresolved_sublayers_and_reading_errors_are_reported() {
     std::fs::write(&source, CODELESS).unwrap();
     let error = compile(&source, &CompileOptions::new()).unwrap_err();
     assert!(
-        matches!(&error, CompileError::UnresolvedSublayer { asset, .. } if asset == "usd/schema.usda"),
+        matches!(&error, CompileError::UnresolvedSublayer { asset_path: asset, .. } if asset == "usd/schema.usda"),
         "{error:?}"
     );
     std::fs::write(&source, "#usda 1.0\nclass \"A\" {").unwrap();

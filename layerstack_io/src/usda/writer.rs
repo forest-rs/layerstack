@@ -1509,7 +1509,7 @@ pub enum WriteError {
         /// Path of the owning object.
         path: String,
         /// The rejected asset path.
-        asset: String,
+        asset_path: String,
     },
     /// A string, token or dictionary key contains NUL, which USD text
     /// cannot represent.
@@ -1638,7 +1638,10 @@ impl fmt::Display for WriteError {
                     "{path}: the value is not a `{type_name}`, the declared type"
                 )
             }
-            Self::InvalidAssetPath { path, asset } => {
+            Self::InvalidAssetPath {
+                path,
+                asset_path: asset,
+            } => {
                 write!(
                     f,
                     "{path}: the asset path `{}` has no USDA quoting",
@@ -1813,7 +1816,7 @@ fn validate_asset_path(asset: &str, path: &str) -> Result<(), WriteError> {
     if asset.is_empty() || asset.chars().any(char::is_control) {
         return Err(WriteError::InvalidAssetPath {
             path: path.into(),
-            asset: asset.into(),
+            asset_path: asset.into(),
         });
     }
     Ok(())
@@ -2190,7 +2193,7 @@ fn validate_value(value: &Value, path: &str) -> Result<(), WriteError> {
             .any(char::is_control)
             .then(|| WriteError::InvalidAssetPath {
                 path: path.into(),
-                asset: asset.clone(),
+                asset_path: asset.clone(),
             })
     };
     // USD strings cannot carry NUL: OpenUSD truncates at it, silently
@@ -5594,7 +5597,7 @@ class "C"
             bad_arc(|d| d.sublayers[0].asset_path = "a\nb".into()),
             WriteError::InvalidAssetPath {
                 path: "/".into(),
-                asset: "a\nb".into()
+                asset_path: "a\nb".into()
             },
             "a sublayer asset path is quotable"
         );
@@ -5609,7 +5612,7 @@ class "C"
             }),
             WriteError::InvalidAssetPath {
                 path: "/P".into(),
-                asset: String::new()
+                asset_path: String::new()
             },
             "an internal arc has no asset path, not an empty one"
         );

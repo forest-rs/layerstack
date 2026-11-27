@@ -1104,7 +1104,7 @@ impl<'l> Lowering<'l> {
     ) -> Result<Reference, LayerSaveError> {
         let internal = matches!(
             arc.source(),
-            ReferenceSource::Layer { layer: id, asset: None } if id == layer.id()
+            ReferenceSource::Layer { layer: id, asset_path: None } if id == layer.id()
         );
         let asset = match arc.asset_path() {
             Some(asset) => Some(String::from(asset)),

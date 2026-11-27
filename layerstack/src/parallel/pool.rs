@@ -1,9 +1,8 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! The work pool itself: public only with the `unstable-internals` feature,
-//! for this repository's format crates, and following no semver promise.
-//! A host supplies threads through [`Threads`] and [`Executor`].
+//! The work pool itself. A host supplies threads through [`Threads`] and
+//! [`Executor`].
 
 #[allow(
     clippy::wildcard_imports,
@@ -13,21 +12,30 @@ use super::*;
 
 /// What a pool does with each task: returns its result and pushes the
 /// tasks it adds. Shared by every worker, so [`Sync`] with `std`.
+///
+/// Without `std` the pool runs on the calling thread, and the bound is
+/// dropped so that work may hold a store that is only
+/// [`MaybeSync`](crate::MaybeSync). Write work that is `Sync` all the
+/// same: Cargo enables `std` for the whole build when any crate does, so
+/// work that is not compiles only while every crate leaves it off.
 #[cfg(feature = "std")]
 pub type Work<'w, T, R> = dyn Fn(T, &mut Vec<T>) -> R + Sync + 'w;
 /// What a pool does with each task: returns its result and pushes the
-/// tasks it adds.
+/// tasks it adds. Without `std` the pool runs on the calling thread, so
+/// the work need not be [`Sync`]; write it `Sync` all the same, as the
+/// `std` build's docs say.
 #[cfg(not(feature = "std"))]
 pub type Work<'w, T, R> = dyn Fn(T, &mut Vec<T>) -> R + 'w;
 
 /// What a pool started with [`with_offering_pool_in`] does with each task:
 /// returns its result and adds tasks to [`Added`], which may hand them to
 /// the pool before the task returns. Shared by every worker, so [`Sync`]
-/// with `std`.
+/// with `std`; [`Work`] says why to write it `Sync` without `std` too.
 #[cfg(feature = "std")]
 pub type Offering<'w, T, R> = dyn Fn(T, &mut Added<'_, T>) -> R + Sync + 'w;
 /// What a pool started with [`with_offering_pool_in`] does with each task:
-/// returns its result and adds tasks to [`Added`].
+/// returns its result and adds tasks to [`Added`]. Without `std` the pool
+/// runs on the calling thread, so the work need not be [`Sync`].
 #[cfg(not(feature = "std"))]
 pub type Offering<'w, T, R> = dyn Fn(T, &mut Added<'_, T>) -> R + 'w;
 
@@ -147,6 +155,7 @@ where
 /// use layerstack::parallel::{Threads, with_pool_in};
 ///
 /// let threads = Threads::new(4);
+/// let spare = threads.spare();
 /// // Each task sums a range on a pool of its own on the same budget,
 /// // which runs on the threads the outer pool leaves idle.
 /// let inner = |n: u64, _: &mut Vec<u64>| n;
@@ -157,7 +166,8 @@ where
 /// };
 /// let sums = with_pool_in(&threads, &outer, |pool| pool.run(vec![10, 100]));
 /// assert_eq!(sums.iter().sum::<u64>(), 45 + 4950);
-/// assert_eq!(threads.spare(), 3);
+/// // Every worker gave its thread back.
+/// assert_eq!(threads.spare(), spare);
 /// ```
 pub fn with_pool_in<T, R, B>(
     threads: &Threads,
@@ -218,13 +228,15 @@ where
 /// use layerstack::parallel::{Threads, join};
 ///
 /// let threads = Threads::new(2);
+/// let spare = threads.spare();
 /// let (evens, odds) = join(
 ///     &threads,
 ///     || (0..10u32).filter(|n| n % 2 == 0).sum::<u32>(),
 ///     || (0..10u32).filter(|n| n % 2 == 1).sum::<u32>(),
 /// );
 /// assert_eq!((evens, odds), (20, 25));
-/// assert_eq!(threads.spare(), 1);
+/// // `b`'s thread is back in the budget.
+/// assert_eq!(threads.spare(), spare);
 /// ```
 pub fn join<A, B>(threads: &Threads, a: impl FnOnce() -> A, b: impl FnOnce() -> B + Send) -> (A, B)
 where

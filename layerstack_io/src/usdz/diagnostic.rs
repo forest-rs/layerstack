@@ -27,8 +27,8 @@ pub struct MemberDiagnostic {
 
 impl MemberDiagnostic {
     /// The diagnostic `diagnostic` of the member at `member`, read as the
-    /// layer `layer_id`: for a reader of members outside this crate, such
-    /// as `layerstack_io`'s loose-file reads, to report in the same shape.
+    /// layer `layer_id`: for a reader of a source outside a package, such as
+    /// a loose file, to report in the same shape.
     #[must_use]
     pub fn new(member: Arc<str>, layer_id: LayerId, diagnostic: ImportDiagnostic) -> Self {
         Self {

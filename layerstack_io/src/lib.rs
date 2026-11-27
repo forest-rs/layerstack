@@ -656,9 +656,12 @@ pub enum VariantArcLoading {
     /// Every branch's, so that selecting another variant reads no source.
     All,
 }
-/// Document import policy applied consistently to root, dependencies and package members.
-/// Existing opening methods use strict import. Set these options explicitly
-/// to defer USDC numeric decoding; checked reads then report payload errors later.
+/// How a document reads its sources: the root layer, its dependencies and
+/// package members alike.
+///
+/// The default imports strictly, decodes USDC values eagerly and resolves
+/// only the selected variants' arcs. Set [`Self::usdc`] to defer USDC
+/// numeric decoding, after which checked reads report payload errors.
 ///
 /// Build it as a struct literal that names the fields it sets and takes
 /// the rest from `..LoadOptions::default()`: a field a later release adds then

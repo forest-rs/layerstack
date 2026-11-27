@@ -2984,19 +2984,13 @@ fn read_loose(
     let rejected = |e: usdc::UsdcError| IoError::new(IoErrorKind::Rejected, e.to_string());
     #[cfg(feature = "std")]
     let result = match usdc_options.arrays {
-        UsdcArrayLoading::Retained => usdc::read_usdc_lazy_range_within(
-            data.clone(),
-            id,
-            tokens,
-            paths,
-            resolver,
-            budget,
-            threads,
-        )
-        .map(|result| {
-            read.retained = Some(result.values);
-            result.assembled
-        }),
+        UsdcArrayLoading::Retained => {
+            usdc::read_usdc_lazy_within(data.clone(), id, tokens, paths, resolver, budget, threads)
+                .map(|result| {
+                    read.retained = Some(result.values);
+                    result.assembled
+                })
+        }
         UsdcArrayLoading::Eager => {
             usdc::read_usdc_within(data, id, tokens, paths, resolver, &mut budget, threads)
         }

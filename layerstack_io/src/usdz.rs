@@ -117,6 +117,7 @@ use alloc::vec::Vec;
 
 use layerstack::AssetResolver;
 use layerstack::doc::{Layer, LayerId};
+use layerstack::encoded_bytes::EncodedBytes;
 use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 
@@ -304,6 +305,9 @@ pub fn read_usdz(
 /// Reads reachable and explicitly selected members with a per-file USDC policy.
 /// CRC and structural validation remain eager. Retained payloads must be read
 /// through checked queries to distinguish decode failure from missing data.
+/// The archive is copied once into storage of its own, which retained values
+/// keep; to keep bytes the caller already owns, build a
+/// [`snapshot::PackageSnapshot`] and read it with [`read_usdz_snapshot`].
 /// AOUSD Core §9.7 and §16.4 (package members and format dispatch).
 pub fn read_usdz_with_options(
     data: &[u8],
@@ -315,7 +319,7 @@ pub fn read_usdz_with_options(
     options: UsdcReadOptions,
 ) -> Result<UsdzResult, UsdzError> {
     let archive = snapshot::PackageSnapshot::new(
-        Arc::<[u8]>::from(data).into(),
+        EncodedBytes::from(data),
         snapshot::PackageLimits::default(),
     )?;
     read_usdz_snapshot(

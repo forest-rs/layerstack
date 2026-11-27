@@ -252,7 +252,7 @@ impl LazyPool {
     /// Retains a `token[]` or `string[]` value ([`retains_text_array`]);
     /// fields sharing one representation share one source. A `token[]`
     /// value has the whole token table interned when the read ends, on
-    /// one thread ([`read_usdc_lazy_range_within`]).
+    /// one thread ([`read_retained`]).
     pub(crate) fn register_value(self: &Arc<Self>, rep: RawValueRep) -> DeferredValue {
         if matches!(rep.value_type(), Ok(ValueType::Token)) {
             self.retains_tokens.store(true, Ordering::Relaxed);
@@ -481,8 +481,13 @@ impl DeferredArraySource for RetimedArray {
 /// dependency scans walk. Scalars stay eager too: most are inlined in their
 /// field's representation, and decoding one costs less than retaining it.
 ///
-/// Input bytes are immutable caller-owned memory. No file I/O, eviction or
-/// background work occurs. Each distinct retained `ValueRep` decodes once,
+/// `bytes` is anything [`EncodedBytes`] converts from: an `Arc<[u8]>` or
+/// `Arc<Vec<u8>>` is shared and a `Vec<u8>` or `Box<[u8]>` is moved, without
+/// copying; a borrowed `&[u8]` is copied once; and an [`EncodedBytes`] view
+/// of a larger buffer, such as a package archive, retains that buffer. Pass
+/// [`EncodedBytes::detached`] when a small file should not keep a large owner
+/// alive. The bytes are immutable; no file I/O, eviction or background work
+/// occurs. Each distinct retained `ValueRep` decodes once,
 /// caching success or failure across layer clones, samples and threads.
 /// All later decodes share the remaining structural assembly budget.
 /// Structural errors fail now; malformed retained payloads fail on demand.
@@ -491,21 +496,22 @@ impl DeferredArraySource for RetimedArray {
 /// value interns the file's whole token table into `tokens`, so deferred
 /// values decode without it.
 pub fn read_usdc_lazy(
-    bytes: Arc<[u8]>,
+    bytes: impl Into<EncodedBytes>,
     id: LayerId,
     tokens: &TokenInterner,
     paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
 ) -> Result<LazyReadResult, UsdcError> {
+    let bytes = bytes.into();
     let budget = DecodeBudget::for_input(bytes.len());
-    read_usdc_lazy_within(bytes, id, tokens, paths, resolver, budget, &Threads::new(1))
+    read_retained(bytes, id, tokens, paths, resolver, budget, &Threads::new(1))
 }
 /// Retained import with one explicitly owned budget covering assembly and all
 /// future decodes. A cached failure never consumes the budget a second time.
 /// The read uses the threads of `threads`, as [`crate::usdc::read_usdc_within`]
 /// does.
 pub fn read_usdc_lazy_within(
-    bytes: Arc<[u8]>,
+    bytes: impl Into<EncodedBytes>,
     id: LayerId,
     tokens: &TokenInterner,
     paths: &PathInterner,
@@ -513,15 +519,11 @@ pub fn read_usdc_lazy_within(
     budget: DecodeBudget,
     threads: &Threads,
 ) -> Result<LazyReadResult, UsdcError> {
-    read_usdc_lazy_range_within(bytes.into(), id, tokens, paths, resolver, budget, threads)
+    read_retained(bytes.into(), id, tokens, paths, resolver, budget, threads)
 }
-/// Retains a checked view of shared encoded storage without copying its bytes.
-/// The budget and once-only cache have the same semantics as
-/// [`read_usdc_lazy_within`]. A small file view may retain a large archive;
-/// pass [`EncodedBytes::detached`] when independent ownership is preferable.
-/// The read uses the threads of `threads`, as [`crate::usdc::read_usdc_within`]
-/// does.
-pub(crate) fn read_usdc_lazy_range_within(
+/// The retained read both entry points share, compiled once for every owner
+/// type they accept.
+fn read_retained(
     bytes: EncodedBytes,
     id: LayerId,
     tokens: &TokenInterner,
@@ -664,6 +666,28 @@ mod tests {
         let path = PropertyPath::new(prim, tokens.lookup(name).unwrap());
         let spec = read.assembled.layer.property(path).unwrap();
         spec.default.as_ref().unwrap()
+    }
+
+    #[test]
+    fn retained_reads_keep_the_callers_allocation() {
+        let bytes = file(false).to_vec();
+        let pointer = bytes.as_ptr();
+        let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
+        let read = read_usdc_lazy(bytes, LayerId(1), &tokens, &paths, &mut NoAssets).unwrap();
+        assert_eq!(
+            read.values.encoded_bytes().as_ptr(),
+            pointer,
+            "a vector moves in"
+        );
+
+        let shared = file(false);
+        let read =
+            read_usdc_lazy(shared.clone(), LayerId(1), &tokens, &paths, &mut NoAssets).unwrap();
+        assert_eq!(
+            read.values.encoded_bytes().as_ptr(),
+            shared.as_ptr(),
+            "an Arc is shared"
+        );
     }
 
     #[test]

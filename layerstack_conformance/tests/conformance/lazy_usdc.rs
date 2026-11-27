@@ -402,7 +402,7 @@ fn malformed_payload_is_deferred_and_failure_is_cached() {
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
     assert!(read_usdc(&damaged, LayerId(1), &tokens, &paths, &mut NoAssets).is_err());
-    let read = read_usdc_lazy(damaged.into(), LayerId(1), &tokens, &paths, &mut NoAssets).unwrap();
+    let read = read_usdc_lazy(damaged, LayerId(1), &tokens, &paths, &mut NoAssets).unwrap();
     assert_eq!(read.values.stats().decode_attempts, 0);
     let p = paths
         .lookup(&layerstack::Path::root().join(&[tokens.lookup("P").unwrap()]))

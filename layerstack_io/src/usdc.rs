@@ -35,8 +35,9 @@
 //!
 //! # Retained values
 //!
-//! With the `std` feature, `read_usdc_lazy` takes immutable `Arc<[u8]>`
-//! input and assembles the same layer, retaining numeric defaults and time
+//! With the `std` feature, `read_usdc_lazy` takes immutable bytes it can keep
+//! (anything `EncodedBytes` converts from: owners are shared or moved without
+//! copying, a borrowed slice is copied once) and assembles the same layer, retaining numeric defaults and time
 //! samples as `TypedArray::Deferred`, and `token[]` and `string[]` attribute
 //! defaults of at least `MIN_RETAINED_TEXT_ARRAY` elements as
 //! `Value::Deferred`, which decode into the native arrays an eager read
@@ -107,8 +108,6 @@
 
 #[cfg(feature = "std")]
 mod lazy;
-#[cfg(feature = "std")]
-pub(crate) use lazy::read_usdc_lazy_range_within;
 #[cfg(feature = "std")]
 pub use lazy::{
     LazyReadResult, MIN_RETAINED_TEXT_ARRAY, RetainedValueStats, RetainedValues, read_usdc_lazy,

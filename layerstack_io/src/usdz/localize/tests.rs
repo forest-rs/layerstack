@@ -102,6 +102,23 @@ fn localized_package_round_trips_layers_and_rewrites_paths_from_each_authoring_l
 }
 
 #[test]
+fn asset_bytes_are_kept_without_copying() {
+    let (store, _, _) = fixture();
+    let image = EncodedBytes::from(alloc::vec![7_u8; 64]);
+    let plan = localize_asset(&store, LayerId(1), "scene.usdc", |d| {
+        Ok(match &*d.identifier {
+            "original/child.usda" => LocalizationTarget::layer(LayerId(2), "models/child.usda"),
+            _ => LocalizationTarget::asset("textures/albedo.png", image.clone()),
+        })
+    })
+    .unwrap();
+    assert!(
+        plan.assets[0].data.shares_backing(&image),
+        "the plan keeps the caller's bytes"
+    );
+}
+
+#[test]
 fn resolution_failure_and_member_collisions_leave_sources_unchanged() {
     let (store, _, _) = fixture();
     let source = store.layer(LayerId(1)).unwrap().clone();
@@ -158,11 +175,11 @@ fn unnamed_layer_links_are_named_and_host_expanded_udims_keep_templates() {
                 resources: vec![
                     LocalizationResource::Asset {
                         member: "textures/1001.png".into(),
-                        data: Arc::from(&b"a"[..]),
+                        data: (&b"a"[..]).into(),
                     },
                     LocalizationResource::Asset {
                         member: "textures/1002.png".into(),
-                        data: Arc::from(&b"b"[..]),
+                        data: (&b"b"[..]).into(),
                     },
                 ],
             }
@@ -214,11 +231,11 @@ fn a_udim_destination_accepts_only_its_own_tiles() {
                 resources: vec![
                     LocalizationResource::Asset {
                         member: "textures/color.1001.png".into(),
-                        data: Arc::from(&b"a"[..]),
+                        data: (&b"a"[..]).into(),
                     },
                     LocalizationResource::Asset {
                         member: "textures/color.1101.png".into(),
-                        data: Arc::from(&b"b"[..]),
+                        data: (&b"b"[..]).into(),
                     },
                 ],
             }

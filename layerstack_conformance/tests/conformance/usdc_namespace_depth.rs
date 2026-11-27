@@ -20,7 +20,6 @@
 //! Spec: AOUSD Core §16.3 (USDC), §7.3.5–§7.3.6 (prim, variant set and
 //! variant specs).
 
-use std::sync::Arc;
 use std::thread;
 
 use layerstack::doc::{Layer, PrimSpec};
@@ -166,8 +165,7 @@ fn read_back_as_usda(data: Vec<u8>) -> [(String, Vec<String>); 2] {
         let eager = save(eager, &tokens, &paths);
         let tokens = TokenInterner::default();
         let paths = PathInterner::default();
-        let lazy = read_usdc_lazy(Arc::from(data), LayerId(3), &tokens, &paths, &mut NoAssets)
-            .expect("reads");
+        let lazy = read_usdc_lazy(data, LayerId(3), &tokens, &paths, &mut NoAssets).expect("reads");
         let lazy = save(lazy.assembled, &tokens, &paths);
         [eager, lazy]
     })

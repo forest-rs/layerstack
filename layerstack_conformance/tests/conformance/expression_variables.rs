@@ -247,6 +247,7 @@ fn errors_match_openusd() {
                     ExpressionContext::Payload => "payload",
                     ExpressionContext::VariantSelection => "variant",
                     ExpressionContext::AssetValue => "asset",
+                    _ => "other",
                 }
                 .to_string(),
                 error.expression.clone(),

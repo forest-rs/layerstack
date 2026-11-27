@@ -200,6 +200,7 @@ impl Fixture {
                 };
             }
             AuthoringSourceKind::AnimationBlock => panic!("an animation block supplies no value"),
+            other => panic!("no oracle name for {other:?}"),
         };
         let graph = self
             .stage

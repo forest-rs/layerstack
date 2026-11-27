@@ -297,6 +297,7 @@ impl core::fmt::Display for LoadRefusal {
 /// and the paths it left out, each with why, in the order given, those to
 /// unload after those to load.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct LoadOutcome {
     /// Whether the load rules changed.
     pub changed: bool,

@@ -72,6 +72,7 @@ impl ArcKind {
 ///
 /// Spec: AOUSD Core §10.4 (strength ordering).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct OpinionKey {
     /// The node of the prim's [`PrimIndexGraph`] this site belongs to
     /// (see [`crate::Prim::composition_graph`]).
@@ -113,6 +114,7 @@ impl OpinionKey {
 /// Spec: AOUSD Core §10.4 (strength ordering), §12.3.2.1 (layer offset and
 /// scale).
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct OpinionSource {
     /// The site and its strength. Its spec path names the prim spec the
     /// source's opinions are read from.
@@ -156,6 +158,7 @@ impl SourceId {
 /// same source position and author the same value; compare
 /// [`OpinionRef`]s to compare opinions of different prims.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Opinion {
     /// The source the opinion was read from (see [`Opinions::source`]).
     pub source: SourceId,

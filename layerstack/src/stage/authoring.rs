@@ -160,6 +160,7 @@ impl From<Time> for AuthoringQuery {
 
 /// The authored slot a source supplies.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AuthoringSourceKind {
     /// An authored default that is not a block.
     Default,

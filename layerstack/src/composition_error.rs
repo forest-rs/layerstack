@@ -1150,6 +1150,7 @@ pub struct InvalidInstanceTargetPath {
 /// Where a variable expression that failed to evaluate is authored (see
 /// [`VariableExpressionError`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum ExpressionContext {
     /// A sublayer asset path.
     Sublayer,

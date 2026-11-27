@@ -38,6 +38,7 @@ pub(crate) use instance_key::{ClipInstanceKey, instance_keys};
 
 /// Why the host should resolve this clip-related asset.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[non_exhaustive]
 pub enum ClipAssetRole {
     /// An explicitly listed value-clip layer.
     Value,

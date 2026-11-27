@@ -3936,12 +3936,14 @@ fn unavailable_row(asset: UnavailableAsset, store: &InMemoryStore) -> Wire {
     ])
 }
 
-/// The name of a clip asset's role.
+/// The name of a clip asset's role; `""` for a role this build does not
+/// name.
 fn clip_role(role: ClipAssetRole) -> &'static str {
     match role {
         ClipAssetRole::Value => "value",
         ClipAssetRole::Manifest => "manifest",
         ClipAssetRole::TemplateCandidate => "templateCandidate",
+        _ => "",
     }
 }
 

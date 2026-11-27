@@ -426,7 +426,7 @@ fn parse_usdc(
     #[cfg(feature = "std")]
     let (result, retained_values) = match options.arrays {
         crate::usdz::UsdcArrayLoading::Retained => {
-            let result = crate::usdc::read_usdc_lazy_range_within(
+            let result = crate::usdc::read_usdc_lazy_within(
                 data.clone(),
                 layer_id,
                 tokens,

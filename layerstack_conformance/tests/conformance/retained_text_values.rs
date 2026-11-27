@@ -149,7 +149,7 @@ fn read_both(bytes: &[u8]) -> Option<Pair> {
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
     let eager = read_usdc(bytes, LayerId(1), &tokens, &paths, &mut NoAssets).ok()?;
-    let lazy = read_usdc_lazy(bytes.into(), LayerId(1), &tokens, &paths, &mut NoAssets)
+    let lazy = read_usdc_lazy(bytes, LayerId(1), &tokens, &paths, &mut NoAssets)
         .expect("a file that reads eagerly reads retained");
     Some(Pair {
         tokens,
@@ -263,7 +263,7 @@ fn composition_and_raw_queries_read_text_arrays_without_decoding_them() {
         .expect("the base layer");
     let mut store = InMemoryStore::default();
     let read = read_usdc_lazy(
-        bytes.as_slice().into(),
+        bytes.as_slice(),
         LayerId(1),
         store.tokens(),
         store.paths(),
@@ -321,7 +321,7 @@ fn retained_text_arrays_decode_once_across_threads() {
         .expect("the base layer");
     let mut store = InMemoryStore::default();
     let read = read_usdc_lazy(
-        bytes.as_slice().into(),
+        bytes.as_slice(),
         LayerId(1),
         store.tokens(),
         store.paths(),
@@ -422,7 +422,7 @@ fn edits_replace_and_restore_retained_values() {
         .expect("the base layer");
     let mut store = InMemoryStore::default();
     let read = read_usdc_lazy(
-        bytes.as_slice().into(),
+        bytes.as_slice(),
         LayerId(1),
         store.tokens(),
         store.paths(),
@@ -541,7 +541,7 @@ fn a_retained_text_array_that_does_not_decode_is_an_error_when_read() {
         "an eager read fails at once"
     );
     let read = read_usdc_lazy(
-        bytes.as_slice().into(),
+        bytes.as_slice(),
         LayerId(1),
         store.tokens(),
         store.paths(),
@@ -605,7 +605,7 @@ fn a_failed_retained_text_array_hides_weaker_values_at_every_time() {
     let bytes = malformed();
     let mut store = InMemoryStore::default();
     let read = read_usdc_lazy(
-        bytes.as_slice().into(),
+        bytes.as_slice(),
         LayerId(1),
         store.tokens(),
         store.paths(),

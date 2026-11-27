@@ -23,6 +23,7 @@ use alloc::{
 use core::fmt;
 use layerstack::asset::UdimPattern;
 use layerstack::asset_dependencies::{AssetDependency, rewrite_layer_assets};
+use layerstack::encoded_bytes::EncodedBytes;
 use layerstack::sort;
 use layerstack::{Layer, LayerId, LayerStore, PathInterner, TokenInterner};
 
@@ -41,7 +42,7 @@ pub enum LocalizationResource {
         /// Destination path relative to the localization root.
         member: Arc<str>,
         /// Complete immutable asset bytes.
-        data: Arc<[u8]>,
+        data: EncodedBytes,
     },
 }
 
@@ -63,9 +64,13 @@ impl LocalizationTarget {
             resources: vec![LocalizationResource::Layer { source, member }],
         }
     }
-    /// Resolves a use to one asset's bytes.
+    /// Resolves a use to one asset's bytes, which the plan keeps until it is
+    /// packaged. Bytes read from storage and any owner [`EncodedBytes`]
+    /// shares or moves are kept without copying; a borrowed slice is copied.
+    /// A view keeps its whole owner alive, such as the package it was read
+    /// from; pass [`EncodedBytes::detached`] to keep only the asset.
     #[must_use]
-    pub fn asset(member: impl Into<Arc<str>>, data: impl Into<Arc<[u8]>>) -> Self {
+    pub fn asset(member: impl Into<Arc<str>>, data: impl Into<EncodedBytes>) -> Self {
         let member = member.into();
         Self {
             member: member.clone(),
@@ -93,7 +98,7 @@ pub struct LocalizedAsset {
     /// Root-relative destination path.
     pub member: Arc<str>,
     /// Complete immutable bytes.
-    pub data: layerstack::encoded_bytes::EncodedBytes,
+    pub data: EncodedBytes,
 }
 /// A complete inspectable localization, whose source layers remain unchanged.
 #[derive(Clone, Debug)]
@@ -247,7 +252,7 @@ pub fn localize_asset(
     names.insert(root, root_member.clone());
     let mut occupied = BTreeMap::new();
     occupied.insert(root_member.clone(), Some(root));
-    let mut assets = BTreeMap::<Arc<str>, Arc<[u8]>>::new();
+    let mut assets = BTreeMap::<Arc<str>, EncodedBytes>::new();
     let mut queue = VecDeque::from([root]);
     let mut visited = BTreeSet::new();
     let mut layers = Vec::new();
@@ -307,7 +312,7 @@ pub fn localize_asset(
                     LocalizationResource::Asset { member, data } => {
                         valid_member(&member)?;
                         if occupied.get(&member).is_some_and(Option::is_some)
-                            || assets.get(&member).is_some_and(|old| old != &data)
+                            || assets.get(&member).is_some_and(|old| *old != data)
                         {
                             return Err(LocalizationError::MemberCollision { member });
                         }
@@ -332,10 +337,7 @@ pub fn localize_asset(
         layers,
         assets: assets
             .into_iter()
-            .map(|(member, data)| LocalizedAsset {
-                member,
-                data: data.into(),
-            })
+            .map(|(member, data)| LocalizedAsset { member, data })
             .collect(),
         resolved_uses,
     })

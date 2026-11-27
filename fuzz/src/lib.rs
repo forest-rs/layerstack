@@ -15,7 +15,7 @@
 //! including this file as a module, so it uses only the crates both
 //! depend on.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
 use layerstack::{
     CompositionLimits, FormatArgs, InMemoryStore, LayerId, NoAssets, Path, PathExpression,
@@ -159,13 +159,9 @@ pub fn usdc(data: &[u8]) {
 
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
-    if let Ok(read) = layerstack_io::usdc::read_usdc_lazy(
-        Arc::from(data),
-        LayerId(1),
-        &tokens,
-        &paths,
-        &mut NoAssets,
-    ) {
+    if let Ok(read) =
+        layerstack_io::usdc::read_usdc_lazy(data, LayerId(1), &tokens, &paths, &mut NoAssets)
+    {
         // Saving reads every value, so every retained one decodes.
         let _ = layerstack_io::usda::save_usda(&read.assembled.layer, &tokens, &paths);
         let _ = read.values.stats();

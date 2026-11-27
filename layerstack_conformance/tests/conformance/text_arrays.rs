@@ -226,7 +226,7 @@ fn text_arrays_round_trip_through_usda_and_usdc() {
         .unwrap()
         .layer;
     let retained = read_usdc_lazy(
-        bytes.as_slice().into(),
+        bytes.as_slice(),
         LayerId(5),
         store.tokens(),
         store.paths(),

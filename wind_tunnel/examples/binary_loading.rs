@@ -9,7 +9,7 @@ use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, LayerId, PathInterner, ResolvedAsset, Stage,
     StageOptions, TokenInterner,
 };
-use std::{sync::Arc, time::Instant};
+use std::time::Instant;
 struct NoAssets;
 impl AssetResolver for NoAssets {
     fn resolve(
@@ -47,7 +47,7 @@ fn main() {
         let mut retained = None;
         let layer = if data.starts_with(b"PXR-USDC") && mode != "eager" {
             let result = layerstack_io::usdc::read_usdc_lazy(
-                Arc::from(data.as_slice()),
+                data.as_slice(),
                 LayerId(1),
                 store.tokens(),
                 store.paths(),

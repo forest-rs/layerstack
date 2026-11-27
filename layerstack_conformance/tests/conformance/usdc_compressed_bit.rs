@@ -15,7 +15,6 @@
 //! `pxr/usd/sdf/crateFile.cpp:2178-2290`. AOUSD Core §16.3.10.
 
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use layerstack::{LayerId, NoAssets, PathInterner, TokenInterner};
 use layerstack_io::usda::save::save_usda;
@@ -79,14 +78,8 @@ fn compressed_bit_where_openusd_never_compresses_is_ignored() {
 
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
-    let lazy = read_usdc_lazy(
-        Arc::from(bytes.as_slice()),
-        LayerId(1),
-        &tokens,
-        &paths,
-        &mut NoAssets,
-    )
-    .expect("reads lazily");
+    let lazy = read_usdc_lazy(bytes.as_slice(), LayerId(1), &tokens, &paths, &mut NoAssets)
+        .expect("reads lazily");
     let text = save_usda(&lazy.assembled.layer, &tokens, &paths).expect("saves as USDA");
     assert_eq!(text, oracle.read, "lazy read");
 }

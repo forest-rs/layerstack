@@ -57,7 +57,8 @@ impl MemoryStorage {
     }
 
     /// Supplies bytes under `identifier`, replacing any earlier source there.
-    /// An owned vector transfers its allocation. An [`EncodedBytes`] view
+    /// An owned vector or boxed slice transfers its allocation, an `Arc` is
+    /// shared, and a borrowed slice is copied. An [`EncodedBytes`] view
     /// retains its existing owner and byte range.
     ///
     /// # Errors

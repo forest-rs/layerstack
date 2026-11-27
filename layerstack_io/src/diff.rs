@@ -45,6 +45,7 @@ impl fmt::Display for DiffSide {
 
 /// A layer could not be read or represented without dropping authored content.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct DiffError {
     /// The input that failed.
     pub side: DiffSide,
@@ -62,6 +63,7 @@ impl core::error::Error for DiffError {}
 
 /// A complete comparison, ordered by path, field name, and sample time.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[non_exhaustive]
 pub struct LayerDiff {
     /// Differences in authored specs and fields.
     pub changes: Vec<Change>,
@@ -69,6 +71,7 @@ pub struct LayerDiff {
 
 /// How an authored opinion differs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ChangeKind {
     /// Present only in the revised layer.
     Added,
@@ -92,6 +95,7 @@ impl ChangeKind {
 
 /// One difference in an authored spec or opinion.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Change {
     /// Absolute spec path, with variant selections where applicable. The
     /// layer metadata spec is at `/`.
@@ -113,6 +117,7 @@ pub struct Change {
 /// Positional summary of an array edit. Insertions and removals in the middle
 /// are reported by their resulting index differences.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ArrayChange {
     /// Element count in the baseline.
     pub before_len: usize,
@@ -505,6 +510,7 @@ fn ordered_diff(mut changes: Vec<Change>) -> LayerDiff {
 
 /// Counts of differing authored records and spec paths.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct DiffStats {
     /// Distinct spec paths with differences.
     pub paths: usize,

@@ -288,6 +288,7 @@ fn write_stat(
         removed,
         changed,
         paths,
+        ..
     } = *stats;
     let total = added + removed + changed;
     let mode = if composed { "composed" } else { "authored" };

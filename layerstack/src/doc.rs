@@ -1170,7 +1170,7 @@ pub struct SublayerEntry {
     /// (not the resolved location); `None` for an entry built without one.
     /// An unresolved sublayer always has it (see
     /// [`SublayerEntry::unresolved`]).
-    pub asset: Option<String>,
+    pub asset_path: Option<String>,
 }
 
 impl SublayerEntry {
@@ -1184,7 +1184,7 @@ impl SublayerEntry {
         Self {
             layer,
             offset,
-            asset: None,
+            asset_path: None,
         }
     }
 
@@ -1194,7 +1194,7 @@ impl SublayerEntry {
         Self {
             layer,
             offset,
-            asset: Some(asset.into()),
+            asset_path: Some(asset.into()),
         }
     }
 
@@ -1226,7 +1226,7 @@ impl SublayerEntry {
         Self {
             layer: LayerId::UNRESOLVED,
             offset,
-            asset: Some(asset.into()),
+            asset_path: Some(asset.into()),
         }
     }
 
@@ -1247,7 +1247,7 @@ impl SublayerEntry {
     /// expression ([`crate::variable_expression::is_expression`]).
     #[must_use]
     pub fn is_expression(&self) -> bool {
-        self.asset
+        self.asset_path
             .as_deref()
             .is_some_and(crate::variable_expression::is_expression)
     }
@@ -1268,7 +1268,7 @@ impl SublayerEntry {
         if self.is_expression() {
             return None;
         }
-        store.asset_layer(anchor, self.asset.as_deref()?)
+        store.asset_layer(anchor, self.asset_path.as_deref()?)
     }
 }
 
@@ -4432,7 +4432,7 @@ impl Layer {
     pub(crate) fn defer_arcs_to(&mut self, layers: &alloc::collections::BTreeSet<LayerId>) {
         let anchor = self.id;
         for sublayer in &mut self.sublayers {
-            if sublayer.asset.is_some() && layers.contains(&sublayer.layer) {
+            if sublayer.asset_path.is_some() && layers.contains(&sublayer.layer) {
                 sublayer.layer = LayerId::UNRESOLVED;
             }
         }
@@ -4459,7 +4459,7 @@ impl Layer {
     fn names_deferred_asset(&self, asset: &str) -> bool {
         if self.sublayers.iter().any(|sublayer| {
             sublayer.is_unresolved()
-                && (sublayer.is_expression() || sublayer.asset.as_deref() == Some(asset))
+                && (sublayer.is_expression() || sublayer.asset_path.as_deref() == Some(asset))
         }) {
             return true;
         }
@@ -4493,7 +4493,7 @@ impl Layer {
             self.sublayers.iter().any(|sublayer| {
                 sublayer.is_unresolved()
                     && !sublayer.is_expression()
-                    && sublayer.asset.as_deref() == Some(asset)
+                    && sublayer.asset_path.as_deref() == Some(asset)
             })
         };
         if !assets.iter().all(|asset| sublayer_named(asset)) {
@@ -4530,7 +4530,7 @@ impl Layer {
                 sublayer.is_unresolved()
                     && (sublayer.is_expression()
                         || sublayer
-                            .asset
+                            .asset_path
                             .as_deref()
                             .is_some_and(|asset| assets.contains(&asset)))
             })
@@ -5764,7 +5764,10 @@ mod tests {
             root_layer.sublayers[0].is_unresolved(),
             "resolved through the binding"
         );
-        assert_eq!(root_layer.sublayers[0].asset.as_deref(), Some("a.usda"));
+        assert_eq!(
+            root_layer.sublayers[0].asset_path.as_deref(),
+            Some("a.usda")
+        );
         assert_eq!(
             root_layer.generation(),
             root_generation,

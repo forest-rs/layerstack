@@ -120,7 +120,7 @@ fn snapshot(loaded: &LoadedStage, stage: &Stage) -> Json {
     let path = |p: layerstack::PathId| store.paths().display(p, store.tokens());
     let root = store.paths().lookup(&Path::root()).unwrap();
     json!({
-        "sublayers": layer.sublayers().iter().map(|s| s.asset.clone().unwrap_or_default()).collect::<Vec<_>>(),
+        "sublayers": layer.sublayers().iter().map(|s| s.asset_path.clone().unwrap_or_default()).collect::<Vec<_>>(),
         "offsets": layer.sublayers().iter().map(|s| json!([s.offset.offset, s.offset.scale])).collect::<Vec<_>>(),
         "relocates": layer.relocates().iter().map(|r| json!([path(r.source), r.target.map(path).unwrap_or_default()])).collect::<Vec<_>>(),
         "prims": stage.traverse_all(root).filter(|p| *p != root).map(path).collect::<Vec<_>>(),

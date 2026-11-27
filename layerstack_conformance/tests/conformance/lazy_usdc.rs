@@ -514,7 +514,7 @@ fn retimed_timecode_arrays_only_demand_the_bracketing_frames() {
             offset: 8.,
             scale: 2.,
         },
-        asset: None,
+        asset_path: None,
     });
     store.insert_layer(root);
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());

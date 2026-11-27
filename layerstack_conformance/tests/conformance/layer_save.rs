@@ -297,7 +297,7 @@ fn unresolved_arcs_are_kept_as_authored() {
             .sublayers()
             .iter()
             .filter(|s| s.is_unresolved())
-            .map(|s| (s.asset.clone(), s.offset.offset))
+            .map(|s| (s.asset_path.clone(), s.offset.offset))
             .collect();
         assert_eq!(
             sublayers,
@@ -483,7 +483,7 @@ fn structure(layer: &Layer) -> String {
     let sublayers: Vec<_> = layer
         .sublayers()
         .iter()
-        .map(|s| (s.asset.clone(), s.offset, s.is_unresolved()))
+        .map(|s| (s.asset_path.clone(), s.offset, s.is_unresolved()))
         .collect();
     let mut out = format!(
         "sublayers {sublayers:?}\ndefault prim {default_prim:?}\nmetadata {metadata:?}\n\

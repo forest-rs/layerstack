@@ -246,7 +246,7 @@ fn diagnostics_print_their_member_phase_and_place() {
         "USDC assembly /Rock.size timeSamples: unknown value type"
     );
     let missing = ImportDiagnostic::AssetResolve {
-        asset: Arc::from("moss.usda"),
+        asset_path: Arc::from("moss.usda"),
         error: AssetResolveError::NotFound,
     };
     assert_eq!(missing.to_string(), "asset `moss.usda` not found");

@@ -1087,7 +1087,7 @@ fn prim_info_changes(
             let mut fields = Vec::new();
             let names = |list: &[crate::SublayerEntry]| {
                 list.iter()
-                    .map(|entry| (entry.layer, entry.asset.clone()))
+                    .map(|entry| (entry.layer, entry.asset_path.clone()))
                     .collect::<Vec<_>>()
             };
             if names(sublayers) != names(before) {
@@ -1737,7 +1737,7 @@ fn reordered_sublayers(
     before: &[crate::SublayerEntry],
 ) -> Vec<LayerId> {
     fn name(entry: &crate::SublayerEntry) -> (Option<&str>, LayerId) {
-        match entry.asset.as_deref() {
+        match entry.asset_path.as_deref() {
             Some(asset) => (Some(asset), LayerId::UNRESOLVED),
             None => (None, entry.layer),
         }

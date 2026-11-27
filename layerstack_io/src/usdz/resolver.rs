@@ -297,7 +297,7 @@ impl<P: PackageAccess> AssetResolver for UsdzResolver<'_, P> {
                 member: authoring,
                 layer: anchor.unwrap_or(self.root),
                 diagnostic: ImportDiagnostic::AssetResolve {
-                    asset: Arc::from(asset_path),
+                    asset_path: Arc::from(asset_path),
                     error: AssetResolveError::NotFound,
                 },
             });

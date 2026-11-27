@@ -2453,7 +2453,7 @@ fn package_relative_missing_dependencies_keep_recovery_evidence() {
         )
         .unwrap();
         assert!(doc.load_report().has_errors());
-        assert!(doc.load_report().diagnostics.iter().any(|d| matches!(&d.diagnostic, ImportDiagnostic::AssetResolve {asset, error: AssetResolveError::NotFound} if &**asset == "./missing.usda")));
+        assert!(doc.load_report().diagnostics.iter().any(|d| matches!(&d.diagnostic, ImportDiagnostic::AssetResolve {asset_path: asset, error: AssetResolveError::NotFound} if &**asset == "./missing.usda")));
         assert!(matches!(
             doc.stage().stage().composition_errors(),
             [layerstack::CompositionError::UnresolvedAsset(error)] if error.asset_path == "./missing.usda"

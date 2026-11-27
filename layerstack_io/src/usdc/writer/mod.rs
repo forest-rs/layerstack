@@ -212,7 +212,7 @@ pub struct Reference {
     /// Authored reference custom data; payload arcs require an empty dictionary.
     pub custom_data: Vec<(String, Value)>,
     /// The asset path as authored; empty for an internal arc.
-    pub asset: String,
+    pub asset_path: String,
     /// An absolute prim path, or empty for the target layer's
     /// `defaultPrim`.
     pub prim_path: String,

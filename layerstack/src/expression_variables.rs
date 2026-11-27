@@ -526,7 +526,8 @@ pub(crate) fn walk_identifier(store: &dyn LayerStore, root: LayerStackIdentifier
         let stack = LayerStack::gather_recording(store, &chain, &mut Vec::new(), None);
         for layer in stack.layers.iter().filter_map(|id| store.layer(*id)) {
             for sublayer in &layer.sublayers {
-                let Some(asset) = sublayer.asset.as_deref().filter(|a| is_expression(a)) else {
+                let Some(asset) = sublayer.asset_path.as_deref().filter(|a| is_expression(a))
+                else {
                     continue;
                 };
                 let evaluated = VariableExpression::parse(asset)

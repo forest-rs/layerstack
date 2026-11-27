@@ -3010,7 +3010,7 @@ fn sublayer_edits_reject_lists_composition_could_not_use() {
 fn sublayer_edits_keep_what_the_list_already_repeats() {
     let mut store = rocks();
     let named = |layer: LayerId, asset: &str| SublayerEntry {
-        asset: Some(asset.into()),
+        asset_path: Some(asset.into()),
         ..SublayerEntry::new(layer)
     };
     // As a reader leaves it: `./sub.usda` and `sub.usda` are one layer,

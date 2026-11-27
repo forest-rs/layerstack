@@ -173,7 +173,12 @@ fn render_with(
         )
         .unwrap();
         for sublayer in layer.sublayers() {
-            writeln!(out, "  sublayer {:?} {:?}", sublayer.layer, sublayer.asset).unwrap();
+            writeln!(
+                out,
+                "  sublayer {:?} {:?}",
+                sublayer.layer, sublayer.asset_path
+            )
+            .unwrap();
         }
         let mut prims: Vec<_> = layer.prims().iter().collect();
         prims.sort_by_key(|(path, _)| paths.display(**path, tokens));

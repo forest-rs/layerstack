@@ -549,11 +549,11 @@ impl<'l> Lowering<'l> {
         // Spec: AOUSD Core §10.3.1 (sublayers), written by their authored
         // asset paths; an unresolved sublayer keeps its own.
         for sublayer in layer.sublayers() {
-            let Some(asset) = &sublayer.asset else {
+            let Some(asset) = &sublayer.asset_path else {
                 return invalid("/", Invalid::ArcWithoutAsset);
             };
             doc.sublayers.push(SubLayer {
-                asset: asset.clone(),
+                asset_path: asset.clone(),
                 offset: layer_offset(sublayer.offset),
             });
         }
@@ -1116,7 +1116,7 @@ impl<'l> Lowering<'l> {
             ReferenceTarget::DefaultPrim => None,
         };
         Ok(Reference {
-            asset,
+            asset_path: asset,
             prim_path,
             offset: layer_offset(arc.layer_offset),
             custom_data: arc

@@ -788,7 +788,7 @@ impl Stage {
                 .map(|entry| {
                     // An entry built natively may hold its layer alone.
                     let asset = entry
-                        .asset
+                        .asset_path
                         .as_deref()
                         .or_else(|| self.document.identifier(entry.layer))
                         .unwrap_or_default();

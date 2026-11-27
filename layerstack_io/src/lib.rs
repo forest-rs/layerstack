@@ -2328,7 +2328,7 @@ impl<B: Storage> StageDocument<B> {
                 for sublayer in layer.sublayers() {
                     let bound = if sublayer.is_unresolved() {
                         sublayer
-                            .asset
+                            .asset_path
                             .as_deref()
                             .filter(|_| !sublayer.is_expression())
                             .and_then(|asset| self.store.asset_layer(id, asset))
@@ -3384,7 +3384,7 @@ fn asset_use(layer: &Layer, asset: &str) -> AssetUse {
     if layer
         .sublayers()
         .iter()
-        .any(|entry| entry.asset.as_deref() == Some(asset))
+        .any(|entry| entry.asset_path.as_deref() == Some(asset))
     {
         return AssetUse::Sublayer;
     }
@@ -3499,7 +3499,7 @@ fn read_custom(
         if entry.layer != LayerId::UNRESOLVED || entry.is_expression() {
             continue;
         }
-        let Some(asset) = entry.asset.clone() else {
+        let Some(asset) = entry.asset_path.clone() else {
             continue;
         };
         if let Ok(resolved) = resolver.resolve(&asset, Some(id), tokens, paths) {

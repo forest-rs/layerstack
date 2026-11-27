@@ -4381,7 +4381,7 @@ def "Other" {}
         };
         let arc = |asset: &str| Arc_ {
             custom_data: Vec::new(),
-            asset: String::from(asset),
+            asset_path: String::from(asset),
             prim_path: String::new(),
             offset: 0.0,
             scale: 1.0,

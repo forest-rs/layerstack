@@ -475,11 +475,11 @@ fn bound_forms(
     };
     let mut normalized: Option<Layer> = None;
     for (at, (old, new)) in current.sublayers.iter().zip(&content.sublayers).enumerate() {
-        let bound = old.asset == new.asset
+        let bound = old.asset_path == new.asset_path
             && old.offset == new.offset
             && old.is_unresolved() != new.is_unresolved()
             && old
-                .asset
+                .asset_path
                 .as_deref()
                 .and_then(|asset| store.asset_layer(layer, asset))
                 == Some(if old.is_unresolved() {

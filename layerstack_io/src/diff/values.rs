@@ -163,7 +163,7 @@ pub(super) fn same_offset(a: &LayerOffset, b: &LayerOffset) -> bool {
 
 pub(super) fn same_arcs(a: &ListOp<Reference>, b: &ListOp<Reference>) -> bool {
     let equal = |a: &Reference, b: &Reference| {
-        a.asset == b.asset
+        a.asset_path == b.asset_path
             && a.prim_path == b.prim_path
             && same_offset(&a.offset, &b.offset)
             && same_dictionary(&a.custom_data, &b.custom_data)

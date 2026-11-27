@@ -57,7 +57,7 @@ pub enum ImportDiagnostic {
     /// An unresolved package-relative composition dependency.
     AssetResolve {
         /// Authored asset path anchored to this diagnostic's member.
-        asset: Arc<str>,
+        asset_path: Arc<str>,
         /// Original resolver error.
         error: AssetResolveError,
     },
@@ -93,7 +93,7 @@ impl ImportDiagnostic {
 impl fmt::Display for ImportDiagnostic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::AssetResolve { asset, error } => write!(f, "asset `{asset}` {error}"),
+            Self::AssetResolve { asset_path, error } => write!(f, "asset `{asset_path}` {error}"),
             Self::UsdaParse(d) => write!(f, "USDA parse {d}"),
             Self::UsdaLower(d) => write!(f, "USDA lowering {d}"),
             Self::UsdaEmit(d) => write!(f, "USDA emission {d}"),

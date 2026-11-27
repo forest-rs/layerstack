@@ -863,7 +863,7 @@ impl Opinion<'_> {
             (Self::Sublayers(a), Self::Sublayers(b)) => {
                 a.len() == b.len()
                     && a.iter().zip(*b).all(|(a, b)| {
-                        a.asset == b.asset && values::same_offset(&a.offset, &b.offset)
+                        a.asset_path == b.asset_path && values::same_offset(&a.offset, &b.offset)
                     })
             }
             (Self::Paths(a), Self::Paths(b)) => a == b,

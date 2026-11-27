@@ -275,7 +275,7 @@ impl LayerStack {
                 if !sub.is_unresolved() {
                     return Some(sub.layer);
                 }
-                let asset = sub.asset.as_deref().unwrap_or_default();
+                let asset = sub.asset_path.as_deref().unwrap_or_default();
                 let path = if sub.is_expression() {
                     let evaluated =
                         evaluate(self.store, self.chain, asset, self.reads.as_deref_mut());
@@ -732,7 +732,7 @@ mod tests {
                     offset: 10.0,
                     scale: 1.0,
                 },
-                asset: None,
+                asset_path: None,
             }],
             default_prim: None,
             metadata: Vec::new(),
@@ -753,7 +753,7 @@ mod tests {
                     offset: 20.0,
                     scale: 1.0,
                 },
-                asset: None,
+                asset_path: None,
             }],
             default_prim: None,
             metadata: Vec::new(),
@@ -814,7 +814,7 @@ mod tests {
                     offset: 10.0,
                     scale: 2.0,
                 },
-                asset: None,
+                asset_path: None,
             }],
             default_prim: None,
             metadata: Vec::new(),
@@ -835,7 +835,7 @@ mod tests {
                     offset: 5.0,
                     scale: 3.0,
                 },
-                asset: None,
+                asset_path: None,
             }],
             default_prim: None,
             metadata: Vec::new(),

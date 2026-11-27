@@ -240,7 +240,7 @@ impl Case {
                     .unwrap()
                     .sublayers()
                     .iter()
-                    .position(|entry| entry.asset.as_deref() == Some(asset))
+                    .position(|entry| entry.asset_path.as_deref() == Some(asset))
                     .unwrap();
                 let mut edit = Transaction::new();
                 edit.remove_sublayer(root, index);

@@ -1387,7 +1387,7 @@ fn lower_one(
                 entries.push(
                     match current
                         .iter()
-                        .find(|entry| entry.asset.as_deref() == Some(asset.as_str()))
+                        .find(|entry| entry.asset_path.as_deref() == Some(asset.as_str()))
                     {
                         Some(entry) => {
                             SublayerEntry::with_asset(entry.layer, asset.as_str(), offset)

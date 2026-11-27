@@ -256,7 +256,7 @@ impl Document {
         }
         validate_metadata(&self.metadata, &mut keys, "/")?;
         for sublayer in &self.sublayers {
-            validate_asset_path(&sublayer.asset, "/")?;
+            validate_asset_path(&sublayer.asset_path, "/")?;
             validate_layer_offset(sublayer.offset, "/")?;
         }
         for (source, target) in self.relocates.iter().flatten() {
@@ -534,7 +534,7 @@ impl Prim {
             };
             validate_arc_list(op, path, key)?;
             for arc in op.items() {
-                if let Some(asset) = &arc.asset {
+                if let Some(asset) = &arc.asset_path {
                     validate_asset_path(asset, path)?;
                 }
                 if let Some(target) = &arc.prim_path {
@@ -1082,7 +1082,7 @@ impl Default for LayerOffset {
 pub struct SubLayer {
     /// The asset path, as authored; not empty, and without `@` or line
     /// breaks.
-    pub asset: String,
+    pub asset_path: String,
     /// The sublayer's layer offset.
     pub offset: LayerOffset,
 }
@@ -1101,7 +1101,7 @@ pub struct Reference {
     /// The asset path, as authored (never a resolved location); `None` for
     /// an internal arc into this layer. When set it is not empty, and has
     /// no `@` or line breaks.
-    pub asset: Option<String>,
+    pub asset_path: Option<String>,
     /// The absolute prim path the arc targets; `None` targets the
     /// `defaultPrim` of the asset (of this layer, for an internal arc).
     pub prim_path: Option<String>,
@@ -3130,7 +3130,7 @@ impl Writer<'_> {
                         self.out.push_str("subLayers = [\n");
                         for (i, sublayer) in sublayers.iter().enumerate() {
                             self.indent(2);
-                            self.asset(&sublayer.asset);
+                            self.asset(&sublayer.asset_path);
                             self.layer_offset(sublayer.offset);
                             if i + 1 < sublayers.len() {
                                 self.out.push(',');
@@ -3566,10 +3566,10 @@ impl Writer<'_> {
     /// offset, scale and `customData` on lines of their own, as
     /// `_ListOpWriter<SdfReference>` writes them; `depth` is the item's.
     fn reference(&mut self, arc: &Reference, depth: usize) {
-        if let Some(asset) = &arc.asset {
+        if let Some(asset) = &arc.asset_path {
             self.asset(asset);
         }
-        match (&arc.asset, &arc.prim_path) {
+        match (&arc.asset_path, &arc.prim_path) {
             (_, Some(path)) => self.path(path),
             (None, None) => self.out.push_str("<>"),
             (Some(_), None) => {}
@@ -5441,7 +5441,7 @@ over "P" (
     fn writes_composition_arcs() {
         fn arc(asset: Option<&str>, prim_path: Option<&str>, offset: f64, scale: f64) -> Reference {
             Reference {
-                asset: asset.map(Into::into),
+                asset_path: asset.map(Into::into),
                 prim_path: prim_path.map(Into::into),
                 offset: LayerOffset { offset, scale },
                 custom_data: Vec::new(),
@@ -5466,11 +5466,11 @@ over "P" (
         let doc = Document {
             sublayers: vec![
                 SubLayer {
-                    asset: "./a.usda".into(),
+                    asset_path: "./a.usda".into(),
                     offset: LayerOffset::IDENTITY,
                 },
                 SubLayer {
-                    asset: "./b.usdc".into(),
+                    asset_path: "./b.usdc".into(),
                     offset: LayerOffset {
                         offset: -1.5,
                         scale: 1.0,
@@ -5591,7 +5591,7 @@ class "C"
         );
         assert!(parse(&text).diagnostics.is_empty(), "re-parses");
         assert_eq!(
-            bad_arc(|d| d.sublayers[0].asset = "a\nb".into()),
+            bad_arc(|d| d.sublayers[0].asset_path = "a\nb".into()),
             WriteError::InvalidAssetPath {
                 path: "/".into(),
                 asset: "a\nb".into()
@@ -5601,7 +5601,7 @@ class "C"
         assert_eq!(
             bad_arc(|d| {
                 d.prims[0].payloads = Some(ListOp::explicit(vec![Reference {
-                    asset: Some(String::new()),
+                    asset_path: Some(String::new()),
                     prim_path: None,
                     offset: LayerOffset::IDENTITY,
                     custom_data: Vec::new(),
@@ -5633,7 +5633,7 @@ class "C"
             .metadata
             .push(Metadatum::new("kind", Value::Token("component".into())));
         summer.references = Some(ListOp::prepend(vec![Reference {
-            asset: Some("./leaves.usda".into()),
+            asset_path: Some("./leaves.usda".into()),
             prim_path: None,
             offset: LayerOffset::IDENTITY,
             custom_data: Vec::new(),

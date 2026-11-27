@@ -416,7 +416,7 @@ fn valid_layer_member(member: &Arc<str>) -> Result<(), LocalizationError> {
 /// Returns a layer-relative path from one normalized package member to another.
 /// Both arguments must be validated root-relative member paths. AOUSD Core §9.4.
 #[must_use]
-pub fn relative_member(from: &str, to: &str) -> String {
+pub(crate) fn relative_member(from: &str, to: &str) -> String {
     let mut parent: Vec<_> = from.split('/').collect();
     parent.pop();
     let target: Vec<_> = to.split('/').collect();

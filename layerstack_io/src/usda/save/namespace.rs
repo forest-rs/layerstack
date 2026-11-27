@@ -87,7 +87,7 @@ impl Sink<'_> for DocumentBuilder {
 /// A single authored spec for the binary writer. Nested specs arrive separately,
 /// in namespace order. This is an implementation interface between the format modules.
 #[derive(Debug)]
-pub enum LayerSpec<'a> {
+pub(crate) enum LayerSpec<'a> {
     /// Layer fields and root prim names.
     Root(Document, Vec<String>),
     /// Prim or variant fields, followed separately by the specs of its children.
@@ -123,7 +123,7 @@ pub enum LayerSpec<'a> {
 /// # Errors
 ///
 /// See [`usdc_document`].
-pub fn visit_layer_specs(
+pub(crate) fn visit_layer_specs(
     layer: &Layer,
     tokens: &TokenInterner,
     paths: &PathInterner,

@@ -140,14 +140,13 @@ pub fn usdc_document(
 }
 
 /// The canonical namespace and exact property groups of an authored comparison input.
-#[doc(hidden)]
 #[derive(Debug)]
-pub struct ComparisonParts {
+pub(crate) struct ComparisonParts {
     /// Validated document with the retained property groups omitted.
-    pub document: Document,
+    pub(crate) document: Document,
     /// Retained groups in authored order, keyed by absolute prim path.
     /// Entries refer to the original layer's token and path interners.
-    pub properties: HashMap<String, Vec<PropertyEntry>>,
+    pub(crate) properties: HashMap<String, Vec<PropertyEntry>>,
 }
 
 /// Validates an authored layer, retaining exact property groups for comparison.
@@ -155,8 +154,7 @@ pub struct ComparisonParts {
 ///
 /// # Errors
 /// Returns the same diagnostic as [`usdc_document`].
-#[doc(hidden)]
-pub fn prepare_comparison(
+pub(crate) fn prepare_comparison(
     mut layer: Layer,
     tokens: &TokenInterner,
     paths: &PathInterner,
@@ -216,8 +214,7 @@ pub fn prepare_comparison(
 /// # Errors
 /// Propagates property lowering errors. Full validation is performed by
 /// [`prepare_comparison`] for its retained groups.
-#[doc(hidden)]
-pub fn canonical_property(
+pub(crate) fn canonical_property(
     entry: &PropertyEntry,
     prim: &str,
     tokens: &TokenInterner,
@@ -1638,10 +1635,8 @@ pub(crate) fn push_element(array: &mut Value, element: Value) -> bool {
 }
 
 mod namespace;
-#[doc(hidden)]
-pub use crate::usda::writer::borrowed::{Declaration, Payload};
-#[doc(hidden)]
-pub use namespace::{LayerSpec, visit_layer_specs};
+pub(crate) use crate::usda::writer::borrowed::{Declaration, Payload};
+pub(crate) use namespace::{LayerSpec, visit_layer_specs};
 
 #[cfg(test)]
 mod tests;

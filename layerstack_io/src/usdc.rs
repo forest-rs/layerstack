@@ -108,9 +108,11 @@
 #[cfg(feature = "std")]
 mod lazy;
 #[cfg(feature = "std")]
+pub(crate) use lazy::read_usdc_lazy_range_within;
+#[cfg(feature = "std")]
 pub use lazy::{
     LazyReadResult, MIN_RETAINED_TEXT_ARRAY, RetainedValueStats, RetainedValues, read_usdc_lazy,
-    read_usdc_lazy_range_within, read_usdc_lazy_within,
+    read_usdc_lazy_within,
 };
 
 internal_mod!(compression);

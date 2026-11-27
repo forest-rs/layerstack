@@ -521,7 +521,7 @@ pub fn read_usdc_lazy_within(
 /// pass [`EncodedBytes::detached`] when independent ownership is preferable.
 /// The read uses the threads of `threads`, as [`crate::usdc::read_usdc_within`]
 /// does.
-pub fn read_usdc_lazy_range_within(
+pub(crate) fn read_usdc_lazy_range_within(
     bytes: EncodedBytes,
     id: LayerId,
     tokens: &TokenInterner,

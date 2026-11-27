@@ -290,31 +290,17 @@ pub fn read_usdz(
     paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
 ) -> Result<UsdzResult, UsdzError> {
-    read_usdz_with_members(data, layer_id, tokens, paths, resolver, &[])
-}
-
-/// Reads a package and explicit additional resident members, even if its root
-/// no longer references them. Selected missing members fail atomically. Used
-/// by hosts retaining package layer identities across reloads; ordinary import
-/// uses `read_usdz`. AOUSD Core §9.7, §16.4.
-pub fn read_usdz_with_members(
-    data: &[u8],
-    layer_id: LayerId,
-    tokens: &TokenInterner,
-    paths: &PathInterner,
-    resolver: &mut dyn AssetResolver,
-    members: &[&str],
-) -> Result<UsdzResult, UsdzError> {
     read_usdz_with_options(
         data,
         layer_id,
         tokens,
         paths,
         resolver,
-        members,
+        &[],
         UsdcReadOptions::default(),
     )
 }
+
 /// Reads reachable and explicitly selected members with a per-file USDC policy.
 /// CRC and structural validation remain eager. Retained payloads must be read
 /// through checked queries to distinguish decode failure from missing data.

@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 import { loadLayerstack } from "@forest-rs/layerstack";
 import type { Changes, Edit, Stage } from "@forest-rs/layerstack";
-import { anchorAssetPath, loadStagehand, textureChannel, udimTiles } from "../dist/index.js";
+import { anchorAssetPath, loadStagehand, readMaterial, textureChannel, udimTiles } from "../dist/index.js";
 import type { DrawDiff, DrawList, MaterialItem, MaterialNoteKind, MaterialValue } from "../dist/index.js";
 
 const layerstack = await loadLayerstack();
@@ -99,6 +99,66 @@ function checkValue(at: string, row: Json, item: MaterialItem, name: string, key
 }
 
 describe("materials", () => {
+  it("read a chain of transforms whole, in the order they apply", () => {
+    const transforms = [0, 1, 2, 3]
+      .map(
+        (index) => `
+        def Shader "T${index}"
+        {
+            uniform token info:id = "UsdTransform2d"
+            float2 inputs:in.connect = <${index === 0 ? "/Looks/Chain/Reader" : `/Looks/Chain/T${index - 1}`}.outputs:result>
+            float inputs:rotation = ${index}
+            float2 outputs:result
+        }`,
+      )
+      .join("\n");
+    const text = `#usda 1.0
+def Scope "Looks"
+{
+    def Material "Chain"
+    {
+        token outputs:surface.connect = </Looks/Chain/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor.connect = </Looks/Chain/Albedo.outputs:rgb>
+            token outputs:surface
+        }
+
+        def Shader "Reader"
+        {
+            uniform token info:id = "UsdPrimvarReader_float2"
+            string inputs:varname = "st"
+            float2 outputs:result
+        }
+${transforms}
+
+        def Shader "Albedo"
+        {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @./grid.png@
+            float2 inputs:st.connect = </Looks/Chain/T3.outputs:result>
+            float3 outputs:rgb
+        }
+    }
+}
+`;
+    const stage = layerstack.open({ identifier: "chain.usda", bytes: new TextEncoder().encode(text) });
+    try {
+      const item = readMaterial(stage, "/Looks/Chain", undefined, [])!.item;
+      assert.deepEqual(item.notes, []);
+      assert.deepEqual(
+        item.textures[0]!.coordinates.transforms.map((transform) => transform.rotation),
+        [0, 1, 2, 3],
+        "the one reading st first",
+      );
+      assert.equal(item.textures[0]!.coordinates.primvar, "st");
+    } finally {
+      stage.free();
+    }
+  });
+
   it("match OpenUSD", async () => {
     const fixtureDir = fileURLToPath(base);
     for (const [contexts, key, time] of [

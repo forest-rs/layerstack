@@ -874,9 +874,89 @@ fn topology_problem_code(error: &MeshTopologyError) -> &'static str {
     }
 }
 
+/// The `MaterialX` node definitions the schemas ship
+/// (`layerstack_schemas::materialx::STANDARD_NODES`), in their order: each
+/// as `[id, ports]`, a port as `[name, direction, typeName, usdName,
+/// usdTypeName, default]`, its direction `"input"` or `"output"` and its
+/// default `null`, `["literal", text]`, `["geomProp", name]` or
+/// `["input", name, fallback]`, a literal in `MaterialX`'s own syntax.
+pub(crate) fn materialx_nodes() -> Wire {
+    use layerstack_schemas::materialx::{MaterialXDefault, STANDARD_NODES};
+    use layerstack_schemas::shading::PortKind;
+
+    let default = |default: Option<MaterialXDefault>| match default {
+        None => Wire::Null,
+        Some(MaterialXDefault::Literal(text)) => {
+            Wire::List(vec![Wire::text("literal"), Wire::text(text)])
+        }
+        Some(MaterialXDefault::GeomProp(name)) => {
+            Wire::List(vec![Wire::text("geomProp"), Wire::text(name)])
+        }
+        Some(MaterialXDefault::Input { name, fallback }) => Wire::List(vec![
+            Wire::text("input"),
+            Wire::text(name),
+            Wire::text_or_null(fallback),
+        ]),
+    };
+    Wire::List(
+        STANDARD_NODES
+            .iter()
+            .map(|node| {
+                let ports = node
+                    .ports
+                    .iter()
+                    .map(|port| {
+                        Wire::List(vec![
+                            Wire::text(port.name),
+                            Wire::text(match port.direction {
+                                PortKind::Input => "input",
+                                PortKind::Output => "output",
+                            }),
+                            Wire::text(port.type_name),
+                            Wire::text(port.usd_name),
+                            Wire::text(port.usd_type_name),
+                            default(port.default),
+                        ])
+                    })
+                    .collect();
+                Wire::List(vec![Wire::text(node.id), Wire::List(ports)])
+            })
+            .collect(),
+    )
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use alloc::{format, string::String};
+
+    /// The `MaterialX` table carries each port's declared default, as its
+    /// literal: an unauthored `OpenPBR` base color is what the node
+    /// definition says.
+    #[test]
+    fn materialx_nodes_carry_their_ports_defaults() {
+        let nodes = materialx_nodes();
+        let open_pbr = nodes
+            .as_list()
+            .unwrap()
+            .iter()
+            .find(|node| {
+                node.as_list().unwrap()[0].as_text() == Some("ND_open_pbr_surface_surfaceshader")
+            })
+            .expect("OpenPBR ships");
+        let base_color = open_pbr.as_list().unwrap()[1]
+            .as_list()
+            .unwrap()
+            .iter()
+            .find(|port| port.as_list().unwrap()[0].as_text() == Some("base_color"))
+            .expect("OpenPBR has base_color");
+        let port = base_color.as_list().unwrap();
+        assert_eq!(port[1].as_text(), Some("input"));
+        assert_eq!(port[3].as_text(), Some("inputs:base_color"));
+        assert_eq!(port[4].as_text(), Some("color3f"));
+        let default = port[5].as_list().unwrap();
+        assert_eq!(default[0].as_text(), Some("literal"));
+        assert_eq!(default[1].as_text(), Some("0.8, 0.8, 0.8"));
+    }
 
     use super::*;
     use crate::stage::BROWSER_LIMITS;

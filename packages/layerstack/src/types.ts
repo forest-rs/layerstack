@@ -2891,3 +2891,40 @@ export interface PointInstances {
   /** Each instance's position in the authored arrays (before masking). */
   readonly indices: Int32Array;
 }
+
+/**
+ * How a MaterialX node definition gives a port its default
+ * (`layerstack_schemas::materialx::MaterialXDefault`): a `literal` in
+ * MaterialX's own syntax (`"0.8, 0.8, 0.8"` for a `color3`), a geometry
+ * property an input reads (`geomProp`, such as `UV0`), or the input an
+ * output passes on (`input`), with its literal `fallback`.
+ */
+export type MaterialXDefault =
+  | { readonly kind: "literal"; readonly value: string }
+  | { readonly kind: "geomProp"; readonly name: string }
+  | { readonly kind: "input"; readonly name: string; readonly fallback: string | null };
+
+/** A port of a MaterialX node definition (`layerstack_schemas::materialx::MaterialXPort`). */
+export interface MaterialXPort {
+  /** Its name in the MaterialX interface (`base_color`). */
+  readonly name: string;
+  readonly kind: "input" | "output";
+  /** Its MaterialX type (`color3`, `surfaceshader`). */
+  readonly typeName: string;
+  /** The USD attribute that authors it (`inputs:base_color`). */
+  readonly usdName: string;
+  /** Its USD value type (`color3f`, `token`). */
+  readonly usdTypeName: string;
+  /** What the node uses when the port is left unauthored; `null` when its definition declares nothing. */
+  readonly default: MaterialXDefault | null;
+}
+
+/**
+ * A MaterialX node definition the module ships, by the `info:id` a
+ * shader authors (`ND_open_pbr_surface_surfaceshader`), with its ports,
+ * inherited ones included (`layerstack_schemas::materialx::MaterialXNode`).
+ */
+export interface MaterialXNode {
+  readonly id: string;
+  readonly ports: readonly MaterialXPort[];
+}

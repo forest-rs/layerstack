@@ -222,6 +222,16 @@ pub fn value_types() -> JsValue {
     value::value_types().into()
 }
 
+/// The `MaterialX` node definitions the schemas ship, with each port's
+/// type and default: the record `schemas::materialx_nodes` builds. A host
+/// shows an input a shader does not author with the default its node
+/// definition declares.
+#[wasm_bindgen(js_name = materialxNodes)]
+#[must_use]
+pub fn materialx_nodes() -> JsValue {
+    schemas::materialx_nodes().into()
+}
+
 /// The linear Rec. 709 color of a blackbody at `kelvin` (clamped to
 /// 1000–10000 K), normalized to unit luminance, as OpenUSD's
 /// `UsdLuxBlackbodyTemperatureAsRgb`: what a light's `colorTemperature`

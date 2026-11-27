@@ -42,7 +42,7 @@ export function ShaderInputField({
   const keyed = inputEditTime(context.stage, path, store.time) !== null;
   const read = attribute?.get(time ?? (keyed ? store.time : undefined)) ?? null;
   // An input with no value (or none authored) shows what a renderer reads: the definition's fallback.
-  const value = read === null && definition !== null ? shown(definition.fallback) : shown(read);
+  const value = read === null && definition?.fallback != null ? shown(definition.fallback) : shown(read);
   // A number typed here is held to the input's hard bounds (`uimin`, `uimax`), as the inspector's slider holds it.
   const port = attribute === null ? null : context.stage.port(path);
   const typeName = attribute?.typeName ?? definition?.typeName ?? value.value?.type ?? "";

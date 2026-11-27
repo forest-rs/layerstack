@@ -8,6 +8,7 @@ import { test } from "node:test";
 import { loadLayerstack } from "@forest-rs/layerstack";
 import { connectedOnly, hasAuthoredLayout, layoutNetwork, networkRoot, readNetwork, type ShadingNetwork } from "../src/model/network.ts";
 import { readOpenPbr } from "../src/model/openpbr.ts";
+import { materialXLiteral, registerMaterialXNodes, shaderDefinition } from "../src/model/shaderDefinitions.ts";
 import { clampToBounds, groupInputs, inputBounds, sliderRange, withinBounds } from "../src/model/shadingInputs.ts";
 
 const LAYER = `#usda 1.0
@@ -138,6 +139,28 @@ test("an OpenPBR surface reads its image through the interface", () => {
   assert.deepEqual(surface.specularRoughness, { value: 0.25, texture: null });
   assert.equal(surface.normal, null);
   assert.equal(readOpenPbr(stage, "/base", undefined), null);
+});
+
+test("a MaterialX shader's unauthored inputs show their node definition's defaults", () => {
+  registerMaterialXNodes(layerstack.materialxNodes());
+  // Every literal default the module ships reads as its port's type, but a matrix's.
+  for (const node of layerstack.materialxNodes().values()) {
+    for (const port of node.ports) {
+      if (port.kind !== "input" || port.default?.kind !== "literal" || port.usdTypeName.startsWith("matrix")) continue;
+      const value = materialXLiteral(port.default.value, port.usdTypeName);
+      assert.equal(value?.type, port.usdTypeName, `${node.id}.${port.name} = ${port.default.value}`);
+    }
+  }
+  const definition = shaderDefinition("ND_open_pbr_surface_surfaceshader");
+  assert.ok(definition !== null);
+  // The Stone's surface authors two inputs; base_weight is the definition's.
+  const groups = groupInputs(stage, "/Stone/surface", stage.shader("/Stone/surface")!.inputs(), definition);
+  const weight = groups.flatMap((group) => group.inputs).find((input) => input.name === "base_weight");
+  assert.ok(weight !== undefined && weight.port === null, "unauthored");
+  assert.deepEqual(weight.definition?.fallback, { kind: "scalar", type: "float", value: 1 });
+  // An image's coordinates come from geometry: no value to show.
+  const texcoord = shaderDefinition("ND_image_color3")?.inputs.find((input) => input.name === "texcoord");
+  assert.equal(texcoord?.fallback, null);
 });
 
 /** An OpenPBR surface whose normal reads an image through the normal map node `id`, scaled by `scale`. */

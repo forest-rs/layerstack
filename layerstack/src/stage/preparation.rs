@@ -427,7 +427,7 @@ impl ComposedEvidence {
                 index
                     .sources
                     .iter()
-                    .map(|source| source.key.layer_id)
+                    .map(|source| source.key.layer)
                     .collect()
             })
             .unwrap_or_default();

@@ -508,8 +508,8 @@ impl<B: Storage> Reader<'_, B> {
         // do those a strict rejection carries.
         let rename = |diagnostics: &mut [crate::usdz::MemberDiagnostic]| {
             for diagnostic in diagnostics {
-                if let Some(&id) = renamed.get(&diagnostic.layer_id) {
-                    diagnostic.layer_id = id;
+                if let Some(&id) = renamed.get(&diagnostic.layer) {
+                    diagnostic.layer = id;
                 }
             }
         };

@@ -108,7 +108,7 @@ fn malformed_text_keeps_each_pipeline_phases_evidence() {
             .iter()
             .filter_map(|d| {
                 assert_eq!(&*d.member, "root.usda");
-                assert_eq!(d.layer_id, LayerId(1));
+                assert_eq!(d.layer, LayerId(1));
                 match (&d.diagnostic, phase) {
                     (ImportDiagnostic::UsdaParse(d), 0)
                     | (ImportDiagnostic::UsdaLower(d), 1)
@@ -141,7 +141,7 @@ fn descendant_diagnostics_are_attributed_once_even_with_repeated_references() {
     assert_eq!(result.diagnostics.len(), 1);
     let d = &result.diagnostics[0];
     assert_eq!(&*d.member, "bad.usda");
-    assert_eq!(result.member_paths.get(&d.layer_id).unwrap(), &d.member);
+    assert_eq!(result.member_paths.get(&d.layer).unwrap(), &d.member);
     assert!(matches!(d.diagnostic, ImportDiagnostic::UsdaEmit(_)));
 }
 
@@ -174,7 +174,7 @@ fn usdc_assembly_losses_survive_root_and_member_import() {
             .diagnostics
             .iter()
             .filter_map(|d| {
-                assert_eq!(result.member_paths.get(&d.layer_id).unwrap(), &d.member);
+                assert_eq!(result.member_paths.get(&d.layer).unwrap(), &d.member);
                 if let ImportDiagnostic::UsdcAssemble(d) = &d.diagnostic {
                     Some(d)
                 } else {

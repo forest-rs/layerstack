@@ -218,7 +218,7 @@ impl ExplainedOpinion<'_> {
     /// identifiers with [`crate::AssetResolver::resolved_path`].
     #[must_use]
     pub fn layer(&self) -> LayerId {
-        self.opinion.layer_id()
+        self.opinion.layer()
     }
 
     /// The spec path the opinion is authored at in its layer

@@ -770,7 +770,7 @@ impl Stage {
             sites.push(OpinionKey {
                 node: id,
                 layer_strength,
-                layer_id: layer,
+                layer,
                 lookup_path: mapped_prim.prim_path(),
                 spec_path: mapped_prim.clone(),
             });

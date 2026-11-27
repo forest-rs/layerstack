@@ -587,7 +587,7 @@ impl Describe for CameraWriteError {
                 "`{attribute}` has a stronger opinion at {} in {}, which would alter the \
                  replacement",
                 names.spec(&source.key.spec_path),
-                names.layer(source.key.layer_id)
+                names.layer(source.key.layer)
             ),
             Self::IncompatibleType { attribute } => write!(
                 f,

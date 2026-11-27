@@ -295,7 +295,7 @@ impl<P: PackageAccess> AssetResolver for UsdzResolver<'_, P> {
             // strict consumers can reject them. AOUSD Core §9.4, §9.7.
             self.diagnostics.push(MemberDiagnostic {
                 member: authoring,
-                layer_id: anchor.unwrap_or(self.root),
+                layer: anchor.unwrap_or(self.root),
                 diagnostic: ImportDiagnostic::AssetResolve {
                     asset: Arc::from(asset_path),
                     error: AssetResolveError::NotFound,
@@ -554,7 +554,7 @@ fn member_diagnostics(
     diagnostics
         .map(|diagnostic| MemberDiagnostic {
             member: member.clone(),
-            layer_id,
+            layer: layer_id,
             diagnostic,
         })
         .collect()

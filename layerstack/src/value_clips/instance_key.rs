@@ -60,7 +60,7 @@ pub(crate) fn instance_keys(
             let stack = index
                 .graph
                 .node(definition.anchor.node)
-                .map_or(definition.anchor.layer_id.into(), |node| {
+                .map_or(definition.anchor.layer.into(), |node| {
                     node.layer_stack_identifier()
                 });
             ClipInstanceKey {

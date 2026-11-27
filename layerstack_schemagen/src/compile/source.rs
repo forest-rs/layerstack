@@ -84,7 +84,7 @@ impl SchemaStage {
         }
         if let Some(diagnostic) = report.diagnostics.iter().find(|d| d.diagnostic.is_error()) {
             return Err(CompileError::Read {
-                layer: self.identifier(diagnostic.layer_id),
+                layer: self.identifier(diagnostic.layer),
                 message: format!("{:?}", diagnostic.diagnostic),
             });
         }

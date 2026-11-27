@@ -1197,7 +1197,7 @@ fn clip_sources_explain_both_actual_layers_and_do_not_define_properties() {
         ))
         .and_then(|a| a.clip_source(Time::at(5.)))
         .unwrap();
-    assert_eq!(source.anchor_layer, LayerId(1));
+    assert_eq!(source.anchor, LayerId(1));
     assert_eq!(source.lower.layer, Some(LayerId(2)));
     assert_eq!(source.upper.layer, Some(LayerId(3)));
     assert_eq!(source.lower.stage_time, 0.);

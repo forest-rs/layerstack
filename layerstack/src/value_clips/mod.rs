@@ -169,7 +169,7 @@ pub struct ClipValueSource {
     /// Composed metadata owner.
     pub owner: PathId,
     /// Metadata's asset anchor; distinct from the actual value layer.
-    pub anchor_layer: LayerId,
+    pub anchor: LayerId,
     /// The node of the queried prim's composition graph
     /// ([`Prim::composition_graph`](crate::Prim::composition_graph)) whose
     /// site authors the clip set; its strength places the clips among the
@@ -413,7 +413,7 @@ impl Catalog {
                 out.sites
                     .entry(owner)
                     .or_default()
-                    .insert((source.layer_id(), source.source().key.lookup_path));
+                    .insert((source.layer(), source.source().key.lookup_path));
             }
             let definitions = definitions(owner, index, store, &mut out.issues);
             for definition in definitions {
@@ -479,7 +479,7 @@ impl Catalog {
         role: ClipAssetRole,
         raw: &mut HashMap<LayerId, Arc<RawLayer>>,
     ) -> Option<(LayerId, Arc<RawLayer>)> {
-        let availability = store.asset_availability(def.anchor.layer_id, identifier);
+        let availability = store.asset_availability(def.anchor.layer, identifier);
         let status = match availability {
             AssetAvailability::Loaded(id) => {
                 self.loaded.insert(id);
@@ -499,7 +499,7 @@ impl Catalog {
         self.requests.push(ClipAssetRequest {
             owner: def.owner,
             set_name: def.name.clone(),
-            anchor: def.anchor.layer_id,
+            anchor: def.anchor.layer,
             source: def.anchor.spec_path.clone(),
             identifier: Arc::from(identifier),
             role,
@@ -520,7 +520,7 @@ impl Catalog {
         self.issues.push(ClipIssue {
             owner: def.owner,
             set_name: def.name.clone(),
-            anchor: def.anchor.layer_id,
+            anchor: def.anchor.layer,
             source: def.anchor.spec_path.clone(),
             kind,
         });
@@ -679,7 +679,7 @@ impl Catalog {
                 times.push((stage_time(time), time));
             }
             for (time, identifier) in template.candidates {
-                let availability = store.asset_availability(def.anchor.layer_id, &identifier);
+                let availability = store.asset_availability(def.anchor.layer, &identifier);
                 let layer = self.asset(
                     store,
                     &def,
@@ -1344,7 +1344,7 @@ fn entry_evaluation(
         },
         set_name: entry.set_name.clone(),
         owner: entry.owner,
-        anchor_layer: entry.key.layer_id,
+        anchor: entry.key.layer,
         node: entry.key.node,
         lower: source(
             value.lower_clip,
@@ -1527,7 +1527,7 @@ fn definitions(
             // the authored one only there.
             let authored = authored_field(
                 store,
-                opinion.layer_id(),
+                opinion.layer(),
                 &opinion.spec_path(),
                 opinion.field(),
             );
@@ -1540,7 +1540,7 @@ fn definitions(
                     issues.push(ClipIssue {
                         owner,
                         set_name: name.clone(),
-                        anchor: opinion.layer_id(),
+                        anchor: opinion.layer(),
                         source: opinion.spec_path(),
                         kind: ClipIssueKind::InvalidMetadata("clips"),
                     });
@@ -1602,7 +1602,7 @@ fn definitions(
                 entry.dictionary = over(value, &entry.dictionary);
                 entry
                     .sources
-                    .push((opinion.layer_id(), opinion.source().key.lookup_path));
+                    .push((opinion.layer(), opinion.source().key.lookup_path));
                 added.push(name.clone());
             }
             sort::sort(&mut added);
@@ -1780,7 +1780,7 @@ mod tests {
         let key = OpinionKey {
             node: NodeId::ROOT,
             layer_strength: 0,
-            layer_id: LayerId(1),
+            layer: LayerId(1),
             lookup_path: prim,
             spec_path: SpecPath::from_prim_path(prim),
         };

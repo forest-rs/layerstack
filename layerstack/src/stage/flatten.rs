@@ -394,7 +394,7 @@ impl Flattener<'_> {
             site.prim_spec()
         };
         FindingSource {
-            layer: opinion.layer_id(),
+            layer: opinion.layer(),
             spec: spec.display(self.store.paths(), self.store.tokens()),
         }
     }
@@ -473,7 +473,7 @@ impl Flattener<'_> {
         let (anchored, unanchored) = (&mut self.anchored, &mut self.unanchored);
         let mut out: Option<Vec<Opinion>> = None;
         for (i, opinion) in opinions.iter().enumerate() {
-            let layer = opinion.layer_id();
+            let layer = opinion.layer();
             let mapped = map_opinion(opinion.opinion(), &mut |leaf| {
                 anchor_leaf(leaf, layer, resolver, anchored, unanchored)
             });
@@ -727,7 +727,7 @@ impl Flattener<'_> {
             let store: &dyn LayerStore = &*self.store;
             // The strongest source spec that authors each dedicated member.
             for OpinionSource { key: source, .. } in &index.sources {
-                let Some(authored) = store.layer(source.layer_id).and_then(|layer| {
+                let Some(authored) = store.layer(source.layer).and_then(|layer| {
                     layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
                 }) else {
                     continue;

@@ -242,7 +242,7 @@ impl MatrixXformError {
                 "`{attribute}` has a stronger opinion at {} in {}, which would mask or alter \
                  the replacement",
                 names.spec(&source.key.spec_path),
-                names.layer(source.key.layer_id)
+                names.layer(source.key.layer)
             ),
             Self::IncompatibleType {
                 attribute,

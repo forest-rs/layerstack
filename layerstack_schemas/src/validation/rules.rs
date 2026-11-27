@@ -265,7 +265,7 @@ fn property_site(scene: &Scene<'_>, prim: PathId, property: TokenId) -> Validati
         .property(PropertyPath::new(prim, property))
         .and_then(|property| property.opinions().first())
         .map(|op| ValidationSource {
-            layer: op.layer_id(),
+            layer: op.layer(),
             spec: Some(op.spec_path()),
         });
     ValidationSite {
@@ -429,7 +429,7 @@ fn prim_rule(scene: &Scene<'_>, prim: PathId, rule: BuiltinRule, out: &mut Valid
                                     prim: Some(prim),
                                     property: Some(property),
                                     source: Some(ValidationSource {
-                                        layer: op.layer_id(),
+                                        layer: op.layer(),
                                         spec: Some(op.spec_path()),
                                     }),
                                 },

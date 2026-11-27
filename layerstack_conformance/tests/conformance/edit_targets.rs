@@ -123,7 +123,7 @@ fn check_opinion(
         "{label} {} {} from layer {} at {}",
         store.paths().display(prim, store.tokens()),
         store.tokens().resolve(name),
-        key.layer_id.0,
+        key.layer.0,
         key.spec_path.display(store.paths(), store.tokens())
     );
     let node = stage
@@ -132,18 +132,11 @@ fn check_opinion(
         .and_then(|graph| graph.node(key.node))
         .expect("opinion node");
     let stack = LayerStack::gather(&*store, node.layer_stack());
-    if stack
-        .layers
-        .iter()
-        .filter(|id| **id == key.layer_id)
-        .count()
-        != 1
-    {
+    if stack.layers.iter().filter(|id| **id == key.layer).count() != 1 {
         // A layer repeated in its stack is not one target.
         return;
     }
-    let Some(target) = EditTarget::for_node_layer(stage, &*store, prim, key.node, key.layer_id)
-    else {
+    let Some(target) = EditTarget::for_node_layer(stage, &*store, prim, key.node, key.layer) else {
         tally.failures.push(format!("{context}: no target"));
         return;
     };

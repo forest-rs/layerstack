@@ -163,7 +163,7 @@ impl Stage {
             let Some(mapped) = opinion.value().targets() else {
                 continue;
             };
-            let (layer, spec) = (opinion.layer_id(), &opinion.spec_path());
+            let (layer, spec) = (opinion.layer(), &opinion.spec_path());
             let authored = store
                 .layer(layer)
                 .and_then(|l| l.property_at(spec))

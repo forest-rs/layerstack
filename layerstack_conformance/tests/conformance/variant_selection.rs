@@ -277,7 +277,7 @@ def "SelectsA" (
             .iter()
             .map(|op| {
                 (
-                    op.layer_id(),
+                    op.layer(),
                     op.spec_path().display(store.paths(), store.tokens()),
                     op.value().default_value().cloned(),
                 )

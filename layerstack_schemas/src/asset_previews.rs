@@ -67,7 +67,7 @@ impl AssetPreviewsApi<'_> {
                     };
                     crate::metadata::dictionary_entry(dictionary, &key_path)?;
                     Some(Provenance {
-                        layer: opinion.layer_id(),
+                        layer: opinion.layer(),
                         spec_path: opinion.spec_path(),
                         field: opinion.field(),
                     })

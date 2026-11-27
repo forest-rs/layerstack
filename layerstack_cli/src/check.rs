@@ -85,7 +85,7 @@ pub(super) fn query(args: Arguments) -> Result<Vec<Record>, QueryError> {
                 fields: vec![
                     (
                         "layer",
-                        doc.identifier(diagnostic.layer_id).unwrap_or(root).into(),
+                        doc.identifier(diagnostic.layer).unwrap_or(root).into(),
                     ),
                     ("member", diagnostic.member.to_string()),
                     ("status", "missing".into()),

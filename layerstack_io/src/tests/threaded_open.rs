@@ -150,7 +150,7 @@ fn render_with(
         writeln!(
             out,
             "diagnostic {} {:?}",
-            diagnostic.member, diagnostic.layer_id
+            diagnostic.member, diagnostic.layer
         )
         .unwrap();
     }

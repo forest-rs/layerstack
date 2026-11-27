@@ -1287,8 +1287,7 @@ impl<'s> SchemaEdit<'s> {
                 .into_iter()
                 .flatten()
                 .filter(|op| {
-                    !(op.layer_id() == self.target.layer()
-                        && mapped.as_ref() == Some(&op.spec_path()))
+                    !(op.layer() == self.target.layer() && mapped.as_ref() == Some(&op.spec_path()))
                 })
                 .filter_map(|op| op.value().as_property()?.default.as_ref())
                 .next()
@@ -1434,7 +1433,7 @@ impl<'s> SchemaEdit<'s> {
         let mut specs = opinions
             .iter()
             .filter(|op| {
-                !(op.layer_id() == self.target.layer() && mapped.as_ref() == Some(&op.spec_path()))
+                !(op.layer() == self.target.layer() && mapped.as_ref() == Some(&op.spec_path()))
             })
             .filter_map(|op| op.value().as_property());
         let strongest = specs.next()?;
@@ -2033,7 +2032,7 @@ impl<'s> SchemaEdit<'s> {
                     .into_iter()
                     .flatten()
                     .filter(|op| {
-                        !(op.layer_id() == self.target.layer()
+                        !(op.layer() == self.target.layer()
                             && mapped.as_ref() == Some(&op.spec_path()))
                     })
                     .filter_map(|op| op.value().as_property()?.metadata(key))

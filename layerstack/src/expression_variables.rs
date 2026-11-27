@@ -712,7 +712,7 @@ fn authored_source_selections<'s>(
     store: &'s dyn LayerStore,
     source: &OpinionKey,
 ) -> Option<&'s VariantSelections> {
-    let spec = store.layer(source.layer_id).and_then(|layer| {
+    let spec = store.layer(source.layer).and_then(|layer| {
         layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
     })?;
     let chain = source.spec_path.variant_chain();
@@ -788,7 +788,7 @@ pub(crate) fn read_selections(
                     }
                     Err(error) => errors.push(expression_error(
                         ExpressionContext::VariantSelection,
-                        source.key.layer_id,
+                        source.key.layer,
                         Some(prim),
                         expression,
                         error,

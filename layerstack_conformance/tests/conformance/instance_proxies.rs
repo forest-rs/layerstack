@@ -111,7 +111,7 @@ fn prim_record(loaded: &LoadedStage, stage: &Stage, prim: layerstack::PathId, de
         let stack: Vec<Json> = property
             .opinions()
             .iter()
-            .map(|o| json!([file_name(loaded, o.layer_id()), display(&o.spec_path())]))
+            .map(|o| json!([file_name(loaded, o.layer()), display(&o.spec_path())]))
             .collect();
         properties.insert(property.name().to_string(), stack);
         if let Some(attribute) = property.as_attribute() {

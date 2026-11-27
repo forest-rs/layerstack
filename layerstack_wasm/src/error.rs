@@ -110,6 +110,7 @@ use crate::wire::Wire;
 /// Codes are part of the public contract: a released code keeps its
 /// spelling and meaning.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Error {
     /// The stable code naming the kind of failure.
     pub code: &'static str,

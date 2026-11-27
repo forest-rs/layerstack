@@ -16,6 +16,13 @@ pub struct Span {
     pub end: u32,
 }
 
+/// Writes the byte range as `bytes start..end`.
+impl core::fmt::Display for Span {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "bytes {}..{}", self.start, self.end)
+    }
+}
+
 impl Span {
     /// Creates a new span from byte offsets.
     #[inline]

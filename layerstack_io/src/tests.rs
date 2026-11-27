@@ -2236,6 +2236,21 @@ fn errors_name_their_source_and_strict_rejections_keep_diagnostics() {
         "{:?}",
         malformed.diagnostics
     );
+    // Printed, it says why: the first diagnostic, with its phase and span,
+    // not repeating the source it is in.
+    let printed = malformed.to_string();
+    let first = &malformed.diagnostics[0].diagnostic;
+    assert_eq!(
+        printed,
+        alloc::format!(
+            "root.usda: strict import rejected malformed or unrepresented content: {first}{}",
+            match malformed.diagnostics.len() {
+                1 => String::new(),
+                n => alloc::format!(" (and {} more)", n - 1),
+            }
+        )
+    );
+    assert!(printed.contains("USDA parse error at bytes "), "{printed}");
 }
 
 #[test]

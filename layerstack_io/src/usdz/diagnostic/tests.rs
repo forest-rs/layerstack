@@ -216,3 +216,38 @@ fn invalid_utf8_preserves_the_offset_and_member() {
     assert_eq!(&*member, "root.usda");
     assert_eq!(error.valid_up_to(), 10);
 }
+
+/// Each diagnostic prints its member, the phase that reported it, and
+/// where in the member, so a printed rejection says why without a debug
+/// dump.
+#[test]
+fn diagnostics_print_their_member_phase_and_place() {
+    use crate::usda::{Span, diagnostic::Diagnostic};
+    use crate::usdc::AssembleDiagnostic;
+    use crate::usdz::MemberDiagnostic;
+    use alloc::string::ToString;
+
+    let parse = MemberDiagnostic::new(
+        Arc::from("models/rock.usda"),
+        LayerId(2),
+        ImportDiagnostic::UsdaParse(Diagnostic::error(Span::new(10, 14), "expected `]`")),
+    );
+    assert_eq!(
+        parse.to_string(),
+        "models/rock.usda: USDA parse error at bytes 10..14: expected `]`"
+    );
+    let assemble = ImportDiagnostic::UsdcAssemble(AssembleDiagnostic {
+        spec_path: "/Rock.size".into(),
+        field: Some("timeSamples".into()),
+        message: "unknown value type".into(),
+    });
+    assert_eq!(
+        assemble.to_string(),
+        "USDC assembly /Rock.size timeSamples: unknown value type"
+    );
+    let missing = ImportDiagnostic::AssetResolve {
+        asset: Arc::from("moss.usda"),
+        error: AssetResolveError::NotFound,
+    };
+    assert_eq!(missing.to_string(), "asset `moss.usda` not found");
+}

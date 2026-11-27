@@ -80,6 +80,17 @@ pub struct AssembleDiagnostic {
     pub message: String,
 }
 
+/// Writes `spec_path: message`, or `spec_path field: message`.
+impl core::fmt::Display for AssembleDiagnostic {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(&self.spec_path)?;
+        if let Some(field) = &self.field {
+            write!(f, " {field}")?;
+        }
+        write!(f, ": {}", self.message)
+    }
+}
+
 /// Assembles decoded USDC sections into a [`Layer`].
 ///
 /// `data` is the full file byte slice (needed for offset-based value reads).

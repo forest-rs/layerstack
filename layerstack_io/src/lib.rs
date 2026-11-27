@@ -386,7 +386,20 @@ impl core::fmt::Display for IoError {
         if let Some(identifier) = &self.identifier {
             write!(f, "{identifier}: ")?;
         }
-        f.write_str(&self.message)
+        f.write_str(&self.message)?;
+        // The first diagnostic says why; `diagnostics` holds them all. A
+        // loose file's diagnostics name it as their member already.
+        if let Some(first) = self.diagnostics.first() {
+            if self.identifier.as_deref() == Some(&*first.member) {
+                write!(f, ": {}", first.diagnostic)?;
+            } else {
+                write!(f, ": {first}")?;
+            }
+            if self.diagnostics.len() > 1 {
+                write!(f, " (and {} more)", self.diagnostics.len() - 1)?;
+            }
+        }
+        Ok(())
     }
 }
 impl core::error::Error for IoError {

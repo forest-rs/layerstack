@@ -68,6 +68,7 @@
 //! ```
 
 use alloc::{string::String, sync::Arc, vec::Vec};
+use core::fmt;
 
 mod format_args;
 mod package_path;
@@ -413,6 +414,18 @@ pub enum AssetResolveError {
     /// ([`crate::Stage::asset_requests`]) until the host loads it.
     Unavailable,
 }
+
+impl fmt::Display for AssetResolveError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NotFound => f.write_str("not found"),
+            Self::LoadError(message) => write!(f, "could not be loaded: {message}"),
+            Self::Unavailable => f.write_str("not available yet"),
+        }
+    }
+}
+
+impl core::error::Error for AssetResolveError {}
 
 /// Resolves asset path strings to layers.
 ///

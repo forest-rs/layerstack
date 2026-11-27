@@ -4,6 +4,7 @@
 //! Evidence retained when a package member is read with recovery.
 
 use alloc::sync::Arc;
+use core::fmt;
 
 use crate::usda::diagnostic::{Diagnostic, Severity};
 use crate::usdc::AssembleDiagnostic;
@@ -35,6 +36,13 @@ impl MemberDiagnostic {
             layer_id,
             diagnostic,
         }
+    }
+}
+
+/// Writes `member: diagnostic`.
+impl fmt::Display for MemberDiagnostic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.member, self.diagnostic)
     }
 }
 
@@ -76,6 +84,20 @@ impl ImportDiagnostic {
                 matches!(d.severity, Severity::Error)
             }
             Self::UsdcAssemble(_) | Self::AssetResolve { .. } => true,
+        }
+    }
+}
+
+/// Writes the phase that reported it, then the diagnostic: `USDA parse
+/// error at bytes 10..14: ...`, `USDC assembly /A.b: ...`.
+impl fmt::Display for ImportDiagnostic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::AssetResolve { asset, error } => write!(f, "asset `{asset}` {error}"),
+            Self::UsdaParse(d) => write!(f, "USDA parse {d}"),
+            Self::UsdaLower(d) => write!(f, "USDA lowering {d}"),
+            Self::UsdaEmit(d) => write!(f, "USDA emission {d}"),
+            Self::UsdcAssemble(d) => write!(f, "USDC assembly {d}"),
         }
     }
 }

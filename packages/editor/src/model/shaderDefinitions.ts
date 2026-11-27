@@ -12,9 +12,11 @@
 // editor knows besides, so the shading view and the inspector can show
 // an input the prim does not author yet with its fallback (and an edit
 // authors it, `UsdShadeConnectableAPI::CreateInput`), and "Add shader"
-// offers these ids. Shaders of other ids (MaterialX `ND_*` nodes) show
-// their authored ports only.
-import type { Value } from "@forest-rs/layerstack";
+// offers these ids. The MaterialX node definitions the module ships
+// (`Layerstack.materialxNodes`, registered at startup) give `ND_*`
+// shaders theirs, each input's fallback its declared default; an input
+// whose default is a geometry property (`UV0`) has none to show.
+import type { MaterialXNode, Value } from "@forest-rs/layerstack";
 
 /** A value a definition gives: a scalar or a tuple, as the stage reads one. */
 export type DefinedValue = Value & { readonly kind: "scalar" | "tuple" };
@@ -24,8 +26,8 @@ export interface DefinedInput {
   readonly name: string;
   /** Its value type name (`color3f`). */
   readonly typeName: string;
-  /** What a renderer reads when nothing is authored or connected. */
-  readonly fallback: DefinedValue;
+  /** What a renderer reads when nothing is authored or connected; `null` when that is not a value (a geometry property it reads). */
+  readonly fallback: DefinedValue | null;
   /** The tokens its value may be, for a `token` input that restricts them; `null` otherwise. */
   readonly allowedTokens: readonly string[] | null;
 }
@@ -43,7 +45,7 @@ export interface ShaderDefinition {
   /** What it is for, in a few words, for a picker. */
   readonly summary: string;
   /** Its family, for grouping a picker. */
-  readonly family: "Surface" | "Texture" | "Primvar reader" | "Transform";
+  readonly family: "Surface" | "Texture" | "Primvar reader" | "Transform" | "MaterialX";
   /** The name a new prim of it is given (`UVTexture`), made unique among its siblings. */
   readonly primName: string;
   readonly inputs: readonly DefinedInput[];
@@ -152,9 +154,61 @@ export const SHADER_DEFINITIONS: readonly ShaderDefinition[] = [
 
 const BY_ID = new Map(SHADER_DEFINITIONS.map((definition) => [definition.id, definition]));
 
+/** The MaterialX node definitions, by id, once {@link registerMaterialXNodes} has run. */
+const MATERIALX = new Map<string, ShaderDefinition>();
+
+/** Adds the MaterialX node definitions `nodes` (the module's, `Layerstack.materialxNodes`) to those {@link shaderDefinition} knows. */
+export function registerMaterialXNodes(nodes: ReadonlyMap<string, MaterialXNode>): void {
+  for (const node of nodes.values()) MATERIALX.set(node.id, materialXDefinition(node));
+}
+
+/** `node` as a shader definition, each input's fallback its literal default read as its USD type. */
+function materialXDefinition(node: MaterialXNode): ShaderDefinition {
+  const local = (usdName: string) => usdName.slice(usdName.indexOf(":") + 1);
+  return {
+    id: node.id,
+    summary: "a MaterialX node",
+    family: "MaterialX",
+    primName: node.id.replace(/^ND_/, ""),
+    inputs: node.ports
+      .filter((port) => port.kind === "input")
+      .map((port) => ({
+        name: local(port.usdName),
+        typeName: port.usdTypeName,
+        fallback: port.default?.kind === "literal" ? materialXLiteral(port.default.value, port.usdTypeName) : null,
+        allowedTokens: null,
+      })),
+    outputs: node.ports.filter((port) => port.kind === "output").map((port) => ({ name: local(port.usdName), typeName: port.usdTypeName })),
+  };
+}
+
+/** The number of components of each tuple type a MaterialX port is authored as. */
+const COMPONENTS = new Map([
+  ["float2", 2], ["float3", 3], ["float4", 4],
+  ["color3f", 3], ["color4f", 4],
+  ["vector3f", 3], ["normal3f", 3], ["point3f", 3], ["texCoord2f", 2],
+]);
+
+/**
+ * A MaterialX literal (`"0.8, 0.8, 0.8"`, `"1"`, `"true"`) as a value of
+ * the USD type `typeName`; `null` for a type this does not read (a
+ * matrix) or text that is not one of its values.
+ */
+export function materialXLiteral(text: string, typeName: string): DefinedValue | null {
+  const numbers = text.split(",").map((part) => Number(part.trim()));
+  const finite = text.trim() !== "" && numbers.every(Number.isFinite);
+  if (typeName === "float" || typeName === "double" || typeName === "half" || typeName === "int") {
+    return finite && numbers.length === 1 ? { kind: "scalar", type: typeName, value: numbers[0]! } : null;
+  }
+  if (typeName === "bool") return text === "true" || text === "false" ? { kind: "scalar", type: typeName, value: text === "true" } : null;
+  if (typeName === "string" || typeName === "token" || typeName === "asset") return { kind: "scalar", type: typeName, value: text };
+  const components = COMPONENTS.get(typeName);
+  return components !== undefined && finite && numbers.length === components ? { kind: "tuple", type: typeName, value: numbers } : null;
+}
+
 /** The definition of the shader id `id`; `null` for an id the editor does not know (or none). */
 export function shaderDefinition(id: string | null): ShaderDefinition | null {
-  return id === null ? null : (BY_ID.get(id) ?? null);
+  return id === null ? null : (BY_ID.get(id) ?? MATERIALX.get(id) ?? null);
 }
 
 /** The definition's input `name`, or `null`. */

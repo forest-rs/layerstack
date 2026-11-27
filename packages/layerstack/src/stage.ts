@@ -112,6 +112,8 @@ import type {
   SchemaInfo,
   ValueRole,
   ValueTypeInfo,
+  MaterialXDefault,
+  MaterialXNode,
 } from "./types.js";
 
 /** This package's version. */
@@ -356,6 +358,8 @@ export interface NativeModule {
   blackbodyTemperatureRgb(kelvin: number): Float32Array;
   /** The value types an attribute may declare ({@link Layerstack.valueTypes}). */
   valueTypes(): unknown;
+  /** The MaterialX node definitions the module ships ({@link Layerstack.materialxNodes}). */
+  materialxNodes(): unknown;
   /**
    * Why the module trapped (`layerstack_wasm::TrapCause`): 1 a panic, 2
    * out of memory, 0 when the module cannot tell (one built with `std`).
@@ -386,6 +390,7 @@ export class Layerstack {
   #views = 0;
   #bytesViewed = 0;
   #valueTypes: readonly ValueTypeInfo[] | undefined = undefined;
+  #materialxNodes: ReadonlyMap<string, MaterialXNode> | undefined = undefined;
 
   /** Wraps an initialized module, refusing one of another ABI (`module.abi`). */
   constructor(module: NativeModule) {
@@ -556,6 +561,48 @@ export class Layerstack {
       );
     }
     return this.#valueTypes;
+  }
+
+  /**
+   * The MaterialX node definitions the module ships (MaterialX 1.39's
+   * standard library nodes the schemas bind, `STANDARD_NODES` in
+   * `layerstack_schemas::materialx`), by `info:id`. The stage has no shader
+   * registry: a shader's ports are what its prim authors, so a host shows
+   * an input it does not author with the default its definition declares
+   * here. The table is the module's, the same for every stage.
+   *
+   * ```ts
+   * const surface = layerstack.materialxNodes().get("ND_open_pbr_surface_surfaceshader");
+   * surface?.ports.find((port) => port.name === "base_color")?.default;
+   * // { kind: "literal", value: "0.8, 0.8, 0.8" }
+   * ```
+   */
+  materialxNodes(): ReadonlyMap<string, MaterialXNode> {
+    if (this.#materialxNodes === undefined) {
+      type DefaultRow = ["literal", string] | ["geomProp", string] | ["input", string, string | null] | null;
+      type PortRow = [string, "input" | "output", string, string, string, DefaultRow];
+      const rows = this.call("materialxNodes", () => this.#module.materialxNodes()) as [string, PortRow[]][];
+      const fallback = (row: DefaultRow): MaterialXDefault | null => {
+        if (row === null) return null;
+        if (row[0] === "literal") return Object.freeze({ kind: "literal", value: row[1] });
+        if (row[0] === "geomProp") return Object.freeze({ kind: "geomProp", name: row[1] });
+        return Object.freeze({ kind: "input", name: row[1], fallback: row[2] });
+      };
+      this.#materialxNodes = new Map(
+        rows.map(([id, ports]) => [
+          id,
+          Object.freeze({
+            id,
+            ports: Object.freeze(
+              ports.map(([name, kind, typeName, usdName, usdTypeName, row]) =>
+                Object.freeze({ name, kind, typeName, usdName, usdTypeName, default: fallback(row) }),
+              ),
+            ),
+          }),
+        ]),
+      );
+    }
+    return this.#materialxNodes;
   }
 
   /** @internal A new native batch of edits. */

@@ -69,7 +69,7 @@ test("a known shader has its definition's ports, unauthored ones marked, in the 
   assert.equal(unfolded.network.nodes.find((node) => node.key === `${CHECKER}/Surface`)!.ports.length, surface.ports.length);
   assert.equal(folded.hidden - unfolded.hidden, surface.ports.length - 2);
   // Every definition's fallback has its input's type.
-  for (const each of SHADER_DEFINITIONS) for (const input of each.inputs) assert.equal(input.fallback.type, input.typeName, `${each.id}.${input.name}`);
+  for (const each of SHADER_DEFINITIONS) for (const input of each.inputs) assert.equal(input.fallback?.type, input.typeName, `${each.id}.${input.name}`);
 });
 
 test("the inspector lists a known shader's inputs in its definition's order, unauthored ones with their definition", () => {

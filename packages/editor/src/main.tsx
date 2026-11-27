@@ -10,12 +10,14 @@ import { EditorContext } from "./app/context.ts";
 import { NoWebGPU } from "./app/NoWebGPU.tsx";
 import { registerBuiltInPresentations } from "./app/presentations/builtins.ts";
 import { initialSource } from "./app/scenes.ts";
+import { registerMaterialXNodes } from "./model/shaderDefinitions.ts";
 import { EditorStore } from "./store.ts";
 import { webGpuMissing } from "./viewport/support.ts";
 import "./index.css";
 
 async function start(): Promise<void> {
   const [layerstack, stagehand] = await Promise.all([loadLayerstack(), loadStagehand()]);
+  registerMaterialXNodes(layerstack.materialxNodes());
   const store = new EditorStore(layerstack, stagehand);
   registerBuiltInPresentations();
   // A module that traps outside an open (an edit, a frame, a draw) stops the

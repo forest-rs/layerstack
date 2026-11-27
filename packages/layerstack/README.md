@@ -571,6 +571,7 @@ stage objects and authored as `Edit`s, as OpenUSD's `UsdShade`,
 | `stage.material(path)` | `Material \| null`: `baseMaterial`, `surface(contexts?)` / `displacement` / `volume` (`TerminalSource`: `shader`, `context`, `sources`), `inputs()`, `outputs()`, `input(name)`, `output(name)` |
 | `stage.shader(path)` | `Shader \| null`: `id`, `implementationSource`, `sdrMetadata`, `inputs()`, `outputs()`, `input(name)`, `output(name)` |
 | `prim.inputs()`, `prim.outputs()`, `stage.port(path)` | `ShaderPort`: `name`, `kind`, `typeName`, `sdrMetadata`, `connections`, `invalidConnections`, `get(time?)`, `valueSources()` |
+| `layerstack.materialxNodes()` | `ReadonlyMap<string, MaterialXNode>` by `info:id`: the MaterialX node definitions the module ships, each port's `name`, `kind`, `typeName`, `usdName`, `usdTypeName` and declared `default` (a `literal` in MaterialX syntax, a `geomProp`, or the `input` an output passes on), for showing an input a shader does not author |
 | `stage.connectionSourceInfo(path)` | `ConnectionSourceInfo`: `prim`, `name`, `kind`, `typeName`, `source`, `valid`: the source a path names, checked against the stage |
 | `prim.geomSubsets({ elementType?, familyName?, time? })`, `subsetFamilyType(family)`, `validateSubsetFamily(family, elementType, { time? })` | `GeomSubset[]`, the family type, `SubsetProblem[]` |
 | `prim.coordSysBindings({ inherited? })` | `CoordSysBinding[]`: `name`, `relationship`, `target` |

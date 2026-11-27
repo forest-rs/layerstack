@@ -579,3 +579,25 @@ describe("a renderer linking lights", () => {
     assert.equal(error.path, "/World/Gone");
   });
 });
+
+describe("MaterialX node definitions", () => {
+  it("give each port its USD name, type and declared default", () => {
+    const nodes = layerstack.materialxNodes();
+    assert.equal(layerstack.materialxNodes(), nodes, "read once");
+    const surface = nodes.get("ND_open_pbr_surface_surfaceshader");
+    assert.ok(surface !== undefined);
+    const baseColor = surface.ports.find((port) => port.name === "base_color");
+    assert.deepEqual(baseColor, {
+      name: "base_color",
+      kind: "input",
+      typeName: "color3",
+      usdName: "inputs:base_color",
+      usdTypeName: "color3f",
+      default: { kind: "literal", value: "0.8, 0.8, 0.8" },
+    });
+    assert.equal(surface.ports.find((port) => port.kind === "output")?.usdTypeName, "token");
+    // Texture coordinates read from geometry by default.
+    const texcoord = nodes.get("ND_image_color3")?.ports.find((port) => port.name === "texcoord");
+    assert.deepEqual(texcoord?.default, { kind: "geomProp", name: "UV0" });
+  });
+});

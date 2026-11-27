@@ -88,6 +88,17 @@ export interface ViewItem {
 }
 
 /** The viewport's contents at one time. */
+/**
+ * Whether `view`'s surfaces are drawn from both sides, lit from each:
+ * those of an authored `doubleSided` gprim, and meshes and planes, often
+ * open and authored without it, as usdview draws them unless asked to
+ * cull back faces. Every material of the item, bound or not, draws them
+ * so.
+ */
+export function drawsBothSides(view: Pick<ViewItem, "item" | "kind">): boolean {
+  return view.item.doubleSided || view.kind === "mesh" || view.kind === "Plane";
+}
+
 export interface ViewportScene {
   readonly items: readonly ViewItem[];
   /** The gprims and instancers left out because they are invisible, or of a purpose not drawn. */

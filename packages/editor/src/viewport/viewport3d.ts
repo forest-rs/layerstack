@@ -238,7 +238,7 @@ import type { ClusterResidency, ClusterStats, ClusterView } from "./clusters.ts"
 import { ClusterManifest, clusterKey, readClusterFile, residentCost } from "./clusterFile.ts";
 import type { ManifestMesh } from "./clusterFile.ts";
 import type { AssetExists, AssetReader, TextureStats } from "./surfaces.ts";
-import type { ViewItem, ViewportScene, ViewportUpdate } from "../model/draws.ts";
+import { drawsBothSides, type ViewItem, type ViewportScene, type ViewportUpdate } from "../model/draws.ts";
 
 /** A clustered draw's last cut, read back ({@link Viewport.clusterCut}). */
 export interface ClusterCut {
@@ -1781,10 +1781,7 @@ function materials(
   const colors = view.buffers.vertices.color;
   // One map for every range's material: a subset's reads its sets' channels.
   const channels = uvChannels(view.buffers.vertices);
-  // Both sides of an authored `doubleSided` gprim, lit from each. Meshes
-  // and planes, often open and authored without it, keep both sides
-  // too, as usdview draws them unless asked to cull back faces.
-  const doubleSided = view.item.doubleSided || view.kind === "mesh" || view.kind === "Plane";
+  const doubleSided = drawsBothSides(view);
   const record = (path: string | null) => {
     const found = path === null ? undefined : records.get(path);
     return found?.surface == null ? null : found;
@@ -1806,7 +1803,7 @@ function materials(
       color: new Color().setRGB(r, g, b),
       vertexColors,
       roughness: 0.7,
-      ...(view.kind === "mesh" || view.kind === "Plane" ? { side: DoubleSide } : {}),
+      ...(doubleSided ? { side: DoubleSide } : {}),
       emissive: highlighted ? new Color(0x2f5fd0) : new Color(0),
       emissiveIntensity: highlighted ? 0.6 : 0,
     });

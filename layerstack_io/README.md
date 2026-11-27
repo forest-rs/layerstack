@@ -96,12 +96,11 @@ Author with `StageDocument::apply(&transaction)`: it applies the edit and loads
 the assets the edit asks for (`Applied::asset_requests`), such as a deferred
 payload it adds.
 
-The Rust methods `save`, `save_layers`, and `save_session_layers` now return
-`Result<SaveReport, SaveError>`. Replace a manual `report.failures` check with
-`let report = document.save()?;`. To recover from a partial save, inspect
-`error.report.saved` for the writes that succeeded and `error.failures` for
-the layer and cause of each failure. Anonymous layers are listed separately
-in the report and remain dirty.
+`save`, `save_layers` and `save_session_layers` return
+`Result<SaveReport, SaveError>`: `Ok` only when no selected layer failed;
+after a partial save, `error.report.saved` lists the writes that
+succeeded and `error.failures` the layer and cause of each failure.
+Anonymous layers are listed separately in the report and remain dirty.
 
 Start with `cargo run -p layerstack_examples --example tutorial_stage_io` for a
 complete create/edit/undo/export/reload workflow, or `tutorial_references` for

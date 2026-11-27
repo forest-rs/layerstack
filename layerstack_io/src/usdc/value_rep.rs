@@ -166,7 +166,7 @@ pub enum CrateValue {
     /// An array of crate values.
     Array(Vec<Self>),
     /// Native numeric array retained by the bulk-import decoding path.
-    /// The generic [`decode_value`] interface keeps returning `Array`.
+    /// The generic value decoder keeps returning `Array`.
     TypedArray(layerstack::TypedArray),
     /// A dictionary (string key → crate value).
     Dictionary(Vec<(String, Self)>),

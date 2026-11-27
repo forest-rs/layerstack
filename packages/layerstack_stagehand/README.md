@@ -373,3 +373,7 @@ message `${operation}: ${message}`.
 `Cargo.lock` holds, and `wasm-opt`), `npm run size` checks it against
 `size-budget.json`, `npm run build` the wrapper, `npm test` the tests
 (after building `../layerstack`).
+
+Run both build steps before running `npm pack` or `npm publish`, which
+refuse to pack without them. The archive includes the WASM and its license
+texts and notices in `wasm/licenses/`.

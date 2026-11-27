@@ -40,3 +40,14 @@ features="--enable-bulk-memory --enable-mutable-globals --enable-nontrapping-flo
 # shellcheck disable=SC2086 # `features` is a list of flags.
 "$wasm_opt" -Oz --converge $features "$package/wasm/layerstack_stagehand_bg.wasm" \
   -o "$package/wasm/layerstack_stagehand_bg.wasm"
+
+# Package the workspace and upstream license material with the finished
+# module: the license texts the main package ships, for the crates this
+# module links (see scripts/licenses/THIRD-PARTY-NOTICES).
+licenses="$package/wasm/licenses"
+mkdir -p "$licenses"
+cp "$workspace/LICENSE-APACHE" "$workspace/LICENSE-MIT" \
+  "$workspace/packages/layerstack/scripts/licenses/LICENSE-compiler-builtins" \
+  "$workspace/packages/layerstack/scripts/licenses/LICENSE-libm" \
+  "$workspace/packages/layerstack/scripts/licenses/LICENSE-ZLIB" \
+  "$package/scripts/licenses/THIRD-PARTY-NOTICES" "$licenses/"

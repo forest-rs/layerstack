@@ -71,7 +71,6 @@ pub struct LayerDiff {
 
 /// How an authored opinion differs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[non_exhaustive]
 pub enum ChangeKind {
     /// Present only in the revised layer.
     Added,

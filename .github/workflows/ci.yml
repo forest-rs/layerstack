@@ -541,6 +541,20 @@ jobs:
         env:
           RUSTDOCFLAGS: '--cfg docsrs -D warnings'
 
+      # docs.rs builds each crate alone with its default features, where
+      # items behind a feature (`unstable-internals`, `std`) are private
+      # and links to them break.
+      - name: cargo doc (each published crate, default features)
+        run: |
+          for crate in $(cargo metadata --locked --no-deps --format-version 1 \
+              | jq -r '.packages[] | select(.publish == null) | .name'); do
+            echo "::group::$crate"
+            cargo doc --locked -p "$crate" --no-deps
+            echo "::endgroup::"
+          done
+        env:
+          RUSTDOCFLAGS: '--cfg docsrs -D warnings'
+
   # The tables and views in layerstack_schemas/src/generated, and the test
   # table in layerstack_conformance/tests/generated, must be what
   # layerstack_schemagen writes from the usd-core release they name and the

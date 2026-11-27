@@ -1795,7 +1795,7 @@ impl Reference {
     ///
     /// Spec: AOUSD Core §10.3.2.1 (an omitted prim path assumes the
     /// `defaultPrim` of the specified layer).
-    pub fn target_path(&self, store: &mut dyn LayerStore) -> Option<PathId> {
+    pub fn target_path(&self, store: &dyn LayerStore) -> Option<PathId> {
         if self.is_unresolved() {
             return None;
         }

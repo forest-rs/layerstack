@@ -48,11 +48,11 @@
 //! # Outputs and profile
 //!
 //! [`Scene::to_usda`] writes one *authored* layer through
-//! [`layerstack_usda::writer`]; nothing is composed or flattened, and the
+//! [`layerstack_io::usda::writer`]; nothing is composed or flattened, and the
 //! composition kernel is not involved. [`Scene::to_usdc`] writes the same
-//! layer in the binary crate format ([`layerstack_usdc::writer`]).
+//! layer in the binary crate format ([`layerstack_io::usdc::writer`]).
 //! [`Scene::to_usdz`] is a separate packaging step
-//! ([`layerstack_usdz::write_usdz`]): the layer becomes the package's first
+//! ([`layerstack_io::usdz::write_usdz`]): the layer becomes the package's first
 //! file, followed by the caller's files (e.g. textures), and every asset
 //! path the scene authors must name one of those files. Paths are used as
 //! given; the packager does not discover or rewrite dependencies.
@@ -271,8 +271,8 @@ pub use instancer::{
 };
 pub use layerstack::UpAxis;
 pub use layerstack::ident::{SiblingNames, sanitize_ascii_identifier as sanitize_name};
-pub use layerstack_usda::writer::Value;
-pub use layerstack_usdz::PackageFile;
+pub use layerstack_io::usda::writer::Value;
+pub use layerstack_io::usdz::PackageFile;
 pub use material::{Channel, ColorInput, FloatInput, MATERIALS_SCOPE, Material, Texture, Wrap};
 pub use mesh::{
     CustomAttribute, CustomPrimvar, Faces, FamilyType, Interpolation, MaterialSubset, Mesh,

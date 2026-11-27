@@ -35,12 +35,12 @@ impl Storage for Transferred {
 
 #[test]
 fn transport_vectors_reach_package_and_resource_views_without_a_payload_copy() {
-    let bytes = layerstack_usdz::write_usdz(&[
-        layerstack_usdz::PackageFile::new("root.usda", b"#usda 1.0\ndef \"P\" {}\n"),
-        layerstack_usdz::PackageFile::new("image.png", b"package pixels"),
+    let bytes = usdz::write_usdz(&[
+        usdz::PackageFile::new("root.usda", b"#usda 1.0\ndef \"P\" {}\n"),
+        usdz::PackageFile::new("image.png", b"package pixels"),
     ])
     .unwrap();
-    let offset = layerstack_usdz::zip::ZipArchive::parse(&bytes)
+    let offset = usdz::zip::ZipArchive::parse(&bytes)
         .unwrap()
         .find("image.png")
         .unwrap()
@@ -216,12 +216,12 @@ fn storage_hears_each_source_read_into_a_layer() {
         );
     }
 
-    let package = layerstack_usdz::write_usdz(&[
-        layerstack_usdz::PackageFile::new(
+    let package = usdz::write_usdz(&[
+        usdz::PackageFile::new(
             "root.usda",
             b"#usda 1.0\n(\n    subLayers = [@sub.usda@]\n)\n",
         ),
-        layerstack_usdz::PackageFile::new("sub.usda", b"#usda 1.0\n"),
+        usdz::PackageFile::new("sub.usda", b"#usda 1.0\n"),
     ])
     .unwrap();
     let mut memory = Memory::default();

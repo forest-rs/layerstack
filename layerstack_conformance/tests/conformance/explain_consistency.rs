@@ -41,7 +41,7 @@ use layerstack::{
     SchemaRegistry, Stage, StageOptions, Time, TokenId, TokenInterner, Value, ValueSource,
 };
 use layerstack_conformance::{pcp_txt::load_pcp_txt, usda_real::load_entry_usda, workspace_root};
-use layerstack_usda::{emit, lower, parser::parse_cst};
+use layerstack_io::usda::{emit, lower, parser::parse_cst};
 use serde::Deserialize;
 
 const TIMES: [f64; 12] = [

@@ -124,7 +124,7 @@ impl<B> PreparedReload<'_, B> {
     }
     /// Candidate retained-array statistics without materializing numeric data.
     #[cfg(feature = "std")]
-    pub fn retained_values(&self, layer: LayerId) -> Option<&layerstack_usdc::RetainedValues> {
+    pub fn retained_values(&self, layer: LayerId) -> Option<&usdc::RetainedValues> {
         self.catalog.retained_values.get(&layer)
     }
     /// Candidate package construction work and encoded backing size, with the

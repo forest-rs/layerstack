@@ -35,7 +35,7 @@ fn scene() -> (InMemoryStore, LiveStage) {
 class "PipelineTintAPI" { color3f pipeline:tint = (0.25, 0.5, 1); }
 class "PipelineSlotAPI" { float pipeline:__INSTANCE_NAME__:gain = 2; }
 "#;
-    let library = layerstack_usda::read_usda(
+    let library = layerstack_io::usda::read_usda(
         source,
         LayerId(9),
         store.tokens(),

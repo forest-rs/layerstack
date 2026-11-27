@@ -47,9 +47,5 @@ wasm-bindgen = { default-features = false, version = "0.2.129" }
 # `wasm32-unknown-unknown`, so the module allocates as it did with `std`.
 dlmalloc = { features = ["global"], optional = true, version = "0.2.14" }
 
-[dev-dependencies]
-# Tests compare a layer's USDA text before an edit and after its undo.
-layerstack_usda = { workspace = true }
-
 [lints]
 workspace = true

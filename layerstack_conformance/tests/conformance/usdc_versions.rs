@@ -24,7 +24,7 @@ use layerstack::{
 };
 use layerstack_conformance::usdc::load_entry_usdc;
 use layerstack_conformance::workspace_root;
-use layerstack_usdc::{CrateVersion, UsdcError};
+use layerstack_io::usdc::{CrateVersion, UsdcError};
 use serde_json::Value as Json;
 
 /// The value opinions author for the attribute at `path` at `time`,
@@ -87,8 +87,8 @@ impl AssetResolver for NoAssets {
 }
 
 /// Decodes one fixture on its own, without resolving sublayers.
-fn read(data: &[u8]) -> Result<layerstack_usdc::AssembleResult, UsdcError> {
-    layerstack_usdc::read_usdc(
+fn read(data: &[u8]) -> Result<layerstack_io::usdc::AssembleResult, UsdcError> {
+    layerstack_io::usdc::read_usdc(
         data,
         LayerId(1),
         &TokenInterner::default(),
@@ -495,7 +495,7 @@ fn newest_authored_spline_features_are_readable() {
 fn authored(name: &str, prim: &str, attribute: &str) -> PropertySpec {
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
-    let result = layerstack_usdc::read_usdc(
+    let result = layerstack_io::usdc::read_usdc(
         &fixture_bytes(name),
         LayerId(1),
         &tokens,

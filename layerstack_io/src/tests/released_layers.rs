@@ -161,12 +161,12 @@ fn a_kept_package_member_holds_the_entire_package() {
         "root.usda",
         "#usda 1.0\ndef \"P\" (payload = @bundle.usdz@</P>) {}\n",
     );
-    let package = layerstack_usdz::write_usdz(&[
-        layerstack_usdz::PackageFile::new(
+    let package = usdz::write_usdz(&[
+        usdz::PackageFile::new(
             "entry.usda",
             b"#usda 1.0\ndef \"P\" (references = @./member.usda@</Part>) {}\n",
         ),
-        layerstack_usdz::PackageFile::new("member.usda", b"#usda 1.0\ndef \"Part\" {}\n"),
+        usdz::PackageFile::new("member.usda", b"#usda 1.0\ndef \"Part\" {}\n"),
     ])
     .unwrap();
     host.supplied.insert("bundle.usdz".into(), package);

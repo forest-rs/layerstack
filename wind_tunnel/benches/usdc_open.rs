@@ -10,7 +10,7 @@ use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use layerstack::{
     AssetResolveError, AssetResolver, LayerId, PathInterner, ResolvedAsset, TokenInterner,
 };
-use layerstack_usdc::{
+use layerstack_io::usdc::{
     CrateFile, DecodeBudget,
     writer::{Spec, SpecForm, Value, write_crate},
 };
@@ -36,7 +36,7 @@ fn fixture(count: u32, len: u32) -> Vec<u8> {
     for i in 0..count {
         specs.push(Spec::new(format!("/Rock{i}"), SpecForm::Prim).with_field(
             "specifier",
-            Value::Specifier(layerstack_usdc::writer::Specifier::Def),
+            Value::Specifier(layerstack_io::usdc::writer::Specifier::Def),
         ));
         specs.push(
             Spec::new(format!("/Rock{i}.weights"), SpecForm::Attribute)
@@ -107,7 +107,7 @@ fn bench_open(c: &mut Criterion) {
                     b.iter(|| {
                         let tokens = TokenInterner::default();
                         let paths = PathInterner::default();
-                        let read = layerstack_usdc::read_usdc_lazy(
+                        let read = layerstack_io::usdc::read_usdc_lazy(
                             Arc::clone(bytes),
                             LayerId(1),
                             &tokens,
@@ -144,7 +144,7 @@ fn bench_open(c: &mut Criterion) {
             |b, bytes| {
                 b.iter(|| {
                     black_box(
-                        layerstack_usdc::read_usdc(
+                        layerstack_io::usdc::read_usdc(
                             black_box(bytes),
                             LayerId(1),
                             &TokenInterner::default(),
@@ -184,7 +184,7 @@ fn bench_integer_decode(c: &mut Criterion) {
                     |b, bytes| {
                         b.iter(|| {
                             black_box(
-                                layerstack_usdc::compression::decode_integer_array(
+                                layerstack_io::usdc::compression::decode_integer_array(
                                     black_box(bytes),
                                     count,
                                     width,
@@ -232,7 +232,7 @@ fn bench_integer_import(c: &mut Criterion) {
                 Spec::new("/", SpecForm::PseudoRoot),
                 Spec::new("/Mesh", SpecForm::Prim).with_field(
                     "specifier",
-                    Value::Specifier(layerstack_usdc::writer::Specifier::Def),
+                    Value::Specifier(layerstack_io::usdc::writer::Specifier::Def),
                 ),
                 Spec::new("/Mesh.indices", SpecForm::Attribute)
                     .with_field("typeName", Value::Token(format!("{kind}[]")))
@@ -242,7 +242,7 @@ fn bench_integer_import(c: &mut Criterion) {
             let tokens = TokenInterner::default();
             let paths = PathInterner::default();
             let read =
-                layerstack_usdc::read_usdc(&bytes, LayerId(1), &tokens, &paths, &mut NoAssets)
+                layerstack_io::usdc::read_usdc(&bytes, LayerId(1), &tokens, &paths, &mut NoAssets)
                     .unwrap();
             assert!(read.diagnostics.is_empty(), "fixture imports completely");
             let field = tokens.intern("indices");
@@ -269,7 +269,7 @@ fn bench_integer_import(c: &mut Criterion) {
                         let tokens = TokenInterner::default();
                         let paths = PathInterner::default();
                         let start = std::time::Instant::now();
-                        let read = layerstack_usdc::read_usdc(
+                        let read = layerstack_io::usdc::read_usdc(
                             black_box(&bytes),
                             LayerId(1),
                             &tokens,

@@ -8,10 +8,7 @@ opinion-resolution kernel from USD scene composition and file formats.
 | [`opinionated`](opinionated/) | `no_std + alloc` resolution of ordered opinions, list edits, recursive dictionaries, and typed sparse array edits |
 | [`layerstack`](layerstack/) | USD layer stacks, composed prims, references, payloads, inherits, specializes, variants, relocates, atomic authoring, flattening, value queries, and provenance |
 | [`layerstack_schemas`](layerstack_schemas/) | Generated OpenUSD schema definitions and typed views, authoring, transforms, bounds, collections, bindings, shading sources, and retained queries |
-| [`layerstack_usda`](layerstack_usda/) | USDA text parsing, authored-layer import, and writing |
-| [`layerstack_usdc`](layerstack_usdc/) | USDC binary reading and writing |
-| [`layerstack_usdz`](layerstack_usdz/) | USDZ archive reading and packaging |
-| [`layerstack_io`](layerstack_io/) | Host-owned storage, dependency loading, retained stage documents, explicit saves, exports and reload policies |
+| [`layerstack_io`](layerstack_io/) | USDA, USDC and USDZ reading and writing; host-owned storage, dependency loading, retained stage documents, explicit saves, exports and reload policies |
 | [`layerstack_mesh_export`](layerstack_mesh_export/) | Meshes, Preview Surface materials, and static point instancers exported to USD |
 | [`layerstack_wasm`](layerstack_wasm/) | WebAssembly bindings: the native side of the TypeScript package |
 | [`@forest-rs/layerstack`](packages/layerstack/) | TypeScript package: open, resolve, inspect, explain, edit and save stages in the browser or Node |
@@ -106,8 +103,7 @@ python3 .github/check_packages.py "${CARGO_TARGET_DIR:-target}/package"
 ```
 
 A dependency-compatible publication order is `opinionated`, `layerstack`,
-`layerstack_usda`, `layerstack_usdc`, `layerstack_usdz`, `layerstack_schemas`,
-`layerstack_io`, `layerstack_mesh_export`, `layerstack_wasm`, then
+`layerstack_schemas`, `layerstack_io`, `layerstack_mesh_export`, `layerstack_wasm`, then
 `layerstack_schemagen`. Packaging verifies the local
 release set together; registry publication still requires those dependencies
 and appropriate crate ownership. CI runs the same archive verification.

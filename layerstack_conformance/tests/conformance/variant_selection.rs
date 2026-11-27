@@ -16,7 +16,7 @@ use layerstack::{
     StageOptions, TokenInterner, Value,
 };
 use layerstack::{Layer, Opinions, PathId, Resolved, ResolvedAsset};
-use layerstack_usda::{emit, lower, parser::parse_cst};
+use layerstack_io::usda::{emit, lower, parser::parse_cst};
 
 /// Whether the stage composes a prim at `path`.
 fn has_prim(stage: &Stage, store: &InMemoryStore, path: PathId) -> bool {
@@ -1120,7 +1120,7 @@ fn load_nested_variant_case(path: &std::path::Path) -> InMemoryStore {
     let mut store = InMemoryStore::default();
     let layer = if path.extension().is_some_and(|ext| ext == "usdc") {
         let data = std::fs::read(path).expect("fixture");
-        let result = layerstack_usdc::read_usdc(
+        let result = layerstack_io::usdc::read_usdc(
             &data,
             LayerId(1),
             store.tokens(),

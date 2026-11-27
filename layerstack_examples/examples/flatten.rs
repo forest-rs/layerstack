@@ -152,7 +152,7 @@ fn parse(
     paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
 ) -> (Layer, Vec<Layer>) {
-    let read = layerstack_usda::read_usda(text, id, tokens, paths, resolver);
+    let read = layerstack_io::usda::read_usda(text, id, tokens, paths, resolver);
     let parsed_diagnostics: Vec<_> = read
         .parse_diagnostics
         .iter()
@@ -229,7 +229,7 @@ fn main() {
     );
 
     // 3. Save it as one USDA file.
-    let text = layerstack_usda::save_usda(flat, store.tokens(), store.paths())
+    let text = layerstack_io::usda::save_usda(flat, store.tokens(), store.paths())
         .expect("the flattened grove saves");
     println!("{text}");
     assert!(!text.contains("references"), "the file names no asset");

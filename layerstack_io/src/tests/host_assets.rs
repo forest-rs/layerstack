@@ -9,11 +9,11 @@
 //! without reading resident layers again.
 
 use super::*;
+use crate::usdz::PackageFile;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use layerstack::{
     AssetUse, LayerOffset, PropertyPath, PropertyType, SublayerEntry, Time, Transaction,
 };
-use layerstack_usdz::PackageFile;
 
 /// A host's byte map: a source it has not been given is unavailable, one
 /// it confirmed absent is not found.
@@ -607,7 +607,7 @@ fn confirmed_absent_sources_become_missing() {
 /// an external asset it references is wanted like any other.
 #[test]
 fn a_package_is_one_supplied_buffer() {
-    let package = layerstack_usdz::write_usdz(&[
+    let package = usdz::write_usdz(&[
         PackageFile::new(
             "scene.usda",
             b"#usda 1.0\n(subLayers = [@./part.usda@])\ndef \"Asset\" (prepend references = @ext.usda@</Ext>) {}\n",

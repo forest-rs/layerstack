@@ -198,7 +198,7 @@ fn a_wide_scene_composes_alike_on_any_number_of_threads() {
     let source = wide_scene(24, 40);
     let compose = |threads| {
         let mut store = InMemoryStore::default();
-        let result = layerstack_usda::read_usda(
+        let result = layerstack_io::usda::read_usda(
             &source,
             LayerId(1),
             store.tokens(),

@@ -220,8 +220,7 @@ impl Storage for Filesystem {
     fn open_ranges(
         &self,
         identifier: &str,
-    ) -> Result<Arc<dyn layerstack_usdz::range::RangeSource<Error = IoError> + Send + Sync>, IoError>
-    {
+    ) -> Result<Arc<dyn usdz::range::RangeSource<Error = IoError> + Send + Sync>, IoError> {
         let file = retry_transient(self.lock_retry, || fs::File::open(identifier))
             .map_err(storage_error)?;
         let metadata = file.metadata().map_err(storage_error)?;
@@ -284,7 +283,7 @@ struct FileRanges {
     length: u64,
     modified: std::time::SystemTime,
 }
-impl layerstack_usdz::range::RangeSource for FileRanges {
+impl usdz::range::RangeSource for FileRanges {
     type Error = IoError;
     fn byte_len(&self) -> u64 {
         self.length
@@ -968,11 +967,7 @@ mod asset_byte_tests {
         fs::write(root.join("image.png"), b"root directory").unwrap();
         fs::write(
             root.join("scene.usdz"),
-            layerstack_usdz::write_usdz(&[layerstack_usdz::PackageFile::new(
-                "root.usda",
-                b"#usda 1.0",
-            )])
-            .unwrap(),
+            usdz::write_usdz(&[usdz::PackageFile::new("root.usda", b"#usda 1.0")]).unwrap(),
         )
         .unwrap();
         let mut document = StageDocument::open(

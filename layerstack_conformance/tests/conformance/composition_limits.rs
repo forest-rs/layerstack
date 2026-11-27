@@ -104,10 +104,10 @@ impl AssetResolver for NoAssets {
 
 /// A store holding `text` as layer 1.
 fn store_of(text: &str) -> InMemoryStore {
-    let parsed = layerstack_usda::parser::parse(text);
+    let parsed = layerstack_io::usda::parser::parse(text);
     assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
     let mut store = InMemoryStore::default();
-    let result = layerstack_usda::emit::emit(
+    let result = layerstack_io::usda::emit::emit(
         &parsed.layer,
         LayerId(1),
         store.tokens(),

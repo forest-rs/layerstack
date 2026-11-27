@@ -289,7 +289,7 @@ fn source_store(source: &str) -> InMemoryStore {
         }
     }
     let mut store = InMemoryStore::default();
-    let result = layerstack_usda::read_usda(
+    let result = layerstack_io::usda::read_usda(
         source,
         LayerId(1),
         store.tokens(),

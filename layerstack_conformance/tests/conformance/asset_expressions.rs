@@ -461,7 +461,7 @@ fn flatten_text(loaded: &mut LoadedStage, stage: &Stage) -> String {
         .expect("flattens");
     let store: &InMemoryStore = &loaded.store;
     let text =
-        layerstack_usda::save_usda(&flat.layer, store.tokens(), store.paths()).expect("saves");
+        layerstack_io::usda::save_usda(&flat.layer, store.tokens(), store.paths()).expect("saves");
     text.replace(&format!("{}/", slashed(&fixtures())), "<dir>/")
 }
 
@@ -511,7 +511,7 @@ fn flatten_layer_stack_text(loaded: &LoadedStage) -> (String, Vec<(String, Strin
     .expect("flattens");
     let store: &InMemoryStore = &loaded.store;
     let text =
-        layerstack_usda::save_usda(&flat.layer, store.tokens(), store.paths()).expect("saves");
+        layerstack_io::usda::save_usda(&flat.layer, store.tokens(), store.paths()).expect("saves");
     let errors = flat
         .report
         .expression_errors

@@ -10,8 +10,8 @@
 //! the fill that growth without a literal uses: the property type's default
 //! array element ([`PropertyTypeFill`]).
 //!
-//! Parsing and writing the authored forms belong to `layerstack_usda` and
-//! `layerstack_usdc`; recognizing edits within an opinion chain and seeding
+//! Parsing and writing the authored forms belong to `layerstack_io::usda` and
+//! `layerstack_io::usdc`; recognizing edits within an opinion chain and seeding
 //! them with the schema fallback belong to value resolution.
 
 use alloc::vec::Vec;

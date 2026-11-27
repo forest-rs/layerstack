@@ -76,7 +76,7 @@ pub(crate) fn load(path: &Path, store: &mut InMemoryStore) -> Result<LayerId, St
     while cursor < resolver.paths.len() {
         let file = resolver.paths[cursor].clone();
         let text = std::fs::read_to_string(&file).map_err(|e| format!("{file}: {e}"))?;
-        let read = layerstack_usda::read_usda(
+        let read = layerstack_io::usda::read_usda(
             &text,
             LayerId(cursor as u64),
             store.tokens(),

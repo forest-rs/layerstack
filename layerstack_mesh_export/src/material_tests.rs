@@ -4,9 +4,9 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use layerstack_usda::ast;
-use layerstack_usda::parser::parse;
-use layerstack_usda::writer::WriteError;
+use layerstack_io::usda::ast;
+use layerstack_io::usda::parser::parse;
+use layerstack_io::usda::writer::WriteError;
 
 use crate::{
     Channel, ColorInput, ExportError, Faces, FamilyType, FloatInput, Material, MaterialProblem,

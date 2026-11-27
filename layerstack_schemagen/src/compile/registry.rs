@@ -15,7 +15,7 @@ use layerstack::{
     EditTarget, FieldValue, Layer, LayerId, ListOp, Path, PathId, PrimSpec, PropertyPath,
     Transaction, Value,
 };
-use layerstack_usda::writer::{Metadatum, Prim, Property, Value as Text};
+use layerstack_io::usda::writer::{Metadatum, Prim, Property, Value as Text};
 
 use super::classes::{
     ClassInfo, MULTIPLE_APPLY, Parsed, SINGLE_APPLY, dict_get, dict_str, dict_strings, is_truthy,
@@ -565,10 +565,12 @@ impl UserDoc {
 /// the layer's comment first, dictionaries in key order, then without the
 /// doxygen commands usdGenSchema removes from the text.
 fn write(layer: &Layer, store: &layerstack::InMemoryStore) -> Result<String, CompileError> {
-    let mut document = layerstack_usda::save::usdc_document(layer, store.tokens(), store.paths())
-        .map_err(|e| CompileError::Write {
-        message: e.to_string(),
-    })?;
+    let mut document =
+        layerstack_io::usda::save::usdc_document(layer, store.tokens(), store.paths()).map_err(
+            |e| CompileError::Write {
+                message: e.to_string(),
+            },
+        )?;
     sort_metadata(&mut document.metadata);
     for prim in &mut document.prims {
         sort_prim(prim);

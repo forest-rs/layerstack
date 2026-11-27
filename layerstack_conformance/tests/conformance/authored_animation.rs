@@ -180,8 +180,8 @@ fn stale_auto_ease_tangents_are_preserved_in_usdc_and_reported_for_usda() {
     layer.property("/A.x").spline.as_mut().unwrap().knots[1].post_tan_slope = 123.;
     assert_eq!(
         layer.save_usda(),
-        Err(layerstack_usda::save::SaveError::Document(
-            layerstack_usda::writer::WriteError::StaleAutoEaseTangent {
+        Err(layerstack_io::usda::save::SaveError::Document(
+            layerstack_io::usda::writer::WriteError::StaleAutoEaseTangent {
                 path: "/A.x".into(),
             },
         ))

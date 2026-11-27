@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! Floating-point numbers spelled as OpenUSD spells them in text: the one
-//! implementation behind `layerstack_usda`'s writer, `layerstack_schemas`'
+//! implementation behind the USDA writer (`layerstack_io::usda`), `layerstack_schemas`'
 //! sdr metadata strings and path-expression predicate arguments. Public
 //! only with the `unstable-internals` feature.
 //!

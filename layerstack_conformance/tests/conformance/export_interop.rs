@@ -32,7 +32,7 @@ use layerstack_conformance::export_fixtures::{
 };
 use layerstack_conformance::save_corpus::{Imported, PROBE_TIMES, cases};
 use layerstack_conformance::usdc::{CrateStructure, crate_structure};
-use layerstack_usdc::writer::{
+use layerstack_io::usdc::writer::{
     Spec as UsdcSpec, SpecForm, Specifier, Value as UsdcValue, Variability, write_crate,
 };
 
@@ -191,7 +191,7 @@ fn usdc_writer_matches_openusd() {
         let usdc = dir.join(format!("{name}.usdc"));
         let reference = dir.join(format!("{name}.openusd.usdc"));
         std::fs::write(&usda, doc.to_usda().unwrap()).unwrap();
-        let ours = layerstack_usdc::writer::write_document(&doc).unwrap();
+        let ours = layerstack_io::usdc::writer::write_document(&doc).unwrap();
         std::fs::write(&usdc, &ours).unwrap();
 
         match (usdcat(&[&usdc]), usdcat(&[&usda])) {
@@ -483,7 +483,7 @@ fn usdc_inlined_values_match_openusd() {
 /// every OpenUSD release, so no version is required.
 #[test]
 fn escaped_strings_read_in_openusd_as_written() {
-    use layerstack_usda::writer::{Attribute, Document, Metadatum, Prim, Value as UsdaValue};
+    use layerstack_io::usda::writer::{Attribute, Document, Metadatum, Prim, Value as UsdaValue};
 
     if tool("usdcat").is_none() {
         eprintln!("skipped: usdcat is not on PATH");
@@ -562,7 +562,7 @@ fn arkit_packages_have_a_single_usdc_root() {
     for fixture in arkit {
         let bytes = std::fs::read(&fixture.path).unwrap();
         let archive =
-            layerstack_usdz::zip::ZipArchive::parse(&bytes).expect("stored, aligned archive");
+            layerstack_io::usdz::zip::ZipArchive::parse(&bytes).expect("stored, aligned archive");
         let entries = archive.entries();
         assert_eq!(&*entries[0].name, "scene.usdc", "root layer");
         assert_eq!(

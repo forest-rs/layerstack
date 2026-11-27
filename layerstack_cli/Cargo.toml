@@ -14,10 +14,6 @@ categories = ["command-line-utilities", "encoding"]
 layerstack = { workspace = true }
 layerstack_io = { features = ["std"], workspace = true }
 layerstack_schemas = { features = ["usd-geom", "usd-shade"], workspace = true }
-layerstack_usda = { workspace = true }
-
-[dev-dependencies]
-layerstack_usdc = { workspace = true }
 
 [[bin]]
 name = "layerstack"

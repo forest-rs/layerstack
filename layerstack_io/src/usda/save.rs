@@ -1,0 +1,1647 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
+//! Saving an authored [`Layer`]: the one lowering route from the layer
+//! model to the writers.
+//!
+//! A shared namespace walk reads every authored field for both formats.
+//! [`usda_document`] and [`usdc_document`] collect its output into a
+//! [`Document`]. [`save_usda`] emits checked prims directly into its result.
+//! [`prepare_usda`] records them in write order for a streaming destination.
+//! The text writer omits dictionary entries with no value.
+//! The crate writer consumes each spec body as the walk produces it and
+//! stores fields as OpenUSD's text parser would store them.
+//!
+//! This saves the authored layer as it is, not a composed stage: nothing is
+//! resolved, flattened or packaged. Asset paths are written as authored,
+//! never as resolved locations, and path-looking strings stay strings.
+//! Meaning is preserved, not formatting: whitespace, comments outside
+//! `comment` fields and statement layout are the writer's own.
+//!
+//! # Supported subset
+//!
+//! A layer with:
+//!
+//! - layer metadata, including `defaultPrim` and bare-string comments, and
+//!   sublayers with their layer offsets;
+//! - prim specs with their specifier, `typeName`, metadata (list ops of
+//!   tokens, strings and integers included, such as `apiSchemas`,
+//!   `clipSets` and `inactiveIds`, and `active` and `instanceable`),
+//!   composition arcs (references, payloads, inherits and specializes, in
+//!   any list-op form), children in authored order, `reorder
+//!   nameChildren`, `reorder properties` and `reorder rootPrims`;
+//! - attribute specs with `custom`, `uniform`, the declared type, a default
+//!   value (a value block included), time samples (blocked samples and an
+//!   empty sample map included), explicit or list-edited connections and
+//!   metadata;
+//! - relationship specs with `custom`, `varying`, explicit or list-edited
+//!   targets and metadata;
+//! - properties in one authored order, attributes and relationships
+//!   interleaved;
+//! - values of every scalar, vector, quaternion and matrix type (`half`
+//!   and the other binary16 types kept as their bit patterns), and arrays
+//!   of them;
+//! - variant selections, the `variantSets` list op of each prim and
+//!   variant spec, and variant sets with their variants, each variant with
+//!   everything a prim spec holds: metadata, arcs, selections, properties,
+//!   `reorder properties`, child prims (the prim specs the layer keeps in
+//!   that branch, [`Layer::branch_prim_specs`]) and nested variant sets,
+//!   written inside the branch that encloses them;
+//! - a namespace of any depth: neither the lowering nor the writer
+//!   recurses through it, so a layer deeper than the USDA reader reads
+//!   (`MAX_NAMESPACE_DEPTH`, 256 levels) saves as OpenUSD writes it.
+//!
+//! A spec's `variantSets` list op is written as authored, apart from its
+//! variant sets, which are written in the order it first names them, then
+//! by name; variants and selections by name, as OpenUSD writes them.
+//!
+//! Arcs are written from what was authored, never from what they resolved
+//! to: a sublayer, reference or payload by its authored asset path (an arc
+//! whose asset did not resolve on import, `Reference::unresolved` or
+//! `SublayerEntry::unresolved`, keeps its own), a reference or payload
+//! with its prim path or none for the `defaultPrim`, and its layer offset.
+//! A reference or payload without an asset path into the layer itself is
+//! internal.
+//!
+//! # Rejected before any output
+//!
+//! [`usdc_document`] checks the whole layer before a writer runs and
+//! returns the first problem it finds, naming its source path:
+//!
+//! - [`SaveError::Unsupported`]: untyped sparse array edits outside attributes;
+//!   list ops mixing an explicit list with
+//!   edits; `varying` relationships; path list-op metadata; and values the
+//!   writers have no representation for (`opaque`, and
+//!   arrays whose element type is not recorded, such as an empty array in
+//!   a dictionary);
+//! - [`SaveError::Invalid`]: a layer the file formats cannot hold as it
+//!   stands, such as a prim spec that no parent or variant lists among its
+//!   children, an attribute without a type, a relationship with time
+//!   samples, or a sublayer or arc into another layer built from a layer id
+//!   alone, with no authored asset path to write;
+//! - [`SaveError::Document`]: what the writers' shared validation rejects
+//!   (invalid identifiers, a `defaultPrim` that names no prim of the layer, keys
+//!   whose USDA syntax the writer does not produce, sample times that are not
+//!   finite and increasing, asset paths the formats cannot quote, arc
+//!   paths that are not prim paths, an arc list that repeats an item within
+//!   one operation, ...).
+//!
+//! The crate writer additionally rejects unregistered list-op metadata and
+//! metadata of the wrong type. Other unregistered metadata is stored as text
+//! or dictionaries, following the text parser's representation.
+//!
+//! Spec: AOUSD Core §7 (scene description: layers, specs, fields and
+//! metadata), §16.2 (USDA), §16.3 (crate format).
+
+use alloc::boxed::Box;
+use alloc::format;
+use alloc::string::String;
+use alloc::vec::Vec;
+use core::fmt;
+use layerstack::sort;
+
+use hashbrown::{HashMap, HashSet};
+use layerstack::SharedVec;
+use layerstack::doc::{
+    FieldEntry, FieldValue, Layer, LayerOffset as LayerLayerOffset, PrimSpec,
+    Reference as LayerReference, ReferenceSource, ReferenceTarget, Specifier, Value as LayerValue,
+    VariantSelections, VariantSetSpec, VariantSpec,
+};
+use layerstack::interner::{TokenId, TokenInterner};
+use layerstack::listop::{ListOp as LayerListOp, SparseListOp};
+use layerstack::path::{Path, PathId, PathInterner, TargetPath};
+use layerstack::property::{PropertyEntry, PropertyKind, Variability};
+use layerstack::spec_path::VariantSelectionSite;
+
+use crate::usda::writer::{
+    Attribute, Document, LayerOffset, ListOp, Metadatum, Prim, Property, Reference, Relationship,
+    Specifier as WriterSpecifier, SubLayer, Value, Variability as WriterVariability, VariantSet,
+    WriteError,
+};
+
+/// Returns the validated [`Document`] corresponding to an authored layer.
+///
+/// `tokens` and `paths` are the interners the layer's identifiers belong
+/// to. The whole layer is checked first; on success the returned document
+/// also passes [`Document::validate`]. Its numeric arrays share the layer's
+/// buffers ([`Value`]) rather than copying them; matrix and text arrays are
+/// converted. See the [module docs](self) for the supported subset.
+///
+/// # Errors
+///
+/// A [`SaveError`] naming the source path of the first unsupported or
+/// invalid spec, field or value.
+pub fn usdc_document(
+    layer: &Layer,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+) -> Result<Document, SaveError> {
+    lower(layer, tokens, paths, false)
+}
+
+/// The canonical namespace and exact property groups of an authored comparison input.
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct ComparisonParts {
+    /// Validated document with the retained property groups omitted.
+    pub document: Document,
+    /// Retained groups in authored order, keyed by absolute prim path.
+    /// Entries refer to the original layer's token and path interners.
+    pub properties: HashMap<String, Vec<PropertyEntry>>,
+}
+
+/// Validates an authored layer, retaining exact property groups for comparison.
+/// The supplied interners must belong to the original layer.
+///
+/// # Errors
+/// Returns the same diagnostic as [`usdc_document`].
+#[doc(hidden)]
+pub fn prepare_comparison(
+    mut layer: Layer,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+) -> Result<ComparisonParts, SaveError> {
+    use crate::usda::writer::borrowed::{CheckedNames, Order};
+
+    let root = paths.lookup(&Path::root());
+    let mut checked = CheckedNames::default();
+    let mut declarations = Vec::new();
+    let mut retained = Vec::new();
+    for (&path, prim) in layer.prims().iter() {
+        if Some(path) == root
+            || !prim.outer_variant_sites().is_empty()
+            || prim.properties.is_empty()
+        {
+            continue;
+        }
+        declarations.clear();
+        if checked
+            .borrow_properties(
+                &prim.properties,
+                tokens,
+                paths,
+                &mut declarations,
+                Order::Authored,
+            )
+            .is_some()
+        {
+            retained.push(path);
+        }
+    }
+    drop(declarations);
+
+    // The checked groups cannot introduce lowering or validation errors. Property
+    // order and child names are checked independently of these declarations.
+    // Keep pseudo-root and variant properties on the normal namespace walk.
+    let mut properties = HashMap::with_capacity(retained.len());
+    if !retained.is_empty() {
+        let prims = layer.prims_mut();
+        for path in retained {
+            let prim = prims.get_mut(&path).expect("retained prim exists");
+            properties.insert(
+                paths.display(path, tokens),
+                core::mem::take(&mut prim.properties),
+            );
+        }
+    }
+    let document = usdc_document(&layer, tokens, paths)?;
+    Ok(ComparisonParts {
+        document,
+        properties,
+    })
+}
+
+/// Lowers one authored property using the same representation as [`usdc_document`].
+///
+/// # Errors
+/// Propagates property lowering errors. Full validation is performed by
+/// [`prepare_comparison`] for its retained groups.
+#[doc(hidden)]
+pub fn canonical_property(
+    entry: &PropertyEntry,
+    prim: &str,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+) -> Result<Property, SaveError> {
+    Lowering {
+        tokens,
+        paths,
+        skip_empty_entries: false,
+    }
+    .property(entry, prim)
+}
+
+/// Lowers `layer`, skipping dictionary entries with no value when
+/// `skip_empty_entries` is set (the USDA writer) and refusing them
+/// otherwise.
+fn lower(
+    layer: &Layer,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+    skip_empty_entries: bool,
+) -> Result<Document, SaveError> {
+    let mut builder = namespace::DocumentBuilder::default();
+    Lowering {
+        tokens,
+        paths,
+        skip_empty_entries,
+    }
+    .layer(layer, &mut builder)?;
+    let doc = builder.document;
+    doc.validate().map_err(SaveError::Document)?;
+    Ok(doc)
+}
+
+/// Saves an authored layer as USDA text, as [`usdc_document`] lowers it
+/// except that a dictionary entry with no value ([`LayerValue::Null`]) is
+/// left out rather than refused.
+///
+/// OpenUSD 26.11's USDA writer skips such an entry with a warning, where
+/// 26.08 wrote `key =` (`Sdf_FileIOUtility::_WriteDictionary`,
+/// `pxr/usd/sdf/fileIO_Common.cpp`); its USDC writer refuses it, as
+/// [`usdc_document`] does. Spec: AOUSD Core §6.6.2 (dictionaries).
+///
+/// # Errors
+///
+/// See [`usdc_document`]. Nothing is produced on error.
+pub fn save_usda(
+    layer: &Layer,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+) -> Result<String, SaveError> {
+    lower_text::<crate::usda::writer::TextString<'_>>(layer, tokens, paths)
+}
+
+/// Saves an authored layer as USDA text into `sink`, a piece at a time:
+/// the bytes [`save_usda`] returns, without holding them all
+/// ([`Document::write_usda_to`]).
+///
+/// The layer is lowered and checked before anything reaches `sink`, so a
+/// [`SaveError`] other than [`SaveError::Sink`] leaves `sink` untouched.
+///
+/// # Errors
+///
+/// See [`save_usda`]; [`SaveError::Sink`] when `sink` refuses text, after
+/// which it holds an incomplete prefix.
+pub fn save_usda_to<W: fmt::Write + ?Sized>(
+    layer: &Layer,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+    sink: &mut W,
+) -> Result<(), SaveError> {
+    prepare_usda(layer, tokens, paths)?
+        .write_to(sink)
+        .map_err(SaveError::from_usda)
+}
+
+/// The document [`save_usda`] writes for `layer`, checked as text
+/// ([`Document::validate_text`]): lowered as [`usdc_document`] lowers it,
+/// except that a dictionary entry with no value is left out.
+///
+/// Lowering first and writing later lets a caller refuse a layer before
+/// it opens a destination, then stream the text
+/// ([`Document::write_usda_to`]).
+///
+/// # Errors
+///
+/// See [`save_usda`].
+pub fn usda_document(
+    layer: &Layer,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+) -> Result<Document, SaveError> {
+    let doc = lower(layer, tokens, paths, true)?;
+    doc.validate_text_specs().map_err(SaveError::Document)?;
+    Ok(doc)
+}
+
+pub use crate::usda::writer::PreparedUsda;
+
+/// Checks the authored layer and determines the USDA header version before
+/// a caller opens a destination. The prepared writer borrows the layer
+/// and its interners and can be streamed repeatedly with [`PreparedUsda::write_to`].
+///
+/// # Errors
+///
+/// See [`save_usda`].
+pub fn prepare_usda<'a>(
+    layer: &'a Layer,
+    tokens: &'a TokenInterner,
+    paths: &'a PathInterner,
+) -> Result<PreparedUsda<'a>, SaveError> {
+    lower_text::<PreparedUsda<'_>>(layer, tokens, paths)
+}
+
+fn lower_text<'a, O: crate::usda::writer::TextOutput<'a>>(
+    layer: &'a Layer,
+    tokens: &'a TokenInterner,
+    paths: &'a PathInterner,
+) -> Result<O::Finished, SaveError> {
+    let mut sink = namespace::TextBuilder::<O>::new();
+    Lowering {
+        tokens,
+        paths,
+        skip_empty_entries: true,
+    }
+    .layer(layer, &mut sink)?;
+    sink.finish()
+}
+
+/// Why an authored layer could not be saved.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum SaveError {
+    /// The layer authors something this save does not write yet.
+    Unsupported {
+        /// Source path: `/` for the layer, a prim or property path, with a
+        /// metadata key after `#`.
+        path: String,
+        /// What is not supported.
+        feature: Unsupported,
+    },
+    /// The layer cannot be written as it stands.
+    Invalid {
+        /// Source path, as for [`Self::Unsupported`].
+        path: String,
+        /// What is wrong.
+        problem: Invalid,
+    },
+    /// The writers' shared validation rejects the lowered document.
+    Document(WriteError),
+    /// A retained array or deferred value could not decode; no output was
+    /// written.
+    ArrayRead {
+        /// Authored value location.
+        path: String,
+        /// Cached source failure.
+        error: layerstack::ArrayReadError,
+    },
+    /// The sink of [`save_usda_to`] refused text, and holds an incomplete
+    /// prefix of it. The sink keeps its own error.
+    Sink,
+}
+
+impl SaveError {
+    /// A writer error as a save error: [`WriteError::Sink`] as
+    /// [`Self::Sink`], the others as [`Self::Document`].
+    fn from_usda(error: WriteError) -> Self {
+        match error {
+            WriteError::Sink => Self::Sink,
+            error => Self::Document(error),
+        }
+    }
+}
+
+impl fmt::Display for SaveError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unsupported { path, feature } => {
+                write!(f, "{path}: saving {feature} is not supported")
+            }
+            Self::Invalid { path, problem } => write!(f, "{path}: {problem}"),
+            Self::Document(e) => write!(f, "{e}"),
+            Self::ArrayRead { path, error } => write!(f, "{path}: {error}"),
+            Self::Sink => f.write_str("the text sink refused the written text"),
+        }
+    }
+}
+
+impl core::error::Error for SaveError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Document(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+/// Authored content outside the supported subset.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Unsupported {
+    /// A sparse array edit.
+    ArrayEdit,
+    /// A list op that holds an explicit list and edits at once, which the
+    /// file formats cannot hold.
+    MixedListOp,
+    /// List-op metadata of this kind (path list ops, which USDA metadata
+    /// has no syntax for).
+    ListOpMetadata(&'static str),
+    /// A value of this kind.
+    Value(&'static str),
+}
+
+impl fmt::Display for Unsupported {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::ArrayEdit => f.write_str("sparse array edits"),
+            Self::MixedListOp => f.write_str("a list op with an explicit list and edits"),
+            Self::ListOpMetadata(kind) => write!(f, "{kind} metadata"),
+            Self::Value(kind) => write!(f, "a {kind} value"),
+        }
+    }
+}
+
+/// A layer the file formats cannot hold as it stands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Invalid {
+    /// An attribute spec has no declared type.
+    MissingTypeName,
+    /// A prim spec is not listed among the authored children of its parent
+    /// (of the variant that holds it, for a prim spec in a variant branch),
+    /// so it has no place in the written namespace.
+    UnlistedPrim,
+    /// A prim lists a child that has no prim spec.
+    MissingChildSpec,
+    /// A relationship spec holds a type, default or time samples.
+    RelationshipValue,
+    /// The pseudo-root spec holds more than children and their order.
+    PseudoRootOpinions,
+    /// A sublayer, or a reference or payload into another layer, records no
+    /// authored asset path to write (it was built from a layer id alone).
+    ArcWithoutAsset,
+}
+
+impl fmt::Display for Invalid {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::MissingTypeName => "attribute has no type name",
+            Self::UnlistedPrim => "prim spec is not among its parent's children",
+            Self::MissingChildSpec => "listed child has no prim spec",
+            Self::RelationshipValue => "relationship holds a type or values",
+            Self::PseudoRootOpinions => "pseudo-root spec holds prim opinions",
+            Self::ArcWithoutAsset => "arc to another layer has no authored asset path",
+        })
+    }
+}
+
+struct Lowering<'a> {
+    tokens: &'a TokenInterner,
+    paths: &'a PathInterner,
+    /// Leave out dictionary entries with no value instead of refusing them.
+    skip_empty_entries: bool,
+}
+
+fn unsupported<T>(path: impl Into<String>, feature: Unsupported) -> Result<T, SaveError> {
+    Err(SaveError::Unsupported {
+        path: path.into(),
+        feature,
+    })
+}
+
+fn invalid<T>(path: impl Into<String>, problem: Invalid) -> Result<T, SaveError> {
+    Err(SaveError::Invalid {
+        path: path.into(),
+        problem,
+    })
+}
+
+fn is_authored<T>(op: &LayerListOp<T>) -> bool {
+    !op.is_empty()
+}
+
+/// Where a value is authored, which decides the types it may have.
+#[derive(Clone, Copy)]
+enum Site<'t> {
+    /// An attribute default or time sample, declared with this type name
+    /// (`[]` included).
+    Value(&'t str, &'t LayerValue),
+    /// A metadata field or dictionary entry.
+    Metadata,
+}
+
+impl<'l> Lowering<'l> {
+    fn name(&self, token: TokenId) -> String {
+        String::from(self.tokens.resolve(token))
+    }
+
+    fn display(&self, path: PathId) -> String {
+        self.paths.display(path, self.tokens)
+    }
+
+    // ── Layer ───────────────────────────────────────────────────────
+
+    /// Spec: AOUSD Core §7.6.1 (layer spec fields).
+    fn layer(
+        &self,
+        layer: &'l Layer,
+        sink: &mut impl namespace::Sink<'l>,
+    ) -> Result<(), SaveError> {
+        let mut doc = Document::new();
+        doc.default_prim = layer.default_prim().map(|t| self.name(t));
+        doc.relocates = layer.has_relocates().then(|| {
+            layer
+                .relocates()
+                .iter()
+                .map(|r| {
+                    (
+                        self.display(r.source),
+                        r.target.map_or_else(String::new, |p| self.display(p)),
+                    )
+                })
+                .collect()
+        });
+        doc.metadata = self.metadata(layer.metadata_fields(), "/")?;
+        // Spec: AOUSD Core §10.3.1 (sublayers), written by their authored
+        // asset paths; an unresolved sublayer keeps its own.
+        for sublayer in layer.sublayers() {
+            let Some(asset) = &sublayer.asset else {
+                return invalid("/", Invalid::ArcWithoutAsset);
+            };
+            doc.sublayers.push(SubLayer {
+                asset: asset.clone(),
+                offset: layer_offset(sublayer.offset),
+            });
+        }
+
+        let root = self.paths.lookup(&Path::root());
+        let mut visited = Visited {
+            prims: HashSet::with_capacity(layer.prims().len()),
+            variants: HashSet::new(),
+        };
+        if let Some((root, spec)) = root.and_then(|id| Some((id, layer.prim(id)?))) {
+            visited.prims.insert(root);
+            if !is_children_only(spec) {
+                return invalid("/", Invalid::PseudoRootOpinions);
+            }
+            doc.prim_order = spec.prim_order().map(|o| self.names(o));
+            sink.root(doc, &spec.authored_children);
+            self.prims(layer, root, &spec.authored_children, &mut visited, sink)?;
+        } else {
+            sink.root(doc, &[]);
+        }
+
+        // Every prim spec, outside variants or inside one, must have been
+        // reached from the pseudo-root through the children lists.
+        // Every visited site resolved to an existing spec. Equal counts
+        // prove coverage; only an incomplete namespace needs a missing path.
+        let total = layer.prims().len()
+            + layer
+                .variant_prims()
+                .iter()
+                .map(|(_, specs)| specs.len())
+                .sum::<usize>();
+        if visited.prims.len() + visited.variants.len() == total {
+            return Ok(());
+        }
+        let unlisted = layer
+            .prims()
+            .iter()
+            .chain(
+                layer
+                    .variant_prims()
+                    .iter()
+                    .flat_map(|(path, specs)| specs.iter().map(move |spec| (path, spec))),
+            )
+            .filter(|(path, spec)| {
+                if spec.outer_variant_sites().is_empty() {
+                    !visited.prims.contains(*path)
+                } else {
+                    !visited
+                        .variants
+                        .contains(&(**path, spec.outer_variant_sites().to_vec()))
+                }
+            })
+            .map(|(path, spec)| self.spec_display(*path, spec.outer_variant_sites()))
+            .min();
+        if let Some(path) = unlisted {
+            return invalid(path, Invalid::UnlistedPrim);
+        }
+        Ok(())
+    }
+
+    fn names(&self, names: &[TokenId]) -> Vec<String> {
+        names.iter().map(|&t| self.name(t)).collect()
+    }
+
+    /// The variant-qualified path of the prim spec at `path` inside the
+    /// branches `sites` (`/A{v=x}B`), as OpenUSD names it.
+    fn spec_display(&self, path: PathId, sites: &[VariantSelectionSite]) -> String {
+        if sites.is_empty() {
+            return self.display(path);
+        }
+        let segments = self.paths.resolve(path).segments();
+        let mut out = String::new();
+        for (i, &segment) in segments.iter().enumerate() {
+            out = child_display(&out, self.tokens.resolve(segment));
+            for site in sites {
+                if self.paths.resolve(site.host_path).segments() == &segments[..=i] {
+                    out = branch_display(
+                        &out,
+                        self.tokens.resolve(site.set),
+                        self.tokens.resolve(site.variant),
+                    );
+                }
+            }
+        }
+        if out.is_empty() {
+            out.push('/');
+        }
+        out
+    }
+
+    // ── Prims ───────────────────────────────────────────────────────
+
+    /// Lowers the root prims `roots` and every spec below them, in the
+    /// order a recursive lowering would reach them, with the specs entered
+    /// and not yet finished on a heap stack rather than the call stack: a
+    /// namespace may be deeper than a thread's stack allows one frame per
+    /// level for, and OpenUSD writes any depth (`Sdf_WritePrim`,
+    /// `pxr/usd/sdf/fileIO_Common.h`).
+    ///
+    /// Spec: AOUSD Core §7.3.5–§7.3.6 (prim, variant set and variant
+    /// specs).
+    fn prims(
+        &self,
+        layer: &'l Layer,
+        root: PathId,
+        roots: &[TokenId],
+        visited: &mut Visited,
+        sink: &mut impl namespace::Sink<'l>,
+    ) -> Result<(), SaveError> {
+        let mut stack: Vec<Task<'l>> = Vec::new();
+        for &name in roots {
+            let parent = Parent {
+                path: root,
+                shown: Some("/"),
+                sites: &[],
+            };
+            stack.push(Task::Spec(self.prim(layer, parent, name, visited, sink)?));
+            while let Some(task) = stack.last_mut() {
+                match task {
+                    Task::Spec(spec) => {
+                        if let Some(&child) = spec.children.get(spec.next_child) {
+                            spec.next_child += 1;
+                            let parent = Parent {
+                                path: spec.host,
+                                shown: spec.shown.as_deref(),
+                                sites: &spec.sites,
+                            };
+                            let child = self.prim(layer, parent, child, visited, sink)?;
+                            stack.push(Task::Spec(child));
+                        } else if let Some(&(&set, set_spec)) = spec.sets.get(spec.next_set) {
+                            spec.next_set += 1;
+                            let mut variants: Vec<(TokenId, &'l VariantSpec)> = set_spec
+                                .variants
+                                .iter()
+                                .map(|(&name, variant)| (name, variant))
+                                .collect();
+                            if variants.is_empty() {
+                                continue;
+                            }
+                            // By name, as `Sdf_WriteVariantSet` sorts them.
+                            sort::sort_by(&mut variants, |a, b| {
+                                self.tokens.resolve(a.0).cmp(self.tokens.resolve(b.0))
+                            });
+                            sink.set(
+                                spec.shown.as_deref().expect("variant set owner"),
+                                self.tokens.resolve(set),
+                                &variants,
+                            );
+                            stack.push(Task::Set(SetTask {
+                                set,
+                                variants,
+                                next: 0,
+                            }));
+                        } else {
+                            let Some(Task::Spec(done)) = stack.pop() else {
+                                unreachable!("the spec on top")
+                            };
+                            if let Some(error) = done.set_names_error {
+                                return Err(error);
+                            }
+                            sink.leave();
+                        }
+                    }
+                    Task::Set(set) => {
+                        if let Some(&(name, variant)) = set.variants.get(set.next) {
+                            set.next += 1;
+                            let set_name = set.set;
+                            let Some((_, below)) = stack.split_last() else {
+                                unreachable!("the set on top")
+                            };
+                            let Some(Task::Spec(owner)) = below.last() else {
+                                unreachable!("a set below its spec")
+                            };
+                            let at = Parent {
+                                path: owner.host,
+                                shown: owner.shown.as_deref(),
+                                sites: &owner.sites,
+                            };
+                            let variant =
+                                self.variant(layer, owner.host, at, set_name, name, variant, sink)?;
+                            stack.push(Task::Spec(variant));
+                        } else {
+                            stack.pop();
+                            sink.leave();
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Starts lowering the prim spec named `name` below `parent`, in the
+    /// variant branches `parent.sites` enclose it in (none outside
+    /// variants): everything but its child prims and variant sets, which
+    /// [`Self::prims`] lowers next.
+    ///
+    /// Spec: AOUSD Core §7.6.2 (prim spec fields), §7.3.6 (variant specs
+    /// contain prim specs).
+    fn prim(
+        &self,
+        layer: &'l Layer,
+        parent: Parent<'_>,
+        name: TokenId,
+        visited: &mut Visited,
+        sink: &mut impl namespace::Sink<'l>,
+    ) -> Result<SpecTask<'l>, SaveError> {
+        let shown = || {
+            let name = self.tokens.resolve(name);
+            match parent.shown {
+                Some(base) => child_display(base, name),
+                None => child_display(&self.spec_display(parent.path, parent.sites), name),
+            }
+        };
+        let Some((id, spec)) = self
+            .paths
+            .lookup_child(parent.path, name)
+            .and_then(|id| Some((id, layer.prim_spec_in(id, parent.sites)?)))
+        else {
+            return invalid(shown(), Invalid::MissingChildSpec);
+        };
+        let duplicate = if parent.sites.is_empty() {
+            !visited.prims.insert(id)
+        } else {
+            !visited.variants.insert((id, parent.sites.to_vec()))
+        };
+
+        if !duplicate
+            && parent.sites.is_empty()
+            && sink.borrow_prim(spec, id, name, self.tokens, self.paths)
+        {
+            return Ok(SpecTask {
+                set_names_error: None,
+                shown: None,
+                sites: parent.sites.to_vec(),
+                host: id,
+                children: &spec.authored_children,
+                next_child: 0,
+                sets: Vec::new(),
+                next_set: 0,
+            });
+        }
+        let shown = shown();
+        let mut prim = Prim::new(
+            WriterSpecifier::Over,
+            spec.type_name.map(|t| self.name(t)),
+            self.name(name),
+        );
+        // A spec that authors no specifier keeps none: USDA writes the
+        // fallback, `over`, and a crate stores no field, as OpenUSD saves
+        // the prim specs `Sdf.CreatePrimInLayer` makes.
+        prim.specifier = spec.specifier.map(|specifier| match specifier {
+            Specifier::Def => WriterSpecifier::Def,
+            Specifier::Over => WriterSpecifier::Over,
+            Specifier::Class => WriterSpecifier::Class,
+        });
+        prim.metadata = self.metadata(&spec.fields, &shown)?;
+        // Dedicated members of the layer model, stored as the `active` and
+        // `instanceable` fields (AOUSD Core §7.6.2).
+        for (key, value) in [("active", spec.active), ("instanceable", spec.instanceable)] {
+            if let Some(value) = value {
+                prim.metadata.push(Metadatum::new(key, Value::Bool(value)));
+            }
+        }
+        let arcs = Arcs {
+            references: &spec.references,
+            payloads: &spec.payloads,
+            inherits: spec.rare().map_or(&NO_PATHS, |rare| &rare.inherits),
+            specializes: spec.rare().map_or(&NO_PATHS, |rare| &rare.specializes),
+        };
+        self.arcs(layer, arcs, &mut prim, &shown)?;
+        if let Some(selections) = spec.variant_selections() {
+            prim.variant_selections = self.selections(selections);
+        }
+        prim.property_order = spec.property_order().map(|o| self.names(o));
+        prim.prim_order = spec.prim_order().map(|o| self.names(o));
+        prim.properties = spec
+            .properties
+            .iter()
+            .map(|entry| self.property(entry, &shown))
+            .collect::<Result<_, _>>()?;
+        let set_names_error = self
+            .set_names(&mut prim, &shown, spec.variant_set_names())
+            .err();
+        let sets: Vec<_> = spec.variant_sets().iter().collect();
+        sink.body(
+            &shown,
+            prim,
+            false,
+            duplicate,
+            &spec.authored_children,
+            &sets,
+        );
+        Ok(SpecTask {
+            set_names_error,
+            shown: Some(shown),
+            sites: parent.sites.to_vec(),
+            host: id,
+            children: &spec.authored_children,
+            next_child: 0,
+            sets,
+            next_set: 0,
+        })
+    }
+
+    /// A set spec and an authored list of set names are independent fields.
+    /// Preserve the original lowering error order: an invalid list is reported
+    /// when leaving the spec, after checking its child and variant specs.
+    fn set_names(
+        &self,
+        prim: &mut Prim,
+        shown: &str,
+        names: &LayerListOp<TokenId>,
+    ) -> Result<(), SaveError> {
+        if is_authored(names) {
+            let path = format!("{shown}#variantSetNames");
+            prim.variant_set_names = Some(self.list_op(names, &path, |set| Ok(self.name(*set)))?);
+        }
+        Ok(())
+    }
+
+    /// Sets a prim's or variant's composition arcs.
+    ///
+    /// Spec: AOUSD Core §7.6.2.3 (prim composition fields), §10.3.2.1–
+    /// §10.3.2.4 (references, payloads, inherits, specializes).
+    fn arcs(
+        &self,
+        layer: &Layer,
+        arcs: Arcs<'_>,
+        prim: &mut Prim,
+        shown: &str,
+    ) -> Result<(), SaveError> {
+        // An arc list an edit emptied in place stays authored, and is
+        // written with no statements (`def "A" (` `)`), as OpenUSD writes
+        // the arc list op field a namespace edit emptied
+        // (`SdfListOp::ModifyOperations`).
+        let references = |op: &SparseListOp<LayerReference>, key: &str| {
+            if !op.is_authored() {
+                return Ok(None);
+            }
+            let path = format!("{shown}#{key}");
+            self.list_op(op, &path, |r| self.arc(layer, r, shown))
+                .map(Some)
+        };
+        prim.payloads = references(arcs.payloads, "payload")?;
+        prim.references = references(arcs.references, "references")?;
+        let paths = |op: &SparseListOp<PathId>, key: &str| {
+            if !op.is_authored() {
+                return Ok(None);
+            }
+            let path = format!("{shown}#{key}");
+            self.list_op(op, &path, |p| Ok(self.display(*p))).map(Some)
+        };
+        prim.inherits = paths(arcs.inherits, "inheritPaths")?;
+        prim.specializes = paths(arcs.specializes, "specializes")?;
+        Ok(())
+    }
+
+    /// Variant selections, by set name as OpenUSD writes them.
+    ///
+    /// Spec: AOUSD Core §7.6.2.3.4 (`variantSelection`).
+    fn selections(&self, selections: &VariantSelections) -> Vec<(String, String)> {
+        let mut out: Vec<(String, String)> = selections
+            .iter()
+            .map(|(set, variant)| (self.name(set), self.name(variant)))
+            .collect();
+        sort::sort(&mut out);
+        out
+    }
+
+    // ── Variants ────────────────────────────────────────────────────
+
+    /// Starts lowering one variant of the prim at `host`, held by `owner`,
+    /// to the prim spec it holds: its metadata, arcs, selections and
+    /// properties; [`Self::prims`] lowers its child prims (the prim specs
+    /// the layer keeps in this branch) and the variant sets nested in it
+    /// next.
+    ///
+    /// Spec: AOUSD Core §7.3.6, §7.6.7 (variant specs), §10.3.2.5.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the variant, its set and where it is written"
+    )]
+    fn variant(
+        &self,
+        layer: &Layer,
+        host: PathId,
+        owner: Parent<'_>,
+        set: TokenId,
+        name: TokenId,
+        variant: &'l VariantSpec,
+        sink: &mut impl namespace::Sink<'l>,
+    ) -> Result<SpecTask<'l>, SaveError> {
+        let shown = branch_display(
+            owner.shown.expect("variant set owner"),
+            self.tokens.resolve(set),
+            self.tokens.resolve(name),
+        );
+        let mut sites = owner.sites.to_vec();
+        sites.push(VariantSelectionSite {
+            host_path: host,
+            set,
+            variant: name,
+        });
+        let mut prim = Prim::new(WriterSpecifier::Over, None, self.name(name));
+        prim.metadata = self.metadata(&variant.fields, &shown)?;
+        let arcs = Arcs {
+            references: &variant.references,
+            payloads: &variant.payloads,
+            inherits: &variant.inherits,
+            specializes: &variant.specializes,
+        };
+        self.arcs(layer, arcs, &mut prim, &shown)?;
+        prim.variant_selections = self.selections(&variant.variant_selections);
+        prim.property_order = variant.property_order.as_ref().map(|o| self.names(o));
+        prim.prim_order = variant.prim_order.as_ref().map(|o| self.names(o));
+        prim.properties = variant
+            .properties
+            .iter()
+            .map(|entry| self.property(entry, &shown))
+            .collect::<Result<_, _>>()?;
+        let set_names_error = self
+            .set_names(&mut prim, &shown, &variant.variant_set_names)
+            .err();
+        let sets: Vec<_> = variant.variant_sets.iter().collect();
+        sink.body(&shown, prim, true, false, &variant.authored_children, &sets);
+        Ok(SpecTask {
+            set_names_error,
+            shown: Some(shown),
+            sites,
+            host,
+            children: &variant.authored_children,
+            next_child: 0,
+            sets,
+            next_set: 0,
+        })
+    }
+
+    // ── Properties ──────────────────────────────────────────────────
+
+    /// Spec: AOUSD Core §7.6.3–§7.6.5 (property, attribute and relationship
+    /// spec fields).
+    fn property(&self, entry: &PropertyEntry, prim: &str) -> Result<Property, SaveError> {
+        let name = self.name(entry.name);
+        let path = [prim, ".", &name].concat();
+        let spec = &entry.spec;
+        let targets = match &spec.targets {
+            Some(op) => Some(self.target_list(op, &path)?),
+            None => None,
+        };
+        let metadata = self.metadata(&spec.metadata, &path)?;
+        Ok(match spec.kind {
+            PropertyKind::Attribute => {
+                let Some(declared) = &spec.type_name else {
+                    return invalid(path, Invalid::MissingTypeName);
+                };
+                let type_name = String::from(declared.type_name());
+                let site = Site::Value(&type_name, declared.default_scalar());
+                let value = match &spec.default {
+                    Some(value) => Some(self.value(value, site, &path)?),
+                    None => None,
+                };
+                // A blocked sample is a value block (§12.3.6), which
+                // `value` converts like any other value.
+                let time_samples = match spec.time_samples.get() {
+                    Some(samples) => Some(
+                        samples
+                            .iter()
+                            .map(|(time, value)| Ok((*time, self.value(value, site, &path)?)))
+                            .collect::<Result<Vec<_>, SaveError>>()?,
+                    ),
+                    None => None,
+                };
+                Property::Attribute(Attribute {
+                    name,
+                    type_name,
+                    custom: spec.custom,
+                    variability: match spec.variability {
+                        Variability::Varying => WriterVariability::Varying,
+                        Variability::Uniform => WriterVariability::Uniform,
+                    },
+                    value,
+                    time_samples,
+                    spline: spec.spline.clone(),
+                    spline_custom_data: spec
+                        .spline
+                        .iter()
+                        .flat_map(|s| &s.knots)
+                        .filter(|k| !k.custom_data.is_empty())
+                        .map(|k| {
+                            let entries = k
+                                .custom_data
+                                .iter()
+                                .map(|(key, value)| {
+                                    Ok((
+                                        String::from(key.as_ref()),
+                                        self.entry_value(value, &path)?,
+                                    ))
+                                })
+                                .collect::<Result<_, SaveError>>()?;
+                            Ok((k.time, entries))
+                        })
+                        .collect::<Result<_, SaveError>>()?,
+                    connections: targets,
+                    metadata,
+                })
+            }
+            PropertyKind::Relationship => {
+                // A relationship holds no value but the legacy `default`
+                // path (`rel r.default = </A>`).
+                let default = match &spec.default {
+                    None => None,
+                    Some(LayerValue::PathText(default)) => Some(String::from(&**default)),
+                    Some(_) => return invalid(path, Invalid::RelationshipValue),
+                };
+                if spec.type_name.is_some() || spec.time_samples.is_authored() {
+                    return invalid(path, Invalid::RelationshipValue);
+                }
+                Property::Relationship(Relationship {
+                    name,
+                    custom: spec.custom,
+                    varying: spec.variability == Variability::Varying,
+                    targets,
+                    default,
+                    metadata,
+                })
+            }
+        })
+    }
+
+    fn target_list(
+        &self,
+        op: &LayerListOp<TargetPath>,
+        path: &str,
+    ) -> Result<ListOp<String>, SaveError> {
+        self.list_op(op, path, |t| Ok(t.display(self.paths, self.tokens)))
+    }
+
+    /// A reference or payload as authored: its asset path, never the layer
+    /// it resolved to (an unresolved arc keeps its asset path too), its
+    /// prim path or none for the `defaultPrim`, and its layer offset. An
+    /// arc into `layer` itself without an asset path is internal.
+    fn arc(&self, layer: &Layer, arc: &LayerReference, prim: &str) -> Result<Reference, SaveError> {
+        let internal = matches!(
+            arc.source(),
+            ReferenceSource::Layer { layer: id, asset: None } if id == layer.id()
+        );
+        let asset = match arc.asset_path() {
+            Some(asset) => Some(String::from(asset)),
+            None if internal => None,
+            None => return invalid(prim, Invalid::ArcWithoutAsset),
+        };
+        let prim_path = match arc.target {
+            ReferenceTarget::Prim(path) => Some(self.display(path)),
+            ReferenceTarget::DefaultPrim => None,
+        };
+        Ok(Reference {
+            asset,
+            prim_path,
+            offset: layer_offset(arc.layer_offset),
+            custom_data: arc
+                .custom_data
+                .iter()
+                .map(|(k, v)| Ok((String::from(k.as_ref()), self.entry_value(v, prim)?)))
+                .collect::<Result<_, SaveError>>()?,
+        })
+    }
+
+    /// Converts a list op, keeping each list. OpenUSD's list ops hold an
+    /// explicit list or edits, never both (AOUSD Core §6.6.3).
+    fn list_op<T, U>(
+        &self,
+        op: &LayerListOp<T>,
+        path: &str,
+        item: impl Fn(&T) -> Result<U, SaveError>,
+    ) -> Result<ListOp<U>, SaveError> {
+        let edits = !(op.prepend.is_empty()
+            && op.append.is_empty()
+            && op.delete.is_empty()
+            && op.add.is_empty()
+            && op.reorder.is_empty());
+        if op.explicit.is_some() && edits {
+            return unsupported(path, Unsupported::MixedListOp);
+        }
+        let list = |items: &[T]| items.iter().map(&item).collect::<Result<Vec<_>, _>>();
+        Ok(ListOp {
+            explicit: op.explicit.as_deref().map(list).transpose()?,
+            deleted: list(&op.delete)?,
+            added: list(&op.add)?,
+            prepended: list(&op.prepend)?,
+            appended: list(&op.append)?,
+            reordered: list(&op.reorder)?,
+        })
+    }
+
+    // ── Metadata ────────────────────────────────────────────────────
+
+    /// Spec: AOUSD Core §7.4 (metadata fields). USDA spells the
+    /// `documentation` field `doc`.
+    fn metadata(&self, fields: &[FieldEntry], owner: &str) -> Result<Vec<Metadatum>, SaveError> {
+        let mut out = Vec::with_capacity(fields.len());
+        for field in fields {
+            let key = self.tokens.resolve(field.name);
+            let path = format!("{owner}#{key}");
+            let value = self.field_value(&field.value, key, &path)?;
+            let key = match key {
+                "documentation" => "doc",
+                key => key,
+            };
+            out.push(Metadatum::new(key, value));
+        }
+        Ok(out)
+    }
+
+    /// A metadata field's value, or a dictionary entry's (`key` empty),
+    /// which may hold a list op as a `VtDictionary` entry may
+    /// (`CrateFile::_PackValue`, `pxr/usd/sdf/crateFile.cpp`).
+    ///
+    /// Spec: AOUSD Core §7.4 (metadata fields), §6.2 (dictionary type).
+    fn field_value(&self, value: &FieldValue, key: &str, path: &str) -> Result<Value, SaveError> {
+        Ok(match value {
+            FieldValue::Value(value) => self.metadata_value(value, key, path)?,
+            FieldValue::TokenListOp(op) => {
+                Value::TokenListOp(self.list_op(op, path, |t| Ok(self.name(*t)))?)
+            }
+            FieldValue::StringListOp(op) => {
+                Value::StringListOp(self.list_op(op, path, |s| Ok(String::from(&**s)))?)
+            }
+            FieldValue::IntListOp(op) => Value::IntListOp(self.list_op(op, path, |x| Ok(*x))?),
+            FieldValue::UIntListOp(op) => Value::UIntListOp(self.list_op(op, path, |x| Ok(*x))?),
+            FieldValue::Int64ListOp(op) => Value::Int64ListOp(self.list_op(op, path, |x| Ok(*x))?),
+            FieldValue::UInt64ListOp(op) => {
+                Value::UInt64ListOp(self.list_op(op, path, |x| Ok(*x))?)
+            }
+            FieldValue::UnregisteredListOp(op) => {
+                Value::UnregisteredListOp(self.list_op(op, path, |s| Ok(String::from(&**s)))?)
+            }
+            FieldValue::PathListOp(_) => {
+                return unsupported(path, Unsupported::ListOpMetadata("path list op"));
+            }
+            _ => return unsupported(path, Unsupported::Value("field value")),
+        })
+    }
+
+    /// An entry of an arc's or a spline knot's custom data.
+    fn entry_value(&self, value: &FieldValue, path: &str) -> Result<Value, SaveError> {
+        match value {
+            FieldValue::Value(value) => self.value(value, Site::Metadata, path),
+            other => self.field_value(other, "", path),
+        }
+    }
+
+    /// A metadata value. Registered array fields give an empty array its
+    /// element type; elsewhere an empty array has none.
+    fn metadata_value(
+        &self,
+        value: &LayerValue,
+        key: &str,
+        path: &str,
+    ) -> Result<Value, SaveError> {
+        if let LayerValue::Array(items) = value
+            && items.is_empty()
+        {
+            // A metadata statement writes no type, so a field's empty
+            // array is `[]` whatever its elements: a built-in array
+            // field's type, else any. A dictionary value (`key` empty)
+            // writes its type.
+            let declared = match layerstack::MetadataField::builtin(key).map(|f| f.value_type()) {
+                Some(value_type @ layerstack::MetadataType::Array(_)) => value_type.name(),
+                _ if !key.is_empty() => "token[]",
+                _ => return unsupported(path, Unsupported::Value("untyped empty array")),
+            };
+            return Value::empty_array_of(declared)
+                .map_or_else(|| unsupported(path, Unsupported::Value("array")), Ok);
+        }
+        self.value(value, Site::Metadata, path)
+    }
+
+    // ── Values ──────────────────────────────────────────────────────
+
+    /// Converts a value, keeping its type. Spec: AOUSD Core §6.2–§6.3
+    /// (value types), §12.3 (value blocks).
+    fn value(&self, value: &LayerValue, site: Site<'_>, path: &str) -> Result<Value, SaveError> {
+        use LayerValue as L;
+        let no = |kind: &'static str| unsupported(path, Unsupported::Value(kind));
+        Ok(match value {
+            L::Bool(v) => Value::Bool(*v),
+            L::Unregistered(text) => Value::Unregistered(String::from(&**text)),
+            L::PathText(_) => return no("path"),
+            L::UChar(v) => Value::UChar(*v),
+            L::Int(v) => Value::Int(*v),
+            L::UInt(v) => Value::UInt(*v),
+            L::Int64(v) => Value::Int64(*v),
+            L::UInt64(v) => Value::UInt64(*v),
+            L::Half(v) => Value::Half(*v),
+            L::Float(v) => Value::Float(*v),
+            L::Double(v) => Value::Double(*v),
+            // The writers hold a `timecode` default as a double and store
+            // it as `SdfTimeCode` from the declared type.
+            L::TimeCode(v) if matches!(site, Site::Value(_, _)) => Value::Double(*v),
+            // Elsewhere (a metadata value or a dictionary entry) the value
+            // carries the type.
+            L::TimeCode(v) => Value::TimeCode(*v),
+            L::Duration(v) => Value::Duration(*v),
+            L::String(v) => Value::String(String::from(&**v)),
+            L::Token(v) => Value::Token(self.name(*v)),
+            L::Asset(v) => Value::Asset(String::from(&**v)),
+            L::Vec2f(v) => Value::Float2(*v),
+            L::Vec3f(v) => Value::Float3(*v),
+            L::Vec4f(v) => Value::Float4(*v),
+            L::Vec2d(v) => Value::Double2(*v),
+            L::Vec3d(v) => Value::Double3(*v),
+            L::Vec4d(v) => Value::Double4(*v),
+            L::Vec2i(v) => Value::Int2(*v),
+            L::Vec3i(v) => Value::Int3(*v),
+            L::Vec4i(v) => Value::Int4(*v),
+            L::Vec2h(v) => Value::Half2(*v),
+            L::Vec3h(v) => Value::Half3(*v),
+            L::Vec4h(v) => Value::Half4(*v),
+            // Both hold a quaternion as `i, j, k, r`.
+            L::Quath(q) => Value::Quath(*q),
+            L::Quatf(q) => Value::Quatf(*q),
+            L::Quatd(q) => Value::Quatd(*q),
+            L::Matrix2d(m) => Value::Matrix2d(rows(m)),
+            L::Matrix3d(m) => Value::Matrix3d(rows(m)),
+            L::Matrix4d(m) => Value::Matrix4d(rows(m)),
+            // Outside an attribute default the writers' validation rejects
+            // a block, naming the owner.
+            L::Blocked => Value::Block,
+            L::AnimationBlock => Value::AnimationBlock,
+            L::Dictionary(entries) => Value::Dictionary(
+                entries
+                    .iter()
+                    .filter(|(_, v)| {
+                        !(self.skip_empty_entries && matches!(v, FieldValue::Value(L::Null)))
+                    })
+                    .map(|(k, v)| {
+                        let path = format!("{path}/{k}");
+                        Ok((String::from(&**k), self.field_value(v, "", &path)?))
+                    })
+                    .collect::<Result<_, SaveError>>()?,
+            ),
+            L::Array(items) => self.array(items, site, path)?,
+            L::TypedArray(items) => {
+                let items = items
+                    .try_materialize()
+                    .map_err(|error| SaveError::ArrayRead {
+                        path: path.into(),
+                        error: error.clone(),
+                    })?;
+                match items {
+                    layerstack::TypedArray::Token(items) => {
+                        Value::TokenArray(items.iter().map(|&token| self.name(token)).collect())
+                    }
+                    layerstack::TypedArray::String(items) => {
+                        Value::StringArray(items.iter().map(String::from).collect())
+                    }
+                    items => match typed_array(items) {
+                        Some(value) => value,
+                        None => return no("array"),
+                    },
+                }
+            }
+            L::ArrayEdit(edit) => self.array_edit(edit, None, site, path)?,
+            L::TypedArrayEdit(edit) => self.array_edit(
+                edit.edit(),
+                Some(edit.value_type().default_scalar()),
+                site,
+                path,
+            )?,
+            L::PathExpression(text) => Value::PathExpression(String::from(&**text)),
+            // Written as the value it decodes to, as an eager read holds it.
+            L::Deferred(_) => {
+                let decoded = value
+                    .try_materialize()
+                    .map_err(|error| SaveError::ArrayRead {
+                        path: path.into(),
+                        error: error.clone(),
+                    })?;
+                return self.value(decoded, site, path);
+            }
+            L::Opaque { .. } => return no("opaque"),
+            L::Null => return no("null"),
+            _ => return no("value"),
+        })
+    }
+
+    fn array_edit(
+        &self,
+        edit: &layerstack::ArrayEdit,
+        descriptor: Option<&LayerValue>,
+        site: Site<'_>,
+        path: &str,
+    ) -> Result<Value, SaveError> {
+        use layerstack::array_edit::{Instruction as I, Operand as O};
+        let descriptor = descriptor
+            .map(|v| self.value(v, Site::Metadata, path))
+            .transpose()?;
+        let element = match descriptor {
+            Some(element) => element,
+            None => {
+                let Site::Value(_, default) = site else {
+                    return unsupported(path, Unsupported::ArrayEdit);
+                };
+                self.value(default, Site::Metadata, path)?
+            }
+        };
+        let literal = |value: &LayerValue| self.value(value, Site::Metadata, path);
+        let operand = |src: &layerstack::ArrayEditOperand| match src {
+            O::Literal(v) => literal(v).map(O::Literal),
+            O::CopyFrom(index) => Ok(O::CopyFrom(*index)),
+        };
+        let instructions = edit
+            .ops
+            .iter()
+            .map(|op| {
+                Ok(match op {
+                    I::Write { src, index } => I::Write {
+                        src: operand(src)?,
+                        index: *index,
+                    },
+                    I::Insert { src, index } => I::Insert {
+                        src: operand(src)?,
+                        index: *index,
+                    },
+                    I::Erase { index } => I::Erase { index: *index },
+                    I::MinSize { len } => I::MinSize { len: *len },
+                    I::MaxSize { len } => I::MaxSize { len: *len },
+                    I::Resize { len } => I::Resize { len: *len },
+                    I::MinSizeFill { len, fill } => I::MinSizeFill {
+                        len: *len,
+                        fill: literal(fill)?,
+                    },
+                    I::ResizeFill { len, fill } => I::ResizeFill {
+                        len: *len,
+                        fill: literal(fill)?,
+                    },
+                })
+            })
+            .collect::<Result<_, SaveError>>()?;
+        Ok(Value::ArrayEdit {
+            element: Box::new(element),
+            instructions,
+        })
+    }
+
+    /// Converts an array. The element type comes from the declared type of
+    /// an attribute default, otherwise from the elements themselves, which
+    /// must all have the first one's type.
+    fn array(&self, items: &[LayerValue], site: Site<'_>, path: &str) -> Result<Value, SaveError> {
+        // An array holding text OpenUSD keeps as it recorded it (an
+        // identifier in metadata no schema registers) is one such text, its
+        // items as the parser records them (`[foo, 1]`,
+        // `Sdf_ParserValueContext`, `pxr/usd/sdf/parserValueContext.cpp`).
+        if items
+            .iter()
+            .any(|item| matches!(item, LayerValue::Unregistered(_)))
+        {
+            let mut text = String::from("[");
+            for (i, item) in items.iter().enumerate() {
+                if i > 0 {
+                    text.push_str(", ");
+                }
+                text.push_str(&self.value(item, site, path)?.to_usda_text());
+            }
+            text.push(']');
+            return Ok(Value::Unregistered(text));
+        }
+        let mut out = match site {
+            Site::Value(type_name, _) => Value::empty_array_of(type_name),
+            Site::Metadata => None,
+        };
+        for item in items {
+            let element = self.value(item, site, path)?;
+            let array =
+                out.get_or_insert_with(|| empty_array_like(&element).unwrap_or(Value::Block));
+            if !push_element(array, element) {
+                return unsupported(path, Unsupported::Value("mixed or nested array"));
+            }
+        }
+        out.map_or_else(
+            || unsupported(path, Unsupported::Value("untyped empty array")),
+            Ok,
+        )
+    }
+}
+
+fn typed_array(array: &layerstack::TypedArray) -> Option<Value> {
+    use layerstack::TypedArray as A;
+    Some(match array {
+        A::Deferred(_) => unreachable!("save preflight materializes retained arrays"),
+        A::Token(_) | A::String(_) => unreachable!("text arrays name their tokens in `value`"),
+        A::Bool(items) => Value::BoolArray(items.clone().into()),
+        A::UChar(items) => Value::UCharArray(items.clone().into()),
+        A::Int(items) => Value::IntArray(items.clone().into()),
+        A::UInt(items) => Value::UIntArray(items.clone().into()),
+        A::Int64(items) => Value::Int64Array(items.clone().into()),
+        A::UInt64(items) => Value::UInt64Array(items.clone().into()),
+        A::Half(items) => Value::HalfArray(items.clone().into()),
+        A::Float(items) => Value::FloatArray(items.clone().into()),
+        A::Double(items) => Value::DoubleArray(items.clone().into()),
+        A::TimeCode(items) => Value::TimeCodeArray(items.clone().into()),
+        A::Duration(items) => Value::DurationArray(items.clone().into()),
+        A::Vec2f(items) => Value::Float2Array(items.clone().into()),
+        A::Vec3f(items) => Value::Float3Array(items.clone().into()),
+        A::Vec4f(items) => Value::Float4Array(items.clone().into()),
+        A::Vec2d(items) => Value::Double2Array(items.clone().into()),
+        A::Vec3d(items) => Value::Double3Array(items.clone().into()),
+        A::Vec4d(items) => Value::Double4Array(items.clone().into()),
+        A::Vec2h(items) => Value::Half2Array(items.clone().into()),
+        A::Vec3h(items) => Value::Half3Array(items.clone().into()),
+        A::Vec4h(items) => Value::Half4Array(items.clone().into()),
+        A::Vec2i(items) => Value::Int2Array(items.clone().into()),
+        A::Vec3i(items) => Value::Int3Array(items.clone().into()),
+        A::Vec4i(items) => Value::Int4Array(items.clone().into()),
+        A::Quath(items) => Value::QuathArray(items.clone().into()),
+        A::Quatf(items) => Value::QuatfArray(items.clone().into()),
+        A::Quatd(items) => Value::QuatdArray(items.clone().into()),
+        A::Matrix2d(items) => Value::Matrix2dArray(items.iter().map(rows).collect()),
+        A::Matrix3d(items) => Value::Matrix3dArray(items.iter().map(rows).collect()),
+        A::Matrix4d(items) => Value::Matrix4dArray(items.iter().map(rows).collect()),
+        _ => return None,
+    })
+}
+
+/// Whether a prim spec holds only children and their order: the shape of
+/// the pseudo-root spec the importers produce.
+fn is_children_only(spec: &PrimSpec) -> bool {
+    spec.specifier.is_none()
+        && spec.type_name.is_none()
+        && spec.fields.is_empty()
+        && spec.properties.is_empty()
+        && spec.property_order().is_none()
+        && spec.variant_selections().is_none()
+        && spec.variant_sets().is_empty()
+        && !is_authored(spec.variant_set_names())
+        && !is_authored(&spec.references)
+        && !is_authored(&spec.payloads)
+        && !is_authored(spec.inherits())
+        && !is_authored(spec.specializes())
+        && spec.active.is_none()
+        && spec.instanceable.is_none()
+        && spec.outer_variant_sites().is_empty()
+}
+
+/// The prim specs reached so far, by path and branch context.
+struct Visited {
+    prims: HashSet<PathId>,
+    variants: HashSet<(PathId, Vec<VariantSelectionSite>)>,
+}
+
+/// Where a prim spec or variant is written: the namespace path of the prim
+/// spec it belongs to, its variant-qualified display path, and the variant
+/// branches enclosing it.
+#[derive(Clone, Copy)]
+struct Parent<'a> {
+    path: PathId,
+    shown: Option<&'a str>,
+    sites: &'a [VariantSelectionSite],
+}
+
+/// A prim spec or variant [`Lowering::prims`] has started and not yet
+/// finished: the [`Prim`] lowered so far, and where its child prims and
+/// variant sets are written.
+struct SpecTask<'l> {
+    /// A malformed set names list is reported after visiting the children.
+    set_names_error: Option<SaveError>,
+    /// The variant-qualified display path (`/A{v=x}`).
+    shown: Option<String>,
+    /// The variant branches enclosing the spec's child prims.
+    sites: Vec<VariantSelectionSite>,
+    /// The prim hosting the spec's variant sets.
+    host: PathId,
+    /// The child prims' names, and the next to lower.
+    children: &'l [TokenId],
+    next_child: usize,
+    /// The variant sets, and the next to lower.
+    sets: Vec<(&'l TokenId, &'l VariantSetSpec)>,
+    next_set: usize,
+}
+
+/// A variant set [`Lowering::prims`] is lowering: its variants by name,
+/// the next to lower and those lowered so far.
+struct SetTask<'l> {
+    set: TokenId,
+    variants: Vec<(TokenId, &'l VariantSpec)>,
+    next: usize,
+}
+
+/// A spec or set whose children are still being visited.
+enum Task<'l> {
+    Spec(SpecTask<'l>),
+    Set(SetTask<'l>),
+}
+
+/// The arc list ops of a prim spec or variant.
+#[derive(Clone, Copy)]
+struct Arcs<'a> {
+    references: &'a SparseListOp<LayerReference>,
+    payloads: &'a SparseListOp<LayerReference>,
+    inherits: &'a SparseListOp<PathId>,
+    specializes: &'a SparseListOp<PathId>,
+}
+
+/// The inherits and specializes of a prim spec authoring none.
+static NO_PATHS: SparseListOp<PathId> = SparseListOp::new();
+
+/// The display path of child prim `name` of `parent` (`/`, `/A` or
+/// `/A{v=x}`): a prim inside a variant follows its selection directly.
+fn child_display(parent: &str, name: &str) -> String {
+    if parent.ends_with('}') {
+        [parent, name].concat()
+    } else {
+        [parent.trim_end_matches('/'), "/", name].concat()
+    }
+}
+
+/// The display path of variant `variant` of set `set` on `owner`.
+fn branch_display(owner: &str, set: &str, variant: &str) -> String {
+    format!("{owner}{{{set}={variant}}}")
+}
+
+fn layer_offset(offset: LayerLayerOffset) -> LayerOffset {
+    LayerOffset {
+        offset: offset.offset,
+        scale: offset.scale,
+    }
+}
+
+/// The empty array of `element`'s type, if the writers have one.
+fn empty_array_like(element: &Value) -> Option<Value> {
+    if matches!(element, Value::TimeCode(_)) {
+        return Some(Value::TimeCodeArray(SharedVec::new()));
+    }
+    if matches!(element, Value::Duration(_)) {
+        return Some(Value::DurationArray(SharedVec::new()));
+    }
+    Value::empty_array_of(&format!("{}[]", element.canonical_type_name()))
+}
+
+/// A row-major `N`×`N` matrix from its flat entries.
+fn rows<const N: usize, const M: usize>(m: &[f64; M]) -> [[f64; N]; N] {
+    core::array::from_fn(|r| core::array::from_fn(|c| m[r * N + c]))
+}
+
+/// Appends `element` to `array` when it has the array's element type.
+pub(crate) fn push_element(array: &mut Value, element: Value) -> bool {
+    match (array, element) {
+        (Value::BoolArray(a), Value::Bool(v)) => a.make_mut().push(v),
+        (Value::UCharArray(a), Value::UChar(v)) => a.make_mut().push(v),
+        (Value::IntArray(a), Value::Int(v)) => a.make_mut().push(v),
+        (Value::UIntArray(a), Value::UInt(v)) => a.make_mut().push(v),
+        (Value::Int64Array(a), Value::Int64(v)) => a.make_mut().push(v),
+        (Value::UInt64Array(a), Value::UInt64(v)) => a.make_mut().push(v),
+        (Value::HalfArray(a), Value::Half(v)) => a.make_mut().push(v),
+        (Value::Half2Array(a), Value::Half2(v)) => a.make_mut().push(v),
+        (Value::Half3Array(a), Value::Half3(v)) => a.make_mut().push(v),
+        (Value::Half4Array(a), Value::Half4(v)) => a.make_mut().push(v),
+        (Value::QuathArray(a), Value::Quath(v)) => a.make_mut().push(v),
+        (Value::QuatfArray(a), Value::Quatf(v)) => a.make_mut().push(v),
+        (Value::QuatdArray(a), Value::Quatd(v)) => a.make_mut().push(v),
+        (Value::Matrix2dArray(a), Value::Matrix2d(v)) => a.push(v),
+        (Value::Matrix3dArray(a), Value::Matrix3d(v)) => a.push(v),
+        (Value::Matrix4dArray(a), Value::Matrix4d(v)) => a.push(v),
+        (Value::FloatArray(a), Value::Float(v)) => a.make_mut().push(v),
+        (Value::DoubleArray(a), Value::Double(v)) => a.make_mut().push(v),
+        (Value::TimeCodeArray(a), Value::TimeCode(v)) => a.make_mut().push(v),
+        (Value::DurationArray(a), Value::Duration(v)) => a.make_mut().push(v),
+        (Value::StringArray(a), Value::String(v)) => a.push(v),
+        (Value::TokenArray(a), Value::Token(v)) => a.push(v),
+        (Value::AssetArray(a), Value::Asset(v)) => a.push(v),
+        (Value::PathExpressionArray(a), Value::PathExpression(v)) => a.push(v),
+        (Value::Float2Array(a), Value::Float2(v)) => a.make_mut().push(v),
+        (Value::Float3Array(a), Value::Float3(v)) => a.make_mut().push(v),
+        (Value::Float4Array(a), Value::Float4(v)) => a.make_mut().push(v),
+        (Value::Double2Array(a), Value::Double2(v)) => a.make_mut().push(v),
+        (Value::Double3Array(a), Value::Double3(v)) => a.make_mut().push(v),
+        (Value::Double4Array(a), Value::Double4(v)) => a.make_mut().push(v),
+        (Value::Int2Array(a), Value::Int2(v)) => a.make_mut().push(v),
+        (Value::Int3Array(a), Value::Int3(v)) => a.make_mut().push(v),
+        (Value::Int4Array(a), Value::Int4(v)) => a.make_mut().push(v),
+        _ => return false,
+    }
+    true
+}
+
+mod namespace;
+#[doc(hidden)]
+pub use crate::usda::writer::borrowed::{Declaration, Payload};
+#[doc(hidden)]
+pub use namespace::{LayerSpec, visit_layer_specs};
+
+#[cfg(test)]
+mod tests;

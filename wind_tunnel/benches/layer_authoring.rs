@@ -162,7 +162,7 @@ impl Fixture {
 }
 
 fn layer_text(layer: &Layer, store: &InMemoryStore) -> String {
-    layerstack_usda::save_usda(layer, store.tokens(), store.paths()).unwrap()
+    layerstack_io::usda::save_usda(layer, store.tokens(), store.paths()).unwrap()
 }
 
 fn neighbors(paths: &[PathId], i: usize) -> [TargetPath; 2] {

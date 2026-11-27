@@ -18,7 +18,7 @@ use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, LayerId, PathInterner, ResolvedAsset, Stage,
     StageOptions, TokenInterner,
 };
-use layerstack_usda::{emit, lower, parser};
+use layerstack_io::usda::{emit, lower, parser};
 
 struct NoAssets;
 impl AssetResolver for NoAssets {
@@ -65,7 +65,7 @@ fn main() {
         let mut store = InMemoryStore::default();
         let start = phase(run, "import");
         let imported = direct.then(|| {
-            layerstack_usda::read_usda(
+            layerstack_io::usda::read_usda(
                 black_box(&source),
                 LayerId(1),
                 store.tokens(),

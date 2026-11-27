@@ -18,7 +18,8 @@ fn diff_distinguishes_equality_changes_and_unreadable_input() {
     let dir = std::env::temp_dir().join(format!("layerstack-diff-{}-{nonce}", std::process::id()));
     fs::create_dir(&dir).unwrap();
     let binary =
-        layerstack_usdc::writer::write_document(&layerstack_usda::writer::Document::new()).unwrap();
+        layerstack_io::usdc::writer::write_document(&layerstack_io::usda::writer::Document::new())
+            .unwrap();
     fs::write(dir.join("before.usdc"), &binary).unwrap();
     fs::write(dir.join("empty.usda"), "#usda 1.0\n").unwrap();
     let text = "#usda 1.0\n(\n subLayers = [@missing.usda@]\n)\n";

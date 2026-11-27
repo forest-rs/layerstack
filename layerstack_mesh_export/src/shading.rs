@@ -24,7 +24,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use layerstack_schemas::usd_shade as shade;
 
-use layerstack_usda::writer::{Attribute, Prim, Property, Value};
+use layerstack_io::usda::writer::{Attribute, Prim, Property, Value};
 
 use crate::{ColorInput, ExportError, FloatInput, Material, MaterialProblem, Texture};
 

@@ -8,11 +8,11 @@ use alloc::string::{String, ToString};
 use alloc::vec;
 use alloc::vec::Vec;
 
-use layerstack_schemas::{usd_geom as geom, usd_shade as shade};
-use layerstack_usda::writer::{
+use layerstack_io::usda::writer::{
     Attribute, Document, LayerOffset, ListOp, Metadatum, Prim, Property, Reference, Relationship,
     Specifier, Value,
 };
+use layerstack_schemas::{usd_geom as geom, usd_shade as shade};
 
 use crate::{
     CustomAttribute, ExportError, Faces, FamilyType, INSTANCE_ID, INSTANCE_NAMES, Instance,

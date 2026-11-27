@@ -8,9 +8,9 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use layerstack::UpAxis;
-use layerstack_usda::writer::{Document, Value};
-use layerstack_usdc::writer::write_document;
-use layerstack_usdz::{PackageFile, write_usdz};
+use layerstack_io::usda::writer::{Document, Value};
+use layerstack_io::usdc::writer::write_document;
+use layerstack_io::usdz::{PackageFile, write_usdz};
 
 use crate::{CustomAttribute, ExportError, Instance, Material, Mesh, PointInstancer, Transform};
 
@@ -52,7 +52,7 @@ impl UsdzProfile {
 
     /// Whether the profile allows a member at `path` besides the root
     /// layer. For [`Self::Generic`], the package writer's own member check
-    /// ([`layerstack_usdz::writer::MEMBER_EXTENSIONS`]) applies.
+    /// ([`layerstack_io::usdz::writer::MEMBER_EXTENSIONS`]) applies.
     fn allows_member(self, path: &str) -> bool {
         match self {
             Self::Generic => true,
@@ -314,7 +314,7 @@ impl<'a> Scene<'a> {
     /// Serializes the scene as a binary USDC layer.
     ///
     /// The layer holds the same specs and fields as [`Self::to_usda`]'s
-    /// text (see [`layerstack_usdc::writer::document`]).
+    /// text (see [`layerstack_io::usdc::writer::document`]).
     ///
     /// # Errors
     ///

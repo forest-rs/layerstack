@@ -94,7 +94,7 @@ fn open(session: Option<&str>) -> StageDocument<Filesystem> {
 
 /// `layer` saved as USDA, with the fixture directory spelled `<dir>`.
 fn text(layer: &layerstack::Layer, store: &InMemoryStore) -> String {
-    let text = layerstack_usda::save_usda(layer, store.tokens(), store.paths()).expect("saves");
+    let text = layerstack_io::usda::save_usda(layer, store.tokens(), store.paths()).expect("saves");
     text.replace(&format!("{}/", slashed(&directory())), "<dir>/")
 }
 

@@ -17,7 +17,7 @@ use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 use layerstack::{AssetResolveError, AssetResolver, ResolvedAsset};
 
-use layerstack_usda::read_usda;
+use layerstack_io::usda::read_usda;
 
 /// Stub resolver for single-file validation (no sublayer loading).
 struct StubResolver {

@@ -16,7 +16,7 @@ use layerstack::{
     ArcKind, AssetResolveError, AssetResolver, CompositionError, InMemoryStore, Layer, LayerId,
     PathInterner, ResolvedAsset, Stage, StageOptions, SublayerCycle, TokenInterner,
 };
-use layerstack_usda::{emit, lower, parser::parse_cst};
+use layerstack_io::usda::{emit, lower, parser::parse_cst};
 
 /// Resolves asset paths against an in-memory set of USDA sources.
 struct MemoryResolver {

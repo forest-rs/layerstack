@@ -18,8 +18,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use layerstack::{LayerId, NoAssets, PathInterner, TokenInterner};
-use layerstack_usda::save::save_usda;
-use layerstack_usdc::{CrateFile, DecodeBudget, read_usdc, read_usdc_lazy};
+use layerstack_io::usda::save::save_usda;
+use layerstack_io::usdc::{CrateFile, DecodeBudget, read_usdc, read_usdc_lazy};
 use serde::Deserialize;
 
 const ORACLE: &str = include_str!("../../fixtures/usdc_compressed_bit/oracle.json");

@@ -4,6 +4,8 @@
 
 Initial release.
 
+- USDA, USDC and USDZ readers and writers, in the `usda`, `usdc` and `usdz`
+  modules.
 - Host-owned storage and retained stage documents for loading USDA, USDC and USDZ.
 - Explicit source tracking, dirty-layer saves, session-layer saves, exports and
   reload policies that protect unsaved edits.

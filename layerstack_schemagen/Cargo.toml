@@ -15,7 +15,6 @@ layerstack = { workspace = true }
 # Opens a schema stage with its sublayers from the filesystem, resolving
 # them through search paths as usdGenSchema's resolver does.
 layerstack_io = { features = ["std"], workspace = true }
-layerstack_usda = { workspace = true }
 # Reads each schema's kind, bases and auto-applies from OpenUSD's
 # `plugInfo.json`, and writes a compiled schema's; this tool is never a
 # dependency of a published crate.

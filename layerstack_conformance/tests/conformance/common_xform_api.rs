@@ -97,8 +97,8 @@ impl AssetResolver for NoAssets {
 fn scene() -> (InMemoryStore, LiveStage) {
     let mut store = InMemoryStore::default();
     for (id, text) in [(LayerId(1), SCENE), (LayerId(2), WEAK)] {
-        let parsed = layerstack_usda::parser::parse(text);
-        let emitted = layerstack_usda::emit::emit(
+        let parsed = layerstack_io::usda::parser::parse(text);
+        let emitted = layerstack_io::usda::emit::emit(
             &parsed.layer,
             id,
             store.tokens(),

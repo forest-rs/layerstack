@@ -182,13 +182,13 @@ fn test_file_format() {
                 paths: store.paths(),
             };
             let layer = format.read(&source).unwrap();
-            layerstack_usda::save_usda(&layer, store.tokens(), store.paths()).unwrap()
+            usda::save_usda(&layer, store.tokens(), store.paths()).unwrap()
         };
         let baseline = |store: &InMemoryStore, file: &str, asset: &str| {
             let text = std::fs::read_to_string(format!("{dir}/baseline/{file}"))
                 .unwrap()
                 .replace("@placeholder.usda@", &format!("@{asset}@"));
-            let read = layerstack_usda::read_usda_with_registry(
+            let read = usda::read_usda_with_registry(
                 &text,
                 LayerId(2),
                 store.tokens(),
@@ -197,7 +197,7 @@ fn test_file_format() {
                 &schemas,
             );
             assert!(!read.emitted.rejected);
-            layerstack_usda::save_usda(&read.emitted.layer, store.tokens(), store.paths()).unwrap()
+            usda::save_usda(&read.emitted.layer, store.tokens(), store.paths()).unwrap()
         };
         let none = FormatArgs::new();
         assert_eq!(

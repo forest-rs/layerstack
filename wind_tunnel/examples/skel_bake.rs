@@ -53,7 +53,7 @@ fn main() {
     let mut summary = String::new();
     for _ in 0..runs {
         let mut store = InMemoryStore::default();
-        let imported = layerstack_usda::read_usda(
+        let imported = layerstack_io::usda::read_usda(
             &source,
             LayerId(1),
             store.tokens(),

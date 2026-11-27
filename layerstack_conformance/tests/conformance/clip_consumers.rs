@@ -75,9 +75,9 @@ def "Clip" {
 }"#;
     let mut store = InMemoryStore::default();
     for (id, text) in [(LayerId(1), root), (LayerId(2), clip)] {
-        let parsed = layerstack_usda::parser::parse(text);
+        let parsed = layerstack_io::usda::parser::parse(text);
         assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
-        let emitted = layerstack_usda::emit::emit(
+        let emitted = layerstack_io::usda::emit::emit(
             &parsed.layer,
             id,
             store.tokens(),

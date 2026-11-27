@@ -30,7 +30,7 @@ use layerstack::{
     PathInterner, PropertyDefinition, PropertyPath, ResolvedAsset, SchemaDefinition,
     SchemaRegistry, Stage, StageOptions, Time, TokenInterner, Value,
 };
-use layerstack_usda::{emit, lower, parser::parse_cst};
+use layerstack_io::usda::{emit, lower, parser::parse_cst};
 use serde::Deserialize;
 
 const VECTORS: &str = include_str!("../data/temporal_sparse.json");

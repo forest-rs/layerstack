@@ -3,7 +3,7 @@
 
 //! USDC loader for conformance testing.
 //!
-//! Reads `.usdc` binary files through `layerstack_usdc::read_usdc` and
+//! Reads `.usdc` binary files through `layerstack_io::usdc::read_usdc` and
 //! produces a [`LoadedStage`] ready for composition, analogous to
 //! [`usda_real::load_entry_usda`](crate::usda_real::load_entry_usda).
 
@@ -94,7 +94,7 @@ fn load_usdc_file(
 
     // Parse through the full USDC pipeline.
     let result =
-        layerstack_usdc::read_usdc(&data, layer_id, store.tokens(), store.paths(), resolver)
+        layerstack_io::usdc::read_usdc(&data, layer_id, store.tokens(), store.paths(), resolver)
             .unwrap_or_else(|e| panic!("failed to parse {}: {e}", path.display()));
 
     // Insert resolved layers (from sublayer/reference resolution).
@@ -184,13 +184,13 @@ impl AssetResolver for UsdcFileResolver {
 
         match ext {
             "usdc" | "usd" if data.starts_with(b"PXR-USDC") => {
-                let result = layerstack_usdc::read_usdc(&data, layer_id, tokens, paths, self)
+                let result = layerstack_io::usdc::read_usdc(&data, layer_id, tokens, paths, self)
                     .map_err(|e| {
-                        AssetResolveError::LoadError(Arc::from(format!(
-                            "failed to parse {}: {e}",
-                            resolved_path.display()
-                        )))
-                    })?;
+                    AssetResolveError::LoadError(Arc::from(format!(
+                        "failed to parse {}: {e}",
+                        resolved_path.display()
+                    )))
+                })?;
                 for layer in result.resolved_layers {
                     self.pending_layers.push(layer);
                 }
@@ -227,7 +227,7 @@ impl AssetResolver for UsdcFileResolver {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CrateStructure {
     /// The header's version.
-    pub version: layerstack_usdc::CrateVersion,
+    pub version: layerstack_io::usdc::CrateVersion,
     /// Spec path to `(form, [(field, value)])`.
     pub specs: BTreeMap<String, (String, Vec<(String, String)>)>,
 }
@@ -237,13 +237,17 @@ pub struct CrateStructure {
 /// # Errors
 ///
 /// Any reader error for the header, TOC, sections or a field value.
-pub fn crate_structure(data: &[u8]) -> Result<CrateStructure, layerstack_usdc::UsdcError> {
-    use layerstack_usdc::value_rep::{RawValueRep, decode_value};
-    let header = layerstack_usdc::header::parse_header(data)?;
-    let toc = layerstack_usdc::toc::parse_toc(data, header.toc_offset)?;
-    let mut budget = layerstack_usdc::DecodeBudget::for_input(data.len());
-    let s =
-        layerstack_usdc::section::parse_sections(data, &toc, header.crate_version(), &mut budget)?;
+pub fn crate_structure(data: &[u8]) -> Result<CrateStructure, layerstack_io::usdc::UsdcError> {
+    use layerstack_io::usdc::value_rep::{RawValueRep, decode_value};
+    let header = layerstack_io::usdc::header::parse_header(data)?;
+    let toc = layerstack_io::usdc::toc::parse_toc(data, header.toc_offset)?;
+    let mut budget = layerstack_io::usdc::DecodeBudget::for_input(data.len());
+    let s = layerstack_io::usdc::section::parse_sections(
+        data,
+        &toc,
+        header.crate_version(),
+        &mut budget,
+    )?;
     let mut specs = BTreeMap::new();
     for spec in &s.specs {
         let mut fields = Vec::new();
@@ -285,14 +289,14 @@ pub fn crate_structure(data: &[u8]) -> Result<CrateStructure, layerstack_usdc::U
 /// # Errors
 ///
 /// Any reader error for the header, TOC or sections.
-pub fn crate_sections(data: &[u8]) -> Result<String, layerstack_usdc::UsdcError> {
-    let header = layerstack_usdc::header::parse_header(data)?;
-    let toc = layerstack_usdc::toc::parse_toc(data, header.toc_offset)?;
-    let sections = layerstack_usdc::section::parse_sections(
+pub fn crate_sections(data: &[u8]) -> Result<String, layerstack_io::usdc::UsdcError> {
+    let header = layerstack_io::usdc::header::parse_header(data)?;
+    let toc = layerstack_io::usdc::toc::parse_toc(data, header.toc_offset)?;
+    let sections = layerstack_io::usdc::section::parse_sections(
         data,
         &toc,
         header.crate_version(),
-        &mut layerstack_usdc::DecodeBudget::with_limit(u64::MAX),
+        &mut layerstack_io::usdc::DecodeBudget::with_limit(u64::MAX),
     )?;
     let entries = [
         toc.tokens,

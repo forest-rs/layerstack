@@ -13,7 +13,7 @@ pub(super) struct Undo {
     identifiers: HashMap<Arc<str>, Option<LayerId>>,
     pub(super) reservations: Vec<LayerId>,
     #[cfg(feature = "std")]
-    retained: BTreeMap<LayerId, Option<layerstack_usdc::RetainedValues>>,
+    retained: BTreeMap<LayerId, Option<crate::usdc::RetainedValues>>,
     reserved_at: Option<(layerstack::StoreIdentity, u64)>,
     next: u64,
     work: PackageCacheStats,
@@ -70,7 +70,7 @@ impl Catalog {
     }
 
     #[cfg(feature = "std")]
-    pub(super) fn retain_values(&mut self, id: LayerId, values: layerstack_usdc::RetainedValues) {
+    pub(super) fn retain_values(&mut self, id: LayerId, values: crate::usdc::RetainedValues) {
         let previous = self.retained_values.insert(id, values);
         if let Some(undo) = &mut self.undo {
             undo.retained.entry(id).or_insert(previous);

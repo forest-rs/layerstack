@@ -405,12 +405,12 @@ fn verify_openusd(store: &InMemoryStore, graph: &str) {
     let usdc = dir.join("paint.usdc");
     std::fs::write(
         &usda,
-        layerstack_usda::save_usda(layer, store.tokens(), store.paths()).unwrap(),
+        layerstack_io::usda::save_usda(layer, store.tokens(), store.paths()).unwrap(),
     )
     .unwrap();
     std::fs::write(
         &usdc,
-        layerstack_usdc::save_usdc(layer, store.tokens(), store.paths()).unwrap(),
+        layerstack_io::usdc::save_usdc(layer, store.tokens(), store.paths()).unwrap(),
     )
     .unwrap();
     let output = Command::new(python)

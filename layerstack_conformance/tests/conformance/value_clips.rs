@@ -94,8 +94,8 @@ fn compose(layers: &Layers) -> (InMemoryStore, Stage) {
     };
     for (name, text) in layers {
         let id = assets.names[name];
-        let parsed = layerstack_usda::parser::parse(text);
-        let emitted = layerstack_usda::emit::emit(
+        let parsed = layerstack_io::usda::parser::parse(text);
+        let emitted = layerstack_io::usda::emit::emit(
             &parsed.layer,
             id,
             store.tokens(),

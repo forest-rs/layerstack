@@ -843,7 +843,7 @@ fn arkit_packages_always_use_references() {
         "ModelIO would draw each instancing prototype once more: {text}"
     );
     let arkit = scene.to_usdz(UsdzProfile::Arkit, &[]).unwrap();
-    let expected = layerstack_usdc::writer::write_document(&layer).unwrap();
+    let expected = layerstack_io::usdc::writer::write_document(&layer).unwrap();
     assert!(
         arkit.windows(expected.len()).any(|w| w == expected),
         "the package's layer is the referenced form"

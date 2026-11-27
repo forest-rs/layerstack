@@ -217,11 +217,11 @@ fn values_openusd_rejects_are_reported() {
             "#usda 1.0\ndef \"P\"\n{{\n    {}\n}}\n",
             statement.replace("\\n", "\n")
         );
-        let parsed = layerstack_usda::parser::parse(&source);
+        let parsed = layerstack_io::usda::parser::parse(&source);
         assert!(parsed.diagnostics.is_empty(), "{statement}");
         let tokens = TokenInterner::default();
         let paths = PathInterner::default();
-        let result = layerstack_usda::emit::emit(
+        let result = layerstack_io::usda::emit::emit(
             &parsed.layer,
             LayerId(1),
             &tokens,
@@ -259,10 +259,10 @@ impl AssetResolver for FixtureResolver {
     ) -> Result<ResolvedAsset, AssetResolveError> {
         let path = fixture_dir().join(asset_path);
         let text = std::fs::read_to_string(&path).map_err(|_| AssetResolveError::NotFound)?;
-        let parsed = layerstack_usda::parser::parse(&text);
+        let parsed = layerstack_io::usda::parser::parse(&text);
         assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
         let id = LayerId(2);
-        let emitted = layerstack_usda::emit::emit(&parsed.layer, id, tokens, paths, self);
+        let emitted = layerstack_io::usda::emit::emit(&parsed.layer, id, tokens, paths, self);
         Ok(ResolvedAsset {
             layer_id: id,
             resolved_path: Arc::from(path.to_string_lossy().as_ref()),
@@ -291,8 +291,8 @@ fn unresolved_sublayers_are_reported_by_both_readers() {
         let mut store = InMemoryStore::default();
         let root = LayerId(1);
         let (layer, resolved) = if format == "usda" {
-            let parsed = layerstack_usda::parser::parse(&text);
-            let emitted = layerstack_usda::emit::emit(
+            let parsed = layerstack_io::usda::parser::parse(&text);
+            let emitted = layerstack_io::usda::emit::emit(
                 &parsed.layer,
                 root,
                 store.tokens(),
@@ -302,7 +302,7 @@ fn unresolved_sublayers_are_reported_by_both_readers() {
             assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
             (emitted.layer, emitted.resolved_layers)
         } else {
-            let read = layerstack_usdc::read_usdc(
+            let read = layerstack_io::usdc::read_usdc(
                 &bytes,
                 root,
                 store.tokens(),

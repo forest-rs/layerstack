@@ -46,7 +46,7 @@ fn main() {
         let start = Instant::now();
         let mut retained = None;
         let layer = if data.starts_with(b"PXR-USDC") && mode != "eager" {
-            let result = layerstack_usdc::read_usdc_lazy(
+            let result = layerstack_io::usdc::read_usdc_lazy(
                 Arc::from(data.as_slice()),
                 LayerId(1),
                 store.tokens(),
@@ -66,7 +66,7 @@ fn main() {
             retained = Some(result.values);
             result.assembled.layer
         } else if data.starts_with(b"PXR-USDC") {
-            let result = layerstack_usdc::read_usdc(
+            let result = layerstack_io::usdc::read_usdc(
                 &data,
                 LayerId(1),
                 store.tokens(),
@@ -78,7 +78,7 @@ fn main() {
             assert!(result.resolved_layers.is_empty(), "self-contained layer");
             result.layer
         } else {
-            let result = layerstack_usdz::read_usdz(
+            let result = layerstack_io::usdz::read_usdz(
                 &data,
                 LayerId(1),
                 store.tokens(),
@@ -129,7 +129,7 @@ fn main() {
         let demand_ms = start.elapsed().as_secs_f64() * 1000.;
         let stats = retained
             .as_ref()
-            .map(layerstack_usdc::RetainedValues::stats)
+            .map(layerstack_io::usdc::RetainedValues::stats)
             .unwrap_or_default();
         println!(
             "{{\"mode\":\"{mode}\",\"run\":{run},\"bytes\":{bytes},\"prims\":{prims},\"read_ms\":{read_ms:.3},\"import_ms\":{import_ms:.3},\"compose_ms\":{compose_ms:.3},\"demand_ms\":{demand_ms:.3},\"decode_attempts\":{},\"cached_element_bytes\":{}}}",

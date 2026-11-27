@@ -30,8 +30,8 @@ impl AssetResolver for NoAssets {
 }
 
 fn parse(text: &str, id: LayerId, store: &mut InMemoryStore) -> layerstack::Layer {
-    let parsed = layerstack_usda::parser::parse(text);
-    let emitted = layerstack_usda::emit::emit(
+    let parsed = layerstack_io::usda::parser::parse(text);
+    let emitted = layerstack_io::usda::emit::emit(
         &parsed.layer,
         id,
         store.tokens(),

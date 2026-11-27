@@ -4,7 +4,7 @@
 //! Integration tests for USDC binary file parsing.
 //!
 //! These tests read the supplemental spec's `gen_*.usdc` reference files
-//! through `layerstack_usdc::read_usdc` and verify the assembled layers
+//! through `layerstack_io::usdc::read_usdc` and verify the assembled layers
 //! contain the expected structure and values.
 //!
 //! Spec: AOUSD Core §16.3.
@@ -45,7 +45,7 @@ fn read_usdc_file(path: &Path) -> ParsedUsdc {
     let layer_id = LayerId(1);
     let mut resolver = StubResolver;
 
-    let result = layerstack_usdc::read_usdc(
+    let result = layerstack_io::usdc::read_usdc(
         &data,
         layer_id,
         store.tokens(),
@@ -66,7 +66,7 @@ fn read_usdc_file(path: &Path) -> ParsedUsdc {
 struct ParsedUsdc {
     store: InMemoryStore,
     layer_id: LayerId,
-    diagnostics: Vec<layerstack_usdc::assemble::AssembleDiagnostic>,
+    diagnostics: Vec<layerstack_io::usdc::assemble::AssembleDiagnostic>,
 }
 
 impl ParsedUsdc {
@@ -146,7 +146,7 @@ fn invalid_magic_rejected() {
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result = layerstack_usdc::read_usdc(&data, LayerId(1), &tokens, &paths, &mut resolver);
+    let result = layerstack_io::usdc::read_usdc(&data, LayerId(1), &tokens, &paths, &mut resolver);
     assert!(result.is_err());
 }
 
@@ -156,7 +156,7 @@ fn truncated_file_rejected() {
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result = layerstack_usdc::read_usdc(data, LayerId(1), &tokens, &paths, &mut resolver);
+    let result = layerstack_io::usdc::read_usdc(data, LayerId(1), &tokens, &paths, &mut resolver);
     assert!(result.is_err());
 }
 
@@ -625,7 +625,7 @@ fn all_gen_files_parse_without_error() {
             let paths = PathInterner::default();
             let mut resolver = StubResolver;
             let result =
-                layerstack_usdc::read_usdc(&data, LayerId(1), &tokens, &paths, &mut resolver);
+                layerstack_io::usdc::read_usdc(&data, LayerId(1), &tokens, &paths, &mut resolver);
             assert!(result.is_ok(), "failed to parse {name}: {:?}", result.err());
             count += 1;
         }
@@ -703,9 +703,9 @@ fn timecodes_decode_to_time_codes() {
 /// Reads `data` within `budget`.
 fn read_within(
     data: &[u8],
-    budget: &mut layerstack_usdc::DecodeBudget,
-) -> Result<layerstack_usdc::AssembleResult, layerstack_usdc::UsdcError> {
-    layerstack_usdc::read_usdc_within(
+    budget: &mut layerstack_io::usdc::DecodeBudget,
+) -> Result<layerstack_io::usdc::AssembleResult, layerstack_io::usdc::UsdcError> {
+    layerstack_io::usdc::read_usdc_within(
         data,
         LayerId(1),
         &TokenInterner::default(),
@@ -721,7 +721,7 @@ fn read_within(
 /// budget one unit short of the read's total fails.
 #[test]
 fn one_budget_covers_the_whole_read() {
-    use layerstack_usdc::{DecodeBudget, UsdcError};
+    use layerstack_io::usdc::{DecodeBudget, UsdcError};
 
     let data = std::fs::read(binary_assets_dir().join("toy_biplane_idle.usdc")).unwrap();
     let mut budget = DecodeBudget::with_limit(u64::MAX);

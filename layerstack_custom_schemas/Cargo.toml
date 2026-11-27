@@ -20,7 +20,7 @@ layerstack = { workspace = true }
 layerstack_schemas = { features = ["usd-geom"], workspace = true }
 
 [dev-dependencies]
-layerstack_usda = { workspace = true }
+layerstack_io = { workspace = true }
 
 # The freshness test of the checked-in `observatory` module compiles it again.
 # Like the generator itself, it does not build for wasm.

@@ -6,7 +6,7 @@
 use std::hint::black_box;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use layerstack_usdc::writer::{Spec, SpecForm, Specifier, Value, write_crate};
+use layerstack_io::usdc::writer::{Spec, SpecForm, Specifier, Value, write_crate};
 
 fn fixture(count: u32, width: u32, unique: bool, nested: bool) -> Vec<Spec> {
     let mut specs = vec![Spec::new("/", SpecForm::PseudoRoot)];
@@ -177,7 +177,7 @@ fn bench_layer_save(c: &mut Criterion) {
                 |b| {
                     b.iter(|| {
                         black_box(
-                            layerstack_usdc::save_usdc(
+                            layerstack_io::usdc::save_usdc(
                                 black_box(&layer),
                                 store.tokens(),
                                 store.paths(),
@@ -187,8 +187,9 @@ fn bench_layer_save(c: &mut Criterion) {
                     });
                 },
             );
-            let doc = layerstack_usda::save::usdc_document(&layer, store.tokens(), store.paths())
-                .unwrap();
+            let doc =
+                layerstack_io::usda::save::usdc_document(&layer, store.tokens(), store.paths())
+                    .unwrap();
             group.bench_function(
                 BenchmarkId::new(
                     if animated {
@@ -201,7 +202,7 @@ fn bench_layer_save(c: &mut Criterion) {
                 |b| {
                     b.iter(|| {
                         black_box(
-                            layerstack_usdc::writer::write_document(black_box(&doc)).unwrap(),
+                            layerstack_io::usdc::writer::write_document(black_box(&doc)).unwrap(),
                         );
                     });
                 },
@@ -223,8 +224,12 @@ fn bench_relationship_save(c: &mut Criterion) {
         group.bench_function(BenchmarkId::new("depth", depth), |b| {
             b.iter(|| {
                 black_box(
-                    layerstack_usdc::save_usdc(black_box(&layer), store.tokens(), store.paths())
-                        .unwrap(),
+                    layerstack_io::usdc::save_usdc(
+                        black_box(&layer),
+                        store.tokens(),
+                        store.paths(),
+                    )
+                    .unwrap(),
                 )
             });
         });

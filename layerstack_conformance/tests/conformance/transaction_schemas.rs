@@ -79,7 +79,7 @@ fn layer_named(loaded: &LoadedStage, name: &str) -> LayerId {
 fn text(loaded: &LoadedStage, name: &str) -> String {
     let store = &loaded.store;
     let layer = store.layer(layer_named(loaded, name)).unwrap();
-    layerstack_usda::save_usda(layer, store.tokens(), store.paths()).expect("saves")
+    layerstack_io::usda::save_usda(layer, store.tokens(), store.paths()).expect("saves")
 }
 
 fn texts(loaded: &LoadedStage) -> Json {

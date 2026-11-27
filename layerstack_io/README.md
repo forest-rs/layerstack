@@ -1,7 +1,8 @@
 # layerstack_io
 
-Application-owned OpenUSD file I/O above Layerstack's composition kernel and
-USDA, USDC and USDZ format implementations. `StageDocument` loads dependencies
+OpenUSD file formats and application-owned stage I/O above Layerstack's
+composition kernel. The `usda`, `usdc` and `usdz` modules read and write
+layers and packages as bytes. `StageDocument` loads dependencies
 into one shared store, exposes its retained stage, saves dirty layers separately
 from session edits, and reloads only the sources that changed, with an explicit
 dirty policy.
@@ -16,6 +17,46 @@ layerstack_io = "0.1"
 ```
 
 Requires Rust **1.89** or later.
+
+## Formats
+
+Each format module works on bytes and Layerstack interners, with no file
+access, and reports recoverable problems as typed diagnostics beside a
+partial result:
+
+- `usda` parses text layers with error recovery (`read_usda`,
+  `read_usda_with_registry` for plugin metadata types), writes explicit
+  authored documents (`writer::Document`) and saves existing layers
+  (`save_usda`, or `save_usda_to` to stream). The `save` module documents
+  exactly what saving supports and rejects.
+- `usdc` reads crate files 0.4 through 0.16 (`read_usdc`, `CrateFile` for
+  field-level access) and writes them from documents, layers (`save_usdc`)
+  or raw specs. With `std`, `read_usdc_lazy` retains large arrays encoded and
+  decodes each on first read into a shared cache.
+- `usdz` packages serialized layers and media (`write_usdz`) and imports a
+  package's root layer and the members it reaches (`read_usdz`), from a
+  verified in-memory snapshot or selected byte ranges.
+
+```rust
+use layerstack::{InMemoryStore, LayerId, NoAssets};
+use layerstack_io::usda::read_usda;
+use layerstack_io::usdz::{PackageFile, write_usdz};
+
+let text = "#usda 1.0\ndef Xform \"Root\" {}\n";
+let store = InMemoryStore::default();
+let read = read_usda(text, LayerId(1), store.tokens(), store.paths(), &mut NoAssets);
+assert!(!read.has_errors());
+
+let package = write_usdz(&[PackageFile::new("scene.usda", text.as_bytes())]).unwrap();
+assert_eq!(&package[..4], b"PK\x03\x04");
+```
+
+The parsers' and encoders' inner layers (lexer, syntax trees, crate
+sections, the ZIP reader) are internal. The `unstable-internals` feature
+makes them public modules for this repository's tests, benchmarks and
+fuzzing; they follow no semver promise.
+
+## Stage documents
 
 ```rust,no_run
 use layerstack::StageOptions;
@@ -254,7 +295,7 @@ view when releasing a large owner is preferable.
 ## Explicit package range imports
 
 `Storage::open_ranges(identifier)` optionally returns a fixed logical byte source
-for `layerstack_usdz::range::RangePackage` and `read_usdz_ranges`. The default
+for `usdz::range::RangePackage` and `read_usdz_ranges`. The default
 reports `Unsupported` without reading. `Filesystem` implements exact bounded
 range reads through a retained open file handle; there is no full-read fallback.
 Filesystem sources survive atomic replacement. Hosts must exclude external

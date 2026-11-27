@@ -471,7 +471,7 @@ def Capsule_1 "Beacon" {
 
     fn stage() -> (InMemoryStore, LiveStage) {
         let mut store = InMemoryStore::default();
-        let read = layerstack_usda::read_usda(
+        let read = layerstack_io::usda::read_usda(
             SCENE,
             LayerId(1),
             store.tokens(),

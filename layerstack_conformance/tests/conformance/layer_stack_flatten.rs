@@ -127,11 +127,11 @@ fn raw_consolidation_matches_native_and_keeps_composed_stage_values() {
     )
     .unwrap();
     assert_eq!(consolidated.report.sources.len(), 2);
-    let parsed = layerstack_usda::parser::parse(include_str!(
+    let parsed = layerstack_io::usda::parser::parse(include_str!(
         "../../fixtures/layer_stack_flatten/native_flattened.usda"
     ));
     assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
-    let mut expected = layerstack_usda::emit::emit(
+    let mut expected = layerstack_io::usda::emit::emit(
         &parsed.layer,
         output,
         store.tokens(),

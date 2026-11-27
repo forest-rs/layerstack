@@ -277,7 +277,7 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
         let path = definitions(pxr, source, plugin, origin).join("generatedSchema.usda");
         files.push(relative(&path));
         let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let read = layerstack_usda::read_usda(
+        let read = layerstack_io::usda::read_usda(
             &text,
             LayerId(u64::try_from(index).expect("few domains") + 1),
             store.tokens(),
@@ -619,7 +619,7 @@ fn source_api_names(
     let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let store = InMemoryStore::default();
     // Its sublayers name other schema files, which need not resolve.
-    let emitted = layerstack_usda::read_usda(
+    let emitted = layerstack_io::usda::read_usda(
         &text,
         LayerId(1),
         store.tokens(),

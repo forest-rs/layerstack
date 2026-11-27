@@ -220,7 +220,7 @@ fn clip_query_planning_does_not_decode_retained_interpolation_endpoints() {
     )
     .unwrap();
     let root = source.stage().stage().root_layer().unwrap();
-    let bytes = layerstack_usdc::save_usdc(
+    let bytes = usdc::save_usdc(
         source.store.layer(root).unwrap(),
         source.store.tokens(),
         source.store.paths(),
@@ -322,7 +322,7 @@ def "P" (clips = { dictionary default = {
     )
     .unwrap();
     let id = source.stage.stage().root_layer().unwrap();
-    let bytes = layerstack_usdc::save_usdc(
+    let bytes = usdc::save_usdc(
         source.store.layer(id).unwrap(),
         source.store.tokens(),
         source.store.paths(),
@@ -783,17 +783,17 @@ fn package_preparation_includes_unsaved_layers_and_reports_missing_resources_wit
 
 #[test]
 fn nested_packages_resolve_defaults_explicit_layers_relative_dependencies_and_resources() {
-    let inner = layerstack_usdz::write_usdz(&[
-        layerstack_usdz::PackageFile::new("dir/root.usda", b"#usda 1.0\n(defaultPrim=\"Inside\")\ndef \"Inside\" (references=@./child.usda@</Child>) {}"),
-        layerstack_usdz::PackageFile::new("dir/child.usda", b"#usda 1.0\ndef \"Child\" {\n int answer=42\n}"),
-        layerstack_usdz::PackageFile::new("dir/data.png", b"inner pixels"),
+    let inner = usdz::write_usdz(&[
+        usdz::PackageFile::new("dir/root.usda", b"#usda 1.0\n(defaultPrim=\"Inside\")\ndef \"Inside\" (references=@./child.usda@</Child>) {}"),
+        usdz::PackageFile::new("dir/child.usda", b"#usda 1.0\ndef \"Child\" {\n int answer=42\n}"),
+        usdz::PackageFile::new("dir/data.png", b"inner pixels"),
     ]).unwrap();
     for reference in ["inner.usdz", "inner.usdz[dir/root.usda]"] {
         let source =
             alloc::format!("#usda 1.0\ndef \"Root\" (references=@{reference}@</Inside>) {{}}");
-        let outer = layerstack_usdz::write_usdz(&[
-            layerstack_usdz::PackageFile::new("root.usda", source.as_bytes()),
-            layerstack_usdz::PackageFile::new("inner.usdz", &inner),
+        let outer = usdz::write_usdz(&[
+            usdz::PackageFile::new("root.usda", source.as_bytes()),
+            usdz::PackageFile::new("inner.usdz", &inner),
         ])
         .unwrap();
         let mut memory = Memory::default();
@@ -1177,7 +1177,7 @@ fn prepared_commit_reuses_sources_and_preserves_stage_observers_and_dependencies
 /// keeps the save error naming the spec, in either format.
 #[test]
 fn a_layer_that_cannot_be_written_keeps_its_typed_cause() {
-    use layerstack_usda::save::{Invalid, SaveError};
+    use crate::usda::save::{Invalid, SaveError};
     let source = "#usda 1.0\ndef \"A\" {\n    int a = 1\n}\n";
     let document = StageDocument::open(
         Memory::with(&[("root.usda", source)]),
@@ -1199,7 +1199,7 @@ fn a_layer_that_cannot_be_written_keeps_its_typed_cause() {
         assert_eq!(error.code(), "io.rejected", "{target}");
         let save = match error.cause() {
             Some(IoCause::Save(save))
-            | Some(IoCause::UsdcWrite(layerstack_usdc::writer::UsdcWriteError::Save(save))) => save,
+            | Some(IoCause::UsdcWrite(usdc::writer::UsdcWriteError::Save(save))) => save,
             other => panic!("{target}: {other:?}"),
         };
         assert_eq!(save, &expected, "{target}");
@@ -1394,7 +1394,7 @@ fn retained_budget_errors_are_distinct_from_missing_geometry() {
     )
     .unwrap();
     let root = probe.stage().stage().root_layer().unwrap();
-    let limit = layerstack_usdc::DecodeBudget::for_input(bytes.len()).remaining()
+    let limit = usdc::DecodeBudget::for_input(bytes.len()).remaining()
         - probe.retained_values(root).unwrap().stats().remaining_units;
     let mut memory = Memory::default();
     memory.files.insert("mesh.usdc".into(), bytes);
@@ -1436,8 +1436,8 @@ fn retained_budget_errors_are_distinct_from_missing_geometry() {
     );
     assert!(!document.storage().files.contains_key("failed.usdc"));
     for member in ["root.usda", "root.usdc"] {
-        let plan = layerstack_usdz::localize::LocalizationPlan {
-            layers: vec![layerstack_usdz::localize::LocalizedLayer {
+        let plan = usdz::localize::LocalizationPlan {
+            layers: vec![usdz::localize::LocalizedLayer {
                 source: root,
                 member: member.into(),
                 layer: document.store().layer(root).unwrap().clone(),
@@ -1481,16 +1481,16 @@ fn retained_budget_errors_are_distinct_from_missing_geometry() {
 fn retained_policy_reaches_package_members_and_explicit_dependency_loads() {
     let bytes = numeric_usdc();
     let root = b"#usda 1.0\n( subLayers = [@./mesh.usdc@] )";
-    let package = layerstack_usdz::write_usdz(&[
-        layerstack_usdz::PackageFile {
+    let package = usdz::write_usdz(&[
+        usdz::PackageFile {
             path: "root.usda",
             data: root,
         },
-        layerstack_usdz::PackageFile {
+        usdz::PackageFile {
             path: "mesh.usdc",
             data: &bytes,
         },
-        layerstack_usdz::PackageFile {
+        usdz::PackageFile {
             path: "unused.usdc",
             data: &bytes,
         },
@@ -1568,7 +1568,7 @@ fn retained_policy_reaches_package_members_and_explicit_dependency_loads() {
 #[test]
 fn retained_binary_package_root_preserves_budget_and_reload_policy() {
     let bytes = numeric_usdc();
-    let package = layerstack_usdz::write_usdz(&[layerstack_usdz::PackageFile {
+    let package = usdz::write_usdz(&[usdz::PackageFile {
         path: "root.usdc",
         data: &bytes,
     }])
@@ -1876,9 +1876,9 @@ fn staged_reload_protects_edits_and_preserves_layer_identities() {
 fn binary_export_reopens_and_package_reload_keeps_member_ids() {
     let root = b"#usda 1.0\n(\n subLayers = [@base.usda@]\n)\ndef \"Root\" {}\n";
     let base = b"#usda 1.0\ndef \"Root\" {\n int value = 7\n}\n";
-    let package = layerstack_usdz::write_usdz(&[
-        layerstack_usdz::PackageFile::new("root.usda", root),
-        layerstack_usdz::PackageFile::new("base.usda", base),
+    let package = usdz::write_usdz(&[
+        usdz::PackageFile::new("root.usda", root),
+        usdz::PackageFile::new("base.usda", base),
     ])
     .unwrap();
     let mut backend = Memory::default();
@@ -1924,8 +1924,7 @@ fn asset_arc_back_into_scene(asset: &str) -> Memory {
         .files
         .insert("scene.usda".into(), scene.into_bytes());
     let bytes = if asset.ends_with(".usdz") {
-        layerstack_usdz::write_usdz(&[layerstack_usdz::PackageFile::new("asset.usda", source)])
-            .unwrap()
+        usdz::write_usdz(&[usdz::PackageFile::new("asset.usda", source)]).unwrap()
     } else {
         source.to_vec()
     };
@@ -2107,13 +2106,13 @@ fn expression_assets_open_with_the_primary_stack_and_retained_bindings() {
 #[test]
 fn package_reload_reads_unreferenced_resident_members_and_allows_root_rename() {
     fn package(root_name: &str, root: &[u8], members: &[(&str, &[u8])]) -> Vec<u8> {
-        let mut files = vec![layerstack_usdz::PackageFile::new(root_name, root)];
+        let mut files = vec![usdz::PackageFile::new(root_name, root)];
         files.extend(
             members
                 .iter()
-                .map(|(name, data)| layerstack_usdz::PackageFile::new(name, data)),
+                .map(|(name, data)| usdz::PackageFile::new(name, data)),
         );
-        layerstack_usdz::write_usdz(&files).unwrap()
+        usdz::write_usdz(&files).unwrap()
     }
     let mut backend = Memory::default();
     backend.files.insert(
@@ -2260,9 +2259,9 @@ fn package_expressions_use_the_archive_before_outer_transport() {
     let mut backend = Memory::default();
     backend.files.insert(
         "scene.usdz".into(),
-        layerstack_usdz::write_usdz(&[
-            layerstack_usdz::PackageFile::new("root.usda", root),
-            layerstack_usdz::PackageFile::new("member.usda", member),
+        usdz::write_usdz(&[
+            usdz::PackageFile::new("root.usda", root),
+            usdz::PackageFile::new("member.usda", member),
         ])
         .unwrap(),
     );
@@ -2278,9 +2277,9 @@ fn promoted_members_retain_distinct_identity_from_the_outer_package() {
     let mut backend = Memory::default();
     backend.files.insert(
         "scene.usdz".into(),
-        layerstack_usdz::write_usdz(&[
-            layerstack_usdz::PackageFile::new("root.usda", root),
-            layerstack_usdz::PackageFile::new("member.usda", member),
+        usdz::write_usdz(&[
+            usdz::PackageFile::new("root.usda", root),
+            usdz::PackageFile::new("member.usda", member),
         ])
         .unwrap(),
     );
@@ -2289,9 +2288,9 @@ fn promoted_members_retain_distinct_identity_from_the_outer_package() {
     let root_id = doc.stage.stage().root_layer().unwrap();
     doc.storage_mut().files.insert(
         "scene.usdz".into(),
-        layerstack_usdz::write_usdz(&[
-            layerstack_usdz::PackageFile::new("member.usda", b"#usda 1.0\ndef \"NewMember\" {}\n"),
-            layerstack_usdz::PackageFile::new("root.usda", root),
+        usdz::write_usdz(&[
+            usdz::PackageFile::new("member.usda", b"#usda 1.0\ndef \"NewMember\" {}\n"),
+            usdz::PackageFile::new("root.usda", root),
         ])
         .unwrap(),
     );
@@ -2338,15 +2337,12 @@ fn nested_promoted_members_refresh_with_member_relative_anchors() {
     let mut backend = Memory::default();
     backend.files.insert(
         "scene.usdz".into(),
-        layerstack_usdz::write_usdz(&[
-            layerstack_usdz::PackageFile::new(
+        usdz::write_usdz(&[
+            usdz::PackageFile::new(
                 "root.usda",
                 b"#usda 1.0\n(subLayers=[@nested/member.usda@])\n",
             ),
-            layerstack_usdz::PackageFile::new(
-                "nested/member.usda",
-                b"#usda 1.0\ndef \"OldMember\" {}\n",
-            ),
+            usdz::PackageFile::new("nested/member.usda", b"#usda 1.0\ndef \"OldMember\" {}\n"),
         ])
         .unwrap(),
     );
@@ -2355,12 +2351,9 @@ fn nested_promoted_members_refresh_with_member_relative_anchors() {
     let member = doc.catalog.ids["scene.usdz[nested/member.usda]"];
     doc.storage_mut().files.insert(
         "scene.usdz".into(),
-        layerstack_usdz::write_usdz(&[
-            layerstack_usdz::PackageFile::new(
-                "nested/member.usda",
-                b"#usda 1.0\ndef \"NewMember\" {}\n",
-            ),
-            layerstack_usdz::PackageFile::new("root.usda", b"#usda 1.0\ndef \"PreviousRoot\" {}\n"),
+        usdz::write_usdz(&[
+            usdz::PackageFile::new("nested/member.usda", b"#usda 1.0\ndef \"NewMember\" {}\n"),
+            usdz::PackageFile::new("root.usda", b"#usda 1.0\ndef \"PreviousRoot\" {}\n"),
         ])
         .unwrap(),
     );
@@ -2376,21 +2369,18 @@ fn promoted_self_references_follow_the_explicit_member_identity() {
     let mut backend = Memory::default();
     backend.files.insert(
         "scene.usdz".into(),
-        layerstack_usdz::write_usdz(&[
-            layerstack_usdz::PackageFile::new(
-                "root.usda",
-                b"#usda 1.0\n(subLayers=[@member.usda@])\n",
-            ),
-            layerstack_usdz::PackageFile::new("member.usda", b"#usda 1.0\ndef \"OldMember\" {}\n"),
+        usdz::write_usdz(&[
+            usdz::PackageFile::new("root.usda", b"#usda 1.0\n(subLayers=[@member.usda@])\n"),
+            usdz::PackageFile::new("member.usda", b"#usda 1.0\ndef \"OldMember\" {}\n"),
         ])
         .unwrap(),
     );
     let mut doc = StageDocument::open(backend, "scene.usdz", StageOptions::default()).unwrap();
     let root = doc.stage.stage().root_layer().unwrap();
     let member = doc.catalog.ids["scene.usdz[member.usda]"];
-    doc.storage_mut().files.insert("scene.usdz".into(), layerstack_usdz::write_usdz(&[
-        layerstack_usdz::PackageFile::new("member.usda", b"#usda 1.0\ndef \"Asset\" {\n int x=1\n}\ndef \"Host\" (references=@member.usda@</Asset>) {}\n"),
-        layerstack_usdz::PackageFile::new("root.usda", b"#usda 1.0\ndef \"PreviousRoot\" {}\n"),
+    doc.storage_mut().files.insert("scene.usdz".into(), usdz::write_usdz(&[
+        usdz::PackageFile::new("member.usda", b"#usda 1.0\ndef \"Asset\" {\n int x=1\n}\ndef \"Host\" (references=@member.usda@</Asset>) {}\n"),
+        usdz::PackageFile::new("root.usda", b"#usda 1.0\ndef \"PreviousRoot\" {}\n"),
     ]).unwrap());
     doc.reload_layers(&[root], ReloadPolicy::DiscardDirty)
         .unwrap();
@@ -2423,7 +2413,7 @@ fn package_relative_missing_dependencies_keep_recovery_evidence() {
         let mut backend = Memory::default();
         backend.files.insert(
             "scene.usdz".into(),
-            layerstack_usdz::write_usdz(&[layerstack_usdz::PackageFile::new(
+            usdz::write_usdz(&[usdz::PackageFile::new(
                 "root.usda",
                 b"#usda 1.0\ndef \"Host\" (references=@./missing.usda@</A>) {}\n",
             )])
@@ -2511,18 +2501,15 @@ fn asset_bytes_use_package_member_provenance_without_importing_assets() {
     let mut backend = Memory::default();
     backend.files.insert(
         "scene.usdz".into(),
-        layerstack_usdz::write_usdz(&[
-            layerstack_usdz::PackageFile::new(
+        usdz::write_usdz(&[
+            usdz::PackageFile::new(
                 "root.usda",
                 b"#usda 1.0\n(subLayers=[@layers/member.usda@])\n",
             ),
-            layerstack_usdz::PackageFile::new(
-                "layers/member.usda",
-                b"#usda 1.0\ndef \"Mesh\" {}\n",
-            ),
-            layerstack_usdz::PackageFile::new("layers/textures/color.png", &[0, 1, 2, 255]),
-            layerstack_usdz::PackageFile::new("textures/color.png", b"root texture"),
-            layerstack_usdz::PackageFile::new("root_only.exr", b"environment"),
+            usdz::PackageFile::new("layers/member.usda", b"#usda 1.0\ndef \"Mesh\" {}\n"),
+            usdz::PackageFile::new("layers/textures/color.png", &[0, 1, 2, 255]),
+            usdz::PackageFile::new("textures/color.png", b"root texture"),
+            usdz::PackageFile::new("root_only.exr", b"environment"),
         ])
         .unwrap(),
     );
@@ -2631,9 +2618,9 @@ fn asset_bytes_use_package_member_provenance_without_importing_assets() {
 #[test]
 fn candidate_package_bytes_publish_only_on_commit_and_keep_validated_handles() {
     fn package(value: u8) -> Vec<u8> {
-        layerstack_usdz::write_usdz(&[
-            layerstack_usdz::PackageFile::new("root.usda", b"#usda 1.0\ndef \"Root\" {}"),
-            layerstack_usdz::PackageFile::new("textures/color.png", &[value]),
+        usdz::write_usdz(&[
+            usdz::PackageFile::new("root.usda", b"#usda 1.0\ndef \"Root\" {}"),
+            usdz::PackageFile::new("textures/color.png", &[value]),
         ])
         .unwrap()
     }
@@ -2684,9 +2671,9 @@ fn explicit_package_bytes_work_without_a_loaded_package_and_keep_decode_errors()
     let mut backend = Memory::with(&[("root.usda", "#usda 1.0\ndef \"Root\" {}")]);
     backend.files.insert(
         "images.usdz".into(),
-        layerstack_usdz::write_usdz(&[
-            layerstack_usdz::PackageFile::new("root.usda", b"#usda 1.0"),
-            layerstack_usdz::PackageFile::new("image.exr", &[0, 255, 0, 128]),
+        usdz::write_usdz(&[
+            usdz::PackageFile::new("root.usda", b"#usda 1.0"),
+            usdz::PackageFile::new("image.exr", &[0, 255, 0, 128]),
         ])
         .unwrap(),
     );
@@ -2749,9 +2736,9 @@ fn forgetting_a_candidate_leaves_the_published_document_usable() {
 
 #[test]
 fn bounded_resources_reject_before_storage_or_member_payload_copies() {
-    let package = layerstack_usdz::write_usdz(&[
-        layerstack_usdz::PackageFile::new("root.usda", b"#usda 1.0"),
-        layerstack_usdz::PackageFile::new("image.png", &[1; 32]),
+    let package = usdz::write_usdz(&[
+        usdz::PackageFile::new("root.usda", b"#usda 1.0"),
+        usdz::PackageFile::new("image.png", &[1; 32]),
     ])
     .unwrap();
     let mut memory = Memory::default();
@@ -2919,12 +2906,12 @@ fn root_reload_refreshes_resident_dependencies_and_protects_required_dirty_layer
 
 #[test]
 fn root_reload_does_not_force_removed_package_members() {
-    let before = layerstack_usdz::write_usdz(&[
-        layerstack_usdz::PackageFile::new("root.usda", b"#usda 1.0\n(subLayers=[@old.usda@])"),
-        layerstack_usdz::PackageFile::new("old.usda", b"#usda 1.0\ndef \"Old\" {}"),
+    let before = usdz::write_usdz(&[
+        usdz::PackageFile::new("root.usda", b"#usda 1.0\n(subLayers=[@old.usda@])"),
+        usdz::PackageFile::new("old.usda", b"#usda 1.0\ndef \"Old\" {}"),
     ])
     .unwrap();
-    let after = layerstack_usdz::write_usdz(&[layerstack_usdz::PackageFile::new(
+    let after = usdz::write_usdz(&[usdz::PackageFile::new(
         "root.usda",
         b"#usda 1.0\ndef \"New\" {}",
     )])
@@ -2943,17 +2930,17 @@ fn root_reload_does_not_force_removed_package_members() {
 
 #[test]
 fn root_reload_renames_a_dependent_package_root_without_alias_collision() {
-    let before = layerstack_usdz::write_usdz(&[layerstack_usdz::PackageFile::new(
+    let before = usdz::write_usdz(&[usdz::PackageFile::new(
         "oldroot.usda",
         b"#usda 1.0\ndef \"Before\" {}",
     )])
     .unwrap();
-    let after = layerstack_usdz::write_usdz(&[
-        layerstack_usdz::PackageFile::new(
+    let after = usdz::write_usdz(&[
+        usdz::PackageFile::new(
             "newroot.usda",
             b"#usda 1.0\n(subLayers=[@oldroot.usda@])\ndef \"NewRoot\" {}",
         ),
-        layerstack_usdz::PackageFile::new("oldroot.usda", b"#usda 1.0\ndef \"OldMember\" {}"),
+        usdz::PackageFile::new("oldroot.usda", b"#usda 1.0\ndef \"OldMember\" {}"),
     ])
     .unwrap();
     let mut memory = Memory::default();

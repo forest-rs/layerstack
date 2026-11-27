@@ -18,8 +18,8 @@ use layerstack::{
 };
 use layerstack_conformance::library_scene::{LibraryFormat, LibraryScene, LibraryShape};
 use layerstack_conformance::save_corpus::in_text_order;
-use layerstack_usdc::writer::{Spec, SpecForm, Specifier, Value as W, write_crate};
-use layerstack_usdc::{CrateFile, DecodeBudget, LazyReadResult, read_usdc, read_usdc_lazy};
+use layerstack_io::usdc::writer::{Spec, SpecForm, Specifier, Value as W, write_crate};
+use layerstack_io::usdc::{CrateFile, DecodeBudget, LazyReadResult, read_usdc, read_usdc_lazy};
 
 /// The opinions of the property at `path`, strongest first; `None` when
 /// none is authored.
@@ -102,7 +102,7 @@ fn encode_library(shape: &LibraryShape) -> Vec<(String, Vec<u8>)> {
 
 /// The small parts library with `tags` arrays long enough to be retained:
 /// the small shape's average of 8 elements is below
-/// [`layerstack_usdc::MIN_RETAINED_TEXT_ARRAY`].
+/// [`layerstack_io::usdc::MIN_RETAINED_TEXT_ARRAY`].
 fn library() -> &'static [(String, Vec<u8>)] {
     static FILES: std::sync::OnceLock<Vec<(String, Vec<u8>)>> = std::sync::OnceLock::new();
     FILES.get_or_init(|| {
@@ -380,8 +380,8 @@ fn retained_text_arrays_save_as_eager_reads_do() {
     for (name, bytes) in library() {
         let pair = read_both(bytes).unwrap();
         let lazy = &pair.lazy.assembled.layer;
-        let save_usda = |layer| layerstack_usda::save_usda(layer, &pair.tokens, &pair.paths);
-        let save_usdc = |layer| layerstack_usdc::save_usdc(layer, &pair.tokens, &pair.paths);
+        let save_usda = |layer| layerstack_io::usda::save_usda(layer, &pair.tokens, &pair.paths);
+        let save_usdc = |layer| layerstack_io::usdc::save_usdc(layer, &pair.tokens, &pair.paths);
         checked += deferred_defaults(lazy);
         let text = save_usda(lazy).unwrap();
         assert_eq!(text, save_usda(&pair.eager).unwrap(), "{name}: USDA");
@@ -398,8 +398,13 @@ fn retained_text_arrays_save_as_eager_reads_do() {
         .unwrap()
         .layer;
         assert_reads_agree(name, &pair.eager, &again);
-        let text =
-            layerstack_usda::read_usda(&text, LayerId(1), &pair.tokens, &pair.paths, &mut NoAssets);
+        let text = layerstack_io::usda::read_usda(
+            &text,
+            LayerId(1),
+            &pair.tokens,
+            &pair.paths,
+            &mut NoAssets,
+        );
         assert!(text.emitted.diagnostics.is_empty(), "{name}");
         // In the order the text writer sorts fields and properties into.
         let mut sorted = pair.eager.clone();
@@ -543,11 +548,12 @@ fn a_retained_text_array_that_does_not_decode_is_an_error_when_read() {
         &mut NoAssets,
     )
     .expect("a retained read leaves the payload for later");
-    let saved = layerstack_usda::save_usda(&read.assembled.layer, store.tokens(), store.paths());
+    let saved =
+        layerstack_io::usda::save_usda(&read.assembled.layer, store.tokens(), store.paths());
     assert!(
         matches!(
             saved,
-            Err(layerstack_usda::save::SaveError::ArrayRead {
+            Err(layerstack_io::usda::save::SaveError::ArrayRead {
                 error: ArrayReadError::InvalidData(_),
                 ..
             })

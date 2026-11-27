@@ -110,7 +110,8 @@ fn registry(tokens: &TokenInterner, paths: &layerstack::PathInterner) -> SchemaR
         });
     }
     let source = std::fs::read_to_string(dir.join("generatedSchema.usda")).unwrap();
-    let read = layerstack_usda::read_usda(&source, LayerId(u64::MAX), tokens, paths, &mut NoAssets);
+    let read =
+        layerstack_io::usda::read_usda(&source, LayerId(u64::MAX), tokens, paths, &mut NoAssets);
     let definitions = read_generated_schema(&read.emitted.layer, &declared, tokens, paths)
         .expect("every declared schema");
     let mut builder = SchemaRegistry::builder();

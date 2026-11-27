@@ -15,9 +15,6 @@ env:
     -p opinionated
     -p layerstack
     -p layerstack_schemas
-    -p layerstack_usda
-    -p layerstack_usdc
-    -p layerstack_usdz
     -p layerstack_io
     -p layerstack_cli
     -p layerstack_mesh_export
@@ -372,9 +369,9 @@ jobs:
       - name: cargo check
         run: cargo hack check ${{ env.RUST_MIN_VER_PKGS }} ${{ env.RUST_MIN_VER_UNPUBLISHED_PKGS }} --locked --optional-deps --each-feature --ignore-unknown-features --features std
 
-      - name: check the default USDC reader with std-enabled core
+      - name: check the USDC reader without std alongside a std-enabled core
         if: runner.os == 'Linux'
-        run: cargo check --locked -p layerstack_usdc --no-default-features --features layerstack/std
+        run: cargo check --locked -p layerstack_io --no-default-features --features layerstack/std
 
   check-msrv-wasm:
     name: cargo check (msrv) (wasm32)

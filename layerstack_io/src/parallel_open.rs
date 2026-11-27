@@ -506,7 +506,7 @@ impl<B: Storage> Reader<'_, B> {
         finish(threads, reads, pending, &rewrite);
         // A diagnostic names the layer read, even one that failed, and so
         // do those a strict rejection carries.
-        let rename = |diagnostics: &mut [layerstack_usdz::MemberDiagnostic]| {
+        let rename = |diagnostics: &mut [crate::usdz::MemberDiagnostic]| {
             for diagnostic in diagnostics {
                 if let Some(&id) = renamed.get(&diagnostic.layer_id) {
                     diagnostic.layer_id = id;

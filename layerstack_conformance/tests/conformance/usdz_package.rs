@@ -12,7 +12,7 @@ use layerstack::doc::{LayerId, Value};
 use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 use layerstack::{AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset};
-use layerstack_usdz::crc32;
+use layerstack_io::usdz::crc32;
 
 // ── Stub resolver ───────────────────────────────────────────────────────
 
@@ -192,9 +192,14 @@ fn parse_usdz(data: &[u8]) -> InMemoryStore {
     let layer_id = LayerId(1);
     let mut resolver = StubResolver;
 
-    let result =
-        layerstack_usdz::read_usdz(data, layer_id, store.tokens(), store.paths(), &mut resolver)
-            .expect("failed to parse USDZ");
+    let result = layerstack_io::usdz::read_usdz(
+        data,
+        layer_id,
+        store.tokens(),
+        store.paths(),
+        &mut resolver,
+    )
+    .expect("failed to parse USDZ");
 
     for layer in result.resolved_layers {
         store.insert_layer(layer);
@@ -289,11 +294,11 @@ fn empty_archive_rejected() {
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result = layerstack_usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
+    let result = layerstack_io::usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
     assert!(result.is_err(), "expected error for empty archive");
     let err = result.unwrap_err();
     assert!(
-        matches!(err, layerstack_usdz::UsdzError::NoRootLayer),
+        matches!(err, layerstack_io::usdz::UsdzError::NoRootLayer),
         "expected NoRootLayer, got {err:?}"
     );
 }
@@ -304,11 +309,11 @@ fn non_usd_first_file_rejected() {
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result = layerstack_usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
+    let result = layerstack_io::usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
     assert!(result.is_err(), "expected error for non-USD first file");
     assert!(matches!(
         result.unwrap_err(),
-        layerstack_usdz::UsdzError::NoRootLayer
+        layerstack_io::usdz::UsdzError::NoRootLayer
     ));
 }
 
@@ -322,11 +327,11 @@ fn invalid_compression_rejected() {
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result = layerstack_usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
+    let result = layerstack_io::usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
     assert!(result.is_err(), "expected error for compressed entry");
     assert!(matches!(
         result.unwrap_err(),
-        layerstack_usdz::UsdzError::ConstraintViolation { .. }
+        layerstack_io::usdz::UsdzError::ConstraintViolation { .. }
     ));
 }
 
@@ -340,11 +345,11 @@ fn invalid_encryption_rejected() {
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result = layerstack_usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
+    let result = layerstack_io::usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
     assert!(result.is_err(), "expected error for encrypted entry");
     assert!(matches!(
         result.unwrap_err(),
-        layerstack_usdz::UsdzError::ConstraintViolation { .. }
+        layerstack_io::usdz::UsdzError::ConstraintViolation { .. }
     ));
 }
 
@@ -358,11 +363,11 @@ fn crc32_mismatch_rejected() {
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result = layerstack_usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
+    let result = layerstack_io::usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
     assert!(result.is_err(), "expected error for CRC mismatch");
     assert!(matches!(
         result.unwrap_err(),
-        layerstack_usdz::UsdzError::CrcMismatch { .. }
+        layerstack_io::usdz::UsdzError::CrcMismatch { .. }
     ));
 }
 
@@ -376,11 +381,11 @@ fn eocd_comment_rejected() {
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result = layerstack_usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
+    let result = layerstack_io::usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
     assert!(result.is_err(), "expected error for EOCD comment");
     assert!(matches!(
         result.unwrap_err(),
-        layerstack_usdz::UsdzError::ConstraintViolation { .. }
+        layerstack_io::usdz::UsdzError::ConstraintViolation { .. }
     ));
 }
 
@@ -390,7 +395,7 @@ fn invalid_magic_rejected() {
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result = layerstack_usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
+    let result = layerstack_io::usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
     assert!(result.is_err());
 }
 
@@ -400,7 +405,7 @@ fn truncated_file_rejected() {
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result = layerstack_usdz::read_usdz(data, LayerId(1), &tokens, &paths, &mut resolver);
+    let result = layerstack_io::usdz::read_usdz(data, LayerId(1), &tokens, &paths, &mut resolver);
     assert!(result.is_err());
 }
 
@@ -422,10 +427,10 @@ fn alignment_validation() {
     let tokens = TokenInterner::default();
     let paths = PathInterner::default();
     let mut resolver = StubResolver;
-    let result = layerstack_usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
+    let result = layerstack_io::usdz::read_usdz(&data, LayerId(1), &tokens, &paths, &mut resolver);
     assert_eq!(
         result.unwrap_err(),
-        layerstack_usdz::UsdzError::ConstraintViolation {
+        layerstack_io::usdz::UsdzError::ConstraintViolation {
             reason: "entry data must be 64-byte aligned",
         },
         "unaligned data must be rejected"

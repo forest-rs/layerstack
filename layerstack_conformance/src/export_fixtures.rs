@@ -21,12 +21,12 @@
 
 use std::path::{Path, PathBuf};
 
+use layerstack_io::usda::writer::{Attribute, Document, Metadatum, Prim, Value};
+use layerstack_io::usdc::writer::write_document;
 use layerstack_mesh_export::{
     Channel, ColorInput, Faces, FamilyType, FloatInput, Material, Mesh, PackageFile, Primvar,
     PrimvarData, Scene, StageSettings, Texture, Transform, UpAxis, UsdzProfile, Xform,
 };
-use layerstack_usda::writer::{Attribute, Document, Metadatum, Prim, Value};
-use layerstack_usdc::writer::write_document;
 
 /// What an external validator should conclude about a fixture.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,7 +68,7 @@ pub fn rgb_png(width: u32, height: u32, pixel: impl Fn(u32, u32) -> [u8; 3]) -> 
         let start = out.len();
         out.extend_from_slice(kind);
         out.extend_from_slice(data);
-        let crc = layerstack_usdz::crc32::crc32(&out[start..]);
+        let crc = layerstack_io::usdz::crc32::crc32(&out[start..]);
         out.extend_from_slice(&crc.to_be_bytes());
     }
     let mut raw = Vec::new();
@@ -337,7 +337,7 @@ fn metadata_dictionaries() -> Document {
     let mut root = Prim::def("Xform", "Root");
     root.metadata.push(Metadatum::new(
         "apiSchemas",
-        Value::TokenListOp(layerstack_usda::writer::ListOp::prepend(vec![
+        Value::TokenListOp(layerstack_io::usda::writer::ListOp::prepend(vec![
             "ClaimsAPI".into(),
         ])),
     ));
@@ -367,7 +367,7 @@ fn metadata_dictionaries() -> Document {
             )
             .with_metadata("uiHints", hints.clone()),
     );
-    let mut rel = layerstack_usda::writer::Relationship::new("exedra:target", "/Root").custom();
+    let mut rel = layerstack_io::usda::writer::Relationship::new("exedra:target", "/Root").custom();
     rel.metadata.push(Metadatum::new("uiHints", hints));
     root.push_property(rel);
     let mut doc = Document::new();
@@ -387,7 +387,7 @@ fn metadata_dictionaries() -> Document {
 /// explicit empty lists and a value block default, in one property order
 /// that interleaves attributes and relationships.
 fn list_edits() -> Document {
-    use layerstack_usda::writer::{ListOp, Relationship, Specifier};
+    use layerstack_io::usda::writer::{ListOp, Relationship, Specifier};
     let mut prim = Prim::def("Xform", "A");
     prim.property_order = Some(vec!["y".into(), "x".into()]);
     prim.prim_order = Some(vec!["D".into(), "C".into()]);
@@ -436,7 +436,7 @@ fn list_edits() -> Document {
 /// `int64` array size constraint, a `float` skinning weight and a
 /// relationship output name.
 fn metadata_scalars() -> Document {
-    use layerstack_usda::writer::Relationship;
+    use layerstack_io::usda::writer::Relationship;
     let mut root = Prim::def("Xform", "Root");
     root.metadata
         .push(Metadatum::new("comment", Value::String("A prim.".into())));
@@ -776,7 +776,7 @@ fn material_fixtures(dir: &Path, out: &mut Vec<Fixture>) {
     );
     assert!(srgb.contains("\"sRGB\""), "control edits the color space");
     let normal = ridges_normal_png();
-    let control = layerstack_usdz::write_usdz(&[
+    let control = layerstack_io::usdz::write_usdz(&[
         PackageFile::new("scene.usda", srgb.as_bytes()),
         PackageFile::new("textures/ridges_normal.png", &normal),
     ])
@@ -1108,14 +1108,14 @@ pub fn write_all(dir: &Path) -> Vec<Fixture> {
             );
             files
         }
-        let usdz = layerstack_usdz::write_usdz(&members(
+        let usdz = layerstack_io::usdz::write_usdz(&members(
             UsdzProfile::Generic.root_layer_path(),
             text.as_bytes(),
             &assets,
         ))
         .unwrap();
         write(dir, &format!("{name}.usdz"), &usdz, Expect::Valid, &mut out);
-        let arkit = layerstack_usdz::write_usdz(&members(
+        let arkit = layerstack_io::usdz::write_usdz(&members(
             UsdzProfile::Arkit.root_layer_path(),
             &usdc,
             &assets,
@@ -1172,7 +1172,8 @@ pub fn write_all(dir: &Path) -> Vec<Fixture> {
     // exporter refuses to write it.
     let layer = "#usda 1.0\n(\n    defaultPrim = \"Root\"\n    metersPerUnit = 1\n    upAxis = \"Z\"\n)\n\ndef Xform \"Root\"\n{\n    custom asset tex = @textures/missing.png@\n}\n";
     let missing =
-        layerstack_usdz::write_usdz(&[PackageFile::new("scene.usda", layer.as_bytes())]).unwrap();
+        layerstack_io::usdz::write_usdz(&[PackageFile::new("scene.usda", layer.as_bytes())])
+            .unwrap();
     write(
         dir,
         "control_missing_asset.usdz",

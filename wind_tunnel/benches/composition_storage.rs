@@ -85,7 +85,7 @@ fn fixture(properties: u32, samples: u32, references: u32) -> InMemoryStore {
 
 fn import(bytes: &[u8]) -> InMemoryStore {
     let mut store = InMemoryStore::default();
-    let result = layerstack_usdc::read_usdc(
+    let result = layerstack_io::usdc::read_usdc(
         bytes,
         LayerId(1),
         store.tokens(),
@@ -105,7 +105,7 @@ fn bench_storage(c: &mut Criterion) {
     let mut group = c.benchmark_group("composition_storage");
     for (properties, samples) in [(32, 0), (128, 0), (32, 64), (128, 64)] {
         let authored = fixture(properties, samples, 128);
-        let bytes = layerstack_usdc::save_usdc(
+        let bytes = layerstack_io::usdc::save_usdc(
             authored.layer(LayerId(1)).unwrap(),
             authored.tokens(),
             authored.paths(),

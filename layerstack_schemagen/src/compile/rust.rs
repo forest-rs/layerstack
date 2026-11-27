@@ -167,7 +167,7 @@ pub(crate) fn module_text(
     // The library's schemas, read from its generated schema layer as
     // OpenUSD's are read from theirs.
     let store = InMemoryStore::default();
-    let read = layerstack_usda::read_usda(
+    let read = layerstack_io::usda::read_usda(
         generated_schema,
         LayerId(1),
         store.tokens(),

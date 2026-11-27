@@ -23,8 +23,8 @@ use layerstack::{
     AssetResolveError, AssetResolver, LayerId, PathInterner, ResolvedAsset, Specifier,
     TokenInterner,
 };
-use layerstack_usda::TextPosition;
-use layerstack_usdc::writer::{Spec, SpecForm, Value, write_crate};
+use layerstack_io::usda::TextPosition;
+use layerstack_io::usdc::writer::{Spec, SpecForm, Value, write_crate};
 
 /// Layers whose prim or variant metadata authors relocates.
 const REFUSED: [&str; 3] = [
@@ -75,7 +75,7 @@ impl AssetResolver for NoAssets {
 /// `imported`.
 fn layerstack_import(source: &str) -> String {
     let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
-    let read = layerstack_usda::read_usda(source, LayerId(1), &tokens, &paths, &mut NoAssets);
+    let read = layerstack_io::usda::read_usda(source, LayerId(1), &tokens, &paths, &mut NoAssets);
     match read.parse_diagnostics.as_slice() {
         [] => "imported".into(),
         [diagnostic] => {
@@ -121,14 +121,14 @@ fn prim_relocates_are_refused_as_openusd_refuses_them() {
     let bytes = crate_with_prim_relocates();
     let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
     let read =
-        layerstack_usdc::read_usdc(&bytes, LayerId(1), &tokens, &paths, &mut NoAssets).unwrap();
+        layerstack_io::usdc::read_usdc(&bytes, LayerId(1), &tokens, &paths, &mut NoAssets).unwrap();
     let reported: Vec<(&str, Option<&str>)> = read
         .diagnostics
         .iter()
         .map(|d| (d.spec_path.as_str(), d.field.as_deref()))
         .collect();
     assert_eq!(reported, [("/A", Some("relocates"))]);
-    let text = layerstack_usda::save_usda(&read.layer, &tokens, &paths).unwrap();
+    let text = layerstack_io::usda::save_usda(&read.layer, &tokens, &paths).unwrap();
     assert!(!text.contains("relocates"), "{text}");
     let our_prims: Vec<String> = ["/A", "/A/B"]
         .into_iter()

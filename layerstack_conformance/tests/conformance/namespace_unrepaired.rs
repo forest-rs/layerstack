@@ -81,8 +81,8 @@ fn layers_record(loaded: &LoadedStage) -> Json {
         let name = layer_name(loaded, *id);
         if LAYERS.contains(&name.as_str()) {
             let layer = store.layer(*id).unwrap();
-            let text =
-                layerstack_usda::save_usda(layer, store.tokens(), store.paths()).expect("saves");
+            let text = layerstack_io::usda::save_usda(layer, store.tokens(), store.paths())
+                .expect("saves");
             out.insert(name, Json::String(text));
         }
     }

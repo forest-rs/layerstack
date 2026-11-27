@@ -4,9 +4,9 @@
 use alloc::{format, string::String, vec::Vec};
 use core::fmt::{self, Debug, Write};
 
+use crate::usda::writer::{LayerOffset, ListOp, Reference, Value};
 use layerstack::array_edit::{Instruction, Operand};
 use layerstack::spline::{Extrapolation, SplineData};
-use layerstack_usda::writer::{LayerOffset, ListOp, Reference, Value};
 
 use super::{ArrayChange, KnotData};
 

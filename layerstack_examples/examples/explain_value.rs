@@ -111,7 +111,7 @@ impl InlineResolver {
         let source = *self.sources.get(name)?;
         self.ids.insert(name.to_string(), id);
         self.names.insert(id, name.to_string());
-        let read = layerstack_usda::read_usda(source, id, tokens, paths, self);
+        let read = layerstack_io::usda::read_usda(source, id, tokens, paths, self);
         let syntax: Vec<_> = read
             .parse_diagnostics
             .iter()

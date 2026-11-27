@@ -24,14 +24,14 @@ fn relationship_save(c: &mut Criterion) {
         let (store, layer) = relationship_layer::fixture(depth, 2048);
         group.bench_function(BenchmarkId::new("string", depth), |b| {
             b.iter(|| {
-                layerstack_usda::save_usda(black_box(&layer), store.tokens(), store.paths())
+                layerstack_io::usda::save_usda(black_box(&layer), store.tokens(), store.paths())
                     .unwrap()
             });
         });
         group.bench_function(BenchmarkId::new("stream", depth), |b| {
             b.iter(|| {
                 let mut sink = ByteCount(0);
-                layerstack_usda::save_usda_to(
+                layerstack_io::usda::save_usda_to(
                     black_box(&layer),
                     store.tokens(),
                     store.paths(),

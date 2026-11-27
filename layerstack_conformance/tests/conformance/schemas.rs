@@ -239,8 +239,8 @@ fn registry(set: &str, store: &mut InMemoryStore) -> SchemaRegistry {
     }
 
     let source = read(set, "generatedSchema.usda");
-    let parsed = layerstack_usda::parser::parse(&source);
-    let emitted = layerstack_usda::emit::emit(
+    let parsed = layerstack_io::usda::parser::parse(&source);
+    let emitted = layerstack_io::usda::emit::emit(
         &parsed.layer,
         LayerId(u64::MAX),
         store.tokens(),

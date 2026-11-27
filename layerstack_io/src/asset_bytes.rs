@@ -289,7 +289,7 @@ pub(super) fn package_entry(
     let selected = archive.member(member).map_err(|e| {
         IoError::new(
             match e {
-                layerstack_usdz::UsdzError::MissingMember { .. } => IoErrorKind::NotFound,
+                usdz::UsdzError::MissingMember { .. } => IoErrorKind::NotFound,
                 _ => IoErrorKind::Rejected,
             },
             e.to_string(),

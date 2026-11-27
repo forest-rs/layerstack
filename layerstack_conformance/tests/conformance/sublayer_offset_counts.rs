@@ -18,8 +18,8 @@ use std::path::Path;
 use std::process::Command;
 
 use layerstack::{CompositionError, LayerStack, StageOptions};
+use layerstack_io::usdc::writer::{Spec, SpecForm, Value, write_crate};
 use layerstack_io::{Filesystem, StageDocument};
-use layerstack_usdc::writer::{Spec, SpecForm, Value, write_crate};
 
 /// A sublayer authoring samples, which offsets retime.
 const SUBLAYER: &str = "#usda 1.0\ndef \"A\"\n{\n    double t.timeSamples = {\n        0: 0,\n        10: 10,\n    }\n}\n";

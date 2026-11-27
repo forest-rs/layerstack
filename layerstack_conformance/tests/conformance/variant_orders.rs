@@ -195,7 +195,8 @@ fn flattened_at(store: &InMemoryStore, layer: &Layer, path: &str) -> Option<Flat
 /// Reads one layer of the fixture on its own.
 fn read_layer(store: &mut InMemoryStore, id: LayerId, name: &str) -> Layer {
     let text = std::fs::read_to_string(fixture(name)).unwrap();
-    let read = layerstack_usda::read_usda(&text, id, store.tokens(), store.paths(), &mut NoAssets);
+    let read =
+        layerstack_io::usda::read_usda(&text, id, store.tokens(), store.paths(), &mut NoAssets);
     assert!(
         !read.has_errors(),
         "{name}: {:?}",
@@ -205,7 +206,7 @@ fn read_layer(store: &mut InMemoryStore, id: LayerId, name: &str) -> Layer {
 }
 
 fn usda(store: &InMemoryStore, layer: &Layer) -> String {
-    layerstack_usda::save::save_usda(layer, store.tokens(), store.paths()).expect("save usda")
+    layerstack_io::usda::save::save_usda(layer, store.tokens(), store.paths()).expect("save usda")
 }
 
 /// Every layer authors each spec's orders as OpenUSD reads them, and saves
@@ -227,11 +228,16 @@ fn variant_orders_read_and_write_as_openusd() {
             oracle.text[name],
             "{name}: saved text"
         );
-        let bytes = layerstack_usdc::save_usdc(&layer, store.tokens(), store.paths())
+        let bytes = layerstack_io::usdc::save_usdc(&layer, store.tokens(), store.paths())
             .unwrap_or_else(|e| panic!("{name}: save usdc: {e:?}"));
-        let back =
-            layerstack_usdc::read_usdc(&bytes, id, store.tokens(), store.paths(), &mut NoAssets)
-                .unwrap_or_else(|e| panic!("{name}: read usdc: {e:?}"));
+        let back = layerstack_io::usdc::read_usdc(
+            &bytes,
+            id,
+            store.tokens(),
+            store.paths(),
+            &mut NoAssets,
+        )
+        .unwrap_or_else(|e| panic!("{name}: read usdc: {e:?}"));
         assert_eq!(
             usda(&store, &back.layer),
             oracle.text[name],
@@ -239,7 +245,7 @@ fn variant_orders_read_and_write_as_openusd() {
         );
     }
     let bytes = std::fs::read(fixture("root.usdc")).unwrap();
-    let crate_layer = layerstack_usdc::read_usdc(
+    let crate_layer = layerstack_io::usdc::read_usdc(
         &bytes,
         LayerId(90),
         store.tokens(),
@@ -286,7 +292,7 @@ fn openusd_reads_variant_orders_from_layerstack_usdc() {
     let mut store = InMemoryStore::default();
     for (i, name) in oracle.text.keys().enumerate() {
         let layer = read_layer(&mut store, LayerId(i as u64 + 1), name);
-        let bytes = layerstack_usdc::save_usdc(&layer, store.tokens(), store.paths())
+        let bytes = layerstack_io::usdc::save_usdc(&layer, store.tokens(), store.paths())
             .unwrap_or_else(|e| panic!("{name}: save usdc: {e:?}"));
         let path = dir.join(name.replace(".usda", ".usdc"));
         std::fs::write(&path, bytes).unwrap();

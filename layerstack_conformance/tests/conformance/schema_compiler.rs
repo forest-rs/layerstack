@@ -364,7 +364,7 @@ fn register_plugin(
         declarations.push(declaration);
     }
     let text = read(&directory.join("generatedSchema.usda"));
-    let layer = layerstack_usda::read_usda(
+    let layer = layerstack_io::usda::read_usda(
         &text,
         LayerId(1),
         store.tokens(),

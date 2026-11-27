@@ -1,7 +1,7 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! USDA loader using the production `layerstack_usda` parser and emit pipeline.
+//! USDA loader using the production `layerstack_io::usda` parser and emit pipeline.
 //!
 //! Routes through the real lexer → CST → AST → emit pipeline.
 
@@ -17,10 +17,10 @@ use layerstack::{
     expression_asset_paths,
 };
 
-use layerstack_usda::diagnostic::{Diagnostic, Severity};
-use layerstack_usda::emit;
-use layerstack_usda::lower;
-use layerstack_usda::parser::parse_cst;
+use layerstack_io::usda::diagnostic::{Diagnostic, Severity};
+use layerstack_io::usda::emit;
+use layerstack_io::usda::lower;
+use layerstack_io::usda::parser::parse_cst;
 
 #[derive(Debug)]
 pub struct LoadedStage {
@@ -28,7 +28,7 @@ pub struct LoadedStage {
     pub root_layer: LayerId,
     pub layer_names: BTreeMap<LayerId, String>,
     /// Why OpenUSD's text parser rejects the entry layer, which then does
-    /// not open (see `layerstack_usda::emit`); empty when it loads. A
+    /// not open (see `layerstack_io::usda::emit`); empty when it loads. A
     /// sublayer or arc target it rejects is unresolved instead, as OpenUSD
     /// cannot open it either.
     pub invalid: Vec<String>,

@@ -30,8 +30,8 @@ use layerstack::spec_path::VariantSelectionSite;
 use layerstack::{LayerId, ListOp, NoAssets, PathInterner, TokenInterner, Value};
 use layerstack_conformance::usdc::crate_sections;
 use layerstack_conformance::workspace_root;
-use layerstack_usda::save::save_usda;
-use layerstack_usdc::{AssembleResult, read_usdc, read_usdc_lazy, save_usdc};
+use layerstack_io::usda::save::save_usda;
+use layerstack_io::usdc::{AssembleResult, read_usdc, read_usdc_lazy, save_usdc};
 use serde_json::Value as Json;
 
 const ORACLE: &str = include_str!("../../fixtures/usdc_namespace_depth/oracle.json");

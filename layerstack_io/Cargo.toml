@@ -1,6 +1,6 @@
 [package]
 name = "layerstack_io"
-description = "Explicit stage loading, saving and reload orchestration for Layerstack."
+description = "USDA, USDC and USDZ readers and writers, and explicit stage loading, saving and reload, for Layerstack."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,24 +8,25 @@ license.workspace = true
 repository.workspace = true
 readme = "README.md"
 documentation = "https://docs.rs/layerstack_io"
-keywords = ["usd", "scene-description", "io"]
-categories = ["encoding", "no-std"]
+keywords = ["usd", "usda", "usdc", "usdz", "scene-description"]
+categories = ["encoding", "parser-implementations", "no-std"]
 
 [features]
 default = ["std"]
-std = ["layerstack/std", "layerstack_usdc/std", "layerstack_usdz/std"]
+std = ["layerstack/std"]
+# The format syntax layers (USDA `lexer`, `cst`, `parser`, `ast`, `lower`,
+# `emit`; USDC `header`, `toc`, `section`, `value_rep`, `value_type`,
+# `compression`, `assemble`; USDZ `zip`, `crc32`) as public modules, for this
+# repository's tests, benchmarks and fuzzing. They follow no semver promise.
+unstable-internals = []
 
 [dependencies]
 # Hash maps for internal indexes; `layerstack` already depends on it.
 hashbrown = { workspace = true }
 layerstack = { features = ["unstable-internals"], workspace = true }
-layerstack_usda = { workspace = true }
-layerstack_usdc = { workspace = true }
-layerstack_usdz = { workspace = true }
-
-[dev-dependencies]
-# Tests locate package members through the USDZ reader.
-layerstack_usdz = { features = ["unstable-internals"], workspace = true }
+# LZ4 block decompression and compression for USDC sections.
+lz4_flex = { workspace = true }
+smallvec = { workspace = true }
 
 [lints]
 workspace = true

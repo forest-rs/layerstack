@@ -20,8 +20,8 @@ use layerstack::{
     AssetResolveError, AssetResolver, LayerId, PathInterner, ResolvedAsset, StageOptions,
     TokenInterner,
 };
+use layerstack_io::usda::diagnostic::Severity;
 use layerstack_io::{Filesystem, IoErrorKind, StageDocument};
-use layerstack_usda::diagnostic::Severity;
 
 /// Each mark's file name and leading bytes.
 const MARKS: [(&str, &[u8]); 5] = [
@@ -159,7 +159,7 @@ fn marked_files_are_refused_as_openusd_refuses_them() {
 fn string_import_is_refused() -> bool {
     let source = format!("\u{feff}{BODY}");
     let (tokens, paths) = (TokenInterner::default(), PathInterner::default());
-    let read = layerstack_usda::read_usda(&source, LayerId(1), &tokens, &paths, &mut NoAssets);
+    let read = layerstack_io::usda::read_usda(&source, LayerId(1), &tokens, &paths, &mut NoAssets);
     let [diagnostic] = read.parse_diagnostics.as_slice() else {
         panic!("diagnostics: {:?}", read.parse_diagnostics);
     };

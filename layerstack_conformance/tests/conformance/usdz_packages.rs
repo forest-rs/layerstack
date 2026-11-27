@@ -7,7 +7,7 @@
 //! composes from each package in `fixtures/usdz_packages`
 //! (`scripts/usdz_packages_oracle.py`, which also writes the members).
 //! Each test packages the same members in the same order with
-//! [`layerstack_usdz::write_usdz`], reads the package back, installs every
+//! [`layerstack_io::usdz::write_usdz`], reads the package back, installs every
 //! layer it returns, composes, and must match OpenUSD's prims, prim stacks
 //! (as package member paths), children and attribute values:
 //!
@@ -31,7 +31,7 @@ use std::collections::BTreeMap;
 
 use layerstack::{Stage, StageOptions, Value};
 use layerstack_conformance::{usda_real::LoadedStage, usdz::load_usdz, workspace_root};
-use layerstack_usdz::{PackageFile, write_usdz};
+use layerstack_io::usdz::{PackageFile, write_usdz};
 use serde::Deserialize;
 
 const ORACLE: &str = include_str!("../../fixtures/usdz_packages/oracle.json");

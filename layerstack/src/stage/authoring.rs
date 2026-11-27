@@ -160,6 +160,7 @@ impl From<Time> for AuthoringQuery {
 
 /// The authored slot a source supplies.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AuthoringSourceKind {
     /// An authored default that is not a block.
     Default,
@@ -769,7 +770,7 @@ impl Stage {
             sites.push(OpinionKey {
                 node: id,
                 layer_strength,
-                layer_id: layer,
+                layer,
                 lookup_path: mapped_prim.prim_path(),
                 spec_path: mapped_prim.clone(),
             });

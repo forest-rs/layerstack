@@ -100,7 +100,10 @@ fn arc(loaded: &mut LoadedStage, layer: LayerId, item: &Json) -> Reference {
     let path = item["path"].as_str().unwrap();
     let mut reference = match item["asset"].as_str().unwrap_or("") {
         "" if path.is_empty() => Reference::from_source(
-            ReferenceSource::Layer { layer, asset: None },
+            ReferenceSource::Layer {
+                layer,
+                asset_path: None,
+            },
             ReferenceTarget::DefaultPrim,
         ),
         "" => Reference::new(layer, loaded.store.path(path)),

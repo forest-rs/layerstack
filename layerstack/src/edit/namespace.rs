@@ -1553,7 +1553,7 @@ fn default_depends(
                 let Some(spec) = opinion.value().as_property() else {
                     return false;
                 };
-                let local = stage.layer_stack().contains(&opinion.layer_id());
+                let local = stage.layer_stack().contains(&opinion.layer());
                 authors(spec)
                     || (local
                         && matches!(&spec.default, Some(Value::PathText(text))

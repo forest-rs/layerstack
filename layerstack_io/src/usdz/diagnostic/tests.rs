@@ -67,7 +67,7 @@ fn hard_decoder_errors_keep_the_same_cause_at_root_and_in_a_member() {
             error,
             UsdzError::LayerRead {
                 member: Arc::from(member),
-                layer_id: id,
+                layer: id,
                 cause: LayerReadError::Usdc(UsdcError::UnsupportedVersion {
                     major: 0,
                     minor: 255,
@@ -108,7 +108,7 @@ fn malformed_text_keeps_each_pipeline_phases_evidence() {
             .iter()
             .filter_map(|d| {
                 assert_eq!(&*d.member, "root.usda");
-                assert_eq!(d.layer_id, LayerId(1));
+                assert_eq!(d.layer, LayerId(1));
                 match (&d.diagnostic, phase) {
                     (ImportDiagnostic::UsdaParse(d), 0)
                     | (ImportDiagnostic::UsdaLower(d), 1)
@@ -141,7 +141,7 @@ fn descendant_diagnostics_are_attributed_once_even_with_repeated_references() {
     assert_eq!(result.diagnostics.len(), 1);
     let d = &result.diagnostics[0];
     assert_eq!(&*d.member, "bad.usda");
-    assert_eq!(result.member_paths.get(&d.layer_id).unwrap(), &d.member);
+    assert_eq!(result.member_paths.get(&d.layer).unwrap(), &d.member);
     assert!(matches!(d.diagnostic, ImportDiagnostic::UsdaEmit(_)));
 }
 
@@ -174,7 +174,7 @@ fn usdc_assembly_losses_survive_root_and_member_import() {
             .diagnostics
             .iter()
             .filter_map(|d| {
-                assert_eq!(result.member_paths.get(&d.layer_id).unwrap(), &d.member);
+                assert_eq!(result.member_paths.get(&d.layer).unwrap(), &d.member);
                 if let ImportDiagnostic::UsdcAssemble(d) = &d.diagnostic {
                     Some(d)
                 } else {
@@ -215,4 +215,39 @@ fn invalid_utf8_preserves_the_offset_and_member() {
     };
     assert_eq!(&*member, "root.usda");
     assert_eq!(error.valid_up_to(), 10);
+}
+
+/// Each diagnostic prints its member, the phase that reported it, and
+/// where in the member, so a printed rejection says why without a debug
+/// dump.
+#[test]
+fn diagnostics_print_their_member_phase_and_place() {
+    use crate::usda::{Span, diagnostic::Diagnostic};
+    use crate::usdc::AssembleDiagnostic;
+    use crate::usdz::MemberDiagnostic;
+    use alloc::string::ToString;
+
+    let parse = MemberDiagnostic::new(
+        Arc::from("models/rock.usda"),
+        LayerId(2),
+        ImportDiagnostic::UsdaParse(Diagnostic::error(Span::new(10, 14), "expected `]`")),
+    );
+    assert_eq!(
+        parse.to_string(),
+        "models/rock.usda: USDA parse error at bytes 10..14: expected `]`"
+    );
+    let assemble = ImportDiagnostic::UsdcAssemble(AssembleDiagnostic {
+        spec_path: "/Rock.size".into(),
+        field: Some("timeSamples".into()),
+        message: "unknown value type".into(),
+    });
+    assert_eq!(
+        assemble.to_string(),
+        "USDC assembly /Rock.size timeSamples: unknown value type"
+    );
+    let missing = ImportDiagnostic::AssetResolve {
+        asset_path: Arc::from("moss.usda"),
+        error: AssetResolveError::NotFound,
+    };
+    assert_eq!(missing.to_string(), "asset `moss.usda` not found");
 }

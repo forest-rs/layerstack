@@ -302,7 +302,7 @@ fn root_spec(
         let assets = doc
             .sublayers
             .iter_mut()
-            .map(|s| core::mem::take(&mut s.asset))
+            .map(|s| core::mem::take(&mut s.asset_path))
             .collect();
         let offsets = doc
             .sublayers
@@ -644,7 +644,7 @@ fn map_list_op<T, U>(op: &mut UsdaListOp<T>, item: impl Fn(&mut T) -> U) -> List
 /// `defaultPrim`.
 fn arc(arc: &mut UsdaReference) -> Reference {
     Reference {
-        asset: arc.asset.take().unwrap_or_default(),
+        asset_path: arc.asset_path.take().unwrap_or_default(),
         prim_path: arc.prim_path.take().unwrap_or_default(),
         offset: arc.offset.offset,
         scale: arc.offset.scale,
@@ -753,10 +753,11 @@ fn natural(value: &mut UsdaValue) -> Value {
 
 fn native_edit(
     element: &UsdaValue,
-    instructions: &mut [layerstack::array_edit::Instruction<UsdaValue>],
+    instructions: &mut [opinionated::ArrayEditOp<UsdaValue>],
 ) -> Value {
     use crate::usdc::value_rep::CrateArrayEditOp as C;
-    use layerstack::array_edit::{ArrayIndex, Instruction as I, Operand as O};
+    use layerstack::array_edit::ArrayIndex;
+    use opinionated::{ArrayEditOp as I, ArrayEditOperand as O};
     let mut values = Vec::new();
     let mut literal = |value: &mut UsdaValue| {
         let i = values.len();
@@ -1915,7 +1916,7 @@ def Xform "A" (
 
         let arc = |asset: Option<&str>, prim_path: Option<&str>| UsdaReference {
             custom_data: Vec::new(),
-            asset: asset.map(Into::into),
+            asset_path: asset.map(Into::into),
             prim_path: prim_path.map(Into::into),
             offset: LayerOffset {
                 offset: 2.0,
@@ -1935,7 +1936,7 @@ def Xform "A" (
         let doc = Document {
             metadata: vec![Metadatum::new("upAxis", UsdaValue::Token("Z".into()))],
             sublayers: vec![SubLayer {
-                asset: "./base.usda".into(),
+                asset_path: "./base.usda".into(),
                 offset: LayerOffset {
                     offset: 10.0,
                     scale: 2.0,
@@ -1957,7 +1958,7 @@ def Xform "A" (
             "sublayers"
         );
         let reference = |asset: &str, prim_path: &str| Reference {
-            asset: asset.into(),
+            asset_path: asset.into(),
             prim_path: prim_path.into(),
             offset: 2.0,
             scale: 1.0,
@@ -2086,7 +2087,7 @@ def Xform "A" (
         assert_eq!(
             save_usdc(&layer, &tokens, &paths),
             Err(UsdcWriteError::Save(
-                crate::usda::save::SaveError::Document(WriteError::UnknownType {
+                crate::usda::save::LayerSaveError::Document(WriteError::UnknownType {
                     path: "/A.a".into(),
                     type_name: "vec3f".into(),
                 })

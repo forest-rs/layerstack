@@ -877,7 +877,7 @@ mod tests {
                     key: OpinionKey {
                         node: NodeId::ROOT,
                         layer_strength: strength,
-                        layer_id: crate::doc::LayerId(1),
+                        layer: crate::doc::LayerId(1),
                         lookup_path,
                         spec_path: spec_path.clone(),
                     },

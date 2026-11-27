@@ -155,7 +155,7 @@ pub fn extract_layer_dependencies(
             layer.id,
             None,
             None,
-            sub.asset.as_deref().unwrap_or(""),
+            sub.asset_path.as_deref().unwrap_or(""),
             AssetDependencyKind::Sublayer,
             Some(sub.layer),
         );
@@ -209,7 +209,7 @@ pub fn collect_dependencies(
         // Unnamed in-memory arcs still establish dependencies. Named arcs use
         // host results: import-time IDs can be stale after an asset path edit.
         for sub in &layer.sublayers {
-            if sub.asset.is_none() && sub.layer != id {
+            if sub.asset_path.is_none() && sub.layer != id {
                 push(&mut pending, sub.layer);
             }
         }
@@ -270,7 +270,7 @@ pub fn rewrite_layer_assets<E>(
     }
     let mut copy = layer.clone();
     for sub in &mut copy.sublayers {
-        let old = sub.asset.as_deref().unwrap_or("");
+        let old = sub.asset_path.as_deref().unwrap_or("");
         let key = dependency(
             layer.id,
             None,
@@ -282,7 +282,7 @@ pub fn rewrite_layer_assets<E>(
         if let Some(new) = replacements.get(&key)
             && &**new != old
         {
-            sub.asset = Some(String::from(&**new));
+            sub.asset_path = Some(String::from(&**new));
         }
     }
     rewrite_fields(&mut copy.metadata, layer.id, None, &replacements, false);

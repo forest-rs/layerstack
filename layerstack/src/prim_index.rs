@@ -72,6 +72,7 @@ impl ArcKind {
 ///
 /// Spec: AOUSD Core §10.4 (strength ordering).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub struct OpinionKey {
     /// The node of the prim's [`PrimIndexGraph`] this site belongs to
     /// (see [`crate::Prim::composition_graph`]).
@@ -79,7 +80,7 @@ pub struct OpinionKey {
     /// Strength position within the node's layer stack (0 is strongest).
     pub layer_strength: u16,
     /// Source layer identifier.
-    pub layer_id: LayerId,
+    pub layer: LayerId,
     /// Concrete prim path used to look up the authored `PrimSpec`.
     pub lookup_path: PathId,
     /// Source spec path identity used for composed provenance: the prim
@@ -113,6 +114,7 @@ impl OpinionKey {
 /// Spec: AOUSD Core §10.4 (strength ordering), §12.3.2.1 (layer offset and
 /// scale).
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct OpinionSource {
     /// The site and its strength. Its spec path names the prim spec the
     /// source's opinions are read from.
@@ -156,6 +158,7 @@ impl SourceId {
 /// same source position and author the same value; compare
 /// [`OpinionRef`]s to compare opinions of different prims.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct Opinion {
     /// The source the opinion was read from (see [`Opinions::source`]).
     pub source: SourceId,
@@ -370,8 +373,8 @@ impl<'a> OpinionRef<'a> {
 
     /// The layer that authors the opinion.
     #[must_use]
-    pub fn layer_id(self) -> LayerId {
-        self.source.key.layer_id
+    pub fn layer(self) -> LayerId {
+        self.source.key.layer
     }
 
     /// The offset from the opinion's layer times to stage times, its
@@ -1146,7 +1149,7 @@ mod tests {
             key: OpinionKey {
                 node: NodeId::ROOT,
                 layer_strength: 0,
-                layer_id: LayerId(1),
+                layer: LayerId(1),
                 lookup_path: prim,
                 spec_path: site.clone(),
             },
@@ -1195,7 +1198,7 @@ mod tests {
         let key = |strength| OpinionKey {
             node: NodeId::ROOT,
             layer_strength: strength,
-            layer_id: LayerId(u64::from(strength) + 1),
+            layer: LayerId(u64::from(strength) + 1),
             lookup_path: prim,
             spec_path: site.clone(),
         };

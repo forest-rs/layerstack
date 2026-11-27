@@ -372,7 +372,7 @@ fn leftover_arcs(layer: &Layer, store: &InMemoryStore) -> Vec<String> {
             r.source()
                 == layerstack::ReferenceSource::Layer {
                     layer: layer.id(),
-                    asset: None,
+                    asset_path: None,
                 }
         });
         let prototype = references.count() <= 1

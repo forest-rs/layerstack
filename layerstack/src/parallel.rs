@@ -334,19 +334,5 @@ impl fmt::Debug for Threads {
     }
 }
 
-#[cfg_attr(
-    not(feature = "unstable-internals"),
-    allow(
-        unreachable_pub,
-        dead_code,
-        reason = "public only with the `unstable-internals` feature"
-    )
-)]
 mod pool;
-#[cfg(feature = "unstable-internals")]
 pub use pool::{Added, Offering, Pool, Work, join, with_offering_pool_in, with_pool, with_pool_in};
-#[cfg(not(feature = "unstable-internals"))]
-#[allow(unused_imports, reason = "not every pool item is used in this crate")]
-pub(crate) use pool::{
-    Added, Offering, Pool, Work, join, with_offering_pool_in, with_pool, with_pool_in,
-};

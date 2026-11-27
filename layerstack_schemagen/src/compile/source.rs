@@ -71,20 +71,20 @@ impl SchemaStage {
                 layer: failure
                     .anchor
                     .map_or_else(|| shown.to_owned(), |layer| self.identifier(layer)),
-                asset: failure.asset_path.clone(),
+                asset_path: failure.asset_path.clone(),
             });
         }
         for error in self.stage().composition_errors() {
             if let CompositionError::UnresolvedSublayer(sublayer) = error {
                 return Err(CompileError::UnresolvedSublayer {
                     layer: self.identifier(sublayer.layer),
-                    asset: sublayer.asset_path.clone(),
+                    asset_path: sublayer.asset_path.clone(),
                 });
             }
         }
         if let Some(diagnostic) = report.diagnostics.iter().find(|d| d.diagnostic.is_error()) {
             return Err(CompileError::Read {
-                layer: self.identifier(diagnostic.layer_id),
+                layer: self.identifier(diagnostic.layer),
                 message: format!("{:?}", diagnostic.diagnostic),
             });
         }

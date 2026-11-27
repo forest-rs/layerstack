@@ -1,9 +1,8 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! The work pool itself: public only with the `unstable-internals` feature,
-//! for this repository's format crates, and following no semver promise.
-//! A host supplies threads through [`Threads`] and [`Executor`].
+//! The work pool itself. A host supplies threads through [`Threads`] and
+//! [`Executor`].
 
 #[allow(
     clippy::wildcard_imports,
@@ -13,21 +12,30 @@ use super::*;
 
 /// What a pool does with each task: returns its result and pushes the
 /// tasks it adds. Shared by every worker, so [`Sync`] with `std`.
+///
+/// Without `std` the pool runs on the calling thread, and the bound is
+/// dropped so that work may hold a store that is only
+/// [`MaybeSync`](crate::MaybeSync). Write work that is `Sync` all the
+/// same: Cargo enables `std` for the whole build when any crate does, so
+/// work that is not compiles only while every crate leaves it off.
 #[cfg(feature = "std")]
 pub type Work<'w, T, R> = dyn Fn(T, &mut Vec<T>) -> R + Sync + 'w;
 /// What a pool does with each task: returns its result and pushes the
-/// tasks it adds.
+/// tasks it adds. Without `std` the pool runs on the calling thread, so
+/// the work need not be [`Sync`]; write it `Sync` all the same, as the
+/// `std` build's docs say.
 #[cfg(not(feature = "std"))]
 pub type Work<'w, T, R> = dyn Fn(T, &mut Vec<T>) -> R + 'w;
 
 /// What a pool started with [`with_offering_pool_in`] does with each task:
 /// returns its result and adds tasks to [`Added`], which may hand them to
 /// the pool before the task returns. Shared by every worker, so [`Sync`]
-/// with `std`.
+/// with `std`; [`Work`] says why to write it `Sync` without `std` too.
 #[cfg(feature = "std")]
 pub type Offering<'w, T, R> = dyn Fn(T, &mut Added<'_, T>) -> R + Sync + 'w;
 /// What a pool started with [`with_offering_pool_in`] does with each task:
-/// returns its result and adds tasks to [`Added`].
+/// returns its result and adds tasks to [`Added`]. Without `std` the pool
+/// runs on the calling thread, so the work need not be [`Sync`].
 #[cfg(not(feature = "std"))]
 pub type Offering<'w, T, R> = dyn Fn(T, &mut Added<'_, T>) -> R + 'w;
 
@@ -147,6 +155,7 @@ where
 /// use layerstack::parallel::{Threads, with_pool_in};
 ///
 /// let threads = Threads::new(4);
+/// let spare = threads.spare();
 /// // Each task sums a range on a pool of its own on the same budget,
 /// // which runs on the threads the outer pool leaves idle.
 /// let inner = |n: u64, _: &mut Vec<u64>| n;
@@ -157,7 +166,8 @@ where
 /// };
 /// let sums = with_pool_in(&threads, &outer, |pool| pool.run(vec![10, 100]));
 /// assert_eq!(sums.iter().sum::<u64>(), 45 + 4950);
-/// assert_eq!(threads.spare(), 3);
+/// // Every worker gave its thread back.
+/// assert_eq!(threads.spare(), spare);
 /// ```
 pub fn with_pool_in<T, R, B>(
     threads: &Threads,
@@ -218,13 +228,15 @@ where
 /// use layerstack::parallel::{Threads, join};
 ///
 /// let threads = Threads::new(2);
+/// let spare = threads.spare();
 /// let (evens, odds) = join(
 ///     &threads,
 ///     || (0..10u32).filter(|n| n % 2 == 0).sum::<u32>(),
 ///     || (0..10u32).filter(|n| n % 2 == 1).sum::<u32>(),
 /// );
 /// assert_eq!((evens, odds), (20, 25));
-/// assert_eq!(threads.spare(), 1);
+/// // `b`'s thread is back in the budget.
+/// assert_eq!(threads.spare(), spare);
 /// ```
 pub fn join<A, B>(threads: &Threads, a: impl FnOnce() -> A, b: impl FnOnce() -> B + Send) -> (A, B)
 where
@@ -240,6 +252,9 @@ where
         let helped = &std::sync::Mutex::new(None);
         let mut a = Some(a);
         let mut out = None;
+        // Returns the claimed thread to the budget however the scope ends,
+        // a panic of `a` or `b` included.
+        let _claimed = Claimed(threads);
         threads.executor().scope(&mut |scope| {
             scope.spawn(Box::new(move |_: &dyn Scope<'_>| {
                 let taken = lock(task).take();
@@ -254,7 +269,6 @@ where
             let taken = lock(task).take();
             out = Some((a, taken.map(|b| b())));
         });
-        threads.give_back();
         let (a, b) = out.expect("a scope runs its body");
         let b = b.unwrap_or_else(|| {
             let helped = lock(helped).take().expect("the second task runs once");
@@ -306,9 +320,11 @@ where
                 threaded: Some((threaded, &spawner)),
             };
             let body = body.take().expect("a scope runs its body once");
+            // Tells the workers the pool is done however the body ends:
+            // were it to panic, the scope would otherwise wait for workers
+            // waiting for more tasks.
+            let _done = Done(threaded);
             out = Some(body(&pool));
-            lock(&threaded.shared).done = true;
-            threaded.changed.notify_all();
         });
         return out.expect("a scope runs its body");
     }
@@ -318,6 +334,30 @@ where
         #[cfg(feature = "std")]
         threaded: None,
     })
+}
+
+/// A thread claimed from the budget, given back when dropped.
+#[cfg(feature = "std")]
+struct Claimed<'a>(&'a Threads);
+
+#[cfg(feature = "std")]
+impl Drop for Claimed<'_> {
+    fn drop(&mut self) {
+        self.0.give_back();
+    }
+}
+
+/// Shuts the pool down when dropped: marks it done and wakes its waiting
+/// workers, which then return.
+#[cfg(feature = "std")]
+struct Done<'a, 'b, T, R>(&'a Threaded<'b, T, R>);
+
+#[cfg(feature = "std")]
+impl<T, R> Drop for Done<'_, '_, T, R> {
+    fn drop(&mut self) {
+        lock(&self.0.shared).done = true;
+        self.0.changed.notify_all();
+    }
 }
 
 /// A pool of threads doing one kind of task (see [`with_pool`]).
@@ -701,6 +741,53 @@ pub(super) mod tests {
             added.extend([task - 1, task - 1]);
         }
         task
+    }
+
+    /// A body that panics after its workers started still returns, its
+    /// panic resumed, once every worker has stopped: the workers learn the
+    /// pool is done however the body ends.
+    #[cfg(feature = "std")]
+    #[test]
+    #[cfg_attr(
+        target_os = "wasi",
+        ignore = "WASI runs tests without threads, and aborts on a panic"
+    )]
+    fn a_panicking_body_stops_its_workers() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let (sent, received) = mpsc::channel();
+        std::thread::spawn(move || {
+            let outcome = std::panic::catch_unwind(|| {
+                with_pool(4, &tree, |pool| {
+                    // A phase wide enough to start workers, which then
+                    // wait for the next one.
+                    assert!(!pool.run(alloc::vec![12]).is_empty(), "the phase ran");
+                    panic!("the body panics after its phase");
+                })
+            });
+            let _ = sent.send(outcome.is_err());
+        });
+        assert_eq!(
+            received.recv_timeout(Duration::from_secs(30)),
+            Ok(true),
+            "the panic reached the caller, every worker stopped"
+        );
+    }
+
+    /// A `join` whose first closure panics gives its claimed thread back,
+    /// so the budget keeps every thread it had.
+    #[cfg(feature = "std")]
+    #[test]
+    #[cfg_attr(target_os = "wasi", ignore = "WASI aborts on a panic")]
+    fn a_panicking_join_gives_its_thread_back() {
+        let threads = Threads::new(2);
+        let spare = threads.spare();
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            join(&threads, || panic!("the first closure panics"), || 1)
+        }));
+        assert!(outcome.is_err(), "the panic reached the caller");
+        assert_eq!(threads.spare(), spare);
     }
 
     #[test]

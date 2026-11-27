@@ -788,7 +788,7 @@ impl Stage {
                 .map(|entry| {
                     // An entry built natively may hold its layer alone.
                     let asset = entry
-                        .asset
+                        .asset_path
                         .as_deref()
                         .or_else(|| self.document.identifier(entry.layer))
                         .unwrap_or_default();
@@ -3936,12 +3936,14 @@ fn unavailable_row(asset: UnavailableAsset, store: &InMemoryStore) -> Wire {
     ])
 }
 
-/// The name of a clip asset's role.
+/// The name of a clip asset's role; `""` for a role this build does not
+/// name.
 fn clip_role(role: ClipAssetRole) -> &'static str {
     match role {
         ClipAssetRole::Value => "value",
         ClipAssetRole::Manifest => "manifest",
         ClipAssetRole::TemplateCandidate => "templateCandidate",
+        _ => "",
     }
 }
 

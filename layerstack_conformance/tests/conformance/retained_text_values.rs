@@ -553,7 +553,7 @@ fn a_retained_text_array_that_does_not_decode_is_an_error_when_read() {
     assert!(
         matches!(
             saved,
-            Err(layerstack_io::usda::save::SaveError::ArrayRead {
+            Err(layerstack_io::usda::save::LayerSaveError::ArrayRead {
                 error: ArrayReadError::InvalidData(_),
                 ..
             })

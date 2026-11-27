@@ -1281,7 +1281,7 @@ impl Transaction {
     /// steps check their slots already.
     /// Addresses the store cannot resolve yet are left for
     /// [`Transaction::apply`] to reject.
-    pub fn expect_unchanged(&mut self, store: &mut dyn LayerStore) -> &mut Self {
+    pub fn expect_unchanged(&mut self, store: &dyn LayerStore) -> &mut Self {
         let mut layers: Vec<LayerId> = Vec::new();
         let mut expectations = Vec::new();
         for op in &self.ops {
@@ -1391,7 +1391,7 @@ impl Op {
 /// The value authored in `slot` at `at`: `Some(None)` when nothing is
 /// authored there, `None` when `at` does not resolve.
 pub(crate) fn authored(
-    store: &mut dyn LayerStore,
+    store: &dyn LayerStore,
     at: &Address,
     slot: &Slot,
 ) -> Option<Option<Authored>> {
@@ -1441,7 +1441,7 @@ pub(crate) fn authored(
             .map(|targets| Authored::Field(FieldValue::PathListOp(Box::new(*targets)))),
         // Layer slots name no spec; preconditions guard them by generation.
         Slot::Sublayers | Slot::Relocates => return None,
-        Slot::Prim(field) => super::prim_fields::read(&*store, spec, *field)
+        Slot::Prim(field) => super::prim_fields::read(store, spec, *field)
             .filter(|value| !value.is_clear())
             .map(|value| Authored::Prim(Box::new(value))),
     })

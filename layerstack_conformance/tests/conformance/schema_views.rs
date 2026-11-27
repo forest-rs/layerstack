@@ -390,7 +390,7 @@ fn referenced() -> (InMemoryStore, LiveStage, EditTarget) {
     let reference =
         Reference::new(LayerId(2), asset).with_source(layerstack::ReferenceSource::Layer {
             layer: LayerId(2),
-            asset: Some("mapped_asset.usda"),
+            asset_path: Some("mapped_asset.usda"),
         });
     main.insert_prim(instance, PrimSpec::def().with_reference(reference));
     store.insert_layer(main);

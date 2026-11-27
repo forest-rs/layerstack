@@ -436,7 +436,7 @@ fn dependency_transport_failure_reaches_importer_without_outer_fallback() {
         &PathInterner::default(),
         &mut Outside,
         &[],
-        crate::usdz::UsdcReadOptions::default(),
+        crate::usdc::UsdcReadOptions::default(),
     );
     assert!(matches!(result, Err(RangeError::Source("offline"))));
 }
@@ -503,7 +503,7 @@ fn repeated_import_selections_reuse_verified_layer_identity_without_payload_read
             &PathInterner::default(),
             &mut Outside,
             &members,
-            crate::usdz::UsdcReadOptions::default(),
+            crate::usdc::UsdcReadOptions::default(),
         )
         .unwrap();
         assert_eq!(result.resolved_layers.len(), 1);

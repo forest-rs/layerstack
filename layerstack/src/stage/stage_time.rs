@@ -428,7 +428,7 @@ mod tests {
             key: OpinionKey {
                 node: NodeId::ROOT,
                 layer_strength: 0,
-                layer_id: LayerId(1),
+                layer: LayerId(1),
                 lookup_path: path,
                 spec_path: SpecPath::from_prim_path(path),
             },

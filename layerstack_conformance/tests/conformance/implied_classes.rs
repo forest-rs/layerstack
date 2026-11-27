@@ -127,7 +127,7 @@ fn prim_stacks_rank_implied_classes_with_their_layer_stack() {
             .iter()
             .map(|key| {
                 (
-                    layer_name(&loaded, key.key.layer_id),
+                    layer_name(&loaded, key.key.layer),
                     key.key
                         .spec_path
                         .display(loaded.store.paths(), loaded.store.tokens()),
@@ -232,7 +232,7 @@ fn snapshot(loaded: &mut LoadedStage, stage: &Stage) -> Vec<String> {
             .map(|key| {
                 format!(
                     "{} {}",
-                    layer_name(loaded, key.key.layer_id),
+                    layer_name(loaded, key.key.layer),
                     key.key
                         .spec_path
                         .display(loaded.store.paths(), loaded.store.tokens())

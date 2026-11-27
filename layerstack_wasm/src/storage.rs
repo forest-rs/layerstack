@@ -31,6 +31,7 @@ enum Source {
 /// What a [`HostStorage`] released of the sources the host supplied
 /// ([`HostStorage::released`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Released {
     /// The sources released.
     pub sources: u64,

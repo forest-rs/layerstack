@@ -115,6 +115,7 @@ impl RawValueRep {
 
 /// A decoded crate value, ready for translation to `layerstack::doc::Value`.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum CrateValue {
     /// No value (e.g. `ValueBlock`).
     None,

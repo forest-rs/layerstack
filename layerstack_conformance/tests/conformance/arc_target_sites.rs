@@ -113,7 +113,7 @@ fn prim_stacks_list_each_site_once_per_arc_path() {
             .iter()
             .map(|key| {
                 (
-                    layer_name(&loaded, key.key.layer_id),
+                    layer_name(&loaded, key.key.layer),
                     key.key
                         .spec_path
                         .display(loaded.store.paths(), loaded.store.tokens()),

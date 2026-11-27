@@ -72,7 +72,7 @@ pub(crate) struct UsdzResolver<'a, P: PackageAccess> {
     /// Resolves paths outside the package, and allocates the layer IDs of
     /// members, so that they share one ID space with the layers it loads.
     outer: &'a mut dyn AssetResolver,
-    options: crate::usdz::UsdcReadOptions,
+    options: crate::usdc::UsdcReadOptions,
     #[cfg(feature = "std")]
     retained_values: BTreeMap<LayerId, crate::usdc::RetainedValues>,
 }
@@ -86,7 +86,7 @@ impl<'a, P: PackageAccess> UsdzResolver<'a, P> {
         root_member: Arc<str>,
         root: LayerId,
         outer: &'a mut dyn AssetResolver,
-        options: crate::usdz::UsdcReadOptions,
+        options: crate::usdc::UsdcReadOptions,
     ) -> Self {
         let distinct_member = outer
             .existing_package_layer_id(root, &root_member)
@@ -295,9 +295,9 @@ impl<P: PackageAccess> AssetResolver for UsdzResolver<'_, P> {
             // strict consumers can reject them. AOUSD Core §9.4, §9.7.
             self.diagnostics.push(MemberDiagnostic {
                 member: authoring,
-                layer_id: anchor.unwrap_or(self.root),
+                layer: anchor.unwrap_or(self.root),
                 diagnostic: ImportDiagnostic::AssetResolve {
-                    asset: Arc::from(asset_path),
+                    asset_path: Arc::from(asset_path),
                     error: AssetResolveError::NotFound,
                 },
             });
@@ -387,7 +387,7 @@ pub(crate) fn parse_layer_data(
     tokens: &TokenInterner,
     paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
-    options: crate::usdz::UsdcReadOptions,
+    options: crate::usdc::UsdcReadOptions,
 ) -> Result<ParsedLayer, UsdzError> {
     let identifier =
         PackagePath::parse(name, 32).map_err(|reason| UsdzError::ConstraintViolation { reason })?;
@@ -406,7 +406,7 @@ pub(crate) fn parse_layer_data(
         }
         _ => Err(UsdzError::LayerRead {
             member: Arc::from(name),
-            layer_id,
+            layer: layer_id,
             cause: LayerReadError::UnsupportedFormat,
         }),
     }
@@ -420,12 +420,12 @@ fn parse_usdc(
     tokens: &TokenInterner,
     paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
-    options: crate::usdz::UsdcReadOptions,
+    options: crate::usdc::UsdcReadOptions,
 ) -> Result<ParsedLayer, UsdzError> {
     let mut budget = options.budget(data.len());
     #[cfg(feature = "std")]
     let (result, retained_values) = match options.arrays {
-        crate::usdz::UsdcArrayLoading::Retained => {
+        crate::usdc::UsdcArrayLoading::Retained => {
             let result = crate::usdc::read_usdc_lazy_within(
                 data.clone(),
                 layer_id,
@@ -440,7 +440,7 @@ fn parse_usdc(
                 Err(error) => (Err(error), None),
             }
         }
-        crate::usdz::UsdcArrayLoading::Eager => (
+        crate::usdc::UsdcArrayLoading::Eager => (
             crate::usdc::read_usdc_within(
                 &data,
                 layer_id,
@@ -465,7 +465,7 @@ fn parse_usdc(
     );
     let result = result.map_err(|cause| UsdzError::LayerRead {
         member: Arc::from(name),
-        layer_id,
+        layer: layer_id,
         cause: LayerReadError::Usdc(cause),
     })?;
     Ok(ParsedLayer {
@@ -499,13 +499,13 @@ fn parse_usda(
     if let Some(mark) = crate::usda::ByteOrderMark::find(data) {
         return Err(UsdzError::LayerRead {
             member: Arc::from(name),
-            layer_id,
+            layer: layer_id,
             cause: LayerReadError::ByteOrderMark(mark),
         });
     }
     let source = core::str::from_utf8(data).map_err(|error| UsdzError::LayerRead {
         member: Arc::from(name),
-        layer_id,
+        layer: layer_id,
         cause: LayerReadError::InvalidUtf8(error),
     })?;
 
@@ -554,7 +554,7 @@ fn member_diagnostics(
     diagnostics
         .map(|diagnostic| MemberDiagnostic {
             member: member.clone(),
-            layer_id,
+            layer: layer_id,
             diagnostic,
         })
         .collect()
@@ -672,7 +672,7 @@ mod tests {
             &PathInterner::default(),
             &mut range_outside,
             &[],
-            crate::usdz::UsdcReadOptions::default(),
+            crate::usdc::UsdcReadOptions::default(),
         );
         let archive = crate::usdz::snapshot::PackageSnapshot::new(
             package.to_vec().into(),
@@ -686,7 +686,7 @@ mod tests {
             &PathInterner::default(),
             outside,
             &[],
-            crate::usdz::UsdcReadOptions::default(),
+            crate::usdc::UsdcReadOptions::default(),
         );
         match (&complete, &ranged) {
             (Ok(a), Ok(b)) => {

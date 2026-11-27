@@ -224,7 +224,7 @@ fn stronger_order_rejects_without_collecting_any_part_of_the_replacement() {
         .set_matrix_transform(&mut edit, identity())
         .unwrap_err();
     assert!(
-        matches!(&error, MatrixXformError::StrongerSource { attribute: "xformOpOrder", source } if source.key.layer_id == LayerId(1))
+        matches!(&error, MatrixXformError::StrongerSource { attribute: "xformOpOrder", source } if source.key.layer == LayerId(1))
     );
     assert_eq!(edit.transaction(), &before);
     assert!(

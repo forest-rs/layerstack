@@ -53,7 +53,7 @@ fn fixture() -> InMemoryStore {
     spec.references.make_mut().explicit = Some(vec![Reference::from_source(
         layerstack::ReferenceSource::Layer {
             layer: LayerId(1),
-            asset: Some("root.usda"),
+            asset_path: Some("root.usda"),
         },
         ReferenceTarget::Prim(asset),
     )]);
@@ -256,7 +256,7 @@ fn session_time_domains_include_authoring_offsets_and_root_default_prim() {
             },
         );
         assert_eq!(stage.time_codes_per_second(&store), rate);
-        assert_eq!(stage.default_prim(&mut store), Some(asset));
+        assert_eq!(stage.default_prim(&store), Some(asset));
         for path in ["/Asset", "/Internal"] {
             let prim = store.path(path);
             assert_eq!(

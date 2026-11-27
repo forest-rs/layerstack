@@ -44,7 +44,7 @@ use layerstack::spec_path::SpecPath;
 use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset, Stage, StageOptions, Time,
 };
-use layerstack_io::usda::save::{SaveError, Unsupported};
+use layerstack_io::usda::save::{LayerSaveError, Unsupported};
 
 use crate::export_fixtures::OpenUsdRelease;
 
@@ -175,7 +175,7 @@ impl Imported {
     /// # Errors
     ///
     /// See [`layerstack_io::usda::save::usdc_document`].
-    pub fn save_usda(&self) -> Result<String, SaveError> {
+    pub fn save_usda(&self) -> Result<String, LayerSaveError> {
         layerstack_io::usda::save_usda(&self.layer, &self.tokens, &self.paths)
     }
 
@@ -766,8 +766,8 @@ pub fn cases() -> Vec<SaveCase> {
 
 /// Authored encodings the save does not support yet: a name, the source
 /// and the error, which names the source path.
-pub fn unsupported_cases() -> Vec<(&'static str, &'static str, SaveError)> {
-    let unsupported = |path: &str, feature| SaveError::Unsupported {
+pub fn unsupported_cases() -> Vec<(&'static str, &'static str, LayerSaveError)> {
+    let unsupported = |path: &str, feature| LayerSaveError::Unsupported {
         path: path.into(),
         feature,
     };

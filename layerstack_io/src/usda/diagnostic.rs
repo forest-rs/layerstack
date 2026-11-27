@@ -5,6 +5,7 @@
 
 use alloc::boxed::Box;
 use alloc::string::String;
+use core::fmt;
 
 use crate::usda::Span;
 use crate::usda::metadata::MetadataRejection;
@@ -21,8 +22,18 @@ pub enum Severity {
     Warning,
 }
 
+impl fmt::Display for Severity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Error => "error",
+            Self::Warning => "warning",
+        })
+    }
+}
+
 /// A diagnostic message with source location.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct Diagnostic {
     /// The source span this diagnostic refers to.
     pub span: Span,
@@ -33,6 +44,13 @@ pub struct Diagnostic {
     /// The metadata statement refused, for a diagnostic that refuses one:
     /// the field, its type and why, without parsing the message.
     pub metadata: Option<Box<MetadataRejection>>,
+}
+
+/// Writes `severity at bytes start..end: message`.
+impl fmt::Display for Diagnostic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} at {}: {}", self.severity, self.span, self.message)
+    }
 }
 
 impl Diagnostic {

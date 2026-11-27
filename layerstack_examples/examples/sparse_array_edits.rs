@@ -108,7 +108,7 @@ over "Mesh" {
         SublayerEntry {
             layer: LayerId(1),
             offset: LayerOffset::IDENTITY,
-            asset: None,
+            asset_path: None,
         },
     ];
     store.insert_layer(root);

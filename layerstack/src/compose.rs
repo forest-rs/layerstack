@@ -230,7 +230,7 @@ fn authored_strength_ordered_variant_selections(
     let sites: Vec<VariantSite<'_>> = sources
         .iter()
         .filter_map(|source| {
-            let spec = store.layer(source.key.layer_id).and_then(|layer| {
+            let spec = store.layer(source.key.layer).and_then(|layer| {
                 layer.source_prim_spec(source.key.lookup_path, &source.key.spec_path, store.paths())
             })?;
             let context = SiteContext::Node(graph, source.key.node);
@@ -322,7 +322,7 @@ pub(crate) fn node_variant_set_names(
     let mut nodes: Vec<(NodeId, Vec<&crate::listop::ListOp<TokenId>>)> = Vec::new();
     for source in sources {
         let op = store
-            .layer(source.key.layer_id)
+            .layer(source.key.layer)
             .and_then(|layer| {
                 layer.source_prim_spec(source.key.lookup_path, &source.key.spec_path, store.paths())
             })
@@ -440,7 +440,7 @@ fn apply_fallbacks_at(
         return;
     }
     let source_specs = sources.iter().filter_map(|source| {
-        let spec = store.layer(source.key.layer_id).and_then(|layer| {
+        let spec = store.layer(source.key.layer).and_then(|layer| {
             layer.source_prim_spec(source.key.lookup_path, &source.key.spec_path, store.paths())
         })?;
         Some((spec, SiteContext::Node(graph, source.key.node)))
@@ -482,7 +482,7 @@ fn authored_composed_variant_selections(
 ) -> VariantSelections {
     let mut selections: VariantSelections = VariantSelections::new();
     for source in sources {
-        let Some(layer) = store.layer(source.key.layer_id) else {
+        let Some(layer) = store.layer(source.key.layer) else {
             continue;
         };
         let Some(spec) =
@@ -504,7 +504,7 @@ fn authored_composed_variant_selections(
     loop {
         let mut new_sels = HashMap::new();
         for source in sources {
-            let Some(layer) = store.layer(source.key.layer_id) else {
+            let Some(layer) = store.layer(source.key.layer) else {
                 continue;
             };
             let Some(spec) = layer.source_prim_spec(
@@ -1005,14 +1005,14 @@ mod instancing_tests {
             .explain_property_path(PropertyPath::new(c, x))
             .expect("x has opinions")
             .iter()
-            .map(|opinion| (opinion.layer_id(), opinion.source().key.lookup_path))
+            .map(|opinion| (opinion.layer(), opinion.source().key.lookup_path))
             .collect();
         assert_eq!(stack, [(LayerId(3), asset_c)], "only the asset contributes");
         let sources: Vec<_> = stage
             .explain_prim(c)
             .expect("C is composed")
             .iter()
-            .map(|source| (source.key.layer_id, source.key.lookup_path))
+            .map(|source| (source.key.layer, source.key.lookup_path))
             .collect();
         assert_eq!(sources, [(LayerId(3), asset_c)]);
         assert_eq!(
@@ -1116,7 +1116,7 @@ mod default_prim_tests {
             .explain_prim(prim)
             .expect("prim is composed")
             .iter()
-            .map(|source| (source.key.layer_id, source.key.lookup_path))
+            .map(|source| (source.key.layer, source.key.lookup_path))
             .collect()
     }
 

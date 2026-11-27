@@ -5,8 +5,8 @@ use alloc::{format, string::String, vec::Vec};
 use core::fmt::{self, Debug, Write};
 
 use crate::usda::writer::{LayerOffset, ListOp, Reference, Value};
-use layerstack::array_edit::{Instruction, Operand};
 use layerstack::spline::{Extrapolation, SplineData};
+use opinionated::{ArrayEditOp as Instruction, ArrayEditOperand as Operand};
 
 use super::{ArrayChange, KnotData};
 
@@ -163,7 +163,7 @@ pub(super) fn same_offset(a: &LayerOffset, b: &LayerOffset) -> bool {
 
 pub(super) fn same_arcs(a: &ListOp<Reference>, b: &ListOp<Reference>) -> bool {
     let equal = |a: &Reference, b: &Reference| {
-        a.asset == b.asset
+        a.asset_path == b.asset_path
             && a.prim_path == b.prim_path
             && same_offset(&a.offset, &b.offset)
             && same_dictionary(&a.custom_data, &b.custom_data)

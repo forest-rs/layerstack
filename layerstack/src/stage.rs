@@ -1708,7 +1708,7 @@ impl Stage {
             if with_source
                 && resolved.provenance.as_ref().is_some_and(|p| {
                     selected.as_ref().is_some_and(|key| {
-                        p.layer == key.key.layer_id && p.spec_path == key.key.spec_path
+                        p.layer == key.key.layer && p.spec_path == key.key.spec_path
                     })
                 })
             {
@@ -2454,7 +2454,7 @@ impl Stage {
                 let mut sibling_branch = false;
                 for (position, opinion) in opinions.iter().enumerate() {
                     let key = opinion.key();
-                    if key.layer_id != edit.layer
+                    if key.layer != edit.layer
                         || (key.lookup_path != edit.path.prim_path()
                             && key.spec_path.prim_path() != edit.path.prim_path())
                     {
@@ -2607,7 +2607,7 @@ impl Stage {
                             .enumerate()
                             .filter_map(|(position, opinion)| {
                                 let key = &opinion.source().key;
-                                (key.layer_id == edit.layer && key.spec_path == edit.path)
+                                (key.layer == edit.layer && key.spec_path == edit.path)
                                     .then_some(position)
                             })
                             .collect();
@@ -2756,7 +2756,7 @@ impl Stage {
             sites.push(lookup);
             let spec_prim = key.spec_path.prim_path();
             if spec_prim != key.lookup_path
-                && let Some(spec) = site(key.layer_id, spec_prim)
+                && let Some(spec) = site(key.layer, spec_prim)
             {
                 sites.push(spec);
             }
@@ -2766,7 +2766,7 @@ impl Stage {
         // name every site they do.
         let mut sites = SmallVec::new();
         for OpinionSource { key, .. } in &index.sources {
-            if let Some(lookup) = site(key.layer_id, key.lookup_path) {
+            if let Some(lookup) = site(key.layer, key.lookup_path) {
                 push(&mut sites, lookup, key);
             }
         }
@@ -3526,7 +3526,7 @@ impl Stage {
             .sources
             .iter()
             .find_map(|OpinionSource { key: source, .. }| {
-                let spec = store.layer(source.layer_id)?.source_prim_spec(
+                let spec = store.layer(source.layer)?.source_prim_spec(
                     source.lookup_path,
                     &source.spec_path,
                     store.paths(),
@@ -3929,7 +3929,7 @@ impl Stage {
         let mut out = Vec::new();
         let mut seen_pairs = HashSet::<(LayerId, SpecPath)>::new();
         for OpinionSource { key, .. } in &index.sources {
-            let pair = (key.layer_id, key.spec_path.clone());
+            let pair = (key.layer, key.spec_path.clone());
             if seen_pairs.insert(pair.clone()) {
                 out.push(pair);
             }
@@ -4061,7 +4061,7 @@ impl Stage {
         let mut names = alloc::collections::BTreeSet::new();
         for source in &index.sources {
             let Some((sets, _)) = store
-                .layer(source.key.layer_id)
+                .layer(source.key.layer)
                 .and_then(|layer| {
                     layer.source_prim_spec(
                         source.key.lookup_path,
@@ -4142,7 +4142,7 @@ impl Stage {
         // Walk sources in strength order (strongest first) and find the
         // strongest defining opinion (def or class).
         for OpinionSource { key, .. } in &index.sources {
-            let Some(layer) = store.layer(key.layer_id) else {
+            let Some(layer) = store.layer(key.layer) else {
                 continue;
             };
             let Some(spec) = layer.source_prim_spec(key.lookup_path, &key.spec_path, store.paths())
@@ -4239,7 +4239,7 @@ impl Stage {
         any_type: Option<TokenId>,
     ) -> Option<TokenId> {
         for OpinionSource { key, .. } in &index.sources {
-            let Some(layer) = store.layer(key.layer_id) else {
+            let Some(layer) = store.layer(key.layer) else {
                 continue;
             };
             let Some(spec) = layer.source_prim_spec(key.lookup_path, &key.spec_path, store.paths())
@@ -4482,12 +4482,12 @@ impl Stage {
             let cut = &stack[..=at];
             opinions
                 .iter()
-                .rposition(|o| o.node() == NodeId::ROOT && cut.contains(&o.layer_id()))
+                .rposition(|o| o.node() == NodeId::ROOT && cut.contains(&o.layer()))
                 .map_or(0, |i| i + 1)
         } else {
             opinions
                 .iter()
-                .rposition(|o| o.layer_id() == layer)
+                .rposition(|o| o.layer() == layer)
                 .map_or(0, |i| i + 1)
         }
     }
@@ -4874,7 +4874,7 @@ impl Stage {
         enabled: bool,
     ) -> Option<Provenance> {
         enabled.then(|| Provenance {
-            layer: strongest.layer_id(),
+            layer: strongest.layer(),
             spec_path: strongest.spec_path(),
             field,
         })
@@ -5460,7 +5460,7 @@ mod tests {
         OpinionKey {
             node: NodeId::ROOT,
             layer_strength: 0,
-            layer_id: layer,
+            layer,
             lookup_path,
             spec_path,
         }
@@ -6282,7 +6282,7 @@ mod tests {
             .explain_prim(prim)
             .expect("composed prim")
             .iter()
-            .map(|source| (source.key.layer_id, source.key.spec_path.clone()))
+            .map(|source| (source.key.layer, source.key.spec_path.clone()))
             .collect();
         let spec = SpecPath::from_prim_path(prim);
         assert_eq!(

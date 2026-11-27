@@ -450,6 +450,8 @@ describe("errors", () => {
     assert.equal(rejected.code, "io.rejected");
     assert.equal(rejected.operation, "open");
     assert.equal(rejected.identifier, "bad.usda");
+    // It says why: the first diagnostic, with its phase and place.
+    assert.match(rejected.message, /rejected .*: USDA parse error at bytes \d+\.\.\d+: /);
 
     using stage = openScene();
     const invalid = await failure(() => stage.prim("Ball"));

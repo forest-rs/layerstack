@@ -129,7 +129,7 @@ impl DemandSet {
             .filter(|r| {
                 r.owner == set.definition.owner
                     && r.set_name == set.definition.name
-                    && r.anchor == set.definition.anchor.layer_id
+                    && r.anchor == set.definition.anchor.layer
                     && r.source == set.definition.anchor.spec_path
             })
             .cloned()
@@ -438,7 +438,7 @@ impl Catalog {
                 && !sets[masked_from..].iter().any(|set| {
                     set.owner == issue.owner
                         && set.name == issue.set_name
-                        && set.key.layer_id == issue.anchor
+                        && set.key.layer == issue.anchor
                         && set.key.spec_path == issue.source
                 })
                 && self

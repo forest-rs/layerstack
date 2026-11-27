@@ -30,7 +30,7 @@ pub enum CompileError {
         /// The layer whose `subLayers` names it.
         layer: String,
         /// The sublayer's asset path, as authored (`usdGeom/schema.usda`).
-        asset: String,
+        asset_path: String,
     },
     /// The schema stage composed with errors that are not unresolved
     /// sublayers, such as an inherit of a prim no layer defines.
@@ -487,7 +487,10 @@ impl fmt::Display for CompileError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Read { layer, message } => write!(f, "{layer}: {message}"),
-            Self::UnresolvedSublayer { layer, asset } => write!(
+            Self::UnresolvedSublayer {
+                layer,
+                asset_path: asset,
+            } => write!(
                 f,
                 "could not resolve sublayer @{asset}@ of {layer} in its directory or any search \
                  path"

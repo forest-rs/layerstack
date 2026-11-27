@@ -418,7 +418,7 @@ fn usdz_requires_textures_to_be_packaged() {
         scene(tri().with_material("Painted"), alloc::vec![painted()])
             .to_usdz(UsdzProfile::Generic, &packaged),
         Err(ExportError::UnpackagedAsset {
-            asset: "textures/normal.png".into()
+            asset_path: "textures/normal.png".into()
         }),
         "the normal map is not in the package"
     );

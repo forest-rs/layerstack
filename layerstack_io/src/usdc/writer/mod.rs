@@ -212,7 +212,7 @@ pub struct Reference {
     /// Authored reference custom data; payload arcs require an empty dictionary.
     pub custom_data: Vec<(String, Value)>,
     /// The asset path as authored; empty for an internal arc.
-    pub asset: String,
+    pub asset_path: String,
     /// An absolute prim path, or empty for the target layer's
     /// `defaultPrim`.
     pub prim_path: String,
@@ -232,6 +232,7 @@ pub struct Reference {
 /// Spec: AOUSD Core §16.3.10 (value types).
 #[derive(Clone, Debug, PartialEq)]
 #[allow(missing_docs, reason = "variants are named after the value types")]
+#[non_exhaustive]
 pub enum Value {
     /// `SdfValueBlock` (`None` in USDA).
     Block,

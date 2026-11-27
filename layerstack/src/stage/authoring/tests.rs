@@ -127,9 +127,9 @@ fn referenced_specless_target_retains_source_namespace_and_stronger_provenance()
         )
         .unwrap();
     let site = result.target.unwrap();
-    assert_eq!(site.layer_id, LayerId(3));
+    assert_eq!(site.layer, LayerId(3));
     assert_eq!(site.lookup_path, source);
-    assert_eq!(result.stronger_sources[0].key.layer_id, LayerId(1));
+    assert_eq!(result.stronger_sources[0].key.layer, LayerId(1));
     assert_eq!(result.stronger_sources[0].key.spec_path.prim_path(), dest);
 }
 
@@ -372,7 +372,7 @@ fn specialized_target_uses_propagated_source_strength_not_its_inert_placeholder(
         .explain_prim(dest)
         .unwrap()
         .iter()
-        .find(|source| source.key.lookup_path == class && source.key.layer_id == LayerId(2))
+        .find(|source| source.key.lookup_path == class && source.key.layer == LayerId(2))
         .unwrap()
         .key
         .node;
@@ -391,7 +391,7 @@ fn specialized_target_uses_propagated_source_strength_not_its_inert_placeholder(
             !result.stronger_sources.is_empty(),
             "the other reference outranks propagated specializes"
         );
-        assert_eq!(result.stronger_sources[0].key.layer_id, LayerId(3));
+        assert_eq!(result.stronger_sources[0].key.layer, LayerId(3));
     }
 }
 
@@ -579,7 +579,7 @@ fn a_default_shows_at_the_default_time_but_not_under_stronger_samples() {
     assert_eq!(at.spans[0].verdict, AuthoringVerdict::Masked { by: 0 });
     let source = &at.stronger_sources[0];
     assert_eq!(source.kind, AuthoringSourceKind::TimeSamples);
-    assert_eq!(source.key.layer_id, LayerId(1));
+    assert_eq!(source.key.layer, LayerId(1));
     assert_eq!(source.arc, ArcKind::Local);
     assert!(!source.same_site);
     // The value interpolates across the stronger samples meanwhile.
@@ -791,7 +791,7 @@ fn every_stronger_source_is_listed_and_a_weaker_value_is_current() {
     let layers: Vec<_> = result
         .stronger_sources
         .iter()
-        .map(|source| source.key.layer_id)
+        .map(|source| source.key.layer)
         .collect();
     assert_eq!(layers, [LayerId(1), LayerId(2)]);
     assert_eq!(result.spans[0].verdict, AuthoringVerdict::Masked { by: 0 });
@@ -806,7 +806,7 @@ fn every_stronger_source_is_listed_and_a_weaker_value_is_current() {
     assert!(result.is_strongest());
     assert!(matches!(
         &result.spans[0].current,
-        CurrentSource::Authored { key, standing: SourceStanding::Weaker, .. } if key.layer_id == LayerId(2)
+        CurrentSource::Authored { key, standing: SourceStanding::Weaker, .. } if key.layer == LayerId(2)
     ));
 }
 

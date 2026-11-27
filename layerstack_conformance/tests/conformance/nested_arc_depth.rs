@@ -103,7 +103,7 @@ fn prim_stacks_rank_nested_arcs_beneath_their_arc() {
             .iter()
             .map(|key| {
                 (
-                    layer_name(&loaded, key.key.layer_id),
+                    layer_name(&loaded, key.key.layer),
                     key.key
                         .spec_path
                         .display(loaded.store.paths(), loaded.store.tokens()),

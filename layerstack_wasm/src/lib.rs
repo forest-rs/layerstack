@@ -148,6 +148,7 @@ mod standalone {
 /// Why the module last trapped, as [`trap_cause`] reports it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
+#[non_exhaustive]
 pub enum TrapCause {
     /// It has not trapped, or this build cannot tell (a `std` build, whose
     /// panic runtime is `std`'s).
@@ -195,7 +196,7 @@ use alloc::vec::Vec;
 use wasm_bindgen::prelude::*;
 
 /// The version of the records the module exchanges with the TypeScript
-/// wrapper: currently 9. It changes whenever an export's arguments or a
+/// wrapper. It changes whenever an export's arguments or a
 /// record's layout change incompatibly; the wrapper
 /// refuses a module whose ABI differs from its own (`module.abi`).
 pub const ABI: u32 = 10;

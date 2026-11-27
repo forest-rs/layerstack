@@ -49,6 +49,7 @@ pub struct ShadingValue {
 
 /// Retained answer. Unsupported bounds remain explicit errors.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum QueryAnswer {
     /// World matrix, or a missing prim.
     WorldTransform(Option<[[f64; 4]; 4]>),
@@ -60,6 +61,7 @@ pub enum QueryAnswer {
 
 /// Evidence that caused a query to be reconsidered, not proof its answer changed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum QueryCause {
     /// First evaluation.
     Initial,

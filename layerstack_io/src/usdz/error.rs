@@ -46,7 +46,7 @@ pub enum UsdzError {
         /// Path of the offending member inside the package.
         member: Arc<str>,
         /// The layer ID assigned to the member for this read.
-        layer_id: LayerId,
+        layer: LayerId,
         /// The original typed failure.
         cause: LayerReadError,
     },

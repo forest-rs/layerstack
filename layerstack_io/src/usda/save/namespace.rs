@@ -128,7 +128,7 @@ pub(crate) fn visit_layer_specs(
     tokens: &TokenInterner,
     paths: &PathInterner,
     visit: impl FnMut(LayerSpec<'_>),
-) -> Result<(), SaveError> {
+) -> Result<(), LayerSaveError> {
     let mut sink = CheckedSpecs {
         names: crate::usda::writer::CheckedNames::default(),
         declarations: Vec::new(),
@@ -142,7 +142,7 @@ pub(crate) fn visit_layer_specs(
         skip_empty_entries: false,
     }
     .layer(layer, &mut sink)?;
-    sink.validation.map_err(SaveError::Document)
+    sink.validation.map_err(LayerSaveError::Document)
 }
 
 struct CheckedSpecs<'a, F> {
@@ -293,11 +293,13 @@ impl<O: Default> TextBuilder<O> {
         layout
     }
 
-    pub(super) fn finish<'a>(self) -> Result<O::Finished, SaveError>
+    pub(super) fn finish<'a>(self) -> Result<O::Finished, LayerSaveError>
     where
         O: crate::usda::writer::TextOutput<'a>,
     {
-        self.shared.and(self.text).map_err(SaveError::Document)?;
+        self.shared
+            .and(self.text)
+            .map_err(LayerSaveError::Document)?;
         Ok(self.output.finish(self.minor))
     }
 }

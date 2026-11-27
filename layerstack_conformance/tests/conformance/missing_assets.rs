@@ -192,7 +192,7 @@ fn record(doc: &StageDocument<Fixture>) -> Json {
             .iter()
             .map(|key| {
                 json!([
-                    identifier(key.key.layer_id),
+                    identifier(key.key.layer),
                     key.key.spec_path.display(store.paths(), store.tokens())
                 ])
             })

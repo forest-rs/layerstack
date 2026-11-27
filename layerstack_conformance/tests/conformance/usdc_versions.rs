@@ -420,7 +420,7 @@ fn sublayers_match_openusd() {
     assert_eq!(root.sublayers()[0].offset.offset, 10.0);
     assert_eq!(root.sublayers()[0].offset.scale, 2.0);
     assert_eq!(
-        root.sublayers()[0].asset.as_deref(),
+        root.sublayers()[0].asset_path.as_deref(),
         Some("./sublayers_weak.usdc"),
         "the authored asset path"
     );

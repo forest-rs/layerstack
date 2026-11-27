@@ -433,6 +433,7 @@ dependencies = [
  "hashbrown",
  "layerstack",
  "lz4_flex",
+ "opinionated",
  "smallvec",
 ]
 

@@ -264,7 +264,7 @@ fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skippe
 
                     assert!(
                         opinions.iter().any(|op| {
-                            op.layer_id() == expected_layer && op.spec_path() == expected_spec_path
+                            op.layer() == expected_layer && op.spec_path() == expected_spec_path
                         }),
                         "missing stack entry for {prop_path}: expected {layer_name} {expected_spec}"
                     );

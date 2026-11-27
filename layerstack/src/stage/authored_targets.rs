@@ -417,7 +417,7 @@ impl Stage {
                     };
                     let next = u32::try_from(reads.len()).unwrap_or(u32::MAX);
                     reads
-                        .entry((opinion.layer_id(), opinion.spec_path()))
+                        .entry((opinion.layer(), opinion.spec_path()))
                         .or_insert_with(|| SpecReads {
                             first: next,
                             reads: smallvec::SmallVec::new(),
@@ -464,7 +464,7 @@ impl Stage {
             .physical
             .values()
             .flat_map(|index| index.sources.iter())
-            .map(|source| (source.key.layer_id, &source.key.spec_path))
+            .map(|source| (source.key.layer, &source.key.spec_path))
             .collect()
     }
 

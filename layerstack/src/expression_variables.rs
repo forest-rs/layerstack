@@ -526,7 +526,8 @@ pub(crate) fn walk_identifier(store: &dyn LayerStore, root: LayerStackIdentifier
         let stack = LayerStack::gather_recording(store, &chain, &mut Vec::new(), None);
         for layer in stack.layers.iter().filter_map(|id| store.layer(*id)) {
             for sublayer in &layer.sublayers {
-                let Some(asset) = sublayer.asset.as_deref().filter(|a| is_expression(a)) else {
+                let Some(asset) = sublayer.asset_path.as_deref().filter(|a| is_expression(a))
+                else {
                     continue;
                 };
                 let evaluated = VariableExpression::parse(asset)
@@ -712,7 +713,7 @@ fn authored_source_selections<'s>(
     store: &'s dyn LayerStore,
     source: &OpinionKey,
 ) -> Option<&'s VariantSelections> {
-    let spec = store.layer(source.layer_id).and_then(|layer| {
+    let spec = store.layer(source.layer).and_then(|layer| {
         layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
     })?;
     let chain = source.spec_path.variant_chain();
@@ -788,7 +789,7 @@ pub(crate) fn read_selections(
                     }
                     Err(error) => errors.push(expression_error(
                         ExpressionContext::VariantSelection,
-                        source.key.layer_id,
+                        source.key.layer,
                         Some(prim),
                         expression,
                         error,

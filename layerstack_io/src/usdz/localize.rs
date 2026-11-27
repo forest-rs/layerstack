@@ -161,7 +161,7 @@ pub enum LocalizationError {
         member: Arc<str>,
     },
     /// USDA lowering/serialization rejected a copied layer.
-    Usda(crate::usda::save::SaveError),
+    Usda(crate::usda::save::LayerSaveError),
     /// USDC lowering/serialization rejected a copied layer.
     Usdc(crate::usdc::writer::UsdcWriteError),
     /// USDZ layout/member validation failed.

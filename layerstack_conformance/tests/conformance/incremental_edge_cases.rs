@@ -148,7 +148,7 @@ fn replacing_an_anchored_asset_mapping_replaces_its_scene_and_provenance() {
                 .last()
                 .unwrap()
                 .key
-                .layer_id,
+                .layer,
             id
         );
         assert_matches_fresh(&mut store, &live);

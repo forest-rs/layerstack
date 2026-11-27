@@ -153,9 +153,10 @@ fn unnamed_layer_links_are_named_and_host_expanded_udims_keep_templates() {
     let layerstack::ReferenceSource::Layer { layer, .. } = arc.source() else {
         panic!("the fixture's reference is resolved");
     };
-    *arc = arc
-        .clone()
-        .with_source(layerstack::ReferenceSource::Layer { layer, asset: None });
+    *arc = arc.clone().with_source(layerstack::ReferenceSource::Layer {
+        layer,
+        asset_path: None,
+    });
     Arc::make_mut(
         &mut store
             .layer_mut(LayerId(2))

@@ -711,12 +711,12 @@ impl<'a> Packer<'a> {
                 && reordered.is_empty()
                 && match items.as_slice() {
                     [] => true,
-                    [one] => !one.asset.is_empty(),
+                    [one] => !one.asset_path.is_empty(),
                     _ => false,
                 } =>
             {
                 static NONE: Reference = Reference {
-                    asset: String::new(),
+                    asset_path: String::new(),
                     prim_path: String::new(),
                     offset: 0.0,
                     scale: 1.0,
@@ -1287,8 +1287,8 @@ impl<'a> Packer<'a> {
                 },
             ));
         }
-        site.check_text(&arc.asset)?;
-        out.extend_from_slice(&self.string(&arc.asset)?.to_le_bytes());
+        site.check_text(&arc.asset_path)?;
+        out.extend_from_slice(&self.string(&arc.asset_path)?.to_le_bytes());
         let path = if arc.prim_path.is_empty() {
             self.empty_path()?
         } else {

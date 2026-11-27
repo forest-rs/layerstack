@@ -80,6 +80,17 @@ pub struct AssembleDiagnostic {
     pub message: String,
 }
 
+/// Writes `spec_path: message`, or `spec_path field: message`.
+impl core::fmt::Display for AssembleDiagnostic {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(&self.spec_path)?;
+        if let Some(field) = &self.field {
+            write!(f, " {field}")?;
+        }
+        write!(f, ": {}", self.message)
+    }
+}
+
 /// Assembles decoded USDC sections into a [`Layer`].
 ///
 /// `data` is the full file byte slice (needed for offset-based value reads).
@@ -3077,7 +3088,7 @@ impl<'a, 'b> AssembleCtx<'a, 'b> {
             if asset_path.is_empty() {
                 let internal = ReferenceSource::Layer {
                     layer: self.layer_id,
-                    asset: None,
+                    asset_path: None,
                 };
                 return Some(
                     Reference::from_source(internal, target)
@@ -4370,7 +4381,7 @@ def "Other" {}
         };
         let arc = |asset: &str| Arc_ {
             custom_data: Vec::new(),
-            asset: String::from(asset),
+            asset_path: String::from(asset),
             prim_path: String::new(),
             offset: 0.0,
             scale: 1.0,

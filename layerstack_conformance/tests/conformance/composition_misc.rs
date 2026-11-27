@@ -169,7 +169,7 @@ fn prims_and_prim_stacks_match_openusd() {
             .iter()
             .map(|key| {
                 (
-                    layer_name(&loaded, key.key.layer_id),
+                    layer_name(&loaded, key.key.layer),
                     key.key
                         .spec_path
                         .display(loaded.store.paths(), loaded.store.tokens()),

@@ -6,7 +6,7 @@
 use alloc::string::String;
 use core::fmt;
 
-use crate::usda::save::SaveError;
+use crate::usda::save::LayerSaveError;
 use crate::usda::writer::WriteError;
 
 use super::document::FieldType;
@@ -119,7 +119,7 @@ pub enum UsdcWriteError {
     /// The authored document is invalid; the USDA writer rejects it too.
     Document(WriteError),
     /// The authored layer cannot be saved; its USDA save fails the same way.
-    Save(SaveError),
+    Save(LayerSaveError),
     /// A field the crate stores as a type this writer does not encode: an
     /// attribute's `displayUnit`, which OpenUSD holds as a `TfEnum` of its
     /// units (`SdfGetUnitFromName`, `pxr/usd/sdf/types.cpp`), and a

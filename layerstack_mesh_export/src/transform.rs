@@ -116,6 +116,7 @@ pub const SHEAR_TOLERANCE: f64 = 1e-5;
 /// Why a transform cannot be written as a scale, a rotation and a
 /// translation, the only transforms a `PointInstancer` instance can have.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum NotRigid {
     /// An element is NaN or infinite.
     NonFinite,

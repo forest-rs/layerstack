@@ -1386,7 +1386,7 @@ mod tests {
                 key: OpinionKey {
                     node: NodeId(id),
                     layer_strength: 0,
-                    layer_id: LayerId(1),
+                    layer: LayerId(1),
                     lookup_path: PathId::from_raw(0),
                     spec_path: spec_path("/A"),
                 },
@@ -1465,7 +1465,7 @@ mod tests {
         OpinionKey {
             node,
             layer_strength,
-            layer_id: LayerId(layer_id),
+            layer: LayerId(layer_id),
             lookup_path: PathId::from_raw(0),
             spec_path,
         }
@@ -1758,14 +1758,14 @@ mod tests {
             let stack = LayerStack::gather(&store, node.layer_stack());
             let index = usize::from(key.layer_strength);
             assert_eq!(
-                stack.layers[index], key.layer_id,
+                stack.layers[index], key.layer,
                 "layer strength indexes the stack"
             );
             assert_eq!(
                 node.layer_offset().compose(stack.offset_at(index)),
                 opinion.layer_offset(),
                 "opinion from layer {:?}",
-                key.layer_id
+                key.layer
             );
         }
     }

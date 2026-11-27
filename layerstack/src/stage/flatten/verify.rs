@@ -431,7 +431,7 @@ impl Verifier<'_> {
         let (mut active, mut instanceable) = (None, None);
         if let Some(index) = stage.prims.get(&prim) {
             for OpinionSource { key: source, .. } in &index.sources {
-                let Some(spec) = self.store.layer(source.layer_id).and_then(|layer| {
+                let Some(spec) = self.store.layer(source.layer).and_then(|layer| {
                     layer.source_prim_spec(source.lookup_path, &source.spec_path, self.paths)
                 }) else {
                     continue;

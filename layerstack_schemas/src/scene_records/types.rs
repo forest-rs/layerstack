@@ -280,6 +280,7 @@ pub struct SceneChange {
 }
 /// Why all prior handles were retired and the current scene was reconstructed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum SceneReset {
     /// Composed change evidence exceeded its retention budget.
     HistoryLost,

@@ -806,7 +806,7 @@ impl LibraryScene {
             .layers
             .iter()
             .map(|(stem, _)| SubLayer {
-                asset: format!("./{stem}.{extension}"),
+                asset_path: format!("./{stem}.{extension}"),
                 offset: LayerOffset::IDENTITY,
             })
             .collect();

@@ -1822,7 +1822,7 @@ mod tests {
         OpinionKey {
             node: crate::prim_index_graph::NodeId::ROOT,
             layer_strength: 0,
-            layer_id: layer,
+            layer,
             lookup_path,
             spec_path,
         }

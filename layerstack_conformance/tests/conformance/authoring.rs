@@ -489,7 +489,7 @@ fn rocks_authoring_session_matches_openusd() {
     s.apply(&edit);
     let mut prepared = Transaction::new();
     prepared.set_default(rock_size.clone(), Value::Double(5.0));
-    prepared.expect_unchanged(&mut s.store);
+    prepared.expect_unchanged(&s.store);
     let rock_size_path = s.store.property_path("/Rock.size");
     s.store
         .layer_mut(ROCK)

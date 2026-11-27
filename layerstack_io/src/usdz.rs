@@ -57,7 +57,7 @@
 //! ([`UsdcReadOptions::decode_budget`]), which limits decoder work
 //! independently per USDC file, later retained reads included; it does not
 //! limit archive size, USDA parsing or total scene memory. With `std`,
-//! [`UsdcArrayLoading::Retained`] defers numeric payload decoding: members
+//! [`UsdcArrayLoading::Retained`](crate::usdc::UsdcArrayLoading::Retained) defers numeric payload decoding: members
 //! share checked ranges into one immutable archive allocation and keep
 //! per-file caches, exposed through [`UsdzResult::retained_values`]. Numeric
 //! failures appear during checked reads; structural validation still occurs
@@ -136,52 +136,7 @@ pub use diagnostic::{ImportDiagnostic, MemberDiagnostic};
 pub use error::{LayerReadError, UsdzError};
 pub use writer::{PackageFile, UsdzWriteError, write_usdz};
 
-/// How USDC field values are loaded within a package or stage document.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum UsdcArrayLoading {
-    /// Decode every value during import: the read pays for all of them, and
-    /// keeps no encoded bytes.
-    #[default]
-    Eager,
-    /// Retain immutable encoded bytes and decode large values on their first
-    /// read: numeric arrays, and `token[]` and `string[]` attribute defaults
-    /// of at least [`usdc::MIN_RETAINED_TEXT_ARRAY`](crate::usdc::MIN_RETAINED_TEXT_ARRAY) elements (see
-    /// `layerstack_io::usdc::read_usdc_lazy` for what stays eager). Each decodes
-    /// once, into a cache shared across threads; later reads cost what an
-    /// eager value's do. Structural validation occurs during import; payload
-    /// failures occur during checked reads. Members share encoded storage
-    /// with separate per-file caches, whose work
-    /// [`usdc::RetainedValues::stats`](crate::usdc::RetainedValues::stats) reports.
-    #[cfg(feature = "std")]
-    Retained,
-}
-/// Per-USDC-file decoding policy, including package members.
-///
-/// The budget covers structural import plus numeric elements and decode work;
-/// it is measured in decoder units, not memory bytes. It applies independently
-/// to each file. It does not limit transport bytes, USDA parsing or scene-wide
-/// memory. The host remains responsible for those budgets.
-///
-/// Build it as a struct literal that names the fields it sets and takes
-/// the rest from `..UsdcReadOptions::default()`: a field a later release adds then
-/// keeps its default.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct UsdcReadOptions {
-    /// Whether arrays decode immediately or retain their encoded storage.
-    pub arrays: UsdcArrayLoading,
-    /// Explicit decoder-unit limit; `None` uses the input-derived default.
-    pub decode_budget: Option<u64>,
-}
-impl UsdcReadOptions {
-    /// Creates a fresh budget for one file, shared with future retained reads.
-    #[must_use]
-    pub fn budget(&self, input_bytes: usize) -> crate::usdc::DecodeBudget {
-        self.decode_budget.map_or_else(
-            || crate::usdc::DecodeBudget::for_input(input_bytes),
-            crate::usdc::DecodeBudget::with_limit,
-        )
-    }
-}
+use crate::usdc::UsdcReadOptions;
 
 /// The result of successfully reading a USDZ package.
 #[derive(Clone, Debug)]

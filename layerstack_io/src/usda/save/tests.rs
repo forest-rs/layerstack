@@ -71,10 +71,10 @@ impl Imported {
 
     /// Saves the layer as one string, checking that streaming it writes
     /// the same text.
-    fn save(&self) -> Result<String, SaveError> {
+    fn save(&self) -> Result<String, LayerSaveError> {
         let text = save_usda(&self.layer, &self.tokens, &self.paths);
         let document = usda_document(&self.layer, &self.tokens, &self.paths)
-            .and_then(|doc| doc.to_usda().map_err(SaveError::Document));
+            .and_then(|doc| doc.to_usda().map_err(LayerSaveError::Document));
         assert_eq!(text, document, "document writer");
         let mut streamed = Pieces::default();
         let result = save_usda_to(&self.layer, &self.tokens, &self.paths, &mut streamed);
@@ -166,7 +166,7 @@ fn comparison_preserves_duplicate_property_and_pseudo_root_errors() {
         if prim_path == "/" {
             assert!(matches!(
                 expected,
-                SaveError::Invalid {
+                LayerSaveError::Invalid {
                     problem: Invalid::PseudoRootOpinions,
                     ..
                 }
@@ -174,7 +174,7 @@ fn comparison_preserves_duplicate_property_and_pseudo_root_errors() {
         } else {
             assert!(matches!(
                 expected,
-                SaveError::Document(WriteError::Duplicate { .. })
+                LayerSaveError::Document(WriteError::Duplicate { .. })
             ));
         }
         assert_eq!(
@@ -197,11 +197,11 @@ fn comparison_preserves_lowering_error_precedence() {
         let expected = usdc_document(&layer, &tokens, &paths).unwrap_err();
         if extra.is_empty() {
             assert!(
-                matches!(expected, SaveError::Document(WriteError::NulInString { ref path }) if path == "/A.bad")
+                matches!(expected, LayerSaveError::Document(WriteError::NulInString { ref path }) if path == "/A.bad")
             );
         } else {
             assert!(
-                matches!(expected, SaveError::Unsupported { ref path, .. } if path == "/C#customData/bad")
+                matches!(expected, LayerSaveError::Unsupported { ref path, .. } if path == "/C#customData/bad")
             );
         }
         assert_eq!(
@@ -319,7 +319,7 @@ fn a_refusing_sink_stops_the_save_with_a_sink_error() {
                 &imported.paths,
                 &mut sink
             ),
-            Err(SaveError::Sink)
+            Err(LayerSaveError::Sink)
         );
         assert_eq!(sink.calls, accepts + 1, "nothing more after the refusal");
     }
@@ -507,7 +507,7 @@ fn rejects_unsupported_features_with_their_source_paths() {
     for (source, path, feature) in cases {
         assert_eq!(
             Imported::new(source).save(),
-            Err(SaveError::Unsupported {
+            Err(LayerSaveError::Unsupported {
                 path: path.to_string(),
                 feature: *feature,
             }),
@@ -527,7 +527,7 @@ fn rejects_unsupported_slots_built_through_the_api() {
     targets.prepend = targets.explicit.clone().unwrap();
     assert_eq!(
         imported.save(),
-        Err(SaveError::Unsupported {
+        Err(LayerSaveError::Unsupported {
             path: "/A.r".into(),
             feature: Unsupported::MixedListOp
         }),
@@ -547,7 +547,7 @@ fn arcs_need_authored_asset_paths() {
         .push(SublayerEntry::new(LayerId(9)));
     assert_eq!(
         imported.save(),
-        Err(SaveError::Invalid {
+        Err(LayerSaveError::Invalid {
             path: "/".into(),
             problem: Invalid::ArcWithoutAsset
         }),
@@ -581,7 +581,7 @@ fn arcs_need_authored_asset_paths() {
     spec.add_reference(Reference::new(LayerId(9), prim));
     assert_eq!(
         imported.save(),
-        Err(SaveError::Invalid {
+        Err(LayerSaveError::Invalid {
             path: "/A".into(),
             problem: Invalid::ArcWithoutAsset
         }),
@@ -625,7 +625,7 @@ fn rejects_repeated_arcs_within_one_operation() {
         edit(layer.prim_mut(a).unwrap(), c, &arc);
         assert_eq!(
             save_usda(&layer, &imported.tokens, &imported.paths),
-            Err(SaveError::Document(WriteError::InvalidListOp {
+            Err(LayerSaveError::Document(WriteError::InvalidListOp {
                 path: format!("/A#{key}")
             })),
             "{key}"
@@ -808,7 +808,7 @@ fn rejects_invalid_layers() {
     imported.layer.insert_prim(b, PrimSpec::def());
     assert_eq!(
         imported.save(),
-        Err(SaveError::Invalid {
+        Err(LayerSaveError::Invalid {
             path: "/A/B".into(),
             problem: Invalid::UnlistedPrim
         }),
@@ -823,7 +823,7 @@ fn rejects_invalid_layers() {
     spec.authored_children.push(name);
     assert_eq!(
         imported.save(),
-        Err(SaveError::Invalid {
+        Err(LayerSaveError::Invalid {
             path: "/A/Missing".into(),
             problem: Invalid::MissingChildSpec
         }),
@@ -841,7 +841,7 @@ fn rejects_invalid_layers() {
     imported.property("/A.r").time_samples = vec![(0.0, LayerValue::Bool(true))].into();
     assert_eq!(
         imported.save(),
-        Err(SaveError::Invalid {
+        Err(LayerSaveError::Invalid {
             path: "/A.r".into(),
             problem: Invalid::RelationshipValue
         }),
@@ -852,7 +852,7 @@ fn rejects_invalid_layers() {
     imported.property("/A.a").type_name = None;
     assert_eq!(
         imported.save(),
-        Err(SaveError::Invalid {
+        Err(LayerSaveError::Invalid {
             path: "/A.a".into(),
             problem: Invalid::MissingTypeName
         }),
@@ -869,7 +869,7 @@ fn rejects_invalid_layers() {
         .set_field(key, LayerValue::Blocked);
     assert_eq!(
         imported.save(),
-        Err(SaveError::Document(WriteError::MisplacedBlock {
+        Err(LayerSaveError::Document(WriteError::MisplacedBlock {
             path: "/A#hidden".into()
         })),
         "a blocked metadata field"
@@ -969,7 +969,7 @@ def "A"
     .into();
     assert_eq!(
         imported.save(),
-        Err(SaveError::Document(WriteError::InvalidTimeSamples {
+        Err(LayerSaveError::Document(WriteError::InvalidTimeSamples {
             path: "/A.x".into()
         })),
         "unordered sample times"
@@ -977,7 +977,7 @@ def "A"
     imported.property("/A.x").time_samples = vec![(0.0, LayerValue::Float(1.0))].into();
     assert_eq!(
         imported.save(),
-        Err(SaveError::Document(WriteError::TypeMismatch {
+        Err(LayerSaveError::Document(WriteError::TypeMismatch {
             path: "/A.x".into(),
             type_name: "double".into()
         })),
@@ -1036,7 +1036,7 @@ def "A" (
     );
     assert_eq!(
         imported.save(),
-        Err(SaveError::Unsupported {
+        Err(LayerSaveError::Unsupported {
             path: "/A#exedraTargets".into(),
             feature: Unsupported::ListOpMetadata("path list op")
         }),
@@ -1175,7 +1175,7 @@ fn a_knot_curve_type_is_not_rewritten() {
     );
     assert_eq!(
         imported.save(),
-        Err(SaveError::Document(WriteError::KnotCurveType {
+        Err(LayerSaveError::Document(WriteError::KnotCurveType {
             path: "/A.d".into()
         }))
     );
@@ -1505,7 +1505,7 @@ fn rejects_misplaced_variant_specs() {
             .unwrap()
     }
     let invalid = |path: &str, problem| {
-        Err(SaveError::Invalid {
+        Err(LayerSaveError::Invalid {
             path: path.into(),
             problem,
         })
@@ -1594,7 +1594,7 @@ fn io_text_streams_into_io_writers_and_keeps_their_error() {
             &imported.paths,
             &mut full
         ),
-        Err(SaveError::Sink)
+        Err(LayerSaveError::Sink)
     );
     assert_eq!(full.take_error().unwrap().to_string(), "device full");
 }

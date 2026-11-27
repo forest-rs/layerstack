@@ -99,7 +99,8 @@ fn check_sublayers(
 ) -> Result<(), Rejection> {
     // An entry is the same sublayer whatever offset it is read through,
     // and is kept as many times as the layer lists it: one more is added.
-    let same = |a: &SublayerEntry, b: &SublayerEntry| a.layer == b.layer && a.asset == b.asset;
+    let same =
+        |a: &SublayerEntry, b: &SublayerEntry| a.layer == b.layer && a.asset_path == b.asset_path;
     let listed = |index: usize| {
         let entry = &sublayers[index];
         let so_far = sublayers[..=index]
@@ -109,7 +110,7 @@ fn check_sublayers(
         so_far <= current.iter().filter(|e| same(e, entry)).count()
     };
     for (index, entry) in sublayers.iter().enumerate() {
-        if entry.asset.as_deref() == Some("") {
+        if entry.asset_path.as_deref() == Some("") {
             return Err(Rejection::EmptySublayerAsset(index));
         }
         let earlier = &sublayers[..index];
@@ -117,7 +118,7 @@ fn check_sublayers(
         let repeated = earlier.iter().enumerate().any(|(at, other)| {
             !(kept && listed(at))
                 && ((entry.layer != LayerId::UNRESOLVED && other.layer == entry.layer)
-                    || (entry.asset.is_some() && other.asset == entry.asset))
+                    || (entry.asset_path.is_some() && other.asset_path == entry.asset_path))
         });
         if repeated {
             return Err(Rejection::DuplicateSublayer(index));

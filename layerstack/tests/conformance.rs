@@ -722,7 +722,7 @@ fn explain_field_returns_sorted_opinion_stack() {
     assert_eq!(stack.len(), 2);
 
     // Strongest-first means the root layer's opinion comes first.
-    let layers: Vec<LayerId> = stack.iter().map(|opinion| opinion.layer_id()).collect();
+    let layers: Vec<LayerId> = stack.iter().map(|opinion| opinion.layer()).collect();
     assert_eq!(layers, [LayerId(1), LayerId(2)]);
 
     assert_eq!(

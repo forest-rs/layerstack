@@ -4,6 +4,7 @@
 //! Evidence retained when a package member is read with recovery.
 
 use alloc::sync::Arc;
+use core::fmt;
 
 use crate::usda::diagnostic::{Diagnostic, Severity};
 use crate::usdc::AssembleDiagnostic;
@@ -19,22 +20,29 @@ pub struct MemberDiagnostic {
     /// Path inside the package, as listed in its directory.
     pub member: Arc<str>,
     /// The layer assigned to this member for this read.
-    pub layer_id: LayerId,
+    pub layer: LayerId,
     /// The original diagnostic and the phase that reported it.
     pub diagnostic: ImportDiagnostic,
 }
 
 impl MemberDiagnostic {
     /// The diagnostic `diagnostic` of the member at `member`, read as the
-    /// layer `layer_id`: for a reader of members outside this crate, such
-    /// as `layerstack_io`'s loose-file reads, to report in the same shape.
+    /// layer `layer`: for a reader of a source outside a package, such as
+    /// a loose file, to report in the same shape.
     #[must_use]
-    pub fn new(member: Arc<str>, layer_id: LayerId, diagnostic: ImportDiagnostic) -> Self {
+    pub fn new(member: Arc<str>, layer: LayerId, diagnostic: ImportDiagnostic) -> Self {
         Self {
             member,
-            layer_id,
+            layer,
             diagnostic,
         }
+    }
+}
+
+/// Writes `member: diagnostic`.
+impl fmt::Display for MemberDiagnostic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.member, self.diagnostic)
     }
 }
 
@@ -49,7 +57,7 @@ pub enum ImportDiagnostic {
     /// An unresolved package-relative composition dependency.
     AssetResolve {
         /// Authored asset path anchored to this diagnostic's member.
-        asset: Arc<str>,
+        asset_path: Arc<str>,
         /// Original resolver error.
         error: AssetResolveError,
     },
@@ -76,6 +84,20 @@ impl ImportDiagnostic {
                 matches!(d.severity, Severity::Error)
             }
             Self::UsdcAssemble(_) | Self::AssetResolve { .. } => true,
+        }
+    }
+}
+
+/// Writes the phase that reported it, then the diagnostic: `USDA parse
+/// error at bytes 10..14: ...`, `USDC assembly /A.b: ...`.
+impl fmt::Display for ImportDiagnostic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::AssetResolve { asset_path, error } => write!(f, "asset `{asset_path}` {error}"),
+            Self::UsdaParse(d) => write!(f, "USDA parse {d}"),
+            Self::UsdaLower(d) => write!(f, "USDA lowering {d}"),
+            Self::UsdaEmit(d) => write!(f, "USDA emission {d}"),
+            Self::UsdcAssemble(d) => write!(f, "USDC assembly {d}"),
         }
     }
 }

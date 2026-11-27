@@ -1701,7 +1701,7 @@ impl<'a> EmitCtx<'a> {
         let Some(asset) = arc_ref.asset.as_deref() else {
             let internal = ReferenceSource::Layer {
                 layer: self.layer_id,
-                asset: None,
+                asset_path: None,
             };
             return Some(
                 Reference::from_source(internal, target)
@@ -1752,7 +1752,7 @@ impl<'a> EmitCtx<'a> {
         }
         let source = ReferenceSource::Layer {
             layer: resolved.layer_id,
-            asset: Some(asset),
+            asset_path: Some(asset),
         };
         Some(
             Reference::from_source(source, target)
@@ -3229,7 +3229,7 @@ def \"A\" {
             spec.references.prepend[0].source(),
             ReferenceSource::Layer {
                 layer: LayerId(100),
-                asset: Some("./ref.usd"),
+                asset_path: Some("./ref.usd"),
             }
         );
     }

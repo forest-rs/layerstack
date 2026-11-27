@@ -100,7 +100,7 @@ fn writes_to_culled_sites_are_placed_with_their_strength() {
         }
         let stronger = inspection.stronger_sources.first().map(|source| {
             let spec = store
-                .layer(source.key.layer_id)
+                .layer(source.key.layer)
                 .and_then(|layer| {
                     layer.property(PropertyPath::new(
                         source.key.spec_path.prim_path(),

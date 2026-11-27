@@ -200,6 +200,7 @@ impl Fixture {
                 };
             }
             AuthoringSourceKind::AnimationBlock => panic!("an animation block supplies no value"),
+            other => panic!("no oracle name for {other:?}"),
         };
         let graph = self
             .stage
@@ -208,7 +209,7 @@ impl Fixture {
         Seen {
             source: source.into(),
             blocked: false,
-            layer: Some(self.layer_name(key.layer_id)),
+            layer: Some(self.layer_name(key.layer)),
             arc: graph
                 .and_then(|graph| graph.node(key.node))
                 .map(|node| arc_name(node.arc_kind()).into()),
@@ -431,7 +432,7 @@ fn check(
             assert_eq!(after.source, written, "{context}");
             assert_eq!(
                 after.layer,
-                Some(fixture.layer_name(site.layer_id)),
+                Some(fixture.layer_name(site.layer)),
                 "{context}"
             );
             assert_eq!(

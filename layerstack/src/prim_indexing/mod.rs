@@ -1018,7 +1018,7 @@ fn prim_record(
     let mut record = PrimDependencies::default();
     record
         .layers
-        .extend(index.sources.iter().map(|source| source.key.layer_id));
+        .extend(index.sources.iter().map(|source| source.key.layer));
     // The layers authoring the references and payloads on the way to each
     // node retime it.
     record
@@ -2104,7 +2104,7 @@ fn prim_index(
                 key: OpinionKey {
                     node: id,
                     layer_strength,
-                    layer_id,
+                    layer: layer_id,
                     lookup_path,
                     spec_path: node.site.path.clone(),
                 },
@@ -2601,7 +2601,7 @@ mod tests {
             let sources: alloc::vec::Vec<_> = prim
                 .sources()
                 .iter()
-                .map(|source| source.key.layer_id)
+                .map(|source| source.key.layer)
                 .collect();
             assert_eq!(sources, layers);
         }

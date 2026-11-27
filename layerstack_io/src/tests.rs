@@ -1177,7 +1177,7 @@ fn prepared_commit_reuses_sources_and_preserves_stage_observers_and_dependencies
 /// keeps the save error naming the spec, in either format.
 #[test]
 fn a_layer_that_cannot_be_written_keeps_its_typed_cause() {
-    use crate::usda::save::{Invalid, SaveError};
+    use crate::usda::save::{Invalid, LayerSaveError};
     let source = "#usda 1.0\ndef \"A\" {\n    int a = 1\n}\n";
     let document = StageDocument::open(
         Memory::with(&[("root.usda", source)]),
@@ -1190,7 +1190,7 @@ fn a_layer_that_cannot_be_written_keeps_its_typed_cause() {
     let (tokens, paths) = (document.store().tokens(), document.store().paths());
     let path = layerstack::PropertyPath::parse("/A.a", tokens, paths).unwrap();
     layer.property_mut(path).unwrap().type_name = None;
-    let expected = SaveError::Invalid {
+    let expected = LayerSaveError::Invalid {
         path: "/A.a".into(),
         problem: Invalid::MissingTypeName,
     };
@@ -2236,6 +2236,21 @@ fn errors_name_their_source_and_strict_rejections_keep_diagnostics() {
         "{:?}",
         malformed.diagnostics
     );
+    // Printed, it says why: the first diagnostic, with its phase and span,
+    // not repeating the source it is in.
+    let printed = malformed.to_string();
+    let first = &malformed.diagnostics[0].diagnostic;
+    assert_eq!(
+        printed,
+        alloc::format!(
+            "root.usda: strict import rejected malformed or unrepresented content: {first}{}",
+            match malformed.diagnostics.len() {
+                1 => String::new(),
+                n => alloc::format!(" (and {} more)", n - 1),
+            }
+        )
+    );
+    assert!(printed.contains("USDA parse error at bytes "), "{printed}");
 }
 
 #[test]
@@ -2438,7 +2453,7 @@ fn package_relative_missing_dependencies_keep_recovery_evidence() {
         )
         .unwrap();
         assert!(doc.load_report().has_errors());
-        assert!(doc.load_report().diagnostics.iter().any(|d| matches!(&d.diagnostic, ImportDiagnostic::AssetResolve {asset, error: AssetResolveError::NotFound} if &**asset == "./missing.usda")));
+        assert!(doc.load_report().diagnostics.iter().any(|d| matches!(&d.diagnostic, ImportDiagnostic::AssetResolve {asset_path: asset, error: AssetResolveError::NotFound} if &**asset == "./missing.usda")));
         assert!(matches!(
             doc.stage().stage().composition_errors(),
             [layerstack::CompositionError::UnresolvedAsset(error)] if error.asset_path == "./missing.usda"

@@ -297,7 +297,7 @@ fn unresolved_arcs_are_kept_as_authored() {
             .sublayers()
             .iter()
             .filter(|s| s.is_unresolved())
-            .map(|s| (s.asset.clone(), s.offset.offset))
+            .map(|s| (s.asset_path.clone(), s.offset.offset))
             .collect();
         assert_eq!(
             sublayers,
@@ -483,7 +483,7 @@ fn structure(layer: &Layer) -> String {
     let sublayers: Vec<_> = layer
         .sublayers()
         .iter()
-        .map(|s| (s.asset.clone(), s.offset, s.is_unresolved()))
+        .map(|s| (s.asset_path.clone(), s.offset, s.is_unresolved()))
         .collect();
     let mut out = format!(
         "sublayers {sublayers:?}\ndefault prim {default_prim:?}\nmetadata {metadata:?}\n\
@@ -618,7 +618,7 @@ fn sparse_edit_descriptors_and_preflight_errors() {
     ));
     assert!(matches!(
         source.save_usda(),
-        Err(layerstack_io::usda::save::SaveError::Document(
+        Err(layerstack_io::usda::save::LayerSaveError::Document(
             layerstack_io::usda::writer::WriteError::TypeMismatch { .. }
         ))
     ));
@@ -653,7 +653,7 @@ fn sparse_end_index_survives_signed_text_and_binary() {
 #[test]
 fn text_refuses_sparse_edit_kind_changes_while_binary_preserves_retiming() {
     use layerstack::{LayerOffset, PropertyType, Time, Value};
-    use layerstack_io::usda::{save::SaveError, writer::WriteError};
+    use layerstack_io::usda::{save::LayerSaveError, writer::WriteError};
     for (kind, declaration, expected) in [
         ("double", "timecode", Value::from(vec![5_f64])),
         (
@@ -675,7 +675,7 @@ fn text_refuses_sparse_edit_kind_changes_while_binary_preserves_retiming() {
                 Some(PropertyType::parse(&format!("{declaration}[]")).unwrap());
             assert!(matches!(
                 authored.save_usda(),
-                Err(SaveError::Document(WriteError::TypeMismatch { .. }))
+                Err(LayerSaveError::Document(WriteError::TypeMismatch { .. }))
             ));
             let bytes = authored.save_usdc().unwrap();
             let mut store = InMemoryStore::default();

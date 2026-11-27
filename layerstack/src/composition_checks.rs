@@ -132,10 +132,10 @@ pub(crate) fn drop_inconsistent_property_kinds(
                 InconsistentPropertyType {
                     prim,
                     property,
-                    defining_layer: defining.layer_id(),
+                    defining_layer: defining.layer(),
                     defining_spec: defining.spec_path(),
                     defining_kind,
-                    conflicting_layer: opinion.layer_id(),
+                    conflicting_layer: opinion.layer(),
                     conflicting_spec: opinion.spec_path(),
                 },
             ));
@@ -369,7 +369,7 @@ pub(crate) fn target_error_applies(
         let Some(targets) = opinion.value().targets() else {
             continue;
         };
-        if opinion.layer_id() == layer && opinion.spec_path() == *spec {
+        if opinion.layer() == layer && opinion.spec_path() == *spec {
             return true;
         }
         if targets.explicit.is_some() {
@@ -467,7 +467,7 @@ pub(crate) fn drop_instance_targets(
                             prim,
                             property,
                             source: opinion.opinion().source,
-                            layer: opinion.layer_id(),
+                            layer: opinion.layer(),
                             spec: opinion.spec_path(),
                             target: *target,
                         });
@@ -638,7 +638,7 @@ mod tests {
                 .explain_property_path(PropertyPath::new(lantern, name))
                 .expect("composed property")
                 .iter()
-                .map(|opinion| opinion.layer_id())
+                .map(|opinion| opinion.layer())
                 .collect()
         };
         assert_eq!(stack(glow), [ROOT]);

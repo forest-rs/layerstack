@@ -126,9 +126,9 @@ pub mod usda;
 pub mod usdc;
 pub mod usdz;
 
+pub use crate::usdc::{UsdcArrayLoading, UsdcReadOptions};
 use crate::usdz::snapshot::{PackageLimits, PackageSnapshot, PackageStats};
 use crate::usdz::{ImportDiagnostic, MemberDiagnostic};
-pub use crate::usdz::{UsdcArrayLoading, UsdcReadOptions};
 use alloc::{
     collections::{BTreeMap, BTreeSet},
     string::{String, ToString},

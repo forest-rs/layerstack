@@ -72,7 +72,7 @@ pub(crate) struct UsdzResolver<'a, P: PackageAccess> {
     /// Resolves paths outside the package, and allocates the layer IDs of
     /// members, so that they share one ID space with the layers it loads.
     outer: &'a mut dyn AssetResolver,
-    options: crate::usdz::UsdcReadOptions,
+    options: crate::usdc::UsdcReadOptions,
     #[cfg(feature = "std")]
     retained_values: BTreeMap<LayerId, crate::usdc::RetainedValues>,
 }
@@ -86,7 +86,7 @@ impl<'a, P: PackageAccess> UsdzResolver<'a, P> {
         root_member: Arc<str>,
         root: LayerId,
         outer: &'a mut dyn AssetResolver,
-        options: crate::usdz::UsdcReadOptions,
+        options: crate::usdc::UsdcReadOptions,
     ) -> Self {
         let distinct_member = outer
             .existing_package_layer_id(root, &root_member)
@@ -387,7 +387,7 @@ pub(crate) fn parse_layer_data(
     tokens: &TokenInterner,
     paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
-    options: crate::usdz::UsdcReadOptions,
+    options: crate::usdc::UsdcReadOptions,
 ) -> Result<ParsedLayer, UsdzError> {
     let identifier =
         PackagePath::parse(name, 32).map_err(|reason| UsdzError::ConstraintViolation { reason })?;
@@ -420,12 +420,12 @@ fn parse_usdc(
     tokens: &TokenInterner,
     paths: &PathInterner,
     resolver: &mut dyn AssetResolver,
-    options: crate::usdz::UsdcReadOptions,
+    options: crate::usdc::UsdcReadOptions,
 ) -> Result<ParsedLayer, UsdzError> {
     let mut budget = options.budget(data.len());
     #[cfg(feature = "std")]
     let (result, retained_values) = match options.arrays {
-        crate::usdz::UsdcArrayLoading::Retained => {
+        crate::usdc::UsdcArrayLoading::Retained => {
             let result = crate::usdc::read_usdc_lazy_within(
                 data.clone(),
                 layer_id,
@@ -440,7 +440,7 @@ fn parse_usdc(
                 Err(error) => (Err(error), None),
             }
         }
-        crate::usdz::UsdcArrayLoading::Eager => (
+        crate::usdc::UsdcArrayLoading::Eager => (
             crate::usdc::read_usdc_within(
                 &data,
                 layer_id,
@@ -672,7 +672,7 @@ mod tests {
             &PathInterner::default(),
             &mut range_outside,
             &[],
-            crate::usdz::UsdcReadOptions::default(),
+            crate::usdc::UsdcReadOptions::default(),
         );
         let archive = crate::usdz::snapshot::PackageSnapshot::new(
             package.to_vec().into(),
@@ -686,7 +686,7 @@ mod tests {
             &PathInterner::default(),
             outside,
             &[],
-            crate::usdz::UsdcReadOptions::default(),
+            crate::usdc::UsdcReadOptions::default(),
         );
         match (&complete, &ranged) {
             (Ok(a), Ok(b)) => {

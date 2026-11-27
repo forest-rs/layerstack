@@ -193,7 +193,7 @@ fn stage_metadata_edits_are_atomic_field_scoped_and_session_aware() {
     assert_eq!(live.stage().time_codes_per_second(&store), 48.0);
     let name = store.tokens().intern("World");
     let default = live.set_default_prim(&mut store, Some(name)).unwrap();
-    assert_eq!(live.stage().default_prim(&mut store), Some(prim));
+    assert_eq!(live.stage().default_prim(&store), Some(prim));
     live.apply(&mut store, &default.inverse).unwrap();
     assert!(!live.stage().has_authored_default_prim(&store));
     let mut rejected = Transaction::new();

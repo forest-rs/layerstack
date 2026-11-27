@@ -343,7 +343,7 @@ fn inactive_roots_remain_inspectable_and_stage_inventories_ignore_host_residency
     assert_eq!(stage.layer_stack(), &[LayerId(1)]);
     assert_eq!(stage.used_layers(false), [LayerId(1)].into_iter().collect());
     assert!(stage.has_authored_default_prim(&store));
-    assert_eq!(stage.default_prim(&mut store), Some(a));
+    assert_eq!(stage.default_prim(&store), Some(a));
     assert_eq!(stage.time_codes_per_second(&store), 24.0);
     let actual_flags: Vec<_> = stage
         .traverse_all(root)

@@ -835,7 +835,7 @@ fn stale_preparations_fail_even_when_the_value_is_back() {
     let size = Address::spec(ROCK, spec(&mut store, "/Rock.size"));
     let mut prepared = Transaction::new();
     prepared.set_default(size.clone(), Value::Double(5.0));
-    prepared.expect_unchanged(&mut store);
+    prepared.expect_unchanged(&store);
 
     // Something else writes the spec and puts the value back.
     let path = store.property_path("/Rock.size");
@@ -860,7 +860,7 @@ fn stale_preparations_fail_even_when_the_value_is_back() {
     ));
     let mut fresh = Transaction::new();
     fresh.set_default(size, Value::Double(5.0));
-    fresh.expect_unchanged(&mut store);
+    fresh.expect_unchanged(&store);
     let generation = store.layers[&ROCK].generation();
     fresh.apply(&mut store).expect("nothing changed since");
     assert_eq!(
@@ -1295,7 +1295,7 @@ fn layer_field_edits_prepare_against_generations() {
         },
     )
     .clear_layer_relocates(SCENE_SUB)
-    .expect_unchanged(&mut store);
+    .expect_unchanged(&store);
     assert_eq!(edit.layers(), [SCENE, SCENE_SUB]);
     let mut unrelated = Transaction::new();
     let kind = store.tokens.intern("kind");
@@ -1326,7 +1326,7 @@ fn prepared_inverses_and_redos_are_guarded_by_generation() {
     let mut edit = Transaction::new();
     edit.set_default(size.clone(), Value::Double(2.0));
     let mut undo = edit.apply(&mut store).expect("applies");
-    undo.expect_unchanged(&mut store);
+    undo.expect_unchanged(&store);
     let mut unrelated = Transaction::new();
     unrelated.set_metadata(
         rock.clone(),
@@ -1342,9 +1342,9 @@ fn prepared_inverses_and_redos_are_guarded_by_generation() {
     assert_eq!(layers(&store), before);
 
     let mut undo = edit.apply(&mut store).expect("applies");
-    undo.expect_unchanged(&mut store);
+    undo.expect_unchanged(&store);
     let mut redo = undo.apply(&mut store).expect("nothing changed since");
-    redo.expect_unchanged(&mut store);
+    redo.expect_unchanged(&store);
     let mut later = Transaction::new();
     later.set_default(size.clone(), Value::Double(3.0));
     later.apply(&mut store).expect("applies");
@@ -2481,11 +2481,11 @@ fn appended_transactions_keep_order_and_one_atomic_inverse() {
     let generation = store.layers[&ROCK].generation();
     let mut batch = Transaction::new();
     batch.set_default(size.clone(), Value::Double(2.));
-    batch.expect_unchanged(&mut store);
+    batch.expect_unchanged(&store);
     let mut other = Transaction::new();
     other.set_default(size, Value::Double(3.));
     other.set_time_sample(spin, 5., Value::Double(50.));
-    other.expect_unchanged(&mut store);
+    other.expect_unchanged(&store);
     batch.append(other).append(Transaction::new());
     assert_eq!(batch.len(), 3);
     let inverse = batch.apply(&mut store).unwrap();
@@ -2536,7 +2536,7 @@ fn appended_transactions_preserve_generation_and_value_guards() {
     let mut guarded = Transaction::new();
     guarded
         .set_default(size.clone(), Value::Double(2.))
-        .expect_unchanged(&mut store);
+        .expect_unchanged(&store);
     batch.append(guarded);
     let mut later = Transaction::new();
     later.set_time_sample(spin.clone(), 6., Value::Double(60.));
@@ -2794,7 +2794,7 @@ fn prepared_prim_field_edits_expect_their_authored_values() {
     let rock_a = store.path("/World/RockA");
     let at = EditTarget::for_layer(SCENE).prim(rock_a);
     let mut edit = Transaction::new();
-    edit.set_instanceable(at, true).expect_unchanged(&mut store);
+    edit.set_instanceable(at, true).expect_unchanged(&store);
     // A write that bypasses transactions leaves the generation alone, but
     // not the value the prepared edit expects.
     let layer = store.layers.get_mut(&SCENE).unwrap();

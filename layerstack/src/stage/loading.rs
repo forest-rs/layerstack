@@ -403,7 +403,7 @@ impl super::Stage {
     /// The root layer's declared default prim, if populated. This differs from
     /// authored metadata presence: a declared path may be absent from the stage.
     #[must_use]
-    pub fn default_prim(&self, store: &mut dyn LayerStore) -> Option<PathId> {
+    pub fn default_prim(&self, store: &dyn LayerStore) -> Option<PathId> {
         let path = store.layer(self.root_layer()?)?.default_prim?;
         let path = store.tokens().resolve(path).to_owned();
         let absolute = if path.starts_with('/') {

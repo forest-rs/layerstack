@@ -15,7 +15,7 @@ function texture(scale: Vec4 = [1, 1, 1, 1], bias: Vec4 = [0, 0, 0, 0]): Materia
   return {
     shader: "/Looks/M/Texture",
     file: { identifier: "image.png", layer: null, udim: false },
-    coordinates: { primvar: "st", transform: null },
+    coordinates: { primvar: "st", transforms: [] },
     wrapS: "repeat",
     wrapT: "repeat",
     fallback: [0, 0, 0, 1],
@@ -147,23 +147,32 @@ function moved(matrix: Mat3, u: number, v: number): [number, number] {
 
 test("a UsdTransform2d scales, then rotates counter-clockwise, then translates st", () => {
   const transform = (rotation: number, scale: [number, number], translation: [number, number]) => ({ rotation, scale, translation });
-  assert.deepEqual(moved(coordinateMatrix(null), 0.3, 0.7), [0.3, 0.7]);
-  assert.deepEqual(moved(coordinateMatrix(transform(0, [2, 2], [0, 0])), 0.5, 0.25), [1, 0.5]);
-  assert.deepEqual(moved(coordinateMatrix(transform(90, [1, 1], [0, 0])), 1, 0), [0, 1], "counter-clockwise");
-  assert.deepEqual(moved(coordinateMatrix(transform(0, [1, 1], [0.25, 0])), 0, 0), [0.25, 0]);
+  assert.deepEqual(moved(coordinateMatrix([]), 0.3, 0.7), [0.3, 0.7]);
+  assert.deepEqual(moved(coordinateMatrix([transform(0, [2, 2], [0, 0])]), 0.5, 0.25), [1, 0.5]);
+  assert.deepEqual(moved(coordinateMatrix([transform(90, [1, 1], [0, 0])]), 1, 0), [0, 1], "counter-clockwise");
+  assert.deepEqual(moved(coordinateMatrix([transform(0, [1, 1], [0.25, 0])]), 0, 0), [0.25, 0]);
   // (1, 0) scaled to (2, 0), rotated to (0, 2), translated to (0.5, 2);
   // rotating first would give (0, 1), then (0, 1), then (0.5, 1).
-  assert.deepEqual(moved(coordinateMatrix(transform(90, [2, 1], [0.5, 0])), 1, 0), [0.5, 2]);
+  assert.deepEqual(moved(coordinateMatrix([transform(90, [2, 1], [0.5, 0])]), 1, 0), [0.5, 2]);
   // As `UsdTransform2d.osl` computes it, at 45 degrees.
   const [x, y] = [2 * 0.3, 1.5 * 0.7];
   const [c, s] = [Math.cos(Math.PI / 4), Math.sin(Math.PI / 4)];
   const expected = moved([1, 0, 0, 0, 1, 0, 0, 0, 1], c * x - s * y + 0.25, s * x + c * y + 0.1);
-  assert.deepEqual(moved(coordinateMatrix(transform(45, [2, 1.5], [0.25, 0.1])), 0.3, 0.7), expected);
+  assert.deepEqual(moved(coordinateMatrix([transform(45, [2, 1.5], [0.25, 0.1])]), 0.3, 0.7), expected);
+});
+
+test("chained UsdTransform2ds apply in turn, the one reading st first", () => {
+  const transform = (rotation: number, scale: [number, number], translation: [number, number]) => ({ rotation, scale, translation });
+  // (1, 0) scaled to (2, 0), then rotated to (0, 2), then moved to (0.5, 2).
+  const chain = [transform(0, [2, 1], [0, 0]), transform(90, [1, 1], [0, 0]), transform(0, [1, 1], [0.5, 0])];
+  assert.deepEqual(moved(coordinateMatrix(chain), 1, 0), [0.5, 2]);
+  // The other way round: moved to (1.5, 0), rotated to (0, 1.5), then scaled to (0, 1.5).
+  assert.deepEqual(moved(coordinateMatrix([...chain].reverse()), 1, 0), [0, 1.5]);
 });
 
 test("a UDIM atlas's grid scales the transformed st into [0, 1]", () => {
   // Tile 1002 of a 2 × 1 atlas covers [1, 2] × [0, 1], the atlas's right half.
-  assert.deepEqual(moved(coordinateMatrix(null, 2, 1), 1.5, 0.5), [0.75, 0.5]);
+  assert.deepEqual(moved(coordinateMatrix([], 2, 1), 1.5, 0.5), [0.75, 0.5]);
   // Tile 1011 of a 1 × 2 atlas, reached by a translation.
-  assert.deepEqual(moved(coordinateMatrix({ rotation: 0, scale: [1, 1], translation: [0, 1] }, 1, 2), 0.5, 0.5), [0.5, 0.75]);
+  assert.deepEqual(moved(coordinateMatrix([{ rotation: 0, scale: [1, 1], translation: [0, 1] }], 1, 2), 0.5, 0.5), [0.5, 0.75]);
 });

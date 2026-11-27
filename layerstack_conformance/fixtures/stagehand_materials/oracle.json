@@ -1923,6 +1923,314 @@
    "contexts": [],
    "id": "UsdPreviewSurface",
    "nodes": {
+    "/Looks/Chained/Albedo": {
+     "canConnect": {
+      "st": true
+     },
+     "file": {
+      "anchored": "textures/grid.png",
+      "authored": "./textures/grid.png",
+      "resolved": "textures/grid.png",
+      "tiles": [],
+      "udim": false
+     },
+     "id": "UsdUVTexture",
+     "inputs": {
+      "file": [
+       {
+        "attribute": "/Looks/Chained/Albedo.inputs:file",
+        "value": "./textures/grid.png",
+        "value10": "./textures/grid.png"
+       }
+      ],
+      "st": [
+       {
+        "attribute": "/Looks/Chained/Turn.outputs:result",
+        "output": "result",
+        "shader": "UsdTransform2d",
+        "type": "float2"
+       }
+      ]
+     },
+     "types": {
+      "file": "asset",
+      "st": "float2"
+     }
+    },
+    "/Looks/Chained/Reader": {
+     "canConnect": {},
+     "id": "UsdPrimvarReader_float2",
+     "inputs": {
+      "varname": [
+       {
+        "attribute": "/Looks/Chained/Reader.inputs:varname",
+        "value": "st",
+        "value10": "st"
+       }
+      ]
+     },
+     "types": {
+      "varname": "string"
+     }
+    },
+    "/Looks/Chained/Tile": {
+     "canConnect": {
+      "in": true
+     },
+     "id": "UsdTransform2d",
+     "inputs": {
+      "in": [
+       {
+        "attribute": "/Looks/Chained/Reader.outputs:result",
+        "output": "result",
+        "shader": "UsdPrimvarReader_float2",
+        "type": "float2"
+       }
+      ],
+      "scale": [
+       {
+        "attribute": "/Looks/Chained/Tile.inputs:scale",
+        "value": [
+         4.0,
+         2.0
+        ],
+        "value10": [
+         4.0,
+         2.0
+        ]
+       }
+      ]
+     },
+     "types": {
+      "in": "float2",
+      "scale": "float2"
+     }
+    },
+    "/Looks/Chained/Turn": {
+     "canConnect": {
+      "in": true
+     },
+     "id": "UsdTransform2d",
+     "inputs": {
+      "in": [
+       {
+        "attribute": "/Looks/Chained/Tile.outputs:result",
+        "output": "result",
+        "shader": "UsdTransform2d",
+        "type": "float2"
+       }
+      ],
+      "rotation": [
+       {
+        "attribute": "/Looks/Chained/Turn.inputs:rotation",
+        "value": 90.0,
+        "value10": 90.0
+       }
+      ],
+      "translation": [
+       {
+        "attribute": "/Looks/Chained/Turn.inputs:translation",
+        "value": [
+         0.5,
+         0.0
+        ],
+        "value10": [
+         0.5,
+         0.0
+        ]
+       }
+      ]
+     },
+     "types": {
+      "in": "float2",
+      "rotation": "float",
+      "translation": "float2"
+     }
+    }
+   },
+   "output": "surface",
+   "path": "/Looks/Chained",
+   "shader": "/Looks/Chained/Surface",
+   "sourceType": "Output",
+   "surface": {
+    "canConnect": {
+     "diffuseColor": true
+    },
+    "id": "UsdPreviewSurface",
+    "inputs": {
+     "diffuseColor": [
+      {
+       "attribute": "/Looks/Chained/Albedo.outputs:rgb",
+       "output": "rgb",
+       "shader": "UsdUVTexture",
+       "type": "float3"
+      }
+     ]
+    },
+    "types": {
+     "diffuseColor": "color3f"
+    }
+   }
+  },
+  {
+   "contexts": [
+    "mtlx"
+   ],
+   "id": "UsdPreviewSurface",
+   "nodes": {
+    "/Looks/Chained/Albedo": {
+     "canConnect": {
+      "st": true
+     },
+     "file": {
+      "anchored": "textures/grid.png",
+      "authored": "./textures/grid.png",
+      "resolved": "textures/grid.png",
+      "tiles": [],
+      "udim": false
+     },
+     "id": "UsdUVTexture",
+     "inputs": {
+      "file": [
+       {
+        "attribute": "/Looks/Chained/Albedo.inputs:file",
+        "value": "./textures/grid.png",
+        "value10": "./textures/grid.png"
+       }
+      ],
+      "st": [
+       {
+        "attribute": "/Looks/Chained/Turn.outputs:result",
+        "output": "result",
+        "shader": "UsdTransform2d",
+        "type": "float2"
+       }
+      ]
+     },
+     "types": {
+      "file": "asset",
+      "st": "float2"
+     }
+    },
+    "/Looks/Chained/Reader": {
+     "canConnect": {},
+     "id": "UsdPrimvarReader_float2",
+     "inputs": {
+      "varname": [
+       {
+        "attribute": "/Looks/Chained/Reader.inputs:varname",
+        "value": "st",
+        "value10": "st"
+       }
+      ]
+     },
+     "types": {
+      "varname": "string"
+     }
+    },
+    "/Looks/Chained/Tile": {
+     "canConnect": {
+      "in": true
+     },
+     "id": "UsdTransform2d",
+     "inputs": {
+      "in": [
+       {
+        "attribute": "/Looks/Chained/Reader.outputs:result",
+        "output": "result",
+        "shader": "UsdPrimvarReader_float2",
+        "type": "float2"
+       }
+      ],
+      "scale": [
+       {
+        "attribute": "/Looks/Chained/Tile.inputs:scale",
+        "value": [
+         4.0,
+         2.0
+        ],
+        "value10": [
+         4.0,
+         2.0
+        ]
+       }
+      ]
+     },
+     "types": {
+      "in": "float2",
+      "scale": "float2"
+     }
+    },
+    "/Looks/Chained/Turn": {
+     "canConnect": {
+      "in": true
+     },
+     "id": "UsdTransform2d",
+     "inputs": {
+      "in": [
+       {
+        "attribute": "/Looks/Chained/Tile.outputs:result",
+        "output": "result",
+        "shader": "UsdTransform2d",
+        "type": "float2"
+       }
+      ],
+      "rotation": [
+       {
+        "attribute": "/Looks/Chained/Turn.inputs:rotation",
+        "value": 90.0,
+        "value10": 90.0
+       }
+      ],
+      "translation": [
+       {
+        "attribute": "/Looks/Chained/Turn.inputs:translation",
+        "value": [
+         0.5,
+         0.0
+        ],
+        "value10": [
+         0.5,
+         0.0
+        ]
+       }
+      ]
+     },
+     "types": {
+      "in": "float2",
+      "rotation": "float",
+      "translation": "float2"
+     }
+    }
+   },
+   "output": "surface",
+   "path": "/Looks/Chained",
+   "shader": "/Looks/Chained/Surface",
+   "sourceType": "Output",
+   "surface": {
+    "canConnect": {
+     "diffuseColor": true
+    },
+    "id": "UsdPreviewSurface",
+    "inputs": {
+     "diffuseColor": [
+      {
+       "attribute": "/Looks/Chained/Albedo.outputs:rgb",
+       "output": "rgb",
+       "shader": "UsdUVTexture",
+       "type": "float3"
+      }
+     ]
+    },
+    "types": {
+     "diffuseColor": "color3f"
+    }
+   }
+  },
+  {
+   "contexts": [],
+   "id": "UsdPreviewSurface",
+   "nodes": {
     "/Looks/Channels/Mask": {
      "canConnect": {},
      "file": {

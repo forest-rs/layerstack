@@ -133,7 +133,7 @@ test("an OpenPBR surface reads its image through the interface", () => {
   assert.equal(texture.file.assetPath, "textures/stone.png");
   assert.equal(texture.file.layer, "looks/stone.usda");
   assert.equal(texture.colorSpace, "sRGB");
-  assert.deepEqual(texture.coordinates.transform?.scale, [2, 3]);
+  assert.deepEqual(texture.coordinates.transforms.map((transform) => transform.scale), [[2, 3]]);
   assert.deepEqual(surface.baseColor.value, [0.8, 0.8, 0.8].map(Math.fround));
   assert.deepEqual(surface.specularRoughness, { value: 0.25, texture: null });
   assert.equal(surface.normal, null);

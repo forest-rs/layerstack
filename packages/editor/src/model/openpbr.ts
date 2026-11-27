@@ -203,7 +203,7 @@ class PbrReader {
     return {
       shader: node,
       file: { assetPath, layer, identifier: anchorAssetPath(assetPath, layer), udim: isUdim(assetPath) },
-      coordinates: { primvar: null, fallback: [0, 0], transform: { shader: node, rotation: 0, scale: tiling, translation: [-offset[0], -offset[1]] } },
+      coordinates: { primvar: null, fallback: [0, 0], transforms: [{ shader: node, rotation: 0, scale: tiling, translation: [-offset[0], -offset[1]] }] },
       wrapS: "repeat",
       wrapT: "repeat",
       fallback: [0, 0, 0, 1],

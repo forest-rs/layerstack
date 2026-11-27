@@ -21,7 +21,8 @@ render context and under `["mtlx"]`:
   output, a color reads `r`), and `UsdShadeConnectableAPI::CanConnect`
   is recorded for each connected input to show it;
 - for each `UsdUVTexture`, `UsdPrimvarReader_float2` and `UsdTransform2d`
-  reached, the same for each of their inputs, and for a texture's file its
+  reached (`Chained` reads its coordinates through two transforms in a
+  row, one's `in` the other's `result`), the same for each of their inputs, and for a texture's file its
   authored path, `Sdf.ComputeAssetPathRelativeToLayer` against the layer
   authoring it, the resolved path, and for a UDIM path
   `UsdShade.UdimUtils.ResolveUdimTilePaths`;
@@ -136,6 +137,14 @@ def Xform "World"
     {
         double size = 7
         rel material:binding = </Looks/Channels>
+    }
+
+    def Cube "Chained" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        double size = 8
+        rel material:binding = </Looks/Chained>
     }
 }
 
@@ -386,6 +395,50 @@ def Scope "Looks"
 
     def Material "Bare"
     {
+    }
+
+    def Material "Chained"
+    {
+        token outputs:surface.connect = </Looks/Chained/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor.connect = </Looks/Chained/Albedo.outputs:rgb>
+            token outputs:surface
+        }
+
+        def Shader "Reader"
+        {
+            uniform token info:id = "UsdPrimvarReader_float2"
+            string inputs:varname = "st"
+            float2 outputs:result
+        }
+
+        def Shader "Tile"
+        {
+            uniform token info:id = "UsdTransform2d"
+            float2 inputs:in.connect = </Looks/Chained/Reader.outputs:result>
+            float2 inputs:scale = (4, 2)
+            float2 outputs:result
+        }
+
+        def Shader "Turn"
+        {
+            uniform token info:id = "UsdTransform2d"
+            float2 inputs:in.connect = </Looks/Chained/Tile.outputs:result>
+            float inputs:rotation = 90
+            float2 inputs:translation = (0.5, 0)
+            float2 outputs:result
+        }
+
+        def Shader "Albedo"
+        {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @./textures/grid.png@
+            float2 inputs:st.connect = </Looks/Chained/Turn.outputs:result>
+            float3 outputs:rgb
+        }
     }
 
     def Material "Channels"

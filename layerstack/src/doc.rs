@@ -1498,7 +1498,7 @@ impl Reference {
     /// let asset = Reference::with_asset_default_prim(LayerId(2), "./rock.usda");
     /// assert_eq!(
     ///     asset.source(),
-    ///     ReferenceSource::Layer { layer: LayerId(2), asset: Some("./rock.usda") },
+    ///     ReferenceSource::Layer { layer: LayerId(2), asset_path: Some("./rock.usda") },
     /// );
     /// let deferred = Reference::deferred(
     ///     LayerId(1), "./plant.usda", ReferenceTarget::DefaultPrim, LayerOffset::IDENTITY,

@@ -60,11 +60,7 @@
 //! }
 //!
 //! // 4. Build the reference with the resolved LayerId.
-//! let reference = Reference {
-//!     layer: resolved.layer_id,
-//!     prim_path: target_path,
-//!     asset: Some("props/robot.usda".into()),
-//! };
+//! let reference = Reference::with_asset(resolved.layer_id, target_path, "props/robot.usda");
 //! ```
 
 use alloc::{string::String, sync::Arc, vec::Vec};

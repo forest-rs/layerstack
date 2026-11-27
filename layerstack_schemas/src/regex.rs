@@ -444,8 +444,7 @@ impl SelectionGlob {
                 break;
             };
             next.clear();
-            for index in 0..current.len() {
-                let pc = current.dense[index];
+            for &pc in &current.dense {
                 let step = match &self.program[pc] {
                     Inst::Char(want) => *want == c,
                     Inst::Any => c != '\n',
@@ -511,10 +510,6 @@ impl Threads {
             dense: Vec::new(),
             member: alloc::vec![false; size],
         }
-    }
-
-    fn len(&self) -> usize {
-        self.dense.len()
     }
 
     fn insert(&mut self, pc: usize) -> bool {

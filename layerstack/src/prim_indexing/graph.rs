@@ -726,8 +726,8 @@ impl Graph {
     fn extend_lookup(&mut self, first: NodeIndex) {
         match &mut self.lookup {
             Some(lookup) => {
-                for at in first as usize..self.nodes.len() {
-                    lookup.add(node_index(at), &self.nodes[at]);
+                for (at, node) in self.nodes.iter().enumerate().skip(first as usize) {
+                    lookup.add(node_index(at), node);
                 }
             }
             None if self.nodes.len() > NodeLookup::MIN_NODES => {

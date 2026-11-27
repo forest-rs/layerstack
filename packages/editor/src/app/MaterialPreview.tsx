@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { Stage } from "@forest-rs/layerstack";
 import { readMaterial } from "@forest-rs/layerstack_stagehand";
+import { describeMaterialNote } from "../model/materialNotes.ts";
 import { readOpenPbr } from "../model/openpbr.ts";
 import { assetExists, readAsset } from "../model/sources.ts";
 import type { EditorStore } from "../store.ts";
@@ -27,7 +28,11 @@ interface Reading {
 function read(stage: Stage, material: string, time: number | undefined): Reading {
   const record = readMaterial(stage, material, time, []);
   if (record !== null && record.item.surface !== null) {
-    return { source: { kind: "previewSurface", item: record.item }, summary: "UsdPreviewSurface, as the viewport draws it", notes: [] };
+    return {
+      source: { kind: "previewSurface", item: record.item },
+      summary: "UsdPreviewSurface, as the viewport draws it",
+      notes: record.item.notes.map(describeMaterialNote),
+    };
   }
   const openPbr = readOpenPbr(stage, material, time);
   if (openPbr !== null) {
@@ -129,25 +134,56 @@ export function MaterialPreview({
         onPointerUp={() => (drag.current = null)}
       />
       {ball ? (
-        <p className="pointer-events-none absolute bottom-2 left-2 max-w-[70%] truncate rounded-md bg-black/40 px-2 py-1 text-[11px] text-white/80 backdrop-blur-sm">
-          {failed ?? `${material} · ${reading.summary}`}
-        </p>
+        <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-end justify-between gap-2 text-[11px] text-white/80">
+          <p className="min-w-0 truncate rounded-md bg-black/40 px-2 py-1 backdrop-blur-sm">{failed ?? `${material} · ${reading.summary}`}</p>
+          {approximates(reading) && (
+            <details className="pointer-events-auto max-h-64 max-w-[60%] shrink-0 overflow-auto rounded-md bg-black/40 px-2 py-1 backdrop-blur-sm">
+              <summary className="cursor-pointer hover:text-white">{approximationLabel(reading)}</summary>
+              <Approximations reading={reading} />
+            </details>
+          )}
+        </div>
       ) : (
-        <p className="mt-1 text-[11px] text-muted-foreground">{failed ?? reading.summary}</p>
-      )}
-      {!ball && reading.source?.kind === "openPbr" && (
-        <details className="text-[11px] text-muted-foreground">
-          <summary className="cursor-pointer hover:text-foreground">What the preview approximates</summary>
-          <ul className="mt-1 ml-3 list-disc space-y-0.5">
-            <li>Base, specular, coat, fuzz, emission, transmission, opacity and thin film map to their nearest three.js physical inputs; float images are read as grey.</li>
-            <li>Specular weight is its default value when textured; coat colour, coat normal and subsurface are not drawn.</li>
-            <li>Emission luminance is divided by 1000 (the preview's lights are not in nits).</li>
-            {reading.notes.map((note) => (
-              <li key={note}>{note}.</li>
-            ))}
-          </ul>
-        </details>
+        <>
+          <p className="mt-1 text-[11px] text-muted-foreground">{failed ?? reading.summary}</p>
+          {approximates(reading) && (
+            <details className="text-[11px] text-muted-foreground">
+              <summary className="cursor-pointer hover:text-foreground">{approximationLabel(reading)}</summary>
+              <Approximations reading={reading} />
+            </details>
+          )}
+        </>
       )}
     </div>
+  );
+}
+
+/** Whether the preview has anything to say about what it drew. */
+function approximates(reading: Reading): boolean {
+  return reading.source?.kind === "openPbr" || reading.notes.length > 0;
+}
+
+/** The toggle's label: what the preview approximates, and how many notes it has on this material. */
+function approximationLabel(reading: Reading): string {
+  const count = reading.notes.length;
+  const notes = count === 0 ? "" : ` (${count} ${count === 1 ? "note" : "notes"})`;
+  return reading.source?.kind === "openPbr" ? `What the preview approximates${notes}` : `Notes${notes}`;
+}
+
+/** What the preview approximates for an OpenPBR surface, then the notes on this material. */
+function Approximations({ reading }: { reading: Reading }) {
+  return (
+    <ul className="mt-1 ml-3 list-disc space-y-0.5">
+      {reading.source?.kind === "openPbr" && (
+        <>
+          <li>Base, specular, coat, fuzz, emission, transmission, opacity and thin film map to their nearest three.js physical inputs; float images are read as grey.</li>
+          <li>Specular weight is its default value when textured; coat colour, coat normal and subsurface are not drawn.</li>
+          <li>Emission luminance is divided by 1000 (the preview's lights are not in nits).</li>
+        </>
+      )}
+      {reading.notes.map((note) => (
+        <li key={note}>{note}.</li>
+      ))}
+    </ul>
   );
 }

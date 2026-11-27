@@ -122,12 +122,12 @@ struct OpenPrim {
 pub const MAX_NAMESPACE_DEPTH: usize = 256;
 
 /// How deeply tuples, arrays, array edits and dictionaries may nest in a
-/// value, as in a crate file
-/// (`layerstack_io::usdc::value_rep::MAX_VALUE_DEPTH`). A deeper layer is
-/// reported as an error, and nothing after the limit is read.
+/// value: the crate file's limit ([`crate::usdc::MAX_VALUE_DEPTH`]), so
+/// that a layer reads in either format. A deeper layer is reported as an
+/// error, and nothing after the limit is read.
 ///
 /// Spec: AOUSD Core §16.2 (USDA), §6.6.2 (dictionaries).
-pub const MAX_VALUE_DEPTH: usize = 64;
+pub const MAX_VALUE_DEPTH: usize = crate::usdc::MAX_VALUE_DEPTH;
 
 /// What nests, for [`Parser::nested`]'s limits.
 #[derive(Clone, Copy)]

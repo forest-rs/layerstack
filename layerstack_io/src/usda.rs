@@ -74,6 +74,31 @@
 //! [`ReadResult::stats`] reports retained syntax and recognized numeric
 //! arrays. Structural syntax for declarations and metadata is retained.
 //!
+//! # Rejected layers
+//!
+//! Some text parses but is not scene description OpenUSD can hold: an
+//! inherits, specializes, reference or payload path, a relocates path or a
+//! relationship target path with a variant selection (`</A{v=x}B>`), and
+//! an attribute connection path written with one; an arc path that does
+//! not name a prim (`<>` but for a reference or payload, `</>`, `</A.b>`,
+//! a relative reference path); and a target or connection that is `<>` or
+//! the root. OpenUSD's text parser
+//! (`Sdf_TextFileFormatParser`, validating with `SdfSchema::IsValid*`)
+//! rejects the whole layer, so it never opens. Reading reports each such
+//! path as a [`Severity::Error`](diagnostic::Severity::Error) diagnostic
+//! with OpenUSD's message, leaves it out of the layer and sets
+//! [`EmitResult::rejected`] ([`ReadResult::is_rejected`]); a caller that
+//! follows OpenUSD treats the layer as one that failed to load. A relative
+//! relationship target inside a variant branch is anchored at the prim with
+//! its variant selections, so it is rejected unless it climbs out of every
+//! branch; a relative connection is anchored without them, as OpenUSD
+//! strips them from connection paths.
+//!
+//! Spec: AOUSD Core §16.2.16.9 (target paths may not contain variant
+//! selections; the text parser may reject them), §8 (path grammar),
+//! §10.3.2 (arcs). The Core leaves the other paths to the parser too; this
+//! follows OpenUSD, which rejects them all.
+//!
 //! # Metadata
 //!
 //! Metadata statements read as their field's registered type, as OpenUSD's

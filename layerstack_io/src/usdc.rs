@@ -156,7 +156,8 @@ pub use assemble::{AssembleDiagnostic, AssembleResult};
 pub use error::UsdcError;
 pub use reader::{CrateField, CrateFile, CrateSpec};
 pub use value_rep::{
-    CrateArrayEdit, CrateArrayEditOp, CrateListOp, CrateValue, DecodeBudget, RawValueRep,
+    CrateArrayEdit, CrateArrayEditOp, CrateListOp, CrateValue, DecodeBudget, MAX_VALUE_DEPTH,
+    RawValueRep,
 };
 pub use value_type::ValueType as CrateValueType;
 pub use version::CrateVersion;
@@ -219,8 +220,7 @@ pub fn read_usdc(
 /// The read runs on the calling thread and the threads `threads` spares
 /// while it runs (with the `std` feature): a read started from a pool
 /// shares that pool's budget, and uses only the threads its other tasks
-/// leave idle. It reads the same layer on any number of threads
-/// ([`assemble::assemble`]).
+/// leave idle. It reads the same layer on any number of threads.
 pub fn read_usdc_within(
     data: &[u8],
     layer_id: LayerId,

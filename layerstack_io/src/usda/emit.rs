@@ -11,31 +11,9 @@
 //! delegated to the caller via the [`AssetResolver`] trait, keeping this
 //! module `no_std` compatible.
 //!
-//! # Rejected layers
+//! Layers OpenUSD refuses to open are reported as described under
+//! [Rejected layers](crate::usda#rejected-layers).
 //!
-//! Some text parses but is not scene description OpenUSD can hold: an
-//! inherits, specializes, reference or payload path, a relocates path or a
-//! relationship target path with a variant selection (`</A{v=x}B>`), and
-//! an attribute connection path written with one; an arc path that does
-//! not name a prim (`<>` but for a reference or payload, `</>`, `</A.b>`,
-//! a relative reference path); and a target or connection that is `<>` or
-//! the root. OpenUSD's text parser
-//! (`Sdf_TextFileFormatParser`, validating with `SdfSchema::IsValid*`)
-//! rejects the whole layer, so it never opens. Emitting reports each such
-//! path as a [`Severity::Error`] diagnostic with OpenUSD's message, leaves
-//! it out of the layer and sets [`EmitResult::rejected`]; a caller that
-//! follows OpenUSD treats the layer as one that failed to load. A relative
-//! relationship target inside a variant branch is anchored at the prim with
-//! its variant selections, so it is rejected unless it climbs out of every
-//! branch; a relative connection is anchored without them, as OpenUSD
-//! strips them from connection paths.
-//!
-//! Spec: AOUSD Core §16.2.16.9 (target paths may not contain variant
-//! selections; the text parser may reject them), §8 (path grammar),
-//! §10.3.2 (arcs). The Core leaves the other paths to the parser too; this
-//! follows OpenUSD, which rejects them all.
-//!
-//! [`Severity::Error`]: crate::usda::diagnostic::Severity::Error
 //! [`Layer`]: layerstack::Layer
 //! [`PrimSpec`]: layerstack::PrimSpec
 
@@ -284,7 +262,7 @@ pub struct EmitResult {
     /// Diagnostics from the emit pass.
     pub diagnostics: Vec<Diagnostic>,
     /// Whether OpenUSD's text parser rejects the layer as a whole (see
-    /// [Rejected layers](self#rejected-layers)); `diagnostics` say why.
+    /// [Rejected layers](crate::usda#rejected-layers)); `diagnostics` say why.
     pub rejected: bool,
 }
 
@@ -343,7 +321,7 @@ pub fn emit_with_registry(
 /// file stores that text (`crateFile.cpp`), and the text writer writes it
 /// back as it is. A crate reader reads the text with this, so that the
 /// layer holds what reading OpenUSD's USDA of the crate file would give,
-/// with the same conversions ([`emit`]).
+/// with the same conversions as [`read_usda`](crate::usda::read_usda).
 ///
 /// Spec: AOUSD Core §7.4 (metadata fields), §16.2 (USDA).
 #[must_use]
@@ -2692,7 +2670,7 @@ fn is_absolute_prim_path(text: &str) -> bool {
 ///
 /// Spec: AOUSD Core §8 (paths).
 /// Whether `path` names a variant selection (`</A{v=x}B>`), which paths in
-/// scene description cannot (see [Rejected layers](self#rejected-layers)).
+/// scene description cannot (see [Rejected layers](crate::usda#rejected-layers)).
 fn has_variant_selection(path: &str) -> bool {
     path.contains('{')
 }

@@ -22,7 +22,8 @@
     "dist",
     "wasm/layerstack_stagehand.js",
     "wasm/layerstack_stagehand.d.ts",
-    "wasm/layerstack_stagehand_bg.wasm"
+    "wasm/layerstack_stagehand_bg.wasm",
+    "wasm/licenses"
   ],
   "engines": {
     "node": ">=22.18"
@@ -31,6 +32,7 @@
     "build:wasm": "bash scripts/build-wasm.sh",
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.test.json",
+    "prepack": "node scripts/check-pack.mjs",
     "size": "node scripts/check-size.mjs",
     "test": "node --test test/*.test.ts"
   },

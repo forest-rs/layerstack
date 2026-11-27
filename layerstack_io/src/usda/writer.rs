@@ -1153,6 +1153,7 @@ impl Metadatum {
 /// document lowered from a layer ([`crate::usda::save::usdc_document`]) shares
 /// the layer's buffers rather than copying them.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Value {
     /// `bool`.
     Bool(bool),

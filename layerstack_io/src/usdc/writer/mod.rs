@@ -232,6 +232,7 @@ pub struct Reference {
 /// Spec: AOUSD Core §16.3.10 (value types).
 #[derive(Clone, Debug, PartialEq)]
 #[allow(missing_docs, reason = "variants are named after the value types")]
+#[non_exhaustive]
 pub enum Value {
     /// `SdfValueBlock` (`None` in USDA).
     Block,

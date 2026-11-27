@@ -23,6 +23,7 @@ pub enum Severity {
 
 /// A diagnostic message with source location.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct Diagnostic {
     /// The source span this diagnostic refers to.
     pub span: Span,

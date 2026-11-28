@@ -28,7 +28,7 @@ invalidation 0.3.1
 libm 0.2.16
   See LICENSE-libm for the licenses and upstream notices.
 
-lz4_flex 0.11.7
+lz4_flex 0.14.2
   Copyright (c) 2020 Pascal Seitz.
   See LICENSE-MIT.
 

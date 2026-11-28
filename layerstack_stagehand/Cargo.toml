@@ -44,7 +44,7 @@ libm = { workspace = true }
 layerstack_io = { workspace = true }
 # The lights test reads the OpenUSD oracle `layerstack_conformance` records
 # (`fixtures/stagehand_lights/oracle.json`); already in the lockfile.
-serde_json = { features = ["float_roundtrip"], version = "1.0" }
+serde_json = { features = ["float_roundtrip"], version = "1.0.154" }
 
 [lints]
 workspace = true

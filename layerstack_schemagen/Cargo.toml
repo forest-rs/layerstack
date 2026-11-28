@@ -18,7 +18,7 @@ layerstack_io = { features = ["std"], workspace = true }
 # Reads each schema's kind, bases and auto-applies from OpenUSD's
 # `plugInfo.json`, and writes a compiled schema's; this tool is never a
 # dependency of a published crate.
-serde_json = { version = "1.0" }
+serde_json = { version = "1.0.154" }
 
 [lints]
 workspace = true

@@ -20,9 +20,9 @@ simd = ["layerstack_schemas/simd"]
 layerstack = { workspace = true }
 
 [dev-dependencies]
-criterion = { features = ["html_reports"], version = "0.8" }
+criterion = { features = ["html_reports"], version = "0.8.2" }
 fearless_simd = { features = ["std"], workspace = true }
-glam = { default-features = false, features = ["f64", "libm"], version = "0.34" }
+glam = { default-features = false, features = ["f64", "libm"], version = "0.34.3" }
 # The map type of a variant set's variants, which benches build.
 hashbrown = { workspace = true }
 # The generated parts library of `library_membership`.

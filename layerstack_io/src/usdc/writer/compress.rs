@@ -27,18 +27,33 @@ pub(super) fn append_compressed(out: &mut Vec<u8>, input: &[u8]) {
 fn append_chunks(out: &mut Vec<u8>, input: &[u8], max_chunk: usize) {
     if input.len() <= max_chunk {
         out.push(0);
-        out.extend_from_slice(&lz4_flex::compress(input));
+        append_block(out, input);
         return;
     }
     let chunks = input.chunks(max_chunk);
     // Callers bound the input to 127 chunks. Each compressed chunk fits i32.
     out.push(u8::try_from(chunks.len()).expect("at most 127 chunks"));
     for chunk in chunks {
-        let block = lz4_flex::compress(chunk);
-        let size = i32::try_from(block.len()).expect("bounded LZ4 block");
-        out.extend_from_slice(&size.to_le_bytes());
-        out.extend_from_slice(&block);
+        let size_at = out.len();
+        out.extend_from_slice(&0_i32.to_le_bytes());
+        let size = i32::try_from(append_block(out, chunk)).expect("bounded LZ4 block");
+        out[size_at..size_at + 4].copy_from_slice(&size.to_le_bytes());
     }
+}
+
+/// Appends `input` as one LZ4 block, compressed in place at the end of
+/// `out` rather than into a block of its own that is then copied, and
+/// returns the block's size.
+fn append_block(out: &mut Vec<u8>, input: &[u8]) -> usize {
+    let start = out.len();
+    out.resize(
+        start + lz4_flex::block::get_maximum_output_size(input.len()),
+        0,
+    );
+    let size = lz4_flex::block::compress_into(input, &mut out[start..])
+        .expect("the output holds the largest block the input can compress to");
+    out.truncate(start + size);
+    size
 }
 
 /// The largest input [`append_compressed`] accepts (127 chunks,

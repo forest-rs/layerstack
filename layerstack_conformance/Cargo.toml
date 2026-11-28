@@ -19,9 +19,9 @@ layerstack = { features = ["std", "unstable-internals"], workspace = true }
 layerstack_io = { features = ["std", "unstable-internals"], workspace = true }
 layerstack_mesh_export = { workspace = true }
 layerstack_schemas = { features = ["all"], workspace = true }
-serde = { features = ["derive"], version = "1.0" }
+serde = { features = ["derive"], version = "1.0.229" }
 # `float_roundtrip` parses the bit-exact vectors exactly.
-serde_json = { features = ["float_roundtrip"], version = "1.0" }
+serde_json = { features = ["float_roundtrip"], version = "1.0.154" }
 
 [dev-dependencies]
 # The map type of a spec's variant sets, which some tests walk.

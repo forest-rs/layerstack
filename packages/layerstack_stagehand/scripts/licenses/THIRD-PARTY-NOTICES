@@ -21,7 +21,7 @@ exedra_curves, exedra_math and exedra_triangulate 0.1.0
 foldhash 0.2.0
   See LICENSE-ZLIB for the copyright and license.
 
-hashbrown 0.17.1
+hashbrown 0.17.2
   Copyright (c) 2016 Amanieu d'Antras.
   See LICENSE-MIT and LICENSE-APACHE.
 

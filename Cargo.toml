@@ -40,7 +40,7 @@ layerstack_io = { default-features = false, path = "layerstack_io", version = "0
 layerstack_mesh_export = { path = "layerstack_mesh_export", version = "0.1.0" }
 layerstack_schemas = { default-features = false, path = "layerstack_schemas", version = "0.1.0" }
 libm = { default-features = false, version = "0.2.16" }
-lz4_flex = { default-features = false, version = "0.11.7" }
+lz4_flex = { default-features = false, features = ["alloc"], version = "0.14.2" }
 opinionated = { path = "opinionated", version = "0.2.0" }
 smallvec = { default-features = false, version = "1.16.6" }
 unicode-ident = { version = "1.0.27" }
